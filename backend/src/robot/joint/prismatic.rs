@@ -1,4 +1,4 @@
-use crate::robot::joint::abstraction::Joint;
+use crate::robot::joint::joint::Joint;
 
 struct PrismaticJoint {
     axis: Vector3,
