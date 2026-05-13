@@ -1,3 +1,5 @@
+use crate::math::error::MathError;
+
 #[derive(Debug, Clone, Copy)]
 pub struct Vector3 {
     pub x: f64,
@@ -20,13 +22,16 @@ impl Vector3 {
          self.z * self.z).sqrt()
     }
 
-    pub fn normalize(&self) -> Self {
+    pub fn normalize(&self) -> Result<Self, MathError> {
         let mag = self.magnitude();
-
-        Self {
+        if mag == 0.0 {
+            return Err(MathError::ZeroVectorNormalization);
+        }
+        
+        Ok(Self {
             x: self.x / mag,
             y: self.y / mag,
             z: self.z / mag,
-        }
+        })
     }
 }
