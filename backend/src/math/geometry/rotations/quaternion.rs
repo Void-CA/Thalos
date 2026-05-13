@@ -1,5 +1,5 @@
 use crate::math::{
-    constants, geometry::vectors::Vector3, 
+    constants, geometry::vectors::{UnitVector3, Vector3}, 
     traits::products::Cross
 };
 
@@ -49,9 +49,7 @@ impl Quaternion {
         self.conjugate().normalize()
     }
 
-    pub fn from_axis_angle(axis: Vector3, angle: f64) -> Self {
-        let axis = axis.normalized().unwrap_or(Vector3::new(1.0, 0.0, 0.0));
-
+    pub fn from_axis_angle(axis: UnitVector3, angle: f64) -> Self {
         let half = angle * 0.5;
         let s = half.sin();
 
@@ -61,7 +59,6 @@ impl Quaternion {
             y: axis.y * s,
             z: axis.z * s,
         }
-        .normalize()
     }
 
     /// Rotación de vector (SO(3))

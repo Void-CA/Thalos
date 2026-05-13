@@ -1,29 +1,9 @@
-use crate::math::geometry::{
-    vectors::Vector3,
-    spatial::Transform,
-    quaternion::Quaternion
-};
+use crate::{
+    math::geometry::vectors::UnitVector3, 
+    robot::joint::joint::JointLimits};
 
-use crate::robot::joint::joint::{Joint, JointLimits};
 
-struct RevoluteJoint {
-    axis: Vector3,
-    angle_limits: JointLimits,
-    offset: Transform,
-}
-
-impl Joint for RevoluteJoint {
-    fn axis(&self) -> Vector3 {
-        self.axis
-    }
-
-    fn limits(&self) -> JointLimits {
-        self.angle_limits
-    }
-
-    fn transform(&self, q : f64) -> Transform {
-        let rotation = Transform::from_rotation(Quaternion::from_axis_angle(self.axis, q));
-        self.offset * rotation
-    }
-    
+pub struct RevoluteJoint {
+    axis: UnitVector3,
+    limits: JointLimits,
 }

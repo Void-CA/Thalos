@@ -1,7 +1,13 @@
-use crate::math::geometry::{
+use crate::{math::geometry::{
     spatial::Transform,
     vectors::Vector3
+}};
+
+use crate::robot::joint::{
+    prismatic::PrismaticJoint, 
+    revolute::RevoluteJoint
 };
+
 
 
 #[derive(Debug, Clone, Copy)]
@@ -10,8 +16,7 @@ pub struct JointLimits {
     pub max: f64,
 }
 
-pub trait Joint {
-    fn transform(&self, q : f64) -> Transform;
-    fn limits(&self) -> JointLimits;
-    fn axis(&self) -> Vector3;
+pub enum JointType {
+    Revolute(RevoluteJoint),
+    Prismatic(PrismaticJoint),
 }
