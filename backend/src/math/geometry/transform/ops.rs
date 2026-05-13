@@ -1,16 +1,17 @@
-use std::ops;
+use std::{marker::PhantomData, ops::Mul};
 use crate::math::geometry::transform::Transform;
 
-impl ops::Mul for Transform {
-    type Output = Transform;
+impl<A, B, C> Mul<Transform<B, C>> for Transform<A, B> {
+    type Output = Transform<A, C>;
 
-    fn mul(self, rhs: Self) -> Self::Output {
-        let new_translation = self.translation + self.rotation.rotate_vector(rhs.translation);
-        let new_rotation = self.rotation * rhs.rotation;
+    fn mul(self, rhs: Transform<B, C>) -> Self::Output {
+        let translation = self.translation + self.rotation.rotate_vector(rhs.translation);
+        let rotation = self.rotation * rhs.rotation;
 
-        Self {
-            translation: new_translation,
-            rotation: new_rotation,
+        Transform {
+            translation,
+            rotation,
+            _marker: PhantomData,
         }
     }
 }

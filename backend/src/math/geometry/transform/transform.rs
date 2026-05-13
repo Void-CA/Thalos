@@ -1,4 +1,4 @@
-use std::ops;
+use std::{marker::PhantomData, ops};
 
 use crate::math::geometry::
 {
@@ -7,16 +7,18 @@ use crate::math::geometry::
 };
 
 
-pub struct Transform {
+pub struct Transform<From, To> {
     pub translation: Vector3,
     pub rotation: Quaternion,
+    pub _marker: PhantomData<(From, To)>,
 }
 
-impl Transform {
+impl<From, To> Transform<From, To> {
     pub fn from_translation(translation: Vector3) -> Self {
         Self {
             translation,
             rotation: Quaternion::identity(),
+            _marker: PhantomData,
         }
     }
 
@@ -24,6 +26,7 @@ impl Transform {
         Self {
             translation: Vector3::zero(),
             rotation,
+            _marker: PhantomData,
         }
     }
 
@@ -31,6 +34,7 @@ impl Transform {
         Self {
             translation: Vector3::zero(),
             rotation: Quaternion::identity(),
+            _marker: PhantomData,
         }
     }
 }
