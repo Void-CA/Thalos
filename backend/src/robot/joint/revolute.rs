@@ -4,6 +4,6 @@ use crate::{
 
 
 pub struct RevoluteJoint {
-    axis: UnitVector3,
-    limits: JointLimits,
+    pub axis: UnitVector3,
+    pub limits: JointLimits,
 }
