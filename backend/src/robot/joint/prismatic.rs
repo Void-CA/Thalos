@@ -1,8 +1,12 @@
-use crate::robot::joint::joint::Joint;
+use crate::robot::joint::joint::{Joint, JointLimits};
+use crate::math::geometry::{
+    vector3::Vector3,
+    transform::Transform
+}
 
 struct PrismaticJoint {
     axis: Vector3,
-    distance_limits: (f64, f64),
+    distance_limits: JointLimits,
     offset: Transform,
 }
 
