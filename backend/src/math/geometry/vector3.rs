@@ -1,10 +1,12 @@
+use std::ops::Mul;
+
 use crate::math::{
     constants,
     error::MathError, 
     traits::products::{Cross, Dot}
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vector3 {
     pub x: f64,
     pub y: f64,
@@ -81,4 +83,16 @@ impl Cross for Vector3 {
         }
     }
     
+}
+
+impl Mul<f64> for Vector3 {
+    type Output = Vector3;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        Vector3 {
+            x: self.x * rhs,
+            y: self.y * rhs,
+            z: self.z * rhs,
+        }
+    }
 }
