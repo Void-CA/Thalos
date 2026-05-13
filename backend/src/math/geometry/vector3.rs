@@ -1,4 +1,4 @@
-use crate::math::error::MathError;
+use crate::math::{error::MathError, traits::products::{Cross, Dot}};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Vector3 {
@@ -56,4 +56,25 @@ impl std::ops::Deref for UnitVector3 {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
+}
+
+impl Dot for Vector3 {
+    type Output = f64;
+
+    fn dot(self, rhs: Vector3) -> Self::Output {
+        self.x * rhs.x + self.y * rhs.y + self.z * rhs.z
+    }
+}
+
+impl Cross for Vector3 {
+    type Output = Vector3;
+
+    fn cross(self, rhs: Vector3) -> Self::Output {
+        Vector3 {
+            x: self.y * rhs.z - self.z * rhs.y,
+            y: self.z * rhs.x - self.x * rhs.z,
+            z: self.x * rhs.y - self.y * rhs.x,
+        }
+    }
+    
 }
