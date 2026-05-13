@@ -22,9 +22,9 @@ impl Vector3 {
          self.z * self.z).sqrt()
     }
 
-    pub fn normalize(&self) -> Result<Self, MathError> {
+    pub fn normalized(&self) -> Result<Self, MathError> {
         let mag = self.magnitude();
-        if mag == 0.0 {
+        if mag.abs() < f64::EPSILON {
             return Err(MathError::ZeroVectorNormalization);
         }
         
@@ -33,5 +33,27 @@ impl Vector3 {
             y: self.y / mag,
             z: self.z / mag,
         })
+    }
+}
+
+
+#[derive(Debug, Clone, Copy)]
+pub struct UnitVector3(Vector3);
+
+impl UnitVector3 {
+    pub fn new(vector: Vector3) -> Result<Self, MathError> {
+        Ok(Self(vector.normalized()?))
+    }
+
+    pub fn into_inner(self) -> Vector3 {
+        self.0
+    }
+}
+
+impl std::ops::Deref for UnitVector3 {
+    type Target = Vector3;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
