@@ -1,7 +1,7 @@
 use crate::robot::joint::joint::{Joint, JointLimits};
 use crate::math::geometry::{
-    vector3::Vector3,
-    transform::Transform
+    vectors::Vector3,
+    spatial::Transform
 }
 
 struct PrismaticJoint {

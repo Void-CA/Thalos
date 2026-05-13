@@ -1,6 +1,6 @@
 use crate::math::geometry::{
-    transform::Transform,
-    vector3::Vector3
+    spatial::Transform,
+    vectors::Vector3
 };
 
 

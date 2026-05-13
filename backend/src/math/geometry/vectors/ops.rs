@@ -1,7 +1,7 @@
 use std::ops::{Add, Mul};
 
 use crate::math::{
-    geometry::vector3::Vector3, 
+    geometry::vectors::Vector3, 
     traits::products::{Cross, Dot}
 };
 

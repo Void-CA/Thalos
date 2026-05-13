@@ -2,8 +2,8 @@ use std::{marker::PhantomData, ops};
 
 use crate::math::geometry::
 {
-    quaternion::Quaternion, 
-    vector3::Vector3
+    rotations::Quaternion, 
+    vectors::Vector3
 };
 
 

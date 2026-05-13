@@ -1,5 +1,5 @@
 use crate::math::{
-    constants, geometry::vector3::Vector3,
+    constants, geometry::vectors::Vector3, 
     traits::products::Cross
 };
 
