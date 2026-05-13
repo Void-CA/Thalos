@@ -3,7 +3,7 @@ use crate::robot::{
     link::Link
 };
 
-pub struct RobotArm {
+pub struct SerialChain {
     pub segments: Vec<Segment>,
 }
 
