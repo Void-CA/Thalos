@@ -1,3 +1,5 @@
+use crate::math::quaternion::Quaternion;
+
 struct Transform {
     translation: Vector3,
     rotation: Quaternion,
