@@ -1,4 +1,8 @@
-use crate::math::{error::MathError, traits::products::{Cross, Dot}};
+use crate::math::{
+    constants,
+    error::MathError, 
+    traits::products::{Cross, Dot}
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Vector3 {
@@ -24,7 +28,7 @@ impl Vector3 {
 
     pub fn normalized(&self) -> Result<Self, MathError> {
         let mag = self.magnitude();
-        if mag.abs() < f64::EPSILON {
+        if mag.abs() < constants::EPS {
             return Err(MathError::ZeroVectorNormalization);
         }
         
