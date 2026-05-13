@@ -1,4 +1,9 @@
-use crate::math::quaternion::Quaternion;
+use crate::math::geometry::
+{
+    quaternion::Quaternion, 
+    vector3::Vector3
+};
+
 
 struct Transform {
     translation: Vector3,

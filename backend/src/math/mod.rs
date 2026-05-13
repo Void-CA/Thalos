@@ -1,2 +1,2 @@
-pub mod transform;
-pub mod quaternion;
+pub mod geometry;
+pub mod angle;
