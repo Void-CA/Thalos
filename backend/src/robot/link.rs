@@ -1,5 +1,5 @@
-use crate::math::geometry::spatial::Transform;
+use crate::math::geometry::spatial::Transform3D;
 
-pub struct Link<From, To> {
-    pub transform: Transform<From, To>,
+pub struct Link {
+    pub transform: Transform3D
 }
