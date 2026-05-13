@@ -25,8 +25,7 @@ impl JointType {
     pub fn motion(&self, q: f64) -> Transform3D {
         match self {
             JointType::Revolute(rev) => {
-                let rotation =
-                    Quaternion::from_axis_angle(rev.axis, q);
+                let rotation = Quaternion::from_axis_angle(rev.axis, q);
 
                 Transform3D::from_rotation(rotation)
             }
@@ -39,3 +38,4 @@ impl JointType {
         }
     }
 }
+
