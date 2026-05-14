@@ -23,22 +23,6 @@ pub enum JointType {
 }
 
 impl JointType {
-    pub fn motion(&self, q: f64) -> Transform3D {
-        match self {
-            JointType::Revolute(rev) => {
-                let rotation = Quaternion::from_axis_angle(rev.axis, q);
-
-                Transform3D::from_rotation(rotation)
-            }
-
-            JointType::Prismatic(pris) => {
-                Transform3D::from_translation(
-                    pris.direction.into_inner() * q
-                )
-            }
-        }
-    }
-
     pub fn limits(&self) -> JointLimits {
         match self {
             JointType::Revolute(rev) => rev.limits,
@@ -50,6 +34,20 @@ impl JointType {
         match self {
             JointType::Revolute(rev) => rev.id,
             JointType::Prismatic(pris) => pris.id,
+        }
+    }
+
+    pub fn motion(&self, q: f64) -> Transform3D {
+        match self {
+            JointType::Revolute(j) => j.motion(q),
+            JointType::Prismatic(j) => j.motion(q),
+        }
+    }
+
+    pub fn origin(&self) -> &Transform3D {
+        match self {
+            JointType::Revolute(j) => &j.origin,
+            JointType::Prismatic(j) => &j.origin,
         }
     }
 }

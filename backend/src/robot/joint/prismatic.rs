@@ -19,4 +19,10 @@ impl PrismaticJoint {
             origin  
         }
     }
+
+    pub fn motion(&self, q: f64) -> Transform3D {
+        Transform3D::from_translation(
+            self.direction.into_inner() * q
+        )
+    }
 }
