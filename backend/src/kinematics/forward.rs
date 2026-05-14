@@ -1,6 +1,6 @@
 use crate::{
     math::geometry::spatial::Transform3D, 
-    robot::{joint::joint::JointType, serial_chain::SerialChain}
+    robot::serial_chain::SerialChain
 };
 
 pub struct ForwardKinematics {

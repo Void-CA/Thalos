@@ -1,7 +1,4 @@
-use crate::math::geometry::{
-    rotations::quaternion::Quaternion,
-    spatial::Transform3D
-};
+use crate::math::geometry::spatial::Transform3D;
 
 use crate::robot::joint::{
     prismatic::PrismaticJoint, 

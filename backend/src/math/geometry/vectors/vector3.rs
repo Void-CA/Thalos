@@ -1,9 +1,6 @@
-use std::ops::Mul;
-
 use crate::math::{
     constants,
-    error::MathError, 
-    traits::products::{Cross, Dot}
+    error::MathError
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
