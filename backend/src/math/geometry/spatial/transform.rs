@@ -1,5 +1,7 @@
 use crate::math::geometry::{rotations::Quaternion, vectors::Vector3};
 
+
+#[derive(Debug, Clone)]
 pub struct Transform3D {
     pub translation: Vector3,
     pub rotation: Quaternion,
@@ -24,6 +26,16 @@ impl Transform3D {
         Self {
             translation: Vector3::zero(),
             rotation: Quaternion::identity(),
+        }
+    }
+
+    pub fn compose(&self, other: &Self) -> Self {
+        let translation = self.translation + self.rotation.rotate_vector(other.translation);
+        let rotation = self.rotation * other.rotation;
+
+        Self {
+            translation,
+            rotation,
         }
     }
 }
