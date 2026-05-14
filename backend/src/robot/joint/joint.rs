@@ -9,6 +9,7 @@ use crate::robot::joint::{
 };
 
 
+pub type JointId = u32;
 
 #[derive(Debug, Clone, Copy)]
 pub struct JointLimits {
