@@ -38,5 +38,19 @@ impl JointType {
             }
         }
     }
+
+    pub fn limits(&self) -> JointLimits {
+        match self {
+            JointType::Revolute(rev) => rev.limits,
+            JointType::Prismatic(pris) => pris.distance_limits,
+        }
+    }
+
+    pub fn id(&self) -> JointId {
+        match self {
+            JointType::Revolute(rev) => rev.id,
+            JointType::Prismatic(pris) => pris.id,
+        }
+    }
 }
 
