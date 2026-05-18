@@ -1,6 +1,7 @@
 use crate::{
     math::geometry::rigid::Transform3D, 
-    robot::serial_chain::SerialChain
+    robot::serial_chain::SerialChain, 
+    spatial::{frame::Frame, pose::Pose}
 };
 
 pub struct ForwardKinematics {
@@ -12,9 +13,10 @@ impl ForwardKinematics {
         Self { chain }
     }
 
-    pub fn evaluate(&self, q: &[f64]) -> Vec<Transform3D> {
+    pub fn evaluate(&self, q: &[f64]) -> Vec<Pose> {
         let mut t = Transform3D::identity();
         let mut results = Vec::new();
+        let world_frame = Frame::world();
 
         for segment in &self.chain.segments {
 
@@ -30,7 +32,11 @@ impl ForwardKinematics {
             // 3. aplicar geometría del link EN FRAME ROTADO
             t = t.compose(&segment.link.transform);
 
-            results.push(t.clone());
+            results.push(Pose::new(
+                world_frame.id(),
+                segment.frame_id(),
+                t.clone()
+            ));
         }
 
         results
@@ -40,11 +46,24 @@ impl ForwardKinematics {
 #[cfg(test)]
 mod tests {
     use crate::{
-        kinematics::forward::ForwardKinematics, math::geometry::{rotations::
-            Quaternion, rigid::Transform3D, vectors::{UnitVector3, Vector3}}, robot::{joint::{joint::{JointLimits, JointType}, revolute::RevoluteJoint}, link::Link, serial_chain::{Segment, SerialChain}}
+        kinematics::forward::ForwardKinematics,
+        math::geometry::{
+            rigid::Transform3D, rotations::Quaternion, vectors::{UnitVector3, Vector3}
+        },
+        robot::{
+            joint::{
+                joint::{JointLimits, JointType},
+                revolute::RevoluteJoint,
+            },
+            link::Link,
+            serial_chain::{Segment, SerialChain},
+        },
+        spatial::frame::Frame,
     };
 
     fn build_simple_chain() -> SerialChain {
+        let frame = Frame::new(0, "link_0".into());
+
         let link = Link {
             id: 0,
             transform: Transform3D {
@@ -67,42 +86,45 @@ mod tests {
 
         SerialChain {
             segments: vec![
-                Segment { joint, link }
+                Segment::new(frame, joint, link)
             ],
         }
     }
 
     #[test]
     fn fk_single_link_zero_rotation() {
-        let chain = build_simple_chain(); // 1 segment
-
+        let chain = build_simple_chain();
         let fk = ForwardKinematics::new(chain);
 
         let q = vec![0.0];
-
         let result = fk.evaluate(&q);
 
         let last = result.last().unwrap();
 
-        assert!((last.translation.x - 1.0).abs() < 1e-6);
-        assert!(last.translation.y.abs() < 1e-6);
-        assert!(last.translation.z.abs() < 1e-6);
+        let t = last.transform();
+
+        assert!((t.translation.x - 1.0).abs() < 1e-6);
+        assert!(t.translation.y.abs() < 1e-6);
+        assert!(t.translation.z.abs() < 1e-6);
+
+        assert_eq!(last.reference_id(), Frame::world().id());
+        assert_eq!(last.target_id(), 0);
     }
 
     #[test]
     fn fk_single_link_90deg() {
         let chain = build_simple_chain();
-
         let fk = ForwardKinematics::new(chain);
 
         let q = vec![std::f64::consts::FRAC_PI_2];
-
         let result = fk.evaluate(&q);
 
         let last = result.last().unwrap();
 
-        assert!((last.translation.x - 0.0).abs() < 1e-6);
-        assert!((last.translation.y - 1.0).abs() < 1e-6);
-    }
+        let t = last.transform();
 
+        assert!((t.translation.x - 0.0).abs() < 1e-6);
+        assert!((t.translation.y - 1.0).abs() < 1e-6);
+        assert!(t.translation.z.abs() < 1e-6);
+    }
 }
