@@ -1,4 +1,4 @@
-use crate::spatial::frame::FrameId;
+use crate::spatial::frame::frame::FrameId;
 use crate::math::geometry::rigid::Transform3D;
 
 pub struct Pose {
