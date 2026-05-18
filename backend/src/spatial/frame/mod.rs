@@ -1,4 +1,4 @@
 pub mod frame;
-pub mod frame_graph;
+pub mod graph;
 
 pub use frame::{Frame, FrameId};
