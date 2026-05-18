@@ -1,5 +1,5 @@
 use std::{marker::PhantomData, ops::Mul};
-use crate::math::geometry::spatial::{Transform, Transform3D};
+use crate::math::geometry::rigid::{Transform, Transform3D};
 
 impl<A, B, C> Mul<Transform<B, C>> for Transform<A, B> {
     type Output = Transform<A, C>;

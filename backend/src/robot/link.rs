@@ -1,4 +1,4 @@
-use crate::math::geometry::spatial::Transform3D;
+use crate::math::geometry::rigid::Transform3D;
 
 pub type LinkId = u32;
 pub struct Link {

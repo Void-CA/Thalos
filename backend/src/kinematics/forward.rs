@@ -1,5 +1,5 @@
 use crate::{
-    math::geometry::spatial::Transform3D, 
+    math::geometry::rigid::Transform3D, 
     robot::serial_chain::SerialChain
 };
 
@@ -41,7 +41,7 @@ impl ForwardKinematics {
 mod tests {
     use crate::{
         kinematics::forward::ForwardKinematics, math::geometry::{rotations::
-            Quaternion, spatial::Transform3D, vectors::{UnitVector3, Vector3}}, robot::{joint::{joint::{JointLimits, JointType}, revolute::RevoluteJoint}, link::Link, serial_chain::{Segment, SerialChain}}
+            Quaternion, rigid::Transform3D, vectors::{UnitVector3, Vector3}}, robot::{joint::{joint::{JointLimits, JointType}, revolute::RevoluteJoint}, link::Link, serial_chain::{Segment, SerialChain}}
     };
 
     fn build_simple_chain() -> SerialChain {

@@ -1,5 +1,5 @@
 use crate::{
-    math::geometry::{rotations::Quaternion, spatial::Transform3D, vectors::UnitVector3}, 
+    math::geometry::{rotations::Quaternion, rigid::Transform3D, vectors::UnitVector3}, 
     robot::joint::joint::{JointId, JointLimits}};
 
 
