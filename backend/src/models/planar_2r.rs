@@ -73,7 +73,7 @@ pub fn planar_2r(l1: f64, l2: f64) -> SerialChain {
         id: 1,
 
         transform: Transform3D::from_translation(
-            Vector3::new(5.0, 0.0, 0.0)
+            Vector3::new(l2, 0.0, 0.0)
         ),
     };
 
@@ -99,7 +99,7 @@ mod tests {
 
     #[test]
     fn testing() {
-        let robot = planar_2r();
+        let robot = planar_2r(5.0, 5.0);
         let ee_id = *robot.end_effector().unwrap();
         let fk = ForwardKinematics::new(robot);
 

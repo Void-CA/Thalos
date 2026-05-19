@@ -180,7 +180,7 @@ use crate::models::single_revolute::single_revolute;
     #[test]
     fn fk_planar_2r_returns_two_poses() {
 
-        let robot = planar_2r();
+        let robot = planar_2r(1.0, 1.0);
 
         let fk = ForwardKinematics::new(robot);
 
@@ -198,7 +198,7 @@ use crate::models::single_revolute::single_revolute;
     #[test]
     fn fk_planar_2r_all_poses_are_global() {
 
-        let robot = planar_2r();
+        let robot = planar_2r(1.0, 1.0);
 
         let fk = ForwardKinematics::new(robot);
 
@@ -224,7 +224,7 @@ use crate::models::single_revolute::single_revolute;
     #[test]
     fn fk_planar_2r_zero_configuration_places_end_effector_at_2_0_0() {
 
-        let robot = planar_2r();
+        let robot = planar_2r(1.0, 1.0);
 
         let end_effector = robot
             .segments
@@ -257,7 +257,7 @@ use crate::models::single_revolute::single_revolute;
     #[test]
     fn fk_planar_2r_first_joint_90_deg_places_end_effector_at_0_2_0() {
 
-        let robot = planar_2r();
+        let robot = planar_2r(1.0, 1.0);
 
         let end_effector = robot
             .segments
@@ -290,7 +290,7 @@ use crate::models::single_revolute::single_revolute;
     #[test]
     fn fk_planar_2r_folded_configuration_places_end_effector_at_1_1_0() {
 
-        let robot = planar_2r();
+        let robot = planar_2r(1.0, 1.0);
 
         let end_effector = robot
             .segments
@@ -323,7 +323,7 @@ use crate::models::single_revolute::single_revolute;
     #[test]
     fn fk_planar_2r_first_link_pose_is_correct_at_zero_configuration() {
 
-        let robot = planar_2r();
+        let robot = planar_2r(1.0, 1.0);
 
         let first_link = robot
             .segments
@@ -356,7 +356,7 @@ use crate::models::single_revolute::single_revolute;
     #[test]
     fn fk_planar_2r_second_joint_rotates_relative_to_first_joint() {
 
-        let robot = planar_2r();
+        let robot = planar_2r(1.0, 1.0);
 
         let end_effector = robot
             .segments
