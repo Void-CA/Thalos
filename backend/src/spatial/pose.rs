@@ -23,4 +23,9 @@ impl Pose {
     pub fn transform(&self) -> &Transform3D {
         &self.transform
     }
+
+    pub fn is_global(&self) -> bool {
+        self.reference_id() == FrameId::World
+    }
+
 }
