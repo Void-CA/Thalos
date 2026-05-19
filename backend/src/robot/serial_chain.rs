@@ -11,4 +11,11 @@ impl SerialChain {
     pub fn frame(&self, id: &FrameId) -> Option<&Frame> {
         self.frames.get(id)
     }
+
+    pub fn end_effector(&self) -> Option<&FrameId> {
+
+        self.segments
+            .last()
+            .map(|s| &s.child)
+    }
 }

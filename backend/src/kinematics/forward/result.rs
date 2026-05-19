@@ -5,6 +5,7 @@ use crate::spatial::{
     pose::Pose
 };
 
+#[derive(Debug)]
 pub struct FKResult {
     poses: HashMap<FrameId, Pose>,
 }
@@ -21,4 +22,5 @@ impl FKResult {
     pub fn frames(&self) -> impl Iterator<Item = &FrameId> {
         self.poses.keys()
     }
+
 }

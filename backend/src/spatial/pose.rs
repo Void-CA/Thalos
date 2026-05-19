@@ -1,6 +1,7 @@
 use crate::spatial::frame::frame::FrameId;
 use crate::math::geometry::rigid::Transform3D;
 
+#[derive(Debug, Clone)]
 pub struct Pose {
     reference: FrameId,
     target: FrameId,
