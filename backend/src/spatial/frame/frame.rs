@@ -4,6 +4,12 @@ pub enum FrameId {
     Id(u64),
 }
 
+impl FrameId {
+    pub fn new(id: u64) -> Self {
+        Self::Id(id)
+    }
+}
+
 pub struct Frame {
     id: FrameId,
     name: String,

@@ -14,6 +14,12 @@ pub struct JointLimits {
     pub max: f64,
 }
 
+impl JointLimits {
+    pub fn new(min: f64, max: f64) -> Self {
+        Self { min, max }
+    }
+}
+
 pub enum JointType {
     Revolute(RevoluteJoint),
     Prismatic(PrismaticJoint),
