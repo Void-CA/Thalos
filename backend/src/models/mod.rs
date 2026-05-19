@@ -16,4 +16,4 @@ pub use crate::math::{
     }
 };
 
-pub use crate::spatial::frame::{FrameId, Frame};
+pub use crate::spatial::frame::{FrameId, Frame, FrameRegistry};

@@ -1,4 +1,4 @@
-#[derive(Clone, Hash, PartialEq, Eq)]
+#[derive(Clone, Hash, PartialEq, Eq, Debug)]
 pub enum FrameId {
     World,
     Id(u64),
