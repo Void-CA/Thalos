@@ -13,7 +13,9 @@ pub use crate::math::{
     geometry::{
         vectors::{UnitVector3, Vector3},
         rigid::Transform3D
-    }
+    },
+
+    constants::{EPS, PI}
 };
 
 pub use crate::spatial::frame::{FrameId, Frame, FrameRegistry};

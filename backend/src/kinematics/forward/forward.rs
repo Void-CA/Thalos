@@ -56,7 +56,8 @@ impl ForwardKinematics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::single_revolute::single_revolute;
+    use crate::models::planar_2r::planar_2r;
+use crate::models::single_revolute::single_revolute;
     use crate::math::constants::{EPS, PI};
 
     #[test]
@@ -173,6 +174,223 @@ mod tests {
         assert!(
             pose.is_global(),
             "Pose should be global (reference == World)"
+        );
+    }
+
+    #[test]
+    fn fk_planar_2r_returns_two_poses() {
+
+        let robot = planar_2r();
+
+        let fk = ForwardKinematics::new(robot);
+
+        let result = fk.evaluate(&[0.0, 0.0]);
+
+        let frames: Vec<_> = result.frames().collect();
+
+        assert_eq!(
+            frames.len(),
+            2,
+            "Planar 2R should generate exactly two poses"
+        );
+    }
+
+    #[test]
+    fn fk_planar_2r_all_poses_are_global() {
+
+        let robot = planar_2r();
+
+        let fk = ForwardKinematics::new(robot);
+
+        let result = fk.evaluate(&[0.0, 0.0]);
+
+        for frame in result.frames() {
+
+            let pose = result.pose(frame).unwrap();
+
+            assert!(
+                pose.is_global(),
+                "All poses should be global"
+            );
+
+            assert_eq!(
+                pose.reference_id(),
+                FrameId::World,
+                "Reference frame should be World"
+            );
+        }
+    }
+
+    #[test]
+    fn fk_planar_2r_zero_configuration_places_end_effector_at_2_0_0() {
+
+        let robot = planar_2r();
+
+        let end_effector = robot
+            .segments
+            .last()
+            .unwrap()
+            .child
+            .clone();
+
+        let fk = ForwardKinematics::new(robot);
+
+        let result = fk.evaluate(&[0.0, 0.0]);
+
+        let pose = result.pose(&end_effector).unwrap();
+
+        let t = &pose.transform().translation;
+
+        assert!(
+            (t.x - 2.0).abs() < EPS
+                && t.y.abs() < EPS
+                && t.z.abs() < EPS,
+
+            "End effector should be at (2, 0, 0), got ({}, {}, {})",
+
+            t.x,
+            t.y,
+            t.z
+        );
+    }
+
+    #[test]
+    fn fk_planar_2r_first_joint_90_deg_places_end_effector_at_0_2_0() {
+
+        let robot = planar_2r();
+
+        let end_effector = robot
+            .segments
+            .last()
+            .unwrap()
+            .child
+            .clone();
+
+        let fk = ForwardKinematics::new(robot);
+
+        let result = fk.evaluate(&[PI / 2.0, 0.0]);
+
+        let pose = result.pose(&end_effector).unwrap();
+
+        let t = &pose.transform().translation;
+
+        assert!(
+            t.x.abs() < EPS
+                && (t.y - 2.0).abs() < EPS
+                && t.z.abs() < EPS,
+
+            "End effector should be at (0, 2, 0), got ({}, {}, {})",
+
+            t.x,
+            t.y,
+            t.z
+        );
+    }
+
+    #[test]
+    fn fk_planar_2r_folded_configuration_places_end_effector_at_1_1_0() {
+
+        let robot = planar_2r();
+
+        let end_effector = robot
+            .segments
+            .last()
+            .unwrap()
+            .child
+            .clone();
+
+        let fk = ForwardKinematics::new(robot);
+
+        let result = fk.evaluate(&[PI / 2.0, -PI / 2.0]);
+
+        let pose = result.pose(&end_effector).unwrap();
+
+        let t = &pose.transform().translation;
+
+        assert!(
+            (t.x - 1.0).abs() < EPS
+                && (t.y - 1.0).abs() < EPS
+                && t.z.abs() < EPS,
+
+            "End effector should be at (1, 1, 0), got ({}, {}, {})",
+
+            t.x,
+            t.y,
+            t.z
+        );
+    }
+
+    #[test]
+    fn fk_planar_2r_first_link_pose_is_correct_at_zero_configuration() {
+
+        let robot = planar_2r();
+
+        let first_link = robot
+            .segments
+            .first()
+            .unwrap()
+            .child
+            .clone();
+
+        let fk = ForwardKinematics::new(robot);
+
+        let result = fk.evaluate(&[0.0, 0.0]);
+
+        let pose = result.pose(&first_link).unwrap();
+
+        let t = &pose.transform().translation;
+
+        assert!(
+            (t.x - 1.0).abs() < EPS
+                && t.y.abs() < EPS
+                && t.z.abs() < EPS,
+
+            "First link should be at (1, 0, 0), got ({}, {}, {})",
+
+            t.x,
+            t.y,
+            t.z
+        );
+    }
+
+    #[test]
+    fn fk_planar_2r_second_joint_rotates_relative_to_first_joint() {
+
+        let robot = planar_2r();
+
+        let end_effector = robot
+            .segments
+            .last()
+            .unwrap()
+            .child
+            .clone();
+
+        let fk = ForwardKinematics::new(robot);
+
+        // q1 = 0
+        // q2 = π/2
+        //
+        // link1 -> (1,0)
+        // link2 rotates locally upward
+        //
+        // expected = (1,1)
+
+        let result = fk.evaluate(&[0.0, PI / 2.0]);
+
+        let pose = result.pose(&end_effector).unwrap();
+
+        let t = &pose.transform().translation;
+
+        assert!(
+            (t.x - 1.0).abs() < EPS
+                && (t.y - 1.0).abs() < EPS
+                && t.z.abs() < EPS,
+
+            "End effector should be at (1, 1, 0), got ({}, {}, {})",
+
+            t.x,
+            t.y,
+            t.z
         );
     }
 }
