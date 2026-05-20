@@ -37,4 +37,8 @@ impl Vector3 {
             z: self.z / mag,
         })
     }
+
+    pub fn z_axis() -> Self {
+        Self { x: 0.0, y: 0.0, z: 1.0 }
+    }
 }

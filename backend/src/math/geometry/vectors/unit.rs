@@ -12,6 +12,10 @@ impl UnitVector3 {
     pub fn into_inner(self) -> Vector3 {
         self.0
     }
+
+    pub fn z_axis() -> Self {
+        Self(Vector3::z_axis())
+    }
 }
 
 impl std::ops::Deref for UnitVector3 {
