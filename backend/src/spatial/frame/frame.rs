@@ -10,6 +10,15 @@ impl FrameId {
     }
 }
 
+impl std::fmt::Display for FrameId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FrameId::World => write!(f, "world"),
+            FrameId::Id(id) => write!(f, "frame_{}", id),
+        }
+    }
+}
+
 pub struct Frame {
     id: FrameId,
     name: String,

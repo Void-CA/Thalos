@@ -4,7 +4,8 @@ use super::segment::Segment;
 
 pub struct SerialChain {
     pub segments: Vec<Segment>,
-    pub frames: FrameRegistry
+    pub frames: FrameRegistry,
+    pub end_effector: FrameId,
 }
 
 impl SerialChain {
@@ -12,10 +13,11 @@ impl SerialChain {
         self.frames.get(id)
     }
 
-    pub fn end_effector(&self) -> Option<&FrameId> {
+    pub fn end_effector(&self) -> &FrameId {
+        &self.end_effector
+    }
 
-        self.segments
-            .last()
-            .map(|s| &s.child)
+    pub fn end_effector_frame(&self) -> Option<&Frame> {
+        self.frames.get(&self.end_effector)
     }
 }

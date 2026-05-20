@@ -31,4 +31,11 @@ impl FrameRegistry {
     pub fn contains(&self, id: &FrameId) -> bool {
         self.frames.contains_key(id)
     }
+
+    pub fn register(&mut self, frame: Frame) -> FrameId {
+        let id = frame.id().clone();
+        self.frames.insert(id.clone(), frame);
+        id
+    }
+
 }

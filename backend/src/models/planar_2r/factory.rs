@@ -1,16 +1,20 @@
 use crate::prelude::*;
 
-pub fn create_planar_2r(l1: f64, l2: f64) -> SerialChain {
+pub fn create_planar_2r(
+    l1: f64,
+    l2: f64,
+) -> SerialChain {
 
-    let mut chain = SerialChain {
-        segments: Vec::new(),
-        frames: FrameRegistry::new(),
-    };
+    let mut builder = SerialChainBuilder::new();
 
     // Frames
-    let link_1_frame = chain.frames.create("link_1");
+    let link_1_frame = builder
+        .frames_mut()
+        .create("link_1");
 
-    let link_2_frame = chain.frames.create("link_2");
+    let link_2_frame = builder
+        .frames_mut()
+        .create("link_2");
 
     // Joint 1
     let joint1 = JointType::Revolute(
@@ -40,33 +44,35 @@ pub fn create_planar_2r(l1: f64, l2: f64) -> SerialChain {
     };
 
     // Segment 1
-    let segment1 = Segment {
-        parent: FrameId::World,
+    builder.add_segment(
+        Segment {
+            parent: FrameId::World,
 
-        child: link_1_frame.clone(),
+            child: link_1_frame.clone(),
 
-        joint: joint1,
+            joint: joint1,
 
-        link: link1,
-    };
-
-    chain.segments.push(segment1);
+            link: link1,
+        }
+    );
 
     // Joint 2
-    let joint2 = RevoluteJoint {
-        id: 1,
+    let joint2 = JointType::Revolute(
+        RevoluteJoint {
+            id: 1,
 
-        axis: UnitVector3::new(
-            Vector3::new(0.0, 0.0, 1.0)
-        ).unwrap(),
+            axis: UnitVector3::new(
+                Vector3::new(0.0, 0.0, 1.0)
+            ).unwrap(),
 
-        limits: JointLimits {
-            min: -PI,
-            max: PI,
-        },
+            limits: JointLimits {
+                min: -PI,
+                max: PI,
+            },
 
-        origin: Transform3D::identity(),
-    };
+            origin: Transform3D::identity(),
+        }
+    );
 
     // Link 2
     let link2 = Link {
@@ -78,18 +84,20 @@ pub fn create_planar_2r(l1: f64, l2: f64) -> SerialChain {
     };
 
     // Segment 2
-    let segment2 = Segment {
-        parent: link_1_frame,
+    builder.add_segment(
+        Segment {
+            parent: link_1_frame,
 
-        child: link_2_frame,
+            child: link_2_frame.clone(),
 
-        joint: JointType::Revolute(joint2),
+            joint: joint2,
 
-        link: link2,
-    };
+            link: link2,
+        }
+    );
 
-    chain.segments.push(segment2);
+    // Explicit end effector
+    builder.set_end_effector(link_2_frame);
 
-    chain
+    builder.build().unwrap()
 }
-

@@ -2,7 +2,9 @@ pub use crate::robot::{
     joint::{JointType, RevoluteJoint, PrismaticJoint, JointLimits},
     serial_chain::SerialChain,
     link::Link,
-    segment::Segment
+    segment::Segment,
+    error::RobotBuilderError,
+    builder::SerialChainBuilder,
 };
 
 pub use crate::math::{

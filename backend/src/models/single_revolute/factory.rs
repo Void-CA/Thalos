@@ -1,36 +1,49 @@
-use crate::prelude::*;
+use crate::{prelude::*, robot::{joint, link}};
 
 pub fn create_single_revolute() -> SerialChain {
-    let world = FrameId::World;
-    let mut frames = FrameRegistry::new();
-    let segment_1_frame_id = frames.create("joint_1");
+    let mut builder = SerialChainBuilder::new();
+    let link_1_frame = builder
+        .frames_mut()
+        .create("link_1");
 
-    let joint_1 = JointType::Revolute(
-        RevoluteJoint::new(
-            0, 
-            UnitVector3::new(Vector3::new(0.0, 0.0, 1.0)).unwrap(), 
-            JointLimits::new(-std::f64::INFINITY, std::f64::INFINITY),
-            Transform3D::identity()
-        )
+
+    let joint1 = JointType::Revolute(
+        RevoluteJoint {
+            id: 0,
+
+            axis: UnitVector3::new(
+                Vector3::new(0.0, 0.0, 1.0)
+            ).unwrap(),
+
+            limits: JointLimits {
+                min: -PI,
+                max: PI,
+            },
+
+            origin: Transform3D::identity(),
+        }
     );
-        
 
-    let link_1 = Link::new(
-        0,
-        Transform3D::from_translation(
+    let link1 = Link {
+        id: 0,
+
+        transform: Transform3D::from_translation(
             Vector3::new(1.0, 0.0, 0.0)
         ),
-    );
-
-    let segment = Segment {
-        parent: world,
-        child: segment_1_frame_id,
-
-        joint: joint_1,
-        link: link_1,
     };
 
-    SerialChain{segments: vec![segment], frames}
+    builder.add_segment(
+        Segment { 
+            parent: FrameId::World,
+            child: link_1_frame,
+            joint: joint1,
+            link: link1 
+        }
+    );
+
+    builder.set_end_effector(link_1_frame);
+
+    builder.build().unwrap()
 }
 
 #[cfg(test)]
