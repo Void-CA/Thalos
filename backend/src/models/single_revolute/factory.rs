@@ -1,6 +1,6 @@
-use crate::models::*;
+use crate::prelude::*;
 
-pub fn single_revolute() -> SerialChain {
+pub fn create_single_revolute() -> SerialChain {
     let world = FrameId::World;
     let mut frames = FrameRegistry::new();
     let segment_1_frame_id = frames.create("joint_1");
@@ -39,13 +39,13 @@ mod tests {
     use crate::math::constants::EPS;
     #[test]
     fn single_revolute_has_one_segment() {
-        let robot = single_revolute();
+        let robot = create_single_revolute();
         assert_eq!(robot.segments.len(), 1, "Should have exactly one segment");
     }
 
     #[test]
     fn single_revolute_parent_is_world() {
-        let robot = single_revolute();
+        let robot = create_single_revolute();
         assert_eq!(
             robot.segments[0].parent,
             FrameId::World,
@@ -55,7 +55,7 @@ mod tests {
 
     #[test]
     fn single_revolute_child_frame_exists_in_registry() {
-        let robot = single_revolute();
+        let robot = create_single_revolute();
         let child_frame_id = &robot.segments[0].child;
         assert!(
             robot.frames.get(child_frame_id).is_some(),
@@ -65,7 +65,7 @@ mod tests {
 
     #[test]
     fn single_revolute_joint_is_revolute_with_z_axis() {
-        let robot = single_revolute();
+        let robot = create_single_revolute();
         let joint = &robot.segments[0].joint;
 
         match joint {
@@ -86,7 +86,7 @@ mod tests {
 
     #[test]
     fn single_revolute_link_has_x_translation() {
-        let robot = single_revolute();
+        let robot = create_single_revolute();
         let link_transform = &robot.segments[0].link.transform;
 
         // El link tiene una translation de (1, 0, 0) - eje X
@@ -102,7 +102,7 @@ mod tests {
 
     #[test]
     fn single_revolute_joint_has_correct_id() {
-        let robot = single_revolute();
+        let robot = create_single_revolute();
         let joint = &robot.segments[0].joint;
         
         match joint {

@@ -1,6 +1,6 @@
-use crate::models::*;
+use crate::prelude::*;
 
-pub fn planar_2r(l1: f64, l2: f64) -> SerialChain {
+pub fn create_planar_2r(l1: f64, l2: f64) -> SerialChain {
 
     let mut chain = SerialChain {
         segments: Vec::new(),
@@ -93,22 +93,3 @@ pub fn planar_2r(l1: f64, l2: f64) -> SerialChain {
     chain
 }
 
-mod tests {
-    use super::*;
-    use crate::kinematics::forward::ForwardKinematics;
-
-    #[test]
-    fn testing() {
-        let robot = planar_2r(5.0, 5.0);
-        let ee_id = *robot.end_effector().unwrap();
-        let fk = ForwardKinematics::new(robot);
-
-        let q1 = PI / 4.0; // 45 degrees
-        let q2 = - PI / 6.0; // -30 degrees
-        let result = fk.evaluate(&[q1, q2]);
-
-        
-        let ee_pose = result.pose(&ee_id).unwrap();
-        println!("End Effector Position: {:?}", ee_pose.transform().translation);
-    }
-}
