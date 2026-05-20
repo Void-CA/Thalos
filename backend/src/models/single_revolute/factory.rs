@@ -2,26 +2,16 @@ use crate::{prelude::*, robot::{joint, link}};
 
 pub fn create_single_revolute() -> SerialChain {
     let mut builder = SerialChainBuilder::new();
-    let link_1_frame = builder
-        .frames_mut()
-        .create("link_1");
+    let link_1_frame = builder.create_frame("link_1");
 
 
     let joint1 = JointType::Revolute(
-        RevoluteJoint {
-            id: 0,
-
-            axis: UnitVector3::new(
-                Vector3::new(0.0, 0.0, 1.0)
-            ).unwrap(),
-
-            limits: JointLimits {
-                min: -PI,
-                max: PI,
-            },
-
-            origin: Transform3D::identity(),
-        }
+        RevoluteJoint::new(
+            0, 
+            UnitVector3::z_axis(), 
+            JointLimits::new(-PI, PI), 
+            Transform3D::identity()
+        )
     );
 
     let link1 = Link {
@@ -45,6 +35,8 @@ pub fn create_single_revolute() -> SerialChain {
 
     builder.build().unwrap()
 }
+
+
 
 #[cfg(test)]
 mod tests {

@@ -30,6 +30,10 @@ impl SerialChainBuilder {
         &mut self.frames
     }
 
+    pub fn create_frame(&mut self, name: &str) -> FrameId {
+        self.frames.create(name)
+    }
+
     pub fn add_frame(&mut self, frame: Frame) {
         self.frames.register(frame);
     }

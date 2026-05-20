@@ -8,30 +8,18 @@ pub fn create_planar_2r(
     let mut builder = SerialChainBuilder::new();
 
     // Frames
-    let link_1_frame = builder
-        .frames_mut()
-        .create("link_1");
+    let link_1_frame = builder.create_frame("link_1");
 
-    let link_2_frame = builder
-        .frames_mut()
-        .create("link_2");
+    let link_2_frame = builder.create_frame("link_2");
 
     // Joint 1
     let joint1 = JointType::Revolute(
-        RevoluteJoint {
-            id: 0,
-
-            axis: UnitVector3::new(
-                Vector3::new(0.0, 0.0, 1.0)
-            ).unwrap(),
-
-            limits: JointLimits {
-                min: -PI,
-                max: PI,
-            },
-
-            origin: Transform3D::identity(),
-        }
+        RevoluteJoint::new(
+            0, 
+            UnitVector3::z_axis(), 
+            JointLimits::new(-PI, PI), 
+            Transform3D::identity()
+        )
     );
 
     // Link 1
@@ -58,20 +46,12 @@ pub fn create_planar_2r(
 
     // Joint 2
     let joint2 = JointType::Revolute(
-        RevoluteJoint {
-            id: 1,
-
-            axis: UnitVector3::new(
-                Vector3::new(0.0, 0.0, 1.0)
-            ).unwrap(),
-
-            limits: JointLimits {
-                min: -PI,
-                max: PI,
-            },
-
-            origin: Transform3D::identity(),
-        }
+        RevoluteJoint::new(
+            1,
+            UnitVector3::z_axis(),
+            JointLimits::new(-PI, PI),
+            Transform3D::identity()
+        )
     );
 
     // Link 2
