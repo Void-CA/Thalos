@@ -8,10 +8,13 @@ robot:
 
 	@mkdir -p $(MODELS_DIR)/$(NAME)/tests
 
+	@echo "pub mod factory;" > $(MODELS_DIR)/$(NAME)/mod.rs
+	@echo "pub mod tests;" >> $(MODELS_DIR)/$(NAME)/mod.rs
+
 	@touch $(MODELS_DIR)/$(NAME)/factory.rs
-	@touch $(MODELS_DIR)/$(NAME)/mod.rs
+
+	@echo "pub mod fk;" > $(MODELS_DIR)/$(NAME)/tests/mod.rs
 
 	@touch $(MODELS_DIR)/$(NAME)/tests/fk.rs
-	@touch $(MODELS_DIR)/$(NAME)/tests/mod.rs
 
 	@echo "Robot model '$(NAME)' created."
