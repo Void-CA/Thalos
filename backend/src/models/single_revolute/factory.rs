@@ -1,4 +1,4 @@
-use crate::{prelude::*, robot::{joint, link}};
+use crate::prelude::*;
 
 pub fn create_single_revolute() -> SerialChain {
     let mut builder = SerialChainBuilder::new();
