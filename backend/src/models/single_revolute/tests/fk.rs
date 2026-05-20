@@ -2,7 +2,7 @@ use crate::prelude::*;
 use crate::models::factories::create_single_revolute;
 
 #[test]
-    fn fk_single_revolute_zero_angle_returns_x_position() {
+    fn zero_angle_returns_x_position() {
         let robot = create_single_revolute();
         let fk = ForwardKinematics::new(robot);
         
@@ -31,7 +31,7 @@ use crate::models::factories::create_single_revolute;
     }
 
     #[test]
-    fn fk_single_revolute_pi_over_2_returns_y_position() {
+    fn pi_over_2_returns_y_position() {
         let robot = create_single_revolute();
         let fk = ForwardKinematics::new(robot);
         
@@ -53,7 +53,7 @@ use crate::models::factories::create_single_revolute;
     }
 
     #[test]
-    fn fk_single_revolute_pi_returns_negative_x_position() {
+    fn pi_returns_negative_x_position() {
         let robot = create_single_revolute();
         let fk = ForwardKinematics::new(robot);
         
@@ -75,7 +75,7 @@ use crate::models::factories::create_single_revolute;
     }
 
     #[test]
-    fn fk_single_revolute_has_one_pose() {
+    fn has_one_pose() {
         let robot = create_single_revolute();
         let fk = ForwardKinematics::new(robot);
         
@@ -86,7 +86,7 @@ use crate::models::factories::create_single_revolute;
     }
 
     #[test]
-    fn fk_single_revolute_pose_target_is_child_frame() {
+    fn pose_target_is_child_frame() {
         let robot = create_single_revolute();
         let fk = ForwardKinematics::new(robot);
         
@@ -103,7 +103,7 @@ use crate::models::factories::create_single_revolute;
     }
 
     #[test]
-    fn fk_single_revolute_pose_is_global() {
+    fn pose_is_global() {
         let robot = create_single_revolute();
         let fk = ForwardKinematics::new(robot);
         

@@ -38,13 +38,13 @@ mod tests {
     use super::*;
     use crate::math::constants::EPS;
     #[test]
-    fn single_revolute_has_one_segment() {
+    fn has_one_segment() {
         let robot = create_single_revolute();
         assert_eq!(robot.segments.len(), 1, "Should have exactly one segment");
     }
 
     #[test]
-    fn single_revolute_parent_is_world() {
+    fn parent_is_world() {
         let robot = create_single_revolute();
         assert_eq!(
             robot.segments[0].parent,
@@ -54,7 +54,7 @@ mod tests {
     }
 
     #[test]
-    fn single_revolute_child_frame_exists_in_registry() {
+    fn child_frame_exists_in_registry() {
         let robot = create_single_revolute();
         let child_frame_id = &robot.segments[0].child;
         assert!(
@@ -64,7 +64,7 @@ mod tests {
     }
 
     #[test]
-    fn single_revolute_joint_is_revolute_with_z_axis() {
+    fn joint_is_revolute_with_z_axis() {
         let robot = create_single_revolute();
         let joint = &robot.segments[0].joint;
 
@@ -85,7 +85,7 @@ mod tests {
     }
 
     #[test]
-    fn single_revolute_link_has_x_translation() {
+    fn link_has_x_translation() {
         let robot = create_single_revolute();
         let link_transform = &robot.segments[0].link.transform;
 
@@ -101,7 +101,7 @@ mod tests {
     }
 
     #[test]
-    fn single_revolute_joint_has_correct_id() {
+    fn joint_has_correct_id() {
         let robot = create_single_revolute();
         let joint = &robot.segments[0].joint;
         
