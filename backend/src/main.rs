@@ -6,5 +6,6 @@ pub mod models;
 pub mod prelude;
 
 fn main() {
-    println!("Hello, world!");
+    println!("Hello, Thalos!");
+
 }
