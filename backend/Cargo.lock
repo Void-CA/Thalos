@@ -3,13 +3,6 @@
 version = 4
 
 [[package]]
-name = "backend"
-version = "0.1.0"
-dependencies = [
- "thiserror",
-]
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -37,6 +30,21 @@ dependencies = [
  "quote",
  "unicode-ident",
 ]
+
+[[package]]
+name = "thalos_api"
+version = "0.1.0"
+
+[[package]]
+name = "thalos_core"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
+name = "thalos_visual"
+version = "0.1.0"
 
 [[package]]
 name = "thiserror"

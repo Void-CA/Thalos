@@ -5,7 +5,3 @@ pub mod spatial;
 pub mod models;
 pub mod prelude;
 
-fn main() {
-    println!("Hello, Thalos!");
-
-}
