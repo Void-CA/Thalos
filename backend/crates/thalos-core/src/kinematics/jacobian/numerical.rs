@@ -5,7 +5,6 @@ use crate::kinematics::jacobian::{
 };
 
 use crate::math::constants::JACOBIAN_EPS;
-use crate::models::planar_2r::tests::fk;
 use crate::spatial::frame::FrameId;
 
 pub struct NumericalJacobian {
