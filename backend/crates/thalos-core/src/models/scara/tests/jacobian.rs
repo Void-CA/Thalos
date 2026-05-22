@@ -17,8 +17,8 @@ fn dimensions_are_correct() {
     let q = [0.0, 0.0, 0.0, 0.0];
     let j = jacobian.evaluate(&q);
     
-    assert_eq!(j.nrows(), 3, "SCARA Jacobian should have 3 rows (x, y, z)");
-    assert_eq!(j.ncols(), 4, "SCARA Jacobian should have 4 columns for 4 joints");
+    assert_eq!(j.linear().nrows(), 3, "SCARA Jacobian should have 3 rows (x, y, z)");
+    assert_eq!(j.linear().ncols(), 4, "SCARA Jacobian should have 4 columns for 4 joints");
 }
 
 #[test]
@@ -41,7 +41,7 @@ fn predicts_small_motion() {
         dq[joint_idx] = delta;
         
         // Predicted motion
-        let dx_pred = j.matrix() * nalgebra::DVector::from_vec(dq.clone());
+        let dx_pred = j.linear() * nalgebra::DVector::from_vec(dq.clone());
         
         // Real FK motion
         let q2 = [
@@ -113,10 +113,10 @@ fn at_zero_configuration() {
     // ∂x/∂θ4 = 0, ∂y/∂θ4 = 0, ∂z/∂θ4 = 0
     
     // Revolute joints (XY plane)
-    let dx_dq1 = j[(0, 0)];
-    let dx_dq2 = j[(0, 1)];
-    let dy_dq1 = j[(1, 0)];
-    let dy_dq2 = j[(1, 1)];
+    let dx_dq1 = j.linear()[(0, 0)];
+    let dx_dq2 = j.linear()[(0, 1)];
+    let dy_dq1 = j.linear()[(1, 0)];
+    let dy_dq2 = j.linear()[(1, 1)];
     
     assert!(
         dx_dq1.abs() < 1e-6,
@@ -143,7 +143,7 @@ fn at_zero_configuration() {
     );
     
     // Prismatic joint (Z axis)
-    let dz_dd3 = j[(2, 2)];
+    let dz_dd3 = j.linear()[(2, 2)];
     assert!(
         (dz_dd3 - 1.0).abs() < 1e-4,
         "dz/dd3 should be 1.0 at zero config, got {}",
@@ -151,9 +151,9 @@ fn at_zero_configuration() {
     );
     
     // Wrist joint (should not affect position)
-    let dx_dq4 = j[(0, 3)];
-    let dy_dq4 = j[(1, 3)];
-    let dz_dq4 = j[(2, 3)];
+    let dx_dq4 = j.linear()[(0, 3)];
+    let dy_dq4 = j.linear()[(1, 3)];
+    let dz_dq4 = j.linear()[(2, 3)];
     
     assert!(
         dx_dq4.abs() < 1e-6,
@@ -188,9 +188,9 @@ fn prismatic_joint_only_affects_z() {
         
         // La columna de la junta prismática (índice 2) debería tener:
         // dx/dd3 = 0, dy/dd3 = 0, dz/dd3 = 1
-        let dx_dd3 = j[(0, 2)];
-        let dy_dd3 = j[(1, 2)];
-        let dz_dd3 = j[(2, 2)];
+        let dx_dd3 = j.linear()[(0, 2)];
+        let dy_dd3 = j.linear()[(1, 2)];
+        let dz_dd3 = j.linear()[(2, 2)];
         
         assert!(
             dx_dd3.abs() < 1e-6,
@@ -224,9 +224,9 @@ fn wrist_joint_does_not_affect_position() {
     for q in test_configs {
         let j = jacobian.evaluate(&q);
         
-        let dx_dq4 = j[(0, 3)];
-        let dy_dq4 = j[(1, 3)];
-        let dz_dq4 = j[(2, 3)];
+        let dx_dq4 = j.linear()[(0, 3)];
+        let dy_dq4 = j.linear()[(1, 3)];
+        let dz_dq4 = j.linear()[(2, 3)];
         
         assert!(
             dx_dq4.abs() < 1e-6,
@@ -259,10 +259,10 @@ fn at_ninety_degrees_first_joint() {
     // ∂y/∂θ1 = 0
     // ∂y/∂θ2 = 0
     
-    let dx_dq1 = j[(0, 0)];
-    let dx_dq2 = j[(0, 1)];
-    let dy_dq1 = j[(1, 0)];
-    let dy_dq2 = j[(1, 1)];
+    let dx_dq1 = j.linear()[(0, 0)];
+    let dx_dq2 = j.linear()[(0, 1)];
+    let dy_dq1 = j.linear()[(1, 0)];
+    let dy_dq2 = j.linear()[(1, 1)];
     
     assert!(
         (dx_dq1 + 2.0).abs() < 1e-4,
@@ -296,12 +296,12 @@ fn approximates_velocity_correctly() {
     let j = jacobian.evaluate(&q);
     
     // Calcular velocidad espacial predicha: v = J * q_dot
-    let v_pred_x = j[(0, 0)] * q_dot[0] + j[(0, 1)] * q_dot[1] 
-                    + j[(0, 2)] * q_dot[2] + j[(0, 3)] * q_dot[3];
-    let v_pred_y = j[(1, 0)] * q_dot[0] + j[(1, 1)] * q_dot[1] 
-                    + j[(1, 2)] * q_dot[2] + j[(1, 3)] * q_dot[3];
-    let v_pred_z = j[(2, 0)] * q_dot[0] + j[(2, 1)] * q_dot[1] 
-                    + j[(2, 2)] * q_dot[2] + j[(2, 3)] * q_dot[3];
+    let v_pred_x = j.linear()[(0, 0)] * q_dot[0] + j.linear()[(0, 1)] * q_dot[1] 
+                    + j.linear()[(0, 2)] * q_dot[2] + j.linear()[(0, 3)] * q_dot[3];
+    let v_pred_y = j.linear()[(1, 0)] * q_dot[0] + j.linear()[(1, 1)] * q_dot[1] 
+                    + j.linear()[(1, 2)] * q_dot[2] + j.linear()[(1, 3)] * q_dot[3];
+    let v_pred_z = j.linear()[(2, 0)] * q_dot[0] + j.linear()[(2, 1)] * q_dot[1] 
+                    + j.linear()[(2, 2)] * q_dot[2] + j.linear()[(2, 3)] * q_dot[3];
     
     // Verificar con diferencia finita
     let dt = 1e-5;
@@ -358,14 +358,14 @@ fn determinant_indicates_singularity() {
     let j_singular = jacobian.evaluate(&q_singular_xy);
     
     // Tomamos la submatriz 2x2 de las juntas revolutas (primeras 2 columnas, filas X,Y)
-    let det_singular_xy = j_singular[(0, 0)] * j_singular[(1, 1)] 
-                            - j_singular[(0, 1)] * j_singular[(1, 0)];
+    let det_singular_xy = j_singular.linear()[(0, 0)] * j_singular.linear()[(1, 1)] 
+                            - j_singular.linear()[(0, 1)] * j_singular.linear()[(1, 0)];
     
     // Configuración no singular en XY
     let q_normal = [PI / 3.0, PI / 4.0, 0.0, 0.0];
     let j_normal = jacobian.evaluate(&q_normal);
-    let det_normal_xy = j_normal[(0, 0)] * j_normal[(1, 1)] 
-                        - j_normal[(0, 1)] * j_normal[(1, 0)];
+    let det_normal_xy = j_normal.linear()[(0, 0)] * j_normal.linear()[(1, 1)] 
+                        - j_normal.linear()[(0, 1)] * j_normal.linear()[(1, 0)];
     
     // El determinante debería ser significativamente menor en singularidad
     assert!(
@@ -377,8 +377,8 @@ fn determinant_indicates_singularity() {
     // Otra singularidad: brazos plegados (θ2 = π)
     let q_folded = [0.0, PI, 0.0, 0.0];
     let j_folded = jacobian.evaluate(&q_folded);
-    let det_folded_xy = j_folded[(0, 0)] * j_folded[(1, 1)] 
-                        - j_folded[(0, 1)] * j_folded[(1, 0)];
+    let det_folded_xy = j_folded.linear()[(0, 0)] * j_folded.linear()[(1, 1)] 
+                        - j_folded.linear()[(0, 1)] * j_folded.linear()[(1, 0)];
     
     assert!(
         det_folded_xy.abs() < 1e-4,
@@ -405,9 +405,9 @@ fn reconstruction_from_motion() {
         let j = jacobian.evaluate(&q);
         
         // Velocidad predicha
-        let v_pred_x = (0..4).map(|i| j[(0, i)] * q_dot[i]).sum::<f64>();
-        let v_pred_y = (0..4).map(|i| j[(1, i)] * q_dot[i]).sum::<f64>();
-        let v_pred_z = (0..4).map(|i| j[(2, i)] * q_dot[i]).sum::<f64>();
+        let v_pred_x = (0..4).map(|i| j.linear()[(0, i)] * q_dot[i]).sum::<f64>();
+        let v_pred_y = (0..4).map(|i| j.linear()[(1, i)] * q_dot[i]).sum::<f64>();
+        let v_pred_z = (0..4).map(|i| j.linear()[(2, i)] * q_dot[i]).sum::<f64>();
         
         // Velocidad real
         let q_next = [
@@ -475,23 +475,23 @@ fn maps_velocities_linearly() {
             a * v1[2] + b * v2[2],
             a * v1[3] + b * v2[3],
         ];
-        let jv_x = (0..4).map(|i| j[(0, i)] * v_combined[i]).sum::<f64>();
-        let jv_y = (0..4).map(|i| j[(1, i)] * v_combined[i]).sum::<f64>();
-        let jv_z = (0..4).map(|i| j[(2, i)] * v_combined[i]).sum::<f64>();
+        let jv_x = (0..4).map(|i| j.linear()[(0, i)] * v_combined[i]).sum::<f64>();
+        let jv_y = (0..4).map(|i| j.linear()[(1, i)] * v_combined[i]).sum::<f64>();
+        let jv_z = (0..4).map(|i| j.linear()[(2, i)] * v_combined[i]).sum::<f64>();
         (jv_x, jv_y, jv_z)
     };
     
     let jv1 = {
-        let jv_x = (0..4).map(|i| j[(0, i)] * v1[i]).sum::<f64>();
-        let jv_y = (0..4).map(|i| j[(1, i)] * v1[i]).sum::<f64>();
-        let jv_z = (0..4).map(|i| j[(2, i)] * v1[i]).sum::<f64>();
+        let jv_x = (0..4).map(|i| j.linear()[(0, i)] * v1[i]).sum::<f64>();
+        let jv_y = (0..4).map(|i| j.linear()[(1, i)] * v1[i]).sum::<f64>();
+        let jv_z = (0..4).map(|i| j.linear()[(2, i)] * v1[i]).sum::<f64>();
         (jv_x, jv_y, jv_z)
     };
     
     let jv2 = {
-        let jv_x = (0..4).map(|i| j[(0, i)] * v2[i]).sum::<f64>();
-        let jv_y = (0..4).map(|i| j[(1, i)] * v2[i]).sum::<f64>();
-        let jv_z = (0..4).map(|i| j[(2, i)] * v2[i]).sum::<f64>();
+        let jv_x = (0..4).map(|i| j.linear()[(0, i)] * v2[i]).sum::<f64>();
+        let jv_y = (0..4).map(|i| j.linear()[(1, i)] * v2[i]).sum::<f64>();
+        let jv_z = (0..4).map(|i| j.linear()[(2, i)] * v2[i]).sum::<f64>();
         (jv_x, jv_y, jv_z)
     };
     
@@ -527,7 +527,7 @@ fn independent_xy_and_z_motions() {
     
     // Verificar que las juntas revolutas (0,1,3) no afectan Z
     for joint_idx in [0, 1, 3] {
-        let dz_dq = j[(2, joint_idx)];
+        let dz_dq = j.linear()[(2, joint_idx)];
         assert!(
             dz_dq.abs() < 1e-6,
             "Revolute joint {} should not affect Z, got {}",
@@ -536,9 +536,9 @@ fn independent_xy_and_z_motions() {
     }
     
     // Verificar que la junta prismática (2) solo afecta Z
-    let dx_dd3 = j[(0, 2)];
-    let dy_dd3 = j[(1, 2)];
-    let dz_dd3 = j[(2, 2)];
+    let dx_dd3 = j.linear()[(0, 2)];
+    let dy_dd3 = j.linear()[(1, 2)];
+    let dz_dd3 = j.linear()[(2, 2)];
     
     assert!(
         dx_dd3.abs() < 1e-6,

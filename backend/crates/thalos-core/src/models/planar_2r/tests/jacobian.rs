@@ -21,7 +21,7 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
         let dq = vec![1e-4, 0.0];
         
         // Predicted motion
-        let dx_pred = j.matrix() * nalgebra::DVector::from_vec(dq.clone());
+        let dx_pred = j.linear() * nalgebra::DVector::from_vec(dq.clone());
         
         // Real FK motion
         let q2 = [q[0] + dq[0], q[1] + dq[1]];
@@ -73,8 +73,8 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
         let q = [0.0, 0.0];
         let j = jacobian.evaluate(&q);
         
-        assert_eq!(j.nrows(), 3, "Jacobian should have 3 rows (x, y, z)");
-        assert_eq!(j.ncols(), 2, "Jacobian should have 2 columns for 2 joints");
+        assert_eq!(j.linear().nrows(), 3, "Jacobian should have 3 rows (x, y, z)");
+        assert_eq!(j.linear().ncols(), 2, "Jacobian should have 2 columns for 2 joints");
     }
 
     #[test]
@@ -91,12 +91,12 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
         // ∂y/∂θ2 = L2*cos(θ1+θ2) = 1
         // ∂z/∂θi = 0 para planar
         
-        let dx_dq1 = j[(0, 0)];
-        let dx_dq2 = j[(0, 1)];
-        let dy_dq1 = j[(1, 0)];
-        let dy_dq2 = j[(1, 1)];
-        let dz_dq1 = j[(2, 0)];
-        let dz_dq2 = j[(2, 1)];
+        let dx_dq1 = j.linear()[(0, 0)];
+        let dx_dq2 = j.linear()[(0, 1)];
+        let dy_dq1 = j.linear()[(1, 0)];
+        let dy_dq2 = j.linear()[(1, 1)];
+        let dz_dq1 = j.linear()[(2, 0)];
+        let dz_dq2 = j.linear()[(2, 1)];
         
         assert!(
             dx_dq1.abs() < 1e-6,
@@ -141,10 +141,10 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
         // ∂y/∂θ1 = L1*cos(90°) + L2*cos(90°) = 0 + 0 = 0
         // ∂y/∂θ2 = L2*cos(90°) = 0
         
-        let dx_dq1 = j[(0, 0)];
-        let dx_dq2 = j[(0, 1)];
-        let dy_dq1 = j[(1, 0)];
-        let dy_dq2 = j[(1, 1)];
+        let dx_dq1 = j.linear()[(0, 0)];
+        let dx_dq2 = j.linear()[(0, 1)];
+        let dy_dq1 = j.linear()[(1, 0)];
+        let dy_dq2 = j.linear()[(1, 1)];
         
         assert!(
             (dx_dq1 + 2.0).abs() < 1e-4,
@@ -179,7 +179,7 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
         // El efector final está en (1, 1)
         
         // Verificar que el Jacobiano tiene sentido (no singular en esta configuración)
-        let det = j[(0, 0)] * j[(1, 1)] - j[(0, 1)] * j[(1, 0)];
+        let det = j.linear()[(0, 0)] * j.linear()[(1, 1)] - j.linear()[(0, 1)] * j.linear()[(1, 0)];
         
         assert!(
             det.abs() > 0.1,
@@ -198,8 +198,8 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
         let j = jacobian.evaluate(&q);
         
         // Calcular velocidad espacial predicha: v = J * q_dot
-        let v_pred_x = j[(0, 0)] * q_dot[0] + j[(0, 1)] * q_dot[1];
-        let v_pred_y = j[(1, 0)] * q_dot[0] + j[(1, 1)] * q_dot[1];
+        let v_pred_x = j.linear()[(0, 0)] * q_dot[0] + j.linear()[(0, 1)] * q_dot[1];
+        let v_pred_y = j.linear()[(1, 0)] * q_dot[0] + j.linear()[(1, 1)] * q_dot[1];
         
         // Verificar con diferencia finita
         let dt = 1e-5;
@@ -242,12 +242,12 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
         // Configuración singular: brazos completamente extendidos (θ2 = 0)
         let q_singular = [0.0, 0.0];
         let j_singular = jacobian.evaluate(&q_singular);
-        let det_singular = j_singular[(0, 0)] * j_singular[(1, 1)] - j_singular[(0, 1)] * j_singular[(1, 0)];
+        let det_singular = j_singular.linear()[(0, 0)] * j_singular.linear()[(1, 1)] - j_singular.linear()[(0, 1)] * j_singular.linear()[(1, 0)];
         
         // Configuración no singular
         let q_normal = [PI / 3.0, PI / 4.0];
         let j_normal = jacobian.evaluate(&q_normal);
-        let det_normal = j_normal[(0, 0)] * j_normal[(1, 1)] - j_normal[(0, 1)] * j_normal[(1, 0)];
+        let det_normal = j_normal.linear()[(0, 0)] * j_normal.linear()[(1, 1)] - j_normal.linear()[(0, 1)] * j_normal.linear()[(1, 0)];
         
         // El determinante debería ser significativamente menor en singularidad
         assert!(
@@ -259,7 +259,7 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
         // Otra singularidad: brazos plegados (θ2 = π)
         let q_folded = [0.0, PI];
         let j_folded = jacobian.evaluate(&q_folded);
-        let det_folded = j_folded[(0, 0)] * j_folded[(1, 1)] - j_folded[(0, 1)] * j_folded[(1, 0)];
+        let det_folded = j_folded.linear()[(0, 0)] * j_folded.linear()[(1, 1)] - j_folded.linear()[(0, 1)] * j_folded.linear()[(1, 0)];
         
         assert!(
             det_folded.abs() < 1e-4,
@@ -287,8 +287,8 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
             let j = jacobian.evaluate(&q);
             
             // Velocidad predicha
-            let v_pred_x = j[(0, 0)] * q_dot[0] + j[(0, 1)] * q_dot[1];
-            let v_pred_y = j[(1, 0)] * q_dot[0] + j[(1, 1)] * q_dot[1];
+            let v_pred_x = j.linear()[(0, 0)] * q_dot[0] + j.linear()[(0, 1)] * q_dot[1];
+            let v_pred_y = j.linear()[(1, 0)] * q_dot[0] + j.linear()[(1, 1)] * q_dot[1];
             
             // Velocidad real
             let q_next = [q[0] + q_dot[0] * dt, q[1] + q_dot[1] * dt];
@@ -339,20 +339,20 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
         
         let jv_combined = {
             let v_combined = [a * v1[0] + b * v2[0], a * v1[1] + b * v2[1]];
-            let jv_x = j[(0, 0)] * v_combined[0] + j[(0, 1)] * v_combined[1];
-            let jv_y = j[(1, 0)] * v_combined[0] + j[(1, 1)] * v_combined[1];
+            let jv_x = j.linear()[(0, 0)] * v_combined[0] + j.linear()[(0, 1)] * v_combined[1];
+            let jv_y = j.linear()[(1, 0)] * v_combined[0] + j.linear()[(1, 1)] * v_combined[1];
             (jv_x, jv_y)
         };
         
         let jv1 = {
-            let jv_x = j[(0, 0)] * v1[0] + j[(0, 1)] * v1[1];
-            let jv_y = j[(1, 0)] * v1[0] + j[(1, 1)] * v1[1];
+            let jv_x = j.linear()[(0, 0)] * v1[0] + j.linear()[(0, 1)] * v1[1];
+            let jv_y = j.linear()[(1, 0)] * v1[0] + j.linear()[(1, 1)] * v1[1];
             (jv_x, jv_y)
         };
         
         let jv2 = {
-            let jv_x = j[(0, 0)] * v2[0] + j[(0, 1)] * v2[1];
-            let jv_y = j[(1, 0)] * v2[0] + j[(1, 1)] * v2[1];
+            let jv_x = j.linear()[(0, 0)] * v2[0] + j.linear()[(0, 1)] * v2[1];
+            let jv_y = j.linear()[(1, 0)] * v2[0] + j.linear()[(1, 1)] * v2[1];
             (jv_x, jv_y)
         };
         

@@ -53,11 +53,11 @@ impl JacobianSolver for NumericalJacobian {
 
         let n = q.len();
 
-        // Position Jacobian:
-        // rows = x,y,z
-        // cols = joints
+        let mut linear =
+            DynamicMatrix::zeros(3, n);
 
-        let mut jacobian = Jacobian::new(DynamicMatrix::zeros(3, n));
+        let angular =
+            DynamicMatrix::zeros(3, n);
 
         for i in 0..n {
 
@@ -75,13 +75,13 @@ impl JacobianSolver for NumericalJacobian {
 
             for j in 0..3 {
 
-                jacobian[(j, i)] =
+                linear[(j, i)] =
                     (p_plus[j] - p_minus[j])
                     / (2.0 * self.epsilon);
             }
         }
 
-        jacobian
+        Jacobian::new(linear, angular)
     }
 }
 
