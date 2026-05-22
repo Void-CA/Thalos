@@ -13,9 +13,12 @@ pub use crate::math::{
         rigid::Transform3D
     },
 
-    constants::{EPS, PI}
+    constants::{EPS, PI, PI_2}
 };
 
 pub use crate::spatial::frame::{FrameId, Frame, FrameRegistry};
 
-pub use crate::kinematics::forward::ForwardKinematics;
+pub use crate::kinematics::{
+    forward::ForwardKinematics,
+    jacobian::{Jacobian, JacobianMatrix, NumericalJacobian}
+};
