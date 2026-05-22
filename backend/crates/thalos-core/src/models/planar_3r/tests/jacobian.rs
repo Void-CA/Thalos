@@ -23,7 +23,7 @@ fn predicts_small_motion() {
         dq[joint_idx] = 1e-4;
         
         // Predicted motion
-        let dx_pred = &j * nalgebra::DVector::from_vec(dq.clone());
+        let dx_pred = j.matrix() * nalgebra::DVector::from_vec(dq.clone());
         
         // Real FK motion
         let q2 = [

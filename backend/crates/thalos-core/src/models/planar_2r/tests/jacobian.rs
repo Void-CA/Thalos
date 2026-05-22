@@ -21,7 +21,7 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
         let dq = vec![1e-4, 0.0];
         
         // Predicted motion
-        let dx_pred = &j * nalgebra::DVector::from_vec(dq.clone());
+        let dx_pred = j.matrix() * nalgebra::DVector::from_vec(dq.clone());
         
         // Real FK motion
         let q2 = [q[0] + dq[0], q[1] + dq[1]];

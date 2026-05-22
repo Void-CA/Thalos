@@ -1,9 +1,10 @@
 use crate::kinematics::forward::ForwardKinematics;
 use crate::kinematics::jacobian::{
-    Jacobian,
-    JacobianMatrix
+    JacobianSolver,
+    Jacobian
 };
 
+use crate::math::algebra::DynamicMatrix;
 use crate::math::constants::JACOBIAN_EPS;
 use crate::spatial::frame::FrameId;
 
@@ -46,9 +47,9 @@ impl NumericalJacobian {
     }
 }
 
-impl Jacobian for NumericalJacobian {
+impl JacobianSolver for NumericalJacobian {
 
-    fn evaluate(&self, q: &[f64]) -> JacobianMatrix {
+    fn evaluate(&self, q: &[f64]) -> Jacobian {
 
         let n = q.len();
 
@@ -56,7 +57,7 @@ impl Jacobian for NumericalJacobian {
         // rows = x,y,z
         // cols = joints
 
-        let mut jacobian = JacobianMatrix::zeros(3, n);
+        let mut jacobian = Jacobian::new(DynamicMatrix::zeros(3, n));
 
         for i in 0..n {
 

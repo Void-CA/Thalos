@@ -20,5 +20,5 @@ pub use crate::spatial::frame::{FrameId, Frame, FrameRegistry};
 
 pub use crate::kinematics::{
     forward::ForwardKinematics,
-    jacobian::{Jacobian, JacobianMatrix, NumericalJacobian}
+    jacobian::{JacobianSolver, Jacobian, NumericalJacobian}
 };
