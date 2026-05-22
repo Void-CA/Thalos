@@ -1,5 +1,7 @@
 use crate::spatial::frame::{FrameId, Frame};
 use std::collections::HashMap;
+
+#[derive(Clone)]
 pub struct FrameRegistry {
     frames: HashMap<FrameId, Frame>,
     next_id: u64,

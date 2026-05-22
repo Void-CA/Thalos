@@ -20,6 +20,7 @@ impl JointLimits {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum JointType {
     Revolute(RevoluteJoint),
     Prismatic(PrismaticJoint),

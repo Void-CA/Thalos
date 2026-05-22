@@ -7,6 +7,7 @@ use crate::{
     spatial::{frame::FrameId, pose::Pose}
 };
 
+#[derive(Clone)]
 pub struct ForwardKinematics {
     chain: SerialChain,
 }

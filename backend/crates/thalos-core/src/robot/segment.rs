@@ -2,7 +2,7 @@ use crate::{
     robot::{joint::JointType, link::Link},
     spatial::frame::{Frame, FrameId, FrameRegistry}
 };
-
+#[derive(Debug, Clone)]
 pub struct Segment {
     pub parent: FrameId,
     pub child: FrameId,

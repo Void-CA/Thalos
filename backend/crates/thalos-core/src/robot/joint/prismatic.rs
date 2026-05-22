@@ -3,6 +3,7 @@ use crate::robot::joint::joint::{JointLimits, JointId};
 use crate::math::geometry::
     vectors::UnitVector3;
 
+#[derive(Debug, Clone)]
 pub struct PrismaticJoint {
     pub id: JointId,
     pub direction: UnitVector3,

@@ -2,7 +2,7 @@ use crate::{
     math::geometry::{rotations::Quaternion, rigid::Transform3D, vectors::UnitVector3}, 
     robot::joint::joint::{JointId, JointLimits}};
 
-
+#[derive(Debug, Clone)]
 pub struct RevoluteJoint {
     pub id: JointId,
     pub axis: UnitVector3,

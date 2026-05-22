@@ -19,6 +19,7 @@ impl std::fmt::Display for FrameId {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Frame {
     id: FrameId,
     name: String,
