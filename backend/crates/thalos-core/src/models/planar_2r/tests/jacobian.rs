@@ -11,7 +11,7 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
 }
 
     #[test]
-    fn jacobian_predicts_small_motion() {
+    fn predicts_small_motion() {
         let (jacobian, fk, end_effector) = setup_robot();
         
         let q = [0.0, 0.0];
@@ -67,7 +67,7 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
     }
 
     #[test]
-    fn jacobian_dimensions_are_correct() {
+    fn dimensions_are_correct() {
         let (jacobian, _, _) = setup_robot();
         
         let q = [0.0, 0.0];
@@ -78,7 +78,7 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
     }
 
     #[test]
-    fn jacobian_at_zero_configuration() {
+    fn at_zero_configuration() {
         let (jacobian, _, _) = setup_robot();
         
         let q = [0.0, 0.0];
@@ -129,7 +129,7 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
     }
 
     #[test]
-    fn jacobian_at_ninety_degrees() {
+    fn at_ninety_degrees() {
         let (jacobian, _, _) = setup_robot();
         
         let q = [PI / 2.0, 0.0];
@@ -169,7 +169,7 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
     }
 
     #[test]
-    fn jacobian_at_folded_configuration() {
+    fn at_folded_configuration() {
         let (jacobian, _, _) = setup_robot();
         
         let q = [PI / 2.0, -PI / 2.0];
@@ -189,7 +189,7 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
     }
 
     #[test]
-    fn jacobian_approximates_velocity_correctly() {
+    fn approximates_velocity_correctly() {
         let (jacobian, fk, end_effector) = setup_robot();
         
         let q = [PI / 4.0, PI / 6.0];
@@ -236,7 +236,7 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
     }
 
     #[test]
-    fn jacobian_determinant_indicates_singularity() {
+    fn determinant_indicates_singularity() {
         let (jacobian, _, _) = setup_robot();
         
         // Configuración singular: brazos completamente extendidos (θ2 = 0)
@@ -270,7 +270,7 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
 
 
     #[test]
-    fn jacobian_reconstruction_from_motion() {
+    fn reconstruction_from_motion() {
         let (jacobian, fk, end_effector) = setup_robot();
         
         // Para varias configuraciones, verificar que J * q_dot ≈ Δp/Δt
@@ -325,7 +325,7 @@ fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame
     }
 
     #[test]
-    fn jacobian_maps_velocities_linearly() {
+    fn maps_velocities_linearly() {
         let (jacobian, _, _) = setup_robot();
         
         let q = [PI / 4.0, PI / 6.0];
