@@ -8,16 +8,19 @@ use axum::{
 use thalos_visual::SceneError;
 
 use crate::app::{
-    dto::{DiffRequest, FromFkRequest, ValidateRequest, ValidateResponse, ErrorResponse},
+    dto::{
+        DiffRequest, ErrorResponse, FromFkRequest, SceneResponse, ValidateRequest,
+        ValidateResponse,
+    },
     state::AppState,
 };
 
 pub async fn get_scene(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match state.services.scene.build_scene(&[0.0, 0.0]) {
-        Ok(scene) => Json(scene).into_response(),
+        Ok(scene) => Json(SceneResponse::new(scene)).into_response(),
         Err(e) => (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse { error: e.to_string() }),
+            Json(ErrorResponse::from(&e)),
         )
             .into_response(),
     }
@@ -28,10 +31,10 @@ pub async fn from_fk(
     Json(payload): Json<FromFkRequest>,
 ) -> impl IntoResponse {
     match state.services.scene.build_scene(&payload.joint_angles) {
-        Ok(scene) => Json(scene).into_response(),
+        Ok(scene) => Json(SceneResponse::new(scene)).into_response(),
         Err(e) => {
             let status = api_error_status(&e);
-            (status, Json(ErrorResponse { error: e.to_string() })).into_response()
+            (status, Json(ErrorResponse::from(&e))).into_response()
         }
     }
 }
@@ -48,14 +51,7 @@ pub async fn validate(
         .into_response(),
         Err(e) => {
             let status = api_error_status(&e);
-            (
-                status,
-                Json(ValidateResponse {
-                    valid: false,
-                    error: Some(e.to_string()),
-                }),
-            )
-                .into_response()
+            (status, Json(ErrorResponse::from(&e))).into_response()
         }
     }
 }

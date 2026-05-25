@@ -8,6 +8,7 @@ thalos_core = { path = "../thalos-core" }
 thalos_visual = { path = "../thalos-visual" }
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
+chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tower-http = { version = "0.6", features = ["cors"] }

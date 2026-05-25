@@ -40,32 +40,45 @@ async fn get_json(
     (status, value)
 }
 
+// ── Scene contract tests ──
+
 #[tokio::test]
-async fn get_scene_returns_scene_with_world() {
+async fn get_scene_returns_wrapped_scene() {
     let app = test_app();
-    let (status, body) = get_json(app, http::Method::GET, "/api/scene", None).await;
+    let (status, body) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
-    assert!(body.get("frames").is_some(), "response must contain frames");
-    let frames = body["frames"].as_array().unwrap();
+
+    // response is wrapped: { scene: VisualScene, generated_at }
+    assert!(body.get("scene").is_some(), "response must contain 'scene' wrapper");
+    assert!(body.get("generated_at").is_some(), "response must contain 'generated_at'");
+
+    let scene = &body["scene"];
+    assert!(scene.get("frames").is_some(), "scene must contain frames");
+    let frames = scene["frames"].as_array().unwrap();
     let has_world = frames.iter().any(|f| f["id"] == "world");
     assert!(has_world, "scene must contain world frame");
 }
 
 #[tokio::test]
-async fn from_fk_returns_scene() {
+async fn from_fk_returns_wrapped_scene() {
     let app = test_app();
     let (status, body) = get_json(
         app,
         http::Method::POST,
-        "/api/scene/from-fk",
+        "/api/v1/scene/from-fk",
         Some(json!({"joint_angles": [0.5, 0.3]})),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
-    assert!(body.get("frames").is_some());
-    let frames = body["frames"].as_array().unwrap();
+
+    assert!(body.get("scene").is_some(), "response must contain 'scene' wrapper");
+    assert!(body.get("generated_at").is_some(), "response must contain 'generated_at'");
+
+    let scene = &body["scene"];
+    assert!(scene.get("frames").is_some());
+    let frames = scene["frames"].as_array().unwrap();
     assert!(frames.len() >= 3, "planar_2r should have world + 2 links");
 }
 
@@ -75,12 +88,12 @@ async fn from_fk_rejects_nan() {
     let (status, body) = get_json(
         app,
         http::Method::POST,
-        "/api/scene/from-fk",
+        "/api/v1/scene/from-fk",
         Some(json!({"joint_angles": [f64::NAN, 0.0]})),
     )
     .await;
     assert!(status.is_client_error(), "NaN should be rejected");
-    assert!(body.is_none() || body.as_ref().is_some_and(|v| v.get("frames").is_none()));
+    assert!(body.is_none() || body.as_ref().is_some_and(|v| v.get("scene").is_none()));
 }
 
 #[tokio::test]
@@ -89,23 +102,26 @@ async fn from_fk_rejects_missing_field() {
     let (status, _body) = get_json(
         app,
         http::Method::POST,
-        "/api/scene/from-fk",
+        "/api/v1/scene/from-fk",
         Some(json!({"state": [0.5, 0.3]})),
     )
     .await;
     assert!(status.is_client_error(), "missing joint_angles should be rejected");
 }
 
+// ── Validation tests ──
+
 #[tokio::test]
 async fn validate_valid_scene() {
     let app = test_app();
-    let (_, body) = get_json(app.clone(), http::Method::GET, "/api/scene", None).await;
-    let scene = body.expect("valid scene response");
+    let (_, body) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let wrapped = body.expect("valid scene response");
+    let scene = &wrapped["scene"];
 
     let (status, body) = get_json(
         app,
         http::Method::POST,
-        "/api/scene/validate",
+        "/api/v1/scene/validate",
         Some(json!({"scene": scene})),
     )
     .await;
@@ -127,27 +143,32 @@ async fn validate_invalid_scene() {
     let (status, body) = get_json(
         app,
         http::Method::POST,
-        "/api/scene/validate",
+        "/api/v1/scene/validate",
         Some(json!({"scene": invalid})),
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     let body = body.expect("response must be valid JSON");
-    assert_eq!(body["valid"], false);
+    // validate returns ErrorResponse on failure (not ValidateResponse)
+    assert!(body.get("code").is_some(), "error response must contain 'code'");
+    assert_eq!(body["code"], "MISSING_WORLD");
     assert!(body["error"].as_str().unwrap().contains("world"));
 }
+
+// ── Diff tests ──
 
 #[tokio::test]
 async fn diff_identical_scenes() {
     let app = test_app();
-    let (_, body) = get_json(app.clone(), http::Method::GET, "/api/scene", None).await;
-    let scene = body.expect("valid scene");
+    let (_, body) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let wrapped = body.expect("valid scene");
+    let scene = &wrapped["scene"];
 
     let (status, body) = get_json(
         app,
         http::Method::POST,
-        "/api/scene/diff",
-        Some(json!({"old": scene.clone(), "new": scene, "epsilon": 1e-6})),
+        "/api/v1/scene/diff",
+        Some(json!({"old": scene, "new": scene, "epsilon": 1e-6})),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -166,25 +187,27 @@ async fn diff_different_scenes() {
     let (_, body) = get_json(
         app.clone(),
         http::Method::POST,
-        "/api/scene/from-fk",
+        "/api/v1/scene/from-fk",
         Some(q0),
     )
     .await;
-    let old = body.expect("valid scene");
+    let old_wrapped = body.expect("valid scene");
+    let old = &old_wrapped["scene"];
 
     let (_, body) = get_json(
         app.clone(),
         http::Method::POST,
-        "/api/scene/from-fk",
+        "/api/v1/scene/from-fk",
         Some(q1),
     )
     .await;
-    let new = body.expect("valid scene");
+    let new_wrapped = body.expect("valid scene");
+    let new = &new_wrapped["scene"];
 
     let (status, body) = get_json(
         app,
         http::Method::POST,
-        "/api/scene/diff",
+        "/api/v1/scene/diff",
         Some(json!({"old": old, "new": new, "epsilon": 1e-6})),
     )
     .await;
@@ -192,4 +215,202 @@ async fn diff_different_scenes() {
     let body = body.expect("response must be valid JSON");
     let changed = body["changed_frames"].as_array().unwrap();
     assert!(!changed.is_empty(), "different configurations should produce changes");
+}
+
+// ── Error mapping tests ──
+
+#[tokio::test]
+async fn error_code_missing_world() {
+    let app = test_app();
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/validate",
+        Some(json!({"scene": {
+            "frames": [],
+            "links": [],
+            "joint_axes": [],
+            "twists": []
+        }})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let body = body.expect("error response");
+    assert_eq!(body["code"], "MISSING_WORLD");
+}
+
+#[tokio::test]
+async fn error_code_duplicate_id() {
+    let app = test_app();
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/validate",
+        Some(json!({"scene": {
+            "frames": [
+                {"id": "world", "parent": null, "translation": [0,0,0], "rotation": [1,0,0,0]},
+                {"id": "link_1", "parent": "world", "translation": [1,0,0], "rotation": [1,0,0,0]},
+                {"id": "link_1", "parent": "world", "translation": [2,0,0], "rotation": [1,0,0,0]}
+            ],
+            "links": [],
+            "joint_axes": [],
+            "twists": []
+        }})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let body = body.expect("error response");
+    assert_eq!(body["code"], "DUPLICATE_ID");
+    assert_eq!(body["frame"], "link_1");
+}
+
+#[tokio::test]
+async fn error_code_missing_frame() {
+    let app = test_app();
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/validate",
+        Some(json!({"scene": {
+            "frames": [
+                {"id": "world", "parent": null, "translation": [0,0,0], "rotation": [1,0,0,0]},
+                {"id": "link_1", "parent": "phantom", "translation": [1,0,0], "rotation": [1,0,0,0]}
+            ],
+            "links": [],
+            "joint_axes": [],
+            "twists": []
+        }})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let body = body.expect("error response");
+    assert_eq!(body["code"], "MISSING_FRAME");
+    assert_eq!(body["frame"], "phantom");
+}
+
+#[tokio::test]
+async fn error_code_non_finite_value() {
+    let app = test_app();
+    let (status, _body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/validate",
+        Some(json!({"scene": {
+            "frames": [
+                {"id": "world", "parent": null, "translation": [0,0,0], "rotation": [1,0,0,0]},
+                {"id": "link_1", "parent": "world", "translation": [f64::NAN, 0, 0], "rotation": [1,0,0,0]}
+            ],
+            "links": [],
+            "joint_axes": [],
+            "twists": []
+        }})),
+    )
+    .await;
+    assert!(status.is_client_error());
+    // NaN may be rejected by serde before reaching handler,
+    // so only check it's a client error
+}
+
+#[tokio::test]
+async fn error_code_invalid_quaternion() {
+    let app = test_app();
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/validate",
+        Some(json!({"scene": {
+            "frames": [
+                {"id": "world", "parent": null, "translation": [0,0,0], "rotation": [1,0,0,0]},
+                {"id": "link_1", "parent": "world", "translation": [1,0,0], "rotation": [5,0,0,0]}
+            ],
+            "links": [],
+            "joint_axes": [],
+            "twists": []
+        }})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let body = body.expect("error response");
+    assert_eq!(body["code"], "INVALID_QUATERNION");
+    assert_eq!(body["frame"], "link_1");
+    assert!((body["norm"].as_f64().unwrap() - 5.0).abs() < 1e-10);
+}
+
+#[tokio::test]
+async fn error_code_broken_topology() {
+    let app = test_app();
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/validate",
+        Some(json!({"scene": {
+            "frames": [
+                {"id": "world", "parent": null, "translation": [0,0,0], "rotation": [1,0,0,0]},
+                {"id": "a", "parent": "b", "translation": [1,0,0], "rotation": [1,0,0,0]},
+                {"id": "b", "parent": "a", "translation": [2,0,0], "rotation": [1,0,0,0]}
+            ],
+            "links": [],
+            "joint_axes": [],
+            "twists": []
+        }})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let body = body.expect("error response");
+    assert_eq!(body["code"], "BROKEN_TOPOLOGY");
+}
+
+#[tokio::test]
+async fn error_code_orphan_link() {
+    let app = test_app();
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/validate",
+        Some(json!({"scene": {
+            "frames": [
+                {"id": "world", "parent": null, "translation": [0,0,0], "rotation": [1,0,0,0]},
+                {"id": "link_1", "parent": "world", "translation": [1,0,0], "rotation": [1,0,0,0]}
+            ],
+            "links": [
+                {"start": [0,0,0], "end": [1,0,0]},
+                {"start": [5,0,0], "end": [10,0,0]}
+            ],
+            "joint_axes": [],
+            "twists": []
+        }})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let body = body.expect("error response");
+    assert_eq!(body["code"], "ORPHAN_LINK");
+    assert_eq!(body["index"], 1);
+}
+
+#[tokio::test]
+async fn error_code_twists_mismatch() {
+    let app = test_app();
+    // first get a valid scene
+    let (_, body) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let wrapped = body.expect("valid scene");
+    let mut scene = wrapped["scene"].clone();
+    // corrupt twists count
+    scene["twists"] = json!([
+        {"origin": [0,0,0], "linear": [0,0,0], "angular": [0,0,0]},
+        {"origin": [0,0,0], "linear": [0,0,0], "angular": [0,0,0]},
+        {"origin": [0,0,0], "linear": [0,0,0], "angular": [0,0,0]}
+    ]);
+
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/validate",
+        Some(json!({"scene": scene})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let body = body.expect("error response");
+    assert_eq!(body["code"], "TWISTS_MISMATCH");
+    assert_eq!(body["expected"], 2);
+    assert_eq!(body["found"], 3);
 }

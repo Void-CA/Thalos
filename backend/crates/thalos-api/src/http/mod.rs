@@ -9,5 +9,5 @@ use crate::app::state::AppState;
 use routes::scene;
 
 pub fn app_router() -> Router<Arc<AppState>> {
-    Router::new().nest("/api", scene::routes())
+    Router::new().nest("/api/v1", scene::routes())
 }
