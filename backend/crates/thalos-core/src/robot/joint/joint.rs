@@ -1,5 +1,6 @@
 use crate::math::geometry::rigid::Transform3D;
 
+use crate::math::geometry::vectors::UnitVector3;
 use crate::robot::joint::{
     prismatic::PrismaticJoint, 
     revolute::RevoluteJoint
@@ -18,6 +19,11 @@ impl JointLimits {
     pub fn new(min: f64, max: f64) -> Self {
         Self { min, max }
     }
+}
+
+pub enum JointKind {
+    Revolute,
+    Prismatic,
 }
 
 #[derive(Debug, Clone)]
@@ -52,6 +58,20 @@ impl JointType {
         match self {
             JointType::Revolute(j) => &j.origin,
             JointType::Prismatic(j) => &j.origin,
+        }
+    }
+
+    pub fn axis(&self) -> UnitVector3 {
+        match self {
+            JointType::Revolute(j) => j.axis,
+            JointType::Prismatic(j) => j.direction,
+        }
+    }
+
+    pub fn kind(&self) -> JointKind {
+        match self {
+            JointType::Revolute(_) => JointKind::Revolute,
+            JointType::Prismatic(_) => JointKind::Prismatic,
         }
     }
 }

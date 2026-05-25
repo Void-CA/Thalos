@@ -17,6 +17,10 @@ impl ForwardKinematics {
         Self { chain }
     }
 
+    pub fn robot(&self) -> &SerialChain {
+        &self.chain
+    }
+
     pub fn evaluate(&self, q: &[f64]) -> FKResult {
         let mut t = Transform3D::identity();
 
@@ -52,15 +56,5 @@ impl ForwardKinematics {
 
         FKResult::new(poses)
     }
+
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::math::constants::{EPS, PI};
-
-    
-
-    
-}
-
