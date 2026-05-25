@@ -1,4 +1,4 @@
-use crate::math::geometry::rigid::Transform3D;
+use crate::math::geometry::rigid::{Transform3D, transform};
 
 use crate::math::geometry::vectors::UnitVector3;
 use crate::robot::joint::{
@@ -73,6 +73,21 @@ impl JointType {
             JointType::Revolute(_) => JointKind::Revolute,
             JointType::Prismatic(_) => JointKind::Prismatic,
         }
+    }
+
+    pub fn axis_world(
+        &self,
+        transform: &Transform3D,
+    ) -> UnitVector3 {
+
+        let axis_local = self.axis();
+
+        let rotated =
+            transform
+                .rotation
+                .rotate_vector(axis_local.into_inner());
+
+        UnitVector3::new(rotated).unwrap()
     }
 }
 

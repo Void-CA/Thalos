@@ -14,8 +14,8 @@ fn returns_four_poses() {
 
     assert_eq!(
         frames.len(),
-        4,  // 4 segmentos = 4 frames móviles + world frame? Ajusta según tu implementación
-        "SCARA should generate exactly four poses (one per joint)"
+        5,  // 4 segmentos = 4 frames móviles + world frame? Ajusta según tu implementación
+        "SCARA should generate exactly 5 poses (one per joint + world pose)",
     );
 }
 

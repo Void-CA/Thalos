@@ -14,8 +14,8 @@ fn returns_three_poses() {
 
     assert_eq!(
         frames.len(),
-        3,
-        "Planar 3R should generate exactly three poses"
+        4,
+        "Planar 3R should generate exactly three poses + world pose",
     );
 }
 

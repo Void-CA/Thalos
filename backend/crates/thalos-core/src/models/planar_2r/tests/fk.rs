@@ -15,8 +15,8 @@ use crate::models::factories::create_planar_2r;
 
         assert_eq!(
             frames.len(),
-            2,
-            "Planar 2R should generate exactly two poses"
+            3,
+            "Planar 2R should generate 3 poses, including world pose",
         );
     }
 

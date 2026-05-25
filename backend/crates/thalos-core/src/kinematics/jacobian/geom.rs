@@ -33,25 +33,19 @@ impl JacobianSolver for GeometricJacobian {
 
     fn evaluate(&self, q: &[f64]) -> Jacobian {
 
-        let result =
-            self.fk.evaluate(q);
+        let result = self.fk.evaluate(q);
 
-        let robot =
-            self.fk.robot();
+        let robot = self.fk.robot();
 
-        let n =
-            robot.segments.len();
+        let n = robot.segments.len();
 
-        let mut linear =
-            DynamicMatrix::zeros(3, n);
+        let mut linear = DynamicMatrix::zeros(3, n);
 
-        let mut angular =
-            DynamicMatrix::zeros(3, n);
+        let mut angular = DynamicMatrix::zeros(3, n);
 
         // Pose global del end-effector
-        let ee_pose =
-            result.pose(&self.end_effector)
-                .expect("End effector pose not found");
+        let ee_pose = result.pose(&self.end_effector)
+                                .expect("End effector pose not found");
 
         let p_e =
             ee_pose.transform().translation;
@@ -73,15 +67,10 @@ impl JacobianSolver for GeometricJacobian {
             let p_i =
                 joint_transform.translation;
 
-            // eje local del joint
-            let axis_local =
-                segment.joint.axis();
-
-            // eje expresado globalmente
             let z_i =
-                joint_transform
-                    .rotation
-                    .rotate_vector(axis_local.into_inner());
+                segment
+                    .joint
+                    .axis_world(&joint_transform);
 
             match segment.joint.kind() {
 
