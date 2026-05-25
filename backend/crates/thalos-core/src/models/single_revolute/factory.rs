@@ -1,6 +1,20 @@
 use crate::prelude::*;
 
-pub fn create_single_revolute() -> SerialChain {
+pub struct SingleRevoluteFactory;
+ {
+    l: f64,
+ }
+impl RobotFactory for SingleRevoluteFactory {
+    fn name(&self) -> &'static str {
+        "single_revolute"
+    }
+
+    fn build(&self) -> SerialChain {
+        create_single_revolute(self.l)
+    }
+}
+
+pub fn create_single_revolute(l: f64) -> SerialChain {
     let mut builder = SerialChainBuilder::new();
     let link_1_frame = builder.create_frame("link_1");
 
@@ -18,7 +32,7 @@ pub fn create_single_revolute() -> SerialChain {
         id: 0,
 
         transform: Transform3D::from_translation(
-            Vector3::new(1.0, 0.0, 0.0)
+            Vector3::new(l, 0.0, 0.0)
         ),
     };
 
@@ -44,13 +58,13 @@ mod tests {
     use crate::math::constants::EPS;
     #[test]
     fn has_one_segment() {
-        let robot = create_single_revolute();
+        let robot = create_single_revolute(1.0);
         assert_eq!(robot.segments.len(), 1, "Should have exactly one segment");
     }
 
     #[test]
     fn parent_is_world() {
-        let robot = create_single_revolute();
+        let robot = create_single_revolute(1.0);
         assert_eq!(
             robot.segments[0].parent,
             FrameId::World,
@@ -60,7 +74,7 @@ mod tests {
 
     #[test]
     fn child_frame_exists_in_registry() {
-        let robot = create_single_revolute();
+        let robot = create_single_revolute(1.0);
         let child_frame_id = &robot.segments[0].child;
         assert!(
             robot.frames.get(child_frame_id).is_some(),
@@ -70,7 +84,7 @@ mod tests {
 
     #[test]
     fn joint_is_revolute_with_z_axis() {
-        let robot = create_single_revolute();
+        let robot = create_single_revolute(1.0);
         let joint = &robot.segments[0].joint;
 
         match joint {
@@ -91,7 +105,7 @@ mod tests {
 
     #[test]
     fn link_has_x_translation() {
-        let robot = create_single_revolute();
+        let robot = create_single_revolute(1.0);
         let link_transform = &robot.segments[0].link.transform;
 
         // El link tiene una translation de (1, 0, 0) - eje X
@@ -107,7 +121,7 @@ mod tests {
 
     #[test]
     fn joint_has_correct_id() {
-        let robot = create_single_revolute();
+        let robot = create_single_revolute(1.0);
         let joint = &robot.segments[0].joint;
         
         match joint {

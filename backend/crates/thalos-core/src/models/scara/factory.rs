@@ -1,6 +1,23 @@
 use crate::prelude::*;
 
-pub fn create_scara_robot(
+pub struct ScaraFactory {
+    pub l1: f64,
+    pub l2: f64,
+    pub z_min: f64,
+    pub z_max: f64,
+}
+
+impl RobotFactory for ScaraFactory {
+    fn name(&self) -> &'static str {
+        "scara"
+    }
+
+    fn build(&self) -> SerialChain {
+        create_scara_robot(self.l1, self.l2, self.z_min, self.z_max)
+    }
+}
+
+fn create_scara_robot(
     l1: f64,     // Longitud del primer brazo
     l2: f64,     // Longitud del segundo brazo
     z_min: f64,  // Límite inferior del eje Z

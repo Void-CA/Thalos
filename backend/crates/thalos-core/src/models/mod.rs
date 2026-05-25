@@ -1,3 +1,4 @@
+pub mod factory;
 pub mod single_revolute;
 pub mod planar_2r;
 pub mod planar_3r;
