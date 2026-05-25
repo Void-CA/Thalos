@@ -13,7 +13,7 @@ pub struct AppState {
 }
 
 pub fn new_default_state() -> Arc<AppState> {
-    let robot = RobotRegistry::create(RobotModel::Planar2R);
+    let robot = RobotRegistry::create_default(RobotModel::Planar2R);
     let scene = SceneService::new(robot);
     Arc::new(AppState {
         services: Arc::new(Services { scene }),
