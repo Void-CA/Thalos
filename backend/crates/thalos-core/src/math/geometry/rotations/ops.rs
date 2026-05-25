@@ -1,6 +1,11 @@
 use std::ops::Mul;
 use super::Quaternion;
 
+/// Producto de Hamilton (producto de cuaterniones como anillo).
+///
+/// NOTA: este es un producto puramente algebraico. NO normaliza.
+/// Si necesitás que el resultado sea un cuaternión unitario,
+/// normalizalo explícitamente o usá [`UnitQuaternion`](super::UnitQuaternion).
 impl Mul for Quaternion {
     type Output = Self;
 
@@ -11,6 +16,5 @@ impl Mul for Quaternion {
             y: self.w * rhs.y - self.x * rhs.z + self.y * rhs.w + self.z * rhs.x,
             z: self.w * rhs.z + self.x * rhs.y - self.y * rhs.x + self.z * rhs.w,
         }
-        .normalize()
     }
 }

@@ -1,5 +1,5 @@
 use crate::{
-    math::geometry::{rotations::Quaternion, rigid::Transform3D, vectors::UnitVector3}, 
+    math::geometry::{rotations::UnitQuaternion, rigid::Transform3D, vectors::UnitVector3}, 
     robot::joint::joint::{JointId, JointLimits}};
 
 #[derive(Debug, Clone)]
@@ -21,7 +21,7 @@ impl RevoluteJoint {
     }
 
     pub fn motion(&self, q: f64) -> Transform3D {
-        let rotation = Quaternion::from_axis_angle(self.axis, q);
+        let rotation = UnitQuaternion::from_axis_angle(self.axis, q);
         Transform3D::from_rotation(rotation)
     }
 }
