@@ -1,3 +1,4 @@
+use crate::models::error::RobotRegistryError;
 use crate::robot::serial_chain::SerialChain;
 
 // ── Modelo (identidad) ───────────────────────────────────────────────────
@@ -48,21 +49,21 @@ pub struct RobotRegistry;
 
 impl RobotRegistry {
     /// Construye un robot validando consistencia model/spec.
-    pub fn create(model: RobotModel, spec: RobotSpec) -> SerialChain {
+    pub fn create(model: RobotModel, spec: RobotSpec) -> Result<SerialChain, RobotRegistryError> {
         match (&model, &spec) {
             (RobotModel::Planar2R, RobotSpec::Planar2R { l1, l2 }) => {
-                super::planar_2r::factory::create_planar_2r(*l1, *l2)
+                Ok(super::planar_2r::factory::create_planar_2r(*l1, *l2))
             }
             (RobotModel::Planar3R, RobotSpec::Planar3R { l1, l2, l3 }) => {
-                super::planar_3r::factory::create_planar_3r(*l1, *l2, *l3)
+                Ok(super::planar_3r::factory::create_planar_3r(*l1, *l2, *l3))
             }
             (RobotModel::SingleRevolute, RobotSpec::SingleRevolute { l1 }) => {
-                super::single_revolute::factory::create_single_revolute(*l1)
+                Ok(super::single_revolute::factory::create_single_revolute(*l1))
             }
             (RobotModel::Scara, RobotSpec::Scara { a1, a2, d1, d2 }) => {
-                super::scara::factory::create_scara_robot(*a1, *a2, *d1, *d2)
+                Ok(super::scara::factory::create_scara_robot(*a1, *a2, *d1, *d2))
             }
-            _ => panic!("RobotModel/Spec mismatch: {:?} vs {:?}", model, spec),
+            _ => Err(RobotRegistryError::ModelSpecMismatch {model, spec}),
         }
     }
 
@@ -86,6 +87,6 @@ impl RobotRegistry {
                 d2: 1.0,
             },
         };
-        Self::create(model, spec)
+        Self::create(model, spec).unwrap()
     }
 }
