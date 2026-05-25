@@ -6,8 +6,8 @@ pub trait JacobianSolver {
 
 
 pub struct Jacobian {
-    linear: DynamicMatrix,
-    angular: DynamicMatrix,
+    pub linear: DynamicMatrix,
+    pub angular: DynamicMatrix,
 }
 
 impl Jacobian {

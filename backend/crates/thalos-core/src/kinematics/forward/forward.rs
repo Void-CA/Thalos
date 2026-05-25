@@ -27,6 +27,16 @@ impl ForwardKinematics {
         let mut poses = HashMap::new();
 
         let world = FrameId::World;
+        
+        // World pose explícita
+        poses.insert(
+            world.clone(),
+            Pose::new(
+                world.clone(),
+                world.clone(),
+                Transform3D::identity(),
+            ),
+        );
 
         for segment in &self.chain.segments {
 
