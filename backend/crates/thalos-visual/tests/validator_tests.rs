@@ -8,7 +8,6 @@ use thalos_visual::{
     SceneBuilder, SceneError, SceneValidator, VisualScene,
 };
 
-/// Una escena válida debe pasar todas las verificaciones.
 #[test]
 fn valid_scene_passes() {
     let robot = create_planar_2r(1.0, 1.0);
@@ -20,7 +19,6 @@ fn valid_scene_passes() {
     assert!(validator.validate(&scene).is_ok());
 }
 
-/// Escena sin world debe fallar.
 #[test]
 fn missing_world_fails() {
     let scene = VisualScene {
@@ -37,7 +35,6 @@ fn missing_world_fails() {
     );
 }
 
-/// IDs duplicados deben fallar.
 #[test]
 fn duplicate_ids_fail() {
     let scene = VisualScene {
@@ -54,13 +51,10 @@ fn duplicate_ids_fail() {
     let validator = SceneValidator::default();
     assert_eq!(
         validator.validate(&scene),
-        Err(SceneError::DuplicateId {
-            id: "link_1".into()
-        })
+        Err(SceneError::DuplicateId { id: "link_1".into() })
     );
 }
 
-/// Frame con parent inexistente debe fallar.
 #[test]
 fn missing_parent_fails() {
     let scene = VisualScene {
@@ -80,7 +74,6 @@ fn missing_parent_fails() {
     );
 }
 
-/// Ciclo en el grafo debe detectarse.
 #[test]
 fn cycle_detected() {
     let scene = VisualScene {
@@ -105,7 +98,6 @@ fn cycle_detected() {
     }
 }
 
-/// Frame aislado (no conectado a world) debe fallar.
 #[test]
 fn orphan_frame_fails() {
     let scene = VisualScene {
@@ -123,18 +115,12 @@ fn orphan_frame_fails() {
     assert!(result.is_err(), "orphan frame should fail");
 }
 
-/// Frame con NaN debe fallar.
 #[test]
 fn nan_value_detected() {
     let scene = VisualScene {
         frames: vec![
             frame("world", None, [0.0; 3], [1.0, 0.0, 0.0, 0.0]),
-            frame(
-                "link_1",
-                Some("world"),
-                [f64::NAN, 0.0, 0.0],
-                [1.0, 0.0, 0.0, 0.0],
-            ),
+            frame("link_1", Some("world"), [f64::NAN, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
         ],
         links: vec![],
         joint_axes: vec![],
@@ -144,13 +130,10 @@ fn nan_value_detected() {
     let validator = SceneValidator::default();
     assert_eq!(
         validator.validate(&scene),
-        Err(SceneError::NonFiniteValue {
-            frame: "link_1".into()
-        })
+        Err(SceneError::NonFiniteValue { frame: "link_1".into() })
     );
 }
 
-/// Cuaternión no unitario debe fallar.
 #[test]
 fn invalid_quaternion_detected() {
     let scene = VisualScene {
@@ -175,7 +158,6 @@ fn invalid_quaternion_detected() {
     }
 }
 
-/// Link huérfano debe detectarse.
 #[test]
 fn orphan_link_detected() {
     let scene = VisualScene {
@@ -184,9 +166,7 @@ fn orphan_link_detected() {
             frame("link_1", Some("world"), [1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
         ],
         links: vec![
-            // Link correcto: world → link_1
             link([0.0, 0.0, 0.0], [1.0, 0.0, 0.0]),
-            // Link huérfano: no corresponde a ningún parent-child
             link([5.0, 0.0, 0.0], [10.0, 0.0, 0.0]),
         ],
         joint_axes: vec![],
@@ -202,7 +182,6 @@ fn orphan_link_detected() {
     }
 }
 
-/// Twists count mismatch debe detectarse.
 #[test]
 fn twists_mismatch_detected() {
     let robot = create_planar_2r(1.0, 1.0);
@@ -210,7 +189,6 @@ fn twists_mismatch_detected() {
     let builder = SceneBuilder::new(&robot);
     let mut scene = builder.from_fk(&fk.evaluate(&[0.3, 0.5]));
 
-    // Agregar un twist extra (deberían ser 2 ejes → 2 twists, pero ponemos 3)
     scene.twists.push(thalos_visual::VisualTwist {
         origin: [0.0; 3],
         linear: [0.0; 3],
@@ -232,14 +210,12 @@ fn twists_mismatch_detected() {
     assert!(result.is_err(), "twists mismatch should fail");
     match result.unwrap_err() {
         SceneError::TwistsMismatch { expected, found } => {
-            assert_eq!(expected, 2); // 2 joint axes
-            assert_eq!(found, 3); // 3 twists
+            assert_eq!(expected, 2);
+            assert_eq!(found, 3);
         }
         other => panic!("expected TwistsMismatch, got {:?}", other),
     }
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────
 
 fn frame(
     id: &str,
