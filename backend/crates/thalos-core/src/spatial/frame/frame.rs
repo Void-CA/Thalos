@@ -40,4 +40,8 @@ impl Frame {
     pub fn id(&self) -> &FrameId {
         &self.id
     }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
 }

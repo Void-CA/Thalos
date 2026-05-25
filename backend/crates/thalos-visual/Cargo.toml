@@ -4,3 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+thalos_core = { path = "../thalos-core" }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+insta = { version = "1.47", features = ["json"] }
+serde_json = "1"
