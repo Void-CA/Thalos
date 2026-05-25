@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use thalos_core::models::factories::create_planar_2r;
 
-use crate::app::service::SceneService;
+use crate::features::scene::SceneService;
 
 pub struct Services {
     pub scene: SceneService,

@@ -10,17 +10,6 @@ import { Subscription } from 'rxjs';
 import { SceneStore } from '../../services/scene.store';
 import { ThreeRendererService } from '../../services/three-renderer.service';
 
-/**
- * Bridge between the reactive store and the imperative Three.js engine.
- *
- * - Grabs the <canvas> ref via @ViewChild
- * - Subscribes to SceneStore.state$
- * - Forwards every valid scene to ThreeRendererService.applyScene()
- * - Owns the renderer lifecycle (init / dispose)
- *
- * ⚠ applyScene is safe to call before init — ThreeRendererService
- *   silently ignores calls when the engine isn't ready yet.
- */
 @Component({
   selector: 'scene-viewer',
   standalone: true,

@@ -3,11 +3,7 @@ use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::EnvFilter;
 
-mod app;
-mod http;
-
-use app::new_default_state;
-use http::app_router;
+use thalos_api::{app::new_default_state, http::app_router};
 
 #[tokio::main]
 async fn main() {

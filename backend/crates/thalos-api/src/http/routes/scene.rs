@@ -6,12 +6,12 @@ use axum::{
 };
 
 use crate::app::state::AppState;
-use crate::http::handlers::scene;
+use crate::features::scene::handler;
 
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
-        .route("/scene", get(scene::get_scene))
-        .route("/scene/from-fk", post(scene::from_fk))
-        .route("/scene/validate", post(scene::validate))
-        .route("/scene/diff", post(scene::diff))
+        .route("/scene", get(handler::get_scene))
+        .route("/scene/from-fk", post(handler::from_fk))
+        .route("/scene/validate", post(handler::validate))
+        .route("/scene/diff", post(handler::diff))
 }

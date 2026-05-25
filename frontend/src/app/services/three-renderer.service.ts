@@ -3,16 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { VisualScene } from '../visual-scene.types';
 
-/**
- * Pure imperative Three.js engine.
- *
- * - init(canvas) → sets up scene, camera, controls, render loop
- * - applyScene(scene) → replaces all visual content (no diff yet)
- * - dispose() → full cleanup (cancel rAF, dispose GPU resources)
- *
- * Angular zone is NOT entangled — rAF and scene mutations run
- * outside change detection for zero overhead.
- */
+
 @Injectable({ providedIn: 'root' })
 export class ThreeRendererService {
   private readonly ngZone = inject(NgZone);
