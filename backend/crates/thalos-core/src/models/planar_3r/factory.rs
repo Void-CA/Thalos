@@ -1,3 +1,4 @@
+use crate::models::factory::RobotFactory;
 use crate::prelude::*;
 
 pub struct Planar3RFactory {
@@ -16,7 +17,7 @@ impl RobotFactory for Planar3RFactory {
     }
 }
 
-fn create_planar_3r(
+pub fn create_planar_3r(
     l1: f64,
     l2: f64,
     l3: f64,

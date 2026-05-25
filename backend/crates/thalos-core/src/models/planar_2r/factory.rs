@@ -1,3 +1,4 @@
+use crate::models::factory::RobotFactory;
 use crate::prelude::*;
 
 pub struct Planar2RFactory {
@@ -15,7 +16,7 @@ impl RobotFactory for Planar2RFactory {
     }
 }
 
-fn create_planar_2r(
+pub fn create_planar_2r(
     l1: f64,
     l2: f64,
 ) -> SerialChain {

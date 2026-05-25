@@ -1,6 +1,7 @@
+use crate::models::factory::RobotFactory;
 use crate::prelude::*;
 
-pub struct SingleRevoluteFactory;
+pub struct SingleRevoluteFactory
  {
     l: f64,
  }

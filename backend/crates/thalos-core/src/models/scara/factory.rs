@@ -1,3 +1,4 @@
+use crate::models::factory::RobotFactory;
 use crate::prelude::*;
 
 pub struct ScaraFactory {
@@ -17,7 +18,7 @@ impl RobotFactory for ScaraFactory {
     }
 }
 
-fn create_scara_robot(
+pub fn create_scara_robot(
     l1: f64,     // Longitud del primer brazo
     l2: f64,     // Longitud del segundo brazo
     z_min: f64,  // Límite inferior del eje Z

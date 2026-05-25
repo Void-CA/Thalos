@@ -2,7 +2,7 @@ use crate::prelude::*;
 use crate::models::factories::create_single_revolute;
 
 fn setup() -> (SerialChain, ForwardKinematics) {
-    let robot = create_single_revolute();
+    let robot = create_single_revolute(1.0);
     let fk = ForwardKinematics::new(robot.clone());
     (robot, fk)
 }
