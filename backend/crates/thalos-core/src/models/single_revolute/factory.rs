@@ -1,19 +1,4 @@
-use crate::models::factory::RobotFactory;
 use crate::prelude::*;
-
-pub struct SingleRevoluteFactory
- {
-    l: f64,
- }
-impl RobotFactory for SingleRevoluteFactory {
-    fn name(&self) -> &'static str {
-        "single_revolute"
-    }
-
-    fn build(&self) -> SerialChain {
-        create_single_revolute(self.l)
-    }
-}
 
 pub fn create_single_revolute(l: f64) -> SerialChain {
     let mut builder = SerialChainBuilder::new();

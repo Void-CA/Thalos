@@ -1,21 +1,4 @@
-use crate::models::factory::RobotFactory;
 use crate::prelude::*;
-
-pub struct Planar3RFactory {
-    pub l1: f64,
-    pub l2: f64,
-    pub l3: f64,
-}
-
-impl RobotFactory for Planar3RFactory {
-    fn name(&self) -> &'static str {
-        "planar_3r"
-    }
-
-    fn build(&self) -> SerialChain {
-        create_planar_3r(self.l1, self.l2, self.l3)
-    }
-}
 
 pub fn create_planar_3r(
     l1: f64,

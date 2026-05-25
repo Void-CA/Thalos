@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use thalos_core::models::factories::create_planar_2r;
+use thalos_core::models::factory::{RobotModel, RobotRegistry};
 
 use crate::features::scene::SceneService;
 
@@ -13,7 +13,7 @@ pub struct AppState {
 }
 
 pub fn new_default_state() -> Arc<AppState> {
-    let robot = create_planar_2r(1.0, 1.0);
+    let robot = RobotRegistry::create(RobotModel::Planar2R);
     let scene = SceneService::new(robot);
     Arc::new(AppState {
         services: Arc::new(Services { scene }),
