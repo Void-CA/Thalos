@@ -1,39 +1,69 @@
 use std::ops::Mul;
 
-use crate::math::geometry::rotations::Quaternion;
-use crate::math::geometry::vectors::{UnitVector3, Vector3};
-use crate::math::traits::products::Cross;
+use crate::math::{
+    error::MathError,
+    geometry::{
+        rotations::Quaternion,
+        vectors::{UnitVector3, Vector3},
+    },
+    traits::products::Cross,
+};
 
+/// Cuaternión unitario — invariante: el `Quaternion` interno tiene norma ≈ 1.
+///
+/// A diferencia de [`Quaternion`] (modelo algebraico puro), `UnitQuaternion`
+/// representa una **rotación** en SO(3). Su construcción garantiza la invariante.
+///
+/// # Garantías
+/// - `norm(self.inner()) ≈ 1.0` dentro de [`EPS`](crate::math::constants::EPS).
+/// - No hay normalizaciones ocultas: si la entrada no cumple la invariante, `new()`
+///   retorna un error explícito.
+/// - La composición vía `Mul` construye directamente el producto de Hamilton,
+///   que matemáticamente preserva la norma unitaria.
 #[derive(Debug, Clone, Copy)]
 pub struct UnitQuaternion {
     q: Quaternion,
 }
 
 impl UnitQuaternion {
-    /// Construye un `UnitQuaternion` a partir de cualquier cuaternión,
-    /// normalizándolo. Si la norma es menor que [`EPS`], retorna la identidad.
-    pub fn new(q: Quaternion) -> Self {
-        Self { q: q.normalize() }
-    }
-
-    pub fn try_new(q: Quaternion) -> Option<Self> {
-
-        if q.norm_squared()
-            < crate::math::constants::EPS
-                * crate::math::constants::EPS
-        {
-            None
-        } else {
-            Some(Self::new(q))
+    /// Construye validando que `q` sea unitario.
+    ///
+    /// # Errors
+    /// Retorna [`MathError::QuaternionNotUnit`] si `q` no cumple [`Quaternion::is_unit()`].
+    pub fn new(q: Quaternion) -> Result<Self, MathError> {
+        if !q.is_unit() {
+            return Err(MathError::QuaternionNotUnit {
+                norm_sq: q.norm_squared(),
+            });
         }
+        Ok(Self { q })
     }
 
-    /// Cuaternión unitario identidad: representa la rotación nula (ángulo 0).
+    /// Construye sin validación. Solo usarlo cuando se GARANTIZA que `q` es unitario.
+    pub fn from_quaternion_unchecked(q: Quaternion) -> Self {
+        Self { q }
+    }
+
+    /// Referencia al cuaternión interno.
+    pub fn inner(&self) -> &Quaternion {
+        &self.q
+    }
+
+    /// Consume el `UnitQuaternion` y devuelve el `Quaternion` interno.
+    pub fn into_inner(self) -> Quaternion {
+        self.q
+    }
+
+    /// Cuaternión unitario identidad: rotación nula.
+    ///
+    /// Infalible: (1,0,0,0) tiene norma exactamente 1.
     pub fn identity() -> Self {
         Self { q: Quaternion::identity() }
     }
 
-    /// Crea un cuaternión unitario a partir de un eje y un ángulo (en radianes).
+    /// Construye desde un eje normalizado y un ángulo (radianes).
+    ///
+    /// La construcción matemática garantiza norma = 1, sin normalización oculta.
     pub fn from_axis_angle(axis: UnitVector3, angle: f64) -> Self {
         let half = angle * 0.5;
         let s = half.sin();
@@ -50,9 +80,11 @@ impl UnitQuaternion {
 
     /// Aplica la rotación a un vector `v` en ℝ³.
     ///
-    /// Usa la fórmula vectorial de Rodrigues (evita construir la matriz 3x3):
+    /// Usa la fórmula vectorial de Rodrigues:
     ///
-    ///   v' = v + 2w(q_vec × v) + 2(q_vec × (q_vec × v))
+    ///   v' = v + 2w(v_q × v) + 2(v_q × (v_q × v))
+    ///
+    /// donde `v_q = (x, y, z)` es la parte vectorial del cuaternión.
     pub fn rotate_vector(&self, v: Vector3) -> Vector3 {
         let q_vec = Vector3::new(self.q.x, self.q.y, self.q.z);
         let uv = q_vec.cross(v);
@@ -61,6 +93,11 @@ impl UnitQuaternion {
         v + (uv * (2.0 * self.q.w)) + (uuv * 2.0)
     }
 
+    /// Ángulos Euler en orden ZYX: (roll, pitch, yaw).
+    ///
+    /// - roll: rotación alrededor de X
+    /// - pitch: rotación alrededor de Y (con protección para gimbal lock)
+    /// - yaw: rotación alrededor de Z
     pub fn to_euler(&self) -> (f64, f64, f64) {
         let q = self.q;
 
@@ -69,7 +106,7 @@ impl UnitQuaternion {
         let cosr_cosp = 1.0 - 2.0 * (q.x * q.x + q.y * q.y);
         let roll = sinr_cosp.atan2(cosr_cosp);
 
-        // Pitch (Y) — con protección para singularidades (gimbal lock)
+        // Pitch (Y) — gimbal lock protection
         let sinp = 2.0 * (q.w * q.y - q.z * q.x);
         let pitch = if sinp.abs() >= 1.0 {
             sinp.signum() * std::f64::consts::FRAC_PI_2
@@ -85,7 +122,9 @@ impl UnitQuaternion {
         (roll, pitch, yaw)
     }
 
-    /// Crea desde ángulos Euler en orden ZYX: roll, pitch, yaw (radianes).
+    /// Construye desde ángulos Euler (orden ZYX: roll, pitch, yaw en radianes).
+    ///
+    /// La construcción matemática garantiza norma = 1, sin normalización oculta.
     pub fn from_euler(roll: f64, pitch: f64, yaw: f64) -> Self {
         let cy = (yaw * 0.5).cos();
         let sy = (yaw * 0.5).sin();
@@ -94,32 +133,39 @@ impl UnitQuaternion {
         let cr = (roll * 0.5).cos();
         let sr = (roll * 0.5).sin();
 
-        Self::new(Quaternion {
-            w: cr * cp * cy + sr * sp * sy,
-            x: sr * cp * cy - cr * sp * sy,
-            y: cr * sp * cy + sr * cp * sy,
-            z: cr * cp * sy - sr * sp * cy,
-        })
+        // Producto de tres cuaterniones unitarios → resultado unitario
+        Self {
+            q: Quaternion {
+                w: cr * cp * cy + sr * sp * sy,
+                x: sr * cp * cy - cr * sp * sy,
+                y: cr * sp * cy + sr * cp * sy,
+                z: cr * cp * sy - sr * sp * cy,
+            },
+        }
     }
 
+    /// Inverso multiplicativo.
+    ///
+    /// Para un cuaternión unitario, el inverso es SU CONJUGADO.
+    /// Operación infalible — no depende de la norma (garantizada = 1).
     pub fn inverse(&self) -> Self {
-    Self {
-        q: self.q.conjugate()
+        Self { q: self.q.conjugate() }
     }
-
-}
 }
 
-/// Composición de rotaciones: multiplicar dos cuaterniones unitarios
-/// equivale a componer sus rotaciones.
+/// Composición de rotaciones.
 ///
-/// Internamente usa el producto de Hamilton y re-normaliza para
-/// mantener la invariante de norma = 1.
+/// El producto de Hamilton de dos cuaterniones unitarios ES matemáticamente
+/// unitario (||q1·q2|| = ||q1||·||q2|| = 1). Por eso construimos directamente
+/// sin re-normalizar.
+///
+/// Si después de muchas composiciones acumulás deriva de punto flotante,
+/// extraé el inner con `into_inner()`, normalizalo, y reconstruí con `new()`.
 impl Mul for UnitQuaternion {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self {
-        Self::new(self.q * rhs.q)
+        Self { q: self.q * rhs.q }
     }
 }
 
@@ -144,11 +190,46 @@ mod unit_quaternion_tests {
         );
     }
 
+    // ─── Tests de construcción ─────────────────────────────────
+
+    #[test]
+    fn new_accepts_unit_quaternion() {
+        let q = Quaternion::identity();
+        assert!(UnitQuaternion::new(q).is_ok());
+    }
+
+    #[test]
+    fn new_rejects_non_unit_quaternion() {
+        let q = Quaternion::new(2.0, 0.0, 0.0, 0.0);
+        let result = UnitQuaternion::new(q);
+        assert!(result.is_err(), "should reject non-unit quaternion");
+
+        let err = result.unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("norm"), "error should mention norm²");
+    }
+
+    #[test]
+    fn from_quaternion_unchecked_does_not_validate() {
+        let q = Quaternion::new(2.0, 0.0, 0.0, 0.0);
+        let uq = UnitQuaternion::from_quaternion_unchecked(q);
+        // No panic — es unchecked
+        assert!((uq.inner().norm() - 2.0).abs() < EPS);
+    }
+
+    #[test]
+    fn inner_and_into_inner_roundtrip() {
+        let uq = UnitQuaternion::identity();
+        assert!(uq.inner().is_unit());
+        let q: Quaternion = uq.into_inner();
+        assert!(q.is_unit());
+    }
+
     // ─── Tests de Euler ────────────────────────────────────────
 
     #[test]
     fn identity_euler_angles_are_zero() {
-        let q = UnitQuaternion::new(Quaternion::identity());
+        let q = UnitQuaternion::identity();
         let (roll, pitch, yaw) = q.to_euler();
 
         assert!(roll.abs() < EPS);
@@ -163,18 +244,15 @@ mod unit_quaternion_tests {
         let q = UnitQuaternion::from_euler(original.0, original.1, original.2);
         let converted = q.to_euler();
 
-        assert!(
-            (original.0 - converted.0).abs() < EPS,
-            "roll: {} vs {}", original.0, converted.0
-        );
-        assert!(
-            (original.1 - converted.1).abs() < EPS,
-            "pitch: {} vs {}", original.1, converted.1
-        );
-        assert!(
-            (original.2 - converted.2).abs() < EPS,
-            "yaw: {} vs {}", original.2, converted.2
-        );
+        assert!((original.0 - converted.0).abs() < EPS, "roll mismatch");
+        assert!((original.1 - converted.1).abs() < EPS, "pitch mismatch");
+        assert!((original.2 - converted.2).abs() < EPS, "yaw mismatch");
+    }
+
+    #[test]
+    fn from_euler_preserves_invariant() {
+        let q = UnitQuaternion::from_euler(PI / 3.0, PI / 4.0, PI / 6.0);
+        assert!(q.inner().is_unit(), "from_euler should produce unit quaternion");
     }
 
     #[test]
@@ -182,15 +260,14 @@ mod unit_quaternion_tests {
         let q1 = UnitQuaternion::from_euler(PI / 2.0, 0.0, 0.0);
         let q2 = UnitQuaternion::from_euler(PI / 2.0, 0.0, 0.0);
 
-        assert!((q1.q.w - q2.q.w).abs() < EPS);
-        assert!((q1.q.x - q2.q.x).abs() < EPS);
-        assert!((q1.q.y - q2.q.y).abs() < EPS);
-        assert!((q1.q.z - q2.q.z).abs() < EPS);
+        assert!((q1.inner().w - q2.inner().w).abs() < EPS);
+        assert!((q1.inner().x - q2.inner().x).abs() < EPS);
+        assert!((q1.inner().y - q2.inner().y).abs() < EPS);
+        assert!((q1.inner().z - q2.inner().z).abs() < EPS);
     }
 
     #[test]
     fn scara_wrist_rotation_only_z() {
-        // Rotación de 90° solo en Z
         let q = UnitQuaternion::from_euler(0.0, 0.0, PI / 2.0);
         let (roll, pitch, yaw) = q.to_euler();
 
@@ -198,7 +275,6 @@ mod unit_quaternion_tests {
         assert!(pitch.abs() < EPS);
         assert!((yaw - PI / 2.0).abs() < EPS);
 
-        // Verificar rotación de vector
         let v = Vector3::new(1.0, 0.0, 0.0);
         let rotated = q.rotate_vector(v);
 
@@ -221,7 +297,7 @@ mod unit_quaternion_tests {
 
     #[test]
     fn identity_rotation_does_not_change_vector() {
-        let q = UnitQuaternion::new(Quaternion::identity());
+        let q = UnitQuaternion::identity();
         let v = Vector3::new(1.0, 2.0, 3.0);
         let rotated = q.rotate_vector(v);
 
@@ -289,9 +365,7 @@ mod unit_quaternion_tests {
         let rotated_sq = rotated.x * rotated.x + rotated.y * rotated.y + rotated.z * rotated.z;
         assert!(
             (rotated_sq - original_sq).abs() < EPS,
-            "rotation should preserve squared length: {} vs {}",
-            rotated_sq,
-            original_sq
+            "rotation should preserve squared length"
         );
     }
 
@@ -299,7 +373,6 @@ mod unit_quaternion_tests {
 
     #[test]
     fn composing_rotations_is_multiplication() {
-        // Rotar 30° en X y luego 60° en Z = componer los cuaterniones
         let qx = UnitQuaternion::from_euler(PI / 6.0, 0.0, 0.0);
         let qz = UnitQuaternion::from_euler(0.0, 0.0, PI / 3.0);
         let composed = qz * qx;
@@ -307,8 +380,6 @@ mod unit_quaternion_tests {
         let v = Vector3::new(1.0, 0.0, 0.0);
         let rotated = composed.rotate_vector(v);
 
-        // Verificar que la composición produce el resultado esperado
-        // (primero rotación X, luego Z)
         let expected_after_x = qx.rotate_vector(v);
         let expected = qz.rotate_vector(expected_after_x);
 
@@ -324,9 +395,20 @@ mod unit_quaternion_tests {
     }
 
     #[test]
+    fn composition_preserves_invariant() {
+        let q1 = UnitQuaternion::from_euler(0.2, 0.3, 0.5);
+        let q2 = UnitQuaternion::from_euler(0.1, 0.4, 0.6);
+        let composed = q1 * q2;
+        assert!(
+            composed.inner().is_unit(),
+            "product of unit quaternions should be unit"
+        );
+    }
+
+    #[test]
     fn identity_is_multiplicative_neutral() {
         let q = UnitQuaternion::from_euler(0.2, 0.3, 0.5);
-        let id = UnitQuaternion::new(Quaternion::identity());
+        let id = UnitQuaternion::identity();
 
         let r1 = q * id;
         let r2 = id * q;
@@ -349,8 +431,7 @@ mod unit_quaternion_tests {
         let axis = UnitVector3::new(Vector3::new(0.0, 1.0, 0.0)).unwrap();
         let q = UnitQuaternion::from_axis_angle(axis, PI / 4.0);
 
-        // Construimos la inversa como from_axis_angle(mismo_eje, -angulo)
-        let q_inv = UnitQuaternion::from_axis_angle(axis, -PI / 4.0);
+        let q_inv = q.inverse();
         let composed = q * q_inv;
 
         let v = Vector3::new(1.0, 2.0, 3.0);
@@ -364,6 +445,16 @@ mod unit_quaternion_tests {
              got ({:.6}, {:.6}, {:.6}), expected ({:.6}, {:.6}, {:.6})",
             rotated.x, rotated.y, rotated.z,
             v.x, v.y, v.z,
+        );
+    }
+
+    #[test]
+    fn inverse_has_the_same_norm() {
+        let q = UnitQuaternion::from_euler(0.3, 0.5, 0.7);
+        let inv = q.inverse();
+        assert!(
+            (q.inner().norm() - inv.inner().norm()).abs() < EPS,
+            "inverse should preserve norm"
         );
     }
 
@@ -391,5 +482,35 @@ mod unit_quaternion_tests {
         assert!((rotated.x + 1.0).abs() < EPS);
         assert!(rotated.y.abs() < EPS);
         assert!(rotated.z.abs() < EPS);
+    }
+
+    #[test]
+    fn from_axis_angle_preserves_invariant() {
+        let axis = UnitVector3::new(Vector3::new(0.0, 0.0, 1.0)).unwrap();
+        let q = UnitQuaternion::from_axis_angle(axis, PI / 3.0);
+        assert!(
+            q.inner().is_unit(),
+            "from_axis_angle should produce unit quaternion"
+        );
+    }
+
+    // ─── Tests de invarianza del producto ──────────────────────
+
+    #[test]
+    fn product_preserves_invariant_after_many_compositions() {
+        let axis = UnitVector3::new(Vector3::new(0.0, 0.0, 1.0)).unwrap();
+        let step = UnitQuaternion::from_axis_angle(axis, 0.001); // ~0.057°/step
+        let mut q = UnitQuaternion::identity();
+
+        // 1000 composiciones → ~57° de rotación total
+        for _ in 0..1000 {
+            q = q * step;
+        }
+
+        assert!(
+            q.inner().is_unit(),
+            "after 1000 compositions, product should still be unit. norm = {}",
+            q.inner().norm()
+        );
     }
 }

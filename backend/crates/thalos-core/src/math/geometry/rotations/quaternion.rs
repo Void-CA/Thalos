@@ -1,6 +1,17 @@
-use crate::math::constants;
+use crate::math::{constants, error::MathError};
 
 
+/// Modelo algebraico del cuaternión.
+///
+/// `Quaternion` es un número hipercomplejo (w, x, y, z). No representa
+/// una orientación — para eso está [`UnitQuaternion`](super::UnitQuaternion).
+///
+/// # Invariante
+/// - Ninguna: todo (w, x, y, z) ∈ ℝ⁴ es un cuaternión válido.
+///
+/// # Filosofía de errores
+/// - `normalize()` e `inverse()` retornan [`Result`] — no hay fallbacks silenciosos.
+/// - Si querés un fallback explícito, usá `normalize_or_identity()` o `inverse_or_identity()`.
 #[derive(Debug, Clone, Copy)]
 pub struct Quaternion {
     pub w: f64,
@@ -15,6 +26,8 @@ impl Quaternion {
     }
 
     /// Elemento neutro del producto de Hamilton: (1, 0, 0, 0).
+    ///
+    /// Es infalible: (1,0,0,0) tiene norma exactamente 1.
     pub fn identity() -> Self {
         Self { w: 1.0, x: 0.0, y: 0.0, z: 0.0 }
     }
@@ -32,27 +45,41 @@ impl Quaternion {
         self.norm_squared().sqrt()
     }
 
+    /// `true` si la norma al cuadrado difiere de 1 en menos de [`EPS`](constants::EPS).
     pub fn is_unit(&self) -> bool {
-        (self.norm_squared() - 1.0).abs()
-            < constants::EPS
+        (self.norm_squared() - 1.0).abs() < constants::EPS
     }
-    
-    pub fn normalize(&self) -> Self {
+
+    /// Normaliza el cuaternión a norma = 1.
+    ///
+    /// # Errors
+    /// Retorna [`MathError::ZeroQuaternionNormalization`] si `norm < EPS`.
+    pub fn normalize(&self) -> Result<Self, MathError> {
         let norm = self.norm();
 
         if norm < constants::EPS {
-            return Self::identity();
+            return Err(MathError::ZeroQuaternionNormalization);
         }
 
-        Self {
+        Ok(Self {
             w: self.w / norm,
             x: self.x / norm,
             y: self.y / norm,
             z: self.z / norm,
-        }
+        })
+    }
+
+    /// Normaliza o retorna la identidad si la norma es muy pequeña.
+    ///
+    /// Es el FALLBACK EXPLÍCITO de [`normalize()`](Self::normalize).
+    /// Preferí llamar a `normalize()` y manejar el `Result` siempre que puedas.
+    pub fn normalize_or_identity(&self) -> Self {
+        self.normalize().unwrap_or_else(|_| Self::identity())
     }
 
     /// Conjugado: (w, -x, -y, -z).
+    ///
+    /// Operación infalible — no depende de la norma.
     pub fn conjugate(&self) -> Self {
         Self {
             w: self.w,
@@ -62,24 +89,33 @@ impl Quaternion {
         }
     }
 
-    /// Inverso multiplicativo: conj(q) / norm_squared(q).
+    /// Inverso multiplicativo: conj(q) / ‖q‖².
     ///
-    /// Si la norma al cuadrado es menor que [`EPS`](constants::EPS), retorna la identidad.
-    pub fn inverse(&self) -> Self {
+    /// # Errors
+    /// Retorna [`MathError::ZeroQuaternionInverse`] si `norm_squared < EPS`.
+    pub fn inverse(&self) -> Result<Self, MathError> {
         let norm_sq = self.norm_squared();
 
         if norm_sq < constants::EPS {
-            return Self::identity();
+            return Err(MathError::ZeroQuaternionInverse { norm_sq });
         }
 
         let c = self.conjugate();
 
-        Self {
+        Ok(Self {
             w: c.w / norm_sq,
             x: c.x / norm_sq,
             y: c.y / norm_sq,
             z: c.z / norm_sq,
-        }
+        })
+    }
+
+    /// Inverso o retorna la identidad si la norma es muy pequeña.
+    ///
+    /// Es el FALLBACK EXPLÍCITO de [`inverse()`](Self::inverse).
+    /// Preferí llamar a `inverse()` y manejar el `Result` siempre que puedas.
+    pub fn inverse_or_identity(&self) -> Self {
+        self.inverse().unwrap_or_else(|_| Self::identity())
     }
 }
 
@@ -88,10 +124,8 @@ mod quaternion_algebra_tests {
     use super::*;
     use crate::math::constants::EPS;
 
-    
     // ─── Helpers ───────────────────────────────────────────────
 
-    /// Dos cuaterniones son aproximadamente iguales componente a componente.
     fn approx_eq(a: &Quaternion, b: &Quaternion, tol: f64) -> bool {
         (a.w - b.w).abs() < tol
             && (a.x - b.x).abs() < tol
@@ -99,8 +133,6 @@ mod quaternion_algebra_tests {
             && (a.z - b.z).abs() < tol
     }
 
-    /// Retorna `true` si la parte vectorial del cuaternión es cercana a cero
-    /// (esencialmente un escalar puro).
     fn is_pure_scalar(q: &Quaternion, tol: f64) -> bool {
         q.x.abs() < tol && q.y.abs() < tol && q.z.abs() < tol
     }
@@ -112,11 +144,9 @@ mod quaternion_algebra_tests {
         let q = Quaternion::new(2.0, -1.0, 3.0, 0.5);
         let id = Quaternion::identity();
 
-        // q * 1 = q
         let r1 = q * id;
         assert!(approx_eq(&r1, &q, EPS), "q * identity != q");
 
-        // 1 * q = q
         let r2 = id * q;
         assert!(approx_eq(&r2, &q, EPS), "identity * q != q");
     }
@@ -124,9 +154,9 @@ mod quaternion_algebra_tests {
     #[test]
     fn inverse_property() {
         let q = Quaternion::new(0.8, -0.2, 0.3, 0.1);
-        let inv = q.inverse();
+        let inv = q.inverse().unwrap();
 
-        // q * q⁻¹ ≈ identity (parte vectorial ≈ 0, w ≈ 1)
+        // q * q⁻¹ ≈ identity
         let r1 = q * inv;
         assert!(
             is_pure_scalar(&r1, EPS),
@@ -141,10 +171,7 @@ mod quaternion_algebra_tests {
 
         // q⁻¹ * q ≈ identity
         let r2 = inv * q;
-        assert!(
-            is_pure_scalar(&r2, EPS),
-            "q⁻¹ * q should be pure scalar"
-        );
+        assert!(is_pure_scalar(&r2, EPS), "q⁻¹ * q should be pure scalar");
         assert!(
             (r2.w - 1.0).abs() < 10.0 * EPS,
             "scalar part of q⁻¹ * q should be ≈ 1"
@@ -152,9 +179,16 @@ mod quaternion_algebra_tests {
     }
 
     #[test]
-    fn zero_norm_inverse_returns_identity() {
+    fn zero_norm_inverse_returns_error() {
         let zero = Quaternion::new(0.0, 0.0, 0.0, 0.0);
-        let inv = zero.inverse();
+        let result = zero.inverse();
+        assert!(result.is_err(), "inverse of zero should error");
+    }
+
+    #[test]
+    fn zero_norm_inverse_or_identity_returns_identity() {
+        let zero = Quaternion::new(0.0, 0.0, 0.0, 0.0);
+        let inv = zero.inverse_or_identity();
         assert!(approx_eq(&inv, &Quaternion::identity(), EPS));
     }
 
@@ -177,7 +211,6 @@ mod quaternion_algebra_tests {
 
     #[test]
     fn conjugate_of_product() {
-        // conj(q1 * q2) = conj(q2) * conj(q1)  (reversing order)
         let q1 = Quaternion::new(0.7, 0.1, -0.3, 0.5);
         let q2 = Quaternion::new(0.2, 0.8, -0.1, 0.4);
 
@@ -186,16 +219,12 @@ mod quaternion_algebra_tests {
 
         assert!(
             approx_eq(&conj_product, &product_conj, EPS),
-            "conj(q1 * q2) != conj(q2) * conj(q1): \
-             got ({}, {}, {}, {}) vs ({}, {}, {}, {})",
-            conj_product.w, conj_product.x, conj_product.y, conj_product.z,
-            product_conj.w, product_conj.x, product_conj.y, product_conj.z,
+            "conj(q1 * q2) != conj(q2) * conj(q1)"
         );
     }
 
     #[test]
     fn norm_is_multiplicative() {
-        // ||q1 * q2|| = ||q1|| * ||q2||
         let q1 = Quaternion::new(2.0, -0.5, 1.5, 0.3);
         let q2 = Quaternion::new(0.7, 1.2, -0.8, 0.1);
 
@@ -212,20 +241,17 @@ mod quaternion_algebra_tests {
 
     #[test]
     fn q_times_conjugate_gives_scalar() {
-        // q * conj(q) = (norm_squared, 0, 0, 0)
         let q = Quaternion::new(0.6, -0.8, 0.3, 0.2);
         let r = q * q.conjugate();
 
         assert!(
             is_pure_scalar(&r, EPS),
-            "q * conj(q) should be pure scalar (norm_squared), \
-             got vector part ({}, {}, {})",
+            "q * conj(q) should be pure scalar, got vector part ({}, {}, {})",
             r.x, r.y, r.z
         );
         assert!(
             (r.w - q.norm_squared()).abs() < EPS,
-            "scalar part of q * conj(q) should = norm_squared, \
-             {} vs {}",
+            "scalar part should = norm_squared, {} vs {}",
             r.w,
             q.norm_squared()
         );
@@ -234,7 +260,7 @@ mod quaternion_algebra_tests {
     #[test]
     fn normalize_produces_unit_norm() {
         let q = Quaternion::new(3.0, -1.5, 2.0, 0.5);
-        let n = q.normalize();
+        let n = q.normalize().unwrap();
 
         let diff = (n.norm() - 1.0).abs();
         assert!(
@@ -246,20 +272,26 @@ mod quaternion_algebra_tests {
     }
 
     #[test]
+    fn normalize_of_zero_returns_error() {
+        let zero = Quaternion::new(0.0, 0.0, 0.0, 0.0);
+        let result = zero.normalize();
+        assert!(result.is_err(), "normalize of zero should error");
+    }
+
+    #[test]
+    fn normalize_or_identity_of_zero_returns_identity() {
+        let zero = Quaternion::new(0.0, 0.0, 0.0, 0.0);
+        let n = zero.normalize_or_identity();
+        assert!(approx_eq(&n, &Quaternion::identity(), EPS));
+    }
+
+    #[test]
     fn identity_norm_is_one() {
         assert!((Quaternion::identity().norm() - 1.0).abs() < EPS);
     }
 
     #[test]
-    fn normalize_of_zero_norm_returns_identity() {
-        let zero = Quaternion::new(0.0, 0.0, 0.0, 0.0);
-        let n = zero.normalize();
-        assert!(approx_eq(&n, &Quaternion::identity(), EPS));
-    }
-
-    #[test]
     fn product_with_scalar_quaternion() {
-        // (a, 0, 0, 0) * (w, x, y, z) = (a*w, a*x, a*y, a*z)
         let scalar = Quaternion::new(3.0, 0.0, 0.0, 0.0);
         let q = Quaternion::new(0.5, -0.2, 0.1, 0.4);
         let r = scalar * q;
@@ -275,7 +307,6 @@ mod quaternion_algebra_tests {
 
     #[test]
     fn associativity_of_product() {
-        // (q1 * q2) * q3 ≈ q1 * (q2 * q3)
         let q1 = Quaternion::new(0.3, -0.7, 0.2, 1.1);
         let q2 = Quaternion::new(0.8, 0.5, -0.4, 0.6);
         let q3 = Quaternion::new(1.2, -0.3, 0.9, -0.5);
@@ -285,10 +316,7 @@ mod quaternion_algebra_tests {
 
         assert!(
             approx_eq(&left, &right, 10.0 * EPS),
-            "Hamilton product is not associative: \
-             left ({}, {}, {}, {}) vs right ({}, {}, {}, {})",
-            left.w, left.x, left.y, left.z,
-            right.w, right.x, right.y, right.z,
+            "Hamilton product is not associative"
         );
     }
 
@@ -296,21 +324,14 @@ mod quaternion_algebra_tests {
     fn norm_squared_consistency() {
         let q = Quaternion::new(0.5, -1.0, 2.0, -0.5);
         let expected = 0.5_f64 * 0.5 + (-1.0) * (-1.0) + 2.0 * 2.0 + (-0.5) * (-0.5);
-        assert!(
-            (q.norm_squared() - expected).abs() < EPS,
-            "norm_squared inconsistent"
-        );
-        assert!(
-            (q.norm_squared() - q.norm() * q.norm()).abs() < EPS,
-            "norm_squared != norm^2"
-        );
+        assert!((q.norm_squared() - expected).abs() < EPS);
+        assert!((q.norm_squared() - q.norm() * q.norm()).abs() < EPS);
     }
 
     #[test]
     fn inverse_of_unit_quaternion_is_conjugate() {
-        // Para ||q|| = 1, q⁻¹ = conj(q)
-        let q = Quaternion::new(0.7071067811865476, 0.7071067811865476, 0.0, 0.0); // norma ≈ 1
-        let inv = q.inverse();
+        let q = Quaternion::new(0.7071067811865476, 0.7071067811865476, 0.0, 0.0);
+        let inv = q.inverse().unwrap();
 
         assert!(
             approx_eq(&inv, &q.conjugate(), EPS),
@@ -324,24 +345,42 @@ mod quaternion_algebra_tests {
         let q = Quaternion::new(1.0, 2.0, 3.0, 4.0);
 
         let r1 = q * zero;
-        assert!(
-            approx_eq(&r1, &zero, EPS),
-            "q * 0 != 0"
-        );
+        assert!(approx_eq(&r1, &zero, EPS), "q * 0 != 0");
 
         let r2 = zero * q;
+        assert!(approx_eq(&r2, &zero, EPS), "0 * q != 0");
+    }
+
+    #[test]
+    fn error_messages_are_descriptive() {
+        let zero = Quaternion::new(0.0, 0.0, 0.0, 0.0);
+
+        let inv_err = zero.inverse().unwrap_err();
+        let msg = inv_err.to_string();
         assert!(
-            approx_eq(&r2, &zero, EPS),
-            "0 * q != 0"
+            msg.contains("norm"),
+            "inverse error should mention norm, got: {}",
+            msg
+        );
+
+        let norm_err = zero.normalize().unwrap_err();
+        let msg = norm_err.to_string();
+        assert!(
+            msg.contains("normalize"),
+            "normalize error should mention normalize, got: {}",
+            msg
         );
     }
 
     #[test]
-    fn euler_roundtrip_uses_unit_quaternion() {
-        // Este test verifica que from_euler / to_euler NO existen en Quaternion.
-        // La conversión con ángulos Euler es responsabilidad de UnitQuaternion.
-        let _q = Quaternion::identity();
-        // Si esto compila, los métodos de UnitQuaternion NO se filtraron aquí.
-        // (No llamamos a .to_euler() porque no existe en Quaternion)
+    fn is_unit_detects_unit_quaternions() {
+        let id = Quaternion::identity();
+        assert!(id.is_unit());
+
+        let q = Quaternion::new(0.7071067811865476, 0.7071067811865476, 0.0, 0.0);
+        assert!(q.is_unit());
+
+        let not_unit = Quaternion::new(2.0, 0.0, 0.0, 0.0);
+        assert!(!not_unit.is_unit());
     }
 }
