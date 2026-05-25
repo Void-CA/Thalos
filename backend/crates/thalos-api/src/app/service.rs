@@ -1,8 +1,5 @@
 use thalos_core::{
-    kinematics::{
-        forward::ForwardKinematics,
-        jacobian::{GeometricJacobian, JacobianSolver},
-    },
+    kinematics::forward::ForwardKinematics,
     robot::serial_chain::SerialChain,
 };
 use thalos_visual::{
@@ -13,7 +10,6 @@ pub struct SceneService {
     fk: ForwardKinematics,
     builder: SceneBuilder,
     validator: SceneValidator,
-    jacobian: Option<GeometricJacobian>,
 }
 
 impl SceneService {
@@ -25,33 +21,12 @@ impl SceneService {
             fk,
             builder,
             validator,
-            jacobian: None,
         }
-    }
-
-    pub fn with_jacobian(mut self) -> Self {
-        let end_effector = self.fk.robot().end_effector().clone();
-        let geom = GeometricJacobian::new(self.fk.clone(), end_effector);
-        self.jacobian = Some(geom);
-        self
     }
 
     pub fn build_scene(&self, q: &[f64]) -> Result<VisualScene, SceneError> {
         let result = self.fk.evaluate(q);
         let scene = self.builder.from_fk(&result);
-        self.validator.validate(&scene)?;
-        Ok(scene)
-    }
-
-    pub fn build_scene_with_jacobian(&self, q: &[f64]) -> Result<VisualScene, SceneError> {
-        let result = self.fk.evaluate(q);
-        let scene = match &self.jacobian {
-            Some(jac) => {
-                let jacobian = jac.evaluate(q);
-                self.builder.from_fk_with_jacobian(&result, &jacobian)
-            }
-            None => self.builder.from_fk(&result),
-        };
         self.validator.validate(&scene)?;
         Ok(scene)
     }

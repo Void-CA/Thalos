@@ -1,14 +1,13 @@
 use std::net::SocketAddr;
 
-use axum::Router;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::EnvFilter;
 
-mod routes;
-mod service;
-mod state;
+mod app;
+mod http;
 
-use state::new_default_state;
+use app::new_default_state;
+use http::app_router;
 
 #[tokio::main]
 async fn main() {
@@ -18,8 +17,7 @@ async fn main() {
 
     let app_state = new_default_state();
 
-    let app = Router::new()
-        .nest("/api", routes::scene_router())
+    let app = app_router()
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 

@@ -6,13 +6,11 @@ use axum::{
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
-use thalos_api::{routes, new_default_state};
+use thalos_api::{app_router, new_default_state};
 
 fn test_app() -> Router {
     let state = new_default_state();
-    Router::new()
-        .nest("/api", routes::scene_router())
-        .with_state(state)
+    app_router().with_state(state)
 }
 
 async fn get_json(
@@ -78,12 +76,10 @@ async fn from_fk_rejects_nan() {
         app,
         http::Method::POST,
         "/api/scene/from-fk",
-        // serde_json serializes NaN as null by default, which fails deser
         Some(json!({"joint_angles": [f64::NAN, 0.0]})),
     )
     .await;
     assert!(status.is_client_error(), "NaN should be rejected");
-    // body might not be valid JSON (axum rejection body is HTML)
     assert!(body.is_none() || body.as_ref().is_some_and(|v| v.get("frames").is_none()));
 }
 

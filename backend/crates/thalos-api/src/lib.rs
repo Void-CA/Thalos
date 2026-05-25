@@ -1,6 +1,5 @@
-pub mod service;
-pub mod state;
-pub mod routes;
+pub mod app;
+pub mod http;
 
-pub use service::SceneService;
-pub use state::{AppState, new_default_state};
+pub use app::{AppState, Services, SceneService, new_default_state};
+pub use http::app_router;
