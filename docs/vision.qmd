@@ -1,0 +1,118 @@
+# Visión del proyecto {#sec-vision}
+
+## Propósito
+
+Thalos es una **plataforma modular para modelado, análisis y visualización de
+sistemas robóticos**. Su propósito es ofrecer un núcleo matemático-robótico
+desacoplado de cualquier infraestructura de visualización o comunicación
+externa, permitiendo que cada capa evolucione de forma independiente.
+
+No es un framework de control robótico en tiempo real (como ROS 2). No es un
+simulador físico (como Gazebo). Es una **capa de representación y análisis**
+que puede integrarse en sistemas más grandes o usarse como herramienta
+autónoma de validación.
+
+## ¿Qué es Thalos arquitectónicamente?
+
+Esta distinción es importante porque el proyecto se mueve en un espacio entre
+varias categorías, y cada una tiene expectativas distintas.
+
+**Thalos NO es actualmente:**
+
+- Un **motor físico** — no simula dinámica, colisiones, ni restricciones de
+  contacto
+- Un **simulador dinámico completo** — no hay masas, inercias, pares, ni
+  aceleraciones
+- Un **framework ROS** — no publica en topics, no usa actionlib, no tiene
+  nodelets
+- Un **renderer 3D** — no genera gráficos por sí mismo; delega la
+  visualización a Three.js vía `VisualScene`
+- Un **controlador industrial** — no ejecuta loops de control en tiempo real
+
+**Thalos SÍ es actualmente:**
+
+> Un **núcleo modular** para **representación, análisis cinemático y
+> visualización estructural** de **robots seriales**.
+
+Eso significa que Thalos provee:
+
+- Las **estructuras de datos** para modelar un robot (joints, links, cadenas,
+  frames)
+- Los **algoritmos** para analizarlo (FK, jacobianos)
+- Una **representación visual serializable** de ese análisis (`VisualScene`)
+- Una **capa de validación** para garantizar consistencia (`SceneValidator`)
+- Una **API HTTP** para que sistemas externos consuman todo lo anterior
+
+Todo lo demás (física, control, planificación, hardware) son capas que pueden
+**agregarse** sobre esta base sin modificarla.
+
+## Objetivos actuales
+
+Actualmente Thalos está enfocado en:
+
+- **Robots seriales** (Serial Chains) — cadenas cinemáticas abiertas
+- **Cinemática directa** (*Forward Kinematics*) — dada una configuración de
+  joints, calcular la pose de cada frame
+- **Jacobianos** — geométrico y numérico, para análisis de velocidades y
+  singularidades
+- **Representación espacial** — poses, frames, registros y grafos de
+  referencia
+- **Validación visual** — construcción, validación y diferencia de escenas
+- **Simulación estructural** — snapshots visuales de configuraciones robóticas
+
+## Alcance actual
+
+El sistema completo abarca desde el modelado matemático hasta la exposición
+via API HTTP:
+
+```{dot}
+//| fig-cap: "Pipeline completo de Thalos — del modelo matemático al frontend"
+//| label: fig-pipeline-vision
+digraph pipeline {
+    rankdir=LR;
+    splines=ortho;
+    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=12, margin="0.35,0.2"];
+
+    core     [label="Core\nModelos · Matemática"];
+    robot    [label="Robótica\nJoints · Cinemática"];
+    spatial  [label="Espacial\nFrames · Poses"];
+    visual   [label="Visualización\nEscenas · Validación"];
+    exposicion [label="Exposición\nHTTP · Frontend"];
+
+    core -> robot -> spatial -> visual -> exposicion;
+}
+```
+
+## Limitaciones actuales
+
+Thalos **NO** soporta actualmente:
+
+- **Robots paralelos** — mecanismos con cadenas cinemáticas cerradas
+  (ej. Stewart platform, delta robots)
+- **Mecanismos cerrados** — cadenas cinemáticas que forman loops
+- **Sistemas híbridos** — combinaciones de series y paralelos
+- **Árboles cinemáticos complejos** — ramificaciones, múltiples
+  end-effectors
+- **Cinemática inversa** (*Inverse Kinematics*)
+- **Planificación de trayectorias**
+- **Dinámica** — masas, inercias, pares, aceleraciones
+- **Detección de colisiones**
+- **Integración con hardware real**
+
+Estas limitaciones son **deliberadas** en esta etapa. La arquitectura está
+diseñada para que cada una pueda agregarse sin reescribir el núcleo existente.
+
+## Dirección futura
+
+La arquitectura modular permite expansion hacia:
+
+- **Planificación de trayectorias** — interpolación en espacio de joints y
+  espacio operacional
+- **Cinemática inversa** — solvers analíticos y numéricos
+- **Integración hardware** — comunicación con brazos robóticos reales via
+  ROS 2, EtherCAT, o APIs propietarias
+- **Traducción entre robots** — mapping de configuraciones entre distintos
+  modelos robóticos
+- **Simulación avanzada** — integración con motores físicos (rapier, physx)
+- **Control robótico** — generación de setpoints, loops de control
+- **Nuevos modelos robóticos** — robots móviles, drones, humanoides

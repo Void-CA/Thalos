@@ -1,0 +1,251 @@
+# Filosofía arquitectónica {#sec-architecture}
+
+Esta sección es **crítica** para entender Thalos. Las decisiones
+arquitectónicas que se describen aquí son la razón por la que el proyecto está
+estructurado como está, y deben respetarse al extenderlo.
+
+## Principios rectores
+
+### Separación de responsabilidades
+
+Thalos separa **cuatro dominios** que nunca deben acoplarse:
+
+| Dominio | Crate | Responsabilidad |
+|---------|-------|-----------------|
+| Matemático | `thalos-core::math` | Álgebra, geometría, rotaciones, transformaciones |
+| Robótico | `thalos-core::robot` + `kinematics` + `spatial` | Estructuras robóticas, cinemática, frames |
+| Visual | `thalos-visual` | Escenas, validación, diff, snapshots |
+| Comunicación | `thalos-api` | HTTP, DTOs, handlers, routing |
+
+La regla de oro:
+
+> **El dominio matemático no importa nada del dominio robótico.**
+> El dominio visual solo depende del matemático y robótico (vía traits).
+> La API solo orquesta — no contiene lógica de dominio.
+
+### Modularidad
+
+Cada crate es independiente y tiene un contrato claro:
+
+- `thalos-core` — **no depende de nada** fuera de `nalgebra` y `thiserror`
+- `thalos-visual` — **solo depende de** `thalos-core` y `serde`
+- `thalos-api` — **depende de** `thalos-core` + `thalos-visual`, agrega `axum`
+  y `tokio`
+
+```{dot}
+//| fig-cap: "Relación de dependencia entre crates"
+//| label: fig-dep-simple
+digraph dependencies {
+    rankdir=BT;
+    splines=ortho;
+    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=12, margin="0.3,0.15"];
+
+    core    [label="thalos-core"];
+    visual  [label="thalos-visual"];
+    api     [label="thalos-api"];
+
+    core -> visual [label="depende de", fontsize=10];
+    visual -> api  [label="depende de", fontsize=10];
+}
+```
+
+Esto significa que `thalos-core` puede compilarse y testearse **sin** `tokio`,
+`axum`, ni ningún sistema de visualización.
+
+### Desacoplamiento matemático/visual
+
+La representación visual (`VisualScene`) es una **proyección** del estado
+cinemático, no un acoplamiento. `SceneBuilder::from_fk()` toma un resultado de
+FK y produce una escena visual. No hay herencia, no hay objetos visuales
+dentro del core.
+
+```rust
+// thalos-visual: SceneBuilder transforma FK → VisualScene
+pub fn from_fk(&self, fk: &FKResult) -> VisualScene {
+    // ... traducción unidireccional
+}
+```
+
+Esto permite cambiar totalmente el sistema de visualización (WebGL, SVG,
+terminal ASCII) sin tocar `thalos-core`.
+
+### Extensibilidad por composición
+
+Las extensiones no se hacen modificando el core, sino **agregando**:
+
+- **Nuevos modelos robóticos** → `thalos-core::models` + factory
+- **Nuevos algoritmos cinemáticos** → `thalos-core::kinematics` nuevos módulos
+- **Nuevas visualizaciones** → nuevo crate que importa `thalos-core`
+- **Nuevas APIs** → `thalos-api::features` nuevos módulos
+
+### Validación por contrato
+
+Cada capa valida sus propias invariantes:
+
+- `UnitQuaternion::new()` valida norma unitaria
+- `SerialChainBuilder::build()` valida frames existentes y end-effector
+- `SceneValidator::validate()` valida topología, quaternions, valores finitos
+
+Si una capa recibe datos inválidos, **rechaza la construcción**, no intenta
+"arreglar" silenciosamente.
+
+```rust
+// ── No hay fallbacks silenciosos ──
+let uq = UnitQuaternion::new(q)?;       // Error si no es unitario
+let chain = builder.build()?;           // Error si falta end-effector
+validator.validate(&scene)?;            // Error si topología rota
+```
+
+## Reglas arquitectónicas (*boundaries*) {#sec-boundaries}
+
+Estas reglas son **obligatorias** y deben verificarse en toda contribución.
+Violar una regla arquitectónica introduce deuda técnica estructural.
+
+| Regla | Descripción |
+|-------|-------------|
+| `thalos-core` no depende de visualización | No puede importar nada de `thalos-visual`. El core no sabe que existe una representación visual. |
+| `thalos-core` no depende de HTTP | No puede importar `axum`, `tokio`, ni ningún crate de infraestructura web. |
+| `thalos-visual` consume estructuras del core | `SceneBuilder` importa `FKResult`, `SerialChain`, `Jacobian` — pero no modifica esas estructuras. La traducción es unidireccional. |
+| `thalos-api` no contiene lógica de dominio | Los handlers delegan en `SceneService`. No hay cálculo cinemático ni manipulación de estructuras del core en los handlers. |
+| Sin dependencias circulares | `thalos-core` → `thalos-visual` → `thalos-api`. Nunca al revés. |
+| DTOs separados del dominio | Los tipos serializables de `thalos-api::app::dto` y `thalos-api::features::scene::dto` son independientes de los tipos del core. `VisualScene` es una excepción controlada (es `Serialize` por diseño). |
+
+> Violar estas reglas rompe el desacoplamiento y eventualmente convierte a
+> Thalos en un monolito.
+
+## Dominios del sistema {#sec-domains}
+
+Para alguien nuevo, la distinción entre "matemático", "robótico" e
+"infraestructura" puede no ser obvia. Aquí está explicitada:
+
+### Dominio matemático (`thalos-core::math`)
+
+Álgebra lineal y geometría. **No sabe qué es un robot.**
+
+- `Vector3`, `UnitVector3`
+- `Quaternion`, `UnitQuaternion`
+- `Transform3D`, `Transform<From, To>`
+- `DynamicMatrix`
+- Traits `Cross`, `Dot`
+
+Puede testearse de forma completamente aislada. Es reutilizable en cualquier
+contexto, no solo robótico.
+
+### Dominio robótico (`thalos-core::robot`, `kinematics`, `spatial`)
+
+Estructuras y algoritmos que **modelan robots y sus propiedades cinemáticas**.
+
+- `JointType`, `RevoluteJoint`, `PrismaticJoint`
+- `Link`, `Segment`, `SerialChain`
+- `ForwardKinematics`, `JacobianSolver`
+- `Frame`, `FrameRegistry`, `Pose`, `FrameGraph`
+
+Depende del dominio matemático pero no sabe de visualización, HTTP, ni
+almacenamiento.
+
+### Dominio de infraestructura
+
+Todo lo que es mecánica de sistema, no lógica de dominio.
+
+- `thalos-visual` — serialización, validación de escenas, diff
+- `thalos-api` — HTTP, routing, DTOs de entrada/salida
+- Frontend Angular — renderizado, UI, estado del cliente
+
+La infraestructura **consume** los dominios matemático y robótico, pero nunca
+al revés.
+
+## Decisiones de diseño {#sec-decisions}
+
+### ¿Por qué Serial Chains primero?
+
+Porque son la topología más simple y la base conceptual de la robótica de
+brazos manipuladores. Un robot serial se modela como una secuencia lineal de
+transformaciones, lo que permite implementar FK y jacobianos sin lidiar con
+la complejidad de loops o ramificaciones.
+
+La arquitectura está preparada para admitir cadenas paralelas y árboles en el
+futuro, pero serial primero nos dio foco.
+
+### ¿Por qué separación visual/core?
+
+Porque la visualización cambia más rápido y por razones distintas que el
+núcleo matemático. Si la visualización estuviera acoplada al core, cambiar de
+Three.js a WebGPU requeriría modificar el cálculo de FK. Eso es insostenible.
+
+Además, `thalos-core` debe poder compilarse y testearse sin GPU, sin
+navegador, sin dependencias gráficas.
+
+### ¿Por qué sistema espacial propio (`Frame`, `FrameRegistry`, `Pose`)?
+
+Porque necesitábamos un modelo explícito de la noción de "frame de
+referencia". La mayoría de las librerías de robótica tratan los frames como
+strings o IDs implícitos. Thalos los convierte en **ciudadanos de primera
+clase** del sistema.
+
+Esto permite:
+
+- Validar que un frame existe antes de referenciarlo
+- Rastrear el grafo de dependencias entre frames
+- Expresar poses con referencia explícita (`Pose::reference`)
+- Escalar a sistemas multi-robot con registros de frames independientes
+
+### ¿Por qué snapshots visuales?
+
+Porque la validación visual tradicional requiere abrir un visor 3D. Con
+snapshots (vía `VisualScene` + `insta`) podemos verificar visualmente en CI
+que un cambio en FK no rompió la escena esperada.
+
+### ¿Por qué Rust?
+
+- `Result` como forma exclusiva de manejo de errores (no excepciones
+  silenciosas)
+- Tipado fuerte para modelar invariantes (`UnitQuaternion` ≠ `Quaternion`)
+- `PhantomData` para type safety entre frames
+- `thiserror` para errores con mensajes descriptivos y `Display` automático
+- Sin runtime ni GC — preparado para integración con hardware en tiempo real
+
+## Mapa de dependencias
+
+```{dot}
+//| fig-cap: "Mapa de dependencias del workspace"
+//| label: fig-dep-map
+digraph deps {
+    rankdir=TB;
+    splines=ortho;
+    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=12, margin="0.3,0.15"];
+
+    subgraph cluster_crates {
+        label="Workspace Thalos";
+        style=dashed;
+        penwidth=1;
+        fontsize=13;
+
+        api     [label="thalos-api\naxum · tokio · serde"];
+        visual  [label="thalos-visual\nserde · insta"];
+        core    [label="thalos-core\nnalgebra · thiserror"];
+    }
+
+    core -> visual [label="depende de", fontsize=9];
+    visual -> api  [label="depende de", fontsize=9];
+}
+```
+
+## Cómo leer el proyecto {#sec-reading-order}
+
+Si sos nuevo en el código, este es el orden recomendado para entender Thalos
+de concepto a implementación:
+
+| Paso | Qué leer | Por qué |
+|------|----------|---------|
+| @sec-domain | Definiciones del dominio | Entender el vocabulario antes de ver código |
+| @sec-architecture | Filosofía arquitectónica | Entender por qué está estructurado así |
+| @sec-flow | Flujo interno del sistema | Ver cómo viajan los datos de punta a punta |
+| `thalos-core::math` | Vectores, cuaterniones, transforms | La base matemática de todo |
+| `thalos-core::robot` | Joints, links, segments, serial chain | Cómo se modela un robot |
+| `thalos-core::kinematics` | FK, jacobianos | Los algoritmos centrales |
+| `thalos-core::spatial` | Frames, poses, registries | El sistema de coordenadas |
+| `thalos-visual` | Scene builder, validator, diff | Cómo se proyecta el dominio a visual |
+| `thalos-api` | Services, handlers, routes | Cómo se expone a otros sistemas |
+| Frontend Angular | Scene store, three renderer | Cómo se ve del lado del cliente |
+
+Los archivos cambian. Los conceptos sobreviven.

@@ -1,0 +1,79 @@
+# Estado de madurez {#sec-maturity}
+
+Esta sección documenta qué partes de Thalos están **estables**, cuáles están
+**en desarrollo**, y qué esperar de cada área. Es información crítica para
+colaboradores y adoptantes tempranos.
+
+## Matriz de madurez
+
+| Área | Estado | Tests | Observaciones |
+|------|--------|-------|---------------|
+| `math::vectors` | ✅ Estable | ✅ | APIs congeladas. `Vector3`, `UnitVector3` |
+| `math::rotations::Quaternion` | ✅ Estable | ✅ | Álgebra de cuaterniones completa |
+| `math::rotations::UnitQuaternion` | ✅ Estable | ✅ | SO(3) con invariante de norma |
+| `math::rotations::ops` | 🧪 Experimental | ❌ | Operaciones aritméticas entre tipos aún no probadas |
+| `math::rigid::Transform3D` | ✅ Estable | ❌ | API congelada, faltan tests unitarios |
+| `math::algebra::DynamicMatrix` | ✅ Estable | ❌ | Alias de `DMatrix`, estable por definición |
+| `math::traits` | 🧪 Experimental | ❌ | Traits `Cross`, `Dot` — pueden cambiar |
+| `robot::joint` | ✅ Estable | ❌ | `JointType`, `RevoluteJoint`, `PrismaticJoint` |
+| `robot::link` | ✅ Estable | ❌ | `Link` simple y directo |
+| `robot::segment` | ✅ Estable | ❌ | `Segment` sin cambios esperados |
+| `robot::serial_chain` | ✅ Estable | ❌ | Estructura central del dominio |
+| `robot::builder` | ✅ Estable | ❌ | `SerialChainBuilder` con validación |
+| `kinematics::forward` | ✅ Estable | ❌ | FK evaluado y probado indirectamente vía snapshots |
+| `kinematics::jacobian::GeometricJacobian` | 🔧 En desarrollo | ❌ | Implementado, sin tests dedicados |
+| `kinematics::jacobian::NumericalJacobian` | 🔧 En desarrollo | ❌ | Implementado, sin tests dedicados |
+| `spatial::frame` | ✅ Estable | ❌ | `FrameId`, `Frame`, `FrameRegistry` estables |
+| `spatial::pose` | ✅ Estable | ❌ | `Pose` sin cambios esperados |
+| `spatial::frame::graph` | 🧪 Experimental | ❌ | Solo esqueleto declarado |
+| `models::factory` | ✅ Estable | ❌ | `RobotRegistry`, `RobotModel`, `RobotSpec` |
+| Models concretos (Planar2R, SCARA, etc.) | ✅ Estable | ❌ | Cada modelo tiene factory + tests FK |
+| `thalos-visual::scene` | 🧪 Experimental | ❌ | `VisualScene`, `VisualFrame`, etc. |
+| `thalos-visual::builder` | 🧪 Experimental | ❌ | `SceneBuilder` — API puede cambiar |
+| `thalos-visual::validator` | ✅ Estable | ✅ | 8 invariantes, tests con `insta` |
+| `thalos-visual::diff` | ✅ Estable | ❌ | `SceneDiff::between()` estable |
+| `thalos-visual::precision` | ✅ Estable | ❌ | `VisualPrecision` sin cambios |
+| `thalos-api::handlers` | 🧪 Experimental | ❌ | Handlers básicos, pueden agregarse |
+| `thalos-api::dto` | 🧪 Experimental | ❌ | `ErrorResponse` puede expandirse |
+| `thalos-api::routes` | 🧪 Experimental | ❌ | Routing puede cambiar |
+| Frontend Angular | 🧪 Experimental | ❌ | En desarrollo activo |
+
+**Leyenda**:
+- ✅ **Estable**: API congelada, no se esperan cambios breaking
+- 🔧 **En desarrollo**: Implementado pero puede cambiar
+- 🧪 **Experimental**: Implementación inicial, sujeta a cambios significativos
+
+## Tests existentes
+
+### `thalos-core`
+
+| Archivo | Lo que prueba |
+|---------|---------------|
+| `math::rotations::quaternion.rs` | Álgebra de cuaterniones: identidad, inverso, conjugado, norma, normalización, producto de Hamilton, asociatividad |
+| `math::rotations::unit_quaternion.rs` | Invariante de norma, Euler ↔ quaternion roundtrip, `rotate_vector`, composición, inverso, `from_axis_angle` |
+
+### `thalos-visual`
+
+| Archivo | Lo que prueba |
+|---------|---------------|
+| `tests/validator_tests.rs` | Cada invariante del `SceneValidator` (world, duplicados, topología, conectividad, finitos, quaternions, links, twists) |
+| `tests/scene_snapshots.rs` | Snapshots con `insta` para validación visual de escenas FK |
+
+### `thalos-api`
+
+| Archivo | Lo que prueba |
+|---------|---------------|
+| `tests/service_tests.rs` | `SceneService::build_scene` con validación |
+| `tests/api_tests.rs` | Integración HTTP: endpoints responden correctamente |
+
+## Cobertura deseada (próximos pasos)
+
+- Tests unitarios para `Transform3D::compose()` y `Transform3D::identity()`
+- Tests unitarios para `RevoluteJoint::motion()` y `PrismaticJoint::motion()`
+- Tests unitarios para `SerialChainBuilder` (éxito y error)
+- Tests de integración para `ForwardKinematics::evaluate()` con modelos
+  conocidos
+- Tests de propiedades para `GeometricJacobian` vs `NumericalJacobian`
+  (deberían coincidir dentro de tolerancia)
+- Tests de snapshot para cada modelo robótico (Planar3R, SCARA, etc.)
+- Tests de frontend con Angular Testing Library

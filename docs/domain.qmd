@@ -1,0 +1,303 @@
+# Definiciones internas del dominio {#sec-domain}
+
+Esta es probablemente la sección **más importante** de la documentación.
+Define el vocabulario del sistema, los límites conceptuales, y lo que cada
+término significa **exactamente** dentro de Thalos.
+
+Los archivos cambian. Los conceptos sobreviven.
+
+## Serial Chain
+
+Una **Serial Chain** es una secuencia ordenada de segmentos conectados por
+joints, donde cada elemento depende cinemáticamente del anterior. Es la
+**única** topología robótica que Thalos soporta actualmente.
+
+```{dot}
+//| fig-cap: "Modelo interno de SerialChain — composición en árbol"
+//| label: fig-serial-chain
+digraph serial_chain {
+    rankdir=TB;
+    splines=ortho;
+    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=12, margin="0.3,0.15"];
+
+    chain [label="SerialChain", penwidth=2];
+    seg   [label="Segment\n(Vec<Segment>)"];
+    joint [label="Joint"];
+    link  [label="Link"];
+    ee    [label="EndEffector", shape=Msquare, penwidth=2];
+
+    chain -> seg;
+    chain -> ee;
+    seg -> joint;
+    seg -> link;
+
+    { rank=same; seg; ee; }
+    { rank=same; joint; link; }
+}
+```
+
+**Implementación**:
+
+```rust
+pub struct SerialChain {
+    pub segments: Vec<Segment>,
+    pub frames: FrameRegistry,
+    pub end_effector: FrameId,
+}
+```
+
+**Lo que NO es**: Thalos no soporta robots paralelos, mecanismos cerrados,
+árboles cinemáticos, ni sistemas híbridos.
+
+## Joint
+
+Elemento que introduce **movimiento relativo** entre dos segmentos. Cada joint
+tiene un origen (transform local), un eje de movimiento, y límites físicos.
+
+Dos tipos:
+
+### RevoluteJoint
+
+Movimiento rotacional alrededor de un eje. Usa `UnitQuaternion::from_axis_angle()`
+para generar la transformación de movimiento.
+
+```rust
+pub struct RevoluteJoint {
+    pub id: JointId,
+    pub axis: UnitVector3,     // eje de rotación (normalizado)
+    pub limits: JointLimits,   // [min, max] en radianes
+    pub origin: Transform3D,   // transform local del joint
+}
+```
+
+### PrismaticJoint
+
+Movimiento de traslación a lo largo de un eje.
+
+```rust
+pub struct PrismaticJoint {
+    pub id: JointId,
+    pub direction: UnitVector3,  // dirección de deslizamiento
+    pub distance_limits: JointLimits,  // [min, max] en unidades de distancia
+    pub origin: Transform3D,     // transform local del joint
+}
+```
+
+### JointType (enum unificado)
+
+```rust
+pub enum JointType {
+    Revolute(RevoluteJoint),
+    Prismatic(PrismaticJoint),
+}
+```
+
+`JointType` delega a la variante concreta para `motion(q)`, `origin()`,
+`axis()`, `axis_world(transform)`, y `kind()`.
+
+## Link
+
+Elemento **rígido** entre dos joints. Representa la geometría física del
+eslabón: una transformación fija desde el child frame del joint anterior hasta
+el origen del siguiente.
+
+```rust
+pub struct Link {
+    pub id: LinkId,
+    pub transform: Transform3D,  // transform rígido del eslabón
+}
+```
+
+Si el link es recto y de longitud `L` a lo largo del eje X, su transform
+sería `Transform3D::from_translation(Vector3::new(L, 0.0, 0.0))`.
+
+## Segment
+
+Unidad estructural que agrupa un **joint** y un **link**, conectando dos
+frames (parent y child). Es la abstracción de "eslabón + articulación" que
+compone la cadena.
+
+```rust
+pub struct Segment {
+    pub parent: FrameId,      // frame del segmento anterior
+    pub child: FrameId,       // frame de este segmento
+    pub joint: JointType,     // articulación (revolute | prismatic)
+    pub link: Link,           // eslabón rígido
+}
+```
+
+La razón por la que `Segment` existe aparte de `Link`:
+
+| Concepto | Representa |
+|----------|------------|
+| `Joint` | El movimiento relativo |
+| `Link` | La geometría rígida |
+| `Segment` | La unidad completa: **joint + link + conexión entre frames** |
+
+Un `Segment` no es "un link con un joint adentro". Es la **relación
+completa** entre dos frames de la cadena.
+
+## Sistema espacial {#sec-spatial-system}
+
+El sistema espacial de Thalos es, conceptualmente, una de las piezas más
+importantes. Es el **puente** entre el dominio robótico (estructuras de
+robot) y el dominio cinemático (FK, jacobianos). También es el modelo que
+la visualización proyecta al mundo exterior.
+
+Lo que hace especial a este diseño es que trata los **frames** como entidades
+explícitas con identidad propia, no como strings o índices implícitos.
+
+### Frame
+
+Un **Frame** es un sistema de referencia espacial. Es la unidad fundamental
+de la representación espacial en Thalos.
+
+```rust
+pub enum FrameId {
+    World,         // frame raíz global (siempre existe)
+    Id(u64),       // frame numerado
+}
+
+pub struct Frame {
+    id: FrameId,
+    name: String,
+}
+```
+
+`FrameId::World` es el frame canónico — toda pose global se expresa relativa
+a World. Los `FrameId::Id(n)` se crean automáticamente por el `FrameRegistry`
+o pueden asignarse manualmente para casos especiales.
+
+### FrameRegistry
+
+Registro central que mapea `FrameId`s a `Frame`s. Es el **índice** de todos
+los frames de una cadena.
+
+```rust
+pub struct FrameRegistry {
+    frames: HashMap<FrameId, Frame>,
+    next_id: u64,
+}
+```
+
+Operaciones:
+- `create(name)` → crea un nuevo `Frame` con ID auto-incremental, lo
+  registra, y devuelve el `FrameId`
+- `register(frame)` → registra un frame existente (útil para IDs
+  predefinidos como World)
+- `get(id)` → lookup por ID
+- `contains(id)` → verifica existencia
+
+La `SerialChain` contiene un `FrameRegistry` completo. Cada `Segment`
+referencia frames **por su `FrameId`**, no por nombre. Esto significa que:
+
+- No puede haber frames huérfanos (el builder valida)
+- No puede haber colisiones de nombres (los IDs son numéricos)
+- El registro es la fuente de verdad de qué frames existen
+
+### Pose
+
+Una **Pose** es la relación espacial entre dos frames: la transformación
+rígida que lleva del frame `reference` al frame `target`.
+
+```rust
+pub struct Pose {
+    reference: FrameId,
+    target: FrameId,
+    transform: Transform3D,   // T_reference→target
+}
+```
+
+Semántica:
+- `Pose::new(world, child, t)` → "el frame `child` está en `t` relativo al
+  mundo"
+- `is_global()` → `true` si `reference == FrameId::World`
+- `transform()` devuelve la `Transform3D` que mapea puntos de `reference` a
+  `target`
+
+El `FKResult` contiene un `HashMap<FrameId, Pose>` con la pose global de cada
+frame de la cadena para una configuración `q` dada.
+
+### FrameGraph
+
+Grafo de relaciones espaciales (esqueleto inicial). Actualmente declarado
+pero no implementado. Su propósito futuro será permitir:
+
+- Navegación entre frames parent/child
+- Composición de transformaciones a lo largo del grafo
+- Detección de ciclos en el grafo de referencia
+- Consultas del tipo "dame la pose del frame A relativa al frame B"
+
+### ¿Cómo conecta el sistema espacial con el resto?
+
+```{dot}
+//| fig-cap: "Conexión del sistema espacial con FK, visualización y validación"
+//| label: fig-spatial-flow
+digraph spatial_flow {
+    rankdir=TB;
+    splines=ortho;
+    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=12, margin="0.3,0.15"];
+
+    chain   [label="SerialChain\n+ FrameRegistry"];
+    fk      [label="FK::evaluate(q)"];
+    fkres   [label="FKResult\n(poses por frame)"];
+    builder [label="SceneBuilder\n::from_fk()"];
+    scene   [label="VisualScene"];
+    vld     [label="SceneValidator\n::validate()"];
+
+    chain -> fk;
+    fk -> fkres;
+    fkres -> builder;
+    builder -> scene;
+    scene -> vld;
+}
+```
+
+El sistema espacial es la **columna vertebral** que permite que el análisis
+cinemático se traduzca a representación visual sin acoplamiento.
+
+## Model
+
+Configuración estructural **concreta** de un robot. Combina un modelo
+genérico (enum `RobotModel`) con parámetros específicos (enum `RobotSpec`).
+
+```rust
+pub enum RobotModel {
+    Planar2R,
+    Planar3R,
+    SingleRevolute,
+    Scara,
+}
+
+pub enum RobotSpec {
+    Planar2R { l1: f64, l2: f64 },
+    Planar3R { l1: f64, l2: f64, l3: f64 },
+    SingleRevolute { l1: f64 },
+    Scara { a1: f64, a2: f64, d1: f64, d2: f64 },
+}
+```
+
+`RobotRegistry::create(model, spec)` valida que model y spec coincidan y
+construye la `SerialChain` correspondiente usando la fábrica adecuada.
+
+```rust
+let robot = RobotRegistry::create(RobotModel::Planar2R, RobotSpec::Planar2R { l1: 1.0, l2: 1.0 })?;
+```
+
+## Glosario rápido
+
+| Término | Definición |
+|---------|------------|
+| **Serial Chain** | Secuencia ordenada de segmentos conectados por joints |
+| **Joint** | Articulación que introduce movimiento (revolute o prismatic) |
+| **Link** | Elemento rígido entre joints |
+| **Segment** | Unidad estructural: joint + link + conexión entre frames |
+| **Pose** | Posición + orientación de un frame relativo a otro |
+| **Frame** | Sistema de referencia espacial |
+| **FrameRegistry** | Registro central de frames con auto-incremento |
+| **FrameGraph** | Grafo de relaciones entre frames (esqueleto) |
+| **Model** | Configuración paramétrica de un robot concreto |
+| **FK** | Cálculo de poses dado un vector de configuración q |
+| **Jacobian** | Matriz que relaciona velocidades de joints con velocidades del end-effector |
+| **VisualScene** | Proyección visual serializable del estado cinemático |
+| **SceneDiff** | Delta entre dos escenas visuales |

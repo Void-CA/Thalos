@@ -1,0 +1,22 @@
+/*-- scss:defaults --*/
+
+$primary: #2c7be5;
+$info:    #6c5ce7;
+
+/*-- scss:rules --*/
+
+/* Code blocks */
+div.sourceCode {
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+/* Callout personalizado para "nota arquitectónica" */
+div.callout-note {
+  border-left-color: $info;
+}
+
+/* Tablas */
+table {
+  font-size: 0.9rem;
+}

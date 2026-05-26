@@ -1,11 +1,6 @@
 use crate::models::error::RobotRegistryError;
 use crate::robot::serial_chain::SerialChain;
 
-// ── Modelo (identidad) ───────────────────────────────────────────────────
-
-/// Identidad del robot. Set conocido y finito.
-///
-/// Representa *qué es* el robot, no cómo está configurado.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RobotModel {
     Planar2R,
@@ -14,12 +9,6 @@ pub enum RobotModel {
     Scara,
 }
 
-// ── Spec (configuración) ─────────────────────────────────────────────────
-
-/// Configuración de parámetros por modelo.
-///
-/// Representa *cómo está configurado* el robot. Cada variante pertenece
-/// a un `RobotModel` específico — el registry valida la consistencia.
 #[derive(Debug, Clone)]
 pub enum RobotSpec {
     Planar2R {
@@ -42,9 +31,6 @@ pub enum RobotSpec {
     },
 }
 
-// ── Registry ─────────────────────────────────────────────────────────────
-
-/// Registry concreto de modelos. Único punto de creación canónico.
 pub struct RobotRegistry;
 
 impl RobotRegistry {

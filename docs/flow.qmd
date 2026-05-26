@@ -1,0 +1,144 @@
+# Flujo interno del sistema {#sec-flow}
+
+Esta sección describe cómo viajan los datos a través del sistema, desde que
+el usuario mueve un slider hasta que ve el resultado en pantalla.
+
+## Pipeline completo (end-to-end)
+
+```{dot}
+//| fig-cap: "Pipeline completo end-to-end"
+//| label: fig-pipeline-e2e
+digraph e2e {
+    rankdir=TB;
+    splines=ortho;
+    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=11, margin="0.3,0.15"];
+    edge [fontsize=9];
+
+    subgraph cluster_frontend {
+        label="Frontend (Angular)";
+        style=dashed;
+        penwidth=1;
+        fontsize=12;
+
+        user    [label="Usuario", shape=oval, penwidth=2];
+        jctrl   [label="JointControl"];
+        sstore  [label="SceneStore"];
+        asvc    [label="SceneApiService"];
+        sview   [label="SceneViewer\n(Three.js)"];
+    }
+
+    subgraph cluster_backend {
+        label="Backend (Rust)";
+        style=dashed;
+        penwidth=1;
+        fontsize=12;
+
+        handler [label="Handler"];
+        fk      [label="FK::evaluate(q)"];
+        builder [label="SceneBuilder\n::from_fk()"];
+        vld     [label="SceneValidator"];
+    }
+
+    user -> jctrl -> sstore -> asvc;
+    asvc -> handler [label="HTTP POST"];
+    handler -> fk -> builder -> vld;
+    vld -> sstore [label="JSON 200"];
+    sstore -> sview;
+}
+```
+
+## Flujo de FK (detalle matemático)
+
+El algoritmo de `ForwardKinematics::evaluate(q)`:
+
+```
+t₀ = Identity
+     ↓
+Para cada segmento i:
+     ↓
+tᵢ = tᵢ₋₁                     // transform acumulado del segmento anterior
+tᵢ = tᵢ ∘ jointᵢ.origin()     // transform local del joint
+tᵢ = tᵢ ∘ jointᵢ.motion(qᵢ)   // movimiento articular
+tᵢ = tᵢ ∘ linkᵢ.transform      // eslabón rígido
+     ↓
+Pose(childᵢ) = (World, childᵢ, tᵢ)
+```
+
+Donde `joint.motion(q)` para cada tipo:
+
+- **Revolute**: `Transform3D::from_rotation(UnitQuaternion::from_axis_angle(axis, q))`
+- **Prismatic**: `Transform3D::from_translation(direction * q)`
+
+## Flujo de Jacobiano (detalle matemático)
+
+### Geométrico
+
+```
+Para cada joint i:
+  pₑ = posición global del end-effector
+  pᵢ = posición del joint i (parent ∘ origin)
+  zᵢ = eje del joint i en frame global
+
+  Si Revolute:
+    J_linear[:,i] = zᵢ × (pₑ - pᵢ)
+    J_angular[:,i] = zᵢ
+
+  Si Prismatic:
+    J_linear[:,i] = zᵢ
+    J_angular[:,i] = 0
+```
+
+### Numérico (diferencias finitas centrales)
+
+```
+Para cada joint i:
+  q₊ = q,  q₊[i] += ε
+  q₋ = q,  q₋[i] -= ε
+
+  p₊ = FK(q₊).end_effector_position
+  p₋ = FK(q₋).end_effector_position
+
+  J_linear[:,i] = (p₊ - p₋) / (2ε)
+  J_angular[:,i] = 0  (solo posición)
+```
+
+## Flujo de SceneDiff
+
+```
+SceneDiff::between(old, new, epsilon)
+
+1. Frames eliminados: en old pero no en new
+2. Frames agregados: en new pero no en old
+3. Frames modificados:
+   - Distancia euclídea de traslación: ‖t_new − t_old‖
+   - Ángulo geodésico de rotación: 2·acos(|q_new · q_old|)
+   - Si alguno > epsilon → se reporta como cambio
+```
+
+## Relación entre conceptos
+
+```{dot}
+//| fig-cap: "Relación entre conceptos del dominio"
+//| label: fig-concept-relations
+digraph relations {
+    rankdir=TB;
+    splines=ortho;
+    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=11, margin="0.3,0.15"];
+
+    model   [label="RobotRegistry\n::create()"];
+    chain   [label="SerialChain"];
+
+    fk      [label="ForwardKinematics\n::evaluate(q)"];
+    fkout   [label="FKResult →\nSceneBuilder →\nVisualScene"];
+
+    jcb     [label="JacobianSolver\n::evaluate(q)"];
+    jcbout  [label="Jacobian →\nSceneBuilder →\nVisualScene\n+ Twists"];
+
+    model -> chain;
+    chain -> fk;
+    fk -> fkout;
+
+    chain -> jcb;
+    jcb -> jcbout;
+}
+```

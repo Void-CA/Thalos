@@ -1,0 +1,267 @@
+# Arquitectura del workspace {#sec-workspace}
+
+El workspace de Thalos está organizado en **tres crates** dentro de un
+workspace Cargo.
+
+```
+backend/
+├── Cargo.toml                    # workspace root
+├── crates/
+│   ├── thalos-core/              # Núcleo matemático-robótico
+│   ├── thalos-visual/            # Representación visual
+│   └── thalos-api/               # Exposición externa (HTTP)
+```
+
+## thalos-core {#sec-core}
+
+**Responsabilidad**: Núcleo matemático y robótico del sistema. Es el crate
+fundacional — todo lo demás depende de él.
+
+**No depende de**: nada externo excepto `nalgebra` y `thiserror`.
+
+### Estructura interna
+
+```
+thalos-core/src/
+├── lib.rs                        # Punto de entrada, declara módulos públicos
+├── prelude.rs                    # Re-exportaciones convenientes
+├── math/                         # Infraestructura matemática reutilizable
+│   ├── geometry/
+│   │   ├── vectors/              # Vector3, UnitVector3
+│   │   ├── rotations/            # Quaternion, UnitQuaternion
+│   │   └── rigid/                # Transform3D, Transform<From,To>
+│   ├── algebra/                  # DynamicMatrix (alias DMatrix)
+│   ├── traits/                   # Cross, Dot (traits para productos)
+│   ├── constants.rs              # EPS, PI, JACOBIAN_EPS, DEG_TO_RAD
+│   └── error.rs                  # MathError
+├── robot/                        # Representación estructural de robots
+│   ├── joint/                    # JointType, RevoluteJoint, PrismaticJoint
+│   ├── link.rs                   # Link (id + transform)
+│   ├── segment.rs                # Segment (parent + child + joint + link)
+│   ├── serial_chain.rs           # SerialChain (segments + frames + end_effector)
+│   ├── builder.rs                # SerialChainBuilder
+│   └── error.rs                  # RobotBuilderError
+├── kinematics/                   # Cálculos cinemáticos
+│   ├── forward/                  # ForwardKinematics, FKResult
+│   └── jacobian/                 # Jacobian, GeometricJacobian, NumericalJacobian
+├── spatial/                      # Representación espacial y frames
+│   ├── frame/                    # FrameId, Frame, FrameRegistry, FrameGraph
+│   └── pose.rs                   # Pose (reference + target + transform)
+└── models/                       # Implementaciones de robots concretos
+    ├── single_revolute/          # Robot de 1 joint rotacional
+    ├── planar_2r/                # Robot planar de 2 revoluciones
+    ├── planar_3r/                # Robot planar de 3 revoluciones
+    ├── scara/                    # Robot SCARA (4 DOF)
+    ├── factory.rs                # RobotRegistry, RobotModel enum, RobotSpec enum
+    └── error.rs                  # RobotRegistryError
+```
+
+### Submódulos clave
+
+#### `math::geometry::vectors`
+
+Define `Vector3` y `UnitVector3`. Operaciones: suma, resta, multiplicación
+por escalar, magnitud, normalización (con error si zero).
+
+#### `math::geometry::rotations`
+
+Define `Quaternion` (modelo algebraico puro) y `UnitQuaternion` (rotaciones
+SO(3) con invariante de norma). `UnitQuaternion::new()` valida la norma;
+`from_axis_angle()` y `from_euler()` construyen garantizando norma = 1.
+
+#### `math::geometry::rigid`
+
+Define `Transform3D` (traslación + rotación) con `compose()`. También
+`Transform<From, To>` con `PhantomData` para type safety entre frames.
+
+#### `robot::serial_chain`
+
+`SerialChain` es la estructura central del dominio robótico. Contiene:
+- `segments: Vec<Segment>` — secuencia ordenada de segmentos
+- `frames: FrameRegistry` — registro de todos los frames
+- `end_effector: FrameId` — identifica el frame terminal
+
+#### `robot::builder`
+
+`SerialChainBuilder` es el constructor con validación. Verifica que todos los
+frames referenciados por los segments existan en el registry antes de
+construir.
+
+#### `kinematics::forward`
+
+`ForwardKinematics::evaluate(q)` recorre los segments secuencialmente,
+componiendo transforms: `t = t ∘ joint.origin ∘ joint.motion(qⱼ) ∘ link.transform`.
+Devuelve `FKResult` con poses globales de cada frame.
+
+#### `kinematics::jacobian`
+
+Dos implementaciones del trait `JacobianSolver`:
+- `GeometricJacobian` — analítico, usa producto cruz `zᵢ × (pₑ − pᵢ)`
+- `NumericalJacobian` — diferencias finitas centrales, `(f(q+ε) − f(q−ε)) / 2ε`
+
+#### `spatial::frame`
+
+- `FrameId`: enum con `World` y `Id(u64)` — identificador único de frame
+- `Frame`: metadatos (id, name)
+- `FrameRegistry`: mapa `HashMap<FrameId, Frame>` con creación auto-incremental
+- `FrameGraph`: grafo de relaciones entre frames (esqueleto inicial)
+
+#### `models`
+
+Catálogo de robots concretos con fábricas. `RobotRegistry::create(model, spec)`
+valida que el `RobotSpec` coincida con el `RobotModel` esperado.
+
+### Jerarquía de tipos
+
+```
+FrameId (World | Id(u64))
+    │
+Frame { id, name }
+    │
+FrameRegistry { map<FrameId, Frame> }
+    │
+    ├── SerialChain { segments, frames, end_effector }
+    │       │
+    │       ├── Segment { parent, child, joint, link }
+    │       │               │              │
+    │       │               │              └── Link { id, transform }
+    │       │               │
+    │       │               └── JointType
+    │       │                   ├── Revolute { id, axis, limits, origin }
+    │       │                   └── Prismatic { id, direction, limits, origin }
+    │       │
+    │       └── ForwardKinematics.evaluate(q) → FKResult { poses: Map<FrameId, Pose> }
+    │
+    └── Pose { reference, target, transform }
+```
+
+## thalos-visual {#sec-visual}
+
+**Responsabilidad**: Representación y validación visual **desacoplada** del
+núcleo matemático.
+
+**Depende de**: `thalos-core`, `serde`.
+
+```
+thalos-visual/src/
+├── lib.rs               # Punto de entrada
+├── scene/
+│   ├── mod.rs           # VisualScene, VisualFrame, VisualLink, VisualJointAxis, VisualTwist
+│   ├── precision.rs     # VisualPrecision (normalización numérica)
+│   └── diff.rs          # SceneDiff, ChangedFrame
+├── builder.rs           # SceneBuilder (FKResult → VisualScene)
+├── validator.rs         # SceneValidator (valida invariantes visuales)
+└── utils.rs             # clean() — utilidad de limpieza numérica
+```
+
+### `VisualScene`
+
+```rust
+pub struct VisualScene {
+    pub frames: Vec<VisualFrame>,         // frames con id, parent, translation, rotation
+    pub links: Vec<VisualLink>,           // segmentos visuales (start → end)
+    pub joint_axes: Vec<VisualJointAxis>, // ejes de joints (origin + direction)
+    pub twists: Vec<VisualTwist>,         // twists jacobianos (origin + linear + angular)
+}
+```
+
+Todas las coordenadas usan `[f64; 3]` o `[f64; 4]` — **sin tipos del core**.
+Es una representación serializable (derive `Serialize, Deserialize`).
+
+### `SceneValidator`
+
+Valida 8 invariantes de una escena:
+
+1. **World frame existe** — debe haber un frame con id `"world"`
+2. **IDs únicos** — sin duplicados
+3. **Parents existen** — todo parent reference a un frame existente
+4. **Sin ciclos** — el grafo parent→child no debe tener loops
+5. **Conectividad** — todos los frames son alcanzables desde `"world"`
+6. **Valores finitos** — sin NaN o Infinity
+7. **Norma de quaternions** — ‖rot‖ ≈ 1
+8. **Links consistentes** — cada link coincide con la geometría esperada
+
+### `SceneDiff`
+
+`SceneDiff::between(old, new, epsilon)` detecta frames agregados, eliminados
+y modificados (con delta de traslación y ángulo de rotación geodésico).
+
+## thalos-api {#sec-api}
+
+**Responsabilidad**: Exponer funcionalidades de Thalos hacia sistemas externos
+via HTTP.
+
+**Depende de**: `thalos-core`, `thalos-visual`, `axum`, `tokio`, `serde`,
+`chrono`, `tower-http`.
+
+```
+thalos-api/src/
+├── main.rs              # Entrypoint: monta router con CORS, inicia servidor
+├── lib.rs               # Re-exportaciones públicas
+├── app/
+│   ├── mod.rs           # AppState, Services
+│   ├── state.rs         # Estado global: scene service + factory
+│   └── dto.rs           # ErrorResponse, ErrorCode
+├── features/
+│   └── scene/
+│       ├── mod.rs       # SceneService (orquesta FK + Builder + Validator)
+│       ├── service.rs   # Lógica de servicio
+│       ├── handler.rs   # Handlers axum
+│       └── dto.rs       # Request/Response DTOs (FromFkRequest, SceneResponse, etc.)
+└── http/
+    ├── mod.rs           # app_router() — monta rutas
+    └── routes/
+        └── scene.rs     # Definición de rutas REST
+```
+
+### Endpoints
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `POST` | `/api/v1/scene/from-fk` | Configuración de joints → escena visual |
+| `GET`  | `/api/v1/scene` | Escena por defecto (q = [0, 0]) |
+| `POST` | `/api/v1/scene/validate` | Validar una escena arbitraria |
+| `POST` | `/api/v1/scene/diff` | Diff entre dos escenas |
+
+### Mapa de errores
+
+Los errores de `SceneError` se traducen a `ErrorResponse` con códigos
+`SCREAMING_SNAKE_CASE` y status HTTP `422 Unprocessable Entity`.
+
+## Esquema general del workspace
+
+```
+Thalos Workspace
+│
+├── thalos-core           # Núcleo matemático-robótico
+│   ├── math              # Vectores, cuaterniones, transforms
+│   ├── robot             # Joints, Links, Segments, SerialChain
+│   ├── kinematics        # FK, Jacobianos (geométrico, numérico)
+│   ├── spatial           # Frames, Poses, FrameRegistry
+│   └── models            # Planar2R, Planar3R, SCARA, SingleRevolute
+│
+├── thalos-visual         # Visualización desacoplada
+│   ├── scene             # VisualScene, SceneDiff, VisualPrecision
+│   ├── builder           # SceneBuilder (FK → VisualScene)
+│   └── validator         # SceneValidator (8 invariantes)
+│
+└── thalos-api            # API HTTP
+    ├── app               # AppState, Services, DTOs de error
+    ├── features/scene    # SceneService + handlers + DTOs
+    └── http/routes       # Rutas REST (axum Router)
+```
+
+## Frontend (Angular)
+
+```
+frontend/src/app/
+├── app.ts                # Layout shell (SceneViewer + JointControl)
+├── visual-scene.types.ts # Mirror types de Rust
+├── services/
+│   ├── scene-api.service.ts   # HTTP client → /api/v1/scene/from-fk
+│   ├── scene.store.ts         # Estado reactivo con RxJS
+│   └── three-renderer.service.ts  # Renderizado Three.js
+└── components/
+    ├── scene-viewer/          # Visualización 3D
+    └── joint-control/         # Controles de sliders para joints
+```

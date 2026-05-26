@@ -1,0 +1,73 @@
+# Thalos {#sec-intro}
+
+Bienvenido a la documentación técnica de **Thalos**.
+
+Thalos es una **plataforma modular** para modelado, análisis y visualización de
+sistemas robóticos, escrita en Rust. Está diseñada desde cero con una filosofía
+de separación clara de responsabilidades: el dominio matemático, la
+representación robótica, la visualización y la exposición externa viven en
+capas independientes.
+
+## ¿Por qué Thalos?
+
+La mayoría de las herramientas robóticas existentes (ROS, Orocos, Drake) son
+sistemas monolíticos donde la matemática, la visualización y el control están
+fuertemente acoplados. Thalos nace con una premisa distinta:
+
+> **Separar para evolucionar.**  
+> El núcleo matemático no debe saber que existe una visualización.  
+> La visualización no debe saber que existe una API HTTP.  
+> Cada capa puede crecer, reemplazarse o eliminarse sin afectar a las demás.
+
+## Stack tecnológico
+
+| Capa          | Tecnología                                    |
+|---------------|-----------------------------------------------|
+| Lenguaje      | Rust (edition 2024)                           |
+| Álgebra       | `nalgebra` + tipos propios (`Vector3`, `UnitQuaternion`, `Transform3D`) |
+| Backend HTTP  | `axum` 0.8                                    |
+| Frontend      | Angular 19 + Three.js (vía `three-renderer`)  |
+| Visualización | Crate `thalos-visual` (scene graph desacoplado) |
+
+## Convenciones del código
+
+- **Errores explícitos con `thiserror`**: no hay fallbacks silenciosos,
+  `normalize()` e `inverse()` retornan `Result`.
+- **Invariantes de construcción**: `UnitQuaternion` valida norma ≈ 1 en `new()`;
+  para bypass explícito existe `from_quaternion_unchecked()`.
+- **Precisión controlada**: `VisualPrecision` permite definir decimales y
+  epsilon de zero para normalizar salidas visuales.
+- **Validación por contrato**: `SceneValidator` verifica que una escena visual
+  cumpla todas las invariantes topológicas y numéricas antes de serializarse.
+
+## Prerequisitos
+
+- Rust toolchain (edition 2024)
+- Node.js 22+ y pnpm (para el frontend)
+- Quarto CLI (para generar esta documentación)
+
+## Quick start
+
+```bash
+# Compilar todo el workspace
+cd backend
+cargo build
+
+# Correr tests
+cargo test
+
+# Iniciar servidor API
+cargo run -p thalos_api
+
+# Frontend
+cd frontend
+pnpm install
+pnpm start
+```
+
+```{=html}
+<!--
+  Navegá por los capítulos para entender la arquitectura,
+  el dominio, y cómo extender Thalos.
+-->
+```

@@ -1,0 +1,83 @@
+# Glosario {#sec-glossary}
+
+## Términos generales
+
+**Serial Chain** — Secuencia ordenada de segmentos donde cada joint conecta
+exactamente dos links, formando una cadena abierta. Es la única topología
+soportada actualmente por Thalos.
+
+**Forward Kinematics (FK)** — Dada una configuración de joints `q`, calcular
+la pose (posición + orientación) de cada frame en la cadena.
+
+**Jacobiano** — Matriz que relaciona velocidades articulares `q̇` con
+velocidades del end-effector `v = J · q̇`. Thalos implementa el jacobiano
+geométrico (analítico) y el numérico (diferencias finitas).
+
+**DOF** — *Degrees of Freedom*. Grados de libertad del robot. Un robot con
+`n` joints tiene `n` DOF.
+
+**End Effector** — Frame terminal de la cadena cinemática. Es el punto de
+interés para el análisis (posición del gripper, herramienta, etc.).
+
+## Términos del dominio
+
+**Frame** — Sistema de referencia espacial. Identificado por `FrameId` (World
+o Id). Tiene un nombre legible. Es la unidad fundamental de la representación
+espacial.
+
+**Pose** — Relación espacial entre dos frames: `Transform3D` de `reference` a
+`target`.
+
+**FrameRegistry** — Registro central que mapea `FrameId`s a `Frame`s. La
+`SerialChain` contiene un `FrameRegistry` que indexa todos los frames de la
+cadena.
+
+**Segment** — Unidad estructural que modela un eslabón completo: joint + link
++ conexión entre parent y child frames.
+
+**Joint** — Articulación que introduce movimiento. Puede ser rotacional
+(`RevoluteJoint`) o de deslizamiento (`PrismaticJoint`).
+
+**Link** — Elemento rígido con una transformación fija.
+
+**Model** — Robot concreto con parámetros específicos. Ej: `Planar2R { l1:
+1.0, l2: 1.0 }`.
+
+**Kinematic Chain** — Conjunto de bodies y joints conectados. Thalos solo
+maneja *serial* chains (abiertas). No soporta cadenas cerradas (parallel) ni
+ramificaciones (tree).
+
+## Términos del workspace
+
+**Crate** — Paquete de Rust. Thalos tiene 3: `thalos-core`, `thalos-visual`,
+`thalos-api`.
+
+**Workspace** — Conjunto de crates que comparten un `Cargo.lock` y
+configuración de build.
+
+**Feature** — Módulo funcional dentro de `thalos-api` (`scene`, y futuros:
+`planning`, `control`, etc.).
+
+## Términos del frontend
+
+**SceneViewer** — Componente Angular que renderiza `VisualScene` en Three.js.
+
+**JointControl** — Componente Angular con sliders para cada joint del robot.
+
+**SceneStore** — Servicio Angular con estado reactivo (RxJS) que orquesta
+llamadas API y mantiene la escena actual.
+
+## Convenciones de código
+
+**Error explícito** — Toda operación que pueda fallar retorna `Result`. No
+hay `unwrap()` ocultos, `expect()` silenciosos, ni fallbacks mágicos.
+
+**Invariante de construcción** — Un tipo que representa un concepto con
+restricciones matemáticas valida esas restricciones en `new()`.
+`UnitQuaternion::new()` falla si la norma no es ≈ 1.
+
+**Normalización controlada** — `VisualPrecision` expone explícitamente los
+parámetros de redondeo. Nada se normaliza "porque sí".
+
+**PhantomData** — Uso de tipos fantasma para asegurar en compilación que
+transformaciones entre frames incompatibles no se compongan accidentalmente.
