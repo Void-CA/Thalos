@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>3&nbsp; Filosofía arquitectónica – Thalos — Documentación Técnica</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./workspace.html" rel="next">
+<link href="./vision.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-7cc62051286a747f1ac641bedccf692b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./architecture.html"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Filosofía arquitectónica</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Thalos — Documentación Técnica</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/Void-CA/Thalos" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Thalos</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./vision.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Visión del proyecto</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./architecture.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Filosofía arquitectónica</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./workspace.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Arquitectura del workspace</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./domain.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Definiciones internas del dominio</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./flow.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Flujo interno del sistema</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./maturity.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Estado de madurez</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./contributing.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Contribución a Thalos</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./glossary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">Glosario</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#principios-rectores" id="toc-principios-rectores" class="nav-link active" data-scroll-target="#principios-rectores"><span class="header-section-number">3.1</span> Principios rectores</a>
+  <ul class="collapse">
+  <li><a href="#separación-de-responsabilidades" id="toc-separación-de-responsabilidades" class="nav-link" data-scroll-target="#separación-de-responsabilidades"><span class="header-section-number">3.1.1</span> Separación de responsabilidades</a></li>
+  <li><a href="#modularidad" id="toc-modularidad" class="nav-link" data-scroll-target="#modularidad"><span class="header-section-number">3.1.2</span> Modularidad</a></li>
+  <li><a href="#desacoplamiento-matemáticovisual" id="toc-desacoplamiento-matemáticovisual" class="nav-link" data-scroll-target="#desacoplamiento-matemáticovisual"><span class="header-section-number">3.1.3</span> Desacoplamiento matemático/visual</a></li>
+  <li><a href="#extensibilidad-por-composición" id="toc-extensibilidad-por-composición" class="nav-link" data-scroll-target="#extensibilidad-por-composición"><span class="header-section-number">3.1.4</span> Extensibilidad por composición</a></li>
+  <li><a href="#validación-por-contrato" id="toc-validación-por-contrato" class="nav-link" data-scroll-target="#validación-por-contrato"><span class="header-section-number">3.1.5</span> Validación por contrato</a></li>
+  </ul></li>
+  <li><a href="#sec-boundaries" id="toc-sec-boundaries" class="nav-link" data-scroll-target="#sec-boundaries"><span class="header-section-number">3.2</span> Reglas arquitectónicas (<em>boundaries</em>)</a></li>
+  <li><a href="#sec-domains" id="toc-sec-domains" class="nav-link" data-scroll-target="#sec-domains"><span class="header-section-number">3.3</span> Dominios del sistema</a>
+  <ul class="collapse">
+  <li><a href="#dominio-matemático-thalos-coremath" id="toc-dominio-matemático-thalos-coremath" class="nav-link" data-scroll-target="#dominio-matemático-thalos-coremath"><span class="header-section-number">3.3.1</span> Dominio matemático (<code>thalos-core::math</code>)</a></li>
+  <li><a href="#dominio-robótico-thalos-corerobot-kinematics-spatial" id="toc-dominio-robótico-thalos-corerobot-kinematics-spatial" class="nav-link" data-scroll-target="#dominio-robótico-thalos-corerobot-kinematics-spatial"><span class="header-section-number">3.3.2</span> Dominio robótico (<code>thalos-core::robot</code>, <code>kinematics</code>, <code>spatial</code>)</a></li>
+  <li><a href="#dominio-de-infraestructura" id="toc-dominio-de-infraestructura" class="nav-link" data-scroll-target="#dominio-de-infraestructura"><span class="header-section-number">3.3.3</span> Dominio de infraestructura</a></li>
+  </ul></li>
+  <li><a href="#sec-decisions" id="toc-sec-decisions" class="nav-link" data-scroll-target="#sec-decisions"><span class="header-section-number">3.4</span> Decisiones de diseño</a>
+  <ul class="collapse">
+  <li><a href="#por-qué-serial-chains-primero" id="toc-por-qué-serial-chains-primero" class="nav-link" data-scroll-target="#por-qué-serial-chains-primero"><span class="header-section-number">3.4.1</span> ¿Por qué Serial Chains primero?</a></li>
+  <li><a href="#por-qué-separación-visualcore" id="toc-por-qué-separación-visualcore" class="nav-link" data-scroll-target="#por-qué-separación-visualcore"><span class="header-section-number">3.4.2</span> ¿Por qué separación visual/core?</a></li>
+  <li><a href="#por-qué-sistema-espacial-propio-frame-frameregistry-pose" id="toc-por-qué-sistema-espacial-propio-frame-frameregistry-pose" class="nav-link" data-scroll-target="#por-qué-sistema-espacial-propio-frame-frameregistry-pose"><span class="header-section-number">3.4.3</span> ¿Por qué sistema espacial propio (<code>Frame</code>, <code>FrameRegistry</code>, <code>Pose</code>)?</a></li>
+  <li><a href="#por-qué-snapshots-visuales" id="toc-por-qué-snapshots-visuales" class="nav-link" data-scroll-target="#por-qué-snapshots-visuales"><span class="header-section-number">3.4.4</span> ¿Por qué snapshots visuales?</a></li>
+  <li><a href="#por-qué-rust" id="toc-por-qué-rust" class="nav-link" data-scroll-target="#por-qué-rust"><span class="header-section-number">3.4.5</span> ¿Por qué Rust?</a></li>
+  </ul></li>
+  <li><a href="#mapa-de-dependencias" id="toc-mapa-de-dependencias" class="nav-link" data-scroll-target="#mapa-de-dependencias"><span class="header-section-number">3.5</span> Mapa de dependencias</a></li>
+  <li><a href="#sec-reading-order" id="toc-sec-reading-order" class="nav-link" data-scroll-target="#sec-reading-order"><span class="header-section-number">3.6</span> Cómo leer el proyecto</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title"><span id="sec-architecture" class="quarto-section-identifier"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Filosofía arquitectónica</span></span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p>Esta sección es <strong>crítica</strong> para entender Thalos. Las decisiones arquitectónicas que se describen aquí son la razón por la que el proyecto está estructurado como está, y deben respetarse al extenderlo.</p>
+<section id="principios-rectores" class="level2" data-number="3.1">
+<h2 data-number="3.1" class="anchored" data-anchor-id="principios-rectores"><span class="header-section-number">3.1</span> Principios rectores</h2>
+<section id="separación-de-responsabilidades" class="level3" data-number="3.1.1">
+<h3 data-number="3.1.1" class="anchored" data-anchor-id="separación-de-responsabilidades"><span class="header-section-number">3.1.1</span> Separación de responsabilidades</h3>
+<p>Thalos separa <strong>cuatro dominios</strong> que nunca deben acoplarse:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 27%">
+<col style="width: 21%">
+<col style="width: 51%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Dominio</th>
+<th>Crate</th>
+<th>Responsabilidad</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Matemático</td>
+<td><code>thalos-core::math</code></td>
+<td>Álgebra, geometría, rotaciones, transformaciones</td>
+</tr>
+<tr class="even">
+<td>Robótico</td>
+<td><code>thalos-core::robot</code> + <code>kinematics</code> + <code>spatial</code></td>
+<td>Estructuras robóticas, cinemática, frames</td>
+</tr>
+<tr class="odd">
+<td>Visual</td>
+<td><code>thalos-visual</code></td>
+<td>Escenas, validación, diff, snapshots</td>
+</tr>
+<tr class="even">
+<td>Comunicación</td>
+<td><code>thalos-api</code></td>
+<td>HTTP, DTOs, handlers, routing</td>
+</tr>
+</tbody>
+</table>
+<p>La regla de oro:</p>
+<blockquote class="blockquote">
+<p><strong>El dominio matemático no importa nada del dominio robótico.</strong> El dominio visual solo depende del matemático y robótico (vía traits). La API solo orquesta — no contiene lógica de dominio.</p>
+</blockquote>
+</section>
+<section id="modularidad" class="level3" data-number="3.1.2">
+<h3 data-number="3.1.2" class="anchored" data-anchor-id="modularidad"><span class="header-section-number">3.1.2</span> Modularidad</h3>
+<p>Cada crate es independiente y tiene un contrato claro:</p>
+<ul>
+<li><code>thalos-core</code> — <strong>no depende de nada</strong> fuera de <code>nalgebra</code> y <code>thiserror</code></li>
+<li><code>thalos-visual</code> — <strong>solo depende de</strong> <code>thalos-core</code> y <code>serde</code></li>
+<li><code>thalos-api</code> — <strong>depende de</strong> <code>thalos-core</code> + <code>thalos-visual</code>, agrega <code>axum</code> y <code>tokio</code></li>
+</ul>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div id="fig-dep-simple" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-dep-simple-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div>
+<svg width="672" height="480" viewbox="0.00 0.00 113.32 213.20" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" style="; max-width: none; max-height: none">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 209.2)">
+<title>dependencies</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-209.2 109.32,-209.2 109.32,4 -4,4"></polygon>
+<!-- core -->
+<g id="node1" class="node">
+<title>core</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M89.47,-36.6C89.47,-36.6 15.85,-36.6 15.85,-36.6 9.85,-36.6 3.85,-30.6 3.85,-24.6 3.85,-24.6 3.85,-11.8 3.85,-11.8 3.85,-5.8 9.85,0.2 15.85,0.2 15.85,0.2 89.47,0.2 89.47,0.2 95.47,0.2 101.47,-5.8 101.47,-11.8 101.47,-11.8 101.47,-24.6 101.47,-24.6 101.47,-30.6 95.47,-36.6 89.47,-36.6"></path>
+<text text-anchor="middle" x="52.66" y="-14.6" font-family="sans-serif" font-size="12.00">thalos-core</text>
+</g>
+<!-- visual -->
+<g id="node2" class="node">
+<title>visual</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M93.49,-121C93.49,-121 11.84,-121 11.84,-121 5.84,-121 -0.16,-115 -0.16,-109 -0.16,-109 -0.16,-96.2 -0.16,-96.2 -0.16,-90.2 5.84,-84.2 11.84,-84.2 11.84,-84.2 93.49,-84.2 93.49,-84.2 99.49,-84.2 105.49,-90.2 105.49,-96.2 105.49,-96.2 105.49,-109 105.49,-109 105.49,-115 99.49,-121 93.49,-121"></path>
+<text text-anchor="middle" x="52.66" y="-99" font-family="sans-serif" font-size="12.00">thalos-visual</text>
+</g>
+<!-- core&#45;&gt;visual -->
+<g id="edge1" class="edge">
+<title>core-&gt;visual</title>
+<path fill="none" stroke="black" d="M52.66,-36.51C52.66,-36.51 52.66,-74.32 52.66,-74.32"></path>
+<polygon fill="black" stroke="black" points="49.16,-74.32 52.66,-84.32 56.16,-74.32 49.16,-74.32"></polygon>
+<text text-anchor="middle" x="75.29" y="-57.4" font-family="Times,serif" font-size="10.00">depende de</text>
+</g>
+<!-- api -->
+<g id="node3" class="node">
+<title>api</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M86.48,-205.4C86.48,-205.4 18.84,-205.4 18.84,-205.4 12.84,-205.4 6.84,-199.4 6.84,-193.4 6.84,-193.4 6.84,-180.6 6.84,-180.6 6.84,-174.6 12.84,-168.6 18.84,-168.6 18.84,-168.6 86.48,-168.6 86.48,-168.6 92.48,-168.6 98.48,-174.6 98.48,-180.6 98.48,-180.6 98.48,-193.4 98.48,-193.4 98.48,-199.4 92.48,-205.4 86.48,-205.4"></path>
+<text text-anchor="middle" x="52.66" y="-183.4" font-family="sans-serif" font-size="12.00">thalos-api</text>
+</g>
+<!-- visual&#45;&gt;api -->
+<g id="edge2" class="edge">
+<title>visual-&gt;api</title>
+<path fill="none" stroke="black" d="M52.66,-120.91C52.66,-120.91 52.66,-158.72 52.66,-158.72"></path>
+<polygon fill="black" stroke="black" points="49.16,-158.72 52.66,-168.72 56.16,-158.72 49.16,-158.72"></polygon>
+<text text-anchor="middle" x="75.29" y="-141.8" font-family="Times,serif" font-size="10.00">depende de</text>
+</g>
+</g>
+</svg>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-dep-simple-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3.1: Relación de dependencia entre crates
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>Esto significa que <code>thalos-core</code> puede compilarse y testearse <strong>sin</strong> <code>tokio</code>, <code>axum</code>, ni ningún sistema de visualización.</p>
+</section>
+<section id="desacoplamiento-matemáticovisual" class="level3" data-number="3.1.3">
+<h3 data-number="3.1.3" class="anchored" data-anchor-id="desacoplamiento-matemáticovisual"><span class="header-section-number">3.1.3</span> Desacoplamiento matemático/visual</h3>
+<p>La representación visual (<code>VisualScene</code>) es una <strong>proyección</strong> del estado cinemático, no un acoplamiento. <code>SceneBuilder::from_fk()</code> toma un resultado de FK y produce una escena visual. No hay herencia, no hay objetos visuales dentro del core.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">// thalos-visual: SceneBuilder transforma FK → VisualScene</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">fn</span> from_fk(<span class="op">&amp;</span><span class="kw">self</span><span class="op">,</span> fk<span class="op">:</span> <span class="op">&amp;</span>FKResult) <span class="op">-&gt;</span> VisualScene <span class="op">{</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... traducción unidireccional</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Esto permite cambiar totalmente el sistema de visualización (WebGL, SVG, terminal ASCII) sin tocar <code>thalos-core</code>.</p>
+</section>
+<section id="extensibilidad-por-composición" class="level3" data-number="3.1.4">
+<h3 data-number="3.1.4" class="anchored" data-anchor-id="extensibilidad-por-composición"><span class="header-section-number">3.1.4</span> Extensibilidad por composición</h3>
+<p>Las extensiones no se hacen modificando el core, sino <strong>agregando</strong>:</p>
+<ul>
+<li><strong>Nuevos modelos robóticos</strong> → <code>thalos-core::models</code> + factory</li>
+<li><strong>Nuevos algoritmos cinemáticos</strong> → <code>thalos-core::kinematics</code> nuevos módulos</li>
+<li><strong>Nuevas visualizaciones</strong> → nuevo crate que importa <code>thalos-core</code></li>
+<li><strong>Nuevas APIs</strong> → <code>thalos-api::features</code> nuevos módulos</li>
+</ul>
+</section>
+<section id="validación-por-contrato" class="level3" data-number="3.1.5">
+<h3 data-number="3.1.5" class="anchored" data-anchor-id="validación-por-contrato"><span class="header-section-number">3.1.5</span> Validación por contrato</h3>
+<p>Cada capa valida sus propias invariantes:</p>
+<ul>
+<li><code>UnitQuaternion::new()</code> valida norma unitaria</li>
+<li><code>SerialChainBuilder::build()</code> valida frames existentes y end-effector</li>
+<li><code>SceneValidator::validate()</code> valida topología, quaternions, valores finitos</li>
+</ul>
+<p>Si una capa recibe datos inválidos, <strong>rechaza la construcción</strong>, no intenta “arreglar” silenciosamente.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">// ── No hay fallbacks silenciosos ──</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> uq <span class="op">=</span> <span class="pp">UnitQuaternion::</span>new(q)<span class="op">?;</span>       <span class="co">// Error si no es unitario</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> chain <span class="op">=</span> builder<span class="op">.</span>build()<span class="op">?;</span>           <span class="co">// Error si falta end-effector</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>validator<span class="op">.</span>validate(<span class="op">&amp;</span>scene)<span class="op">?;</span>            <span class="co">// Error si topología rota</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+</section>
+<section id="sec-boundaries" class="level2" data-number="3.2">
+<h2 data-number="3.2" class="anchored" data-anchor-id="sec-boundaries"><span class="header-section-number">3.2</span> Reglas arquitectónicas (<em>boundaries</em>)</h2>
+<p>Estas reglas son <strong>obligatorias</strong> y deben verificarse en toda contribución. Violar una regla arquitectónica introduce deuda técnica estructural.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 35%">
+<col style="width: 65%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Regla</th>
+<th>Descripción</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>thalos-core</code> no depende de visualización</td>
+<td>No puede importar nada de <code>thalos-visual</code>. El core no sabe que existe una representación visual.</td>
+</tr>
+<tr class="even">
+<td><code>thalos-core</code> no depende de HTTP</td>
+<td>No puede importar <code>axum</code>, <code>tokio</code>, ni ningún crate de infraestructura web.</td>
+</tr>
+<tr class="odd">
+<td><code>thalos-visual</code> consume estructuras del core</td>
+<td><code>SceneBuilder</code> importa <code>FKResult</code>, <code>SerialChain</code>, <code>Jacobian</code> — pero no modifica esas estructuras. La traducción es unidireccional.</td>
+</tr>
+<tr class="even">
+<td><code>thalos-api</code> no contiene lógica de dominio</td>
+<td>Los handlers delegan en <code>SceneService</code>. No hay cálculo cinemático ni manipulación de estructuras del core en los handlers.</td>
+</tr>
+<tr class="odd">
+<td>Sin dependencias circulares</td>
+<td><code>thalos-core</code> → <code>thalos-visual</code> → <code>thalos-api</code>. Nunca al revés.</td>
+</tr>
+<tr class="even">
+<td>DTOs separados del dominio</td>
+<td>Los tipos serializables de <code>thalos-api::app::dto</code> y <code>thalos-api::features::scene::dto</code> son independientes de los tipos del core. <code>VisualScene</code> es una excepción controlada (es <code>Serialize</code> por diseño).</td>
+</tr>
+</tbody>
+</table>
+<blockquote class="blockquote">
+<p>Violar estas reglas rompe el desacoplamiento y eventualmente convierte a Thalos en un monolito.</p>
+</blockquote>
+</section>
+<section id="sec-domains" class="level2" data-number="3.3">
+<h2 data-number="3.3" class="anchored" data-anchor-id="sec-domains"><span class="header-section-number">3.3</span> Dominios del sistema</h2>
+<p>Para alguien nuevo, la distinción entre “matemático”, “robótico” e “infraestructura” puede no ser obvia. Aquí está explicitada:</p>
+<section id="dominio-matemático-thalos-coremath" class="level3" data-number="3.3.1">
+<h3 data-number="3.3.1" class="anchored" data-anchor-id="dominio-matemático-thalos-coremath"><span class="header-section-number">3.3.1</span> Dominio matemático (<code>thalos-core::math</code>)</h3>
+<p>Álgebra lineal y geometría. <strong>No sabe qué es un robot.</strong></p>
+<ul>
+<li><code>Vector3</code>, <code>UnitVector3</code></li>
+<li><code>Quaternion</code>, <code>UnitQuaternion</code></li>
+<li><code>Transform3D</code>, <code>Transform&lt;From, To&gt;</code></li>
+<li><code>DynamicMatrix</code></li>
+<li>Traits <code>Cross</code>, <code>Dot</code></li>
+</ul>
+<p>Puede testearse de forma completamente aislada. Es reutilizable en cualquier contexto, no solo robótico.</p>
+</section>
+<section id="dominio-robótico-thalos-corerobot-kinematics-spatial" class="level3" data-number="3.3.2">
+<h3 data-number="3.3.2" class="anchored" data-anchor-id="dominio-robótico-thalos-corerobot-kinematics-spatial"><span class="header-section-number">3.3.2</span> Dominio robótico (<code>thalos-core::robot</code>, <code>kinematics</code>, <code>spatial</code>)</h3>
+<p>Estructuras y algoritmos que <strong>modelan robots y sus propiedades cinemáticas</strong>.</p>
+<ul>
+<li><code>JointType</code>, <code>RevoluteJoint</code>, <code>PrismaticJoint</code></li>
+<li><code>Link</code>, <code>Segment</code>, <code>SerialChain</code></li>
+<li><code>ForwardKinematics</code>, <code>JacobianSolver</code></li>
+<li><code>Frame</code>, <code>FrameRegistry</code>, <code>Pose</code>, <code>FrameGraph</code></li>
+</ul>
+<p>Depende del dominio matemático pero no sabe de visualización, HTTP, ni almacenamiento.</p>
+</section>
+<section id="dominio-de-infraestructura" class="level3" data-number="3.3.3">
+<h3 data-number="3.3.3" class="anchored" data-anchor-id="dominio-de-infraestructura"><span class="header-section-number">3.3.3</span> Dominio de infraestructura</h3>
+<p>Todo lo que es mecánica de sistema, no lógica de dominio.</p>
+<ul>
+<li><code>thalos-visual</code> — serialización, validación de escenas, diff</li>
+<li><code>thalos-api</code> — HTTP, routing, DTOs de entrada/salida</li>
+<li>Frontend Angular — renderizado, UI, estado del cliente</li>
+</ul>
+<p>La infraestructura <strong>consume</strong> los dominios matemático y robótico, pero nunca al revés.</p>
+</section>
+</section>
+<section id="sec-decisions" class="level2" data-number="3.4">
+<h2 data-number="3.4" class="anchored" data-anchor-id="sec-decisions"><span class="header-section-number">3.4</span> Decisiones de diseño</h2>
+<section id="por-qué-serial-chains-primero" class="level3" data-number="3.4.1">
+<h3 data-number="3.4.1" class="anchored" data-anchor-id="por-qué-serial-chains-primero"><span class="header-section-number">3.4.1</span> ¿Por qué Serial Chains primero?</h3>
+<p>Porque son la topología más simple y la base conceptual de la robótica de brazos manipuladores. Un robot serial se modela como una secuencia lineal de transformaciones, lo que permite implementar FK y jacobianos sin lidiar con la complejidad de loops o ramificaciones.</p>
+<p>La arquitectura está preparada para admitir cadenas paralelas y árboles en el futuro, pero serial primero nos dio foco.</p>
+</section>
+<section id="por-qué-separación-visualcore" class="level3" data-number="3.4.2">
+<h3 data-number="3.4.2" class="anchored" data-anchor-id="por-qué-separación-visualcore"><span class="header-section-number">3.4.2</span> ¿Por qué separación visual/core?</h3>
+<p>Porque la visualización cambia más rápido y por razones distintas que el núcleo matemático. Si la visualización estuviera acoplada al core, cambiar de Three.js a WebGPU requeriría modificar el cálculo de FK. Eso es insostenible.</p>
+<p>Además, <code>thalos-core</code> debe poder compilarse y testearse sin GPU, sin navegador, sin dependencias gráficas.</p>
+</section>
+<section id="por-qué-sistema-espacial-propio-frame-frameregistry-pose" class="level3" data-number="3.4.3">
+<h3 data-number="3.4.3" class="anchored" data-anchor-id="por-qué-sistema-espacial-propio-frame-frameregistry-pose"><span class="header-section-number">3.4.3</span> ¿Por qué sistema espacial propio (<code>Frame</code>, <code>FrameRegistry</code>, <code>Pose</code>)?</h3>
+<p>Porque necesitábamos un modelo explícito de la noción de “frame de referencia”. La mayoría de las librerías de robótica tratan los frames como strings o IDs implícitos. Thalos los convierte en <strong>ciudadanos de primera clase</strong> del sistema.</p>
+<p>Esto permite:</p>
+<ul>
+<li>Validar que un frame existe antes de referenciarlo</li>
+<li>Rastrear el grafo de dependencias entre frames</li>
+<li>Expresar poses con referencia explícita (<code>Pose::reference</code>)</li>
+<li>Escalar a sistemas multi-robot con registros de frames independientes</li>
+</ul>
+</section>
+<section id="por-qué-snapshots-visuales" class="level3" data-number="3.4.4">
+<h3 data-number="3.4.4" class="anchored" data-anchor-id="por-qué-snapshots-visuales"><span class="header-section-number">3.4.4</span> ¿Por qué snapshots visuales?</h3>
+<p>Porque la validación visual tradicional requiere abrir un visor 3D. Con snapshots (vía <code>VisualScene</code> + <code>insta</code>) podemos verificar visualmente en CI que un cambio en FK no rompió la escena esperada.</p>
+</section>
+<section id="por-qué-rust" class="level3" data-number="3.4.5">
+<h3 data-number="3.4.5" class="anchored" data-anchor-id="por-qué-rust"><span class="header-section-number">3.4.5</span> ¿Por qué Rust?</h3>
+<ul>
+<li><code>Result</code> como forma exclusiva de manejo de errores (no excepciones silenciosas)</li>
+<li>Tipado fuerte para modelar invariantes (<code>UnitQuaternion</code> ≠ <code>Quaternion</code>)</li>
+<li><code>PhantomData</code> para type safety entre frames</li>
+<li><code>thiserror</code> para errores con mensajes descriptivos y <code>Display</code> automático</li>
+<li>Sin runtime ni GC — preparado para integración con hardware en tiempo real</li>
+</ul>
+</section>
+</section>
+<section id="mapa-de-dependencias" class="level2" data-number="3.5">
+<h2 data-number="3.5" class="anchored" data-anchor-id="mapa-de-dependencias"><span class="header-section-number">3.5</span> Mapa de dependencias</h2>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div id="fig-dep-map" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-dep-map-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div>
+<svg width="672" height="480" viewbox="0.00 0.00 184.00 309.60" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" style="; max-width: none; max-height: none">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 305.6)">
+<title>deps</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-305.6 180,-305.6 180,4 -4,4"></polygon>
+<g id="clust1" class="cluster">
+<title>cluster_crates</title>
+<polygon fill="none" stroke="black" stroke-dasharray="5,2" points="8,-8 8,-293.6 168,-293.6 168,-8 8,-8"></polygon>
+<text text-anchor="middle" x="88" y="-277.9" font-family="Times,serif" font-size="13.00">Workspace Thalos</text>
+</g>
+<!-- api -->
+<g id="node1" class="node">
+<title>api</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M148.15,-66.7C148.15,-66.7 27.85,-66.7 27.85,-66.7 21.85,-66.7 15.85,-60.7 15.85,-54.7 15.85,-54.7 15.85,-28.1 15.85,-28.1 15.85,-22.1 21.85,-16.1 27.85,-16.1 27.85,-16.1 148.15,-16.1 148.15,-16.1 154.15,-16.1 160.15,-22.1 160.15,-28.1 160.15,-28.1 160.15,-54.7 160.15,-54.7 160.15,-60.7 154.15,-66.7 148.15,-66.7"></path>
+<text text-anchor="middle" x="88" y="-45" font-family="sans-serif" font-size="12.00">thalos-api</text>
+<text text-anchor="middle" x="88" y="-30.6" font-family="sans-serif" font-size="12.00">axum · tokio · serde</text>
+</g>
+<!-- visual -->
+<g id="node2" class="node">
+<title>visual</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M128.82,-164.3C128.82,-164.3 47.18,-164.3 47.18,-164.3 41.18,-164.3 35.18,-158.3 35.18,-152.3 35.18,-152.3 35.18,-125.7 35.18,-125.7 35.18,-119.7 41.18,-113.7 47.18,-113.7 47.18,-113.7 128.82,-113.7 128.82,-113.7 134.82,-113.7 140.82,-119.7 140.82,-125.7 140.82,-125.7 140.82,-152.3 140.82,-152.3 140.82,-158.3 134.82,-164.3 128.82,-164.3"></path>
+<text text-anchor="middle" x="88" y="-142.6" font-family="sans-serif" font-size="12.00">thalos-visual</text>
+<text text-anchor="middle" x="88" y="-128.2" font-family="sans-serif" font-size="12.00">serde · insta</text>
+</g>
+<!-- visual&#45;&gt;api -->
+<g id="edge2" class="edge">
+<title>visual-&gt;api</title>
+<path fill="none" stroke="black" d="M88,-113.61C88,-113.61 88,-77 88,-77"></path>
+<polygon fill="black" stroke="black" points="91.5,-77 88,-67 84.5,-77 91.5,-77"></polygon>
+<text text-anchor="middle" x="108.36" y="-87.5" font-family="Times,serif" font-size="9.00">depende de</text>
+</g>
+<!-- core -->
+<g id="node3" class="node">
+<title>core</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M144.96,-261.9C144.96,-261.9 31.04,-261.9 31.04,-261.9 25.04,-261.9 19.04,-255.9 19.04,-249.9 19.04,-249.9 19.04,-223.3 19.04,-223.3 19.04,-217.3 25.04,-211.3 31.04,-211.3 31.04,-211.3 144.96,-211.3 144.96,-211.3 150.96,-211.3 156.96,-217.3 156.96,-223.3 156.96,-223.3 156.96,-249.9 156.96,-249.9 156.96,-255.9 150.96,-261.9 144.96,-261.9"></path>
+<text text-anchor="middle" x="88" y="-240.2" font-family="sans-serif" font-size="12.00">thalos-core</text>
+<text text-anchor="middle" x="88" y="-225.8" font-family="sans-serif" font-size="12.00">nalgebra · thiserror</text>
+</g>
+<!-- core&#45;&gt;visual -->
+<g id="edge1" class="edge">
+<title>core-&gt;visual</title>
+<path fill="none" stroke="black" d="M88,-211.21C88,-211.21 88,-174.6 88,-174.6"></path>
+<polygon fill="black" stroke="black" points="91.5,-174.6 88,-164.6 84.5,-174.6 91.5,-174.6"></polygon>
+<text text-anchor="middle" x="108.36" y="-185.1" font-family="Times,serif" font-size="9.00">depende de</text>
+</g>
+</g>
+</svg>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-dep-map-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3.2: Mapa de dependencias del workspace
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="sec-reading-order" class="level2" data-number="3.6">
+<h2 data-number="3.6" class="anchored" data-anchor-id="sec-reading-order"><span class="header-section-number">3.6</span> Cómo leer el proyecto</h2>
+<p>Si sos nuevo en el código, este es el orden recomendado para entender Thalos de concepto a implementación:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 24%">
+<col style="width: 40%">
+<col style="width: 36%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Paso</th>
+<th>Qué leer</th>
+<th>Por qué</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><a href="domain.html" class="quarto-xref"><span>Chapter 5</span></a></td>
+<td>Definiciones del dominio</td>
+<td>Entender el vocabulario antes de ver código</td>
+</tr>
+<tr class="even">
+<td><a href="#sec-architecture" class="quarto-xref"><span>Chapter 3</span></a></td>
+<td>Filosofía arquitectónica</td>
+<td>Entender por qué está estructurado así</td>
+</tr>
+<tr class="odd">
+<td><a href="flow.html" class="quarto-xref"><span>Chapter 6</span></a></td>
+<td>Flujo interno del sistema</td>
+<td>Ver cómo viajan los datos de punta a punta</td>
+</tr>
+<tr class="even">
+<td><code>thalos-core::math</code></td>
+<td>Vectores, cuaterniones, transforms</td>
+<td>La base matemática de todo</td>
+</tr>
+<tr class="odd">
+<td><code>thalos-core::robot</code></td>
+<td>Joints, links, segments, serial chain</td>
+<td>Cómo se modela un robot</td>
+</tr>
+<tr class="even">
+<td><code>thalos-core::kinematics</code></td>
+<td>FK, jacobianos</td>
+<td>Los algoritmos centrales</td>
+</tr>
+<tr class="odd">
+<td><code>thalos-core::spatial</code></td>
+<td>Frames, poses, registries</td>
+<td>El sistema de coordenadas</td>
+</tr>
+<tr class="even">
+<td><code>thalos-visual</code></td>
+<td>Scene builder, validator, diff</td>
+<td>Cómo se proyecta el dominio a visual</td>
+</tr>
+<tr class="odd">
+<td><code>thalos-api</code></td>
+<td>Services, handlers, routes</td>
+<td>Cómo se expone a otros sistemas</td>
+</tr>
+<tr class="even">
+<td>Frontend Angular</td>
+<td>Scene store, three renderer</td>
+<td>Cómo se ve del lado del cliente</td>
+</tr>
+</tbody>
+</table>
+<p>Los archivos cambian. Los conceptos sobreviven.</p>
+
+
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./vision.html" class="pagination-link" aria-label="Visión del proyecto">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Visión del proyecto</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./workspace.html" class="pagination-link" aria-label="Arquitectura del workspace">
+        <span class="nav-page-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Arquitectura del workspace</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
