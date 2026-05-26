@@ -19,3 +19,5 @@ _book/
 # OS / Editor
 .vscode/
 .DS_Store
+/.quarto/
+**/*.quarto_ipynb
