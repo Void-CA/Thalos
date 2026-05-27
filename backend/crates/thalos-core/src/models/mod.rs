@@ -9,6 +9,7 @@ mod error;
 
 pub use factory::{RobotModel, RobotRegistry, RobotSpec};
 pub use metadata::RobotMetadata;
+pub use error::RobotModelError;
 
 pub mod factories {
     pub use crate::models::planar_2r::factory::create_planar_2r;
