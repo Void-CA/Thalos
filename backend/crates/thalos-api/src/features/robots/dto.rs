@@ -25,9 +25,7 @@ impl From<RobotMetadata> for RobotMetadataDto {
 pub struct JointMetadataDto {
     pub name: String,
     pub kind: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub min: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub max: Option<f64>,
 }
 
@@ -35,11 +33,7 @@ impl From<JointInfo> for JointMetadataDto {
     fn from(joint: JointInfo) -> Self {
         Self {
             name: joint.name.to_string(),
-            kind: match joint.kind {
-                thalos_core::robot::joint::JointKind::Revolute => "revolute",
-                thalos_core::robot::joint::JointKind::Prismatic => "prismatic",
-            }
-            .to_string(),
+            kind: joint.kind.to_string(),
             min: joint.limits.map(|l| l.min),
             max: joint.limits.map(|l| l.max),
         }

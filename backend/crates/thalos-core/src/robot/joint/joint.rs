@@ -3,7 +3,8 @@ use crate::math::geometry::rigid::{Transform3D, transform};
 use crate::math::geometry::vectors::UnitVector3;
 use crate::robot::joint::{
     prismatic::PrismaticJoint, 
-    revolute::RevoluteJoint
+    revolute::RevoluteJoint,
+    kind::JointKind
 };
 
 
@@ -21,11 +22,6 @@ impl JointLimits {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum JointKind {
-    Revolute,
-    Prismatic,
-}
 
 #[derive(Debug, Clone)]
 pub enum JointType {

@@ -6,4 +6,3 @@ pub struct JointInfo {
     pub kind: JointKind,
     pub limits: Option<JointLimits>,
 }
-
