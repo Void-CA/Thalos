@@ -1,4 +1,6 @@
 pub mod factory;
+pub mod metadata;
+
 pub mod single_revolute;
 pub mod planar_2r;
 pub mod planar_3r;
@@ -6,6 +8,7 @@ pub mod scara;
 mod error;
 
 pub use factory::{RobotModel, RobotRegistry, RobotSpec};
+pub use metadata::RobotMetadata;
 
 pub mod factories {
     pub use crate::models::planar_2r::factory::create_planar_2r;

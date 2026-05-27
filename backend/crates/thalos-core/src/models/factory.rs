@@ -1,3 +1,4 @@
+use crate::models::RobotMetadata;
 use crate::models::error::RobotRegistryError;
 use crate::robot::serial_chain::SerialChain;
 
@@ -8,6 +9,34 @@ pub enum RobotModel {
     SingleRevolute,
     Scara,
 }
+
+impl RobotModel {
+    pub fn metadata(&self) -> RobotMetadata {
+        match self {
+            RobotModel::Planar2R => RobotMetadata {
+                id: "planar_2r",
+                display_name: "Planar 2R",
+                dof: 2,
+            },
+            RobotModel::Planar3R => RobotMetadata {
+                id: "planar_3r",
+                display_name: "Planar 3R",
+                dof: 3,
+            },
+            RobotModel::SingleRevolute => RobotMetadata {
+                id: "single_revolute",
+                display_name: "Single Revolute",
+                dof: 1,
+            },
+            RobotModel::Scara => RobotMetadata {
+                id: "scara",
+                display_name: "SCARA",
+                dof: 4,
+            },
+        }
+    }
+}
+
 
 #[derive(Debug, Clone)]
 pub enum RobotSpec {
