@@ -414,3 +414,95 @@ async fn error_code_twists_mismatch() {
     assert_eq!(body["expected"], 2);
     assert_eq!(body["found"], 3);
 }
+
+// ── Robot metadata / joints tests ──
+
+#[tokio::test]
+async fn get_robot_scara_returns_joints() {
+    let app = test_app();
+    let (status, body) = get_json(app, http::Method::GET, "/api/v1/robots/scara", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+
+    let joints = body["joints"].as_array().expect("response must contain 'joints' array");
+    assert_eq!(joints.len(), 4, "SCARA should have 4 joints");
+
+    let first = &joints[0];
+    assert!(first.get("name").is_some(), "each joint must have a name");
+    assert!(first.get("kind").is_some(), "each joint must have a kind");
+    assert!(first.get("min").is_some(), "each joint must have min (may be null)");
+    assert!(first.get("max").is_some(), "each joint must have max (may be null)");
+
+    assert_eq!(body["dof"].as_u64().unwrap() as usize, joints.len(), "dof must equal joints.len()");
+}
+
+#[tokio::test]
+async fn get_robot_planar_2r_returns_joints() {
+    let app = test_app();
+    let (status, body) = get_json(app, http::Method::GET, "/api/v1/robots/planar_2r", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+
+    let joints = body["joints"].as_array().expect("response must contain 'joints' array");
+    assert_eq!(joints.len(), 2, "Planar2R should have 2 joints");
+    assert_eq!(body["dof"].as_u64().unwrap() as usize, joints.len(), "dof must equal joints.len()");
+}
+
+#[tokio::test]
+async fn get_robot_planar_3r_returns_joints() {
+    let app = test_app();
+    let (status, body) = get_json(app, http::Method::GET, "/api/v1/robots/planar_3r", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+
+    let joints = body["joints"].as_array().expect("response must contain 'joints' array");
+    assert_eq!(joints.len(), 3, "Planar3R should have 3 joints");
+    assert_eq!(body["dof"].as_u64().unwrap() as usize, joints.len(), "dof must equal joints.len()");
+}
+
+#[tokio::test]
+async fn get_robot_single_revolute_returns_joints() {
+    let app = test_app();
+    let (status, body) = get_json(app, http::Method::GET, "/api/v1/robots/single_revolute", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+
+    let joints = body["joints"].as_array().expect("response must contain 'joints' array");
+    assert_eq!(joints.len(), 1, "SingleRevolute should have 1 joint");
+    assert_eq!(body["dof"].as_u64().unwrap() as usize, joints.len(), "dof must equal joints.len()");
+}
+
+#[tokio::test]
+async fn list_robots_returns_all_with_joints() {
+    let app = test_app();
+    let (status, body) = get_json(app, http::Method::GET, "/api/v1/robots", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+    let robots = body.as_array().expect("response must be an array");
+    assert_eq!(robots.len(), 4, "should have 4 robots");
+
+    for robot in robots {
+        let joints = robot["joints"].as_array().expect("each robot must have joints array");
+        let dof = robot["dof"].as_u64().unwrap() as usize;
+        assert_eq!(dof, joints.len(), "dof must equal joints.len() for {}", robot["id"]);
+    }
+}
+
+#[tokio::test]
+async fn scara_joint_kinds_include_prismatic() {
+    let app = test_app();
+    let (status, body) = get_json(app, http::Method::GET, "/api/v1/robots/scara", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+    let joints = body["joints"].as_array().unwrap();
+
+    // SCARA: joint_1 (revolute), joint_2 (revolute), joint_3 (prismatic), joint_4 (revolute)
+    assert_eq!(joints[0]["kind"], "revolute");
+    assert_eq!(joints[1]["kind"], "revolute");
+    assert_eq!(joints[2]["kind"], "prismatic");
+    assert_eq!(joints[3]["kind"], "revolute");
+
+    // Verify limits are present for joints with limits
+    assert!(joints[0]["min"].is_number());
+    assert!(joints[2]["max"].is_number());
+}

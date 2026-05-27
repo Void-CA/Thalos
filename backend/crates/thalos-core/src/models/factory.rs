@@ -1,6 +1,74 @@
+use std::f64::consts::PI;
+
 use crate::models::RobotMetadata;
 use crate::models::error::RobotModelError;
+use crate::robot::joint::{JointInfo, JointKind, JointLimits};
 use crate::robot::serial_chain::SerialChain;
+
+// ── Static joint descriptors per robot model ──
+
+const JOINTS_SINGLE_REVOLUTE: &[JointInfo] = &[JointInfo {
+    name: "joint_1",
+    kind: JointKind::Revolute,
+    limits: Some(JointLimits { min: -PI, max: PI }),
+}];
+
+const JOINTS_PLANAR_2R: &[JointInfo] = &[
+    JointInfo {
+        name: "joint_1",
+        kind: JointKind::Revolute,
+        limits: Some(JointLimits { min: -PI, max: PI }),
+    },
+    JointInfo {
+        name: "joint_2",
+        kind: JointKind::Revolute,
+        limits: Some(JointLimits { min: -PI, max: PI }),
+    },
+];
+
+const JOINTS_PLANAR_3R: &[JointInfo] = &[
+    JointInfo {
+        name: "joint_1",
+        kind: JointKind::Revolute,
+        limits: Some(JointLimits { min: -PI, max: PI }),
+    },
+    JointInfo {
+        name: "joint_2",
+        kind: JointKind::Revolute,
+        limits: Some(JointLimits { min: -PI, max: PI }),
+    },
+    JointInfo {
+        name: "joint_3",
+        kind: JointKind::Revolute,
+        limits: Some(JointLimits { min: -PI, max: PI }),
+    },
+];
+
+const JOINTS_SCARA: &[JointInfo] = &[
+    JointInfo {
+        name: "joint_1",
+        kind: JointKind::Revolute,
+        limits: Some(JointLimits { min: -PI, max: PI }),
+    },
+    JointInfo {
+        name: "joint_2",
+        kind: JointKind::Revolute,
+        limits: Some(JointLimits { min: -PI, max: PI }),
+    },
+    JointInfo {
+        name: "joint_3",
+        kind: JointKind::Prismatic,
+        limits: Some(JointLimits {
+            min: -1.0,
+            max: 1.0,
+        }),
+    },
+    JointInfo {
+        name: "joint_4",
+        kind: JointKind::Revolute,
+        limits: Some(JointLimits { min: -PI, max: PI }),
+    },
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RobotModel {
@@ -17,21 +85,25 @@ impl RobotModel {
                 id: "planar_2r",
                 display_name: "Planar 2R",
                 dof: 2,
+                joints: JOINTS_PLANAR_2R,
             },
             RobotModel::Planar3R => RobotMetadata {
                 id: "planar_3r",
                 display_name: "Planar 3R",
                 dof: 3,
+                joints: JOINTS_PLANAR_3R,
             },
             RobotModel::SingleRevolute => RobotMetadata {
                 id: "single_revolute",
                 display_name: "Single Revolute",
                 dof: 1,
+                joints: JOINTS_SINGLE_REVOLUTE,
             },
             RobotModel::Scara => RobotMetadata {
                 id: "scara",
                 display_name: "SCARA",
                 dof: 4,
+                joints: JOINTS_SCARA,
             },
         }
     }

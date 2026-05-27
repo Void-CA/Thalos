@@ -21,6 +21,7 @@ impl JointLimits {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum JointKind {
     Revolute,
     Prismatic,
