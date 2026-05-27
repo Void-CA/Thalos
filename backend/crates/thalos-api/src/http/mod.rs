@@ -5,8 +5,13 @@ use std::sync::Arc;
 use axum::Router;
 
 use crate::app::state::AppState;
-use routes::scene;
+use routes::{robots, scene};
 
 pub fn app_router() -> Router<Arc<AppState>> {
-    Router::new().nest("/api/v1", scene::routes())
+    Router::new().nest(
+        "/api/v1",
+        Router::new()
+            .merge(scene::routes())
+            .merge(robots::routes()),
+    )
 }

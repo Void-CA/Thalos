@@ -1,9 +1,5 @@
 use serde::Serialize;
-use thalos_core::models::{
-    RobotMetadata,
-    RobotModel,
-    RobotSpec,
-};
+use thalos_core::models::RobotMetadata;
 
 #[derive(Debug, Serialize)]
 pub struct RobotMetadataDto {
