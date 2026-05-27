@@ -32,22 +32,6 @@ Cada crate es independiente y tiene un contrato claro:
 - `thalos-api` — **depende de** `thalos-core` + `thalos-visual`, agrega `axum`
   y `tokio`
 
-```{dot}
-//| fig-cap: "Relación de dependencia entre crates"
-//| label: fig-dep-simple
-digraph dependencies {
-    rankdir=BT;
-    splines=ortho;
-    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=12, margin="0.3,0.15"];
-
-    core    [label="thalos-core"];
-    visual  [label="thalos-visual"];
-    api     [label="thalos-api"];
-
-    core -> visual [label="depende de", fontsize=10];
-    visual -> api  [label="depende de", fontsize=10];
-}
-```
 
 Esto significa que `thalos-core` puede compilarse y testearse **sin** `tokio`,
 `axum`, ni ningún sistema de visualización.
@@ -225,8 +209,8 @@ digraph deps {
         core    [label="thalos-core\nnalgebra · thiserror"];
     }
 
-    core -> visual [label="depende de", fontsize=9];
-    visual -> api  [label="depende de", fontsize=9];
+    visual -> core [label="depende de", fontsize=9];
+    api -> visual  [label="depende de", fontsize=9];
 }
 ```
 

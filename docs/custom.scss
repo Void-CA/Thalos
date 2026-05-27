@@ -20,3 +20,9 @@ div.callout-note {
 table {
   font-size: 0.9rem;
 }
+
+/* SVGs de DOT responsivos */
+.quarto-figure svg {
+  max-width: 100% !important;
+  height: auto !important;
+}

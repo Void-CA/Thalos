@@ -69,17 +69,38 @@ via API HTTP:
 //| fig-cap: "Pipeline completo de Thalos — del modelo matemático al frontend"
 //| label: fig-pipeline-vision
 digraph pipeline {
-    rankdir=LR;
+    rankdir=TB;
     splines=ortho;
-    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=12, margin="0.35,0.2"];
-
+    nodesep=0.5;
+    ranksep=0.5;
+    
+    node [shape=box, style="rounded,filled", fillcolor="white", 
+          penwidth=1.5, fontname="sans-serif", fontsize=10, 
+          margin="0.25,0.12", width=1.5];
+    edge [penwidth=1.3, arrowsize=0.8];
+    
+    // Columna izquierda (3 nodos)
+    { rank=same; core; spatial; exposicion; }
+    
+    // Columna derecha (2 nodos, con espacio)
+    { rank=same; robot; visual; }
+    
     core     [label="Core\nModelos · Matemática"];
-    robot    [label="Robótica\nJoints · Cinemática"];
+    robot    [label="Robótica\nEstructura · Cinemática"];
     spatial  [label="Espacial\nFrames · Poses"];
     visual   [label="Visualización\nEscenas · Validación"];
     exposicion [label="Exposición\nHTTP · Frontend"];
-
-    core -> robot -> spatial -> visual -> exposicion;
+    
+    // Flujo en zigzag descendente
+    core -> robot;
+    robot -> spatial;
+    spatial -> visual;
+    visual -> exposicion;
+    
+    // Mantener cuadrícula
+    edge [style=invis, weight=20];
+    core -> spatial -> exposicion;
+    robot -> visual;
 }
 ```
 

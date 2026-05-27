@@ -231,25 +231,43 @@ pero no implementado. Su propósito futuro será permitir:
 ### ¿Cómo conecta el sistema espacial con el resto?
 
 ```{dot}
-//| fig-cap: "Conexión del sistema espacial con FK, visualización y validación"
+//| fig-cap: "Pipeline espacial: FK, visualización y validación"
 //| label: fig-spatial-flow
 digraph spatial_flow {
     rankdir=TB;
     splines=ortho;
-    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=12, margin="0.3,0.15"];
-
+    nodesep=0.7;
+    ranksep=0.6;
+    
+    node [shape=box, style="rounded,filled", fillcolor="white", 
+          penwidth=1.5, fontname="sans-serif", fontsize=11, 
+          margin="0.3,0.15", width=1.5];
+    edge [penwidth=1.5, color="#5d6d7e"];
+    
+    // Columna izquierda (3 nodos)
+    { rank=same; chain; fkres; scene; }
+    
+    // Columna derecha (3 nodos)
+    { rank=same; fk; builder; vld; }
+    
     chain   [label="SerialChain\n+ FrameRegistry"];
     fk      [label="FK::evaluate(q)"];
     fkres   [label="FKResult\n(poses por frame)"];
     builder [label="SceneBuilder\n::from_fk()"];
     scene   [label="VisualScene"];
     vld     [label="SceneValidator\n::validate()"];
-
+    
+    // Flujo en zigzag descendente
     chain -> fk;
     fk -> fkres;
     fkres -> builder;
     builder -> scene;
     scene -> vld;
+    
+    // Conexiones invisibles para mantener la cuadrícula
+    edge [style=invis, weight=20];
+    chain -> fkres -> scene;
+    fk -> builder -> vld;
 }
 ```
 

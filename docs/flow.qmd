@@ -11,39 +11,61 @@ el usuario mueve un slider hasta que ve el resultado en pantalla.
 digraph e2e {
     rankdir=TB;
     splines=ortho;
-    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=11, margin="0.3,0.15"];
-    edge [fontsize=9];
+    nodesep=0.5;
+    ranksep=0.5;
+    
+    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=10, margin="0.25,0.1"];
+    edge [fontsize=8, fontname="sans-serif"];
 
     subgraph cluster_frontend {
         label="Frontend (Angular)";
         style=dashed;
         penwidth=1;
-        fontsize=12;
-
+        fontsize=10;
+        color="#2c3e50";
+        
         user    [label="Usuario", shape=oval, penwidth=2];
         jctrl   [label="JointControl"];
         sstore  [label="SceneStore"];
         asvc    [label="SceneApiService"];
         sview   [label="SceneViewer\n(Three.js)"];
+        
+        // Flujo vertical en frontend
+        user -> jctrl;
+        jctrl -> sstore;
+        sstore -> asvc;
     }
 
     subgraph cluster_backend {
         label="Backend (Rust)";
         style=dashed;
         penwidth=1;
-        fontsize=12;
-
+        fontsize=10;
+        color="#2c3e50";
+        
         handler [label="Handler"];
         fk      [label="FK::evaluate(q)"];
         builder [label="SceneBuilder\n::from_fk()"];
         vld     [label="SceneValidator"];
+        
+        // Flujo vertical en backend
+        handler -> fk;
+        fk -> builder;
+        builder -> vld;
     }
 
-    user -> jctrl -> sstore -> asvc;
-    asvc -> handler [label="HTTP POST"];
-    handler -> fk -> builder -> vld;
-    vld -> sstore [label="JSON 200"];
-    sstore -> sview;
+    // Conexión horizontal entre columnas (de frontend a backend)
+    asvc -> handler [label="HTTP POST", penwidth=1.5];
+    
+    // Conexión horizontal de retorno (de backend a frontend)
+    vld -> sstore [label="JSON 200", penwidth=1.5, dir=back];
+    
+    // Conexión final dentro del frontend
+    sstore -> sview [style=invis];  // Mantiene alineación vertical
+    
+    // Forzar disposición en dos columnas
+    { rank=same; asvc; handler; }
+    { rank=same; vld; sstore; }
 }
 ```
 
