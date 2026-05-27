@@ -9,20 +9,28 @@ use thalos_visual::SceneDiff;
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
-use crate::features::scene::dto::{
-    DiffRequest, FromFkRequest, SceneResponse, ValidateRequest, ValidateResponse,
-};
+use crate::features::scene::dto::*;
 
-pub async fn get_scene(State(state): State<Arc<AppState>>) -> ApiResult<SceneResponse> {
-    let scene = state.services.scene.build_scene(&[0.0, 0.0])?;
+pub async fn get_scene(
+    State(state): State<Arc<AppState>>,
+) -> ApiResult<SceneResponse> {
+    let scene = state.services.scene.build_scene()?;
+
     Ok(Json(SceneResponse::new(scene)))
 }
 
-pub async fn from_fk(
+
+pub async fn set_joints(
     State(state): State<Arc<AppState>>,
-    Json(payload): Json<FromFkRequest>,
+    Json(payload): Json<SetJointsRequest>,
 ) -> ApiResult<SceneResponse> {
-    let scene = state.services.scene.build_scene(&payload.joint_angles)?;
+    state
+        .services
+        .scene
+        .set_joints(payload.joint_angles);
+
+    let scene = state.services.scene.build_scene()?;
+
     Ok(Json(SceneResponse::new(scene)))
 }
 

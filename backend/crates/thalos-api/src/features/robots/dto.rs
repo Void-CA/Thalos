@@ -16,7 +16,7 @@ impl From<RobotMetadata> for RobotMetadataDto {
             id: metadata.id.to_string(),
             display_name: metadata.display_name.to_string(),
             dof: metadata.dof,
-            joints: metadata.joints.iter().map(|j| (*j).into()).collect(),
+            joints: metadata.joints.iter().map(Into::into).collect(),
         }
     }
 }
@@ -29,8 +29,8 @@ pub struct JointMetadataDto {
     pub max: Option<f64>,
 }
 
-impl From<JointInfo> for JointMetadataDto {
-    fn from(joint: JointInfo) -> Self {
+impl From<&JointInfo> for JointMetadataDto {
+    fn from(joint: &JointInfo) -> Self {
         Self {
             name: joint.name.to_string(),
             kind: joint.kind.to_string(),
