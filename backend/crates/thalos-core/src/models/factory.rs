@@ -1,5 +1,5 @@
 use crate::models::RobotMetadata;
-use crate::models::error::RobotRegistryError;
+use crate::models::error::RobotModelError;
 use crate::robot::serial_chain::SerialChain;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,6 +54,15 @@ impl RobotModel {
         }
     }
 
+    pub fn from_id(id: &str) -> Result<RobotModel, RobotModelError> {
+        match id {
+            "planar_2r" => Ok(RobotModel::Planar2R),
+            "planar_3r" => Ok(RobotModel::Planar3R),
+            "single_revolute" => Ok(RobotModel::SingleRevolute),
+            "scara" => Ok(RobotModel::Scara),
+            _ => Err(RobotModelError::InvalidRobotId { id: id.to_string() }),
+        }
+    }
     pub fn all() -> &'static [RobotModel] {
         &[
             RobotModel::Planar2R,
@@ -91,7 +100,7 @@ pub struct RobotRegistry;
 
 impl RobotRegistry {
     /// Construye un robot validando consistencia model/spec.
-    pub fn create(model: RobotModel, spec: RobotSpec) -> Result<SerialChain, RobotRegistryError> {
+    pub fn create(model: RobotModel, spec: RobotSpec) -> Result<SerialChain, RobotModelError> {
         match (&model, &spec) {
             (RobotModel::Planar2R, RobotSpec::Planar2R { l1, l2 }) => {
                 Ok(super::planar_2r::factory::create_planar_2r(*l1, *l2))
@@ -105,7 +114,7 @@ impl RobotRegistry {
             (RobotModel::Scara, RobotSpec::Scara { a1, a2, d1, d2 }) => {
                 Ok(super::scara::factory::create_scara_robot(*a1, *a2, *d1, *d2))
             }
-            _ => Err(RobotRegistryError::ModelSpecMismatch {model, spec}),
+            _ => Err(RobotModelError::ModelSpecMismatch { model, spec }),
         }
     }
 
