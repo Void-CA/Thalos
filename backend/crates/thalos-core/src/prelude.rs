@@ -22,3 +22,4 @@ pub use crate::kinematics::{
     forward::ForwardKinematics,
     jacobian::{JacobianSolver, Jacobian, NumericalJacobian, GeometricJacobian}
 };
+

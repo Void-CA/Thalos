@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use thalos_core::models::factory::{RobotModel, RobotRegistry};
+use thalos_core::models::RobotModel;
 
 use crate::features::{
+    robots::service::RobotService,
     scene::SceneService,
-    robots::service::RobotService
 };
 
 pub struct Services {
@@ -19,10 +19,14 @@ pub struct AppState {
 pub type SharedState = Arc<AppState>;
 
 pub fn new_default_state() -> SharedState {
-    let robot = RobotRegistry::create_default(RobotModel::Planar2R);
-    let scene = SceneService::new(robot);
+    let scene = SceneService::new(RobotModel::Planar2R);
+
     let robots = RobotService;
+
     Arc::new(AppState {
-        services: Arc::new(Services { scene, robots }),
+        services: Arc::new(Services {
+            scene,
+            robots,
+        }),
     })
 }

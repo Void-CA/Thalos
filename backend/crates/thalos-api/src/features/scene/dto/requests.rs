@@ -25,6 +25,12 @@ pub struct DiffRequest {
     pub epsilon: f64,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct LoadRobotRequest {
+    pub robot_id: String,
+}
+
+
 fn default_epsilon() -> f64 {
     1e-6
 }

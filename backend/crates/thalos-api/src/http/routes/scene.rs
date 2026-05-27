@@ -10,8 +10,14 @@ use crate::features::scene::handler;
 
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
+        // Current visual scene
         .route("/scene", get(handler::get_scene))
-        .route("/scene/from-fk", post(handler::from_fk))
+
+        // Runtime mutations
+        .route("/scene/joints", post(handler::set_joints))
+        .route("/scene/robot", post(handler::load_robot))
+
+        // Utilities
         .route("/scene/validate", post(handler::validate))
         .route("/scene/diff", post(handler::diff))
 }

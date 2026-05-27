@@ -4,8 +4,10 @@ use axum::{
     Json,
 };
 use thalos_visual::SceneError;
+use thalos_core::models::RobotModelError;
 
 use crate::app::dto::{ErrorCode, ErrorResponse};
+
 
 #[derive(Debug)]
 pub enum ApiError {
@@ -152,6 +154,21 @@ impl From<SceneError> for ApiError {
                 expected: Some(expected),
                 found: Some(found),
             },
+        }
+    }
+}
+
+impl From<RobotModelError> for ApiError {
+    fn from(e: RobotModelError) -> Self {
+
+        match e {
+            RobotModelError::InvalidRobotId { id } => {
+                ApiError::NotFound(msg)
+            }
+
+            RobotModelError::ModelSpecMismatch { model, spec } => {
+                Api
+            }
         }
     }
 }

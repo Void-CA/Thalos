@@ -5,10 +5,12 @@ use axum::{
     Json,
 };
 
+use thalos_core::models::RobotModel;
 use thalos_visual::SceneDiff;
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
+use crate::features::robots::dto::RobotMetadataDto;
 use crate::features::scene::dto::*;
 
 pub async fn get_scene(
@@ -32,6 +34,17 @@ pub async fn set_joints(
     let scene = state.services.scene.build_scene()?;
 
     Ok(Json(SceneResponse::new(scene)))
+}
+
+pub async fn load_robot(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<LoadRobotRequest>,
+) -> ApiResult<RobotMetadataDto> {
+    let model = RobotModel::from_id(&payload.robot_id)?;
+
+    state.services.scene.load_robot(model);
+
+    Ok(Json(model.metadata().into()))
 }
 
 pub async fn validate(
