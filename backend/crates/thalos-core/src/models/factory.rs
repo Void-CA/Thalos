@@ -35,6 +35,33 @@ impl RobotModel {
             },
         }
     }
+
+    pub fn default_spec(&self) -> RobotSpec {
+        match self {
+            RobotModel::Planar2R => RobotSpec::Planar2R { l1: 1.0, l2: 1.0 },
+            RobotModel::Planar3R => RobotSpec::Planar3R {
+                l1: 1.0,
+                l2: 1.0,
+                l3: 1.0,
+            },
+            RobotModel::SingleRevolute => RobotSpec::SingleRevolute { l1: 1.0 },
+            RobotModel::Scara => RobotSpec::Scara {
+                a1: 1.0,
+                a2: 1.0,
+                d1: -1.0,
+                d2: 1.0,
+            },
+        }
+    }
+
+    pub fn all() -> &'static [RobotModel] {
+        &[
+            RobotModel::Planar2R,
+            RobotModel::Planar3R,
+            RobotModel::SingleRevolute,
+            RobotModel::Scara,
+        ]
+    }
 }
 
 
@@ -84,24 +111,7 @@ impl RobotRegistry {
 
     /// Construye un robot con parámetros por defecto para el modelo dado.
     pub fn create_default(model: RobotModel) -> SerialChain {
-        let spec = match model {
-            RobotModel::Planar2R => RobotSpec::Planar2R {
-                l1: 1.0,
-                l2: 1.0,
-            },
-            RobotModel::Planar3R => RobotSpec::Planar3R {
-                l1: 1.0,
-                l2: 1.0,
-                l3: 1.0,
-            },
-            RobotModel::SingleRevolute => RobotSpec::SingleRevolute { l1: 1.0 },
-            RobotModel::Scara => RobotSpec::Scara {
-                a1: 1.0,
-                a2: 1.0,
-                d1: -1.0,
-                d2: 1.0,
-            },
-        };
+        let spec = model.default_spec();
         Self::create(model, spec).unwrap()
     }
 }
