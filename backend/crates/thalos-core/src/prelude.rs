@@ -1,5 +1,5 @@
 pub use crate::robot::{
-    joint::{JointType, RevoluteJoint, PrismaticJoint, JointLimits},
+    joint::{JointType, RevoluteJoint, PrismaticJoint, JointLimits, JointKind, JointInfo},
     serial_chain::SerialChain,
     link::Link,
     segment::Segment,

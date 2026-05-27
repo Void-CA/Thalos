@@ -22,3 +22,10 @@ impl From<RobotMetadata> for RobotMetadataDto {
 pub struct RobotSpecDto {
 
 }
+
+pub struct JointMetadataDto {
+    pub name: String,
+    pub kind: String,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+}
