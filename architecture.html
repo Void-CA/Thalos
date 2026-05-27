@@ -79,7 +79,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-7cc62051286a747f1ac641bedccf692b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-15b1bb634b6a18c42086f799218af8ca.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "sidebar",
   "copy-button": false,
@@ -328,59 +328,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><code>thalos-visual</code> — <strong>solo depende de</strong> <code>thalos-core</code> y <code>serde</code></li>
 <li><code>thalos-api</code> — <strong>depende de</strong> <code>thalos-core</code> + <code>thalos-visual</code>, agrega <code>axum</code> y <code>tokio</code></li>
 </ul>
-<div class="cell" data-layout-align="default">
-<div class="cell-output-display">
-<div id="fig-dep-simple" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-fig figure">
-<div aria-describedby="fig-dep-simple-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<div>
-<svg width="672" height="480" viewbox="0.00 0.00 113.32 213.20" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" style="; max-width: none; max-height: none">
-<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 209.2)">
-<title>dependencies</title>
-<polygon fill="white" stroke="transparent" points="-4,4 -4,-209.2 109.32,-209.2 109.32,4 -4,4"></polygon>
-<!-- core -->
-<g id="node1" class="node">
-<title>core</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M89.47,-36.6C89.47,-36.6 15.85,-36.6 15.85,-36.6 9.85,-36.6 3.85,-30.6 3.85,-24.6 3.85,-24.6 3.85,-11.8 3.85,-11.8 3.85,-5.8 9.85,0.2 15.85,0.2 15.85,0.2 89.47,0.2 89.47,0.2 95.47,0.2 101.47,-5.8 101.47,-11.8 101.47,-11.8 101.47,-24.6 101.47,-24.6 101.47,-30.6 95.47,-36.6 89.47,-36.6"></path>
-<text text-anchor="middle" x="52.66" y="-14.6" font-family="sans-serif" font-size="12.00">thalos-core</text>
-</g>
-<!-- visual -->
-<g id="node2" class="node">
-<title>visual</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M93.49,-121C93.49,-121 11.84,-121 11.84,-121 5.84,-121 -0.16,-115 -0.16,-109 -0.16,-109 -0.16,-96.2 -0.16,-96.2 -0.16,-90.2 5.84,-84.2 11.84,-84.2 11.84,-84.2 93.49,-84.2 93.49,-84.2 99.49,-84.2 105.49,-90.2 105.49,-96.2 105.49,-96.2 105.49,-109 105.49,-109 105.49,-115 99.49,-121 93.49,-121"></path>
-<text text-anchor="middle" x="52.66" y="-99" font-family="sans-serif" font-size="12.00">thalos-visual</text>
-</g>
-<!-- core&#45;&gt;visual -->
-<g id="edge1" class="edge">
-<title>core-&gt;visual</title>
-<path fill="none" stroke="black" d="M52.66,-36.51C52.66,-36.51 52.66,-74.32 52.66,-74.32"></path>
-<polygon fill="black" stroke="black" points="49.16,-74.32 52.66,-84.32 56.16,-74.32 49.16,-74.32"></polygon>
-<text text-anchor="middle" x="75.29" y="-57.4" font-family="Times,serif" font-size="10.00">depende de</text>
-</g>
-<!-- api -->
-<g id="node3" class="node">
-<title>api</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M86.48,-205.4C86.48,-205.4 18.84,-205.4 18.84,-205.4 12.84,-205.4 6.84,-199.4 6.84,-193.4 6.84,-193.4 6.84,-180.6 6.84,-180.6 6.84,-174.6 12.84,-168.6 18.84,-168.6 18.84,-168.6 86.48,-168.6 86.48,-168.6 92.48,-168.6 98.48,-174.6 98.48,-180.6 98.48,-180.6 98.48,-193.4 98.48,-193.4 98.48,-199.4 92.48,-205.4 86.48,-205.4"></path>
-<text text-anchor="middle" x="52.66" y="-183.4" font-family="sans-serif" font-size="12.00">thalos-api</text>
-</g>
-<!-- visual&#45;&gt;api -->
-<g id="edge2" class="edge">
-<title>visual-&gt;api</title>
-<path fill="none" stroke="black" d="M52.66,-120.91C52.66,-120.91 52.66,-158.72 52.66,-158.72"></path>
-<polygon fill="black" stroke="black" points="49.16,-158.72 52.66,-168.72 56.16,-158.72 49.16,-158.72"></polygon>
-<text text-anchor="middle" x="75.29" y="-141.8" font-family="Times,serif" font-size="10.00">depende de</text>
-</g>
-</g>
-</svg>
-</div>
-</div>
-<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-dep-simple-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;3.1: Relación de dependencia entre crates
-</figcaption>
-</figure>
-</div>
-</div>
-</div>
 <p>Esto significa que <code>thalos-core</code> puede compilarse y testearse <strong>sin</strong> <code>tokio</code>, <code>axum</code>, ni ningún sistema de visualización.</p>
 </section>
 <section id="desacoplamiento-matemáticovisual" class="level3" data-number="3.1.3">
@@ -557,9 +504,9 @@ Figure&nbsp;3.1: Relación de dependencia entre crates
 <!-- api -->
 <g id="node1" class="node">
 <title>api</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M148.15,-66.7C148.15,-66.7 27.85,-66.7 27.85,-66.7 21.85,-66.7 15.85,-60.7 15.85,-54.7 15.85,-54.7 15.85,-28.1 15.85,-28.1 15.85,-22.1 21.85,-16.1 27.85,-16.1 27.85,-16.1 148.15,-16.1 148.15,-16.1 154.15,-16.1 160.15,-22.1 160.15,-28.1 160.15,-28.1 160.15,-54.7 160.15,-54.7 160.15,-60.7 154.15,-66.7 148.15,-66.7"></path>
-<text text-anchor="middle" x="88" y="-45" font-family="sans-serif" font-size="12.00">thalos-api</text>
-<text text-anchor="middle" x="88" y="-30.6" font-family="sans-serif" font-size="12.00">axum · tokio · serde</text>
+<path fill="none" stroke="black" stroke-width="1.5" d="M148.15,-261.9C148.15,-261.9 27.85,-261.9 27.85,-261.9 21.85,-261.9 15.85,-255.9 15.85,-249.9 15.85,-249.9 15.85,-223.3 15.85,-223.3 15.85,-217.3 21.85,-211.3 27.85,-211.3 27.85,-211.3 148.15,-211.3 148.15,-211.3 154.15,-211.3 160.15,-217.3 160.15,-223.3 160.15,-223.3 160.15,-249.9 160.15,-249.9 160.15,-255.9 154.15,-261.9 148.15,-261.9"></path>
+<text text-anchor="middle" x="88" y="-240.2" font-family="sans-serif" font-size="12.00">thalos-api</text>
+<text text-anchor="middle" x="88" y="-225.8" font-family="sans-serif" font-size="12.00">axum · tokio · serde</text>
 </g>
 <!-- visual -->
 <g id="node2" class="node">
@@ -568,33 +515,33 @@ Figure&nbsp;3.1: Relación de dependencia entre crates
 <text text-anchor="middle" x="88" y="-142.6" font-family="sans-serif" font-size="12.00">thalos-visual</text>
 <text text-anchor="middle" x="88" y="-128.2" font-family="sans-serif" font-size="12.00">serde · insta</text>
 </g>
-<!-- visual&#45;&gt;api -->
+<!-- api&#45;&gt;visual -->
 <g id="edge2" class="edge">
-<title>visual-&gt;api</title>
-<path fill="none" stroke="black" d="M88,-113.61C88,-113.61 88,-77 88,-77"></path>
-<polygon fill="black" stroke="black" points="91.5,-77 88,-67 84.5,-77 91.5,-77"></polygon>
-<text text-anchor="middle" x="108.36" y="-87.5" font-family="Times,serif" font-size="9.00">depende de</text>
+<title>api-&gt;visual</title>
+<path fill="none" stroke="black" d="M88,-211.21C88,-211.21 88,-174.6 88,-174.6"></path>
+<polygon fill="black" stroke="black" points="91.5,-174.6 88,-164.6 84.5,-174.6 91.5,-174.6"></polygon>
+<text text-anchor="middle" x="108.36" y="-185.1" font-family="Times,serif" font-size="9.00">depende de</text>
 </g>
 <!-- core -->
 <g id="node3" class="node">
 <title>core</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M144.96,-261.9C144.96,-261.9 31.04,-261.9 31.04,-261.9 25.04,-261.9 19.04,-255.9 19.04,-249.9 19.04,-249.9 19.04,-223.3 19.04,-223.3 19.04,-217.3 25.04,-211.3 31.04,-211.3 31.04,-211.3 144.96,-211.3 144.96,-211.3 150.96,-211.3 156.96,-217.3 156.96,-223.3 156.96,-223.3 156.96,-249.9 156.96,-249.9 156.96,-255.9 150.96,-261.9 144.96,-261.9"></path>
-<text text-anchor="middle" x="88" y="-240.2" font-family="sans-serif" font-size="12.00">thalos-core</text>
-<text text-anchor="middle" x="88" y="-225.8" font-family="sans-serif" font-size="12.00">nalgebra · thiserror</text>
+<path fill="none" stroke="black" stroke-width="1.5" d="M144.96,-66.7C144.96,-66.7 31.04,-66.7 31.04,-66.7 25.04,-66.7 19.04,-60.7 19.04,-54.7 19.04,-54.7 19.04,-28.1 19.04,-28.1 19.04,-22.1 25.04,-16.1 31.04,-16.1 31.04,-16.1 144.96,-16.1 144.96,-16.1 150.96,-16.1 156.96,-22.1 156.96,-28.1 156.96,-28.1 156.96,-54.7 156.96,-54.7 156.96,-60.7 150.96,-66.7 144.96,-66.7"></path>
+<text text-anchor="middle" x="88" y="-45" font-family="sans-serif" font-size="12.00">thalos-core</text>
+<text text-anchor="middle" x="88" y="-30.6" font-family="sans-serif" font-size="12.00">nalgebra · thiserror</text>
 </g>
-<!-- core&#45;&gt;visual -->
+<!-- visual&#45;&gt;core -->
 <g id="edge1" class="edge">
-<title>core-&gt;visual</title>
-<path fill="none" stroke="black" d="M88,-211.21C88,-211.21 88,-174.6 88,-174.6"></path>
-<polygon fill="black" stroke="black" points="91.5,-174.6 88,-164.6 84.5,-174.6 91.5,-174.6"></polygon>
-<text text-anchor="middle" x="108.36" y="-185.1" font-family="Times,serif" font-size="9.00">depende de</text>
+<title>visual-&gt;core</title>
+<path fill="none" stroke="black" d="M88,-113.61C88,-113.61 88,-77 88,-77"></path>
+<polygon fill="black" stroke="black" points="91.5,-77 88,-67 84.5,-77 91.5,-77"></polygon>
+<text text-anchor="middle" x="108.36" y="-87.5" font-family="Times,serif" font-size="9.00">depende de</text>
 </g>
 </g>
 </svg>
 </div>
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-dep-map-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;3.2: Mapa de dependencias del workspace
+Figure&nbsp;3.1: Mapa de dependencias del workspace
 </figcaption>
 </figure>
 </div>

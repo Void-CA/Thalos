@@ -44,7 +44,7 @@ ul.task-list li input[type="checkbox"] {
 <link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-7cc62051286a747f1ac641bedccf692b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-15b1bb634b6a18c42086f799218af8ca.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "sidebar",
   "copy-button": false,
@@ -73,6 +73,35 @@ ul.task-list li input[type="checkbox"] {
   }
 }</script>
 
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
 </head>
 
@@ -189,13 +218,13 @@ ul.task-list li input[type="checkbox"] {
    
   <ul>
   <li><a href="#matriz-de-madurez" id="toc-matriz-de-madurez" class="nav-link active" data-scroll-target="#matriz-de-madurez"><span class="header-section-number">7.1</span> Matriz de madurez</a></li>
-  <li><a href="#tests-existentes" id="toc-tests-existentes" class="nav-link" data-scroll-target="#tests-existentes"><span class="header-section-number">7.2</span> Tests existentes</a>
+  <li><a href="#cobertura-de-tests" id="toc-cobertura-de-tests" class="nav-link" data-scroll-target="#cobertura-de-tests"><span class="header-section-number">7.2</span> Cobertura de tests</a>
   <ul class="collapse">
   <li><a href="#thalos-core" id="toc-thalos-core" class="nav-link" data-scroll-target="#thalos-core"><span class="header-section-number">7.2.1</span> <code>thalos-core</code></a></li>
   <li><a href="#thalos-visual" id="toc-thalos-visual" class="nav-link" data-scroll-target="#thalos-visual"><span class="header-section-number">7.2.2</span> <code>thalos-visual</code></a></li>
   <li><a href="#thalos-api" id="toc-thalos-api" class="nav-link" data-scroll-target="#thalos-api"><span class="header-section-number">7.2.3</span> <code>thalos-api</code></a></li>
   </ul></li>
-  <li><a href="#cobertura-deseada-próximos-pasos" id="toc-cobertura-deseada-próximos-pasos" class="nav-link" data-scroll-target="#cobertura-deseada-próximos-pasos"><span class="header-section-number">7.3</span> Cobertura deseada (próximos pasos)</a></li>
+  <li><a href="#cobertura-deseada" id="toc-cobertura-deseada" class="nav-link" data-scroll-target="#cobertura-deseada"><span class="header-section-number">7.3</span> Cobertura deseada</a></li>
   </ul>
 </nav>
     </div>
@@ -226,285 +255,205 @@ ul.task-list li input[type="checkbox"] {
 <h2 data-number="7.1" class="anchored" data-anchor-id="matriz-de-madurez"><span class="header-section-number">7.1</span> Matriz de madurez</h2>
 <table class="caption-top table">
 <colgroup>
-<col style="width: 16%">
-<col style="width: 22%">
-<col style="width: 19%">
-<col style="width: 41%">
+<col style="width: 28%">
+<col style="width: 38%">
+<col style="width: 33%">
 </colgroup>
 <thead>
 <tr class="header">
 <th>Área</th>
 <th>Estado</th>
-<th>Tests</th>
-<th>Observaciones</th>
+<th>Notas</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
 <td><code>math::vectors</code></td>
-<td>✅ Estable</td>
-<td>✅</td>
-<td>APIs congeladas. <code>Vector3</code>, <code>UnitVector3</code></td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
+<td><code>Vector3</code>, <code>UnitVector3</code></td>
 </tr>
 <tr class="even">
 <td><code>math::rotations::Quaternion</code></td>
-<td>✅ Estable</td>
-<td>✅</td>
-<td>Álgebra de cuaterniones completa</td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
+<td>Álgebra completa</td>
 </tr>
 <tr class="odd">
 <td><code>math::rotations::UnitQuaternion</code></td>
-<td>✅ Estable</td>
-<td>✅</td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
 <td>SO(3) con invariante de norma</td>
 </tr>
 <tr class="even">
 <td><code>math::rotations::ops</code></td>
-<td>🧪 Experimental</td>
-<td>❌</td>
-<td>Operaciones aritméticas entre tipos aún no probadas</td>
+<td><span class="math inline">\(\circ\)</span> Experimental</td>
+<td>Operaciones entre tipos, sin probar</td>
 </tr>
 <tr class="odd">
 <td><code>math::rigid::Transform3D</code></td>
-<td>✅ Estable</td>
-<td>❌</td>
-<td>API congelada, faltan tests unitarios</td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
+<td>API congelada, faltan tests directos</td>
 </tr>
 <tr class="even">
 <td><code>math::algebra::DynamicMatrix</code></td>
-<td>✅ Estable</td>
-<td>❌</td>
-<td>Alias de <code>DMatrix</code>, estable por definición</td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
+<td>Alias de <code>DMatrix</code></td>
 </tr>
 <tr class="odd">
 <td><code>math::traits</code></td>
-<td>🧪 Experimental</td>
-<td>❌</td>
+<td><span class="math inline">\(\circ\)</span> Experimental</td>
 <td>Traits <code>Cross</code>, <code>Dot</code> — pueden cambiar</td>
 </tr>
 <tr class="even">
 <td><code>robot::joint</code></td>
-<td>✅ Estable</td>
-<td>❌</td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
 <td><code>JointType</code>, <code>RevoluteJoint</code>, <code>PrismaticJoint</code></td>
 </tr>
 <tr class="odd">
 <td><code>robot::link</code></td>
-<td>✅ Estable</td>
-<td>❌</td>
-<td><code>Link</code> simple y directo</td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
+<td><code>Link</code> simple</td>
 </tr>
 <tr class="even">
 <td><code>robot::segment</code></td>
-<td>✅ Estable</td>
-<td>❌</td>
-<td><code>Segment</code> sin cambios esperados</td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
+<td><code>Segment</code></td>
 </tr>
 <tr class="odd">
 <td><code>robot::serial_chain</code></td>
-<td>✅ Estable</td>
-<td>❌</td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
 <td>Estructura central del dominio</td>
 </tr>
 <tr class="even">
 <td><code>robot::builder</code></td>
-<td>✅ Estable</td>
-<td>❌</td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
 <td><code>SerialChainBuilder</code> con validación</td>
 </tr>
 <tr class="odd">
 <td><code>kinematics::forward</code></td>
-<td>✅ Estable</td>
-<td>❌</td>
-<td>FK evaluado y probado indirectamente vía snapshots</td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
+<td>FK probado indirectamente vía snapshots</td>
 </tr>
 <tr class="even">
 <td><code>kinematics::jacobian::GeometricJacobian</code></td>
-<td>🔧 En desarrollo</td>
-<td>❌</td>
-<td>Implementado, sin tests dedicados</td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td>Sin tests dedicados</td>
 </tr>
 <tr class="odd">
 <td><code>kinematics::jacobian::NumericalJacobian</code></td>
-<td>🔧 En desarrollo</td>
-<td>❌</td>
-<td>Implementado, sin tests dedicados</td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td>Sin tests dedicados</td>
 </tr>
 <tr class="even">
 <td><code>spatial::frame</code></td>
-<td>✅ Estable</td>
-<td>❌</td>
-<td><code>FrameId</code>, <code>Frame</code>, <code>FrameRegistry</code> estables</td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
+<td><code>FrameId</code>, <code>Frame</code>, <code>FrameRegistry</code></td>
 </tr>
 <tr class="odd">
 <td><code>spatial::pose</code></td>
-<td>✅ Estable</td>
-<td>❌</td>
-<td><code>Pose</code> sin cambios esperados</td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
+<td><code>Pose</code></td>
 </tr>
 <tr class="even">
 <td><code>spatial::frame::graph</code></td>
-<td>🧪 Experimental</td>
-<td>❌</td>
+<td><span class="math inline">\(\circ\)</span> Experimental</td>
 <td>Solo esqueleto declarado</td>
 </tr>
 <tr class="odd">
 <td><code>models::factory</code></td>
-<td>✅ Estable</td>
-<td>❌</td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
 <td><code>RobotRegistry</code>, <code>RobotModel</code>, <code>RobotSpec</code></td>
 </tr>
 <tr class="even">
-<td>Models concretos (Planar2R, SCARA, etc.)</td>
-<td>✅ Estable</td>
-<td>❌</td>
-<td>Cada modelo tiene factory + tests FK</td>
+<td>Modelos concretos</td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
+<td>Factory + tests FK por modelo</td>
 </tr>
 <tr class="odd">
 <td><code>thalos-visual::scene</code></td>
-<td>🧪 Experimental</td>
-<td>❌</td>
-<td><code>VisualScene</code>, <code>VisualFrame</code>, etc.</td>
+<td><span class="math inline">\(\circ\)</span> Experimental</td>
+<td><code>VisualScene</code>, <code>VisualFrame</code>, API puede cambiar</td>
 </tr>
 <tr class="even">
 <td><code>thalos-visual::builder</code></td>
-<td>🧪 Experimental</td>
-<td>❌</td>
+<td><span class="math inline">\(\circ\)</span> Experimental</td>
 <td><code>SceneBuilder</code> — API puede cambiar</td>
 </tr>
 <tr class="odd">
 <td><code>thalos-visual::validator</code></td>
-<td>✅ Estable</td>
-<td>✅</td>
-<td>8 invariantes, tests con <code>insta</code></td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
+<td>8 invariantes, tests con insta</td>
 </tr>
 <tr class="even">
 <td><code>thalos-visual::diff</code></td>
-<td>✅ Estable</td>
-<td>❌</td>
-<td><code>SceneDiff::between()</code> estable</td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
+<td><code>SceneDiff::between()</code></td>
 </tr>
 <tr class="odd">
 <td><code>thalos-visual::precision</code></td>
-<td>✅ Estable</td>
-<td>❌</td>
-<td><code>VisualPrecision</code> sin cambios</td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
+<td><code>VisualPrecision</code></td>
 </tr>
 <tr class="even">
 <td><code>thalos-api::handlers</code></td>
-<td>🧪 Experimental</td>
-<td>❌</td>
-<td>Handlers básicos, pueden agregarse</td>
+<td><span class="math inline">\(\circ\)</span> Experimental</td>
+<td>Handlers básicos, pueden expandirse</td>
 </tr>
 <tr class="odd">
 <td><code>thalos-api::dto</code></td>
-<td>🧪 Experimental</td>
-<td>❌</td>
+<td><span class="math inline">\(\circ\)</span> Experimental</td>
 <td><code>ErrorResponse</code> puede expandirse</td>
 </tr>
 <tr class="even">
 <td><code>thalos-api::routes</code></td>
-<td>🧪 Experimental</td>
-<td>❌</td>
+<td><span class="math inline">\(\circ\)</span> Experimental</td>
 <td>Routing puede cambiar</td>
 </tr>
 <tr class="odd">
 <td>Frontend Angular</td>
-<td>🧪 Experimental</td>
-<td>❌</td>
+<td><span class="math inline">\(\circ\)</span> Experimental</td>
 <td>En desarrollo activo</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Leyenda</strong>: - ✅ <strong>Estable</strong>: API congelada, no se esperan cambios breaking - 🔧 <strong>En desarrollo</strong>: Implementado pero puede cambiar - 🧪 <strong>Experimental</strong>: Implementación inicial, sujeta a cambios significativos</p>
+<p><strong>Estados</strong>:</p>
+<ul>
+<li><span class="math inline">\(\blacksquare\)</span> Estable — API congelada, sin cambios breaking esperados</li>
+<li><span class="math inline">\(\blacktriangle\)</span> Desarrollo — Implementado pero puede cambiar</li>
+<li><span class="math inline">\(\circ\)</span> Experimental — Implementación inicial, sujeta a cambios significativos</li>
+</ul>
 </section>
-<section id="tests-existentes" class="level2" data-number="7.2">
-<h2 data-number="7.2" class="anchored" data-anchor-id="tests-existentes"><span class="header-section-number">7.2</span> Tests existentes</h2>
+<section id="cobertura-de-tests" class="level2" data-number="7.2">
+<h2 data-number="7.2" class="anchored" data-anchor-id="cobertura-de-tests"><span class="header-section-number">7.2</span> Cobertura de tests</h2>
 <section id="thalos-core" class="level3" data-number="7.2.1">
 <h3 data-number="7.2.1" class="anchored" data-anchor-id="thalos-core"><span class="header-section-number">7.2.1</span> <code>thalos-core</code></h3>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 37%">
-<col style="width: 62%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Archivo</th>
-<th>Lo que prueba</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td><code>math::rotations::quaternion.rs</code></td>
-<td>Álgebra de cuaterniones: identidad, inverso, conjugado, norma, normalización, producto de Hamilton, asociatividad</td>
-</tr>
-<tr class="even">
-<td><code>math::rotations::unit_quaternion.rs</code></td>
-<td>Invariante de norma, Euler ↔︎ quaternion roundtrip, <code>rotate_vector</code>, composición, inverso, <code>from_axis_angle</code></td>
-</tr>
-</tbody>
-</table>
+<ul>
+<li><code>math::rotations::quaternion</code> — Álgebra de cuaterniones: identidad, inverso, conjugado, norma, normalización, producto de Hamilton, asociatividad</li>
+<li><code>math::rotations::unit_quaternion</code> — Invariante de norma, Euler ↔︎ quaternion roundtrip, <code>rotate_vector</code>, composición, inverso, <code>from_axis_angle</code></li>
+</ul>
 </section>
 <section id="thalos-visual" class="level3" data-number="7.2.2">
 <h3 data-number="7.2.2" class="anchored" data-anchor-id="thalos-visual"><span class="header-section-number">7.2.2</span> <code>thalos-visual</code></h3>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 37%">
-<col style="width: 62%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Archivo</th>
-<th>Lo que prueba</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td><code>tests/validator_tests.rs</code></td>
-<td>Cada invariante del <code>SceneValidator</code> (world, duplicados, topología, conectividad, finitos, quaternions, links, twists)</td>
-</tr>
-<tr class="even">
-<td><code>tests/scene_snapshots.rs</code></td>
-<td>Snapshots con <code>insta</code> para validación visual de escenas FK</td>
-</tr>
-</tbody>
-</table>
+<ul>
+<li><code>validator_tests</code> — Cada invariante del <code>SceneValidator</code> (world, duplicados, topología, conectividad, finitos, quaternions, links, twists)</li>
+<li><code>scene_snapshots</code> — Snapshots con <code>insta</code> para validación visual de escenas FK</li>
+</ul>
 </section>
 <section id="thalos-api" class="level3" data-number="7.2.3">
 <h3 data-number="7.2.3" class="anchored" data-anchor-id="thalos-api"><span class="header-section-number">7.2.3</span> <code>thalos-api</code></h3>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 37%">
-<col style="width: 62%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Archivo</th>
-<th>Lo que prueba</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td><code>tests/service_tests.rs</code></td>
-<td><code>SceneService::build_scene</code> con validación</td>
-</tr>
-<tr class="even">
-<td><code>tests/api_tests.rs</code></td>
-<td>Integración HTTP: endpoints responden correctamente</td>
-</tr>
-</tbody>
-</table>
-</section>
-</section>
-<section id="cobertura-deseada-próximos-pasos" class="level2" data-number="7.3">
-<h2 data-number="7.3" class="anchored" data-anchor-id="cobertura-deseada-próximos-pasos"><span class="header-section-number">7.3</span> Cobertura deseada (próximos pasos)</h2>
 <ul>
-<li>Tests unitarios para <code>Transform3D::compose()</code> y <code>Transform3D::identity()</code></li>
-<li>Tests unitarios para <code>RevoluteJoint::motion()</code> y <code>PrismaticJoint::motion()</code></li>
-<li>Tests unitarios para <code>SerialChainBuilder</code> (éxito y error)</li>
-<li>Tests de integración para <code>ForwardKinematics::evaluate()</code> con modelos conocidos</li>
-<li>Tests de propiedades para <code>GeometricJacobian</code> vs <code>NumericalJacobian</code> (deberían coincidir dentro de tolerancia)</li>
-<li>Tests de snapshot para cada modelo robótico (Planar3R, SCARA, etc.)</li>
+<li><code>service_tests</code> — <code>SceneService::build_scene</code> con validación</li>
+<li><code>api_tests</code> — Integración HTTP: endpoints responden correctamente</li>
+</ul>
+</section>
+</section>
+<section id="cobertura-deseada" class="level2" data-number="7.3">
+<h2 data-number="7.3" class="anchored" data-anchor-id="cobertura-deseada"><span class="header-section-number">7.3</span> Cobertura deseada</h2>
+<ul>
+<li>Tests directos para <code>Transform3D::compose()</code> y <code>Transform3D::identity()</code></li>
+<li>Tests para <code>RevoluteJoint::motion()</code> y <code>PrismaticJoint::motion()</code></li>
+<li>Tests para <code>SerialChainBuilder</code> (éxito y error)</li>
+<li>Integración FK con modelos conocidos</li>
+<li>Comparación <code>GeometricJacobian</code> vs <code>NumericalJacobian</code> (deberían coincidir dentro de tolerancia)</li>
+<li>Snapshots por modelo robótico (Planar3R, SCARA, etc.)</li>
 <li>Tests de frontend con Angular Testing Library</li>
 </ul>
 

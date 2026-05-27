@@ -79,7 +79,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-7cc62051286a747f1ac641bedccf692b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-15b1bb634b6a18c42086f799218af8ca.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "sidebar",
   "copy-button": false,
@@ -502,86 +502,90 @@ Figure&nbsp;5.1: Modelo interno de SerialChain — composición en árbol
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-spatial-flow-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <div>
-<svg width="672" height="480" viewbox="0.00 0.00 136.63 464.00" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" style="; max-width: none; max-height: none">
-<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 460)">
+<svg width="672" height="480" viewbox="0.00 0.00 458.07 147.80" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" style="; max-width: none; max-height: none">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 143.8)">
 <title>spatial_flow</title>
-<polygon fill="white" stroke="transparent" points="-4,4 -4,-460 132.63,-460 132.63,4 -4,4"></polygon>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-143.8 454.07,-143.8 454.07,4 -4,4"></polygon>
 <!-- chain -->
 <g id="node1" class="node">
 <title>chain</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M114.9,-455.9C114.9,-455.9 13.73,-455.9 13.73,-455.9 7.73,-455.9 1.73,-449.9 1.73,-443.9 1.73,-443.9 1.73,-417.3 1.73,-417.3 1.73,-411.3 7.73,-405.3 13.73,-405.3 13.73,-405.3 114.9,-405.3 114.9,-405.3 120.9,-405.3 126.9,-411.3 126.9,-417.3 126.9,-417.3 126.9,-443.9 126.9,-443.9 126.9,-449.9 120.9,-455.9 114.9,-455.9"></path>
-<text text-anchor="middle" x="64.32" y="-434.2" font-family="sans-serif" font-size="12.00">SerialChain</text>
-<text text-anchor="middle" x="64.32" y="-419.8" font-family="sans-serif" font-size="12.00">+ FrameRegistry</text>
+<path fill="white" stroke="black" stroke-width="1.5" d="M106.5,-140C106.5,-140 11.83,-140 11.83,-140 5.83,-140 -0.17,-134 -0.17,-128 -0.17,-128 -0.17,-103.2 -0.17,-103.2 -0.17,-97.2 5.83,-91.2 11.83,-91.2 11.83,-91.2 106.5,-91.2 106.5,-91.2 112.5,-91.2 118.5,-97.2 118.5,-103.2 118.5,-103.2 118.5,-128 118.5,-128 118.5,-134 112.5,-140 106.5,-140"></path>
+<text text-anchor="middle" x="59.17" y="-118.9" font-family="sans-serif" font-size="11.00">SerialChain</text>
+<text text-anchor="middle" x="59.17" y="-105.7" font-family="sans-serif" font-size="11.00">+ FrameRegistry</text>
 </g>
-<!-- fk -->
+<!-- fkres -->
 <g id="node2" class="node">
+<title>fkres</title>
+<path fill="white" stroke="black" stroke-width="1.5" d="M277.75,-140C277.75,-140 180.58,-140 180.58,-140 174.58,-140 168.58,-134 168.58,-128 168.58,-128 168.58,-103.2 168.58,-103.2 168.58,-97.2 174.58,-91.2 180.58,-91.2 180.58,-91.2 277.75,-91.2 277.75,-91.2 283.75,-91.2 289.75,-97.2 289.75,-103.2 289.75,-103.2 289.75,-128 289.75,-128 289.75,-134 283.75,-140 277.75,-140"></path>
+<text text-anchor="middle" x="229.17" y="-118.9" font-family="sans-serif" font-size="11.00">FKResult</text>
+<text text-anchor="middle" x="229.17" y="-105.7" font-family="sans-serif" font-size="11.00">(poses por frame)</text>
+</g>
+<!-- chain&#45;&gt;fkres -->
+<!-- fk -->
+<g id="node4" class="node">
 <title>fk</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M112.29,-369.4C112.29,-369.4 16.34,-369.4 16.34,-369.4 10.34,-369.4 4.34,-363.4 4.34,-357.4 4.34,-357.4 4.34,-344.6 4.34,-344.6 4.34,-338.6 10.34,-332.6 16.34,-332.6 16.34,-332.6 112.29,-332.6 112.29,-332.6 118.29,-332.6 124.29,-338.6 124.29,-344.6 124.29,-344.6 124.29,-357.4 124.29,-357.4 124.29,-363.4 118.29,-369.4 112.29,-369.4"></path>
-<text text-anchor="middle" x="64.32" y="-347.4" font-family="sans-serif" font-size="12.00">FK::evaluate(q)</text>
+<path fill="white" stroke="black" stroke-width="1.5" d="M117.81,-42.2C117.81,-42.2 28.52,-42.2 28.52,-42.2 22.52,-42.2 16.52,-36.2 16.52,-30.2 16.52,-30.2 16.52,-18.2 16.52,-18.2 16.52,-12.2 22.52,-6.2 28.52,-6.2 28.52,-6.2 117.81,-6.2 117.81,-6.2 123.81,-6.2 129.81,-12.2 129.81,-18.2 129.81,-18.2 129.81,-30.2 129.81,-30.2 129.81,-36.2 123.81,-42.2 117.81,-42.2"></path>
+<text text-anchor="middle" x="73.17" y="-20.9" font-family="sans-serif" font-size="11.00">FK::evaluate(q)</text>
 </g>
 <!-- chain&#45;&gt;fk -->
 <g id="edge1" class="edge">
 <title>chain-&gt;fk</title>
-<path fill="none" stroke="black" d="M64.32,-404.98C64.32,-404.98 64.32,-379.26 64.32,-379.26"></path>
-<polygon fill="black" stroke="black" points="67.82,-379.26 64.32,-369.26 60.82,-379.26 67.82,-379.26"></polygon>
+<path fill="none" stroke="#5d6d7e" stroke-width="1.5" d="M67.34,-91.11C67.34,-91.11 67.34,-52.38 67.34,-52.38"></path>
+<polygon fill="#5d6d7e" stroke="#5d6d7e" stroke-width="1.5" points="70.84,-52.38 67.34,-42.38 63.84,-52.38 70.84,-52.38"></polygon>
 </g>
-<!-- fkres -->
+<!-- scene -->
 <g id="node3" class="node">
-<title>fkres</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M116.45,-296.7C116.45,-296.7 12.18,-296.7 12.18,-296.7 6.18,-296.7 0.18,-290.7 0.18,-284.7 0.18,-284.7 0.18,-258.1 0.18,-258.1 0.18,-252.1 6.18,-246.1 12.18,-246.1 12.18,-246.1 116.45,-246.1 116.45,-246.1 122.45,-246.1 128.45,-252.1 128.45,-258.1 128.45,-258.1 128.45,-284.7 128.45,-284.7 128.45,-290.7 122.45,-296.7 116.45,-296.7"></path>
-<text text-anchor="middle" x="64.32" y="-275" font-family="sans-serif" font-size="12.00">FKResult</text>
-<text text-anchor="middle" x="64.32" y="-260.6" font-family="sans-serif" font-size="12.00">(poses por frame)</text>
+<title>scene</title>
+<path fill="white" stroke="black" stroke-width="1.5" d="M436.17,-133.6C436.17,-133.6 352.17,-133.6 352.17,-133.6 346.17,-133.6 340.17,-127.6 340.17,-121.6 340.17,-121.6 340.17,-109.6 340.17,-109.6 340.17,-103.6 346.17,-97.6 352.17,-97.6 352.17,-97.6 436.17,-97.6 436.17,-97.6 442.17,-97.6 448.17,-103.6 448.17,-109.6 448.17,-109.6 448.17,-121.6 448.17,-121.6 448.17,-127.6 442.17,-133.6 436.17,-133.6"></path>
+<text text-anchor="middle" x="394.17" y="-112.3" font-family="sans-serif" font-size="11.00">VisualScene</text>
 </g>
-<!-- fk&#45;&gt;fkres -->
-<g id="edge2" class="edge">
-<title>fk-&gt;fkres</title>
-<path fill="none" stroke="black" d="M64.32,-332.54C64.32,-332.54 64.32,-307 64.32,-307"></path>
-<polygon fill="black" stroke="black" points="67.82,-307 64.32,-297 60.82,-307 67.82,-307"></polygon>
-</g>
+<!-- fkres&#45;&gt;scene -->
 <!-- builder -->
-<g id="node4" class="node">
+<g id="node5" class="node">
 <title>builder</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M106.46,-209.9C106.46,-209.9 22.17,-209.9 22.17,-209.9 16.17,-209.9 10.17,-203.9 10.17,-197.9 10.17,-197.9 10.17,-171.3 10.17,-171.3 10.17,-165.3 16.17,-159.3 22.17,-159.3 22.17,-159.3 106.46,-159.3 106.46,-159.3 112.46,-159.3 118.46,-165.3 118.46,-171.3 118.46,-171.3 118.46,-197.9 118.46,-197.9 118.46,-203.9 112.46,-209.9 106.46,-209.9"></path>
-<text text-anchor="middle" x="64.32" y="-188.2" font-family="sans-serif" font-size="12.00">SceneBuilder</text>
-<text text-anchor="middle" x="64.32" y="-173.8" font-family="sans-serif" font-size="12.00">::from_fk()</text>
+<path fill="white" stroke="black" stroke-width="1.5" d="M276.17,-48.6C276.17,-48.6 192.17,-48.6 192.17,-48.6 186.17,-48.6 180.17,-42.6 180.17,-36.6 180.17,-36.6 180.17,-11.8 180.17,-11.8 180.17,-5.8 186.17,0.2 192.17,0.2 192.17,0.2 276.17,0.2 276.17,0.2 282.17,0.2 288.17,-5.8 288.17,-11.8 288.17,-11.8 288.17,-36.6 288.17,-36.6 288.17,-42.6 282.17,-48.6 276.17,-48.6"></path>
+<text text-anchor="middle" x="234.17" y="-27.5" font-family="sans-serif" font-size="11.00">SceneBuilder</text>
+<text text-anchor="middle" x="234.17" y="-14.3" font-family="sans-serif" font-size="11.00">::from_fk()</text>
 </g>
 <!-- fkres&#45;&gt;builder -->
 <g id="edge3" class="edge">
 <title>fkres-&gt;builder</title>
-<path fill="none" stroke="black" d="M64.32,-245.83C64.32,-245.83 64.32,-219.99 64.32,-219.99"></path>
-<polygon fill="black" stroke="black" points="67.82,-219.99 64.32,-209.99 60.82,-219.99 67.82,-219.99"></polygon>
-</g>
-<!-- scene -->
-<g id="node5" class="node">
-<title>scene</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M104.3,-123.4C104.3,-123.4 24.33,-123.4 24.33,-123.4 18.33,-123.4 12.33,-117.4 12.33,-111.4 12.33,-111.4 12.33,-98.6 12.33,-98.6 12.33,-92.6 18.33,-86.6 24.33,-86.6 24.33,-86.6 104.3,-86.6 104.3,-86.6 110.3,-86.6 116.3,-92.6 116.3,-98.6 116.3,-98.6 116.3,-111.4 116.3,-111.4 116.3,-117.4 110.3,-123.4 104.3,-123.4"></path>
-<text text-anchor="middle" x="64.32" y="-101.4" font-family="sans-serif" font-size="12.00">VisualScene</text>
-</g>
-<!-- builder&#45;&gt;scene -->
-<g id="edge4" class="edge">
-<title>builder-&gt;scene</title>
-<path fill="none" stroke="black" d="M64.32,-158.98C64.32,-158.98 64.32,-133.26 64.32,-133.26"></path>
-<polygon fill="black" stroke="black" points="67.82,-133.26 64.32,-123.26 60.82,-133.26 67.82,-133.26"></polygon>
+<path fill="none" stroke="#5d6d7e" stroke-width="1.5" d="M234.17,-91.11C234.17,-91.11 234.17,-58.44 234.17,-58.44"></path>
+<polygon fill="#5d6d7e" stroke="#5d6d7e" stroke-width="1.5" points="237.67,-58.44 234.17,-48.44 230.67,-58.44 237.67,-58.44"></polygon>
 </g>
 <!-- vld -->
 <g id="node6" class="node">
 <title>vld</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M111.29,-50.7C111.29,-50.7 17.35,-50.7 17.35,-50.7 11.35,-50.7 5.35,-44.7 5.35,-38.7 5.35,-38.7 5.35,-12.1 5.35,-12.1 5.35,-6.1 11.35,-0.1 17.35,-0.1 17.35,-0.1 111.29,-0.1 111.29,-0.1 117.29,-0.1 123.29,-6.1 123.29,-12.1 123.29,-12.1 123.29,-38.7 123.29,-38.7 123.29,-44.7 117.29,-50.7 111.29,-50.7"></path>
-<text text-anchor="middle" x="64.32" y="-29" font-family="sans-serif" font-size="12.00">SceneValidator</text>
-<text text-anchor="middle" x="64.32" y="-14.6" font-family="sans-serif" font-size="12.00">::validate()</text>
+<path fill="white" stroke="black" stroke-width="1.5" d="M437.97,-48.6C437.97,-48.6 350.36,-48.6 350.36,-48.6 344.36,-48.6 338.36,-42.6 338.36,-36.6 338.36,-36.6 338.36,-11.8 338.36,-11.8 338.36,-5.8 344.36,0.2 350.36,0.2 350.36,0.2 437.97,0.2 437.97,0.2 443.97,0.2 449.97,-5.8 449.97,-11.8 449.97,-11.8 449.97,-36.6 449.97,-36.6 449.97,-42.6 443.97,-48.6 437.97,-48.6"></path>
+<text text-anchor="middle" x="394.17" y="-27.5" font-family="sans-serif" font-size="11.00">SceneValidator</text>
+<text text-anchor="middle" x="394.17" y="-14.3" font-family="sans-serif" font-size="11.00">::validate()</text>
 </g>
 <!-- scene&#45;&gt;vld -->
 <g id="edge5" class="edge">
 <title>scene-&gt;vld</title>
-<path fill="none" stroke="black" d="M64.32,-86.54C64.32,-86.54 64.32,-61 64.32,-61"></path>
-<polygon fill="black" stroke="black" points="67.82,-61 64.32,-51 60.82,-61 67.82,-61"></polygon>
+<path fill="none" stroke="#5d6d7e" stroke-width="1.5" d="M394.17,-97.54C394.17,-97.54 394.17,-58.45 394.17,-58.45"></path>
+<polygon fill="#5d6d7e" stroke="#5d6d7e" stroke-width="1.5" points="397.67,-58.45 394.17,-48.45 390.67,-58.45 397.67,-58.45"></polygon>
 </g>
+<!-- fk&#45;&gt;fkres -->
+<g id="edge2" class="edge">
+<title>fk-&gt;fkres</title>
+<path fill="none" stroke="#5d6d7e" stroke-width="1.5" d="M129.92,-30C152.97,-30 174.27,-30 174.27,-30 174.27,-30 174.27,-81.3 174.27,-81.3"></path>
+<polygon fill="#5d6d7e" stroke="#5d6d7e" stroke-width="1.5" points="170.77,-81.3 174.27,-91.3 177.77,-81.3 170.77,-81.3"></polygon>
+</g>
+<!-- fk&#45;&gt;builder -->
+<!-- builder&#45;&gt;scene -->
+<g id="edge4" class="edge">
+<title>builder-&gt;scene</title>
+<path fill="none" stroke="#5d6d7e" stroke-width="1.5" d="M288.37,-32C302.63,-32 314.11,-32 314.11,-32 314.11,-32 314.11,-109 314.11,-109 314.11,-109 329.88,-109 329.88,-109"></path>
+<polygon fill="#5d6d7e" stroke="#5d6d7e" stroke-width="1.5" points="329.88,-112.5 339.88,-109 329.88,-105.5 329.88,-112.5"></polygon>
+</g>
+<!-- builder&#45;&gt;vld -->
 </g>
 </svg>
 </div>
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-spatial-flow-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;5.2: Conexión del sistema espacial con FK, visualización y validación
+Figure&nbsp;5.2: Pipeline espacial: FK, visualización y validación
 </figcaption>
 </figure>
 </div>
