@@ -1,7 +1,7 @@
 import { Injectable, NgZone, inject } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { VisualScene } from '../scene.types';
+import { SceneData } from '../scene.types';
 
 
 @Injectable({ providedIn: 'root' })
@@ -55,7 +55,7 @@ export class ThreeRendererService {
     this.ngZone.runOutsideAngular(() => this.startLoop());
   }
 
-  applyScene(scene: VisualScene): void {
+  applyScene(scene: SceneData): void {
     const grp = this.contentGroup;
     if (!grp || !this.scene) return;
 
@@ -101,7 +101,7 @@ export class ThreeRendererService {
     }
 
     // ── Joint axes ──
-    for (const ja of scene.joint_axes) {
+    for (const ja of scene.jointAxes) {
       const origin = new THREE.Vector3(ja.origin[0], ja.origin[1], ja.origin[2]);
       const axis = new THREE.Vector3(ja.axis[0], ja.axis[1], ja.axis[2]).normalize();
       const half = 0.18;

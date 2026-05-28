@@ -30,8 +30,8 @@ export class SceneViewer implements AfterViewInit, OnDestroy {
 
   constructor() {
     this.sub = this.store.state$.subscribe(state => {
-      if (state.scene) {
-        this.renderer.applyScene(state.scene);
+      if (state.data) {
+        this.renderer.applyScene(state.data);
       }
     });
   }

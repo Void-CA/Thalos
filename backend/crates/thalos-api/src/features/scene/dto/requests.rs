@@ -8,11 +8,6 @@ pub struct SetJointsRequest {
 }
 
 #[derive(Deserialize)]
-pub struct FromFkRequest {
-    pub joint_angles: Vec<f64>,
-}
-
-#[derive(Deserialize)]
 pub struct ValidateRequest {
     pub scene: VisualSceneDto,
 }

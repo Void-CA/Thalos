@@ -11,6 +11,8 @@ use thalos_visual::{
     VisualTwist,
 };
 
+use crate::features::robots::dto::RobotMetadataDto;
+
 
 // ── Scene response DTOs ──
 
@@ -51,21 +53,16 @@ pub struct VisualTwistDto {
 }
 
 
-// ── Scene response ──
+// ── Runtime response ──
 
+/// Full runtime state: the active robot, its joint angles, and the computed scene.
+/// Returned by every endpoint that touches the runtime.
 #[derive(Debug, Serialize)]
-pub struct SceneStateResponse {
+pub struct RuntimeStateResponse {
+    pub robot: RobotMetadataDto,
+    pub joints: Vec<f64>,
     pub scene: VisualSceneDto,
     pub generated_at: DateTime<Utc>,
-}
-
-impl SceneStateResponse {
-    pub fn new(scene: VisualSceneDto) -> Self {
-        Self {
-            scene,
-            generated_at: Utc::now(),
-        }
-    }
 }
 
 

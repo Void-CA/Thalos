@@ -69,6 +69,10 @@ impl SceneService {
         self.runtime.read().unwrap().active_robot.model.metadata()
     }
 
+    pub fn current_joints(&self) -> Vec<f64> {
+        self.runtime.read().unwrap().active_robot.joints.clone()
+    }
+
     pub fn validate(&self, scene: &VisualScene) -> Result<(), SceneError> {
         self.validator.validate(scene)
     }

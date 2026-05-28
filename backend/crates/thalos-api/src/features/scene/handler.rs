@@ -9,40 +9,50 @@ use thalos_core::models::RobotModel;
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
-use crate::features::robots::dto::RobotMetadataDto;
 use crate::features::scene::dto::*;
+
+fn build_runtime_response(
+    state: &Arc<AppState>,
+) -> ApiResult<RuntimeStateResponse> {
+    let scene = state.services.scene.build_scene()?;
+    let robot = state.services.scene.current_robot_metadata();
+    let joints = state.services.scene.current_joints();
+
+    Ok(Json(RuntimeStateResponse {
+        robot: robot.into(),
+        joints,
+        scene: scene.into(),
+        generated_at: chrono::Utc::now(),
+    }))
+}
 
 pub async fn get_scene(
     State(state): State<Arc<AppState>>,
-) -> ApiResult<SceneStateResponse> {
-    let scene = state.services.scene.build_scene()?;
-
-    Ok(Json(SceneStateResponse::new(scene.into())))
+) -> ApiResult<RuntimeStateResponse> {
+    build_runtime_response(&state)
 }
 
 pub async fn set_joints(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<SetJointsRequest>,
-) -> ApiResult<SceneStateResponse> {
+) -> ApiResult<RuntimeStateResponse> {
     state
         .services
         .scene
         .set_joints(payload.joint_angles);
 
-    let scene = state.services.scene.build_scene()?;
-
-    Ok(Json(SceneStateResponse::new(scene.into())))
+    build_runtime_response(&state)
 }
 
 pub async fn load_robot(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<LoadRobotRequest>,
-) -> ApiResult<RobotMetadataDto> {
+) -> ApiResult<RuntimeStateResponse> {
     let model = RobotModel::from_id(&payload.robot_id)?;
 
     state.services.scene.load_robot(model);
 
-    Ok(Json(model.metadata().into()))
+    build_runtime_response(&state)
 }
 
 pub async fn validate(
