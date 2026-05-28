@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { auditTime, catchError, distinctUntilChanged, map, scan, switchMap } from 'rxjs/operators';
-import { SceneApiService } from './scene-api.service';
-import { SceneState, VisualScene } from '../visual-scene.types';
+import { SceneApiService } from '../services/scene-api.service';
+import { SceneState, VisualScene } from '../scene.types';
 
 type SceneEvent =
   | { type: 'scene'; scene: VisualScene }

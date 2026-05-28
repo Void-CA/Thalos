@@ -1,6 +1,6 @@
 import { Component } from '@angular/core';
-import { SceneViewer } from './components/scene-viewer/scene-viewer';
-import { JointControl } from './components/joint-control/joint-control';
+import { SceneViewer } from './features/scene/components/scene-viewer/scene-viewer';
+import { JointControl } from './features/scene/components/joint-control/joint-control';
 
 /**
  * Layout shell — solo compone UI.

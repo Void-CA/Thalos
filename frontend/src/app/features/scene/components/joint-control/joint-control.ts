@@ -1,5 +1,5 @@
 import { Component, inject } from '@angular/core';
-import { SceneStore } from '../../services/scene.store';
+import { SceneStore } from '../../store/scene.store';
 
 /**
  * Slider driver for joint angles.

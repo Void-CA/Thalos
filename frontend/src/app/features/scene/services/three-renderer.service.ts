@@ -1,7 +1,7 @@
 import { Injectable, NgZone, inject } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { VisualScene } from '../visual-scene.types';
+import { VisualScene } from '../scene.types';
 
 
 @Injectable({ providedIn: 'root' })
