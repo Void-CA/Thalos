@@ -7,13 +7,27 @@ use axum::{
 use crate::app::dto::ErrorResponse;
 
 
-#[derive(Debug)]
 pub enum ApiError {
     NotFound {
         message: String,
     },
 
     Validation {
+        message: String,
+        code: String,
+    },
+
+    Conflict {
+        message: String,
+        code: String,
+    },
+
+    InvalidState {
+        message: String,
+        code: String,
+    },
+
+    Unsupported {
         message: String,
         code: String,
     },
@@ -36,6 +50,30 @@ impl IntoResponse for ApiError {
 
             ApiError::Validation { message, code } => (
                 StatusCode::UNPROCESSABLE_ENTITY,
+                Json(ErrorResponse {
+                    error: message,
+                    code,
+                }),
+            ),
+
+            ApiError::Conflict { message, code } => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    error: message,
+                    code,
+                }),
+            ),
+
+            ApiError::InvalidState { message, code } => (
+                StatusCode::PRECONDITION_FAILED,
+                Json(ErrorResponse {
+                    error: message,
+                    code,
+                }),
+            ),
+
+            ApiError::Unsupported { message, code } => (
+                StatusCode::NOT_IMPLEMENTED,
                 Json(ErrorResponse {
                     error: message,
                     code,

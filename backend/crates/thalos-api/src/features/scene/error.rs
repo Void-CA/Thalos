@@ -15,12 +15,12 @@ impl From<SceneError> for ApiError {
                 code: "missing_frame".into(),
             },
 
-            SceneError::DuplicateId { .. } => ApiError::Validation {
+            SceneError::DuplicateId { .. } => ApiError::Conflict {
                 message: e.to_string(),
                 code: "duplicate_id".into(),
             },
 
-            SceneError::BrokenTopology { .. } => ApiError::Validation {
+            SceneError::BrokenTopology { .. } => ApiError::InvalidState {
                 message: e.to_string(),
                 code: "broken_topology".into(),
             },
@@ -35,7 +35,7 @@ impl From<SceneError> for ApiError {
                 code: "invalid_quaternion".into(),
             },
 
-            SceneError::OrphanLink { .. } => ApiError::Validation {
+            SceneError::OrphanLink { .. } => ApiError::Conflict {
                 message: e.to_string(),
                 code: "orphan_link".into(),
             },
