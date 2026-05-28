@@ -24,7 +24,9 @@ pub async fn get_robot(
         .services
         .robots
         .get_metadata(&id)
-        .ok_or_else(|| ApiError::NotFound(format!("Robot '{}' not found", id)))?;
+        .ok_or_else(|| ApiError::NotFound {
+            message: format!("Robot '{}' not found", id),
+        })?;
 
     Ok(Json(robot.into()))
 }
