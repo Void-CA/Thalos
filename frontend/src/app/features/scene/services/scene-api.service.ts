@@ -8,9 +8,27 @@ export class SceneApiService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = 'http://localhost:3000/api/v1';
 
-  getSceneFromFk(q: number[]): Observable<SceneResponse> {
-    return this.http.post<SceneResponse>(`${this.baseUrl}/scene/from-fk`, {
-      joint_angles: q,
-    });
+  getSceneState(): Observable<SceneStateResponse> {
+    return this.http.get<SceneStateResponse>(
+      `${this.baseUrl}/scene`
+    );
+  }
+
+  setJoints(jointAngles: number[]): Observable<SceneStateResponse> {
+    return this.http.post<SceneStateResponse>(
+      `${this.baseUrl}/scene/joints`,
+      {
+        joint_angles: jointAngles,
+      }
+    );
+  }
+
+  loadRobot(robotId: string): Observable<SceneStateResponse> {
+    return this.http.post<SceneStateResponse>(
+      `${this.baseUrl}/scene/robot`,
+      {
+        robot_id: robotId,
+      }
+    );
   }
 }

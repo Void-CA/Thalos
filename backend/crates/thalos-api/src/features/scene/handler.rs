@@ -6,7 +6,6 @@ use axum::{
 };
 
 use thalos_core::models::RobotModel;
-use thalos_visual::SceneDiff;
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
@@ -15,17 +14,16 @@ use crate::features::scene::dto::*;
 
 pub async fn get_scene(
     State(state): State<Arc<AppState>>,
-) -> ApiResult<SceneResponse> {
+) -> ApiResult<SceneStateResponse> {
     let scene = state.services.scene.build_scene()?;
 
-    Ok(Json(SceneResponse::new(scene)))
+    Ok(Json(SceneStateResponse::new(scene.into())))
 }
-
 
 pub async fn set_joints(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<SetJointsRequest>,
-) -> ApiResult<SceneResponse> {
+) -> ApiResult<SceneStateResponse> {
     state
         .services
         .scene
@@ -33,7 +31,7 @@ pub async fn set_joints(
 
     let scene = state.services.scene.build_scene()?;
 
-    Ok(Json(SceneResponse::new(scene)))
+    Ok(Json(SceneStateResponse::new(scene.into())))
 }
 
 pub async fn load_robot(
@@ -51,7 +49,10 @@ pub async fn validate(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<ValidateRequest>,
 ) -> ApiResult<ValidateResponse> {
-    state.services.scene.validate(&payload.scene)?;
+    let scene: thalos_visual::VisualScene = payload.scene.into();
+
+    state.services.scene.validate(&scene)?;
+
     Ok(Json(ValidateResponse {
         valid: true,
         error: None,
@@ -61,10 +62,14 @@ pub async fn validate(
 pub async fn diff(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<DiffRequest>,
-) -> ApiResult<SceneDiff> {
+) -> ApiResult<SceneDiffDto> {
+    let old: thalos_visual::VisualScene = payload.old.into();
+    let new: thalos_visual::VisualScene = payload.new.into();
+
     let result = state
         .services
         .scene
-        .diff(&payload.old, &payload.new, payload.epsilon);
-    Ok(Json(result))
+        .diff(&old, &new, payload.epsilon);
+
+    Ok(Json(result.into()))
 }

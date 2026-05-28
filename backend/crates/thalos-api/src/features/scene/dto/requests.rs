@@ -1,5 +1,6 @@
 use serde::Deserialize;
-use thalos_visual::VisualScene;
+
+use super::responses::VisualSceneDto;
 
 #[derive(Deserialize)]
 pub struct SetJointsRequest {
@@ -11,16 +12,15 @@ pub struct FromFkRequest {
     pub joint_angles: Vec<f64>,
 }
 
-
 #[derive(Deserialize)]
 pub struct ValidateRequest {
-    pub scene: VisualScene,
+    pub scene: VisualSceneDto,
 }
 
 #[derive(Deserialize)]
 pub struct DiffRequest {
-    pub old: VisualScene,
-    pub new: VisualScene,
+    pub old: VisualSceneDto,
+    pub new: VisualSceneDto,
     #[serde(default = "default_epsilon")]
     pub epsilon: f64,
 }
@@ -29,7 +29,6 @@ pub struct DiffRequest {
 pub struct LoadRobotRequest {
     pub robot_id: String,
 }
-
 
 fn default_epsilon() -> f64 {
     1e-6

@@ -39,8 +39,3 @@ impl From<&JointInfo> for JointMetadataDto {
         }
     }
 }
-
-
-pub struct RobotSpecDto {
-
-}
