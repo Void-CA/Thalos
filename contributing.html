@@ -228,7 +228,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul class="collapse">
   <li><a href="#thalos-core" id="toc-thalos-core" class="nav-link" data-scroll-target="#thalos-core"><span class="header-section-number">8.2.1</span> thalos-core</a></li>
   <li><a href="#thalos-visual" id="toc-thalos-visual" class="nav-link" data-scroll-target="#thalos-visual"><span class="header-section-number">8.2.2</span> thalos-visual</a></li>
-  <li><a href="#thalos-api" id="toc-thalos-api" class="nav-link" data-scroll-target="#thalos-api"><span class="header-section-number">8.2.3</span> thalos-api</a></li>
+  <li><a href="#thalos-runtime" id="toc-thalos-runtime" class="nav-link" data-scroll-target="#thalos-runtime"><span class="header-section-number">8.2.3</span> thalos-runtime</a></li>
+  <li><a href="#thalos-api" id="toc-thalos-api" class="nav-link" data-scroll-target="#thalos-api"><span class="header-section-number">8.2.4</span> thalos-api</a></li>
   </ul></li>
   <li><a href="#cómo-agregar-un-modelo-robótico-nuevo" id="toc-cómo-agregar-un-modelo-robótico-nuevo" class="nav-link" data-scroll-target="#cómo-agregar-un-modelo-robótico-nuevo"><span class="header-section-number">8.3</span> Cómo agregar un modelo robótico nuevo</a></li>
   <li><a href="#cómo-agregar-tests" id="toc-cómo-agregar-tests" class="nav-link" data-scroll-target="#cómo-agregar-tests"><span class="header-section-number">8.4</span> Cómo agregar tests</a>
@@ -302,129 +303,177 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h3 data-number="8.2.2" class="anchored" data-anchor-id="thalos-visual"><span class="header-section-number">8.2.2</span> thalos-visual</h3>
 <pre><code>crates/thalos-visual/src/
 ├── lib.rs            # Re-exportaciones públicas
-├── scene/mod.rs      # Tipos del modelo visual
-├── builder.rs        # SceneBuilder (traducción core → visual)
+├── scene/
+│   ├── mod.rs        # VisualScene, VisualFrame, VisualPrimitive, FrameStyle, etc.
+│   ├── precision.rs  # VisualPrecision (normalización numérica)
+│   └── diff.rs       # SceneDiff, ChangedFrame
+├── builder.rs        # SceneBuilder (FK → VisualScene) + helpers (cylinder_between, align_y_to)
+├── scara.rs          # ScaraVisualBuilder (builders específicos por robot)
 ├── validator.rs      # SceneValidator (invariantes)
 └── utils.rs          # Utilidades pequeñas</code></pre>
 <ul>
 <li>Los tipos visuales se declaran en <code>scene/mod.rs</code> con <code>derive(Serialize, Deserialize)</code>.</li>
 <li><code>SceneBuilder</code> importa del core pero <strong>no modifica</strong> estructuras del core.</li>
 <li><code>SceneValidator</code> es autónomo: solo recibe un <code>&amp;VisualScene</code> y devuelve <code>Result&lt;(), SceneError&gt;</code>.</li>
+<li>Los <strong>builders específicos</strong> (ej: <code>ScaraVisualBuilder</code>) van en archivos separados y extienden <code>SceneBuilder</code> para generar primitivas geométricas.</li>
+<li>Los <strong>helpers geométricos</strong> (<code>cylinder_between</code>, <code>align_y_to</code>) viven en <code>builder.rs</code> y se exportan para reuso.</li>
 </ul>
 </section>
-<section id="thalos-api" class="level3" data-number="8.2.3">
-<h3 data-number="8.2.3" class="anchored" data-anchor-id="thalos-api"><span class="header-section-number">8.2.3</span> thalos-api</h3>
+<section id="thalos-runtime" class="level3" data-number="8.2.3">
+<h3 data-number="8.2.3" class="anchored" data-anchor-id="thalos-runtime"><span class="header-section-number">8.2.3</span> thalos-runtime</h3>
+<pre><code>crates/thalos-runtime/src/
+├── lib.rs            # Re-exportaciones públicas
+├── error.rs          # RuntimeError
+├── commands/
+│   └── mod.rs        # Command enum (SetJoints, LoadRobot)
+├── state/
+│   ├── mod.rs
+│   └── robot.rs      # SceneRuntime, ActiveRobot
+├── services/
+│   ├── mod.rs
+│   └── scene.rs      # SceneService (orquestador principal)
+├── backends/
+│   ├── mod.rs        # RobotBackend trait
+│   └── internal.rs   # InternalBackend
+└── snapshots/
+    ├── mod.rs
+    └── scene.rs      # RuntimeSnapshot</code></pre>
+<p>Reglas:</p>
+<ul>
+<li><code>SceneService</code> es el <strong>único punto de entrada</strong> para mutaciones del sistema.</li>
+<li>Los <code>Command</code> son <strong>tipados e inmutables</strong> — representan intenciones.</li>
+<li>Los <code>RobotBackend</code> siguen <strong>strategy pattern</strong> — el default es <code>InternalBackend</code>.</li>
+<li>El runtime <strong>no sabe de HTTP</strong> — no importa nada de <code>thalos-api</code>.</li>
+<li><code>SceneService::execute()</code> siempre devuelve un <code>RuntimeSnapshot</code> completo.</li>
+</ul>
+</section>
+<section id="thalos-api" class="level3" data-number="8.2.4">
+<h3 data-number="8.2.4" class="anchored" data-anchor-id="thalos-api"><span class="header-section-number">8.2.4</span> thalos-api</h3>
 <pre><code>crates/thalos-api/src/
 ├── main.rs           # Entrypoint
 ├── lib.rs            # Re-exportaciones
 ├── app/
 │   ├── mod.rs        # AppState + Services
 │   ├── state.rs      # Estado global
-│   └── dto.rs        # DTOs de error compartidos
+│   ├── prelude.rs    # Re-exportaciones del crate
+│   ├── error.rs      # ApiError (conversión a HTTP)
+│   ├── dto.rs        # DTOs de error compartidos
+│   └── types.rs      # ApiResult alias
 ├── features/
-│   └── &lt;feature&gt;/    # Una carpeta por feature
-│       ├── mod.rs    # Re-exportaciones del feature
-│       ├── service.rs    # Lógica de servicio
-│       ├── handler.rs    # Handlers axum
-│       └── dto.rs        # Request/Response DTOs
+│   ├── scene/        # Feature de escena
+│   │   ├── mod.rs
+│   │   ├── handler.rs    # Handlers axum
+│   │   ├── dto/
+│   │   │   ├── mod.rs
+│   │   │   ├── requests.rs  # SetJointsRequest, LoadRobotRequest, etc.
+│   │   │   └── responses.rs # VisualSceneDto, RuntimeStateResponse, etc.
+│   │   └── error.rs
+│   └── robots/       # Feature de catálogo
+│       ├── mod.rs
+│       ├── handler.rs
+│       ├── service.rs    # RobotService
+│       ├── dto.rs        # RobotMetadataDto
+│       └── error.rs
 └── http/
     ├── mod.rs        # app_router()
     └── routes/
-        └── &lt;feature&gt;.rs  # Definición de rutas</code></pre>
+        ├── mod.rs
+        ├── scene.rs  # Rutas de escena
+        └── robots.rs # Rutas de robots</code></pre>
 </section>
 </section>
 <section id="cómo-agregar-un-modelo-robótico-nuevo" class="level2" data-number="8.3">
 <h2 data-number="8.3" class="anchored" data-anchor-id="cómo-agregar-un-modelo-robótico-nuevo"><span class="header-section-number">8.3</span> Cómo agregar un modelo robótico nuevo</h2>
 <p>Agregar un robot concreto (ej: <code>RRBot</code>) requiere:</p>
 <p><strong>1. Crear la estructura de directorios</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> robot NAME=rrbot</span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Crea:</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co">#   src/models/rrbot/</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co">#   ├── mod.rs</span></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co">#   ├── factory.rs</span></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co">#   └── tests/</span></span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="co">#       ├── mod.rs</span></span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="co">#       └── fk.rs</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> robot NAME=rrbot</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Crea:</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="co">#   src/models/rrbot/</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co">#   ├── mod.rs</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="co">#   ├── factory.rs</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="co">#   └── tests/</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="co">#       ├── mod.rs</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="co">#       └── fk.rs</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>2. Implementar la fábrica en <code>factory.rs</code></strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">use</span> <span class="pp">thalos_core::prelude::</span><span class="op">*;</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">fn</span> create_rrbot(l1<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span> l2<span class="op">:</span> <span class="dt">f64</span>) <span class="op">-&gt;</span> SerialChain <span class="op">{</span></span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> <span class="kw">mut</span> builder <span class="op">=</span> <span class="pp">SerialChainBuilder::</span>new()<span class="op">;</span></span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> base <span class="op">=</span> builder<span class="op">.</span>create_frame(<span class="st">"base"</span>)<span class="op">;</span></span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> joint_1 <span class="op">=</span> builder<span class="op">.</span>create_frame(<span class="st">"joint_1"</span>)<span class="op">;</span></span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> joint_2 <span class="op">=</span> builder<span class="op">.</span>create_frame(<span class="st">"joint_2"</span>)<span class="op">;</span></span>
-<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> ee <span class="op">=</span> builder<span class="op">.</span>create_frame(<span class="st">"ee"</span>)<span class="op">;</span></span>
-<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... configurar joints, links, segments ...</span></span>
-<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>    builder<span class="op">.</span>set_end_effector(ee)<span class="op">;</span></span>
-<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>    builder<span class="op">.</span>build()<span class="op">.</span>expect(<span class="st">"RRBot debe ser válido"</span>)</span>
-<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">use</span> <span class="pp">thalos_core::prelude::</span><span class="op">*;</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">fn</span> create_rrbot(l1<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span> l2<span class="op">:</span> <span class="dt">f64</span>) <span class="op">-&gt;</span> SerialChain <span class="op">{</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> <span class="kw">mut</span> builder <span class="op">=</span> <span class="pp">SerialChainBuilder::</span>new()<span class="op">;</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> base <span class="op">=</span> builder<span class="op">.</span>create_frame(<span class="st">"base"</span>)<span class="op">;</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> joint_1 <span class="op">=</span> builder<span class="op">.</span>create_frame(<span class="st">"joint_1"</span>)<span class="op">;</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> joint_2 <span class="op">=</span> builder<span class="op">.</span>create_frame(<span class="st">"joint_2"</span>)<span class="op">;</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> ee <span class="op">=</span> builder<span class="op">.</span>create_frame(<span class="st">"ee"</span>)<span class="op">;</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... configurar joints, links, segments ...</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    builder<span class="op">.</span>set_end_effector(ee)<span class="op">;</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    builder<span class="op">.</span>build()<span class="op">.</span>expect(<span class="st">"RRBot debe ser válido"</span>)</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>3. Agregar variante a <code>RobotModel</code> y <code>RobotSpec</code></strong></p>
 <p>En <code>models/factory.rs</code>, agregar:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> RobotModel <span class="op">{</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... existentes ...</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    Rrbot<span class="op">,</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> RobotSpec <span class="op">{</span></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... existentes ...</span></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    Rrbot <span class="op">{</span> l1<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span> l2<span class="op">:</span> <span class="dt">f64</span> <span class="op">},</span></span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> RobotModel <span class="op">{</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... existentes ...</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    Rrbot<span class="op">,</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> RobotSpec <span class="op">{</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... existentes ...</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>    Rrbot <span class="op">{</span> l1<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span> l2<span class="op">:</span> <span class="dt">f64</span> <span class="op">},</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Y el match correspondiente en <code>RobotRegistry::create()</code>.</p>
 <p><strong>4. Exportar la fábrica</strong></p>
 <p>En <code>models/mod.rs</code>:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">mod</span> factories <span class="op">{</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... existentes ...</span></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> <span class="kw">use</span> <span class="kw">crate</span><span class="pp">::models::rrbot::factory::</span>create_rrbot<span class="op">;</span></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">mod</span> factories <span class="op">{</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... existentes ...</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> <span class="kw">use</span> <span class="kw">crate</span><span class="pp">::models::rrbot::factory::</span>create_rrbot<span class="op">;</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>5. Escribir tests de FK</strong></p>
 <p>En <code>tests/fk.rs</code>:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="at">#[</span>cfg<span class="at">(</span>test<span class="at">)]</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="kw">mod</span> rrbot_fk_tests <span class="op">{</span></span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">use</span> <span class="pp">thalos_core::prelude::</span><span class="op">*;</span></span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">#[</span>test<span class="at">]</span></span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">fn</span> test_home_position() <span class="op">{</span></span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>        <span class="kw">let</span> robot <span class="op">=</span> create_rrbot(<span class="dv">1.0</span><span class="op">,</span> <span class="dv">1.0</span>)<span class="op">;</span></span>
-<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>        <span class="kw">let</span> fk <span class="op">=</span> <span class="pp">ForwardKinematics::</span>new(robot)<span class="op">;</span></span>
-<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>        <span class="kw">let</span> result <span class="op">=</span> fk<span class="op">.</span>evaluate(<span class="op">&amp;</span>[<span class="dv">0.0</span><span class="op">,</span> <span class="dv">0.0</span>])<span class="op">;</span></span>
-<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>        <span class="kw">let</span> ee_pose <span class="op">=</span> result<span class="op">.</span>pose(</span>
-<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>            <span class="op">&amp;</span><span class="pp">FrameId::</span>Id(<span class="dv">3</span>) <span class="co">// ID del end-effector</span></span>
-<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>        )<span class="op">.</span>expect(<span class="st">"end effector pose"</span>)<span class="op">;</span></span>
-<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>        <span class="co">// assert! ...</span></span>
-<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
-<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="at">#[</span>cfg<span class="at">(</span>test<span class="at">)]</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="kw">mod</span> rrbot_fk_tests <span class="op">{</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">use</span> <span class="pp">thalos_core::prelude::</span><span class="op">*;</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">#[</span>test<span class="at">]</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">fn</span> test_home_position() <span class="op">{</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>        <span class="kw">let</span> robot <span class="op">=</span> create_rrbot(<span class="dv">1.0</span><span class="op">,</span> <span class="dv">1.0</span>)<span class="op">;</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>        <span class="kw">let</span> fk <span class="op">=</span> <span class="pp">ForwardKinematics::</span>new(robot)<span class="op">;</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>        <span class="kw">let</span> result <span class="op">=</span> fk<span class="op">.</span>evaluate(<span class="op">&amp;</span>[<span class="dv">0.0</span><span class="op">,</span> <span class="dv">0.0</span>])<span class="op">;</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>        <span class="kw">let</span> ee_pose <span class="op">=</span> result<span class="op">.</span>pose(</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>            <span class="op">&amp;</span><span class="pp">FrameId::</span>Id(<span class="dv">3</span>) <span class="co">// ID del end-effector</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>        )<span class="op">.</span>expect(<span class="st">"end effector pose"</span>)<span class="op">;</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>        <span class="co">// assert! ...</span></span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="cómo-agregar-tests" class="level2" data-number="8.4">
 <h2 data-number="8.4" class="anchored" data-anchor-id="cómo-agregar-tests"><span class="header-section-number">8.4</span> Cómo agregar tests</h2>
 <section id="tests-unitarios-en-el-mismo-archivo" class="level3" data-number="8.4.1">
 <h3 data-number="8.4.1" class="anchored" data-anchor-id="tests-unitarios-en-el-mismo-archivo"><span class="header-section-number">8.4.1</span> Tests unitarios (en el mismo archivo)</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="at">#[</span>cfg<span class="at">(</span>test<span class="at">)]</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="kw">mod</span> vector3_tests <span class="op">{</span></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">use</span> <span class="kw">super</span><span class="pp">::</span><span class="op">*;</span></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">#[</span>test<span class="at">]</span></span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">fn</span> test_magnitude() <span class="op">{</span></span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>        <span class="kw">let</span> v <span class="op">=</span> <span class="pp">Vector3::</span>new(<span class="dv">3.0</span><span class="op">,</span> <span class="dv">4.0</span><span class="op">,</span> <span class="dv">0.0</span>)<span class="op">;</span></span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>        <span class="pp">assert!</span>((v<span class="op">.</span>magnitude() <span class="op">-</span> <span class="dv">5.0</span>)<span class="op">.</span>abs() <span class="op">&lt;</span> EPS)<span class="op">;</span></span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="at">#[</span>cfg<span class="at">(</span>test<span class="at">)]</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="kw">mod</span> vector3_tests <span class="op">{</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">use</span> <span class="kw">super</span><span class="pp">::</span><span class="op">*;</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">#[</span>test<span class="at">]</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">fn</span> test_magnitude() <span class="op">{</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>        <span class="kw">let</span> v <span class="op">=</span> <span class="pp">Vector3::</span>new(<span class="dv">3.0</span><span class="op">,</span> <span class="dv">4.0</span><span class="op">,</span> <span class="dv">0.0</span>)<span class="op">;</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>        <span class="pp">assert!</span>((v<span class="op">.</span>magnitude() <span class="op">-</span> <span class="dv">5.0</span>)<span class="op">.</span>abs() <span class="op">&lt;</span> EPS)<span class="op">;</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="tests-de-integración-en-tests" class="level3" data-number="8.4.2">
 <h3 data-number="8.4.2" class="anchored" data-anchor-id="tests-de-integración-en-tests"><span class="header-section-number">8.4.2</span> Tests de integración (en <code>tests/</code>)</h3>
 <p>Usar <code>insta</code> para snapshots cuando sea posible:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="at">#[</span>test<span class="at">]</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> test_planar_2r_scene() <span class="op">{</span></span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> robot <span class="op">=</span> <span class="pp">RobotRegistry::</span>create_default(<span class="pp">RobotModel::</span>Planar2R)<span class="op">;</span></span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> fk <span class="op">=</span> <span class="pp">ForwardKinematics::</span>new(robot)<span class="op">;</span></span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> result <span class="op">=</span> fk<span class="op">.</span>evaluate(<span class="op">&amp;</span>[<span class="dv">0.5</span><span class="op">,</span> <span class="dv">0.3</span>])<span class="op">;</span></span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> scene <span class="op">=</span> <span class="pp">SceneBuilder::</span>new(fk<span class="op">.</span>robot())<span class="op">.</span>from_fk(<span class="op">&amp;</span>result)<span class="op">;</span></span>
-<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>    <span class="pp">insta::assert_json_snapshot!</span>(scene)<span class="op">;</span></span>
-<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="at">#[</span>test<span class="at">]</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> test_planar_2r_scene() <span class="op">{</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> robot <span class="op">=</span> <span class="pp">RobotRegistry::</span>create_default(<span class="pp">RobotModel::</span>Planar2R)<span class="op">;</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> fk <span class="op">=</span> <span class="pp">ForwardKinematics::</span>new(robot)<span class="op">;</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> result <span class="op">=</span> fk<span class="op">.</span>evaluate(<span class="op">&amp;</span>[<span class="dv">0.5</span><span class="op">,</span> <span class="dv">0.3</span>])<span class="op">;</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> scene <span class="op">=</span> <span class="pp">SceneBuilder::</span>new(fk<span class="op">.</span>robot())<span class="op">.</span>from_fk(<span class="op">&amp;</span>result)<span class="op">;</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    <span class="pp">insta::assert_json_snapshot!</span>(scene)<span class="op">;</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Los snapshots permiten detectar visualmente cambios no deseados en CI sin abrir un visor 3D.</p>
 </section>
 </section>
@@ -433,7 +482,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="no-hacer" class="level3" data-number="8.5.1">
 <h3 data-number="8.5.1" class="anchored" data-anchor-id="no-hacer"><span class="header-section-number">8.5.1</span> No hacer</h3>
 <ul>
-<li>Importar <code>thalos-visual</code> o <code>thalos-api</code> desde <code>thalos-core</code></li>
+<li>Importar <code>thalos-visual</code>, <code>thalos-runtime</code> o <code>thalos-api</code> desde <code>thalos-core</code></li>
 <li>Poner lógica de negocios en handlers HTTP</li>
 <li>Usar <code>unwrap()</code> o <code>expect()</code> en código de producción (salvo en <code>main.rs</code> o tests)</li>
 <li>Agregar dependencias pesadas al core (<code>thalos-core</code> solo debe tener <code>nalgebra</code> y <code>thiserror</code>)</li>

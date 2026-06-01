@@ -278,7 +278,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 data-number="3.1" class="anchored" data-anchor-id="principios-rectores"><span class="header-section-number">3.1</span> Principios rectores</h2>
 <section id="separación-de-responsabilidades" class="level3" data-number="3.1.1">
 <h3 data-number="3.1.1" class="anchored" data-anchor-id="separación-de-responsabilidades"><span class="header-section-number">3.1.1</span> Separación de responsabilidades</h3>
-<p>Thalos separa <strong>cuatro dominios</strong> que nunca deben acoplarse:</p>
+<p>Thalos separa <strong>cinco dominios</strong> que nunca deben acoplarse:</p>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 27%">
@@ -306,9 +306,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tr class="odd">
 <td>Visual</td>
 <td><code>thalos-visual</code></td>
-<td>Escenas, validación, diff, snapshots</td>
+<td>Escenas, validación, diff, snapshots, primitivas</td>
 </tr>
 <tr class="even">
+<td>Runtime</td>
+<td><code>thalos-runtime</code></td>
+<td>Orquestación, estado mutable, commands, backends</td>
+</tr>
+<tr class="odd">
 <td>Comunicación</td>
 <td><code>thalos-api</code></td>
 <td>HTTP, DTOs, handlers, routing</td>
@@ -326,7 +331,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <ul>
 <li><code>thalos-core</code> — <strong>no depende de nada</strong> fuera de <code>nalgebra</code> y <code>thiserror</code></li>
 <li><code>thalos-visual</code> — <strong>solo depende de</strong> <code>thalos-core</code> y <code>serde</code></li>
-<li><code>thalos-api</code> — <strong>depende de</strong> <code>thalos-core</code> + <code>thalos-visual</code>, agrega <code>axum</code> y <code>tokio</code></li>
+<li><code>thalos-runtime</code> — <strong>depende de</strong> <code>thalos-core</code> + <code>thalos-visual</code>, agrega <code>thiserror</code> y <code>chrono</code>. <strong>No sabe que existe HTTP.</strong></li>
+<li><code>thalos-api</code> — <strong>depende de</strong> <code>thalos-core</code> + <code>thalos-visual</code> + <code>thalos-runtime</code>, agrega <code>axum</code> y <code>tokio</code></li>
 </ul>
 <p>Esto significa que <code>thalos-core</code> puede compilarse y testearse <strong>sin</strong> <code>tokio</code>, <code>axum</code>, ni ningún sistema de visualización.</p>
 </section>
@@ -355,7 +361,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <ul>
 <li><code>UnitQuaternion::new()</code> valida norma unitaria</li>
 <li><code>SerialChainBuilder::build()</code> valida frames existentes y end-effector</li>
-<li><code>SceneValidator::validate()</code> valida topología, quaternions, valores finitos</li>
+<li><code>SceneValidator::validate()</code> valida topología, quaternions, valores finitos, links consistentes y twists</li>
+<li><code>SceneService::execute()</code> valida que el comando sea aplicable al estado actual</li>
 </ul>
 <p>Si una capa recibe datos inválidos, <strong>rechaza la construcción</strong>, no intenta “arreglar” silenciosamente.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">// ── No hay fallbacks silenciosos ──</span></span>
@@ -392,16 +399,20 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td><code>SceneBuilder</code> importa <code>FKResult</code>, <code>SerialChain</code>, <code>Jacobian</code> — pero no modifica esas estructuras. La traducción es unidireccional.</td>
 </tr>
 <tr class="even">
-<td><code>thalos-api</code> no contiene lógica de dominio</td>
-<td>Los handlers delegan en <code>SceneService</code>. No hay cálculo cinemático ni manipulación de estructuras del core en los handlers.</td>
+<td><code>thalos-runtime</code> no depende de HTTP</td>
+<td>El runtime orquesta core + visual pero no sabe que existe <code>axum</code> ni <code>thalos-api</code>.</td>
 </tr>
 <tr class="odd">
-<td>Sin dependencias circulares</td>
-<td><code>thalos-core</code> → <code>thalos-visual</code> → <code>thalos-api</code>. Nunca al revés.</td>
+<td><code>thalos-api</code> no contiene lógica de dominio</td>
+<td>Los handlers delegan en <code>SceneService::execute()</code>. No hay cálculo cinemático ni manipulación de estructuras del core en los handlers.</td>
 </tr>
 <tr class="even">
+<td>Sin dependencias circulares</td>
+<td><code>thalos-core</code> → <code>thalos-visual</code> → <code>thalos-runtime</code> → <code>thalos-api</code>. Nunca al revés.</td>
+</tr>
+<tr class="odd">
 <td>DTOs separados del dominio</td>
-<td>Los tipos serializables de <code>thalos-api::app::dto</code> y <code>thalos-api::features::scene::dto</code> son independientes de los tipos del core. <code>VisualScene</code> es una excepción controlada (es <code>Serialize</code> por diseño).</td>
+<td>Los tipos serializables de la API (<code>VisualSceneDto</code>, <code>RuntimeStateResponse</code>) son independientes de los tipos del core. <code>VisualScene</code> es una excepción controlada (es <code>Serialize</code> por diseño). El adapter <code>dto-to-model.ts</code> en el frontend traduce snake_case DTOs a camelCase internos.</td>
 </tr>
 </tbody>
 </table>
@@ -439,9 +450,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h3 data-number="3.3.3" class="anchored" data-anchor-id="dominio-de-infraestructura"><span class="header-section-number">3.3.3</span> Dominio de infraestructura</h3>
 <p>Todo lo que es mecánica de sistema, no lógica de dominio.</p>
 <ul>
-<li><code>thalos-visual</code> — serialización, validación de escenas, diff</li>
+<li><code>thalos-visual</code> — serialización, validación de escenas, diff, primitivas</li>
+<li><code>thalos-runtime</code> — orquestación, estado mutable, backends de robots</li>
 <li><code>thalos-api</code> — HTTP, routing, DTOs de entrada/salida</li>
-<li>Frontend Angular — renderizado, UI, estado del cliente</li>
+<li>Frontend Angular — renderizado 3D, UI, estado del cliente con signals</li>
 </ul>
 <p>La infraestructura <strong>consume</strong> los dominios matemático y robótico, pero nunca al revés.</p>
 </section>
@@ -492,38 +504,53 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-dep-map-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <div>
-<svg width="672" height="480" viewbox="0.00 0.00 184.00 309.60" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" style="; max-width: none; max-height: none">
-<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 305.6)">
+<svg width="672" height="480" viewbox="0.00 0.00 184.00 407.20" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" style="; max-width: none; max-height: none">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 403.2)">
 <title>deps</title>
-<polygon fill="white" stroke="transparent" points="-4,4 -4,-305.6 180,-305.6 180,4 -4,4"></polygon>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-403.2 180,-403.2 180,4 -4,4"></polygon>
 <g id="clust1" class="cluster">
 <title>cluster_crates</title>
-<polygon fill="none" stroke="black" stroke-dasharray="5,2" points="8,-8 8,-293.6 168,-293.6 168,-8 8,-8"></polygon>
-<text text-anchor="middle" x="88" y="-277.9" font-family="Times,serif" font-size="13.00">Workspace Thalos</text>
+<polygon fill="none" stroke="black" stroke-dasharray="5,2" points="8,-8 8,-391.2 168,-391.2 168,-8 8,-8"></polygon>
+<text text-anchor="middle" x="88" y="-375.5" font-family="Times,serif" font-size="13.00">Workspace Thalos</text>
 </g>
 <!-- api -->
 <g id="node1" class="node">
 <title>api</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M148.15,-261.9C148.15,-261.9 27.85,-261.9 27.85,-261.9 21.85,-261.9 15.85,-255.9 15.85,-249.9 15.85,-249.9 15.85,-223.3 15.85,-223.3 15.85,-217.3 21.85,-211.3 27.85,-211.3 27.85,-211.3 148.15,-211.3 148.15,-211.3 154.15,-211.3 160.15,-217.3 160.15,-223.3 160.15,-223.3 160.15,-249.9 160.15,-249.9 160.15,-255.9 154.15,-261.9 148.15,-261.9"></path>
-<text text-anchor="middle" x="88" y="-240.2" font-family="sans-serif" font-size="12.00">thalos-api</text>
-<text text-anchor="middle" x="88" y="-225.8" font-family="sans-serif" font-size="12.00">axum · tokio · serde</text>
+<path fill="none" stroke="black" stroke-width="1.5" d="M148.15,-359.5C148.15,-359.5 27.85,-359.5 27.85,-359.5 21.85,-359.5 15.85,-353.5 15.85,-347.5 15.85,-347.5 15.85,-320.9 15.85,-320.9 15.85,-314.9 21.85,-308.9 27.85,-308.9 27.85,-308.9 148.15,-308.9 148.15,-308.9 154.15,-308.9 160.15,-314.9 160.15,-320.9 160.15,-320.9 160.15,-347.5 160.15,-347.5 160.15,-353.5 154.15,-359.5 148.15,-359.5"></path>
+<text text-anchor="middle" x="88" y="-337.8" font-family="sans-serif" font-size="12.00">thalos-api</text>
+<text text-anchor="middle" x="88" y="-323.4" font-family="sans-serif" font-size="12.00">axum · tokio · serde</text>
+</g>
+<!-- runtime -->
+<g id="node2" class="node">
+<title>runtime</title>
+<path fill="none" stroke="black" stroke-width="2" stroke-dasharray="5,2" d="M140.97,-261.9C140.97,-261.9 35.03,-261.9 35.03,-261.9 29.03,-261.9 23.03,-255.9 23.03,-249.9 23.03,-249.9 23.03,-223.3 23.03,-223.3 23.03,-217.3 29.03,-211.3 35.03,-211.3 35.03,-211.3 140.97,-211.3 140.97,-211.3 146.97,-211.3 152.97,-217.3 152.97,-223.3 152.97,-223.3 152.97,-249.9 152.97,-249.9 152.97,-255.9 146.97,-261.9 140.97,-261.9"></path>
+<text text-anchor="middle" x="88" y="-240.2" font-family="sans-serif" font-size="12.00">thalos-runtime</text>
+<text text-anchor="middle" x="88" y="-225.8" font-family="sans-serif" font-size="12.00">chrono · thiserror</text>
+</g>
+<!-- api&#45;&gt;runtime -->
+<g id="edge3" class="edge">
+<title>api-&gt;runtime</title>
+<path fill="none" stroke="black" d="M88,-308.81C88,-308.81 88,-272.2 88,-272.2"></path>
+<polygon fill="black" stroke="black" points="91.5,-272.2 88,-262.2 84.5,-272.2 91.5,-272.2"></polygon>
+<text text-anchor="middle" x="108.36" y="-282.7" font-family="Times,serif" font-size="9.00">depende de</text>
 </g>
 <!-- visual -->
-<g id="node2" class="node">
+<g id="node3" class="node">
 <title>visual</title>
 <path fill="none" stroke="black" stroke-width="1.5" d="M128.82,-164.3C128.82,-164.3 47.18,-164.3 47.18,-164.3 41.18,-164.3 35.18,-158.3 35.18,-152.3 35.18,-152.3 35.18,-125.7 35.18,-125.7 35.18,-119.7 41.18,-113.7 47.18,-113.7 47.18,-113.7 128.82,-113.7 128.82,-113.7 134.82,-113.7 140.82,-119.7 140.82,-125.7 140.82,-125.7 140.82,-152.3 140.82,-152.3 140.82,-158.3 134.82,-164.3 128.82,-164.3"></path>
 <text text-anchor="middle" x="88" y="-142.6" font-family="sans-serif" font-size="12.00">thalos-visual</text>
-<text text-anchor="middle" x="88" y="-128.2" font-family="sans-serif" font-size="12.00">serde · insta</text>
+<text text-anchor="middle" x="88" y="-128.2" font-family="sans-serif" font-size="12.00">serde</text>
 </g>
-<!-- api&#45;&gt;visual -->
+<!-- runtime&#45;&gt;visual -->
 <g id="edge2" class="edge">
-<title>api-&gt;visual</title>
-<path fill="none" stroke="black" d="M88,-211.21C88,-211.21 88,-174.6 88,-174.6"></path>
-<polygon fill="black" stroke="black" points="91.5,-174.6 88,-164.6 84.5,-174.6 91.5,-174.6"></polygon>
-<text text-anchor="middle" x="108.36" y="-185.1" font-family="Times,serif" font-size="9.00">depende de</text>
+<title>runtime-&gt;visual</title>
+<path fill="none" stroke="black" d="M70.45,-211.21C70.45,-211.21 70.45,-174.6 70.45,-174.6"></path>
+<polygon fill="black" stroke="black" points="73.95,-174.6 70.45,-164.6 66.95,-174.6 73.95,-174.6"></polygon>
+<text text-anchor="middle" x="61.36" y="-185.1" font-family="Times,serif" font-size="9.00">depende de</text>
 </g>
+<!-- runtime&#45;&gt;visual -->
 <!-- core -->
-<g id="node3" class="node">
+<g id="node4" class="node">
 <title>core</title>
 <path fill="none" stroke="black" stroke-width="1.5" d="M144.96,-66.7C144.96,-66.7 31.04,-66.7 31.04,-66.7 25.04,-66.7 19.04,-60.7 19.04,-54.7 19.04,-54.7 19.04,-28.1 19.04,-28.1 19.04,-22.1 25.04,-16.1 31.04,-16.1 31.04,-16.1 144.96,-16.1 144.96,-16.1 150.96,-16.1 156.96,-22.1 156.96,-28.1 156.96,-28.1 156.96,-54.7 156.96,-54.7 156.96,-60.7 150.96,-66.7 144.96,-66.7"></path>
 <text text-anchor="middle" x="88" y="-45" font-family="sans-serif" font-size="12.00">thalos-core</text>
@@ -602,17 +629,22 @@ Figure&nbsp;3.1: Mapa de dependencias del workspace
 </tr>
 <tr class="even">
 <td><code>thalos-visual</code></td>
-<td>Scene builder, validator, diff</td>
+<td>Scene builder, validator, diff, primitives, FrameStyle</td>
 <td>Cómo se proyecta el dominio a visual</td>
 </tr>
 <tr class="odd">
-<td><code>thalos-api</code></td>
-<td>Services, handlers, routes</td>
-<td>Cómo se expone a otros sistemas</td>
+<td><code>thalos-runtime</code></td>
+<td>SceneService, Command, RobotBackend</td>
+<td>Cómo se orquesta el estado mutable</td>
 </tr>
 <tr class="even">
+<td><code>thalos-api</code></td>
+<td>Services, handlers, routes, DTOs</td>
+<td>Cómo se expone a otros sistemas</td>
+</tr>
+<tr class="odd">
 <td>Frontend Angular</td>
-<td>Scene store, three renderer</td>
+<td>Scene store (signals), three renderer</td>
 <td>Cómo se ve del lado del cliente</td>
 </tr>
 </tbody>

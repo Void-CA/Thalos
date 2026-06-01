@@ -190,8 +190,10 @@ ul.task-list li input[type="checkbox"] {
   <li><a href="#términos-generales" id="toc-términos-generales" class="nav-link active" data-scroll-target="#términos-generales"><span class="header-section-number">A.1</span> Términos generales</a></li>
   <li><a href="#términos-del-dominio" id="toc-términos-del-dominio" class="nav-link" data-scroll-target="#términos-del-dominio"><span class="header-section-number">A.2</span> Términos del dominio</a></li>
   <li><a href="#términos-del-workspace" id="toc-términos-del-workspace" class="nav-link" data-scroll-target="#términos-del-workspace"><span class="header-section-number">A.3</span> Términos del workspace</a></li>
-  <li><a href="#términos-del-frontend" id="toc-términos-del-frontend" class="nav-link" data-scroll-target="#términos-del-frontend"><span class="header-section-number">A.4</span> Términos del frontend</a></li>
-  <li><a href="#convenciones-de-código" id="toc-convenciones-de-código" class="nav-link" data-scroll-target="#convenciones-de-código"><span class="header-section-number">A.5</span> Convenciones de código</a></li>
+  <li><a href="#términos-del-runtime" id="toc-términos-del-runtime" class="nav-link" data-scroll-target="#términos-del-runtime"><span class="header-section-number">A.4</span> Términos del runtime</a></li>
+  <li><a href="#términos-del-frontend" id="toc-términos-del-frontend" class="nav-link" data-scroll-target="#términos-del-frontend"><span class="header-section-number">A.5</span> Términos del frontend</a></li>
+  <li><a href="#términos-visuales" id="toc-términos-visuales" class="nav-link" data-scroll-target="#términos-visuales"><span class="header-section-number">A.6</span> Términos visuales</a></li>
+  <li><a href="#convenciones-de-código" id="toc-convenciones-de-código" class="nav-link" data-scroll-target="#convenciones-de-código"><span class="header-section-number">A.7</span> Convenciones de código</a></li>
   </ul>
 </nav>
     </div>
@@ -238,18 +240,37 @@ ul.task-list li input[type="checkbox"] {
 </section>
 <section id="términos-del-workspace" class="level2" data-number="A.3">
 <h2 data-number="A.3" class="anchored" data-anchor-id="términos-del-workspace"><span class="header-section-number">A.3</span> Términos del workspace</h2>
-<p><strong>Crate</strong> — Paquete de Rust. Thalos tiene 3: <code>thalos-core</code>, <code>thalos-visual</code>, <code>thalos-api</code>.</p>
+<p><strong>Crate</strong> — Paquete de Rust. Thalos tiene 4: <code>thalos-core</code>, <code>thalos-visual</code>, <code>thalos-runtime</code>, <code>thalos-api</code>.</p>
 <p><strong>Workspace</strong> — Conjunto de crates que comparten un <code>Cargo.lock</code> y configuración de build.</p>
-<p><strong>Feature</strong> — Módulo funcional dentro de <code>thalos-api</code> (<code>scene</code>, y futuros: <code>planning</code>, <code>control</code>, etc.).</p>
+<p><strong>Feature</strong> — Módulo funcional dentro de <code>thalos-api</code> (<code>scene</code>, <code>robots</code>, y futuros: <code>planning</code>, <code>control</code>, etc.).</p>
 </section>
-<section id="términos-del-frontend" class="level2" data-number="A.4">
-<h2 data-number="A.4" class="anchored" data-anchor-id="términos-del-frontend"><span class="header-section-number">A.4</span> Términos del frontend</h2>
-<p><strong>SceneViewer</strong> — Componente Angular que renderiza <code>VisualScene</code> en Three.js.</p>
-<p><strong>JointControl</strong> — Componente Angular con sliders para cada joint del robot.</p>
-<p><strong>SceneStore</strong> — Servicio Angular con estado reactivo (RxJS) que orquesta llamadas API y mantiene la escena actual.</p>
+<section id="términos-del-runtime" class="level2" data-number="A.4">
+<h2 data-number="A.4" class="anchored" data-anchor-id="términos-del-runtime"><span class="header-section-number">A.4</span> Términos del runtime</h2>
+<p><strong>SceneService</strong> — Orquestador central. Mantiene <code>SceneRuntime</code> (el estado mutable) y expone <code>snapshot()</code> y <code>execute(Command)</code>. Es el punto único de entrada para toda mutación del sistema.</p>
+<p><strong>Command</strong> — Enum que tipa las mutaciones del runtime: <code>SetJoints(Vec&lt;f64&gt;)</code> y <code>LoadRobot(String)</code>. Se ejecutan via <code>SceneService::execute()</code>.</p>
+<p><strong>RuntimeSnapshot</strong> — Estado puntual del sistema: robot activo, joints actuales, escena visual validada y timestamp. Es el valor de retorno unificado.</p>
+<p><strong>SceneRuntime</strong> — Contenedor del estado mutable: envuelve <code>ActiveRobot</code> dentro de un <code>RwLock</code> para acceso concurrente.</p>
+<p><strong>ActiveRobot</strong> — Robot actualmente cargado: modelo, cadena cinemática (<code>SerialChain</code>) y ángulos articulares (<code>Vec&lt;f64&gt;</code>).</p>
+<p><strong>RobotBackend</strong> — Trait (strategy) para resolver modelos robóticos por ID. <code>InternalBackend</code> usa el catálogo built-in; implementaciones custom pueden integrar hardware, archivos de configuración o redes.</p>
 </section>
-<section id="convenciones-de-código" class="level2" data-number="A.5">
-<h2 data-number="A.5" class="anchored" data-anchor-id="convenciones-de-código"><span class="header-section-number">A.5</span> Convenciones de código</h2>
+<section id="términos-del-frontend" class="level2" data-number="A.5">
+<h2 data-number="A.5" class="anchored" data-anchor-id="términos-del-frontend"><span class="header-section-number">A.5</span> Términos del frontend</h2>
+<p><strong>SceneStore</strong> — Servicio Angular con estado reactivo. Usa dos pipelines RxJS paralelos (joints + load robot) mergados con <code>merge()</code> + <code>scan()</code>, expuestos como <code>Signal&lt;SceneState&gt;</code> vía <code>toSignal()</code>.</p>
+<p><strong>RobotStore</strong> — Store con signals puras para el catálogo de robots. Expone <code>robots</code>, <code>selectedId</code>, <code>loading</code> y <code>error</code> como <code>WritableSignal</code>.</p>
+<p><strong>ThreeRendererService</strong> — Servicio Angular que renderiza <code>SceneData</code> en Three.js. Maneja frames con <code>FrameStyle</code>, links cilíndricos, primitivas geométricas y brújula 3D.</p>
+<p><strong>RobotCatalog</strong> — Componente orquestador que lista robots del catálogo y al seleccionar uno dispara <code>RobotStore.select()</code> + <code>SceneStore.loadRobot()</code>.</p>
+<p><strong>dto-to-model</strong> — Adapter que traduce DTOs del API (snake_case) a tipos internos del frontend (camelCase). Incluye conversión de geometrías (<code>PrimitiveGeometryDto</code> → <code>ScenePrimitive</code>).</p>
+</section>
+<section id="términos-visuales" class="level2" data-number="A.6">
+<h2 data-number="A.6" class="anchored" data-anchor-id="términos-visuales"><span class="header-section-number">A.6</span> Términos visuales</h2>
+<p><strong>VisualPrimitive</strong> — Elemento 3D con volumen (cilindro, esfera, caja) que complementa frames y links en la escena. Tiene <code>id</code>, <code>translation</code>, <code>rotation</code> y <code>geometry</code>. Ej: base column del SCARA, cuerpos de links.</p>
+<p><strong>FrameStyle</strong> — Configuración visual de un frame individual: longitud/radio de ejes, colores RGB, esfera de origen y etiquetas. Cada <code>VisualFrame</code> puede tener su propio <code>FrameStyle</code> o usar defaults del frontend.</p>
+<p><strong>ScaraVisualBuilder</strong> — Builder específico para el robot SCARA. Genera primitivas geométricas (base column, link bodies) además de los frames y links estándar. Es un ejemplo del patrón “builder por robot”.</p>
+<p><strong>cylinder_between</strong> — Helper que construye un <code>VisualPrimitive::Cylinder</code> entre dos puntos 3D, calculando altura (distancia), punto medio y rotación (para alinear el eje Y del cilindro con la dirección del segmento).</p>
+<p><strong>align_y_to</strong> — Helper que produce un quaternion que rota el eje Y canónico (0,1,0) para alinearse con una dirección arbitraria. Se usa internamente por <code>cylinder_between</code> y es exportado para uso en builders personalizados.</p>
+</section>
+<section id="convenciones-de-código" class="level2" data-number="A.7">
+<h2 data-number="A.7" class="anchored" data-anchor-id="convenciones-de-código"><span class="header-section-number">A.7</span> Convenciones de código</h2>
 <p><strong>Error explícito</strong> — Toda operación que pueda fallar retorna <code>Result</code>. No hay <code>unwrap()</code> ocultos, <code>expect()</code> silenciosos, ni fallbacks mágicos.</p>
 <p><strong>Invariante de construcción</strong> — Un tipo que representa un concepto con restricciones matemáticas valida esas restricciones en <code>new()</code>. <code>UnitQuaternion::new()</code> falla si la norma no es ≈ 1.</p>
 <p><strong>Normalización controlada</strong> — <code>VisualPrecision</code> expone explícitamente los parámetros de redondeo. Nada se normaliza “porque sí”.</p>

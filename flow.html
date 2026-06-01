@@ -188,7 +188,11 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">Table of contents</h2>
    
   <ul>
-  <li><a href="#pipeline-completo-end-to-end" id="toc-pipeline-completo-end-to-end" class="nav-link active" data-scroll-target="#pipeline-completo-end-to-end"><span class="header-section-number">6.1</span> Pipeline completo (end-to-end)</a></li>
+  <li><a href="#pipeline-completo-end-to-end" id="toc-pipeline-completo-end-to-end" class="nav-link active" data-scroll-target="#pipeline-completo-end-to-end"><span class="header-section-number">6.1</span> Pipeline completo (end-to-end)</a>
+  <ul class="collapse">
+  <li><a href="#flujo-setjoints" id="toc-flujo-setjoints" class="nav-link" data-scroll-target="#flujo-setjoints"><span class="header-section-number">6.1.1</span> Flujo: SetJoints</a></li>
+  <li><a href="#flujo-loadrobot" id="toc-flujo-loadrobot" class="nav-link" data-scroll-target="#flujo-loadrobot"><span class="header-section-number">6.1.2</span> Flujo: LoadRobot</a></li>
+  </ul></li>
   <li><a href="#flujo-de-fk-detalle-matemático" id="toc-flujo-de-fk-detalle-matemático" class="nav-link" data-scroll-target="#flujo-de-fk-detalle-matemático"><span class="header-section-number">6.2</span> Flujo de FK (detalle matemático)</a></li>
   <li><a href="#flujo-de-jacobiano-detalle-matemático" id="toc-flujo-de-jacobiano-detalle-matemático" class="nav-link" data-scroll-target="#flujo-de-jacobiano-detalle-matemático"><span class="header-section-number">6.3</span> Flujo de Jacobiano (detalle matemático)</a>
   <ul class="collapse">
@@ -196,7 +200,8 @@ ul.task-list li input[type="checkbox"] {
   <li><a href="#numérico-diferencias-finitas-centrales" id="toc-numérico-diferencias-finitas-centrales" class="nav-link" data-scroll-target="#numérico-diferencias-finitas-centrales"><span class="header-section-number">6.3.2</span> Numérico (diferencias finitas centrales)</a></li>
   </ul></li>
   <li><a href="#flujo-de-scenediff" id="toc-flujo-de-scenediff" class="nav-link" data-scroll-target="#flujo-de-scenediff"><span class="header-section-number">6.4</span> Flujo de SceneDiff</a></li>
-  <li><a href="#relación-entre-conceptos" id="toc-relación-entre-conceptos" class="nav-link" data-scroll-target="#relación-entre-conceptos"><span class="header-section-number">6.5</span> Relación entre conceptos</a></li>
+  <li><a href="#flujo-de-primitives" id="toc-flujo-de-primitives" class="nav-link" data-scroll-target="#flujo-de-primitives"><span class="header-section-number">6.5</span> Flujo de Primitives</a></li>
+  <li><a href="#relación-entre-conceptos" id="toc-relación-entre-conceptos" class="nav-link" data-scroll-target="#relación-entre-conceptos"><span class="header-section-number">6.6</span> Relación entre conceptos</a></li>
   </ul>
 </nav>
     </div>
@@ -225,142 +230,375 @@ ul.task-list li input[type="checkbox"] {
 <p>Esta sección describe cómo viajan los datos a través del sistema, desde que el usuario mueve un slider hasta que ve el resultado en pantalla.</p>
 <section id="pipeline-completo-end-to-end" class="level2" data-number="6.1">
 <h2 data-number="6.1" class="anchored" data-anchor-id="pipeline-completo-end-to-end"><span class="header-section-number">6.1</span> Pipeline completo (end-to-end)</h2>
+<p>Hay dos flujos principales: <strong>set joints</strong> (actualizar ángulos) y <strong>load robot</strong> (cambiar de modelo). Ambos pasan por <code>SceneService::execute(Command)</code>.</p>
+<section id="flujo-setjoints" class="level3" data-number="6.1.1">
+<h3 data-number="6.1.1" class="anchored" data-anchor-id="flujo-setjoints"><span class="header-section-number">6.1.1</span> Flujo: SetJoints</h3>
 <div class="cell" data-layout-align="default">
 <div class="cell-output-display">
 <div id="fig-pipeline-e2e" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-pipeline-e2e-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <div>
-<svg width="672" height="480" viewbox="0.00 0.00 470.10 303.00" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" style="; max-width: none; max-height: none">
-<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 299)">
+<svg width="672" height="480" viewbox="0.00 0.00 550.10 483.60" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" style="; max-width: none; max-height: none">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 479.6)">
 <title>e2e</title>
-<polygon fill="white" stroke="transparent" points="-4,4 -4,-299 466.1,-299 466.1,4 -4,4"></polygon>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-479.6 546.1,-479.6 546.1,4 -4,4"></polygon>
 <g id="clust1" class="cluster">
 <title>cluster_frontend</title>
-<polygon fill="none" stroke="#2c3e50" stroke-dasharray="5,2" points="8,-139 8,-287 245,-287 245,-139 8,-139"></polygon>
-<text text-anchor="middle" x="126.5" y="-274" font-family="Times,serif" font-size="10.00">Frontend (Angular)</text>
+<polygon fill="none" stroke="#2c3e50" stroke-dasharray="5,2" points="210,-150.6 210,-299.6 447,-299.6 447,-150.6 210,-150.6"></polygon>
+<text text-anchor="middle" x="328.5" y="-286.6" font-family="Times,serif" font-size="10.00">Frontend (Angular)</text>
 </g>
 <g id="clust2" class="cluster">
-<title>cluster_backend</title>
-<polygon fill="none" stroke="#2c3e50" stroke-dasharray="5,2" points="284,-138 284,-286 400,-286 400,-138 284,-138"></polygon>
-<text text-anchor="middle" x="342" y="-273" font-family="Times,serif" font-size="10.00">Backend (Rust)</text>
+<title>cluster_runtime</title>
+<polygon fill="none" stroke="#2c3e50" stroke-dasharray="5,2" points="8,-150.6 8,-467.6 186,-467.6 186,-150.6 8,-150.6"></polygon>
+<text text-anchor="middle" x="97" y="-454.6" font-family="Times,serif" font-size="10.00">Runtime (thalos-runtime)</text>
 </g>
 <!-- user -->
 <g id="node1" class="node">
 <title>user</title>
-<ellipse fill="none" stroke="black" stroke-width="2" cx="64" cy="-240" rx="47.69" ry="18.27"></ellipse>
-<text text-anchor="middle" x="64" y="-237" font-family="sans-serif" font-size="10.00">Usuario</text>
+<ellipse fill="none" stroke="black" stroke-width="2" cx="266" cy="-252.6" rx="47.69" ry="18.27"></ellipse>
+<text text-anchor="middle" x="266" y="-249.6" font-family="sans-serif" font-size="10.00">Usuario</text>
 </g>
 <!-- jctrl -->
 <g id="node2" class="node">
 <title>jctrl</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M105,-183C105,-183 43,-183 43,-183 37,-183 31,-177 31,-171 31,-171 31,-159 31,-159 31,-153 37,-147 43,-147 43,-147 105,-147 105,-147 111,-147 117,-153 117,-159 117,-159 117,-171 117,-171 117,-177 111,-183 105,-183"></path>
-<text text-anchor="middle" x="74" y="-162" font-family="sans-serif" font-size="10.00">JointControl</text>
+<path fill="none" stroke="black" stroke-width="1.5" d="M315.9,-196.6C315.9,-196.6 240.1,-196.6 240.1,-196.6 234.1,-196.6 228.1,-190.6 228.1,-184.6 228.1,-184.6 228.1,-170.6 228.1,-170.6 228.1,-164.6 234.1,-158.6 240.1,-158.6 240.1,-158.6 315.9,-158.6 315.9,-158.6 321.9,-158.6 327.9,-164.6 327.9,-170.6 327.9,-170.6 327.9,-184.6 327.9,-184.6 327.9,-190.6 321.9,-196.6 315.9,-196.6"></path>
+<text text-anchor="middle" x="278" y="-180.6" font-family="sans-serif" font-size="10.00">JointControl</text>
+<text text-anchor="middle" x="278" y="-168.6" font-family="sans-serif" font-size="10.00">(signal + slider)</text>
 </g>
 <!-- user&#45;&gt;jctrl -->
 <g id="edge1" class="edge">
 <title>user-&gt;jctrl</title>
-<path fill="none" stroke="black" d="M71.42,-221.46C71.42,-221.46 71.42,-193.07 71.42,-193.07"></path>
-<polygon fill="black" stroke="black" points="74.92,-193.07 71.42,-183.07 67.92,-193.07 74.92,-193.07"></polygon>
+<path fill="none" stroke="black" d="M271.07,-234.06C271.07,-234.06 271.07,-206.71 271.07,-206.71"></path>
+<polygon fill="black" stroke="black" points="274.57,-206.71 271.07,-196.71 267.57,-206.71 274.57,-206.71"></polygon>
 </g>
 <!-- sstore -->
 <g id="node3" class="node">
 <title>sstore</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M204.49,-109C204.49,-109 147.51,-109 147.51,-109 141.51,-109 135.51,-103 135.51,-97 135.51,-97 135.51,-85 135.51,-85 135.51,-79 141.51,-73 147.51,-73 147.51,-73 204.49,-73 204.49,-73 210.49,-73 216.49,-79 216.49,-85 216.49,-85 216.49,-97 216.49,-97 216.49,-103 210.49,-109 204.49,-109"></path>
-<text text-anchor="middle" x="176" y="-88" font-family="sans-serif" font-size="10.00">SceneStore</text>
+<path fill="none" stroke="black" stroke-width="1.5" d="M383.87,-113C383.87,-113 274.13,-113 274.13,-113 268.13,-113 262.13,-107 262.13,-101 262.13,-101 262.13,-87 262.13,-87 262.13,-81 268.13,-75 274.13,-75 274.13,-75 383.87,-75 383.87,-75 389.87,-75 395.87,-81 395.87,-87 395.87,-87 395.87,-101 395.87,-101 395.87,-107 389.87,-113 383.87,-113"></path>
+<text text-anchor="middle" x="329" y="-97" font-family="sans-serif" font-size="10.00">SceneStore</text>
+<text text-anchor="middle" x="329" y="-85" font-family="sans-serif" font-size="10.00">merge + scan + toSignal</text>
 </g>
 <!-- jctrl&#45;&gt;sstore -->
 <g id="edge2" class="edge">
 <title>jctrl-&gt;sstore</title>
-<path fill="none" stroke="black" d="M117.08,-165C130.3,-165 141.43,-165 141.43,-165 141.43,-165 141.43,-119.29 141.43,-119.29"></path>
-<polygon fill="black" stroke="black" points="144.93,-119.29 141.43,-109.29 137.93,-119.29 144.93,-119.29"></polygon>
+<path fill="none" stroke="black" d="M295.01,-158.21C295.01,-158.21 295.01,-123.28 295.01,-123.28"></path>
+<polygon fill="black" stroke="black" points="298.51,-123.28 295.01,-113.28 291.51,-123.28 298.51,-123.28"></polygon>
+<text text-anchor="middle" x="321.22" y="-133.4" font-family="sans-serif" font-size="8.00">setJointAngles(q)</text>
 </g>
 <!-- asvc -->
 <g id="node4" class="node">
 <title>asvc</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M279.36,-36C279.36,-36 198.64,-36 198.64,-36 192.64,-36 186.64,-30 186.64,-24 186.64,-24 186.64,-12 186.64,-12 186.64,-6 192.64,0 198.64,0 198.64,0 279.36,0 279.36,0 285.36,0 291.36,-6 291.36,-12 291.36,-12 291.36,-24 291.36,-24 291.36,-30 285.36,-36 279.36,-36"></path>
-<text text-anchor="middle" x="239" y="-15" font-family="sans-serif" font-size="10.00">SceneApiService</text>
+<path fill="none" stroke="black" stroke-width="1.5" d="M364.36,-38C364.36,-38 283.64,-38 283.64,-38 277.64,-38 271.64,-32 271.64,-26 271.64,-26 271.64,-12 271.64,-12 271.64,-6 277.64,0 283.64,0 283.64,0 364.36,0 364.36,0 370.36,0 376.36,-6 376.36,-12 376.36,-12 376.36,-26 376.36,-26 376.36,-32 370.36,-38 364.36,-38"></path>
+<text text-anchor="middle" x="324" y="-22" font-family="sans-serif" font-size="10.00">SceneApiService</text>
+<text text-anchor="middle" x="324" y="-10" font-family="sans-serif" font-size="10.00">HTTP client</text>
 </g>
 <!-- sstore&#45;&gt;asvc -->
 <g id="edge3" class="edge">
 <title>sstore-&gt;asvc</title>
-<path fill="none" stroke="black" d="M201.53,-72.96C201.53,-72.96 201.53,-46.09 201.53,-46.09"></path>
-<polygon fill="black" stroke="black" points="205.03,-46.09 201.53,-36.09 198.03,-46.09 205.03,-46.09"></polygon>
+<path fill="none" stroke="black" d="M324,-74.69C324,-74.69 324,-48.25 324,-48.25"></path>
+<polygon fill="black" stroke="black" points="327.5,-48.25 324,-38.25 320.5,-48.25 327.5,-48.25"></polygon>
 </g>
 <!-- sview -->
 <g id="node5" class="node">
 <title>sview</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M224.81,-259C224.81,-259 159.19,-259 159.19,-259 153.19,-259 147.19,-253 147.19,-247 147.19,-247 147.19,-233 147.19,-233 147.19,-227 153.19,-221 159.19,-221 159.19,-221 224.81,-221 224.81,-221 230.81,-221 236.81,-227 236.81,-233 236.81,-233 236.81,-247 236.81,-247 236.81,-253 230.81,-259 224.81,-259"></path>
-<text text-anchor="middle" x="192" y="-243" font-family="sans-serif" font-size="10.00">SceneViewer</text>
-<text text-anchor="middle" x="192" y="-231" font-family="sans-serif" font-size="10.00">(Three.js)</text>
+<path fill="none" stroke="black" stroke-width="1.5" d="M426.81,-271.6C426.81,-271.6 361.19,-271.6 361.19,-271.6 355.19,-271.6 349.19,-265.6 349.19,-259.6 349.19,-259.6 349.19,-245.6 349.19,-245.6 349.19,-239.6 355.19,-233.6 361.19,-233.6 361.19,-233.6 426.81,-233.6 426.81,-233.6 432.81,-233.6 438.81,-239.6 438.81,-245.6 438.81,-245.6 438.81,-259.6 438.81,-259.6 438.81,-265.6 432.81,-271.6 426.81,-271.6"></path>
+<text text-anchor="middle" x="394" y="-255.6" font-family="sans-serif" font-size="10.00">SceneViewer</text>
+<text text-anchor="middle" x="394" y="-243.6" font-family="sans-serif" font-size="10.00">(Three.js)</text>
 </g>
 <!-- sstore&#45;&gt;sview -->
 <!-- handler -->
 <g id="node6" class="node">
 <title>handler</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M450.21,-36C450.21,-36 405.79,-36 405.79,-36 399.79,-36 393.79,-30 393.79,-24 393.79,-24 393.79,-12 393.79,-12 393.79,-6 399.79,0 405.79,0 405.79,0 450.21,0 450.21,0 456.21,0 462.21,-6 462.21,-12 462.21,-12 462.21,-24 462.21,-24 462.21,-30 456.21,-36 450.21,-36"></path>
-<text text-anchor="middle" x="428" y="-15" font-family="sans-serif" font-size="10.00">Handler</text>
+<path fill="none" stroke="black" stroke-width="1.5" d="M530.21,-37C530.21,-37 485.79,-37 485.79,-37 479.79,-37 473.79,-31 473.79,-25 473.79,-25 473.79,-13 473.79,-13 473.79,-7 479.79,-1 485.79,-1 485.79,-1 530.21,-1 530.21,-1 536.21,-1 542.21,-7 542.21,-13 542.21,-13 542.21,-25 542.21,-25 542.21,-31 536.21,-37 530.21,-37"></path>
+<text text-anchor="middle" x="508" y="-16" font-family="sans-serif" font-size="10.00">Handler</text>
 </g>
 <!-- asvc&#45;&gt;handler -->
-<g id="edge7" class="edge">
+<g id="edge9" class="edge">
 <title>asvc-&gt;handler</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M291.4,-18C291.4,-18 383.7,-18 383.7,-18"></path>
-<polygon fill="black" stroke="black" stroke-width="1.5" points="383.7,-21.5 393.7,-18 383.7,-14.5 383.7,-21.5"></polygon>
+<path fill="none" stroke="black" stroke-width="1.5" d="M376.73,-19C376.73,-19 463.85,-19 463.85,-19"></path>
+<polygon fill="black" stroke="black" stroke-width="1.5" points="463.85,-22.5 473.85,-19 463.85,-15.5 463.85,-22.5"></polygon>
+</g>
+<!-- service -->
+<g id="node7" class="node">
+<title>service</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M166.09,-439.6C166.09,-439.6 27.91,-439.6 27.91,-439.6 21.91,-439.6 15.91,-433.6 15.91,-427.6 15.91,-427.6 15.91,-413.6 15.91,-413.6 15.91,-407.6 21.91,-401.6 27.91,-401.6 27.91,-401.6 166.09,-401.6 166.09,-401.6 172.09,-401.6 178.09,-407.6 178.09,-413.6 178.09,-413.6 178.09,-427.6 178.09,-427.6 178.09,-433.6 172.09,-439.6 166.09,-439.6"></path>
+<text text-anchor="middle" x="97" y="-423.6" font-family="sans-serif" font-size="10.00">SceneService</text>
+<text text-anchor="middle" x="97" y="-411.6" font-family="sans-serif" font-size="10.00">::execute(Command::SetJoints)</text>
+</g>
+<!-- handler&#45;&gt;service -->
+<g id="edge4" class="edge">
+<title>handler-&gt;service</title>
+<path fill="none" stroke="black" d="M508,-37.01C508,-115.04 508,-420 508,-420 508,-420 188.2,-420 188.2,-420"></path>
+<polygon fill="black" stroke="black" points="188.2,-416.5 178.2,-420 188.2,-423.5 188.2,-416.5"></polygon>
+</g>
+<!-- runtime -->
+<g id="node8" class="node">
+<title>runtime</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M147.04,-364.6C147.04,-364.6 30.96,-364.6 30.96,-364.6 24.96,-364.6 18.96,-358.6 18.96,-352.6 18.96,-352.6 18.96,-338.6 18.96,-338.6 18.96,-332.6 24.96,-326.6 30.96,-326.6 30.96,-326.6 147.04,-326.6 147.04,-326.6 153.04,-326.6 159.04,-332.6 159.04,-338.6 159.04,-338.6 159.04,-352.6 159.04,-352.6 159.04,-358.6 153.04,-364.6 147.04,-364.6"></path>
+<text text-anchor="middle" x="89" y="-348.6" font-family="sans-serif" font-size="10.00">RwLock&lt;SceneRuntime&gt;</text>
+<text text-anchor="middle" x="89" y="-336.6" font-family="sans-serif" font-size="10.00">(mut: joints)</text>
+</g>
+<!-- service&#45;&gt;runtime -->
+<g id="edge5" class="edge">
+<title>service-&gt;runtime</title>
+<path fill="none" stroke="black" d="M89,-401.29C89,-401.29 89,-374.85 89,-374.85"></path>
+<polygon fill="black" stroke="black" points="92.5,-374.85 89,-364.85 85.5,-374.85 92.5,-374.85"></polygon>
 </g>
 <!-- fk -->
-<g id="node7" class="node">
+<g id="node9" class="node">
 <title>fk</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M379.81,-258C379.81,-258 304.19,-258 304.19,-258 298.19,-258 292.19,-252 292.19,-246 292.19,-246 292.19,-234 292.19,-234 292.19,-228 298.19,-222 304.19,-222 304.19,-222 379.81,-222 379.81,-222 385.81,-222 391.81,-228 391.81,-234 391.81,-234 391.81,-246 391.81,-246 391.81,-252 385.81,-258 379.81,-258"></path>
-<text text-anchor="middle" x="342" y="-237" font-family="sans-serif" font-size="10.00">FK::evaluate(q)</text>
+<path fill="none" stroke="black" stroke-width="1.5" d="M116.81,-270.6C116.81,-270.6 41.19,-270.6 41.19,-270.6 35.19,-270.6 29.19,-264.6 29.19,-258.6 29.19,-258.6 29.19,-246.6 29.19,-246.6 29.19,-240.6 35.19,-234.6 41.19,-234.6 41.19,-234.6 116.81,-234.6 116.81,-234.6 122.81,-234.6 128.81,-240.6 128.81,-246.6 128.81,-246.6 128.81,-258.6 128.81,-258.6 128.81,-264.6 122.81,-270.6 116.81,-270.6"></path>
+<text text-anchor="middle" x="79" y="-249.6" font-family="sans-serif" font-size="10.00">FK::evaluate(q)</text>
 </g>
-<!-- handler&#45;&gt;fk -->
-<g id="edge4" class="edge">
-<title>handler-&gt;fk</title>
-<path fill="none" stroke="black" d="M428,-36.17C428,-89.19 428,-240 428,-240 428,-240 402.03,-240 402.03,-240"></path>
-<polygon fill="black" stroke="black" points="402.03,-236.5 392.03,-240 402.03,-243.5 402.03,-236.5"></polygon>
+<!-- runtime&#45;&gt;fk -->
+<g id="edge6" class="edge">
+<title>runtime-&gt;fk</title>
+<path fill="none" stroke="black" d="M79,-326.33C79,-326.33 79,-280.9 79,-280.9"></path>
+<polygon fill="black" stroke="black" points="82.5,-280.9 79,-270.9 75.5,-280.9 82.5,-280.9"></polygon>
 </g>
 <!-- builder -->
-<g id="node8" class="node">
+<g id="node10" class="node">
 <title>builder</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M371.87,-184C371.87,-184 306.13,-184 306.13,-184 300.13,-184 294.13,-178 294.13,-172 294.13,-172 294.13,-158 294.13,-158 294.13,-152 300.13,-146 306.13,-146 306.13,-146 371.87,-146 371.87,-146 377.87,-146 383.87,-152 383.87,-158 383.87,-158 383.87,-172 383.87,-172 383.87,-178 377.87,-184 371.87,-184"></path>
-<text text-anchor="middle" x="339" y="-168" font-family="sans-serif" font-size="10.00">SceneBuilder</text>
-<text text-anchor="middle" x="339" y="-156" font-family="sans-serif" font-size="10.00">::from_fk()</text>
+<path fill="none" stroke="black" stroke-width="1.5" d="M102.87,-196.6C102.87,-196.6 37.13,-196.6 37.13,-196.6 31.13,-196.6 25.13,-190.6 25.13,-184.6 25.13,-184.6 25.13,-170.6 25.13,-170.6 25.13,-164.6 31.13,-158.6 37.13,-158.6 37.13,-158.6 102.87,-158.6 102.87,-158.6 108.87,-158.6 114.87,-164.6 114.87,-170.6 114.87,-170.6 114.87,-184.6 114.87,-184.6 114.87,-190.6 108.87,-196.6 102.87,-196.6"></path>
+<text text-anchor="middle" x="70" y="-180.6" font-family="sans-serif" font-size="10.00">SceneBuilder</text>
+<text text-anchor="middle" x="70" y="-168.6" font-family="sans-serif" font-size="10.00">::from_fk()</text>
 </g>
 <!-- fk&#45;&gt;builder -->
-<g id="edge5" class="edge">
+<g id="edge7" class="edge">
 <title>fk-&gt;builder</title>
-<path fill="none" stroke="black" d="M339,-221.84C339,-221.84 339,-194.03 339,-194.03"></path>
-<polygon fill="black" stroke="black" points="342.5,-194.03 339,-184.03 335.5,-194.03 342.5,-194.03"></polygon>
+<path fill="none" stroke="black" d="M72.14,-234.44C72.14,-234.44 72.14,-206.63 72.14,-206.63"></path>
+<polygon fill="black" stroke="black" points="75.64,-206.63 72.14,-196.63 68.64,-206.63 75.64,-206.63"></polygon>
 </g>
 <!-- vld -->
-<g id="node9" class="node">
+<g id="node11" class="node">
 <title>vld</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M373.64,-109C373.64,-109 300.36,-109 300.36,-109 294.36,-109 288.36,-103 288.36,-97 288.36,-97 288.36,-85 288.36,-85 288.36,-79 294.36,-73 300.36,-73 300.36,-73 373.64,-73 373.64,-73 379.64,-73 385.64,-79 385.64,-85 385.64,-85 385.64,-97 385.64,-97 385.64,-103 379.64,-109 373.64,-109"></path>
-<text text-anchor="middle" x="337" y="-88" font-family="sans-serif" font-size="10.00">SceneValidator</text>
+<path fill="none" stroke="black" stroke-width="1.5" d="M99.64,-112C99.64,-112 26.36,-112 26.36,-112 20.36,-112 14.36,-106 14.36,-100 14.36,-100 14.36,-88 14.36,-88 14.36,-82 20.36,-76 26.36,-76 26.36,-76 99.64,-76 99.64,-76 105.64,-76 111.64,-82 111.64,-88 111.64,-88 111.64,-100 111.64,-100 111.64,-106 105.64,-112 99.64,-112"></path>
+<text text-anchor="middle" x="63" y="-91" font-family="sans-serif" font-size="10.00">SceneValidator</text>
 </g>
 <!-- builder&#45;&gt;vld -->
-<g id="edge6" class="edge">
+<g id="edge8" class="edge">
 <title>builder-&gt;vld</title>
-<path fill="none" stroke="black" d="M339,-145.94C339,-145.94 339,-119.23 339,-119.23"></path>
-<polygon fill="black" stroke="black" points="342.5,-119.23 339,-109.23 335.5,-119.23 342.5,-119.23"></polygon>
+<path fill="none" stroke="black" d="M68.44,-158.21C68.44,-158.21 68.44,-122.14 68.44,-122.14"></path>
+<polygon fill="black" stroke="black" points="71.94,-122.14 68.44,-112.14 64.94,-122.14 71.94,-122.14"></polygon>
 </g>
 <!-- vld&#45;&gt;sstore -->
-<g id="edge8" class="edge">
+<g id="edge10" class="edge">
 <title>vld-&gt;sstore</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M278.26,-91C278.26,-91 216.72,-91 216.72,-91"></path>
-<polygon fill="black" stroke="black" stroke-width="1.5" points="278.26,-94.5 288.26,-91 278.26,-87.5 278.26,-94.5"></polygon>
+<path fill="none" stroke="black" stroke-width="1.5" d="M121.79,-94C121.79,-94 261.99,-94 261.99,-94"></path>
+<polygon fill="black" stroke="black" stroke-width="1.5" points="121.79,-90.5 111.79,-94 121.79,-97.5 121.79,-90.5"></polygon>
 </g>
 </g>
 </svg>
 </div>
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-pipeline-e2e-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;6.1: Pipeline completo end-to-end
+Figure&nbsp;6.1: Pipeline SetJoints — el usuario mueve un slider y ve el resultado
 </figcaption>
 </figure>
 </div>
 </div>
 </div>
+</section>
+<section id="flujo-loadrobot" class="level3" data-number="6.1.2">
+<h3 data-number="6.1.2" class="anchored" data-anchor-id="flujo-loadrobot"><span class="header-section-number">6.1.2</span> Flujo: LoadRobot</h3>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div id="fig-pipeline-load" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-pipeline-load-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div>
+<svg width="672" height="480" viewbox="0.00 0.00 713.10 670.37" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" style="; max-width: none; max-height: none">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 666.37)">
+<title>load</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-666.37 709.1,-666.37 709.1,4 -4,4"></polygon>
+<g id="clust1" class="cluster">
+<title>cluster_frontend</title>
+<polygon fill="none" stroke="#2c3e50" stroke-dasharray="5,2" points="202,-66 202,-316.37 314,-316.37 314,-66 202,-66"></polygon>
+<text text-anchor="middle" x="258" y="-303.37" font-family="Times,serif" font-size="10.00">Frontend (Angular)</text>
+</g>
+<g id="clust2" class="cluster">
+<title>cluster_backend</title>
+<polygon fill="none" stroke="#2c3e50" stroke-dasharray="5,2" points="8,-148.6 8,-654.37 194,-654.37 194,-148.6 8,-148.6"></polygon>
+<text text-anchor="middle" x="101" y="-641.37" font-family="Times,serif" font-size="10.00">Backend (Rust)</text>
+</g>
+<!-- user -->
+<g id="node1" class="node">
+<title>user</title>
+<ellipse fill="none" stroke="black" stroke-width="2" cx="258" cy="-249.98" rx="47.69" ry="18.27"></ellipse>
+<text text-anchor="middle" x="258" y="-246.98" font-family="sans-serif" font-size="10.00">Usuario</text>
+</g>
+<!-- catalog -->
+<g id="node2" class="node">
+<title>catalog</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M293.55,-193.6C293.55,-193.6 226.45,-193.6 226.45,-193.6 220.45,-193.6 214.45,-187.6 214.45,-181.6 214.45,-181.6 214.45,-169.6 214.45,-169.6 214.45,-163.6 220.45,-157.6 226.45,-157.6 226.45,-157.6 293.55,-157.6 293.55,-157.6 299.55,-157.6 305.55,-163.6 305.55,-169.6 305.55,-169.6 305.55,-181.6 305.55,-181.6 305.55,-187.6 299.55,-193.6 293.55,-193.6"></path>
+<text text-anchor="middle" x="260" y="-172.6" font-family="sans-serif" font-size="10.00">RobotCatalog</text>
+</g>
+<!-- user&#45;&gt;catalog -->
+<g id="edge1" class="edge">
+<title>user-&gt;catalog</title>
+<path fill="none" stroke="black" d="M260,-231.6C260,-231.6 260,-203.78 260,-203.78"></path>
+<polygon fill="black" stroke="black" points="263.5,-203.78 260,-193.78 256.5,-203.78 263.5,-203.78"></polygon>
+</g>
+<!-- rstore -->
+<g id="node3" class="node">
+<title>rstore</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M291.56,-110C291.56,-110 234.44,-110 234.44,-110 228.44,-110 222.44,-104 222.44,-98 222.44,-98 222.44,-86 222.44,-86 222.44,-80 228.44,-74 234.44,-74 234.44,-74 291.56,-74 291.56,-74 297.56,-74 303.56,-80 303.56,-86 303.56,-86 303.56,-98 303.56,-98 303.56,-104 297.56,-110 291.56,-110"></path>
+<text text-anchor="middle" x="263" y="-89" font-family="sans-serif" font-size="10.00">RobotStore</text>
+</g>
+<!-- catalog&#45;&gt;rstore -->
+<g id="edge2" class="edge">
+<title>catalog-&gt;rstore</title>
+<path fill="none" stroke="black" d="M263,-157.46C263,-157.46 263,-120.1 263,-120.1"></path>
+<polygon fill="black" stroke="black" points="266.5,-120.1 263,-110.1 259.5,-120.1 266.5,-120.1"></polygon>
+<text text-anchor="middle" x="275.88" y="-131.4" font-family="sans-serif" font-size="8.00">select(id)</text>
+</g>
+<!-- sstore2 -->
+<g id="node4" class="node">
+<title>sstore2</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M552.1,-111C552.1,-111 483.9,-111 483.9,-111 477.9,-111 471.9,-105 471.9,-99 471.9,-99 471.9,-85 471.9,-85 471.9,-79 477.9,-73 483.9,-73 483.9,-73 552.1,-73 552.1,-73 558.1,-73 564.1,-79 564.1,-85 564.1,-85 564.1,-99 564.1,-99 564.1,-105 558.1,-111 552.1,-111"></path>
+<text text-anchor="middle" x="518" y="-95" font-family="sans-serif" font-size="10.00">SceneStore</text>
+<text text-anchor="middle" x="518" y="-83" font-family="sans-serif" font-size="10.00">loadRobot(id)</text>
+</g>
+<!-- catalog&#45;&gt;sstore2 -->
+<g id="edge3" class="edge">
+<title>catalog-&gt;sstore2</title>
+<path fill="none" stroke="black" stroke-dasharray="5,2" d="M305.75,-175C383.57,-175 533.35,-175 533.35,-175 533.35,-175 533.35,-121.25 533.35,-121.25"></path>
+<polygon fill="black" stroke="black" points="536.85,-121.25 533.35,-111.25 529.85,-121.25 536.85,-121.25"></polygon>
+<text text-anchor="middle" x="520.44" y="-131.4" font-family="sans-serif" font-size="8.00">loadRobot(id)</text>
+</g>
+<!-- asvc2 -->
+<g id="node5" class="node">
+<title>asvc2</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M528.36,-36C528.36,-36 447.64,-36 447.64,-36 441.64,-36 435.64,-30 435.64,-24 435.64,-24 435.64,-12 435.64,-12 435.64,-6 441.64,0 447.64,0 447.64,0 528.36,0 528.36,0 534.36,0 540.36,-6 540.36,-12 540.36,-12 540.36,-24 540.36,-24 540.36,-30 534.36,-36 528.36,-36"></path>
+<text text-anchor="middle" x="488" y="-15" font-family="sans-serif" font-size="10.00">SceneApiService</text>
+</g>
+<!-- sstore2&#45;&gt;asvc2 -->
+<g id="edge4" class="edge">
+<title>sstore2-&gt;asvc2</title>
+<path fill="none" stroke="black" d="M506.19,-72.94C506.19,-72.94 506.19,-46.23 506.19,-46.23"></path>
+<polygon fill="black" stroke="black" points="509.69,-46.23 506.19,-36.23 502.69,-46.23 509.69,-46.23"></polygon>
+</g>
+<!-- handler2 -->
+<g id="node6" class="node">
+<title>handler2</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M693.21,-36C693.21,-36 648.79,-36 648.79,-36 642.79,-36 636.79,-30 636.79,-24 636.79,-24 636.79,-12 636.79,-12 636.79,-6 642.79,0 648.79,0 648.79,0 693.21,0 693.21,0 699.21,0 705.21,-6 705.21,-12 705.21,-12 705.21,-24 705.21,-24 705.21,-30 699.21,-36 693.21,-36"></path>
+<text text-anchor="middle" x="671" y="-15" font-family="sans-serif" font-size="10.00">Handler</text>
+</g>
+<!-- asvc2&#45;&gt;handler2 -->
+<g id="edge12" class="edge">
+<title>asvc2-&gt;handler2</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M540.44,-18C540.44,-18 626.76,-18 626.76,-18"></path>
+<polygon fill="black" stroke="black" stroke-width="1.5" points="626.76,-21.5 636.76,-18 626.76,-14.5 626.76,-21.5"></polygon>
+</g>
+<!-- service2 -->
+<g id="node7" class="node">
+<title>service2</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M174.47,-606.37C174.47,-606.37 27.53,-606.37 27.53,-606.37 21.53,-606.37 15.53,-600.37 15.53,-594.37 15.53,-594.37 15.53,-580.37 15.53,-580.37 15.53,-574.37 21.53,-568.37 27.53,-568.37 27.53,-568.37 174.47,-568.37 174.47,-568.37 180.47,-568.37 186.47,-574.37 186.47,-580.37 186.47,-580.37 186.47,-594.37 186.47,-594.37 186.47,-600.37 180.47,-606.37 174.47,-606.37"></path>
+<text text-anchor="middle" x="101" y="-590.37" font-family="sans-serif" font-size="10.00">SceneService</text>
+<text text-anchor="middle" x="101" y="-578.37" font-family="sans-serif" font-size="10.00">::execute(Command::LoadRobot)</text>
+</g>
+<!-- handler2&#45;&gt;service2 -->
+<g id="edge5" class="edge">
+<title>handler2-&gt;service2</title>
+<path fill="none" stroke="black" d="M671,-36.29C671,-133.68 671,-587 671,-587 671,-587 196.64,-587 196.64,-587"></path>
+<polygon fill="black" stroke="black" points="196.64,-583.5 186.64,-587 196.64,-590.5 196.64,-583.5"></polygon>
+</g>
+<!-- backend -->
+<g id="node8" class="node">
+<title>backend</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M143.59,-531.37C143.59,-531.37 60.41,-531.37 60.41,-531.37 54.41,-531.37 48.41,-525.37 48.41,-519.37 48.41,-519.37 48.41,-505.37 48.41,-505.37 48.41,-499.37 54.41,-493.37 60.41,-493.37 60.41,-493.37 143.59,-493.37 143.59,-493.37 149.59,-493.37 155.59,-499.37 155.59,-505.37 155.59,-505.37 155.59,-519.37 155.59,-519.37 155.59,-525.37 149.59,-531.37 143.59,-531.37"></path>
+<text text-anchor="middle" x="102" y="-515.37" font-family="sans-serif" font-size="10.00">RobotBackend</text>
+<text text-anchor="middle" x="102" y="-503.37" font-family="sans-serif" font-size="10.00">::resolve_model()</text>
+</g>
+<!-- service2&#45;&gt;backend -->
+<g id="edge6" class="edge">
+<title>service2-&gt;backend</title>
+<path fill="none" stroke="black" d="M102,-568.06C102,-568.06 102,-541.62 102,-541.62"></path>
+<polygon fill="black" stroke="black" points="105.5,-541.62 102,-531.62 98.5,-541.62 105.5,-541.62"></polygon>
+</g>
+<!-- chain -->
+<g id="node9" class="node">
+<title>chain</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M147.34,-456.37C147.34,-456.37 66.66,-456.37 66.66,-456.37 60.66,-456.37 54.66,-450.37 54.66,-444.37 54.66,-444.37 54.66,-430.37 54.66,-430.37 54.66,-424.37 60.66,-418.37 66.66,-418.37 66.66,-418.37 147.34,-418.37 147.34,-418.37 153.34,-418.37 159.34,-424.37 159.34,-430.37 159.34,-430.37 159.34,-444.37 159.34,-444.37 159.34,-450.37 153.34,-456.37 147.34,-456.37"></path>
+<text text-anchor="middle" x="107" y="-440.37" font-family="sans-serif" font-size="10.00">RobotRegistry</text>
+<text text-anchor="middle" x="107" y="-428.37" font-family="sans-serif" font-size="10.00">::create_default()</text>
+</g>
+<!-- backend&#45;&gt;chain -->
+<g id="edge7" class="edge">
+<title>backend-&gt;chain</title>
+<path fill="none" stroke="black" d="M105.06,-493.06C105.06,-493.06 105.06,-466.62 105.06,-466.62"></path>
+<polygon fill="black" stroke="black" points="108.56,-466.62 105.06,-456.62 101.56,-466.62 108.56,-466.62"></polygon>
+</g>
+<!-- runtime2 -->
+<g id="node10" class="node">
+<title>runtime2</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M167.04,-381.37C167.04,-381.37 50.96,-381.37 50.96,-381.37 44.96,-381.37 38.96,-375.37 38.96,-369.37 38.96,-369.37 38.96,-355.37 38.96,-355.37 38.96,-349.37 44.96,-343.37 50.96,-343.37 50.96,-343.37 167.04,-343.37 167.04,-343.37 173.04,-343.37 179.04,-349.37 179.04,-355.37 179.04,-355.37 179.04,-369.37 179.04,-369.37 179.04,-375.37 173.04,-381.37 167.04,-381.37"></path>
+<text text-anchor="middle" x="109" y="-365.37" font-family="sans-serif" font-size="10.00">RwLock&lt;SceneRuntime&gt;</text>
+<text text-anchor="middle" x="109" y="-353.37" font-family="sans-serif" font-size="10.00">(new ActiveRobot)</text>
+</g>
+<!-- chain&#45;&gt;runtime2 -->
+<g id="edge8" class="edge">
+<title>chain-&gt;runtime2</title>
+<path fill="none" stroke="black" d="M107,-418.06C107,-418.06 107,-391.62 107,-391.62"></path>
+<polygon fill="black" stroke="black" points="110.5,-391.62 107,-381.62 103.5,-391.62 110.5,-391.62"></polygon>
+</g>
+<!-- fk2 -->
+<g id="node11" class="node">
+<title>fk2</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M154.81,-267.98C154.81,-267.98 79.19,-267.98 79.19,-267.98 73.19,-267.98 67.19,-261.98 67.19,-255.98 67.19,-255.98 67.19,-243.98 67.19,-243.98 67.19,-237.98 73.19,-231.98 79.19,-231.98 79.19,-231.98 154.81,-231.98 154.81,-231.98 160.81,-231.98 166.81,-237.98 166.81,-243.98 166.81,-243.98 166.81,-255.98 166.81,-255.98 166.81,-261.98 160.81,-267.98 154.81,-267.98"></path>
+<text text-anchor="middle" x="117" y="-246.98" font-family="sans-serif" font-size="10.00">FK::evaluate(q)</text>
+</g>
+<!-- runtime2&#45;&gt;fk2 -->
+<g id="edge9" class="edge">
+<title>runtime2-&gt;fk2</title>
+<path fill="none" stroke="black" d="M117,-343.31C117,-343.31 117,-278.03 117,-278.03"></path>
+<polygon fill="black" stroke="black" points="120.5,-278.03 117,-268.03 113.5,-278.03 120.5,-278.03"></polygon>
+</g>
+<!-- builder2 -->
+<g id="node12" class="node">
+<title>builder2</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M157.87,-194.6C157.87,-194.6 92.13,-194.6 92.13,-194.6 86.13,-194.6 80.13,-188.6 80.13,-182.6 80.13,-182.6 80.13,-168.6 80.13,-168.6 80.13,-162.6 86.13,-156.6 92.13,-156.6 92.13,-156.6 157.87,-156.6 157.87,-156.6 163.87,-156.6 169.87,-162.6 169.87,-168.6 169.87,-168.6 169.87,-182.6 169.87,-182.6 169.87,-188.6 163.87,-194.6 157.87,-194.6"></path>
+<text text-anchor="middle" x="125" y="-178.6" font-family="sans-serif" font-size="10.00">SceneBuilder</text>
+<text text-anchor="middle" x="125" y="-166.6" font-family="sans-serif" font-size="10.00">::from_fk()</text>
+</g>
+<!-- fk2&#45;&gt;builder2 -->
+<g id="edge10" class="edge">
+<title>fk2-&gt;builder2</title>
+<path fill="none" stroke="black" d="M123.36,-231.98C123.36,-231.98 123.36,-204.74 123.36,-204.74"></path>
+<polygon fill="black" stroke="black" points="126.86,-204.74 123.36,-194.74 119.86,-204.74 126.86,-204.74"></polygon>
+</g>
+<!-- vld2 -->
+<g id="node13" class="node">
+<title>vld2</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M173.64,-110C173.64,-110 100.36,-110 100.36,-110 94.36,-110 88.36,-104 88.36,-98 88.36,-98 88.36,-86 88.36,-86 88.36,-80 94.36,-74 100.36,-74 100.36,-74 173.64,-74 173.64,-74 179.64,-74 185.64,-80 185.64,-86 185.64,-86 185.64,-98 185.64,-98 185.64,-104 179.64,-110 173.64,-110"></path>
+<text text-anchor="middle" x="137" y="-89" font-family="sans-serif" font-size="10.00">SceneValidator</text>
+</g>
+<!-- builder2&#45;&gt;vld2 -->
+<g id="edge11" class="edge">
+<title>builder2-&gt;vld2</title>
+<path fill="none" stroke="black" d="M129.06,-156.21C129.06,-156.21 129.06,-120.14 129.06,-120.14"></path>
+<polygon fill="black" stroke="black" points="132.56,-120.14 129.06,-110.14 125.56,-120.14 132.56,-120.14"></polygon>
+</g>
+<!-- vld2&#45;&gt;sstore2 -->
+<g id="edge13" class="edge">
+<title>vld2-&gt;sstore2</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M174.48,-120.1C174.48,-120.1 174.48,-133 174.48,-133 174.48,-133 502.65,-133 502.65,-133 502.65,-133 502.65,-121.77 502.65,-111.06"></path>
+<polygon fill="black" stroke="black" stroke-width="1.5" points="177.98,-120.1 174.48,-110.1 170.98,-120.1 177.98,-120.1"></polygon>
+<text text-anchor="middle" x="379" y="-131.4" font-family="sans-serif" font-size="8.00">JSON 200 (RuntimeStateResponse)</text>
+</g>
+</g>
+</svg>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-pipeline-load-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;6.2: Pipeline LoadRobot — cambiar el modelo activo
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</section>
 </section>
 <section id="flujo-de-fk-detalle-matemático" class="level2" data-number="6.2">
 <h2 data-number="6.2" class="anchored" data-anchor-id="flujo-de-fk-detalle-matemático"><span class="header-section-number">6.2</span> Flujo de FK (detalle matemático)</h2>
@@ -422,8 +660,36 @@ Pose(childᵢ) = (World, childᵢ, tᵢ)</code></pre>
    - Ángulo geodésico de rotación: 2·acos(|q_new · q_old|)
    - Si alguno &gt; epsilon → se reporta como cambio</code></pre>
 </section>
-<section id="relación-entre-conceptos" class="level2" data-number="6.5">
-<h2 data-number="6.5" class="anchored" data-anchor-id="relación-entre-conceptos"><span class="header-section-number">6.5</span> Relación entre conceptos</h2>
+<section id="flujo-de-primitives" class="level2" data-number="6.5">
+<h2 data-number="6.5" class="anchored" data-anchor-id="flujo-de-primitives"><span class="header-section-number">6.5</span> Flujo de Primitives</h2>
+<p>Las primitivas geométricas se construyen en <code>SceneBuilder</code> (o builders específicos como <code>ScaraVisualBuilder</code>) y viajan dentro de <code>VisualScene</code> hasta el frontend.</p>
+<pre><code>ScaraVisualBuilder::build(fk, chain)
+
+1. SceneBuilder::from_fk(fk) → VisualScene base (frames + links + axes)
+2. Extraer poses de link_1 y link_2 del FKResult
+3. Crear primitives:
+   - "base_column": Cylinder(radius=0.08, height=0.4) en [0, 0, -0.2]
+   - "link_1_body": cylinder_between(world, link_1, radius=0.045)
+   - "link_2_body": cylinder_between(link_1, link_2, radius=0.035)
+4. Pushear primitives a scene.primitives
+5. Devolver VisualScene completa</code></pre>
+<p>En el frontend, <code>ThreeRendererService.renderPrimitives()</code> recorre las primitives y crea meshes Three.js:</p>
+<pre><code>Por cada primitiva:
+  geometry → switch(type):
+    Cylinder → CylinderGeometry(radius, height)
+    Sphere   → SphereGeometry(radius)
+    Box      → BoxGeometry(width, height, depth)
+
+  color ← heuristic: id.includes("column") → gris
+                         id.includes("link_1") → azul
+                         id.includes("link_2") → verde
+
+  mesh = new Mesh(geometry, material)
+  mesh.position = primitive.translation
+  mesh.quaternion = [rot.y, rot.z, rot.w, rot.x]  // Rust → Three.js</code></pre>
+</section>
+<section id="relación-entre-conceptos" class="level2" data-number="6.6">
+<h2 data-number="6.6" class="anchored" data-anchor-id="relación-entre-conceptos"><span class="header-section-number">6.6</span> Relación entre conceptos</h2>
 <div class="cell" data-layout-align="default">
 <div class="cell-output-display">
 <div id="fig-concept-relations" class="quarto-float quarto-figure quarto-figure-center anchored">
@@ -513,7 +779,7 @@ Pose(childᵢ) = (World, childᵢ, tᵢ)</code></pre>
 </div>
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-concept-relations-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;6.2: Relación entre conceptos del dominio
+Figure&nbsp;6.3: Relación entre conceptos del dominio
 </figcaption>
 </figure>
 </div>

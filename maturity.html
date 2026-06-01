@@ -223,6 +223,7 @@ window.Quarto = {
   <li><a href="#thalos-core" id="toc-thalos-core" class="nav-link" data-scroll-target="#thalos-core"><span class="header-section-number">7.2.1</span> <code>thalos-core</code></a></li>
   <li><a href="#thalos-visual" id="toc-thalos-visual" class="nav-link" data-scroll-target="#thalos-visual"><span class="header-section-number">7.2.2</span> <code>thalos-visual</code></a></li>
   <li><a href="#thalos-api" id="toc-thalos-api" class="nav-link" data-scroll-target="#thalos-api"><span class="header-section-number">7.2.3</span> <code>thalos-api</code></a></li>
+  <li><a href="#thalos-runtime" id="toc-thalos-runtime" class="nav-link" data-scroll-target="#thalos-runtime"><span class="header-section-number">7.2.4</span> <code>thalos-runtime</code></a></li>
   </ul></li>
   <li><a href="#cobertura-deseada" id="toc-cobertura-deseada" class="nav-link" data-scroll-target="#cobertura-deseada"><span class="header-section-number">7.3</span> Cobertura deseada</a></li>
   </ul>
@@ -369,13 +370,13 @@ window.Quarto = {
 </tr>
 <tr class="odd">
 <td><code>thalos-visual::scene</code></td>
-<td><span class="math inline">\(\circ\)</span> Experimental</td>
-<td><code>VisualScene</code>, <code>VisualFrame</code>, API puede cambiar</td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td><code>VisualScene</code>, <code>VisualFrame</code>, primitives, <code>FrameStyle</code> — API estable pero puede crecer</td>
 </tr>
 <tr class="even">
 <td><code>thalos-visual::builder</code></td>
-<td><span class="math inline">\(\circ\)</span> Experimental</td>
-<td><code>SceneBuilder</code> — API puede cambiar</td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td><code>SceneBuilder</code>, <code>ScaraVisualBuilder</code>, <code>cylinder_between</code></td>
 </tr>
 <tr class="odd">
 <td><code>thalos-visual::validator</code></td>
@@ -393,24 +394,59 @@ window.Quarto = {
 <td><code>VisualPrecision</code></td>
 </tr>
 <tr class="even">
-<td><code>thalos-api::handlers</code></td>
-<td><span class="math inline">\(\circ\)</span> Experimental</td>
-<td>Handlers básicos, pueden expandirse</td>
+<td><code>thalos-runtime::scene</code></td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td><code>SceneService</code>, <code>Command</code>, <code>RuntimeSnapshot</code> — estable pero crecerá</td>
 </tr>
 <tr class="odd">
-<td><code>thalos-api::dto</code></td>
+<td><code>thalos-runtime::backends</code></td>
 <td><span class="math inline">\(\circ\)</span> Experimental</td>
-<td><code>ErrorResponse</code> puede expandirse</td>
+<td><code>RobotBackend</code> trait — puede necesitar más métodos</td>
 </tr>
 <tr class="even">
-<td><code>thalos-api::routes</code></td>
+<td><code>thalos-runtime::state</code></td>
 <td><span class="math inline">\(\circ\)</span> Experimental</td>
-<td>Routing puede cambiar</td>
+<td><code>SceneRuntime</code>, <code>ActiveRobot</code> — sujeto a cambios</td>
 </tr>
 <tr class="odd">
-<td>Frontend Angular</td>
+<td><code>thalos-api::handlers</code></td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td>Handlers REST escena + robots</td>
+</tr>
+<tr class="even">
+<td><code>thalos-api::dto</code></td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td><code>RuntimeStateResponse</code>, <code>VisualSceneDto</code>, mirrors completos</td>
+</tr>
+<tr class="odd">
+<td><code>thalos-api::routes</code></td>
 <td><span class="math inline">\(\circ\)</span> Experimental</td>
-<td>En desarrollo activo</td>
+<td>Routing puede cambiar / reorganizarse</td>
+</tr>
+<tr class="even">
+<td><code>thalos-api::robots</code></td>
+<td><span class="math inline">\(\circ\)</span> Experimental</td>
+<td>Catálogo de robots — feature nuevo</td>
+</tr>
+<tr class="odd">
+<td>Frontend: Scene feature</td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td>Signals + RxJS, stable pero en evolución</td>
+</tr>
+<tr class="even">
+<td>Frontend: Robots feature</td>
+<td><span class="math inline">\(\circ\)</span> Experimental</td>
+<td>Catálogo + selección — feature nuevo</td>
+</tr>
+<tr class="odd">
+<td>Frontend: ThreeRenderer</td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td>Primitives, FrameStyle, compass — puede sumar features</td>
+</tr>
+<tr class="even">
+<td>Frontend: RobotCatalog</td>
+<td><span class="math inline">\(\circ\)</span> Experimental</td>
+<td>UI de selección de robots, puede cambiar</td>
 </tr>
 </tbody>
 </table>
@@ -442,6 +478,12 @@ window.Quarto = {
 <ul>
 <li><code>service_tests</code> — <code>SceneService::build_scene</code> con validación</li>
 <li><code>api_tests</code> — Integración HTTP: endpoints responden correctamente</li>
+</ul>
+</section>
+<section id="thalos-runtime" class="level3" data-number="7.2.4">
+<h3 data-number="7.2.4" class="anchored" data-anchor-id="thalos-runtime"><span class="header-section-number">7.2.4</span> <code>thalos-runtime</code></h3>
+<ul>
+<li>Sin tests dedicados aún (depende de validación de escena vía <code>thalos-visual</code>)</li>
 </ul>
 </section>
 </section>

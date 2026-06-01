@@ -234,14 +234,29 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#visualscene" id="toc-visualscene" class="nav-link" data-scroll-target="#visualscene"><span class="header-section-number">4.2.1</span> <code>VisualScene</code></a></li>
   <li><a href="#scenevalidator" id="toc-scenevalidator" class="nav-link" data-scroll-target="#scenevalidator"><span class="header-section-number">4.2.2</span> <code>SceneValidator</code></a></li>
   <li><a href="#scenediff" id="toc-scenediff" class="nav-link" data-scroll-target="#scenediff"><span class="header-section-number">4.2.3</span> <code>SceneDiff</code></a></li>
+  <li><a href="#primitivas-geométricas" id="toc-primitivas-geométricas" class="nav-link" data-scroll-target="#primitivas-geométricas"><span class="header-section-number">4.2.4</span> Primitivas geométricas</a></li>
+  <li><a href="#framestyle" id="toc-framestyle" class="nav-link" data-scroll-target="#framestyle"><span class="header-section-number">4.2.5</span> FrameStyle</a></li>
+  <li><a href="#builders-específicos-por-robot" id="toc-builders-específicos-por-robot" class="nav-link" data-scroll-target="#builders-específicos-por-robot"><span class="header-section-number">4.2.6</span> Builders específicos por robot</a></li>
   </ul></li>
-  <li><a href="#sec-api" id="toc-sec-api" class="nav-link" data-scroll-target="#sec-api"><span class="header-section-number">4.3</span> thalos-api</a>
+  <li><a href="#sec-runtime" id="toc-sec-runtime" class="nav-link" data-scroll-target="#sec-runtime"><span class="header-section-number">4.3</span> thalos-runtime</a>
   <ul class="collapse">
-  <li><a href="#endpoints" id="toc-endpoints" class="nav-link" data-scroll-target="#endpoints"><span class="header-section-number">4.3.1</span> Endpoints</a></li>
-  <li><a href="#mapa-de-errores" id="toc-mapa-de-errores" class="nav-link" data-scroll-target="#mapa-de-errores"><span class="header-section-number">4.3.2</span> Mapa de errores</a></li>
+  <li><a href="#sceneservice" id="toc-sceneservice" class="nav-link" data-scroll-target="#sceneservice"><span class="header-section-number">4.3.1</span> SceneService</a></li>
+  <li><a href="#command-pattern" id="toc-command-pattern" class="nav-link" data-scroll-target="#command-pattern"><span class="header-section-number">4.3.2</span> Command pattern</a></li>
+  <li><a href="#state" id="toc-state" class="nav-link" data-scroll-target="#state"><span class="header-section-number">4.3.3</span> State</a></li>
+  <li><a href="#robotbackend-trait" id="toc-robotbackend-trait" class="nav-link" data-scroll-target="#robotbackend-trait"><span class="header-section-number">4.3.4</span> RobotBackend (trait)</a></li>
+  <li><a href="#runtimesnapshot" id="toc-runtimesnapshot" class="nav-link" data-scroll-target="#runtimesnapshot"><span class="header-section-number">4.3.5</span> RuntimeSnapshot</a></li>
   </ul></li>
-  <li><a href="#esquema-general-del-workspace" id="toc-esquema-general-del-workspace" class="nav-link" data-scroll-target="#esquema-general-del-workspace"><span class="header-section-number">4.4</span> Esquema general del workspace</a></li>
-  <li><a href="#frontend-angular" id="toc-frontend-angular" class="nav-link" data-scroll-target="#frontend-angular"><span class="header-section-number">4.5</span> Frontend (Angular)</a></li>
+  <li><a href="#sec-api" id="toc-sec-api" class="nav-link" data-scroll-target="#sec-api"><span class="header-section-number">4.4</span> thalos-api</a>
+  <ul class="collapse">
+  <li><a href="#endpoints" id="toc-endpoints" class="nav-link" data-scroll-target="#endpoints"><span class="header-section-number">4.4.1</span> Endpoints</a></li>
+  <li><a href="#mapa-de-errores" id="toc-mapa-de-errores" class="nav-link" data-scroll-target="#mapa-de-errores"><span class="header-section-number">4.4.2</span> Mapa de errores</a></li>
+  </ul></li>
+  <li><a href="#esquema-general-del-workspace" id="toc-esquema-general-del-workspace" class="nav-link" data-scroll-target="#esquema-general-del-workspace"><span class="header-section-number">4.5</span> Esquema general del workspace</a></li>
+  <li><a href="#frontend-angular" id="toc-frontend-angular" class="nav-link" data-scroll-target="#frontend-angular"><span class="header-section-number">4.6</span> Frontend (Angular)</a>
+  <ul class="collapse">
+  <li><a href="#arquitectura-del-store-scenestore" id="toc-arquitectura-del-store-scenestore" class="nav-link" data-scroll-target="#arquitectura-del-store-scenestore"><span class="header-section-number">4.6.1</span> Arquitectura del store (SceneStore)</a></li>
+  <li><a href="#threerendererservice" id="toc-threerendererservice" class="nav-link" data-scroll-target="#threerendererservice"><span class="header-section-number">4.6.2</span> ThreeRendererService</a></li>
+  </ul></li>
   </ul>
 </nav>
     </div>
@@ -267,12 +282,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>El workspace de Thalos está organizado en <strong>tres crates</strong> dentro de un workspace Cargo.</p>
+<p>El workspace de Thalos está organizado en <strong>cuatro crates</strong> dentro de un workspace Cargo.</p>
 <pre><code>backend/
 ├── Cargo.toml                    # workspace root
 ├── crates/
 │   ├── thalos-core/              # Núcleo matemático-robótico
 │   ├── thalos-visual/            # Representación visual
+│   ├── thalos-runtime/           # 🆕 Orquestación runtime
 │   └── thalos-api/               # Exposición externa (HTTP)</code></pre>
 <section id="sec-core" class="level2" data-number="4.1">
 <h2 data-number="4.1" class="anchored" data-anchor-id="sec-core"><span class="header-section-number">4.1</span> thalos-core</h2>
@@ -421,36 +437,148 @@ FrameRegistry { map&lt;FrameId, Frame&gt; }
 <h3 data-number="4.2.3" class="anchored" data-anchor-id="scenediff"><span class="header-section-number">4.2.3</span> <code>SceneDiff</code></h3>
 <p><code>SceneDiff::between(old, new, epsilon)</code> detecta frames agregados, eliminados y modificados (con delta de traslación y ángulo de rotación geodésico).</p>
 </section>
+<section id="primitivas-geométricas" class="level3" data-number="4.2.4">
+<h3 data-number="4.2.4" class="anchored" data-anchor-id="primitivas-geométricas"><span class="header-section-number">4.2.4</span> Primitivas geométricas</h3>
+<p><code>VisualScene</code> ahora incluye <code>primitives: Vec&lt;VisualPrimitive&gt;</code> para representar objetos 3D con volumen (cilindros, esferas, cajas) que complementan los frames y links. Cada primitiva tiene <code>id</code>, <code>translation</code>, <code>rotation</code> y <code>geometry</code>.</p>
+<p>Esto permite modelar elementos visuales concretos como la base column del SCARA, los cuerpos de los links, o marcadores TCP, <strong>sin modificar el core</strong>.</p>
 </section>
-<section id="sec-api" class="level2" data-number="4.3">
-<h2 data-number="4.3" class="anchored" data-anchor-id="sec-api"><span class="header-section-number">4.3</span> thalos-api</h2>
+<section id="framestyle" class="level3" data-number="4.2.5">
+<h3 data-number="4.2.5" class="anchored" data-anchor-id="framestyle"><span class="header-section-number">4.2.5</span> FrameStyle</h3>
+<p><code>FrameStyle</code> permite personalizar el aspecto visual de cada frame individual:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> FrameStyle <span class="op">{</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> axis_length<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span>     <span class="co">// longitud de cada eje</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> axis_radius<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span>     <span class="co">// radio del cilindro del eje (0 = línea)</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> origin_radius<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span>   <span class="co">// radio de la esfera del origen</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> show_labels<span class="op">:</span> <span class="dt">bool</span><span class="op">,</span>    <span class="co">// etiquetas X/Y/Z</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> color_x<span class="op">:</span> [<span class="dt">f64</span><span class="op">;</span> <span class="dv">3</span>]<span class="op">,</span>    <span class="co">// color RGB del eje X</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> color_y<span class="op">:</span> [<span class="dt">f64</span><span class="op">;</span> <span class="dv">3</span>]<span class="op">,</span>    <span class="co">// color RGB del eje Y</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> color_z<span class="op">:</span> [<span class="dt">f64</span><span class="op">;</span> <span class="dv">3</span>]<span class="op">,</span>    <span class="co">// color RGB del eje Z</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>VisualFrame.style</code> es <code>Option&lt;FrameStyle&gt;</code> — si es <code>None</code>, el frontend usa sus valores por defecto.</p>
+</section>
+<section id="builders-específicos-por-robot" class="level3" data-number="4.2.6">
+<h3 data-number="4.2.6" class="anchored" data-anchor-id="builders-específicos-por-robot"><span class="header-section-number">4.2.6</span> Builders específicos por robot</h3>
+<p>Además de <code>SceneBuilder</code> (genérico), existen builders específicos:</p>
+<ul>
+<li><strong><code>ScaraVisualBuilder</code></strong> — genera primitivas geométricas para el SCARA: <code>base_column</code>, <code>link_1_body</code> y <code>link_2_body</code> como cilindros posicionados dinámicamente según la FK actual.</li>
+</ul>
+<p>Helpers geométricos: <code>cylinder_between(from, to, radius)</code> crea un cilindro entre dos puntos 3D; <code>align_y_to(direction)</code> produce el quaternion que alinea el eje Y con la dirección dada.</p>
+</section>
+</section>
+<section id="sec-runtime" class="level2" data-number="4.3">
+<h2 data-number="4.3" class="anchored" data-anchor-id="sec-runtime"><span class="header-section-number">4.3</span> thalos-runtime</h2>
+<p><strong>Responsabilidad</strong>: Orquestación del estado mutable del sistema — el “cerebro” que conecta el análisis cinemático con la visualización.</p>
+<p><strong>Depende de</strong>: <code>thalos-core</code>, <code>thalos-visual</code>, <code>thiserror</code>, <code>chrono</code>.</p>
+<p><strong>Posición arquitectónica</strong>: se encuentra entre <code>thalos-visual</code> y <code>thalos-api</code>. La API consume el runtime, no llama al core ni al visual directamente.</p>
+<pre><code>thalos-runtime/src/
+├── lib.rs               # Re-exportaciones públicas
+├── error.rs             # RuntimeError (Scene + RobotModel)
+├── commands/
+│   └── mod.rs           # Command enum: SetJoints, LoadRobot
+├── state/
+│   ├── mod.rs
+│   └── robot.rs         # SceneRuntime, ActiveRobot
+├── services/
+│   ├── mod.rs
+│   └── scene.rs         # SceneService (orquestador principal)
+├── backends/
+│   ├── mod.rs           # RobotBackend trait
+│   └── internal.rs      # InternalBackend (catálogo built-in)
+└── snapshots/
+    ├── mod.rs
+    └── scene.rs         # RuntimeSnapshot (point-in-time state)</code></pre>
+<section id="sceneservice" class="level3" data-number="4.3.1">
+<h3 data-number="4.3.1" class="anchored" data-anchor-id="sceneservice"><span class="header-section-number">4.3.1</span> SceneService</h3>
+<p><code>SceneService</code> es el orquestador central. Mantiene el estado mutable (<code>SceneRuntime</code> envuelto en <code>RwLock</code>) y expone dos operaciones principales:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">impl</span> SceneService <span class="op">{</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">/// Snapshot del estado actual (FK + visual scene).</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> <span class="kw">fn</span> snapshot(<span class="op">&amp;</span><span class="kw">self</span>) <span class="op">-&gt;</span> <span class="dt">Result</span><span class="op">&lt;</span>RuntimeSnapshot<span class="op">,</span> RuntimeError<span class="op">&gt;;</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">/// Aplica un comando y devuelve el snapshot resultante.</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> <span class="kw">fn</span> execute(<span class="op">&amp;</span><span class="kw">self</span><span class="op">,</span> cmd<span class="op">:</span> Command) <span class="op">-&gt;</span> <span class="dt">Result</span><span class="op">&lt;</span>RuntimeSnapshot<span class="op">,</span> RuntimeError<span class="op">&gt;;</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Cada <code>execute()</code>: 1. Aplica la mutación (setear joints o cargar robot) 2. Corre FK sobre el nuevo estado 3. Construye la escena visual (con el builder correspondiente al modelo) 4. Valida la escena con <code>SceneValidator</code> 5. Devuelve <code>RuntimeSnapshot</code> con todo el estado + timestamp</p>
+</section>
+<section id="command-pattern" class="level3" data-number="4.3.2">
+<h3 data-number="4.3.2" class="anchored" data-anchor-id="command-pattern"><span class="header-section-number">4.3.2</span> Command pattern</h3>
+<p>Las mutaciones están tipadas como <code>Command</code>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> Command <span class="op">{</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    SetJoints(<span class="dt">Vec</span><span class="op">&lt;</span><span class="dt">f64</span><span class="op">&gt;</span>)<span class="op">,</span>   <span class="co">// ángulos articulares</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    LoadRobot(<span class="dt">String</span>)<span class="op">,</span>     <span class="co">// ID del modelo a cargar</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Esto permite que <code>SceneService::execute()</code> sea un punto único de entrada para toda mutación, facilitando auditoría, logging y futuros undo/redo.</p>
+</section>
+<section id="state" class="level3" data-number="4.3.3">
+<h3 data-number="4.3.3" class="anchored" data-anchor-id="state"><span class="header-section-number">4.3.3</span> State</h3>
+<p><code>SceneRuntime</code> y <code>ActiveRobot</code> modelan el estado mutable:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> SceneRuntime <span class="op">{</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> active_robot<span class="op">:</span> ActiveRobot<span class="op">,</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> ActiveRobot <span class="op">{</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> model<span class="op">:</span> RobotModel<span class="op">,</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> chain<span class="op">:</span> SerialChain<span class="op">,</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> joints<span class="op">:</span> <span class="dt">Vec</span><span class="op">&lt;</span><span class="dt">f64</span><span class="op">&gt;,</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="robotbackend-trait" class="level3" data-number="4.3.4">
+<h3 data-number="4.3.4" class="anchored" data-anchor-id="robotbackend-trait"><span class="header-section-number">4.3.4</span> RobotBackend (trait)</h3>
+<p>Strategy para resolución de modelos robóticos:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">trait</span> RobotBackend<span class="op">:</span> <span class="bu">Send</span> <span class="op">+</span> <span class="bu">Sync</span> <span class="op">{</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">fn</span> resolve_model(<span class="op">&amp;</span>id<span class="op">:</span> <span class="op">&amp;</span><span class="dt">str</span>) <span class="op">-&gt;</span> <span class="dt">Result</span><span class="op">&lt;</span>RobotModel<span class="op">,</span> RuntimeError<span class="op">&gt;;</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>InternalBackend</code> resuelve contra el catálogo built-in de <code>thalos-core</code>. Se pueden implementar backends personalizados (hardware, archivos, red).</p>
+</section>
+<section id="runtimesnapshot" class="level3" data-number="4.3.5">
+<h3 data-number="4.3.5" class="anchored" data-anchor-id="runtimesnapshot"><span class="header-section-number">4.3.5</span> RuntimeSnapshot</h3>
+<p>Valor de retorno unificado: contiene el modelo activo, los joints actuales, la escena visual validada y un timestamp.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> RuntimeSnapshot <span class="op">{</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> robot<span class="op">:</span> RobotModel<span class="op">,</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> joints<span class="op">:</span> <span class="dt">Vec</span><span class="op">&lt;</span><span class="dt">f64</span><span class="op">&gt;,</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> scene<span class="op">:</span> VisualScene<span class="op">,</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> generated_at<span class="op">:</span> DateTime<span class="op">&lt;</span>Utc<span class="op">&gt;,</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>La API convierte esto a <code>RuntimeStateResponse</code> (DTO HTTP) con <code>From</code>.</p>
+</section>
+</section>
+<section id="sec-api" class="level2" data-number="4.4">
+<h2 data-number="4.4" class="anchored" data-anchor-id="sec-api"><span class="header-section-number">4.4</span> thalos-api</h2>
 <p><strong>Responsabilidad</strong>: Exponer funcionalidades de Thalos hacia sistemas externos via HTTP.</p>
-<p><strong>Depende de</strong>: <code>thalos-core</code>, <code>thalos-visual</code>, <code>axum</code>, <code>tokio</code>, <code>serde</code>, <code>chrono</code>, <code>tower-http</code>.</p>
+<p><strong>Depende de</strong>: <code>thalos-core</code>, <code>thalos-visual</code>, <code>thalos-runtime</code>, <code>axum</code>, <code>tokio</code>, <code>serde</code>, <code>chrono</code>, <code>tower-http</code>.</p>
 <pre><code>thalos-api/src/
 ├── main.rs              # Entrypoint: monta router con CORS, inicia servidor
 ├── lib.rs               # Re-exportaciones públicas
 ├── app/
 │   ├── mod.rs           # AppState, Services
-│   ├── state.rs         # Estado global: scene service + factory
-│   └── dto.rs           # ErrorResponse, ErrorCode
+│   ├── prelude.rs       # Re-exportaciones del crate
+│   ├── state.rs         # Estado global: scene + robots services
+│   ├── dto.rs           # ErrorResponse, ErrorCode
+│   ├── error.rs         # ApiError (conversión a respuesta HTTP)
+│   └── types.rs         # ApiResult alias
 ├── features/
-│   └── scene/
-│       ├── mod.rs       # SceneService (orquesta FK + Builder + Validator)
-│       ├── service.rs   # Lógica de servicio
+│   ├── scene/
+│   │   ├── mod.rs       # Re-exportaciones
+│   │   ├── handler.rs   # Handlers axum
+│   │   ├── dto/         # Request/Response DTOs (SetJoints, LoadRobot, etc.)
+│   │   │   ├── mod.rs
+│   │   │   ├── requests.rs
+│   │   │   └── responses.rs
+│   │   └── error.rs     # SceneError conversion
+│   └── robots/
+│       ├── mod.rs       # Re-exportaciones
 │       ├── handler.rs   # Handlers axum
-│       └── dto.rs       # Request/Response DTOs (FromFkRequest, SceneResponse, etc.)
+│       ├── service.rs   # RobotService (catálogo de robots)
+│       ├── dto.rs       # RobotMetadataDto
+│       └── error.rs     # RobotError conversion
 └── http/
     ├── mod.rs           # app_router() — monta rutas
     └── routes/
-        └── scene.rs     # Definición de rutas REST</code></pre>
-<section id="endpoints" class="level3" data-number="4.3.1">
-<h3 data-number="4.3.1" class="anchored" data-anchor-id="endpoints"><span class="header-section-number">4.3.1</span> Endpoints</h3>
+        ├── mod.rs
+        ├── scene.rs     # Rutas de escena
+        └── robots.rs    # Rutas de robots</code></pre>
+<section id="endpoints" class="level3" data-number="4.4.1">
+<h3 data-number="4.4.1" class="anchored" data-anchor-id="endpoints"><span class="header-section-number">4.4.1</span> Endpoints</h3>
 <table class="caption-top table">
-<colgroup>
-<col style="width: 29%">
-<col style="width: 22%">
-<col style="width: 48%">
-</colgroup>
 <thead>
 <tr class="header">
 <th>Método</th>
@@ -460,35 +588,96 @@ FrameRegistry { map&lt;FrameId, Frame&gt; }
 </thead>
 <tbody>
 <tr class="odd">
-<td><code>POST</code></td>
-<td><code>/api/v1/scene/from-fk</code></td>
-<td>Configuración de joints → escena visual</td>
-</tr>
-<tr class="even">
 <td><code>GET</code></td>
 <td><code>/api/v1/scene</code></td>
-<td>Escena por defecto (q = [0, 0])</td>
+<td>Snapshot del runtime actual</td>
+</tr>
+<tr class="even">
+<td><code>POST</code></td>
+<td><code>/api/v1/scene/joints</code></td>
+<td>Mutar joints (<code>SetJoints</code>)</td>
 </tr>
 <tr class="odd">
+<td><code>POST</code></td>
+<td><code>/api/v1/scene/robot</code></td>
+<td>Cargar otro robot (<code>LoadRobot</code>)</td>
+</tr>
+<tr class="even">
 <td><code>POST</code></td>
 <td><code>/api/v1/scene/validate</code></td>
 <td>Validar una escena arbitraria</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>POST</code></td>
 <td><code>/api/v1/scene/diff</code></td>
 <td>Diff entre dos escenas</td>
 </tr>
+<tr class="even">
+<td><code>GET</code></td>
+<td><code>/api/v1/robots</code></td>
+<td>Listar catálogo de robots</td>
+</tr>
+<tr class="odd">
+<td><code>GET</code></td>
+<td><code>/api/v1/robots/{id}</code></td>
+<td>Obtener metadata de un robot</td>
+</tr>
+</tbody>
+</table>
+<p>Los handlers de scene <strong>no contienen lógica de dominio</strong>: delegan en <code>thalos_runtime::SceneService::execute()</code>. La API solo traduce HTTP ↔︎ Command.</p>
+</section>
+<section id="mapa-de-errores" class="level3" data-number="4.4.2">
+<h3 data-number="4.4.2" class="anchored" data-anchor-id="mapa-de-errores"><span class="header-section-number">4.4.2</span> Mapa de errores</h3>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Rust Error →</th>
+<th>HTTP Status</th>
+<th>Código</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>SceneError::MissingWorld</code></td>
+<td>422</td>
+<td><code>MISSING_WORLD</code></td>
+</tr>
+<tr class="even">
+<td><code>SceneError::MissingFrame</code></td>
+<td>422</td>
+<td><code>MISSING_FRAME</code></td>
+</tr>
+<tr class="odd">
+<td><code>SceneError::DuplicateId</code></td>
+<td>422</td>
+<td><code>DUPLICATE_ID</code></td>
+</tr>
+<tr class="even">
+<td><code>SceneError::BrokenTopology</code></td>
+<td>422</td>
+<td><code>BROKEN_TOPOLOGY</code></td>
+</tr>
+<tr class="odd">
+<td><code>SceneError::NonFiniteValue</code></td>
+<td>422</td>
+<td><code>NON_FINITE_VALUE</code></td>
+</tr>
+<tr class="even">
+<td><code>SceneError::InvalidQuaternion</code></td>
+<td>422</td>
+<td><code>INVALID_QUATERNION</code></td>
+</tr>
+<tr class="odd">
+<td><code>RobotModelError</code></td>
+<td>404</td>
+<td><code>ROBOT_NOT_FOUND</code></td>
+</tr>
 </tbody>
 </table>
 </section>
-<section id="mapa-de-errores" class="level3" data-number="4.3.2">
-<h3 data-number="4.3.2" class="anchored" data-anchor-id="mapa-de-errores"><span class="header-section-number">4.3.2</span> Mapa de errores</h3>
-<p>Los errores de <code>SceneError</code> se traducen a <code>ErrorResponse</code> con códigos <code>SCREAMING_SNAKE_CASE</code> y status HTTP <code>422 Unprocessable Entity</code>.</p>
 </section>
-</section>
-<section id="esquema-general-del-workspace" class="level2" data-number="4.4">
-<h2 data-number="4.4" class="anchored" data-anchor-id="esquema-general-del-workspace"><span class="header-section-number">4.4</span> Esquema general del workspace</h2>
+<section id="esquema-general-del-workspace" class="level2" data-number="4.5">
+<h2 data-number="4.5" class="anchored" data-anchor-id="esquema-general-del-workspace"><span class="header-section-number">4.5</span> Esquema general del workspace</h2>
 <pre><code>Thalos Workspace
 │
 ├── thalos-core           # Núcleo matemático-robótico
@@ -499,29 +688,73 @@ FrameRegistry { map&lt;FrameId, Frame&gt; }
 │   └── models            # Planar2R, Planar3R, SCARA, SingleRevolute
 │
 ├── thalos-visual         # Visualización desacoplada
-│   ├── scene             # VisualScene, SceneDiff, VisualPrecision
-│   ├── builder           # SceneBuilder (FK → VisualScene)
+│   ├── scene             # VisualScene, SceneDiff, VisualPrecision,
+│   │                     # FrameStyle, VisualPrimitive
+│   ├── builder           # SceneBuilder, ScaraVisualBuilder
 │   └── validator         # SceneValidator (8 invariantes)
 │
+├── thalos-runtime        # Orquestación runtime
+│   ├── commands          # Command enum (SetJoints, LoadRobot)
+│   ├── state             # SceneRuntime, ActiveRobot
+│   ├── services          # SceneService (orquestador)
+│   ├── backends          # RobotBackend trait + InternalBackend
+│   └── snapshots         # RuntimeSnapshot
+│
 └── thalos-api            # API HTTP
-    ├── app               # AppState, Services, DTOs de error
-    ├── features/scene    # SceneService + handlers + DTOs
+    ├── app               # AppState, Services, ApiError
+    ├── features/{scene,robots} # Handlers + DTOs + services
     └── http/routes       # Rutas REST (axum Router)</code></pre>
 </section>
-<section id="frontend-angular" class="level2" data-number="4.5">
-<h2 data-number="4.5" class="anchored" data-anchor-id="frontend-angular"><span class="header-section-number">4.5</span> Frontend (Angular)</h2>
+<section id="frontend-angular" class="level2" data-number="4.6">
+<h2 data-number="4.6" class="anchored" data-anchor-id="frontend-angular"><span class="header-section-number">4.6</span> Frontend (Angular)</h2>
+<p>El frontend está organizado por <strong>features</strong> (scene, robots), cada uno con sus propios stores, servicios, tipos y componentes. Usa <strong>Angular Signals</strong> como mecanismo principal de reactividad, con RxJS subyacente para comunicación HTTP y pipelines asíncronos.</p>
 <pre><code>frontend/src/app/
-├── app.ts                # Layout shell (SceneViewer + JointControl)
-├── visual-scene.types.ts # Mirror types de Rust
-├── services/
-│   ├── scene-api.service.ts   # HTTP client → /api/v1/scene/from-fk
-│   ├── scene.store.ts         # Estado reactivo con RxJS
-│   └── three-renderer.service.ts  # Renderizado Three.js
-└── components/
-    ├── scene-viewer/          # Visualización 3D
-    └── joint-control/         # Controles de sliders para joints</code></pre>
+├── app.config.ts              # Providers y configuración de Angular
+├── app.component.ts           # Layout shell
+│
+├── features/
+│   ├── scene/                 # Feature de escena 3D
+│   │   ├── scene.types.ts     # Tipos internos (SceneData, SceneFrame, etc.)
+│   │   ├── scene-api.types.ts # Mirror de DTOs del backend (snake_case)
+│   │   ├── adapters/
+│   │   │   └── dto-to-model.ts    # VisualSceneDto → SceneData
+│   │   ├── store/
+│   │   │   └── scene.store.ts     # Estado reactivo → Signal&lt;SceneState&gt;
+│   │   ├── services/
+│   │   │   ├── scene-api.service.ts       # HTTP client
+│   │   │   └── three-renderer.service.ts  # Renderizado Three.js
+│   │   └── components/
+│   │       ├── scene-viewer/        # Canvas Three.js + effect()
+│   │       └── joint-control/       # Sliders adaptativos por DOF
+│   │
+│   └── robots/                 # Feature de catálogo de robots
+│       ├── robot-api.types.ts  # DTOs (RobotMetadataDto)
+│       ├── store/
+│       │   └── robot.store.ts  # Estado reactivo → signals
+│       └── components/
+│           ├── robot-catalog/      # Lista + selección
+│           └── robot-card/         # Card individual</code></pre>
+<section id="arquitectura-del-store-scenestore" class="level3" data-number="4.6.1">
+<h3 data-number="4.6.1" class="anchored" data-anchor-id="arquitectura-del-store-scenestore"><span class="header-section-number">4.6.1</span> Arquitectura del store (SceneStore)</h3>
+<p>Dos pipelines RxJS paralelos se merged con <code>merge()</code> + <code>scan()</code> para producir un <code>Observable&lt;SceneState&gt;</code> que se convierte en <code>Signal&lt;SceneState&gt;</code> vía <code>toSignal()</code>:</p>
+<pre><code>qSubject (BehaviorSubject) ─→ auditTime(16) ─→ switchMap → API setJoints ──┐
+                                                                           ├→ merge → scan → toSignal → Signal&lt;SceneState&gt;
+loadRobotSubject (Subject) ─────────────────→ switchMap → API loadRobot ───┘</code></pre>
+<p>Los componentes consumen <code>SceneStore.state</code> como signal. <strong>No hay subscriptions manuales</strong> — usan <code>effect()</code> o <code>computed()</code>.</p>
+</section>
+<section id="threerendererservice" class="level3" data-number="4.6.2">
+<h3 data-number="4.6.2" class="anchored" data-anchor-id="threerendererservice"><span class="header-section-number">4.6.2</span> ThreeRendererService</h3>
+<p>Renderiza <code>SceneData</code> en Three.js. Soporta:</p>
+<ul>
+<li><strong>Frames</strong> con <code>FrameStyle</code> (esferas de origen, ejes con flechas cónicas)</li>
+<li><strong>Links</strong> como cilindros entre dos puntos</li>
+<li><strong>Primitivas</strong> geométricas (cilindros, esferas, cajas con color por ID)</li>
+<li><strong>Brújula 3D</strong> en esquina (contra-rotada a la cámara para orientación global)</li>
+</ul>
+<p>Rotación: Rust serializa quaternions como <code>[w, x, y, z]</code> → Three.js espera <code>(x, y, z, w)</code>. El adapter y el renderer aplican esta conversión.</p>
 
 
+</section>
 </section>
 
 </main> <!-- /main -->
