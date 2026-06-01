@@ -1,7 +1,7 @@
 import { Injectable, NgZone, inject } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { SceneData, ScenePrimitive } from '../scene.types';
+import { DEFAULT_FRAME_STYLE, SceneData, ScenePrimitive } from '../scene.types';
 
 
 @Injectable({ providedIn: 'root' })
@@ -13,6 +13,7 @@ export class ThreeRendererService {
   private renderer: THREE.WebGLRenderer | null = null;
   private controls: OrbitControls | null = null;
   private contentGroup: THREE.Group | null = null;
+  private compassGroup: THREE.Group | null = null;
   private frameId: number | null = null;
 
   // ── Public API ──
@@ -47,6 +48,13 @@ export class ThreeRendererService {
     this.contentGroup = new THREE.Group();
     this.scene.add(this.contentGroup);
 
+    // ── Compass (hijo de la cámara — siempre visible en pantalla) ──
+    this.compassGroup = new THREE.Group();
+    this.buildCompassAxes(this.compassGroup, 0.35);
+    // Posición relativa a la cámara: abajo‑izquierda, ligeramente adelante
+    this.compassGroup.position.set(-0.55, -0.4, -0.9);
+    this.camera.add(this.compassGroup);
+
     // Resize
     this.bindResize();
     window.addEventListener('resize', this.onResize);
@@ -69,14 +77,20 @@ export class ThreeRendererService {
       // Rust: [w, x, y, z] → Three.js: (x, y, z, w)
       g.quaternion.set(frame.rotation[1], frame.rotation[2], frame.rotation[3], frame.rotation[0]);
 
-      // Origin marker
-      g.add(new THREE.Mesh(
-        new THREE.SphereGeometry(0.025, 10, 10),
-        new THREE.MeshStandardMaterial({ color: 0xaaaaaa }),
-      ));
+      const style = frame.style ?? DEFAULT_FRAME_STYLE;
 
-      // Coordinate axes
-      g.add(new THREE.AxesHelper(0.12));
+      // Origin sphere
+      if (style.originRadius > 0) {
+        g.add(new THREE.Mesh(
+          new THREE.SphereGeometry(style.originRadius, 12, 12),
+          new THREE.MeshStandardMaterial({ color: 0xcccccc }),
+        ));
+      }
+
+      // Three axes with styled arrows
+      this.makeAxisArrow(g, style.axisLength, style.axisRadius, style.colorX, new THREE.Vector3(1, 0, 0));
+      this.makeAxisArrow(g, style.axisLength, style.axisRadius, style.colorY, new THREE.Vector3(0, 1, 0));
+      this.makeAxisArrow(g, style.axisLength, style.axisRadius, style.colorZ, new THREE.Vector3(0, 0, 1));
 
       grp.add(g);
     }
@@ -100,21 +114,7 @@ export class ThreeRendererService {
       grp.add(mesh);
     }
 
-    // ── Joint axes ──
-    for (const ja of scene.jointAxes) {
-      const origin = new THREE.Vector3(ja.origin[0], ja.origin[1], ja.origin[2]);
-      const axis = new THREE.Vector3(ja.axis[0], ja.axis[1], ja.axis[2]).normalize();
-      const half = 0.18;
-
-      const pts = [
-        origin.clone().add(axis.clone().multiplyScalar(-half)),
-        origin.clone().add(axis.clone().multiplyScalar(half)),
-      ];
-      grp.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(pts),
-        new THREE.LineBasicMaterial({ color: 0xff8800 }),
-      ));
-    }
+    // ── Joint axes (omitido — la flecha Z de cada frame ya indica el eje) ──
 
     // ── Primitives ──
     this.renderPrimitives(grp, scene);
@@ -166,6 +166,81 @@ export class ThreeRendererService {
     }
   }
 
+  /** Construye un eje visual: flecha cilíndrica si radius>0, línea si radius≈0. */
+  private makeAxisArrow(
+    parent: THREE.Group,
+    length: number,
+    radius: number,
+    rgb: [number, number, number],
+    dir: THREE.Vector3,
+  ): void {
+    const color = new THREE.Color(rgb[0], rgb[1], rgb[2]);
+    const headLen = Math.min(length * 0.2, 0.04);
+    const shaftLen = length - headLen;
+    const up = new THREE.Vector3(0, 1, 0);
+
+    // Position along dir (not parent Y) so axes don't cross
+    const shaftCenter = dir.clone().multiplyScalar(shaftLen / 2);
+    const headCenter = dir.clone().multiplyScalar(shaftLen + headLen / 2);
+
+    if (radius > 1e-6) {
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius, radius, shaftLen, 6, 1),
+        new THREE.MeshStandardMaterial({ color }),
+      );
+      shaft.position.copy(shaftCenter);
+      shaft.quaternion.setFromUnitVectors(up, dir);
+      parent.add(shaft);
+
+      const head = new THREE.Mesh(
+        new THREE.ConeGeometry(radius * 3, headLen, 6, 1),
+        new THREE.MeshStandardMaterial({ color }),
+      );
+      head.position.copy(headCenter);
+      head.quaternion.setFromUnitVectors(up, dir);
+      parent.add(head);
+    } else {
+      const pts = [new THREE.Vector3(0, 0, 0), dir.clone().multiplyScalar(length)];
+      parent.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(pts),
+        new THREE.LineBasicMaterial({ color }),
+      ));
+    }
+  }
+
+  /** Construye los ejes de la brújula (estilo fijo, siempre visible). */
+  private buildCompassAxes(parent: THREE.Group, size: number): void {
+    const headFrac = 0.18;
+    const shaftLen = size * (1 - headFrac);
+    const headLen = size * headFrac;
+    const r = size * 0.025;
+
+    const build = (rgb: [number, number, number], dir: THREE.Vector3): void => {
+      const color = new THREE.Color(rgb[0], rgb[1], rgb[2]);
+      const up = new THREE.Vector3(0, 1, 0);
+
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(r, r, shaftLen, 6, 1),
+        new THREE.MeshStandardMaterial({ color }),
+      );
+      shaft.position.y = shaftLen / 2;
+      shaft.quaternion.setFromUnitVectors(up, dir);
+      parent.add(shaft);
+
+      const head = new THREE.Mesh(
+        new THREE.ConeGeometry(r * 3, headLen, 6, 1),
+        new THREE.MeshStandardMaterial({ color }),
+      );
+      head.position.y = shaftLen + headLen / 2;
+      head.quaternion.setFromUnitVectors(up, dir);
+      parent.add(head);
+    };
+
+    build([1.0, 0.5, 0.0], new THREE.Vector3(1, 0, 0));
+    build([0.0, 0.8, 0.0], new THREE.Vector3(0, 1, 0));
+    build([0.0, 0.5, 1.0], new THREE.Vector3(0, 0, 1));
+  }
+
   dispose(): void {
     if (this.frameId !== null) {
       cancelAnimationFrame(this.frameId);
@@ -185,12 +260,20 @@ export class ThreeRendererService {
   // ── Private ──
 
   private startLoop(): void {
+    const invQuat = new THREE.Quaternion();
     const loop = (): void => {
       this.frameId = requestAnimationFrame(loop);
       this.controls?.update();
-      if (this.renderer && this.scene && this.camera) {
-        this.renderer.render(this.scene, this.camera);
+
+      const cam = this.camera;
+      if (!cam || !this.renderer || !this.scene) return;
+
+      // Contra‑rotar el compass para que siempre apunte en direcciones globales
+      if (this.compassGroup) {
+        this.compassGroup.quaternion.copy(cam.quaternion).invert();
       }
+
+      this.renderer.render(this.scene, cam);
     };
     loop();
   }

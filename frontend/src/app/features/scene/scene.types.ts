@@ -14,11 +14,32 @@ export interface RuntimeInfo {
 }
 
 /** Modelo interno de frames renderizables. */
+export interface SceneFrameStyle {
+  axisLength: number;
+  axisRadius: number;
+  originRadius: number;
+  showLabels: boolean;
+  colorX: [number, number, number];
+  colorY: [number, number, number];
+  colorZ: [number, number, number];
+}
+
+export const DEFAULT_FRAME_STYLE: SceneFrameStyle = {
+  axisLength: 0.18,
+  axisRadius: 0.006,
+  originRadius: 0,
+  showLabels: false,
+  colorX: [1.0, 0.5, 0.0],
+  colorY: [0.0, 0.8, 0.0],
+  colorZ: [0.0, 0.5, 1.0],
+};
+
 export interface SceneFrame {
   id: string;
   parent: string | null;
   translation: [number, number, number];
   rotation: [number, number, number, number];
+  style: SceneFrameStyle | null;
 }
 
 export interface SceneLink {

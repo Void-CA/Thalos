@@ -210,6 +210,7 @@ fn frame(
         parent: parent.map(|p| p.into()),
         translation,
         rotation,
+        style: None,
     }
 }
 

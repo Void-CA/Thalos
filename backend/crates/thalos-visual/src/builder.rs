@@ -102,6 +102,7 @@ impl SceneBuilder {
             parent: None,
             translation: self.normalize_tx(world_pose.transform()),
             rotation: self.normalize_rot(world_pose.transform()),
+            style: None,
         });
 
         for segment in &self.chain.segments {
@@ -113,6 +114,7 @@ impl SceneBuilder {
                 parent: Some(self.resolve_visual_id(&segment.parent)),
                 translation: self.normalize_tx(child_pose.transform()),
                 rotation: self.normalize_rot(child_pose.transform()),
+                style: None,
             });
 
             links.push(VisualLink {

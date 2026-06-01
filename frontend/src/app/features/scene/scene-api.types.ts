@@ -3,11 +3,22 @@
 
 import type { RobotMetadataDto } from '../robots/robot-api.types';
 
+export interface FrameStyleDto {
+  axis_length: number;
+  axis_radius: number;
+  origin_radius: number;
+  show_labels: boolean;
+  color_x: [number, number, number];
+  color_y: [number, number, number];
+  color_z: [number, number, number];
+}
+
 export interface VisualFrameDto {
   id: string;
   parent: string | null;
   translation: [number, number, number];
   rotation: [number, number, number, number];
+  style: FrameStyleDto | null;
 }
 
 export interface VisualLinkDto {

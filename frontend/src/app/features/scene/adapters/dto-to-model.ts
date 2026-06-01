@@ -1,7 +1,7 @@
 // ── Adapter: VisualSceneDto (API contract) → SceneData (runtime state) ──
 
-import type { VisualSceneDto, PrimitiveGeometryDto } from '../scene-api.types';
-import type { SceneData, SceneFrame, SceneJointAxis, SceneLink, ScenePrimitive, SceneTwist } from '../scene.types';
+import type { VisualSceneDto, PrimitiveGeometryDto, FrameStyleDto } from '../scene-api.types';
+import type { SceneData, SceneFrame, SceneFrameStyle, SceneJointAxis, SceneLink, ScenePrimitive, SceneTwist } from '../scene.types';
 
 export function toSceneData(dto: VisualSceneDto): SceneData {
   return {
@@ -19,6 +19,19 @@ function toFrame(dto: VisualSceneDto['frames'][number]): SceneFrame {
     parent: dto.parent,
     translation: dto.translation,
     rotation: dto.rotation,
+    style: dto.style ? toFrameStyle(dto.style) : null,
+  };
+}
+
+function toFrameStyle(dto: FrameStyleDto): SceneFrameStyle {
+  return {
+    axisLength: dto.axis_length,
+    axisRadius: dto.axis_radius,
+    originRadius: dto.origin_radius,
+    showLabels: dto.show_labels,
+    colorX: dto.color_x,
+    colorY: dto.color_y,
+    colorZ: dto.color_z,
   };
 }
 

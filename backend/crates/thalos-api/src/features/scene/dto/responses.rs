@@ -3,15 +3,8 @@ use serde::{Deserialize, Serialize};
 
 use thalos_runtime::RuntimeSnapshot;
 use thalos_visual::{
-    ChangedFrame,
-    PrimitiveGeometry,
-    SceneDiff,
-    VisualFrame,
-    VisualJointAxis,
-    VisualLink,
-    VisualPrimitive,
-    VisualScene,
-    VisualTwist,
+    ChangedFrame, FrameStyle, PrimitiveGeometry, SceneDiff, VisualFrame, VisualJointAxis,
+    VisualLink, VisualPrimitive, VisualScene, VisualTwist,
 };
 
 use crate::features::robots::dto::RobotMetadataDto;
@@ -30,11 +23,24 @@ pub struct VisualSceneDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FrameStyleDto {
+    pub axis_length: f64,
+    pub axis_radius: f64,
+    pub origin_radius: f64,
+    pub show_labels: bool,
+    pub color_x: [f64; 3],
+    pub color_y: [f64; 3],
+    pub color_z: [f64; 3],
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct VisualFrameDto {
     pub id: String,
     pub parent: Option<String>,
     pub translation: [f64; 3],
     pub rotation: [f64; 4],
+    #[serde(default)]
+    pub style: Option<FrameStyleDto>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -127,6 +133,20 @@ impl From<RuntimeSnapshot> for RuntimeStateResponse {
 
 // ── Domain → DTO conversions ──
 
+impl From<FrameStyle> for FrameStyleDto {
+    fn from(s: FrameStyle) -> Self {
+        Self {
+            axis_length: s.axis_length,
+            axis_radius: s.axis_radius,
+            origin_radius: s.origin_radius,
+            show_labels: s.show_labels,
+            color_x: s.color_x,
+            color_y: s.color_y,
+            color_z: s.color_z,
+        }
+    }
+}
+
 impl From<VisualFrame> for VisualFrameDto {
     fn from(f: VisualFrame) -> Self {
         Self {
@@ -134,6 +154,7 @@ impl From<VisualFrame> for VisualFrameDto {
             parent: f.parent,
             translation: f.translation,
             rotation: f.rotation,
+            style: f.style.map(Into::into),
         }
     }
 }
@@ -222,6 +243,20 @@ impl From<SceneDiff> for SceneDiffDto {
 
 // ── DTO → Domain conversions (for incoming requests) ──
 
+impl From<FrameStyleDto> for FrameStyle {
+    fn from(s: FrameStyleDto) -> Self {
+        Self {
+            axis_length: s.axis_length,
+            axis_radius: s.axis_radius,
+            origin_radius: s.origin_radius,
+            show_labels: s.show_labels,
+            color_x: s.color_x,
+            color_y: s.color_y,
+            color_z: s.color_z,
+        }
+    }
+}
+
 impl From<VisualFrameDto> for VisualFrame {
     fn from(f: VisualFrameDto) -> Self {
         Self {
@@ -229,6 +264,7 @@ impl From<VisualFrameDto> for VisualFrame {
             parent: f.parent,
             translation: f.translation,
             rotation: f.rotation,
+            style: f.style.map(Into::into),
         }
     }
 }

@@ -93,12 +93,48 @@ impl Default for VisualScene {
     }
 }
 
+/// Estilo visual de un frame (cómo renderizar sus ejes y origen).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FrameStyle {
+    /// Longitud de cada eje (desde el origen).
+    pub axis_length: f64,
+    /// Radio de los cilindros que representan cada eje (0 = línea).
+    pub axis_radius: f64,
+    /// Radio de la esfera en el origen (0 = sin esfera).
+    pub origin_radius: f64,
+    /// Si se deben mostrar etiquetas (X/Y/Z) cerca del extremo de cada eje.
+    pub show_labels: bool,
+    /// Color RGB del eje X (cada componente en 0..1).
+    pub color_x: [f64; 3],
+    /// Color RGB del eje Y.
+    pub color_y: [f64; 3],
+    /// Color RGB del eje Z.
+    pub color_z: [f64; 3],
+}
+
+impl Default for FrameStyle {
+    fn default() -> Self {
+        Self {
+            axis_length: 0.18,
+            axis_radius: 0.006,
+            origin_radius: 0.0,
+            show_labels: false,
+            color_x: [1.0, 0.5, 0.0],   // naranja
+            color_y: [0.0, 0.8, 0.0],   // verde
+            color_z: [0.0, 0.5, 1.0],   // azul
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct VisualFrame {
     pub id: VisualId,
     pub parent: Option<VisualId>,
     pub translation: [f64; 3],
     pub rotation: [f64; 4],
+    /// Estilo visual opcional. `None` = usar defaults del frontend.
+    #[serde(default)]
+    pub style: Option<FrameStyle>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
