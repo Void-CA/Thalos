@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { BehaviorSubject, Observable, of } from 'rxjs';
+import { BehaviorSubject, merge, Observable, of, Subject } from 'rxjs';
 import { auditTime, catchError, distinctUntilChanged, map, scan, switchMap } from 'rxjs/operators';
 import { SceneApiService } from '../services/scene-api.service';
 import { toSceneData } from '../adapters/dto-to-model';
@@ -40,26 +40,32 @@ function toSceneEvent(res: RuntimeStateResponse): SceneEvent {
 export class SceneStore {
   private readonly api = inject(SceneApiService);
 
-  /** Input stream: emit joint angles to trigger a new FK computation. */
+  /** Input stream: joint angles → FK computation. */
   private readonly qSubject = new BehaviorSubject<number[]>(DEFAULT_Q);
 
-  /** Single source of truth: latest scene data + UI state. */
-  readonly state$: Observable<SceneState> = this.qSubject.pipe(
-    auditTime(16),
-    distinctUntilChanged((a, b) =>
-      a.length === b.length && a.every((v, i) => v === b[i]),
-    ),
-    switchMap(q => {
-      // Emit loading state before the API call
-      // (handled by scan starting from previous state)
+  /** Input stream: load a different robot model into the scene. */
+  private readonly loadRobotSubject = new Subject<string>();
 
-      return this.api.setJoints(q).pipe(
-        map(toSceneEvent),
-        catchError(err =>
-          of({ type: 'error' as const, message: err.message ?? 'FK failed' }),
-        ),
-      );
-    }),
+  /** Single source of truth: latest scene data + UI state. */
+  readonly state$: Observable<SceneState> = merge(
+    // Pipeline 1: joint angle changes → setJoints API
+    this.qSubject.pipe(
+      auditTime(16),
+      distinctUntilChanged((a, b) =>
+        a.length === b.length && a.every((v, i) => v === b[i]),
+      ),
+      switchMap(q => this.api.setJoints(q)),
+    ),
+
+    // Pipeline 2: robot load → loadRobot API
+    this.loadRobotSubject.pipe(
+      switchMap(id => this.api.loadRobot(id)),
+    ),
+  ).pipe(
+    map(toSceneEvent),
+    catchError(err =>
+      of({ type: 'error' as const, message: err.message ?? 'Operation failed' }),
+    ),
     scan((state, event): SceneState => {
       switch (event.type) {
         case 'scene':
@@ -80,5 +86,10 @@ export class SceneStore {
   /** Push new joint angles into the pipeline. */
   setJointAngles(q: number[]): void {
     this.qSubject.next(q);
+  }
+
+  /** Load a different robot into the scene. */
+  loadRobot(id: string): void {
+    this.loadRobotSubject.next(id);
   }
 }

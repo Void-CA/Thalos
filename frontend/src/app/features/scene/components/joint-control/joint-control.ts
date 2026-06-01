@@ -1,11 +1,13 @@
-import { Component, inject } from '@angular/core';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { SceneStore } from '../../store/scene.store';
+import type { JointMetadataDto } from '../../../robots/robot-api.types';
 
 /**
  * Slider driver for joint angles.
  *
- * No logic beyond: slider value → store.setJointAngles().
- * The store owns all state, timing, and API orchestration.
+ * Se adapta dinámicamente al DOF del robot cargado.
+ * Los límites de cada slider vienen del metadata del robot (JointMetadataDto).
  */
 @Component({
   selector: 'joint-control',
@@ -13,30 +15,23 @@ import { SceneStore } from '../../store/scene.store';
   template: `
     <div class="joint-panel">
       <h3>Joints</h3>
-      <label>
-        q<sub>1</sub>
-        <input
-          type="range"
-          min="-3.14"
-          max="3.14"
-          step="0.01"
-          [value]="q1"
-          (input)="onQ1($event)"
-        />
-        <span class="value">{{ q1.toFixed(2) }}</span>
-      </label>
-      <label>
-        q<sub>2</sub>
-        <input
-          type="range"
-          min="-3.14"
-          max="3.14"
-          step="0.01"
-          [value]="q2"
-          (input)="onQ2($event)"
-        />
-        <span class="value">{{ q2.toFixed(2) }}</span>
-      </label>
+
+      @for (joint of joints; track $index) {
+        <label>
+          <span class="joint-label">{{ joint.name }}</span>
+          <input
+            type="range"
+            [min]="joint.min ?? -3.14"
+            [max]="joint.max ?? 3.14"
+            step="0.01"
+            [value]="values[$index]"
+            (input)="onSlider($index, $event)"
+          />
+          <span class="value">{{ values[$index].toFixed(2) }}</span>
+        </label>
+      } @empty {
+        <p class="empty">No robot loaded</p>
+      }
     </div>
   `,
   styles: [
@@ -56,28 +51,48 @@ import { SceneStore } from '../../store/scene.store';
       margin-bottom: 0.5rem;
       font-size: 0.85rem;
     }
+    .joint-label {
+      min-width: 7ch;
+      font-size: 0.8rem;
+      opacity: 0.8;
+    }
     input[type="range"] { flex: 1; accent-color: #3399ff; }
     .value { min-width: 3.5ch; text-align: right; opacity: 0.6; }
+    .empty {
+      margin: 0;
+      font-size: 0.8rem;
+      opacity: 0.4;
+    }
   `,
   ],
 })
 export class JointControl {
   private readonly store = inject(SceneStore);
+  private readonly destroy = inject(DestroyRef);
 
-  protected q1 = 0;
-  protected q2 = 0;
+  /** Metadata de joints del robot activo (define nombres y límites). */
+  protected joints: JointMetadataDto[] = [];
+  /** Valores actuales de cada joint. */
+  protected values: number[] = [];
 
-  protected onQ1(e: Event): void {
-    this.q1 = parseFloat((e.target as HTMLInputElement).value);
-    this.emit();
+  constructor() {
+    this.store.state$
+      .pipe(takeUntilDestroyed(this.destroy))
+      .subscribe(state => {
+        if (state.runtime) {
+          const newJoints = state.runtime.robot.joints;
+          // Si cambió el robot (distinto DOF o distinto nombre de joints), reseteamos
+          if (newJoints.length !== this.joints.length) {
+            this.joints = newJoints;
+            this.values = [...state.runtime.joints];
+          }
+        }
+      });
   }
 
-  protected onQ2(e: Event): void {
-    this.q2 = parseFloat((e.target as HTMLInputElement).value);
-    this.emit();
-  }
-
-  private emit(): void {
-    this.store.setJointAngles([this.q1, this.q2]);
+  protected onSlider(index: number, e: Event): void {
+    const value = parseFloat((e.target as HTMLInputElement).value);
+    this.values[index] = value;
+    this.store.setJointAngles([...this.values]);
   }
 }

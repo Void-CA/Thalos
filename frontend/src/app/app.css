@@ -3,6 +3,15 @@
   height: 100dvh;
 }
 
+.catalog-panel {
+  width: 220px;
+  padding: 1rem;
+  background: #1e1e1e;
+  color: #c0c0c0;
+  border-right: 1px solid #333;
+  overflow-y: auto;
+}
+
 .viewport {
   flex: 1;
   min-width: 0;

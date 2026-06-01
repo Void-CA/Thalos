@@ -12,11 +12,7 @@ use crate::error::RuntimeError;
 use crate::snapshots::RuntimeSnapshot;
 use crate::state::robot::{ActiveRobot, SceneRuntime};
 
-/// Orchestrates the runtime state: applies commands, builds scenes, validates.
-///
-/// This is the single entry point for all runtime operations. It holds the
-/// mutable state (active robot + joints) and delegates to thalos-core for
-/// kinematics and thalos-visual for scene construction, validation, and diffing.
+
 pub struct SceneService {
     runtime: RwLock<SceneRuntime>,
     validator: SceneValidator,
