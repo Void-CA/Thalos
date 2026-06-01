@@ -1,15 +1,12 @@
-import {
-  AfterViewInit,
-  Component,
-  ElementRef,
-  inject,
-  OnDestroy,
-  ViewChild,
-} from '@angular/core';
-import { Subscription } from 'rxjs';
+import { AfterViewInit, Component, effect, ElementRef, inject, ViewChild } from '@angular/core';
 import { SceneStore } from '../../store/scene.store';
 import { ThreeRendererService } from '../../services/three-renderer.service';
 
+/**
+ * Contenedor Three.js que renderiza la escena robótica.
+ *
+ * Reacciona al SceneStore.state via effect() — sin subscriptions manuales.
+ */
 @Component({
   selector: 'scene-viewer',
   standalone: true,
@@ -21,15 +18,15 @@ import { ThreeRendererService } from '../../services/three-renderer.service';
   `,
   ],
 })
-export class SceneViewer implements AfterViewInit, OnDestroy {
+export class SceneViewer implements AfterViewInit {
   @ViewChild('canvas') private readonly canvasRef!: ElementRef<HTMLCanvasElement>;
 
   private readonly store = inject(SceneStore);
   private readonly renderer = inject(ThreeRendererService);
-  private readonly sub: Subscription;
 
   constructor() {
-    this.sub = this.store.state$.subscribe(state => {
+    effect(() => {
+      const state = this.store.state();
       if (state.data) {
         this.renderer.applyScene(state.data);
       }
@@ -38,10 +35,5 @@ export class SceneViewer implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     this.renderer.init(this.canvasRef.nativeElement);
-  }
-
-  ngOnDestroy(): void {
-    this.sub.unsubscribe();
-    this.renderer.dispose();
   }
 }

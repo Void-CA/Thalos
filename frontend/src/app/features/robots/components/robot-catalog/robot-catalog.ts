@@ -1,9 +1,7 @@
-import { Component, DestroyRef, inject, OnInit } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Component, inject, OnInit } from '@angular/core';
 import { RobotCard } from '../robot-card/robot-card';
 import { RobotStore } from '../../store/robot.store';
 import { SceneStore } from '../../../scene/store/scene.store';
-import type { RobotCatalogState } from '../../robot.types';
 
 /**
  * Panel de catálogo de robots.
@@ -14,6 +12,7 @@ import type { RobotCatalogState } from '../../robot.types';
  *  3. Click → RobotStore.select(id) + SceneStore.loadRobot(id)
  *
  * NO acopla RobotStore con SceneStore.
+ * Sin subscribe ni zone.js — puros signals.
  */
 @Component({
   selector: 'robot-catalog',
@@ -23,16 +22,16 @@ import type { RobotCatalogState } from '../../robot.types';
     <div class="catalog">
       <h3 class="title">Robots</h3>
 
-      @if (state.loading) {
+      @if (loading()) {
         <p class="status">Loading…</p>
-      } @else if (state.error) {
-        <p class="status error">{{ state.error }}</p>
+      } @else if (error(); as err) {
+        <p class="status error">{{ err }}</p>
       } @else {
         <div class="list">
-          @for (robot of state.robots; track robot.id) {
+          @for (robot of robots(); track robot.id) {
             <robot-card
               [robot]="robot"
-              [selected]="robot.id === state.selectedId"
+              [selected]="robot.id === selectedId()"
               (select)="onSelect($event)"
             />
           }
@@ -77,20 +76,14 @@ import type { RobotCatalogState } from '../../robot.types';
 export class RobotCatalog implements OnInit {
   private readonly robotStore = inject(RobotStore);
   private readonly sceneStore = inject(SceneStore);
-  private readonly destroy = inject(DestroyRef);
 
-  protected state: RobotCatalogState = {
-    robots: [],
-    selectedId: null,
-    loading: true,
-    error: null,
-  };
+  // Señales del store expuestas al template
+  protected readonly robots = this.robotStore.robots;
+  protected readonly selectedId = this.robotStore.selectedId;
+  protected readonly loading = this.robotStore.loading;
+  protected readonly error = this.robotStore.error;
 
   ngOnInit(): void {
-    this.robotStore.state$
-      .pipe(takeUntilDestroyed(this.destroy))
-      .subscribe(s => (this.state = s));
-
     this.robotStore.loadRobots();
   }
 

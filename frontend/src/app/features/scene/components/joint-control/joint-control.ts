@@ -1,13 +1,15 @@
-import { Component, DestroyRef, inject } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { SceneStore } from '../../store/scene.store';
-import type { JointMetadataDto } from '../../../robots/robot-api.types';
 
 /**
  * Slider driver for joint angles.
  *
  * Se adapta dinámicamente al DOF del robot cargado.
  * Los límites de cada slider vienen del metadata del robot (JointMetadataDto).
+ *
+ * Sin subscribe ni zone.js:
+ *  - joint metadata → computed desde SceneStore.state
+ *  - slider values  → writable signal local, se resetea via effect cuando cambia DOF
  */
 @Component({
   selector: 'joint-control',
@@ -16,7 +18,7 @@ import type { JointMetadataDto } from '../../../robots/robot-api.types';
     <div class="joint-panel">
       <h3>Joints</h3>
 
-      @for (joint of joints; track $index) {
+      @for (joint of joints(); track $index) {
         <label>
           <span class="joint-label">{{ joint.name }}</span>
           <input
@@ -24,10 +26,10 @@ import type { JointMetadataDto } from '../../../robots/robot-api.types';
             [min]="joint.min ?? -3.14"
             [max]="joint.max ?? 3.14"
             step="0.01"
-            [value]="values[$index]"
+            [value]="values()[$index]"
             (input)="onSlider($index, $event)"
           />
-          <span class="value">{{ values[$index].toFixed(2) }}</span>
+          <span class="value">{{ values()[$index].toFixed(2) }}</span>
         </label>
       } @empty {
         <p class="empty">No robot loaded</p>
@@ -68,31 +70,46 @@ import type { JointMetadataDto } from '../../../robots/robot-api.types';
 })
 export class JointControl {
   private readonly store = inject(SceneStore);
-  private readonly destroy = inject(DestroyRef);
 
-  /** Metadata de joints del robot activo (define nombres y límites). */
-  protected joints: JointMetadataDto[] = [];
-  /** Valores actuales de cada joint. */
-  protected values: number[] = [];
+  // ── Señales derivadas del store ──
+
+  /** Metadata de joints del robot activo (nombres, límites). */
+  protected readonly joints = computed(() =>
+    this.store.state()?.runtime?.robot?.joints ?? [],
+  );
+
+  /** Valores locales de cada slider. */
+  private readonly localValues = signal<number[]>([]);
+
+  /** Exposición readonly para el template. */
+  protected readonly values = this.localValues.asReadonly();
+
+  // ── Sincronización reactiva ──
+
+  /** Track del DOF anterior para resetear valores cuando cambia el robot. */
+  private readonly prevDof = signal(0);
 
   constructor() {
-    this.store.state$
-      .pipe(takeUntilDestroyed(this.destroy))
-      .subscribe(state => {
-        if (state.runtime) {
-          const newJoints = state.runtime.robot.joints;
-          // Si cambió el robot (distinto DOF o distinto nombre de joints), reseteamos
-          if (newJoints.length !== this.joints.length) {
-            this.joints = newJoints;
-            this.values = [...state.runtime.joints];
-          }
+    // Cada vez que cambia el robot (distinto DOF), reseteamos valores desde el store
+    effect(() => {
+      const runtime = this.store.state()?.runtime;
+      if (runtime) {
+        const dof = runtime.robot.joints.length;
+        if (dof !== this.prevDof()) {
+          this.prevDof.set(dof);
+          this.localValues.set([...runtime.joints]);
         }
-      });
+      }
+    });
   }
+
+  // ── Acciones ──
 
   protected onSlider(index: number, e: Event): void {
     const value = parseFloat((e.target as HTMLInputElement).value);
-    this.values[index] = value;
-    this.store.setJointAngles([...this.values]);
+    const next = [...this.localValues()];
+    next[index] = value;
+    this.localValues.set(next);
+    this.store.setJointAngles(next);
   }
 }

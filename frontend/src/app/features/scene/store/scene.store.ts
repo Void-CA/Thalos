@@ -1,4 +1,5 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, Signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { BehaviorSubject, merge, Observable, of, Subject } from 'rxjs';
 import { auditTime, catchError, distinctUntilChanged, map, scan, switchMap } from 'rxjs/operators';
 import { SceneApiService } from '../services/scene-api.service';
@@ -92,6 +93,15 @@ export class SceneStore {
       }
     }, INITIAL_STATE),
   );
+
+  /**
+   * Señal derivada del pipeline RxJS.
+   * Los componentes consumen esto en vez de subscribirse a state$.
+   * El pipeline interno sigue siendo RxJS por auditTime, switchMap, merge, etc.
+   */
+  readonly state: Signal<SceneState> = toSignal(this.state$, {
+    initialValue: INITIAL_STATE,
+  });
 
   /** Push new joint angles into the pipeline. */
   setJointAngles(q: number[]): void {
