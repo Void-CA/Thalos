@@ -1,48 +1,61 @@
 use crate::app::error::ApiError;
 
-use thalos_visual::SceneError;
+use thalos_core::models::RobotModelError;
+use thalos_runtime::RuntimeError;
 
-impl From<SceneError> for ApiError {
-    fn from(e: SceneError) -> Self {
+impl From<RuntimeError> for ApiError {
+    fn from(e: RuntimeError) -> Self {
         match e {
-            SceneError::MissingWorld => ApiError::Validation {
-                message: e.to_string(),
-                code: "missing_world".into(),
+            RuntimeError::Scene(e) => match e {
+                thalos_visual::SceneError::MissingWorld => ApiError::Validation {
+                    message: e.to_string(),
+                    code: "MISSING_WORLD".into(),
+                },
+
+                thalos_visual::SceneError::MissingFrame(_) => ApiError::Validation {
+                    message: e.to_string(),
+                    code: "MISSING_FRAME".into(),
+                },
+
+                thalos_visual::SceneError::DuplicateId { .. } => ApiError::Conflict {
+                    message: e.to_string(),
+                    code: "DUPLICATE_ID".into(),
+                },
+
+                thalos_visual::SceneError::BrokenTopology { .. } => ApiError::InvalidState {
+                    message: e.to_string(),
+                    code: "BROKEN_TOPOLOGY".into(),
+                },
+
+                thalos_visual::SceneError::NonFiniteValue { .. } => ApiError::Validation {
+                    message: e.to_string(),
+                    code: "NON_FINITE_VALUE".into(),
+                },
+
+                thalos_visual::SceneError::InvalidQuaternion { .. } => ApiError::Validation {
+                    message: e.to_string(),
+                    code: "INVALID_QUATERNION".into(),
+                },
+
+                thalos_visual::SceneError::OrphanLink { .. } => ApiError::Conflict {
+                    message: e.to_string(),
+                    code: "ORPHAN_LINK".into(),
+                },
+
+                thalos_visual::SceneError::TwistsMismatch { .. } => ApiError::Validation {
+                    message: e.to_string(),
+                    code: "TWISTS_MISMATCH".into(),
+                },
             },
 
-            SceneError::MissingFrame(_) => ApiError::Validation {
-                message: e.to_string(),
-                code: "missing_frame".into(),
-            },
+            RuntimeError::RobotModel(e) => match e {
+                RobotModelError::InvalidRobotId { .. } => ApiError::NotFound {
+                    message: e.to_string(),
+                },
 
-            SceneError::DuplicateId { .. } => ApiError::Conflict {
-                message: e.to_string(),
-                code: "duplicate_id".into(),
-            },
-
-            SceneError::BrokenTopology { .. } => ApiError::InvalidState {
-                message: e.to_string(),
-                code: "broken_topology".into(),
-            },
-
-            SceneError::NonFiniteValue { .. } => ApiError::Validation {
-                message: e.to_string(),
-                code: "non_finite_value".into(),
-            },
-
-            SceneError::InvalidQuaternion { .. } => ApiError::Validation {
-                message: e.to_string(),
-                code: "invalid_quaternion".into(),
-            },
-
-            SceneError::OrphanLink { .. } => ApiError::Conflict {
-                message: e.to_string(),
-                code: "orphan_link".into(),
-            },
-
-            SceneError::TwistsMismatch { .. } => ApiError::Validation {
-                message: e.to_string(),
-                code: "twists_mismatch".into(),
+                RobotModelError::ModelSpecMismatch { .. } => ApiError::Internal {
+                    message: e.to_string(),
+                },
             },
         }
     }

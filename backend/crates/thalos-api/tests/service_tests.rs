@@ -1,31 +1,55 @@
-// use std::f64::consts::PI;
+use std::f64::consts::PI;
 
-// use thalos_core::models::factories::create_planar_2r;
-// use thalos_api::SceneService;
+use thalos_core::models::RobotModel;
+use thalos_runtime::{backends::InternalBackend, Command, SceneService};
 
-// #[test]
-// fn build_scene_returns_valid_scene() {
-//     let robot = create_planar_2r(1.0, 1.0);
-//     let service = SceneService::new(robot);
-//     let scene = service.build_scene(&[0.5, 0.3]);
-//     assert!(scene.is_ok(), "scene should build and validate");
-// }
+fn new_service() -> SceneService {
+    let backend = Box::new(InternalBackend);
+    SceneService::new(backend, RobotModel::Planar2R)
+}
 
-// #[test]
-// fn build_scene_deterministic() {
-//     let robot = create_planar_2r(1.0, 1.0);
-//     let service = SceneService::new(robot);
-//     let a = service.build_scene(&[0.3, 0.5]).unwrap();
-//     let b = service.build_scene(&[0.3, 0.5]).unwrap();
-//     assert_eq!(a, b, "same input must produce identical scene");
-// }
+#[test]
+fn snapshot_returns_valid_scene() {
+    let service = new_service();
+    let snapshot = service.snapshot();
+    assert!(snapshot.is_ok(), "snapshot should build and validate");
+}
 
-// #[test]
-// fn build_scene_different_configs_differ() {
-//     let robot = create_planar_2r(1.0, 1.0);
-//     let service = SceneService::new(robot);
-//     let a = service.build_scene(&[0.0, 0.0]).unwrap();
-//     let b = service.build_scene(&[PI / 2.0, 0.0]).unwrap();
-//     let diff = service.diff(&a, &b, 1e-6);
-//     assert!(!diff.changed_frames.is_empty(), "different configs should differ");
-// }
+#[test]
+fn snapshot_deterministic() {
+    let service = new_service();
+    let a = service.snapshot().unwrap();
+    let b = service.snapshot().unwrap();
+    assert_eq!(a.scene, b.scene, "same state must produce identical scene");
+}
+
+#[test]
+fn execute_set_joints_changes_scene() {
+    let service = new_service();
+    let a = service.snapshot().unwrap();
+
+    let b = service
+        .execute(Command::SetJoints(vec![PI / 2.0, 0.0]))
+        .unwrap();
+
+    assert_ne!(a.scene, b.scene, "different joints should produce different scenes");
+}
+
+#[test]
+fn execute_load_robot_changes_robot() {
+    let service = new_service();
+    let a = service.snapshot().unwrap();
+
+    let b = service
+        .execute(Command::LoadRobot("scara".into()))
+        .unwrap();
+
+    assert_ne!(a.robot, b.robot, "different robot model should be loaded");
+}
+
+#[test]
+fn execute_load_robot_invalid_id() {
+    let service = new_service();
+    let result = service.execute(Command::LoadRobot("nonexistent".into()));
+    assert!(result.is_err(), "invalid robot id should fail");
+}

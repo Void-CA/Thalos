@@ -5,54 +5,39 @@ use axum::{
     Json,
 };
 
-use thalos_core::models::RobotModel;
+use thalos_runtime::Command;
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
 use crate::features::scene::dto::*;
 
-fn build_runtime_response(
-    state: &Arc<AppState>,
-) -> ApiResult<RuntimeStateResponse> {
-    let scene = state.services.scene.build_scene()?;
-    let robot = state.services.scene.current_robot_metadata();
-    let joints = state.services.scene.current_joints();
-
-    Ok(Json(RuntimeStateResponse {
-        robot: robot.into(),
-        joints,
-        scene: scene.into(),
-        generated_at: chrono::Utc::now(),
-    }))
-}
-
 pub async fn get_scene(
     State(state): State<Arc<AppState>>,
 ) -> ApiResult<RuntimeStateResponse> {
-    build_runtime_response(&state)
+    let snapshot = state.services.scene.snapshot()?;
+    Ok(Json(snapshot.into()))
 }
 
 pub async fn set_joints(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<SetJointsRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
-    state
+    let snapshot = state
         .services
         .scene
-        .set_joints(payload.joint_angles);
-
-    build_runtime_response(&state)
+        .execute(Command::SetJoints(payload.joint_angles))?;
+    Ok(Json(snapshot.into()))
 }
 
 pub async fn load_robot(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<LoadRobotRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
-    let model = RobotModel::from_id(&payload.robot_id)?;
-
-    state.services.scene.load_robot(model);
-
-    build_runtime_response(&state)
+    let snapshot = state
+        .services
+        .scene
+        .execute(Command::LoadRobot(payload.robot_id))?;
+    Ok(Json(snapshot.into()))
 }
 
 pub async fn validate(
@@ -61,7 +46,7 @@ pub async fn validate(
 ) -> ApiResult<ValidateResponse> {
     let scene: thalos_visual::VisualScene = payload.scene.into();
 
-    state.services.scene.validate(&scene)?;
+    state.services.scene.validate_scene(&scene)?;
 
     Ok(Json(ValidateResponse {
         valid: true,

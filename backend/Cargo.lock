@@ -1066,6 +1066,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thalos_core",
+ "thalos_runtime",
  "thalos_visual",
  "tokio",
  "tower",
@@ -1079,6 +1080,16 @@ name = "thalos_core"
 version = "0.1.0"
 dependencies = [
  "nalgebra",
+ "thiserror",
+]
+
+[[package]]
+name = "thalos_runtime"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "thalos_core",
+ "thalos_visual",
  "thiserror",
 ]
 
