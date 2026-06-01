@@ -68,6 +68,7 @@ impl SceneBuilder {
             links,
             joint_axes,
             twists: Vec::new(),
+            primitives: Vec::new(),
         }
     }
 

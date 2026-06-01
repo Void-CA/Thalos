@@ -8,12 +8,79 @@ pub use diff::{SceneDiff, ChangedFrame};
 
 pub type VisualId = String;
 
+// ── Geometrías primitivas ──────────────────────────────────────────────
+
+/// Forma geométrica de un elemento visual primitivo.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum PrimitiveGeometry {
+    Cylinder { radius: f64, height: f64 },
+    Sphere { radius: f64 },
+    Box { width: f64, height: f64, depth: f64 },
+}
+
+/// Elemento visual con geometría primitiva (cilindro, esfera, caja).
+///
+/// A diferencia de `VisualFrame` (que representa un sistema de coordenadas),
+/// `VisualPrimitive` representa un objeto 3D con volumen. Útil para modelar
+/// columnas de SCARA, bases de robot, marcadores TCP, etc.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct VisualPrimitive {
+    pub id: VisualId,
+    pub translation: [f64; 3],
+    pub rotation: [f64; 4],
+    pub geometry: PrimitiveGeometry,
+}
+
+impl VisualPrimitive {
+    pub fn cylinder(id: impl Into<VisualId>, radius: f64, height: f64) -> Self {
+        Self {
+            id: id.into(),
+            translation: [0.0; 3],
+            rotation: [1.0, 0.0, 0.0, 0.0],
+            geometry: PrimitiveGeometry::Cylinder { radius, height },
+        }
+    }
+
+    pub fn sphere(id: impl Into<VisualId>, radius: f64) -> Self {
+        Self {
+            id: id.into(),
+            translation: [0.0; 3],
+            rotation: [1.0, 0.0, 0.0, 0.0],
+            geometry: PrimitiveGeometry::Sphere { radius },
+        }
+    }
+
+    pub fn box_shape(id: impl Into<VisualId>, width: f64, height: f64, depth: f64) -> Self {
+        Self {
+            id: id.into(),
+            translation: [0.0; 3],
+            rotation: [1.0, 0.0, 0.0, 0.0],
+            geometry: PrimitiveGeometry::Box { width, height, depth },
+        }
+    }
+}
+
+// ── Escena visual ──────────────────────────────────────────────────────
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct VisualScene {
     pub frames: Vec<VisualFrame>,
     pub links: Vec<VisualLink>,
     pub joint_axes: Vec<VisualJointAxis>,
     pub twists: Vec<VisualTwist>,
+    pub primitives: Vec<VisualPrimitive>,
+}
+
+impl Default for VisualScene {
+    fn default() -> Self {
+        Self {
+            frames: vec![],
+            links: vec![],
+            joint_axes: vec![],
+            twists: vec![],
+            primitives: vec![],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

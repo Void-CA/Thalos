@@ -21,12 +21,7 @@ fn valid_scene_passes() {
 
 #[test]
 fn missing_world_fails() {
-    let scene = VisualScene {
-        frames: vec![],
-        links: vec![],
-        joint_axes: vec![],
-        twists: vec![],
-    };
+    let scene = VisualScene::default();
 
     let validator = SceneValidator::default();
     assert_eq!(
@@ -43,9 +38,7 @@ fn duplicate_ids_fail() {
             frame("link_1", Some("world"), [1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
             frame("link_1", Some("world"), [2.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
         ],
-        links: vec![],
-        joint_axes: vec![],
-        twists: vec![],
+        ..Default::default()
     };
 
     let validator = SceneValidator::default();
@@ -62,9 +55,7 @@ fn missing_parent_fails() {
             frame("world", None, [0.0; 3], [1.0, 0.0, 0.0, 0.0]),
             frame("link_1", Some("phantom"), [1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
         ],
-        links: vec![],
-        joint_axes: vec![],
-        twists: vec![],
+        ..Default::default()
     };
 
     let validator = SceneValidator::default();
@@ -82,9 +73,7 @@ fn cycle_detected() {
             frame("a", Some("b"), [1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
             frame("b", Some("a"), [2.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
         ],
-        links: vec![],
-        joint_axes: vec![],
-        twists: vec![],
+        ..Default::default()
     };
 
     let validator = SceneValidator::default();
@@ -105,9 +94,7 @@ fn orphan_frame_fails() {
             frame("world", None, [0.0; 3], [1.0, 0.0, 0.0, 0.0]),
             frame("orphan", None, [5.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
         ],
-        links: vec![],
-        joint_axes: vec![],
-        twists: vec![],
+        ..Default::default()
     };
 
     let validator = SceneValidator::default();
@@ -122,9 +109,7 @@ fn nan_value_detected() {
             frame("world", None, [0.0; 3], [1.0, 0.0, 0.0, 0.0]),
             frame("link_1", Some("world"), [f64::NAN, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
         ],
-        links: vec![],
-        joint_axes: vec![],
-        twists: vec![],
+        ..Default::default()
     };
 
     let validator = SceneValidator::default();
@@ -141,9 +126,7 @@ fn invalid_quaternion_detected() {
             frame("world", None, [0.0; 3], [1.0, 0.0, 0.0, 0.0]),
             frame("link_1", Some("world"), [1.0, 0.0, 0.0], [5.0, 0.0, 0.0, 0.0]),
         ],
-        links: vec![],
-        joint_axes: vec![],
-        twists: vec![],
+        ..Default::default()
     };
 
     let validator = SceneValidator::default();
@@ -169,8 +152,7 @@ fn orphan_link_detected() {
             link([0.0, 0.0, 0.0], [1.0, 0.0, 0.0]),
             link([5.0, 0.0, 0.0], [10.0, 0.0, 0.0]),
         ],
-        joint_axes: vec![],
-        twists: vec![],
+        ..Default::default()
     };
 
     let validator = SceneValidator::default();

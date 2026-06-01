@@ -4,10 +4,12 @@ use serde::{Deserialize, Serialize};
 use thalos_runtime::RuntimeSnapshot;
 use thalos_visual::{
     ChangedFrame,
+    PrimitiveGeometry,
     SceneDiff,
     VisualFrame,
     VisualJointAxis,
     VisualLink,
+    VisualPrimitive,
     VisualScene,
     VisualTwist,
 };
@@ -24,6 +26,7 @@ pub struct VisualSceneDto {
     pub links: Vec<VisualLinkDto>,
     pub joint_axes: Vec<VisualJointAxisDto>,
     pub twists: Vec<VisualTwistDto>,
+    pub primitives: Vec<VisualPrimitiveDto>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -51,6 +54,21 @@ pub struct VisualTwistDto {
     pub origin: [f64; 3],
     pub linear: [f64; 3],
     pub angular: [f64; 3],
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum PrimitiveGeometryDto {
+    Cylinder { radius: f64, height: f64 },
+    Sphere { radius: f64 },
+    Box { width: f64, height: f64, depth: f64 },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct VisualPrimitiveDto {
+    pub id: String,
+    pub translation: [f64; 3],
+    pub rotation: [f64; 4],
+    pub geometry: PrimitiveGeometryDto,
 }
 
 
@@ -148,6 +166,27 @@ impl From<VisualTwist> for VisualTwistDto {
     }
 }
 
+impl From<PrimitiveGeometry> for PrimitiveGeometryDto {
+    fn from(g: PrimitiveGeometry) -> Self {
+        match g {
+            PrimitiveGeometry::Cylinder { radius, height } => Self::Cylinder { radius, height },
+            PrimitiveGeometry::Sphere { radius } => Self::Sphere { radius },
+            PrimitiveGeometry::Box { width, height, depth } => Self::Box { width, height, depth },
+        }
+    }
+}
+
+impl From<VisualPrimitive> for VisualPrimitiveDto {
+    fn from(p: VisualPrimitive) -> Self {
+        Self {
+            id: p.id,
+            translation: p.translation,
+            rotation: p.rotation,
+            geometry: p.geometry.into(),
+        }
+    }
+}
+
 impl From<VisualScene> for VisualSceneDto {
     fn from(s: VisualScene) -> Self {
         Self {
@@ -155,6 +194,7 @@ impl From<VisualScene> for VisualSceneDto {
             links: s.links.into_iter().map(Into::into).collect(),
             joint_axes: s.joint_axes.into_iter().map(Into::into).collect(),
             twists: s.twists.into_iter().map(Into::into).collect(),
+            primitives: s.primitives.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -221,6 +261,27 @@ impl From<VisualTwistDto> for VisualTwist {
     }
 }
 
+impl From<PrimitiveGeometryDto> for PrimitiveGeometry {
+    fn from(g: PrimitiveGeometryDto) -> Self {
+        match g {
+            PrimitiveGeometryDto::Cylinder { radius, height } => Self::Cylinder { radius, height },
+            PrimitiveGeometryDto::Sphere { radius } => Self::Sphere { radius },
+            PrimitiveGeometryDto::Box { width, height, depth } => Self::Box { width, height, depth },
+        }
+    }
+}
+
+impl From<VisualPrimitiveDto> for VisualPrimitive {
+    fn from(p: VisualPrimitiveDto) -> Self {
+        Self {
+            id: p.id,
+            translation: p.translation,
+            rotation: p.rotation,
+            geometry: p.geometry.into(),
+        }
+    }
+}
+
 impl From<VisualSceneDto> for VisualScene {
     fn from(s: VisualSceneDto) -> Self {
         Self {
@@ -228,6 +289,7 @@ impl From<VisualSceneDto> for VisualScene {
             links: s.links.into_iter().map(Into::into).collect(),
             joint_axes: s.joint_axes.into_iter().map(Into::into).collect(),
             twists: s.twists.into_iter().map(Into::into).collect(),
+            primitives: s.primitives.into_iter().map(Into::into).collect(),
         }
     }
 }
