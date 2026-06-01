@@ -1,6 +1,6 @@
 # Arquitectura del workspace {#sec-workspace}
 
-El workspace de Thalos está organizado en **tres crates** dentro de un
+El workspace de Thalos está organizado en **cuatro crates** dentro de un
 workspace Cargo.
 
 ```
@@ -9,6 +9,7 @@ backend/
 ├── crates/
 │   ├── thalos-core/              # Núcleo matemático-robótico
 │   ├── thalos-visual/            # Representación visual
+│   ├── thalos-runtime/           # 🆕 Orquestación runtime
 │   └── thalos-api/               # Exposición externa (HTTP)
 ```
 
@@ -186,13 +187,164 @@ Valida 8 invariantes de una escena:
 `SceneDiff::between(old, new, epsilon)` detecta frames agregados, eliminados
 y modificados (con delta de traslación y ángulo de rotación geodésico).
 
+### Primitivas geométricas
+
+`VisualScene` ahora incluye `primitives: Vec<VisualPrimitive>` para representar
+objetos 3D con volumen (cilindros, esferas, cajas) que complementan los frames
+y links. Cada primitiva tiene `id`, `translation`, `rotation` y `geometry`.
+
+Esto permite modelar elementos visuales concretos como la base column del SCARA,
+los cuerpos de los links, o marcadores TCP, **sin modificar el core**.
+
+### FrameStyle
+
+`FrameStyle` permite personalizar el aspecto visual de cada frame individual:
+
+```rust
+pub struct FrameStyle {
+    pub axis_length: f64,     // longitud de cada eje
+    pub axis_radius: f64,     // radio del cilindro del eje (0 = línea)
+    pub origin_radius: f64,   // radio de la esfera del origen
+    pub show_labels: bool,    // etiquetas X/Y/Z
+    pub color_x: [f64; 3],    // color RGB del eje X
+    pub color_y: [f64; 3],    // color RGB del eje Y
+    pub color_z: [f64; 3],    // color RGB del eje Z
+}
+```
+
+`VisualFrame.style` es `Option<FrameStyle>` — si es `None`, el frontend usa
+sus valores por defecto.
+
+### Builders específicos por robot
+
+Además de `SceneBuilder` (genérico), existen builders específicos:
+
+- **`ScaraVisualBuilder`** — genera primitivas geométricas para el SCARA:
+  `base_column`, `link_1_body` y `link_2_body` como cilindros posicionados
+  dinámicamente según la FK actual.
+
+Helpers geométricos: `cylinder_between(from, to, radius)` crea un cilindro
+entre dos puntos 3D; `align_y_to(direction)` produce el quaternion que alinea
+el eje Y con la dirección dada.
+
+## thalos-runtime {#sec-runtime}
+
+**Responsabilidad**: Orquestación del estado mutable del sistema — el "cerebro"
+que conecta el análisis cinemático con la visualización.
+
+**Depende de**: `thalos-core`, `thalos-visual`, `thiserror`, `chrono`.
+
+**Posición arquitectónica**: se encuentra entre `thalos-visual` y `thalos-api`.
+La API consume el runtime, no llama al core ni al visual directamente.
+
+```
+thalos-runtime/src/
+├── lib.rs               # Re-exportaciones públicas
+├── error.rs             # RuntimeError (Scene + RobotModel)
+├── commands/
+│   └── mod.rs           # Command enum: SetJoints, LoadRobot
+├── state/
+│   ├── mod.rs
+│   └── robot.rs         # SceneRuntime, ActiveRobot
+├── services/
+│   ├── mod.rs
+│   └── scene.rs         # SceneService (orquestador principal)
+├── backends/
+│   ├── mod.rs           # RobotBackend trait
+│   └── internal.rs      # InternalBackend (catálogo built-in)
+└── snapshots/
+    ├── mod.rs
+    └── scene.rs         # RuntimeSnapshot (point-in-time state)
+```
+
+### SceneService
+
+`SceneService` es el orquestador central. Mantiene el estado mutable
+(`SceneRuntime` envuelto en `RwLock`) y expone dos operaciones principales:
+
+```rust
+impl SceneService {
+    /// Snapshot del estado actual (FK + visual scene).
+    pub fn snapshot(&self) -> Result<RuntimeSnapshot, RuntimeError>;
+
+    /// Aplica un comando y devuelve el snapshot resultante.
+    pub fn execute(&self, cmd: Command) -> Result<RuntimeSnapshot, RuntimeError>;
+}
+```
+
+Cada `execute()`:
+1. Aplica la mutación (setear joints o cargar robot)
+2. Corre FK sobre el nuevo estado
+3. Construye la escena visual (con el builder correspondiente al modelo)
+4. Valida la escena con `SceneValidator`
+5. Devuelve `RuntimeSnapshot` con todo el estado + timestamp
+
+### Command pattern
+
+Las mutaciones están tipadas como `Command`:
+
+```rust
+pub enum Command {
+    SetJoints(Vec<f64>),   // ángulos articulares
+    LoadRobot(String),     // ID del modelo a cargar
+}
+```
+
+Esto permite que `SceneService::execute()` sea un punto único de entrada para
+toda mutación, facilitando auditoría, logging y futuros undo/redo.
+
+### State
+
+`SceneRuntime` y `ActiveRobot` modelan el estado mutable:
+
+```rust
+pub struct SceneRuntime {
+    pub active_robot: ActiveRobot,
+}
+
+pub struct ActiveRobot {
+    pub model: RobotModel,
+    pub chain: SerialChain,
+    pub joints: Vec<f64>,
+}
+```
+
+### RobotBackend (trait)
+
+Strategy para resolución de modelos robóticos:
+
+```rust
+pub trait RobotBackend: Send + Sync {
+    fn resolve_model(&id: &str) -> Result<RobotModel, RuntimeError>;
+}
+```
+
+`InternalBackend` resuelve contra el catálogo built-in de `thalos-core`.
+Se pueden implementar backends personalizados (hardware, archivos, red).
+
+### RuntimeSnapshot
+
+Valor de retorno unificado: contiene el modelo activo, los joints actuales,
+la escena visual validada y un timestamp.
+
+```rust
+pub struct RuntimeSnapshot {
+    pub robot: RobotModel,
+    pub joints: Vec<f64>,
+    pub scene: VisualScene,
+    pub generated_at: DateTime<Utc>,
+}
+```
+
+La API convierte esto a `RuntimeStateResponse` (DTO HTTP) con `From`.
+
 ## thalos-api {#sec-api}
 
 **Responsabilidad**: Exponer funcionalidades de Thalos hacia sistemas externos
 via HTTP.
 
-**Depende de**: `thalos-core`, `thalos-visual`, `axum`, `tokio`, `serde`,
-`chrono`, `tower-http`.
+**Depende de**: `thalos-core`, `thalos-visual`, `thalos-runtime`, `axum`,
+`tokio`, `serde`, `chrono`, `tower-http`.
 
 ```
 thalos-api/src/
@@ -200,33 +352,60 @@ thalos-api/src/
 ├── lib.rs               # Re-exportaciones públicas
 ├── app/
 │   ├── mod.rs           # AppState, Services
-│   ├── state.rs         # Estado global: scene service + factory
-│   └── dto.rs           # ErrorResponse, ErrorCode
+│   ├── prelude.rs       # Re-exportaciones del crate
+│   ├── state.rs         # Estado global: scene + robots services
+│   ├── dto.rs           # ErrorResponse, ErrorCode
+│   ├── error.rs         # ApiError (conversión a respuesta HTTP)
+│   └── types.rs         # ApiResult alias
 ├── features/
-│   └── scene/
-│       ├── mod.rs       # SceneService (orquesta FK + Builder + Validator)
-│       ├── service.rs   # Lógica de servicio
+│   ├── scene/
+│   │   ├── mod.rs       # Re-exportaciones
+│   │   ├── handler.rs   # Handlers axum
+│   │   ├── dto/         # Request/Response DTOs (SetJoints, LoadRobot, etc.)
+│   │   │   ├── mod.rs
+│   │   │   ├── requests.rs
+│   │   │   └── responses.rs
+│   │   └── error.rs     # SceneError conversion
+│   └── robots/
+│       ├── mod.rs       # Re-exportaciones
 │       ├── handler.rs   # Handlers axum
-│       └── dto.rs       # Request/Response DTOs (FromFkRequest, SceneResponse, etc.)
+│       ├── service.rs   # RobotService (catálogo de robots)
+│       ├── dto.rs       # RobotMetadataDto
+│       └── error.rs     # RobotError conversion
 └── http/
     ├── mod.rs           # app_router() — monta rutas
     └── routes/
-        └── scene.rs     # Definición de rutas REST
+        ├── mod.rs
+        ├── scene.rs     # Rutas de escena
+        └── robots.rs    # Rutas de robots
 ```
 
 ### Endpoints
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| `POST` | `/api/v1/scene/from-fk` | Configuración de joints → escena visual |
-| `GET`  | `/api/v1/scene` | Escena por defecto (q = [0, 0]) |
+| `GET`  | `/api/v1/scene` | Snapshot del runtime actual |
+| `POST` | `/api/v1/scene/joints` | Mutar joints (`SetJoints`) |
+| `POST` | `/api/v1/scene/robot` | Cargar otro robot (`LoadRobot`) |
 | `POST` | `/api/v1/scene/validate` | Validar una escena arbitraria |
 | `POST` | `/api/v1/scene/diff` | Diff entre dos escenas |
+| `GET`  | `/api/v1/robots` | Listar catálogo de robots |
+| `GET`  | `/api/v1/robots/{id}` | Obtener metadata de un robot |
+
+Los handlers de scene **no contienen lógica de dominio**: delegan en
+`thalos_runtime::SceneService::execute()`. La API solo traduce HTTP ↔ Command.
 
 ### Mapa de errores
 
-Los errores de `SceneError` se traducen a `ErrorResponse` con códigos
-`SCREAMING_SNAKE_CASE` y status HTTP `422 Unprocessable Entity`.
+| Rust Error → | HTTP Status | Código |
+|--------------|-------------|--------|
+| `SceneError::MissingWorld` | 422 | `MISSING_WORLD` |
+| `SceneError::MissingFrame` | 422 | `MISSING_FRAME` |
+| `SceneError::DuplicateId` | 422 | `DUPLICATE_ID` |
+| `SceneError::BrokenTopology` | 422 | `BROKEN_TOPOLOGY` |
+| `SceneError::NonFiniteValue` | 422 | `NON_FINITE_VALUE` |
+| `SceneError::InvalidQuaternion` | 422 | `INVALID_QUATERNION` |
+| `RobotModelError` | 404 | `ROBOT_NOT_FOUND` |
 
 ## Esquema general del workspace
 
@@ -241,27 +420,83 @@ Thalos Workspace
 │   └── models            # Planar2R, Planar3R, SCARA, SingleRevolute
 │
 ├── thalos-visual         # Visualización desacoplada
-│   ├── scene             # VisualScene, SceneDiff, VisualPrecision
-│   ├── builder           # SceneBuilder (FK → VisualScene)
+│   ├── scene             # VisualScene, SceneDiff, VisualPrecision,
+│   │                     # FrameStyle, VisualPrimitive
+│   ├── builder           # SceneBuilder, ScaraVisualBuilder
 │   └── validator         # SceneValidator (8 invariantes)
 │
+├── thalos-runtime        # Orquestación runtime
+│   ├── commands          # Command enum (SetJoints, LoadRobot)
+│   ├── state             # SceneRuntime, ActiveRobot
+│   ├── services          # SceneService (orquestador)
+│   ├── backends          # RobotBackend trait + InternalBackend
+│   └── snapshots         # RuntimeSnapshot
+│
 └── thalos-api            # API HTTP
-    ├── app               # AppState, Services, DTOs de error
-    ├── features/scene    # SceneService + handlers + DTOs
+    ├── app               # AppState, Services, ApiError
+    ├── features/{scene,robots} # Handlers + DTOs + services
     └── http/routes       # Rutas REST (axum Router)
 ```
 
 ## Frontend (Angular)
 
+El frontend está organizado por **features** (scene, robots), cada uno con sus
+propios stores, servicios, tipos y componentes. Usa **Angular Signals** como
+mecanismo principal de reactividad, con RxJS subyacente para comunicación HTTP
+y pipelines asíncronos.
+
 ```
 frontend/src/app/
-├── app.ts                # Layout shell (SceneViewer + JointControl)
-├── visual-scene.types.ts # Mirror types de Rust
-├── services/
-│   ├── scene-api.service.ts   # HTTP client → /api/v1/scene/from-fk
-│   ├── scene.store.ts         # Estado reactivo con RxJS
-│   └── three-renderer.service.ts  # Renderizado Three.js
-└── components/
-    ├── scene-viewer/          # Visualización 3D
-    └── joint-control/         # Controles de sliders para joints
+├── app.config.ts              # Providers y configuración de Angular
+├── app.component.ts           # Layout shell
+│
+├── features/
+│   ├── scene/                 # Feature de escena 3D
+│   │   ├── scene.types.ts     # Tipos internos (SceneData, SceneFrame, etc.)
+│   │   ├── scene-api.types.ts # Mirror de DTOs del backend (snake_case)
+│   │   ├── adapters/
+│   │   │   └── dto-to-model.ts    # VisualSceneDto → SceneData
+│   │   ├── store/
+│   │   │   └── scene.store.ts     # Estado reactivo → Signal<SceneState>
+│   │   ├── services/
+│   │   │   ├── scene-api.service.ts       # HTTP client
+│   │   │   └── three-renderer.service.ts  # Renderizado Three.js
+│   │   └── components/
+│   │       ├── scene-viewer/        # Canvas Three.js + effect()
+│   │       └── joint-control/       # Sliders adaptativos por DOF
+│   │
+│   └── robots/                 # Feature de catálogo de robots
+│       ├── robot-api.types.ts  # DTOs (RobotMetadataDto)
+│       ├── store/
+│       │   └── robot.store.ts  # Estado reactivo → signals
+│       └── components/
+│           ├── robot-catalog/      # Lista + selección
+│           └── robot-card/         # Card individual
 ```
+
+### Arquitectura del store (SceneStore)
+
+Dos pipelines RxJS paralelos se merged con `merge()` + `scan()` para producir
+un `Observable<SceneState>` que se convierte en `Signal<SceneState>` vía
+`toSignal()`:
+
+```
+qSubject (BehaviorSubject) ─→ auditTime(16) ─→ switchMap → API setJoints ──┐
+                                                                           ├→ merge → scan → toSignal → Signal<SceneState>
+loadRobotSubject (Subject) ─────────────────→ switchMap → API loadRobot ───┘
+```
+
+Los componentes consumen `SceneStore.state` como signal. **No hay subscriptions
+manuales** — usan `effect()` o `computed()`.
+
+### ThreeRendererService
+
+Renderiza `SceneData` en Three.js. Soporta:
+
+- **Frames** con `FrameStyle` (esferas de origen, ejes con flechas cónicas)
+- **Links** como cilindros entre dos puntos
+- **Primitivas** geométricas (cilindros, esferas, cajas con color por ID)
+- **Brújula 3D** en esquina (contra-rotada a la cámara para orientación global)
+
+Rotación: Rust serializa quaternions como `[w, x, y, z]` → Three.js espera
+`(x, y, z, w)`. El adapter y el renderer aplican esta conversión.

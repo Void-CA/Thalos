@@ -43,8 +43,12 @@ Reglas:
 ```
 crates/thalos-visual/src/
 ├── lib.rs            # Re-exportaciones públicas
-├── scene/mod.rs      # Tipos del modelo visual
-├── builder.rs        # SceneBuilder (traducción core → visual)
+├── scene/
+│   ├── mod.rs        # VisualScene, VisualFrame, VisualPrimitive, FrameStyle, etc.
+│   ├── precision.rs  # VisualPrecision (normalización numérica)
+│   └── diff.rs       # SceneDiff, ChangedFrame
+├── builder.rs        # SceneBuilder (FK → VisualScene) + helpers (cylinder_between, align_y_to)
+├── scara.rs          # ScaraVisualBuilder (builders específicos por robot)
 ├── validator.rs      # SceneValidator (invariantes)
 └── utils.rs          # Utilidades pequeñas
 ```
@@ -54,6 +58,40 @@ crates/thalos-visual/src/
 - `SceneBuilder` importa del core pero **no modifica** estructuras del core.
 - `SceneValidator` es autónomo: solo recibe un `&VisualScene` y devuelve
   `Result<(), SceneError>`.
+- Los **builders específicos** (ej: `ScaraVisualBuilder`) van en archivos
+  separados y extienden `SceneBuilder` para generar primitivas geométricas.
+- Los **helpers geométricos** (`cylinder_between`, `align_y_to`) viven en
+  `builder.rs` y se exportan para reuso.
+
+### thalos-runtime
+
+```
+crates/thalos-runtime/src/
+├── lib.rs            # Re-exportaciones públicas
+├── error.rs          # RuntimeError
+├── commands/
+│   └── mod.rs        # Command enum (SetJoints, LoadRobot)
+├── state/
+│   ├── mod.rs
+│   └── robot.rs      # SceneRuntime, ActiveRobot
+├── services/
+│   ├── mod.rs
+│   └── scene.rs      # SceneService (orquestador principal)
+├── backends/
+│   ├── mod.rs        # RobotBackend trait
+│   └── internal.rs   # InternalBackend
+└── snapshots/
+    ├── mod.rs
+    └── scene.rs      # RuntimeSnapshot
+```
+
+Reglas:
+
+- `SceneService` es el **único punto de entrada** para mutaciones del sistema.
+- Los `Command` son **tipados e inmutables** — representan intenciones.
+- Los `RobotBackend` siguen **strategy pattern** — el default es `InternalBackend`.
+- El runtime **no sabe de HTTP** — no importa nada de `thalos-api`.
+- `SceneService::execute()` siempre devuelve un `RuntimeSnapshot` completo.
 
 ### thalos-api
 
@@ -64,17 +102,31 @@ crates/thalos-api/src/
 ├── app/
 │   ├── mod.rs        # AppState + Services
 │   ├── state.rs      # Estado global
-│   └── dto.rs        # DTOs de error compartidos
+│   ├── prelude.rs    # Re-exportaciones del crate
+│   ├── error.rs      # ApiError (conversión a HTTP)
+│   ├── dto.rs        # DTOs de error compartidos
+│   └── types.rs      # ApiResult alias
 ├── features/
-│   └── <feature>/    # Una carpeta por feature
-│       ├── mod.rs    # Re-exportaciones del feature
-│       ├── service.rs    # Lógica de servicio
-│       ├── handler.rs    # Handlers axum
-│       └── dto.rs        # Request/Response DTOs
+│   ├── scene/        # Feature de escena
+│   │   ├── mod.rs
+│   │   ├── handler.rs    # Handlers axum
+│   │   ├── dto/
+│   │   │   ├── mod.rs
+│   │   │   ├── requests.rs  # SetJointsRequest, LoadRobotRequest, etc.
+│   │   │   └── responses.rs # VisualSceneDto, RuntimeStateResponse, etc.
+│   │   └── error.rs
+│   └── robots/       # Feature de catálogo
+│       ├── mod.rs
+│       ├── handler.rs
+│       ├── service.rs    # RobotService
+│       ├── dto.rs        # RobotMetadataDto
+│       └── error.rs
 └── http/
     ├── mod.rs        # app_router()
     └── routes/
-        └── <feature>.rs  # Definición de rutas
+        ├── mod.rs
+        ├── scene.rs  # Rutas de escena
+        └── robots.rs # Rutas de robots
 ```
 
 ## Cómo agregar un modelo robótico nuevo
@@ -206,7 +258,7 @@ abrir un visor 3D.
 
 ### No hacer
 
-- Importar `thalos-visual` o `thalos-api` desde `thalos-core`
+- Importar `thalos-visual`, `thalos-runtime` o `thalos-api` desde `thalos-core`
 - Poner lógica de negocios en handlers HTTP
 - Usar `unwrap()` o `expect()` en código de producción (salvo en `main.rs` o
   tests)

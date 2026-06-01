@@ -49,23 +49,78 @@ ramificaciones (tree).
 
 ## Términos del workspace
 
-**Crate** — Paquete de Rust. Thalos tiene 3: `thalos-core`, `thalos-visual`,
-`thalos-api`.
+**Crate** — Paquete de Rust. Thalos tiene 4: `thalos-core`, `thalos-visual`,
+`thalos-runtime`, `thalos-api`.
 
 **Workspace** — Conjunto de crates que comparten un `Cargo.lock` y
 configuración de build.
 
-**Feature** — Módulo funcional dentro de `thalos-api` (`scene`, y futuros:
-`planning`, `control`, etc.).
+**Feature** — Módulo funcional dentro de `thalos-api` (`scene`, `robots`,
+y futuros: `planning`, `control`, etc.).
+
+## Términos del runtime
+
+**SceneService** — Orquestador central. Mantiene `SceneRuntime` (el estado mutable)
+y expone `snapshot()` y `execute(Command)`. Es el punto único de entrada para
+toda mutación del sistema.
+
+**Command** — Enum que tipa las mutaciones del runtime: `SetJoints(Vec<f64>)`
+y `LoadRobot(String)`. Se ejecutan via `SceneService::execute()`.
+
+**RuntimeSnapshot** — Estado puntual del sistema: robot activo, joints actuales,
+escena visual validada y timestamp. Es el valor de retorno unificado.
+
+**SceneRuntime** — Contenedor del estado mutable: envuelve `ActiveRobot` dentro
+de un `RwLock` para acceso concurrente.
+
+**ActiveRobot** — Robot actualmente cargado: modelo, cadena cinemática
+(`SerialChain`) y ángulos articulares (`Vec<f64>`).
+
+**RobotBackend** — Trait (strategy) para resolver modelos robóticos por ID.
+`InternalBackend` usa el catálogo built-in; implementaciones custom pueden
+integrar hardware, archivos de configuración o redes.
 
 ## Términos del frontend
 
-**SceneViewer** — Componente Angular que renderiza `VisualScene` en Three.js.
+**SceneStore** — Servicio Angular con estado reactivo. Usa dos pipelines RxJS
+paralelos (joints + load robot) mergados con `merge()` + `scan()`, expuestos
+como `Signal<SceneState>` vía `toSignal()`.
 
-**JointControl** — Componente Angular con sliders para cada joint del robot.
+**RobotStore** — Store con signals puras para el catálogo de robots. Expone
+`robots`, `selectedId`, `loading` y `error` como `WritableSignal`.
 
-**SceneStore** — Servicio Angular con estado reactivo (RxJS) que orquesta
-llamadas API y mantiene la escena actual.
+**ThreeRendererService** — Servicio Angular que renderiza `SceneData` en
+Three.js. Maneja frames con `FrameStyle`, links cilíndricos, primitivas
+geométricas y brújula 3D.
+
+**RobotCatalog** — Componente orquestador que lista robots del catálogo y al
+seleccionar uno dispara `RobotStore.select()` + `SceneStore.loadRobot()`.
+
+**dto-to-model** — Adapter que traduce DTOs del API (snake_case) a tipos
+internos del frontend (camelCase). Incluye conversión de geometrías
+(`PrimitiveGeometryDto` → `ScenePrimitive`).
+
+## Términos visuales
+
+**VisualPrimitive** — Elemento 3D con volumen (cilindro, esfera, caja) que
+complementa frames y links en la escena. Tiene `id`, `translation`, `rotation`
+y `geometry`. Ej: base column del SCARA, cuerpos de links.
+
+**FrameStyle** — Configuración visual de un frame individual: longitud/radio de
+ejes, colores RGB, esfera de origen y etiquetas. Cada `VisualFrame` puede
+tener su propio `FrameStyle` o usar defaults del frontend.
+
+**ScaraVisualBuilder** — Builder específico para el robot SCARA. Genera
+primitivas geométricas (base column, link bodies) además de los frames y links
+estándar. Es un ejemplo del patrón "builder por robot".
+
+**cylinder_between** — Helper que construye un `VisualPrimitive::Cylinder`
+entre dos puntos 3D, calculando altura (distancia), punto medio y rotación
+(para alinear el eje Y del cilindro con la dirección del segmento).
+
+**align_y_to** — Helper que produce un quaternion que rota el eje Y canónico
+(0,1,0) para alinearse con una dirección arbitraria. Se usa internamente por
+`cylinder_between` y es exportado para uso en builders personalizados.
 
 ## Convenciones de código
 

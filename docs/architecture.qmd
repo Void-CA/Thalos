@@ -8,13 +8,14 @@ estructurado como está, y deben respetarse al extenderlo.
 
 ### Separación de responsabilidades
 
-Thalos separa **cuatro dominios** que nunca deben acoplarse:
+Thalos separa **cinco dominios** que nunca deben acoplarse:
 
 | Dominio | Crate | Responsabilidad |
 |---------|-------|-----------------|
 | Matemático | `thalos-core::math` | Álgebra, geometría, rotaciones, transformaciones |
 | Robótico | `thalos-core::robot` + `kinematics` + `spatial` | Estructuras robóticas, cinemática, frames |
-| Visual | `thalos-visual` | Escenas, validación, diff, snapshots |
+| Visual | `thalos-visual` | Escenas, validación, diff, snapshots, primitivas |
+| Runtime | `thalos-runtime` | Orquestación, estado mutable, commands, backends |
 | Comunicación | `thalos-api` | HTTP, DTOs, handlers, routing |
 
 La regla de oro:
@@ -29,8 +30,10 @@ Cada crate es independiente y tiene un contrato claro:
 
 - `thalos-core` — **no depende de nada** fuera de `nalgebra` y `thiserror`
 - `thalos-visual` — **solo depende de** `thalos-core` y `serde`
-- `thalos-api` — **depende de** `thalos-core` + `thalos-visual`, agrega `axum`
-  y `tokio`
+- `thalos-runtime` — **depende de** `thalos-core` + `thalos-visual`, agrega
+  `thiserror` y `chrono`. **No sabe que existe HTTP.**
+- `thalos-api` — **depende de** `thalos-core` + `thalos-visual` + `thalos-runtime`,
+  agrega `axum` y `tokio`
 
 
 Esto significa que `thalos-core` puede compilarse y testearse **sin** `tokio`,
@@ -68,7 +71,9 @@ Cada capa valida sus propias invariantes:
 
 - `UnitQuaternion::new()` valida norma unitaria
 - `SerialChainBuilder::build()` valida frames existentes y end-effector
-- `SceneValidator::validate()` valida topología, quaternions, valores finitos
+- `SceneValidator::validate()` valida topología, quaternions, valores finitos,
+  links consistentes y twists
+- `SceneService::execute()` valida que el comando sea aplicable al estado actual
 
 Si una capa recibe datos inválidos, **rechaza la construcción**, no intenta
 "arreglar" silenciosamente.
@@ -90,9 +95,10 @@ Violar una regla arquitectónica introduce deuda técnica estructural.
 | `thalos-core` no depende de visualización | No puede importar nada de `thalos-visual`. El core no sabe que existe una representación visual. |
 | `thalos-core` no depende de HTTP | No puede importar `axum`, `tokio`, ni ningún crate de infraestructura web. |
 | `thalos-visual` consume estructuras del core | `SceneBuilder` importa `FKResult`, `SerialChain`, `Jacobian` — pero no modifica esas estructuras. La traducción es unidireccional. |
-| `thalos-api` no contiene lógica de dominio | Los handlers delegan en `SceneService`. No hay cálculo cinemático ni manipulación de estructuras del core en los handlers. |
-| Sin dependencias circulares | `thalos-core` → `thalos-visual` → `thalos-api`. Nunca al revés. |
-| DTOs separados del dominio | Los tipos serializables de `thalos-api::app::dto` y `thalos-api::features::scene::dto` son independientes de los tipos del core. `VisualScene` es una excepción controlada (es `Serialize` por diseño). |
+| `thalos-runtime` no depende de HTTP | El runtime orquesta core + visual pero no sabe que existe `axum` ni `thalos-api`. |
+| `thalos-api` no contiene lógica de dominio | Los handlers delegan en `SceneService::execute()`. No hay cálculo cinemático ni manipulación de estructuras del core en los handlers. |
+| Sin dependencias circulares | `thalos-core` → `thalos-visual` → `thalos-runtime` → `thalos-api`. Nunca al revés. |
+| DTOs separados del dominio | Los tipos serializables de la API (`VisualSceneDto`, `RuntimeStateResponse`) son independientes de los tipos del core. `VisualScene` es una excepción controlada (es `Serialize` por diseño). El adapter `dto-to-model.ts` en el frontend traduce snake_case DTOs a camelCase internos. |
 
 > Violar estas reglas rompe el desacoplamiento y eventualmente convierte a
 > Thalos en un monolito.
@@ -131,9 +137,10 @@ almacenamiento.
 
 Todo lo que es mecánica de sistema, no lógica de dominio.
 
-- `thalos-visual` — serialización, validación de escenas, diff
+- `thalos-visual` — serialización, validación de escenas, diff, primitivas
+- `thalos-runtime` — orquestación, estado mutable, backends de robots
 - `thalos-api` — HTTP, routing, DTOs de entrada/salida
-- Frontend Angular — renderizado, UI, estado del cliente
+- Frontend Angular — renderizado 3D, UI, estado del cliente con signals
 
 La infraestructura **consume** los dominios matemático y robótico, pero nunca
 al revés.
@@ -205,12 +212,16 @@ digraph deps {
         fontsize=13;
 
         api     [label="thalos-api\naxum · tokio · serde"];
-        visual  [label="thalos-visual\nserde · insta"];
+        runtime [label="thalos-runtime\nchrono · thiserror", style="rounded,dashed", penwidth=2];
+        visual  [label="thalos-visual\nserde"];
         core    [label="thalos-core\nnalgebra · thiserror"];
     }
 
     visual -> core [label="depende de", fontsize=9];
-    api -> visual  [label="depende de", fontsize=9];
+    runtime -> visual [label="depende de", fontsize=9];
+    api -> runtime  [label="depende de", fontsize=9];
+    edge [style=invis, weight=10];
+    runtime -> visual;
 }
 ```
 
@@ -228,8 +239,9 @@ de concepto a implementación:
 | `thalos-core::robot` | Joints, links, segments, serial chain | Cómo se modela un robot |
 | `thalos-core::kinematics` | FK, jacobianos | Los algoritmos centrales |
 | `thalos-core::spatial` | Frames, poses, registries | El sistema de coordenadas |
-| `thalos-visual` | Scene builder, validator, diff | Cómo se proyecta el dominio a visual |
-| `thalos-api` | Services, handlers, routes | Cómo se expone a otros sistemas |
-| Frontend Angular | Scene store, three renderer | Cómo se ve del lado del cliente |
+| `thalos-visual` | Scene builder, validator, diff, primitives, FrameStyle | Cómo se proyecta el dominio a visual |
+| `thalos-runtime` | SceneService, Command, RobotBackend | Cómo se orquesta el estado mutable |
+| `thalos-api` | Services, handlers, routes, DTOs | Cómo se expone a otros sistemas |
+| Frontend Angular | Scene store (signals), three renderer | Cómo se ve del lado del cliente |
 
 Los archivos cambian. Los conceptos sobreviven.

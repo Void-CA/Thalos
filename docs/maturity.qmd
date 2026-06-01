@@ -28,15 +28,22 @@ colaboradores y adoptantes tempranos.
 | `spatial::frame::graph` | $\circ$ Experimental | Solo esqueleto declarado |
 | `models::factory` | $\blacksquare$ Estable | `RobotRegistry`, `RobotModel`, `RobotSpec` |
 | Modelos concretos | $\blacksquare$ Estable | Factory + tests FK por modelo |
-| `thalos-visual::scene` | $\circ$ Experimental | `VisualScene`, `VisualFrame`, API puede cambiar |
-| `thalos-visual::builder` | $\circ$ Experimental | `SceneBuilder` — API puede cambiar |
+| `thalos-visual::scene` | $\blacktriangle$ Desarrollo | `VisualScene`, `VisualFrame`, primitives, `FrameStyle` — API estable pero puede crecer |
+| `thalos-visual::builder` | $\blacktriangle$ Desarrollo | `SceneBuilder`, `ScaraVisualBuilder`, `cylinder_between` |
 | `thalos-visual::validator` | $\blacksquare$ Estable | 8 invariantes, tests con insta |
 | `thalos-visual::diff` | $\blacksquare$ Estable | `SceneDiff::between()` |
 | `thalos-visual::precision` | $\blacksquare$ Estable | `VisualPrecision` |
-| `thalos-api::handlers` | $\circ$ Experimental | Handlers básicos, pueden expandirse |
-| `thalos-api::dto` | $\circ$ Experimental | `ErrorResponse` puede expandirse |
-| `thalos-api::routes` | $\circ$ Experimental | Routing puede cambiar |
-| Frontend Angular | $\circ$ Experimental | En desarrollo activo |
+| `thalos-runtime::scene` | $\blacktriangle$ Desarrollo | `SceneService`, `Command`, `RuntimeSnapshot` — estable pero crecerá |
+| `thalos-runtime::backends` | $\circ$ Experimental | `RobotBackend` trait — puede necesitar más métodos |
+| `thalos-runtime::state` | $\circ$ Experimental | `SceneRuntime`, `ActiveRobot` — sujeto a cambios |
+| `thalos-api::handlers` | $\blacktriangle$ Desarrollo | Handlers REST escena + robots |
+| `thalos-api::dto` | $\blacktriangle$ Desarrollo | `RuntimeStateResponse`, `VisualSceneDto`, mirrors completos |
+| `thalos-api::routes` | $\circ$ Experimental | Routing puede cambiar / reorganizarse |
+| `thalos-api::robots` | $\circ$ Experimental | Catálogo de robots — feature nuevo |
+| Frontend: Scene feature | $\blacktriangle$ Desarrollo | Signals + RxJS, stable pero en evolución |
+| Frontend: Robots feature | $\circ$ Experimental | Catálogo + selección — feature nuevo |
+| Frontend: ThreeRenderer | $\blacktriangle$ Desarrollo | Primitives, FrameStyle, compass — puede sumar features |
+| Frontend: RobotCatalog | $\circ$ Experimental | UI de selección de robots, puede cambiar |
 
 **Estados**: 
 
@@ -63,6 +70,10 @@ colaboradores y adoptantes tempranos.
 
 - `service_tests` — `SceneService::build_scene` con validación
 - `api_tests` — Integración HTTP: endpoints responden correctamente
+
+### `thalos-runtime`
+
+- Sin tests dedicados aún (depende de validación de escena vía `thalos-visual`)
 
 ## Cobertura deseada
 
