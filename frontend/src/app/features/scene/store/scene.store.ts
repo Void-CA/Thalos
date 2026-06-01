@@ -54,18 +54,28 @@ export class SceneStore {
       distinctUntilChanged((a, b) =>
         a.length === b.length && a.every((v, i) => v === b[i]),
       ),
-      switchMap(q => this.api.setJoints(q)),
+      switchMap(q =>
+        this.api.setJoints(q).pipe(
+          map(toSceneEvent),
+          catchError(err =>
+            of({ type: 'error' as const, message: err.message ?? 'FK failed' }),
+          ),
+        ),
+      ),
     ),
 
     // Pipeline 2: robot load → loadRobot API
     this.loadRobotSubject.pipe(
-      switchMap(id => this.api.loadRobot(id)),
+      switchMap(id =>
+        this.api.loadRobot(id).pipe(
+          map(toSceneEvent),
+          catchError(err =>
+            of({ type: 'error' as const, message: err.message ?? 'Load failed' }),
+          ),
+        ),
+      ),
     ),
   ).pipe(
-    map(toSceneEvent),
-    catchError(err =>
-      of({ type: 'error' as const, message: err.message ?? 'Operation failed' }),
-    ),
     scan((state, event): SceneState => {
       switch (event.type) {
         case 'scene':
