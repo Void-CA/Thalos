@@ -58,6 +58,16 @@ impl VisualPrimitive {
             geometry: PrimitiveGeometry::Box { width, height, depth },
         }
     }
+
+    pub fn with_translation(mut self, translation: [f64; 3]) -> Self {
+        self.translation = translation;
+        self
+    }
+
+    pub fn with_rotation(mut self, rotation: [f64; 4]) -> Self {
+        self.rotation = rotation;
+        self
+    }
 }
 
 // ── Escena visual ──────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ use thalos_core::{
     kinematics::forward::ForwardKinematics,
     models::{RobotModel, RobotRegistry},
 };
-use thalos_visual::{SceneBuilder, SceneDiff, SceneValidator, VisualScene};
+use thalos_visual::{SceneBuilder, SceneDiff, SceneValidator, ScaraVisualBuilder, VisualScene};
 
 use crate::backends::RobotBackend;
 use crate::commands::Command;
@@ -39,9 +39,15 @@ impl SceneService {
         let runtime = self.runtime.read().unwrap();
 
         let fk = ForwardKinematics::new(runtime.active_robot.chain.clone());
-        let builder = SceneBuilder::new(&runtime.active_robot.chain);
         let result = fk.evaluate(&runtime.active_robot.joints);
-        let scene = builder.from_fk(&result);
+
+        let scene = match runtime.active_robot.model {
+            RobotModel::Scara => ScaraVisualBuilder::build(&result, &runtime.active_robot.chain),
+            _ => {
+                let builder = SceneBuilder::new(&runtime.active_robot.chain);
+                builder.from_fk(&result)
+            }
+        };
 
         self.validator.validate(&scene)?;
 

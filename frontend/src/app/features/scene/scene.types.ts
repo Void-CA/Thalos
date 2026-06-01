@@ -37,12 +37,25 @@ export interface SceneTwist {
   angular: [number, number, number];
 }
 
+export interface ScenePrimitive {
+  id: string;
+  translation: [number, number, number];
+  rotation: [number, number, number, number];
+  geometry: PrimitiveGeometry;
+}
+
+export type PrimitiveGeometry =
+  | { type: 'cylinder'; radius: number; height: number }
+  | { type: 'sphere'; radius: number }
+  | { type: 'box'; width: number; height: number; depth: number };
+
 /** Escena deserializada y lista para consumo interno (renderer, interacción, etc.). */
 export interface SceneData {
   frames: SceneFrame[];
   links: SceneLink[];
   jointAxes: SceneJointAxis[];
   twists: SceneTwist[];
+  primitives: ScenePrimitive[];
 }
 
 /** Estado puramente de UI — NO existe en el backend. */

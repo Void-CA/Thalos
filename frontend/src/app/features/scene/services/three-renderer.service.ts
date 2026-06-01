@@ -1,7 +1,7 @@
 import { Injectable, NgZone, inject } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { SceneData } from '../scene.types';
+import { SceneData, ScenePrimitive } from '../scene.types';
 
 
 @Injectable({ providedIn: 'root' })
@@ -116,8 +116,54 @@ export class ThreeRendererService {
       ));
     }
 
+    // ── Primitives ──
+    this.renderPrimitives(grp, scene);
+
     // ── Twists (not yet populated by backend — placeholder) ──
     // Future: render linear angular arrows from each twist
+  }
+
+  private renderPrimitives(grp: THREE.Group, scene: SceneData): void {
+    const matCache = new Map<string, THREE.Material>();
+
+    function getMat(color: number): THREE.Material {
+      const key = color.toString(16);
+      if (!matCache.has(key)) {
+        matCache.set(key, new THREE.MeshStandardMaterial({ color }));
+      }
+      return matCache.get(key)!;
+    }
+
+    for (const p of scene.primitives) {
+      const pos = new THREE.Vector3(p.translation[0], p.translation[1], p.translation[2]);
+      // Rust quaternion [w, x, y, z] → Three.js (x, y, z, w)
+      const rot = new THREE.Quaternion(p.rotation[1], p.rotation[2], p.rotation[3], p.rotation[0]);
+
+      const geo = this.buildPrimitiveGeometry(p.geometry);
+      if (!geo) continue;
+
+      // Color por id para distinguir visualmente
+      const color = p.id.includes('column') ? 0x888888
+                 : p.id.includes('link_1') ? 0x3399ff
+                 : p.id.includes('link_2') ? 0x44bbaa
+                 : 0xaaaaaa;
+
+      const mesh = new THREE.Mesh(geo, getMat(color));
+      mesh.position.copy(pos);
+      mesh.quaternion.copy(rot);
+      grp.add(mesh);
+    }
+  }
+
+  private buildPrimitiveGeometry(g: ScenePrimitive['geometry']): THREE.BufferGeometry | null {
+    switch (g.type) {
+      case 'cylinder':
+        return new THREE.CylinderGeometry(g.radius, g.radius, g.height, 16, 1);
+      case 'sphere':
+        return new THREE.SphereGeometry(g.radius, 16, 16);
+      case 'box':
+        return new THREE.BoxGeometry(g.width, g.height, g.depth);
+    }
   }
 
   dispose(): void {

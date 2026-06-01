@@ -26,11 +26,24 @@ export interface VisualTwistDto {
   angular: [number, number, number];
 }
 
+export interface VisualPrimitiveDto {
+  id: string;
+  translation: [number, number, number];
+  rotation: [number, number, number, number];
+  geometry: PrimitiveGeometryDto;
+}
+
+export type PrimitiveGeometryDto =
+  | { Cylinder: { radius: number; height: number } }
+  | { Sphere: { radius: number } }
+  | { Box: { width: number; height: number; depth: number } };
+
 export interface VisualSceneDto {
   frames: VisualFrameDto[];
   links: VisualLinkDto[];
   joint_axes: VisualJointAxisDto[];
   twists: VisualTwistDto[];
+  primitives: VisualPrimitiveDto[];
 }
 
 export interface RuntimeStateResponse {

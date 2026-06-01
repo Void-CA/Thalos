@@ -7,6 +7,72 @@ use thalos_core::{
 
 use crate::scene::*;
 
+// ── Helpers geométricos para construir primitives ──
+
+/// Normaliza un vector 3D.
+fn normalize(v: [f64; 3]) -> [f64; 3] {
+    let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+    if len < 1e-15 {
+        return [0.0, 1.0, 0.0];
+    }
+    [v[0] / len, v[1] / len, v[2] / len]
+}
+
+/// Devuelve un quaternion `[w, x, y, z]` que rota el eje Y (0,1,0) para alinearse
+/// con `direction`. Útil para orientar cilindros cuyo eje default es Y (Three.js).
+pub fn align_y_to(direction: [f64; 3]) -> [f64; 4] {
+    let dir = normalize(direction);
+    let y = [0.0, 1.0, 0.0];
+    let dot = y[0] * dir[0] + y[1] * dir[1] + y[2] * dir[2];
+
+    // Misma dirección → identidad
+    if dot > 0.9999 {
+        return [1.0, 0.0, 0.0, 0.0];
+    }
+    // Dirección opuesta → 180° alrededor de Z
+    if dot < -0.9999 {
+        return [0.0, 0.0, 0.0, 1.0];
+    }
+
+    // Producto vectorial: eje de rotación
+    let axis = [
+        y[1] * dir[2] - y[2] * dir[1],
+        y[2] * dir[0] - y[0] * dir[2],
+        y[0] * dir[1] - y[1] * dir[0],
+    ];
+    let axis = normalize(axis);
+
+    let half = dot.acos() / 2.0;
+    let s = half.sin();
+    [half.cos(), axis[0] * s, axis[1] * s, axis[2] * s]
+}
+
+/// Construye un `VisualPrimitive::Cylinder` que va desde `from` hasta `to`.
+/// El cilindro queda centrado en el punto medio, con la altura = distancia y
+/// orientación alineada con la dirección del segmento.
+pub fn cylinder_between(
+    id: impl Into<String>,
+    from: [f64; 3],
+    to: [f64; 3],
+    radius: f64,
+) -> VisualPrimitive {
+    let dx = to[0] - from[0];
+    let dy = to[1] - from[1];
+    let dz = to[2] - from[2];
+    let height = (dx * dx + dy * dy + dz * dz).sqrt();
+
+    if height < 1e-10 {
+        return VisualPrimitive::cylinder(id, radius, 0.0);
+    }
+
+    let midpoint = [(from[0] + to[0]) / 2.0, (from[1] + to[1]) / 2.0, (from[2] + to[2]) / 2.0];
+    let rotation = align_y_to([dx / height, dy / height, dz / height]);
+
+    VisualPrimitive { id: id.into(), translation: midpoint, rotation, geometry: PrimitiveGeometry::Cylinder { radius, height } }
+}
+
+// ── SceneBuilder ──
+
 pub struct SceneBuilder {
     chain: SerialChain,
     precision: VisualPrecision,
