@@ -1,7 +1,5 @@
-
 use crate::prelude::*;
-use crate::kinematics::inverse::solver::IKSolver;
-use crate::math::algebra::vector::DynamicVector;
+use crate::kinematics::inverse::solver::JacobianTransposeSolver;
 use std::f64::consts::PI;
 
 // ─── Helpers ───────────────────────────────────────────────────────────
@@ -65,115 +63,135 @@ fn build_2dof_planar_arm() -> (ForwardKinematics, FrameId) {
 
 // ─── Tests ─────────────────────────────────────────────────────────────
 
-/// 1. VALIDACIÓN BÁSICA: el error disminuye iteración a iteración.
-///
-/// Corre el loop manualmente para registrar la historia del error.
-/// Verifica que el error nunca crezca (con tolerancia numérica 1e-12).
+/// 1. EL RESULTADO EXPONE ESTADO: verifica que IKResult tenga status,
+///    iterations y final_error correctamente poblados.
 #[test]
-fn test_error_decreases_monotonically() {
+fn test_result_exposes_metadata() {
     let (fk, ee) = build_2dof_planar_arm();
-    let jacobian = GeometricJacobian::new(fk.clone(), ee);
+    let solver = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5);
 
     let q0 = vec![0.0, 0.0];
     let target = Vector3::new(1.0, 1.0, 0.0);
-    let max_iters = 500;
-    let tolerance = 1e-6;
-    let alpha = 0.5;
+    let result = solver.solve(&q0, target);
 
-    let mut q = DynamicVector::from_column_slice(&q0);
-    let mut prev_error = f64::MAX;
-    let mut errors: Vec<f64> = Vec::new();
-    let mut converged = false;
+    // IKResult debe contener la solución
+    assert_eq!(result.q.len(), 2, "Solución debe tener 2 joint values");
 
-    for iter in 0..max_iters {
-        let fk_result = fk.evaluate(q.as_slice());
-        let p = fk_result.ee_position().unwrap();
-        let error = target - p;
-        let mag = error.magnitude();
-        errors.push(mag);
-
-        if mag < tolerance {
-            converged = true;
-            println!("  Converged in {} iterations, final error = {:.2e}", iter + 1, mag);
-            prev_error = mag;
-            break;
-        }
-
-        // El error debe decrecer (o mantenerse) consistentemente
-        assert!(
-            mag <= prev_error + 1e-12,
-            "ERROR CRECIÓ: iter={}, prev={:.6}, current={:.6}",
-            iter,
-            prev_error,
-            mag
-        );
-
-        let error_vec: DynamicVector = error.into();
-        let jacobian_result = jacobian.evaluate(q.as_slice());
-        let dq = alpha * (jacobian_result.linear().transpose() * error_vec);
-        q += dq;
-
-        prev_error = mag;
-    }
-
+    // Debe haber convergido (error < tolerancia)
     assert!(
-        converged,
-        "No convergió después de {} iteraciones: error final = {:.2e} (tolerancia = {:.2e})",
-        max_iters,
-        prev_error,
-        tolerance
+        result.status.is_converged(),
+        "Debe converger: status={:?}, final_error={:.2e}, iterations={}",
+        result.status,
+        result.final_error,
+        result.iterations
     );
 
-    // Print de la serie de errores para inspección visual
-    println!("\nEvolución del error (primeros 20):");
-    for (i, e) in errors.iter().take(20).enumerate() {
+    // Iteraciones debe ser > 0 y razonable
+    assert!(result.iterations > 0, "Debe haber al menos 1 iteración");
+    assert!(result.iterations < 500, "No debería agotar max_iters");
+    assert!(
+        result.iterations < 100,
+        "Jacobian Transpose con alpha=0.5 debería converger en <100 iteraciones para este caso, tomó {}",
+        result.iterations
+    );
+
+    // Error final debe estar dentro de tolerancia
+    assert!(
+        result.final_error < 1e-5,
+        "Error final ({:.2e}) muy por encima de tolerancia (1e-6)",
+        result.final_error
+    );
+
+    // Por defecto no hay historial
+    assert!(result.error_history.is_none(), "Historial debe ser None por defecto");
+}
+
+/// 2. HISTORIAL DE ERRORES: con with_history(true) se registra.
+#[test]
+fn test_error_history_is_recorded() {
+    let (fk, ee) = build_2dof_planar_arm();
+    let solver = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5)
+        .with_history(true);
+
+    let q0 = vec![0.0, 0.0];
+    let target = Vector3::new(1.0, 1.0, 0.0);
+    let result = solver.solve(&q0, target);
+
+    let history = result
+        .error_history
+        .expect("with_history(true) debe registrar historial");
+
+    assert_eq!(
+        history.len(),
+        result.iterations,
+        "Historial debe tener {} entradas (== iterations)",
+        result.iterations
+    );
+
+    // El primer error debe ser significativo (el ee empieza en (2,0,0), target (1,1,0))
+    assert!(
+        history[0] > 0.5,
+        "Error inicial debe ser grande, fue {:.4}",
+        history[0]
+    );
+
+    // El último error debe coincidir con final_error
+    let last = history.last().unwrap();
+    assert!(
+        (last - result.final_error).abs() < 1e-12,
+        "Último historial ({:.2e}) debe coincidir con final_error ({:.2e})",
+        last,
+        result.final_error
+    );
+
+    // Imprimir evolución para inspección visual
+    println!("Evolución del error (historial completo, {} iteraciones):", history.len());
+    for (i, e) in history.iter().enumerate() {
         println!("  iter={:3}  error={:.6}", i, e);
-    }
-    if errors.len() > 20 {
-        println!("  ... truncado ({} iteraciones totales)", errors.len());
     }
 }
 
-/// 2. CASO ANALÍTICO: brazo planar de 2-DOF.
+/// 3. CASO ANALÍTICO: brazo planar de 2-DOF.
 ///
 /// L1 = L2 = 1, target (1, 1, 0).
 /// Solución esperada: q1 ≈ 0°, q2 ≈ 90°.
 #[test]
 fn test_2dof_planar_arm_known_solution() {
     let (fk, ee) = build_2dof_planar_arm();
-    let solver = IKSolver::new(fk, ee, 500, 1e-6, 0.5);
+    let solver = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5);
 
     let q0 = vec![0.0, 0.0];
     let target = Vector3::new(1.0, 1.0, 0.0);
-    let q_solution = solver.solve(&q0, target);
+    let result = solver.solve(&q0, target);
 
-    println!("  q1 = {:.6} rad ({:.2}°)", q_solution[0], q_solution[0].to_degrees());
-    println!("  q2 = {:.6} rad ({:.2}°)", q_solution[1], q_solution[1].to_degrees());
+    println!("  q1 = {:.6} rad ({:.2}°)", result.q[0], result.q[0].to_degrees());
+    println!("  q2 = {:.6} rad ({:.2}°)", result.q[1], result.q[1].to_degrees());
 
     assert!(
-        q_solution[0].abs() < 1e-2,
+        result.q[0].abs() < 1e-2,
         "Esperado q1 ≈ 0, got {}",
-        q_solution[0]
+        result.q[0]
     );
     assert!(
-        (q_solution[1] - PI / 2.0).abs() < 1e-2,
+        (result.q[1] - PI / 2.0).abs() < 1e-2,
         "Esperado q2 ≈ π/2, got {}",
-        q_solution[1]
+        result.q[1]
     );
+    assert!(result.status.is_converged(), "IK debe converger");
 }
 
-/// 3. CONSISTENCIA FK: después de IK, FK(position(q)) ≈ target.
+/// 4. CONSISTENCIA FK: después de IK, FK(position(q)) ≈ target.
 #[test]
 fn test_fk_ik_consistency() {
     let (fk, ee) = build_2dof_planar_arm();
-    let solver = IKSolver::new(fk.clone(), ee, 500, 1e-6, 0.5);
+    let solver = JacobianTransposeSolver::new(fk.clone(), ee, 500, 1e-6, 0.5);
 
     let q0 = vec![0.0, 0.0];
     let target = Vector3::new(1.0, 1.0, 0.0);
-    let q_solution = solver.solve(&q0, target);
+    let result = solver.solve(&q0, target);
 
     // FK desde la solución de IK
-    let fk_result = fk.evaluate(&q_solution);
+    let fk_result = fk.evaluate(&result.q);
     let reached = fk_result.ee_position().unwrap();
     let final_error = (target - reached).magnitude();
 
@@ -194,7 +212,7 @@ fn test_fk_ik_consistency() {
     );
 }
 
-/// 4. VERIFICACIÓN DEL JACOBIANO: geométrico vs. numérico.
+/// 5. VERIFICACIÓN DEL JACOBIANO: geométrico vs. numérico.
 ///
 /// Para múltiples configuraciones, compara cada columna del Jacobiano
 /// lineal obtenido por método geométrico contra diferencias finitas.
@@ -237,24 +255,30 @@ fn test_jacobian_matches_numerical() {
     }
 }
 
-/// 5. CASO EXTREMADAMENTE SIMPLE: 1-DOF.
+/// 6. CASO EXTREMADAMENTE SIMPLE: 1-DOF.
 ///
 /// L = 1, target (0, 1, 0).
 /// Solución analítica: θ = π/2.
 #[test]
 fn test_1dof_reaches_known_target() {
     let (fk, ee) = build_1dof_arm(1.0);
-    let solver = IKSolver::new(fk, ee, 100, 1e-6, 0.5);
+    let solver = JacobianTransposeSolver::new(fk, ee, 100, 1e-6, 0.5);
 
     let q0 = vec![0.0];
     let target = Vector3::new(0.0, 1.0, 0.0);
-    let q_solution = solver.solve(&q0, target);
+    let result = solver.solve(&q0, target);
 
-    println!("  θ = {:.6} rad ({:.2}°)", q_solution[0], q_solution[0].to_degrees());
+    println!("  θ = {:.6} rad ({:.2}°)", result.q[0], result.q[0].to_degrees());
 
     assert!(
-        (q_solution[0] - PI / 2.0).abs() < 1e-3,
+        (result.q[0] - PI / 2.0).abs() < 1e-3,
         "Esperado θ ≈ π/2, got {}",
-        q_solution[0]
+        result.q[0]
+    );
+    assert!(result.status.is_converged(), "IK debe converger en 1-DOF");
+    assert!(
+        result.iterations <= 100,
+        "No debe exceder max_iters, usó {}",
+        result.iterations
     );
 }
