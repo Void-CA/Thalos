@@ -27,6 +27,10 @@ impl Jacobian {
         &self.linear
     }
 
+    pub fn position(&self) -> &DynamicMatrix {
+        &self.linear
+    }
+    
     pub fn angular(&self) -> &DynamicMatrix {
         &self.angular
     }
