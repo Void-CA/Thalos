@@ -1,9 +1,12 @@
 use crate::kinematics::forward::ForwardKinematics;
 use crate::kinematics::jacobian::{GeometricJacobian, JacobianSolver};
 use crate::math::algebra::vector::DynamicVector;
-use crate::math::geometry::vectors::Vector3;
 use crate::spatial::frame::FrameId;
-use crate::kinematics::inverse::{result::IKResult, IKSolver};
+use crate::kinematics::inverse::{
+    result::IKResult,
+    solver::{compute_pose_error, IKGoal},
+    IKSolver,
+};
 
 pub struct JacobianTransposeSolver {
     jacobian: GeometricJacobian,
@@ -41,7 +44,7 @@ impl JacobianTransposeSolver {
 }
 
 impl IKSolver for JacobianTransposeSolver {
-    fn solve(&self, q0: &[f64], target: Vector3) -> IKResult {
+    fn solve(&self, q0: &[f64], goal: IKGoal) -> IKResult {
         let mut q = DynamicVector::from_column_slice(q0);
         let mut error_history = if self.track_history {
             Some(Vec::with_capacity(self.max_iters))
@@ -51,9 +54,22 @@ impl IKSolver for JacobianTransposeSolver {
 
         for iteration in 0..self.max_iters {
             let fk_result = self.fk.evaluate(q.as_slice());
-            let p = fk_result.ee_position().unwrap();
-            let error = target - p;
-            let magnitude = error.magnitude();
+            let jacobian = self.jacobian.evaluate(q.as_slice());
+
+            let (error_vec, magnitude) = match &goal {
+                IKGoal::Position(target_pos) => {
+                    let p = fk_result.ee_position().unwrap();
+                    let error = *target_pos - p;
+                    let mag = error.magnitude();
+                    (DynamicVector::from(error), mag)
+                }
+                IKGoal::Pose(target_pose) => {
+                    let current_pose = fk_result.ee_pose().unwrap();
+                    let error = compute_pose_error(current_pose, target_pose);
+                    let mag = error.magnitude();
+                    (error, mag)
+                }
+            };
 
             if let Some(ref mut history) = error_history {
                 history.push(magnitude);
@@ -68,15 +84,30 @@ impl IKSolver for JacobianTransposeSolver {
                 );
             }
 
-            let error_vec: DynamicVector = error.into();
-            let jacobian = self.jacobian.evaluate(q.as_slice());
-            let dq = self.alpha * (jacobian.linear().transpose() * error_vec);
+            let dq = match &goal {
+                IKGoal::Position(_) => {
+                    let j_lin = jacobian.linear();
+                    self.alpha * (j_lin.transpose() * error_vec)
+                }
+                IKGoal::Pose(_) => {
+                    let j_full = jacobian.full();
+                    self.alpha * (j_full.transpose() * error_vec)
+                }
+            };
             q += dq;
         }
 
         // Último error después de agotar iteraciones
         let fk_result = self.fk.evaluate(q.as_slice());
-        let final_error = (target - fk_result.ee_position().unwrap()).magnitude();
+        let final_error = match &goal {
+            IKGoal::Position(target_pos) => {
+                (*target_pos - fk_result.ee_position().unwrap()).magnitude()
+            }
+            IKGoal::Pose(target_pose) => {
+                let current = fk_result.ee_pose().unwrap();
+                compute_pose_error(current, target_pose).magnitude()
+            }
+        };
 
         IKResult::max_iterations(
             q.as_slice().to_vec(),

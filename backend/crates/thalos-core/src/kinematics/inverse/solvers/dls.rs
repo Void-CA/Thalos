@@ -2,9 +2,12 @@ use crate::kinematics::forward::ForwardKinematics;
 use crate::kinematics::jacobian::{GeometricJacobian, JacobianSolver};
 use crate::math::algebra::DynamicMatrix;
 use crate::math::algebra::vector::DynamicVector;
-use crate::math::geometry::vectors::Vector3;
 use crate::spatial::frame::FrameId;
-use crate::kinematics::inverse::{result::IKResult, IKSolver};
+use crate::kinematics::inverse::{
+    result::IKResult,
+    solver::{compute_pose_error, IKGoal},
+    IKSolver,
+};
 
 
 pub struct DampedLeastSquaresSolver {
@@ -43,7 +46,7 @@ impl DampedLeastSquaresSolver {
 }
 
 impl IKSolver for DampedLeastSquaresSolver {
-    fn solve(&self, q0: &[f64], target: Vector3) -> IKResult {
+    fn solve(&self, q0: &[f64], goal: IKGoal) -> IKResult {
         let mut q = DynamicVector::from_column_slice(q0);
         let mut error_history = if self.track_history {
             Some(Vec::with_capacity(self.max_iters))
@@ -52,13 +55,28 @@ impl IKSolver for DampedLeastSquaresSolver {
         };
 
         let lambda_sq = self.lambda * self.lambda;
-        let identity_3x3 = DynamicMatrix::identity(3, 3);
 
         for iteration in 0..self.max_iters {
             let fk_result = self.fk.evaluate(q.as_slice());
-            let p = fk_result.ee_position().unwrap();
-            let error = target - p;
-            let magnitude = error.magnitude();
+            let jacobian = self.jacobian.evaluate(q.as_slice());
+
+            // Extract error vector and Jacobian matrix based on goal type
+            let (error_vec, j_mat, magnitude) = match &goal {
+                IKGoal::Position(target_pos) => {
+                    let p = fk_result.ee_position().unwrap();
+                    let error = *target_pos - p;
+                    let mag = error.magnitude();
+                    let j_lin = jacobian.linear().clone_owned();
+                    (DynamicVector::from(error), j_lin, mag)
+                }
+                IKGoal::Pose(target_pose) => {
+                    let current_pose = fk_result.ee_pose().unwrap();
+                    let error = compute_pose_error(current_pose, target_pose);
+                    let mag = error.magnitude();
+                    let j_full = jacobian.full();
+                    (error, j_full, mag)
+                }
+            };
 
             if let Some(ref mut history) = error_history {
                 history.push(magnitude);
@@ -73,27 +91,16 @@ impl IKSolver for DampedLeastSquaresSolver {
                 );
             }
 
-            let error_vec: DynamicVector = error.into();
+            // A = J · Jᵀ  (n_dof × n_dof)
+            // A_damped = A + λ² · I
+            let n_dof = j_mat.nrows();
+            let identity = DynamicMatrix::identity(n_dof, n_dof);
+            let a = &j_mat * j_mat.transpose();
+            let a_damped = a + lambda_sq * identity;
 
-            // J_lin es 3×n
-            let j = self.jacobian.evaluate(q.as_slice());
-            let j_lin = j.linear().clone();
-
-            // A = J_lin · J_linᵀ  (3×3)
-            let a = &j_lin * j_lin.transpose();
-
-            // A_damped = A + λ² · I₃
-            let a_damped = a + lambda_sq * &identity_3x3;
-
-            // Inversa (siempre existe con λ > 0, pero por las dudas
-            // fallbackeamos a (1/λ²)·I si try_inverse falla)
             let inv = match a_damped.try_inverse() {
                 Some(inv) => inv,
                 None => {
-                    // λ² = 0 y matriz singular → no hay update
-                    // Esto no debería pasar porque en la práctica
-                    // usamos λ > 0. Si pasa, early exit con lo que
-                    // tengamos.
                     return IKResult::max_iterations(
                         q.as_slice().to_vec(),
                         iteration + 1,
@@ -103,14 +110,22 @@ impl IKSolver for DampedLeastSquaresSolver {
                 }
             };
 
-            // Δq = J_linᵀ · inv(A_damped) · e
-            let dq = j_lin.transpose() * (inv * error_vec);
+            // Δq = Jᵀ · inv(A_damped) · e
+            let dq = j_mat.transpose() * (inv * error_vec);
             q += dq;
         }
 
         // Último error después de agotar iteraciones
         let fk_result = self.fk.evaluate(q.as_slice());
-        let final_error = (target - fk_result.ee_position().unwrap()).magnitude();
+        let final_error = match &goal {
+            IKGoal::Position(target_pos) => {
+                (*target_pos - fk_result.ee_position().unwrap()).magnitude()
+            }
+            IKGoal::Pose(target_pose) => {
+                let current = fk_result.ee_pose().unwrap();
+                compute_pose_error(current, target_pose).magnitude()
+            }
+        };
 
         IKResult::max_iterations(
             q.as_slice().to_vec(),

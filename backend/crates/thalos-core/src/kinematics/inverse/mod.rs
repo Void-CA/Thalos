@@ -4,7 +4,7 @@ pub mod solvers;
 pub mod singularity;
 
 pub use result::{IKResult, IKStatus};
-pub use solver::{IKSolver};
+pub use solver::{IKGoal, IKSolver};
 pub use solvers::{DampedLeastSquaresSolver, JacobianTransposeSolver};
 pub use singularity::SingularityReport;
 

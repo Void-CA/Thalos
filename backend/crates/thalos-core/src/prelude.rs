@@ -21,6 +21,6 @@ pub use crate::spatial::frame::{FrameId, Frame, FrameRegistry};
 pub use crate::kinematics::{
     forward::ForwardKinematics,
     jacobian::{JacobianSolver, Jacobian, NumericalJacobian, GeometricJacobian},
-    inverse::{DampedLeastSquaresSolver, IKResult, IKStatus, IKSolver, JacobianTransposeSolver, SingularityReport},
+    inverse::{DampedLeastSquaresSolver, IKGoal, IKResult, IKStatus, IKSolver, JacobianTransposeSolver, SingularityReport},
 };
 
