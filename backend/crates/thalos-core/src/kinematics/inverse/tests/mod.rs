@@ -1,11 +1,10 @@
 pub mod bench;
 pub mod dls;
-pub mod infrastructure;
-pub mod singular;
-pub mod unreacheable;
+pub mod jt;
+pub mod singularity;
 
 use crate::prelude::*;
-use crate::kinematics::inverse::solver::JacobianTransposeSolver;
+use crate::kinematics::inverse::solvers::JacobianTransposeSolver;
 use crate::kinematics::inverse::result::IKStatus;
 use std::f64::consts::PI;
 
