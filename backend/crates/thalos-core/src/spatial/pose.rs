@@ -1,5 +1,6 @@
 use crate::spatial::frame::frame::FrameId;
 use crate::math::geometry::rigid::Transform3D;
+use crate::math::geometry::vectors::Vector3;
 
 #[derive(Debug, Clone)]
 pub struct Pose {
@@ -27,6 +28,10 @@ impl Pose {
 
     pub fn is_global(&self) -> bool {
         self.reference_id() == FrameId::World
+    }
+
+    pub fn translation(&self) -> Vector3 {
+        self.transform.translation
     }
 
 }

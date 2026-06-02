@@ -64,7 +64,8 @@ impl ForwardKinematics {
             );
         }
 
-        FKResult::new(poses)
+        let end_effector = *self.chain.end_effector();
+        FKResult::new(poses, end_effector)
     }
 
 }
