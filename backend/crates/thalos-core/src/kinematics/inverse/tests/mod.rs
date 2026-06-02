@@ -1,3 +1,4 @@
+pub mod bench;
 pub mod dls;
 pub mod infrastructure;
 pub mod singular;
