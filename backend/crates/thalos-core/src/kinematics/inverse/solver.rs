@@ -6,14 +6,8 @@ use crate::spatial::frame::FrameId;
 
 use super::result::IKResult;
 
-/// Trait común para todos los solvers de cinemática inversa.
-///
-/// Cualquier algoritmo (Jacobian Transpose, DLS, Levenberg–Marquardt,
-/// pseudo-inversa, CCD, FABRIK, etc.) implementa este trait y devuelve
-/// exactamente el mismo `IKResult`, permitiendo intercambiarlos sin
-/// cambiar el código consumidor.
+
 pub trait IKSolver {
-    /// Resuelve la cinemática inversa para alcanzar `target` partiendo de `q0`.
     fn solve(&self, q0: &[f64], target: Vector3) -> IKResult;
 }
 
