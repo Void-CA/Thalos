@@ -1,4 +1,5 @@
 pub mod infrastructure;
+pub mod singular;
 pub mod unreacheable;
 
 use crate::prelude::*;
