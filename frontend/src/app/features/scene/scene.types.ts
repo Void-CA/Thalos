@@ -107,11 +107,12 @@ export interface SceneUiState {
   error: string | null;
 }
 
-/** Estado completo del store — runtime snapshot + datos de escena + estado de UI. */
+/** Estado completo del store — runtime snapshot + datos de escena + IK + estado de UI. */
 export interface SceneState {
   data: SceneData | null;
   runtime: RuntimeInfo | null;
   ikResult: IkResult | null;
+  solvedQ: number[] | null;
   ikTarget: IkTarget | null;
   ui: SceneUiState;
 }

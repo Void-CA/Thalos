@@ -4,11 +4,12 @@ import { BehaviorSubject, merge, Observable, of, Subject } from 'rxjs';
 import { auditTime, catchError, distinctUntilChanged, map, scan, switchMap } from 'rxjs/operators';
 import { SceneApiService } from '../services/scene-api.service';
 import { toSceneData } from '../adapters/dto-to-model';
-import type { RuntimeStateResponse } from '../scene-api.types';
+import type { RuntimeStateResponse, SolveIKResponse } from '../scene-api.types';
 import type { IkCommand, IkResult, IkTarget, RuntimeInfo, SceneData, SceneState, SceneUiState } from '../scene.types';
 
 type SceneEvent =
   | { type: 'scene'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null }
+  | { type: 'solve'; joints: number[]; ikResult: IkResult }
   | { type: 'target'; target: IkTarget | null }
   | { type: 'error'; message: string };
 
@@ -21,6 +22,7 @@ const INITIAL_STATE: SceneState = {
   data: null,
   runtime: null,
   ikResult: null,
+  solvedQ: null,
   ikTarget: null,
   ui: INITIAL_UI,
 };
@@ -49,6 +51,19 @@ function toSceneEvent(res: RuntimeStateResponse): SceneEvent {
   };
 }
 
+/** Map a SolveIK response into a 'solve' event. */
+function toSolveEvent(res: SolveIKResponse): SceneEvent {
+  return {
+    type: 'solve',
+    joints: res.joints,
+    ikResult: {
+      status: res.ik_result.status,
+      iterations: res.ik_result.iterations,
+      finalError: res.ik_result.final_error,
+    },
+  };
+}
+
 @Injectable({ providedIn: 'root' })
 export class SceneStore {
   private readonly api = inject(SceneApiService);
@@ -61,6 +76,12 @@ export class SceneStore {
 
   /** Input stream: IK commands (moveToPosition / moveToPose). */
   private readonly ikSubject = new Subject<IkCommand>();
+
+  /** Input stream: solve IK (no mutation). */
+  private readonly solveSubject = new Subject<{ target: IkCommand['target']; frame_id?: number }>();
+
+  /** Input stream: execute solved Q (move robot). */
+  private readonly executeSubject = new Subject<number[]>();
 
   /** Input stream: gizmo target position (no API call — just UX state). */
   private readonly targetSubject = new Subject<IkTarget | null>();
@@ -95,7 +116,7 @@ export class SceneStore {
       ),
     ),
 
-    // Pipeline 3: IK commands → moveToPosition / moveToPose API
+    // Pipeline 3: IK commands → moveToPosition / moveToPose API (mutates runtime)
     this.ikSubject.pipe(
       switchMap(cmd => {
         const req = cmd.target.type === 'position'
@@ -110,13 +131,43 @@ export class SceneStore {
         return req.pipe(
           map(toSceneEvent),
           catchError(err =>
-            of({ type: 'error' as const, message: err.message ?? 'IK failed' }),
+            of({ type: 'error' as const, message: err.message ?? 'IK execute failed' }),
           ),
         );
       }),
     ),
 
-    // Pipeline 4: gizmo target position updates (local, no API)
+    // Pipeline 4: solve IK (no mutation — just returns q values)
+    this.solveSubject.pipe(
+      switchMap(({ target, frame_id }) => {
+        const req = target.type === 'position'
+          ? this.api.solveIkPosition(target.translation, frame_id)
+          : this.api.solveIkPose(
+              { translation: target.translation, rotation: target.rotation! },
+              frame_id,
+            );
+        return req.pipe(
+          map(toSolveEvent),
+          catchError(err =>
+            of({ type: 'error' as const, message: err.message ?? 'IK solve failed' }),
+          ),
+        );
+      }),
+    ),
+
+    // Pipeline 5: execute solved Q
+    this.executeSubject.pipe(
+      switchMap(joints =>
+        this.api.executeIk(joints).pipe(
+          map(toSceneEvent),
+          catchError(err =>
+            of({ type: 'error' as const, message: err.message ?? 'IK execute failed' }),
+          ),
+        ),
+      ),
+    ),
+
+    // Pipeline 6: gizmo target position updates (local, no API)
     this.targetSubject.pipe(
       map(target => ({ type: 'target' as const, target })),
     ),
@@ -128,8 +179,16 @@ export class SceneStore {
             data: event.data,
             runtime: event.runtime,
             ikResult: event.ikResult,
+            solvedQ: null,
             ikTarget: state.ikTarget,
             ui: { loading: false, error: null },
+          };
+        case 'solve':
+          return {
+            ...state,
+            ikResult: event.ikResult,
+            solvedQ: event.joints,
+            ui: { ...state.ui, loading: false },
           };
         case 'target':
           return { ...state, ikTarget: event.target };
@@ -160,9 +219,19 @@ export class SceneStore {
     this.loadRobotSubject.next(id);
   }
 
-  /** Send an IK command (move-to-position or move-to-pose). */
+  /** Send an IK command (move-to-position or move-to-pose, mutates runtime). */
   moveToTarget(cmd: IkCommand): void {
     this.ikSubject.next(cmd);
+  }
+
+  /** Solve IK without mutating runtime — stores result in solvedQ. */
+  solveIK(target: IkCommand['target']): void {
+    this.solveSubject.next({ target });
+  }
+
+  /** Execute previously solved joint angles — moves robot. */
+  executeIK(joints: number[]): void {
+    this.executeSubject.next(joints);
   }
 
   /** Update the gizmo target position (no API call). */

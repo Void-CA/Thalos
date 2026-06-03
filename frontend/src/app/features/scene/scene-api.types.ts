@@ -108,3 +108,12 @@ export interface IkResultDto {
   iterations: number;
   final_error: number;
 }
+
+export interface SolveIKResponse {
+  joints: number[];
+  ik_result: IkResultDto;
+}
+
+export interface ExecuteIKRequest {
+  joint_angles: number[];
+}

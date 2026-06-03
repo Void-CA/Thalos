@@ -1,14 +1,13 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { SceneStore } from '../../store/scene.store';
 import { IkTarget, IkResult } from '../../scene.types';
 
 /**
- * Panel de control IK.
+ * Panel de control IK con flujo de 3 pasos:
  *
- * - Inputs X, Y, Z para posición destino
- * - Toggle position / pose (pose añade inputs de quaternion)
- * - Botón "Send" → SceneStore.moveToTarget()
- * - Feedback visual del último IK result
+ * 1. **Preview** — mueve solo el gizmo (updateTarget, no API)
+ * 2. **Solve** — corre IK en backend, muestra q1..qn, NO mueve el robot
+ * 3. **Execute** — aplica los q resueltos y mueve el robot
  *
  * Sin subscribe — signals + effects.
  */
@@ -47,18 +46,32 @@ import { IkTarget, IkResult } from '../../scene.types';
         </fieldset>
       }
 
-      <!-- Acciones -->
+      <!-- 3 botones -->
       <div class="actions">
         <button (click)="onPreview()">Preview</button>
-        <button class="primary" (click)="onSend()">Send</button>
+        <button class="solve" (click)="onSolve()">Solve</button>
+        <button
+          class="execute"
+          [disabled]="!solvedQ()"
+          (click)="onExecute()"
+        >Execute</button>
       </div>
+
+      <!-- Solved Q display (despues de Solve) -->
+      @if (solvedQ(); as q) {
+        <div class="solved-q">
+          <span class="solved-label">Solved joints</span>
+          @for (v of q; track $index) {
+            <span class="q-value">q{{ $index + 1 }}: {{ v.toFixed(4) }}</span>
+          }
+        </div>
+      }
 
       <!-- Feedback IK result -->
       @if (result(); as r) {
         <div class="feedback" [class.ok]="r.status === 'Converged'" [class.warn]="r.status === 'MaxIterations'">
           <span class="status">{{ r.status }}</span>
-          <span class="detail">Iters: {{ r.iterations }}</span>
-          <span>Error: {{ r.finalError.toExponential(2) }}</span>
+          <span class="detail">{{ r.iterations }} iters · err {{ r.finalError.toExponential(2) }}</span>
         </div>
       }
     </div>
@@ -77,7 +90,7 @@ import { IkTarget, IkResult } from '../../scene.types';
     .toggle { font-size: 0.8rem; cursor: pointer; }
     label { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.3rem; font-size: 0.8rem; }
     input[type="number"] {
-      width: 10ch;
+      width: 8ch;
       padding: 0.15rem 0.3rem;
       font-family: monospace;
       font-size: 0.8rem;
@@ -93,27 +106,49 @@ import { IkTarget, IkResult } from '../../scene.types';
       padding: 0.4rem 0.6rem;
     }
     legend { font-size: 0.75rem; opacity: 0.6; padding: 0 0.3rem; }
-    .actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+    .actions { display: flex; gap: 0.4rem; margin-top: 0.5rem; }
     button {
       flex: 1;
-      padding: 0.3rem 0.6rem;
+      padding: 0.3rem 0.4rem;
       font-family: monospace;
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       cursor: pointer;
       background: #333;
       border: 1px solid #555;
       color: #ddd;
       border-radius: 3px;
     }
-    button.primary { background: #1a5a9c; border-color: #2a7adf; color: #fff; }
-    button:hover { filter: brightness(1.2); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.solve   { background: #1a5a9c; border-color: #2a7adf; color: #fff; }
+    button.execute { background: #3a7a3a; border-color: #5aaa5a; color: #fff; }
+    button:hover:not(:disabled) { filter: brightness(1.2); }
+    .solved-q {
+      margin-top: 0.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem 0.6rem;
+    }
+    .solved-label {
+      width: 100%;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      opacity: 0.6;
+      margin-bottom: 0.15rem;
+    }
+    .q-value {
+      font-size: 0.8rem;
+      background: #1a2a1a;
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+      border: 1px solid #2a4a2a;
+    }
     .feedback {
       margin-top: 0.5rem;
       padding: 0.3rem 0.5rem;
       border-radius: 3px;
       font-size: 0.75rem;
       display: flex;
-      flex-direction: column;
       justify-content: space-between;
     }
     .feedback.ok    { background: #0a3a0a; border: 1px solid #2a7a2a; }
@@ -129,9 +164,9 @@ export class IkTargetPanel {
   // ── Local state ──
 
   protected readonly type = signal<'position' | 'pose'>('position');
-  protected readonly x = signal(1.0);
+  protected readonly x = signal(2.0);
   protected readonly y = signal(1.0);
-  protected readonly z = signal(0.0);
+  protected readonly z = signal(0.5);
   protected readonly qw = signal(1.0);
   protected readonly qx = signal(0);
   protected readonly qy = signal(0);
@@ -140,8 +175,9 @@ export class IkTargetPanel {
   // ── Store-derived ──
 
   protected readonly result = computed<IkResult | null>(() => this.store.state().ikResult);
+  protected readonly solvedQ = computed<number[] | null>(() => this.store.state().solvedQ);
 
-  // ── Gizmo preview: actualiza el target visual sin llamar API ──
+  // ── Build target from form ──
 
   private buildTarget(): IkTarget {
     return this.type() === 'position'
@@ -153,16 +189,25 @@ export class IkTargetPanel {
         };
   }
 
+  // ── Step 1: Preview (gizmo only) ──
+
   protected onPreview(): void {
     this.store.updateTarget(this.buildTarget());
   }
 
-  // ── Send IK command ──
+  // ── Step 2: Solve (IK sin mutación, muestra q) ──
 
-  protected onSend(): void {
-    const cmd = this.buildTarget();
-    this.store.moveToTarget({ type: cmd.type === 'position' ? 'moveToPosition' : 'moveToPose', target: cmd });
-    // Also show gizmo
-    this.store.updateTarget(cmd);
+  protected onSolve(): void {
+    this.store.updateTarget(this.buildTarget());
+    this.store.solveIK(this.buildTarget());
+  }
+
+  // ── Step 3: Execute (aplica q resueltos, mueve robot) ──
+
+  protected onExecute(): void {
+    const q = this.solvedQ();
+    if (q) {
+      this.store.executeIK(q);
+    }
   }
 }

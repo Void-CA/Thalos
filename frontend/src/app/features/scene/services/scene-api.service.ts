@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { RuntimeStateResponse, MoveToPositionRequest, MoveToPoseRequest } from '../scene-api.types';
+import { RuntimeStateResponse, SolveIKResponse, MoveToPositionRequest, MoveToPoseRequest, ExecuteIKRequest } from '../scene-api.types';
 
 @Injectable({ providedIn: 'root' })
 export class SceneApiService {
@@ -49,6 +49,35 @@ export class SceneApiService {
     return this.http.post<RuntimeStateResponse>(
       `${this.baseUrl}/scene/move-to-pose`,
       { target, frame_id } as MoveToPoseRequest,
+    );
+  }
+
+  solveIkPosition(
+    target: [number, number, number],
+    frame_id?: number,
+  ): Observable<SolveIKResponse> {
+    return this.http.post<SolveIKResponse>(
+      `${this.baseUrl}/scene/solve-ik-position`,
+      { target, frame_id } as MoveToPositionRequest,
+    );
+  }
+
+  solveIkPose(
+    target: MoveToPoseRequest['target'],
+    frame_id?: number,
+  ): Observable<SolveIKResponse> {
+    return this.http.post<SolveIKResponse>(
+      `${this.baseUrl}/scene/solve-ik-pose`,
+      { target, frame_id } as MoveToPoseRequest,
+    );
+  }
+
+  executeIk(
+    jointAngles: number[],
+  ): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/scene/execute-ik`,
+      { joint_angles: jointAngles } as ExecuteIKRequest,
     );
   }
 }
