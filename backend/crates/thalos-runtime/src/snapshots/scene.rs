@@ -1,20 +1,24 @@
 use chrono::{DateTime, Utc};
 
-use thalos_core::models::RobotModel;
-use thalos_visual::VisualScene;
+use thalos_core::{
+    kinematics::forward::result::FKResult,
+    models::RobotModel,
+    robot::serial_chain::SerialChain,
+};
 
-/// A point-in-time snapshot of the runtime state.
+/// Immutable snapshot of the runtime state at a point in time.
 ///
-/// Produced by [`SceneService::snapshot`](crate::services::scene::SceneService::snapshot)
-/// and [`SceneService::execute`](crate::services::scene::SceneService::execute).
-/// The API layer converts this into an HTTP response DTO.
+/// Contains only domain state — no visual representation.
+/// Visual scene construction is the responsibility of the API layer.
 pub struct RuntimeSnapshot {
-    /// The active robot model (enum tag, Copy).
+    /// The active robot model.
     pub robot: RobotModel,
     /// Current joint angles.
     pub joints: Vec<f64>,
-    /// The visual scene computed from the current state.
-    pub scene: VisualScene,
+    /// The kinematic chain of the active robot.
+    pub chain: SerialChain,
+    /// The forward kinematics result computed from the current joints.
+    pub fk_result: FKResult,
     /// When this snapshot was taken.
     pub generated_at: DateTime<Utc>,
 }

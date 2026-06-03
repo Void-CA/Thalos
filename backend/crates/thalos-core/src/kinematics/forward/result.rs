@@ -5,7 +5,7 @@ use crate::spatial::{
     pose::Pose
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FKResult {
     poses: HashMap<FrameId, Pose>,
     end_effector: FrameId,

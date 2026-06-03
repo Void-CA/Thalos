@@ -1,10 +1,10 @@
 use std::sync::RwLock;
 
 use thalos_core::{
-    kinematics::forward::ForwardKinematics,
+    kinematics::forward::{result::FKResult, ForwardKinematics},
     models::{RobotModel, RobotRegistry},
+    robot::serial_chain::SerialChain,
 };
-use thalos_visual::{SceneBuilder, SceneDiff, SceneValidator, ScaraVisualBuilder, VisualScene};
 
 use crate::backends::RobotBackend;
 use crate::commands::Command;
@@ -15,12 +15,10 @@ use crate::state::robot::{ActiveRobot, SceneRuntime};
 
 pub struct SceneService {
     runtime: RwLock<SceneRuntime>,
-    validator: SceneValidator,
     backend: Box<dyn RobotBackend + Send + Sync>,
 }
 
 impl SceneService {
-    /// Creates a new service with the given backend and initial robot model.
     pub fn new(backend: Box<dyn RobotBackend + Send + Sync>, model: RobotModel) -> Self {
         let chain = RobotRegistry::create_default(model);
         let active_robot = ActiveRobot::new(model, chain, vec![0.0; model.metadata().dof]);
@@ -28,33 +26,26 @@ impl SceneService {
 
         Self {
             runtime: RwLock::new(runtime),
-            validator: SceneValidator::default(),
             backend,
         }
     }
 
-    /// Returns a snapshot of the current runtime state, building the visual scene
-    /// from the active robot's joint configuration.
+    fn compute_fk(chain: &SerialChain, joints: &[f64]) -> FKResult {
+        let fk = ForwardKinematics::new(chain.clone());
+        fk.evaluate(joints)
+    }
+
+    /// Returns a snapshot of the current runtime state with FK result.
     pub fn snapshot(&self) -> Result<RuntimeSnapshot, RuntimeError> {
         let runtime = self.runtime.read().unwrap();
 
-        let fk = ForwardKinematics::new(runtime.active_robot.chain.clone());
-        let result = fk.evaluate(&runtime.active_robot.joints);
-
-        let scene = match runtime.active_robot.model {
-            RobotModel::Scara => ScaraVisualBuilder::build(&result, &runtime.active_robot.chain),
-            _ => {
-                let builder = SceneBuilder::new(&runtime.active_robot.chain);
-                builder.from_fk(&result)
-            }
-        };
-
-        self.validator.validate(&scene)?;
+        let fk_result = Self::compute_fk(&runtime.active_robot.chain, &runtime.active_robot.joints);
 
         Ok(RuntimeSnapshot {
             robot: runtime.active_robot.model,
             joints: runtime.active_robot.joints.clone(),
-            scene,
+            chain: runtime.active_robot.chain.clone(),
+            fk_result,
             generated_at: chrono::Utc::now(),
         })
     }
@@ -66,8 +57,7 @@ impl SceneService {
                 let mut runtime = self.runtime.write().unwrap();
                 runtime.active_robot.joints = joints;
             }
-            Command::LoadRobot(id) => {
-                let model = self.backend.resolve_model(&id)?;
+            Command::LoadRobot(model) => {
                 let chain = RobotRegistry::create_default(model);
                 let dof = model.metadata().dof;
 
@@ -77,16 +67,5 @@ impl SceneService {
         }
 
         self.snapshot()
-    }
-
-    /// Validates a visual scene against structural rules.
-    pub fn validate_scene(&self, scene: &VisualScene) -> Result<(), RuntimeError> {
-        self.validator.validate(scene)?;
-        Ok(())
-    }
-
-    /// Computes the diff between two visual scenes.
-    pub fn diff(&self, old: &VisualScene, new: &VisualScene, epsilon: f64) -> SceneDiff {
-        SceneDiff::between(old, new, epsilon)
     }
 }

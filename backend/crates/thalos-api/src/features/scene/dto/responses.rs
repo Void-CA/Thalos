@@ -1,14 +1,11 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use thalos_runtime::RuntimeSnapshot;
+use crate::features::robots::dto::RobotMetadataDto;
 use thalos_visual::{
     ChangedFrame, FrameStyle, PrimitiveGeometry, SceneDiff, VisualFrame, VisualJointAxis,
     VisualLink, VisualPrimitive, VisualScene, VisualTwist,
 };
-
-use crate::features::robots::dto::RobotMetadataDto;
-
 
 // ── Scene response DTOs ──
 
@@ -117,19 +114,6 @@ pub struct ChangedFrameDto {
     pub rotation_angle_deg: f64,
 }
 
-
-// ── RuntimeSnapshot → RuntimeStateResponse ──
-
-impl From<RuntimeSnapshot> for RuntimeStateResponse {
-    fn from(s: RuntimeSnapshot) -> Self {
-        Self {
-            robot: s.robot.metadata().into(),
-            joints: s.joints,
-            scene: s.scene.into(),
-            generated_at: s.generated_at,
-        }
-    }
-}
 
 // ── Domain → DTO conversions ──
 
