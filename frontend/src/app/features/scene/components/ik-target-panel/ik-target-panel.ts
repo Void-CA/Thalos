@@ -57,7 +57,8 @@ import { IkTarget, IkResult } from '../../scene.types';
       @if (result(); as r) {
         <div class="feedback" [class.ok]="r.status === 'Converged'" [class.warn]="r.status === 'MaxIterations'">
           <span class="status">{{ r.status }}</span>
-          <span class="detail">{{ r.iterations }} iters · err {{ r.finalError.toExponential(2) }}</span>
+          <span class="detail">Iters: {{ r.iterations }}</span>
+          <span>Error: {{ r.finalError.toExponential(2) }}</span>
         </div>
       }
     </div>
@@ -76,7 +77,7 @@ import { IkTarget, IkResult } from '../../scene.types';
     .toggle { font-size: 0.8rem; cursor: pointer; }
     label { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.3rem; font-size: 0.8rem; }
     input[type="number"] {
-      width: 6ch;
+      width: 10ch;
       padding: 0.15rem 0.3rem;
       font-family: monospace;
       font-size: 0.8rem;
@@ -112,6 +113,7 @@ import { IkTarget, IkResult } from '../../scene.types';
       border-radius: 3px;
       font-size: 0.75rem;
       display: flex;
+      flex-direction: column;
       justify-content: space-between;
     }
     .feedback.ok    { background: #0a3a0a; border: 1px solid #2a7a2a; }
@@ -127,9 +129,9 @@ export class IkTargetPanel {
   // ── Local state ──
 
   protected readonly type = signal<'position' | 'pose'>('position');
-  protected readonly x = signal(2.0);
+  protected readonly x = signal(1.0);
   protected readonly y = signal(1.0);
-  protected readonly z = signal(0.5);
+  protected readonly z = signal(0.0);
   protected readonly qw = signal(1.0);
   protected readonly qx = signal(0);
   protected readonly qy = signal(0);
