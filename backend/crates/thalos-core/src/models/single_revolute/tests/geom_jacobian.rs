@@ -27,7 +27,7 @@ fn geometric_matches_numerical() {
 }
 
 #[test]
-fn geometric_jacobian_at_zero() {
+fn at_zero() {
     let robot = create_single_revolute(1.0);
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
@@ -48,7 +48,7 @@ fn geometric_jacobian_at_zero() {
 }
 
 #[test]
-fn geometric_jacobian_at_ninety_degrees() {
+fn at_ninety_degrees() {
     let robot = create_single_revolute(1.0);
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
@@ -64,7 +64,7 @@ fn geometric_jacobian_at_ninety_degrees() {
 }
 
 #[test]
-fn geometric_jacobian_at_pi() {
+fn at_pi() {
     let robot = create_single_revolute(1.0);
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
@@ -80,7 +80,7 @@ fn geometric_jacobian_at_pi() {
 }
 
 #[test]
-fn geometric_jacobian_angular_consistency() {
+fn angular_consistency() {
     let robot = create_single_revolute(1.0);
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
@@ -106,7 +106,7 @@ fn geometric_jacobian_angular_consistency() {
 }
 
 #[test]
-fn geometric_jacobian_propagates_velocity() {
+fn propagates_velocity() {
     let robot = create_single_revolute(1.0);
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot.clone());
@@ -153,7 +153,7 @@ fn geometric_jacobian_propagates_velocity() {
 }
 
 #[test]
-fn geometric_jacobian_linearity() {
+fn linearity() {
     let robot = create_single_revolute(1.0);
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
@@ -194,7 +194,7 @@ fn geometric_jacobian_linearity() {
 }
 
 #[test]
-fn geometric_jacobian_velocity_consistency() {
+fn velocity_consistency() {
     let robot = create_single_revolute(1.0);
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot.clone());
@@ -225,7 +225,7 @@ fn geometric_jacobian_velocity_consistency() {
 }
 
 #[test]
-fn geometric_jacobian_linear_magnitude() {
+fn linear_magnitude() {
     let robot = create_single_revolute(1.0);
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);

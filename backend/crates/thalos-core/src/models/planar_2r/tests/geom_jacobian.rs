@@ -30,7 +30,7 @@ fn geometric_matches_numerical() {
 }
 
 #[test]
-fn geometric_jacobian_at_zero() {
+fn at_zero() {
     let robot = create_planar_2r(1.0, 1.0);
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
@@ -55,7 +55,7 @@ fn geometric_jacobian_at_zero() {
 }
 
 #[test]
-fn geometric_jacobian_at_ninety_degrees() {
+fn at_ninety_degrees() {
     let robot = create_planar_2r(1.0, 1.0);
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
@@ -78,7 +78,7 @@ fn geometric_jacobian_at_ninety_degrees() {
 }
 
 #[test]
-fn geometric_jacobian_at_folded_configuration() {
+fn at_folded_configuration() {
     let robot = create_planar_2r(1.0, 1.0);
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
@@ -103,7 +103,7 @@ fn geometric_jacobian_at_folded_configuration() {
 }
 
 #[test]
-fn geometric_jacobian_angular_velocity_accumulation() {
+fn angular_velocity_accumulation() {
     let robot = create_planar_2r(1.0, 1.0);
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
@@ -136,7 +136,7 @@ fn geometric_jacobian_angular_velocity_accumulation() {
 }
 
 #[test]
-fn geometric_jacobian_linear_velocity_consistency() {
+fn linear_velocity_consistency() {
     let robot = create_planar_2r(1.0, 1.0);
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot.clone());
@@ -169,7 +169,7 @@ fn geometric_jacobian_linear_velocity_consistency() {
 }
 
 #[test]
-fn geometric_jacobian_propagates_velocities() {
+fn propagates_velocities() {
 
     let robot =
         create_planar_2r(1.0, 1.0);
@@ -277,7 +277,7 @@ fn geometric_jacobian_propagates_velocities() {
 }
 
 #[test]
-fn geometric_jacobian_singularity_detection() {
+fn singularity_detection() {
     let robot = create_planar_2r(1.0, 1.0);
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
@@ -317,7 +317,7 @@ fn geometric_jacobian_singularity_detection() {
 }
 
 #[test]
-fn geometric_jacobian_linearity() {
+fn linearity() {
     let robot = create_planar_2r(1.0, 1.0);
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
@@ -369,7 +369,7 @@ fn geometric_jacobian_linearity() {
 
 
 #[test]
-fn geometric_jacobian_angular_consistency() {
+fn angular_consistency() {
 
     let robot =
         create_planar_2r(1.0, 1.0);
@@ -432,7 +432,7 @@ fn geometric_jacobian_angular_consistency() {
 
 
 #[test]
-fn geometric_jacobian_joint_contributions() {
+fn joint_contributions() {
     let robot = create_planar_2r(1.0, 1.0);
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
