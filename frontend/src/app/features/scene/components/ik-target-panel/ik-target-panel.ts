@@ -67,7 +67,8 @@ import { IkTarget, IkResult } from '../../scene.types';
       @if (result(); as r) {
         <div class="feedback" [class.ok]="r.status === 'Converged'" [class.warn]="r.status === 'MaxIterations'">
           <span class="status">{{ r.status }}</span>
-          <span class="detail">{{ r.iterations }} iters · err {{ r.finalError.toExponential(2) }}</span>
+          <span class="detail">iters: {{ r.iterations }} </span>
+          <span class="detail">final error: {{ r.finalError.toFixed(2) }}</span>
         </div>
       }
     </div>
@@ -145,6 +146,7 @@ import { IkTarget, IkResult } from '../../scene.types';
       border-radius: 3px;
       font-size: 0.75rem;
       display: flex;
+      flex-direction: column;
       justify-content: space-between;
     }
     .feedback.ok    { background: #0a3a0a; border: 1px solid #2a7a2a; }
@@ -162,7 +164,7 @@ export class IkTargetPanel {
   protected readonly type = signal<'position' | 'pose'>('position');
   protected readonly x = signal(2.0);
   protected readonly y = signal(1.0);
-  protected readonly z = signal(0.5);
+  protected readonly z = signal(0);
   protected readonly qw = signal(1.0);
   protected readonly qx = signal(0);
   protected readonly qy = signal(0);
