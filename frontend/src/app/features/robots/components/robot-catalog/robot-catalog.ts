@@ -39,39 +39,7 @@ import { SceneStore } from '../../../scene/store/scene.store';
       }
     </div>
   `,
-  styles: [
-    `
-    .catalog {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .title {
-      margin: 0;
-      font-size: 0.85rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      opacity: 0.6;
-    }
-
-    .list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.4rem;
-    }
-
-    .status {
-      margin: 0;
-      font-size: 0.8rem;
-      opacity: 0.5;
-    }
-    .status.error {
-      color: #ff6644;
-      opacity: 1;
-    }
-  `,
-  ],
+  styleUrl: './robot-catalog.scss',
 })
 export class RobotCatalog implements OnInit {
   private readonly robotStore = inject(RobotStore);

@@ -1,0 +1,48 @@
+// ──────────────────────────────────────────────
+// Thalos — Design Tokens
+// ──────────────────────────────────────────────
+
+// Colores de superficie
+$bg-canvas: #111;
+$bg-surface: #1e1e1e;
+$bg-card: #252525;
+$bg-overlay: rgba(20, 20, 20, 0.92);
+$bg-elevated: #333;
+$bg-input: #222;
+
+// Colores de borde
+$border-subtle: #333;
+$border-default: #444;
+$border-hover: #555;
+
+// Colores de texto
+$text-primary: #c0c0c0;
+$text-secondary: #ccc;
+$text-muted: #ddd;
+
+// Colores funcionales
+$accent: #3399ff;
+$danger: #ff6644;
+
+// Estados
+$success-bg: #0a3a0a;
+$success-border: #2a7a2a;
+$warn-bg: #3a2a0a;
+$warn-border: #7a5a2a;
+
+// IK button variants
+$solve-bg: #1a5a9c;
+$solve-border: #2a7adf;
+$execute-bg: #3a7a3a;
+$execute-border: #5aaa5a;
+
+// Tipografía
+$font-ui: system-ui, -apple-system, sans-serif;
+$font-mono: monospace;
+
+// Radios
+$radius-sm: 3px;
+$radius-md: 6px;
+
+// Transiciones
+$transition-fast: 0.15s;

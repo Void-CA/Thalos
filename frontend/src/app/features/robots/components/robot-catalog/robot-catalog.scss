@@ -1,0 +1,32 @@
+@use '../../../../../styles/variables' as *;
+
+.catalog {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.6;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.status {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.5;
+
+  &.error {
+    color: $danger;
+    opacity: 1;
+  }
+}

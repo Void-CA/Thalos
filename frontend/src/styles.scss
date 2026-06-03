@@ -1,3 +1,5 @@
+@use 'variables' as *;
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -7,7 +9,7 @@ html, body {
   padding: 0;
   height: 100%;
   overflow: hidden;
-  background: #111;
-  color: #c0c0c0;
-  font-family: system-ui, -apple-system, sans-serif;
+  background: $bg-canvas;
+  color: $text-primary;
+  font-family: $font-ui;
 }

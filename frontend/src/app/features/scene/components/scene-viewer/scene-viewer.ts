@@ -16,23 +16,7 @@ import { IkTargetPanel } from '../ik-target-panel/ik-target-panel';
     <canvas #canvas></canvas>
     <ik-target-panel class="ik-overlay" />
   `,
-  styles: [
-    `
-    :host { display: block; width: 100%; height: 100%; position: relative; }
-    canvas { display: block; width: 100%; height: 100%; }
-    .ik-overlay {
-      position: absolute;
-      bottom: 1rem;
-      right: 1rem;
-      width: 220px;
-      background: rgba(20, 20, 20, 0.92);
-      border: 1px solid #444;
-      border-radius: 6px;
-      padding: 0.75rem;
-      color: #ccc;
-    }
-  `,
-  ],
+  styleUrl: './scene-viewer.scss',
 })
 export class SceneViewer implements AfterViewInit {
   @ViewChild('canvas') private readonly canvasRef!: ElementRef<HTMLCanvasElement>;

@@ -15,6 +15,6 @@ import { RobotCatalog } from './features/robots/components/robot-catalog/robot-c
   standalone: true,
   imports: [SceneViewer, JointControl, RobotCatalog],
   templateUrl: './app.html',
-  styleUrl: './app.css',
+  styleUrl: './app.scss',
 })
 export class App {}

@@ -1,3 +1,5 @@
+@use 'variables' as *;
+
 .layout {
   display: flex;
   height: 100dvh;
@@ -6,9 +8,9 @@
 .catalog-panel {
   width: 220px;
   padding: 1rem;
-  background: #1e1e1e;
-  color: #c0c0c0;
-  border-right: 1px solid #333;
+  background: $bg-surface;
+  color: $text-primary;
+  border-right: 1px solid $border-subtle;
   overflow-y: auto;
 }
 
@@ -20,10 +22,10 @@
 .side-panel {
   width: 280px;
   padding: 1rem;
-  background: #1e1e1e;
-  color: #c0c0c0;
+  background: $bg-surface;
+  color: $text-primary;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  border-left: 1px solid #333;
+  border-left: 1px solid $border-subtle;
 }
