@@ -1,4 +1,4 @@
-use crate::math::geometry::rigid::{Transform3D, transform};
+use crate::math::geometry::rigid::Transform3D;
 
 use crate::math::geometry::vectors::UnitVector3;
 use crate::robot::joint::{
