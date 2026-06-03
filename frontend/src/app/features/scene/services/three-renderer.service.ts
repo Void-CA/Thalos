@@ -1,8 +1,20 @@
 import { Injectable, NgZone, inject } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { DEFAULT_FRAME_STYLE, SceneData, ScenePrimitive } from '../scene.types';
+import { DEFAULT_FRAME_STYLE, SceneData, SceneFrame, SceneLink, ScenePrimitive } from '../scene.types';
 
+interface FrameSlot {
+  group: THREE.Group;
+}
+
+interface LinkSlot {
+  mesh: THREE.Mesh;
+  baseLen: number;
+}
+
+interface PrimitiveSlot {
+  mesh: THREE.Mesh;
+}
 
 @Injectable({ providedIn: 'root' })
 export class ThreeRendererService {
@@ -16,6 +28,20 @@ export class ThreeRendererService {
   private targetGroup: THREE.Group | null = null;
   private compassGroup: THREE.Group | null = null;
   private frameId: number | null = null;
+
+  // ── Scene content caches (id → slot) ──
+  private frameSlots = new Map<string, FrameSlot>();
+  private linkSlots = new Map<string, LinkSlot>();
+  private primitiveSlots = new Map<string, PrimitiveSlot>();
+
+  // ── Reusable scratch objects (avoid allocations in hot path) ──
+  private readonly scratchVec = new THREE.Vector3();
+  private readonly scratchQuat = new THREE.Quaternion();
+  private readonly scratchDir = new THREE.Vector3();
+  private readonly linkUp = new THREE.Vector3(0, 1, 0);
+
+  // ── Material cache (per-color dedup) ──
+  private readonly matCache = new Map<number, THREE.Material>();
 
   // ── Public API ──
 
@@ -45,7 +71,7 @@ export class ThreeRendererService {
     // Reference grid (XZ plane — robot lives in XY)
     this.scene.add(new THREE.GridHelper(4, 10, 0x666666, 0x444444));
 
-    // Content container — cleared on every applyScene
+    // Content container
     this.contentGroup = new THREE.Group();
     this.scene.add(this.contentGroup);
 
@@ -55,111 +81,188 @@ export class ThreeRendererService {
     this.targetGroup.visible = false;
     this.scene.add(this.targetGroup);
 
-    // ── Compass (hijo de la cámara — siempre visible en pantalla) ──
+    // ── Compass (child of camera — always visible) ──
     this.compassGroup = new THREE.Group();
     this.buildCompassAxes(this.compassGroup, 0.35);
-    // Posición relativa a la cámara: abajo‑izquierda, ligeramente adelante
     this.compassGroup.position.set(-0.55, -0.4, -0.9);
     this.camera.add(this.compassGroup);
 
     // Resize
-    this.bindResize();
     window.addEventListener('resize', this.onResize);
 
     // rAF loop — runs outside Angular zone to avoid unnecessary CD
     this.ngZone.runOutsideAngular(() => this.startLoop());
   }
 
+  /**
+   * Apply a scene snapshot. Diffs against cached slots and only updates
+   * transforms / creates new objects when needed.
+   *
+   *  - Frames / links / primitives keyed by `id` are reused.
+   *  - Removed ids have their slots disposed.
+   *  - New ids have their meshes built once.
+   */
   applyScene(scene: SceneData): void {
-    const grp = this.contentGroup;
-    if (!grp || !this.scene) return;
+    if (!this.contentGroup) return;
 
-    // Fast clear — let GC collect old objects
-    grp.clear();
-
-    // ── Frames ──
-    for (const frame of scene.frames) {
-      const g = new THREE.Group();
-      g.position.set(frame.translation[0], frame.translation[1], frame.translation[2]);
-      // Rust: [w, x, y, z] → Three.js: (x, y, z, w)
-      g.quaternion.set(frame.rotation[1], frame.rotation[2], frame.rotation[3], frame.rotation[0]);
-
-      const style = frame.style ?? DEFAULT_FRAME_STYLE;
-
-      // Origin sphere
-      if (style.originRadius > 0) {
-        g.add(new THREE.Mesh(
-          new THREE.SphereGeometry(style.originRadius, 12, 12),
-          new THREE.MeshStandardMaterial({ color: 0xcccccc }),
-        ));
-      }
-
-      // Three axes with styled arrows
-      this.makeAxisArrow(g, style.axisLength, style.axisRadius, style.colorX, new THREE.Vector3(1, 0, 0));
-      this.makeAxisArrow(g, style.axisLength, style.axisRadius, style.colorY, new THREE.Vector3(0, 1, 0));
-      this.makeAxisArrow(g, style.axisLength, style.axisRadius, style.colorZ, new THREE.Vector3(0, 0, 1));
-
-      grp.add(g);
-    }
-
-    // ── Links ──
-    const linkUp = new THREE.Vector3(0, 1, 0);
-    for (const link of scene.links) {
-      const start = new THREE.Vector3(link.start[0], link.start[1], link.start[2]);
-      const end = new THREE.Vector3(link.end[0], link.end[1], link.end[2]);
-      const dir = new THREE.Vector3().copy(end).sub(start);
-      const len = dir.length();
-      if (len < 1e-10) continue;
-
-      const mid = new THREE.Vector3().copy(start).add(end).multiplyScalar(0.5);
-      const mesh = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.018, 0.018, len, 8, 1),
-        new THREE.MeshStandardMaterial({ color: 0x3399ff }),
-      );
-      mesh.position.copy(mid);
-      mesh.quaternion.setFromUnitVectors(linkUp, dir.clone().normalize());
-      grp.add(mesh);
-    }
-
-    // ── Joint axes (omitido — la flecha Z de cada frame ya indica el eje) ──
-
-    // ── Primitives ──
-    this.renderPrimitives(grp, scene);
-
-    // ── Twists (not yet populated by backend — placeholder) ──
-    // Future: render linear angular arrows from each twist
+    this.syncFrames(scene.frames);
+    this.syncLinks(scene.links);
+    this.syncPrimitives(scene.primitives);
   }
 
-  private renderPrimitives(grp: THREE.Group, scene: SceneData): void {
-    const matCache = new Map<string, THREE.Material>();
+  private syncFrames(frames: SceneFrame[]): void {
+    const incoming = new Set<string>();
 
-    function getMat(color: number): THREE.Material {
-      const key = color.toString(16);
-      if (!matCache.has(key)) {
-        matCache.set(key, new THREE.MeshStandardMaterial({ color }));
+    for (const frame of frames) {
+      incoming.add(frame.id);
+      let slot = this.frameSlots.get(frame.id);
+      if (!slot) {
+        slot = { group: this.buildFrame(frame) };
+        this.frameSlots.set(frame.id, slot);
+        this.contentGroup!.add(slot.group);
       }
-      return matCache.get(key)!;
+      // Update transform only — no geometry churn
+      const g = slot.group;
+      g.position.set(frame.translation[0], frame.translation[1], frame.translation[2]);
+      // Rust: [w, x, y, z] → Three.js: (x, y, z, w)
+      g.quaternion.set(
+        frame.rotation[1],
+        frame.rotation[2],
+        frame.rotation[3],
+        frame.rotation[0],
+      );
     }
 
-    for (const p of scene.primitives) {
-      const pos = new THREE.Vector3(p.translation[0], p.translation[1], p.translation[2]);
+    // Dispose removed frames
+    for (const [id, slot] of this.frameSlots) {
+      if (!incoming.has(id)) {
+        this.contentGroup!.remove(slot.group);
+        this.disposeGroup(slot.group);
+        this.frameSlots.delete(id);
+      }
+    }
+  }
+
+  private buildFrame(frame: SceneFrame): THREE.Group {
+    const g = new THREE.Group();
+    const style = frame.style ?? DEFAULT_FRAME_STYLE;
+
+    if (style.originRadius > 0) {
+      g.add(new THREE.Mesh(
+        new THREE.SphereGeometry(style.originRadius, 12, 12),
+        new THREE.MeshStandardMaterial({ color: 0xcccccc }),
+      ));
+    }
+
+    this.makeAxisArrow(g, style.axisLength, style.axisRadius, style.colorX, new THREE.Vector3(1, 0, 0));
+    this.makeAxisArrow(g, style.axisLength, style.axisRadius, style.colorY, new THREE.Vector3(0, 1, 0));
+    this.makeAxisArrow(g, style.axisLength, style.axisRadius, style.colorZ, new THREE.Vector3(0, 0, 1));
+
+    return g;
+  }
+
+  private syncLinks(links: SceneLink[]): void {
+    const incoming = new Set<string>();
+    let idx = 0;
+
+    for (const link of links) {
+      // Use positional index as id (no id field on SceneLink)
+      const key = `link_${idx++}`;
+      incoming.add(key);
+
+      this.scratchDir
+        .set(link.end[0] - link.start[0], link.end[1] - link.start[1], link.end[2] - link.start[2]);
+      const len = this.scratchDir.length();
+      if (len < 1e-10) continue;
+
+      let slot = this.linkSlots.get(key);
+      if (!slot) {
+        // Build a unit cylinder along +Y; we'll scale Y to actual length.
+        const mesh = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.018, 0.018, 1, 8, 1),
+          new THREE.MeshStandardMaterial({ color: 0x3399ff }),
+        );
+        slot = { mesh, baseLen: 1 };
+        this.linkSlots.set(key, slot);
+        this.contentGroup!.add(mesh);
+      }
+
+      const mesh = slot.mesh;
+      // Midpoint
+      mesh.position.set(
+        (link.start[0] + link.end[0]) * 0.5,
+        (link.start[1] + link.end[1]) * 0.5,
+        (link.start[2] + link.end[2]) * 0.5,
+      );
+      // Orient +Y → direction, scale Y to length
+      this.scratchVec.copy(this.scratchDir).normalize();
+      mesh.quaternion.setFromUnitVectors(this.linkUp, this.scratchVec);
+      mesh.scale.set(1, len, 1);
+    }
+
+    // Dispose removed links
+    for (const [key, slot] of this.linkSlots) {
+      if (!incoming.has(key)) {
+        this.contentGroup!.remove(slot.mesh);
+        slot.mesh.geometry.dispose();
+        (slot.mesh.material as THREE.Material).dispose();
+        this.linkSlots.delete(key);
+      }
+    }
+  }
+
+  private syncPrimitives(primitives: ScenePrimitive[]): void {
+    const incoming = new Set<string>();
+
+    for (const p of primitives) {
+      incoming.add(p.id);
+      let slot = this.primitiveSlots.get(p.id);
+
+      const color = this.colorFor(p.id);
+
+      if (!slot) {
+        const geo = this.buildPrimitiveGeometry(p.geometry);
+        if (!geo) continue;
+        const mesh = new THREE.Mesh(geo, this.getMaterial(color));
+        slot = { mesh };
+        this.primitiveSlots.set(p.id, slot);
+        this.contentGroup!.add(mesh);
+      }
+
+      slot.mesh.position.set(p.translation[0], p.translation[1], p.translation[2]);
       // Rust quaternion [w, x, y, z] → Three.js (x, y, z, w)
-      const rot = new THREE.Quaternion(p.rotation[1], p.rotation[2], p.rotation[3], p.rotation[0]);
-
-      const geo = this.buildPrimitiveGeometry(p.geometry);
-      if (!geo) continue;
-
-      // Color por id para distinguir visualmente
-      const color = p.id.includes('column') ? 0x888888
-                 : p.id.includes('link_1') ? 0x3399ff
-                 : p.id.includes('link_2') ? 0x44bbaa
-                 : 0xaaaaaa;
-
-      const mesh = new THREE.Mesh(geo, getMat(color));
-      mesh.position.copy(pos);
-      mesh.quaternion.copy(rot);
-      grp.add(mesh);
+      slot.mesh.quaternion.set(
+        p.rotation[1],
+        p.rotation[2],
+        p.rotation[3],
+        p.rotation[0],
+      );
     }
+
+    // Dispose removed primitives
+    for (const [id, slot] of this.primitiveSlots) {
+      if (!incoming.has(id)) {
+        this.contentGroup!.remove(slot.mesh);
+        slot.mesh.geometry.dispose();
+        this.primitiveSlots.delete(id);
+      }
+    }
+  }
+
+  private colorFor(id: string): number {
+    if (id.includes('column')) return 0x888888;
+    if (id.includes('link_1')) return 0x3399ff;
+    if (id.includes('link_2')) return 0x44bbaa;
+    return 0xaaaaaa;
+  }
+
+  private getMaterial(color: number): THREE.Material {
+    let mat = this.matCache.get(color);
+    if (!mat) {
+      mat = new THREE.MeshStandardMaterial({ color });
+      this.matCache.set(color, mat);
+    }
+    return mat;
   }
 
   private buildPrimitiveGeometry(g: ScenePrimitive['geometry']): THREE.BufferGeometry | null {
@@ -186,7 +289,6 @@ export class ThreeRendererService {
     const shaftLen = length - headLen;
     const up = new THREE.Vector3(0, 1, 0);
 
-    // Position along dir (not parent Y) so axes don't cross
     const shaftCenter = dir.clone().multiplyScalar(shaftLen / 2);
     const headCenter = dir.clone().multiplyScalar(shaftLen + headLen / 2);
 
@@ -313,6 +415,28 @@ export class ThreeRendererService {
     this.controls?.dispose();
     this.renderer?.dispose();
 
+    // Dispose all cached scene content
+    for (const slot of this.frameSlots.values()) {
+      this.disposeGroup(slot.group);
+    }
+    this.frameSlots.clear();
+
+    for (const slot of this.linkSlots.values()) {
+      slot.mesh.geometry.dispose();
+      (slot.mesh.material as THREE.Material).dispose();
+    }
+    this.linkSlots.clear();
+
+    for (const slot of this.primitiveSlots.values()) {
+      slot.mesh.geometry.dispose();
+    }
+    this.primitiveSlots.clear();
+
+    for (const mat of this.matCache.values()) {
+      mat.dispose();
+    }
+    this.matCache.clear();
+
     this.scene = null;
     this.camera = null;
     this.renderer = null;
@@ -323,7 +447,6 @@ export class ThreeRendererService {
   // ── Private ──
 
   private startLoop(): void {
-    const invQuat = new THREE.Quaternion();
     const loop = (): void => {
       this.frameId = requestAnimationFrame(loop);
       this.controls?.update();
@@ -331,7 +454,7 @@ export class ThreeRendererService {
       const cam = this.camera;
       if (!cam || !this.renderer || !this.scene) return;
 
-      // Contra‑rotar el compass para que siempre apunte en direcciones globales
+      // Counter-rotate the compass so it always points in global directions
       if (this.compassGroup) {
         this.compassGroup.quaternion.copy(cam.quaternion).invert();
       }
@@ -353,7 +476,18 @@ export class ThreeRendererService {
     c.updateProjectionMatrix();
   };
 
-  private bindResize = (): void => {
-    // bound once; used for both addEventListener / removeEventListener reference
-  };
+  /** Recursively dispose geometries and materials of all children. */
+  private disposeGroup(group: THREE.Group): void {
+    group.traverse(obj => {
+      if (obj instanceof THREE.Mesh) {
+        obj.geometry.dispose();
+        const mat = obj.material;
+        if (Array.isArray(mat)) {
+          mat.forEach(m => m.dispose());
+        } else {
+          mat.dispose();
+        }
+      }
+    });
+  }
 }

@@ -1,6 +1,6 @@
 import { Injectable, inject, Signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { BehaviorSubject, merge, Observable, of, Subject } from 'rxjs';
+import { BehaviorSubject, concat, merge, Observable, of, Subject } from 'rxjs';
 import { auditTime, catchError, distinctUntilChanged, map, scan, switchMap } from 'rxjs/operators';
 import { SceneApiService } from '../services/scene-api.service';
 import { toSceneData } from '../adapters/dto-to-model';
@@ -8,6 +8,7 @@ import type { RuntimeStateResponse, SolveIKResponse } from '../scene-api.types';
 import type { IkCommand, IkResult, IkTarget, RuntimeInfo, SceneData, SceneState, SceneUiState } from '../scene.types';
 
 type SceneEvent =
+  | { type: 'loading' }
   | { type: 'scene'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null }
   | { type: 'ik-executed'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null }
   | { type: 'solve'; joints: number[]; ikResult: IkResult }
@@ -117,26 +118,28 @@ export class SceneStore {
       distinctUntilChanged((a, b) =>
         a.length === b.length && a.every((v, i) => v === b[i]),
       ),
-      switchMap(q =>
+      switchMap(q => concat(
+        of({ type: 'loading' as const }),
         this.api.setJoints(q).pipe(
           map(toSceneEvent),
           catchError(err =>
             of({ type: 'error' as const, message: err.message ?? 'FK failed' }),
           ),
         ),
-      ),
+      )),
     ),
 
     // Pipeline 2: robot load → loadRobot API
     this.loadRobotSubject.pipe(
-      switchMap(id =>
+      switchMap(id => concat(
+        of({ type: 'loading' as const }),
         this.api.loadRobot(id).pipe(
           map(toSceneEvent),
           catchError(err =>
             of({ type: 'error' as const, message: err.message ?? 'Load failed' }),
           ),
         ),
-      ),
+      )),
     ),
 
     // Pipeline 3: monolithic IK move (solve + execute in one API call)
@@ -151,10 +154,13 @@ export class SceneStore {
               },
               undefined,
             );
-        return req.pipe(
-          map(toIkExecutedEvent),
-          catchError(err =>
-            of({ type: 'error' as const, message: err.message ?? 'IK execute failed' }),
+        return concat(
+          of({ type: 'loading' as const }),
+          req.pipe(
+            map(toIkExecutedEvent),
+            catchError(err =>
+              of({ type: 'error' as const, message: err.message ?? 'IK execute failed' }),
+            ),
           ),
         );
       }),
@@ -169,10 +175,13 @@ export class SceneStore {
               { translation: target.translation, rotation: target.rotation! },
               frame_id,
             );
-        return req.pipe(
-          map(toSolveEvent),
-          catchError(err =>
-            of({ type: 'error' as const, message: err.message ?? 'IK solve failed' }),
+        return concat(
+          of({ type: 'loading' as const }),
+          req.pipe(
+            map(toSolveEvent),
+            catchError(err =>
+              of({ type: 'error' as const, message: err.message ?? 'IK solve failed' }),
+            ),
           ),
         );
       }),
@@ -180,14 +189,15 @@ export class SceneStore {
 
     // Pipeline 5: execute solved Q
     this.executeSubject.pipe(
-      switchMap(joints =>
+      switchMap(joints => concat(
+        of({ type: 'loading' as const }),
         this.api.executeIk(joints).pipe(
           map(toSceneEvent),
           catchError(err =>
             of({ type: 'error' as const, message: err.message ?? 'IK execute failed' }),
           ),
         ),
-      ),
+      )),
     ),
 
     // Pipeline 6: gizmo target position updates (local, no API)
@@ -197,6 +207,8 @@ export class SceneStore {
   ).pipe(
     scan((state, event): SceneState => {
       switch (event.type) {
+        case 'loading':
+          return { ...state, ui: { ...state.ui, loading: true, error: null } };
         case 'scene':
           return {
             data: event.data,
