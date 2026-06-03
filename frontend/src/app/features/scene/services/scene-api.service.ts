@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { RuntimeStateResponse } from '../scene-api.types';
+import { RuntimeStateResponse, MoveToPositionRequest, MoveToPoseRequest } from '../scene-api.types';
 
 @Injectable({ providedIn: 'root' })
 export class SceneApiService {
@@ -29,6 +29,26 @@ export class SceneApiService {
       {
         robot_id: robotId,
       }
+    );
+  }
+
+  moveToPosition(
+    target: [number, number, number],
+    frame_id?: number,
+  ): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/scene/move-to-position`,
+      { target, frame_id } as MoveToPositionRequest,
+    );
+  }
+
+  moveToPose(
+    target: MoveToPoseRequest['target'],
+    frame_id?: number,
+  ): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/scene/move-to-pose`,
+      { target, frame_id } as MoveToPoseRequest,
     );
   }
 }

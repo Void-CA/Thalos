@@ -61,6 +61,7 @@ export interface RuntimeStateResponse {
   robot: RobotMetadataDto;
   joints: number[];
   scene: VisualSceneDto;
+  ik_result: IkResultDto | null;
   generated_at: string;
 }
 
@@ -84,4 +85,26 @@ export interface ChangedFrameDto {
 export interface ErrorResponse {
   error: string;
   code: string;
+}
+
+
+// ── IK endpoint types ──
+
+export interface MoveToPositionRequest {
+  target: [number, number, number];
+  frame_id?: number;
+}
+
+export interface MoveToPoseRequest {
+  target: {
+    translation: [number, number, number];
+    rotation: [number, number, number, number];
+  };
+  frame_id?: number;
+}
+
+export interface IkResultDto {
+  status: 'Converged' | 'MaxIterations';
+  iterations: number;
+  final_error: number;
 }

@@ -79,6 +79,28 @@ export interface SceneData {
   primitives: ScenePrimitive[];
 }
 
+// ── IK types ──
+
+/** Target para un comando IK. */
+export interface IkTarget {
+  type: 'position' | 'pose';
+  translation: [number, number, number];
+  rotation?: [number, number, number, number]; // quaternion [w, x, y, z]
+}
+
+/** Comando IK enviado al store. */
+export interface IkCommand {
+  type: 'moveToPosition' | 'moveToPose';
+  target: IkTarget;
+}
+
+/** Resultado del solver IK (mirror de IkResultDto). */
+export interface IkResult {
+  status: 'Converged' | 'MaxIterations';
+  iterations: number;
+  finalError: number;
+}
+
 /** Estado puramente de UI — NO existe en el backend. */
 export interface SceneUiState {
   loading: boolean;
@@ -89,5 +111,7 @@ export interface SceneUiState {
 export interface SceneState {
   data: SceneData | null;
   runtime: RuntimeInfo | null;
+  ikResult: IkResult | null;
+  ikTarget: IkTarget | null;
   ui: SceneUiState;
 }

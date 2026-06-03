@@ -5,10 +5,11 @@ import { auditTime, catchError, distinctUntilChanged, map, scan, switchMap } fro
 import { SceneApiService } from '../services/scene-api.service';
 import { toSceneData } from '../adapters/dto-to-model';
 import type { RuntimeStateResponse } from '../scene-api.types';
-import type { RuntimeInfo, SceneData, SceneState, SceneUiState } from '../scene.types';
+import type { IkCommand, IkResult, IkTarget, RuntimeInfo, SceneData, SceneState, SceneUiState } from '../scene.types';
 
 type SceneEvent =
-  | { type: 'scene'; data: SceneData; runtime: RuntimeInfo }
+  | { type: 'scene'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null }
+  | { type: 'target'; target: IkTarget | null }
   | { type: 'error'; message: string };
 
 const INITIAL_UI: SceneUiState = {
@@ -19,13 +20,23 @@ const INITIAL_UI: SceneUiState = {
 const INITIAL_STATE: SceneState = {
   data: null,
   runtime: null,
+  ikResult: null,
+  ikTarget: null,
   ui: INITIAL_UI,
 };
 
 const DEFAULT_Q: number[] = [0, 0];
 
-/** Map the API response into the internal (data + runtime) event. */
+/** Map the API response into the internal (data + runtime + ik) event. */
 function toSceneEvent(res: RuntimeStateResponse): SceneEvent {
+  const ikResult: IkResult | null = res.ik_result
+    ? {
+        status: res.ik_result.status,
+        iterations: res.ik_result.iterations,
+        finalError: res.ik_result.final_error,
+      }
+    : null;
+
   return {
     type: 'scene',
     data: toSceneData(res.scene),
@@ -34,6 +45,7 @@ function toSceneEvent(res: RuntimeStateResponse): SceneEvent {
       joints: res.joints,
       generatedAt: res.generated_at,
     },
+    ikResult,
   };
 }
 
@@ -46,6 +58,12 @@ export class SceneStore {
 
   /** Input stream: load a different robot model into the scene. */
   private readonly loadRobotSubject = new Subject<string>();
+
+  /** Input stream: IK commands (moveToPosition / moveToPose). */
+  private readonly ikSubject = new Subject<IkCommand>();
+
+  /** Input stream: gizmo target position (no API call — just UX state). */
+  private readonly targetSubject = new Subject<IkTarget | null>();
 
   /** Single source of truth: latest scene data + UI state. */
   readonly state$: Observable<SceneState> = merge(
@@ -76,6 +94,32 @@ export class SceneStore {
         ),
       ),
     ),
+
+    // Pipeline 3: IK commands → moveToPosition / moveToPose API
+    this.ikSubject.pipe(
+      switchMap(cmd => {
+        const req = cmd.target.type === 'position'
+          ? this.api.moveToPosition(cmd.target.translation, undefined)
+          : this.api.moveToPose(
+              {
+                translation: cmd.target.translation,
+                rotation: cmd.target.rotation!,
+              },
+              undefined,
+            );
+        return req.pipe(
+          map(toSceneEvent),
+          catchError(err =>
+            of({ type: 'error' as const, message: err.message ?? 'IK failed' }),
+          ),
+        );
+      }),
+    ),
+
+    // Pipeline 4: gizmo target position updates (local, no API)
+    this.targetSubject.pipe(
+      map(target => ({ type: 'target' as const, target })),
+    ),
   ).pipe(
     scan((state, event): SceneState => {
       switch (event.type) {
@@ -83,8 +127,12 @@ export class SceneStore {
           return {
             data: event.data,
             runtime: event.runtime,
+            ikResult: event.ikResult,
+            ikTarget: state.ikTarget,
             ui: { loading: false, error: null },
           };
+        case 'target':
+          return { ...state, ikTarget: event.target };
         case 'error':
           return {
             ...state,
@@ -97,7 +145,6 @@ export class SceneStore {
   /**
    * Señal derivada del pipeline RxJS.
    * Los componentes consumen esto en vez de subscribirse a state$.
-   * El pipeline interno sigue siendo RxJS por auditTime, switchMap, merge, etc.
    */
   readonly state: Signal<SceneState> = toSignal(this.state$, {
     initialValue: INITIAL_STATE,
@@ -111,5 +158,15 @@ export class SceneStore {
   /** Load a different robot into the scene. */
   loadRobot(id: string): void {
     this.loadRobotSubject.next(id);
+  }
+
+  /** Send an IK command (move-to-position or move-to-pose). */
+  moveToTarget(cmd: IkCommand): void {
+    this.ikSubject.next(cmd);
+  }
+
+  /** Update the gizmo target position (no API call). */
+  updateTarget(target: IkTarget | null): void {
+    this.targetSubject.next(target);
   }
 }
