@@ -90,6 +90,51 @@ pub async fn move_to_pose(
     Ok(Json(to_api_response(&snapshot)))
 }
 
+
+// ─── Solve IK (no mutation) ──────────────────────────────────────────────
+
+pub async fn solve_ik_position(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<MoveToPositionRequest>,
+) -> ApiResult<SolveIKResponse> {
+    let snapshot = state.services.scene.snapshot()?;
+    let default_ee = *snapshot.chain.end_effector();
+    let (frame, goal) = payload.to_ik_goal(default_ee);
+
+    let (joints, ik) = state.services.scene.solve_ik(frame, goal)?;
+    Ok(Json(SolveIKResponse {
+        joints,
+        ik_result: ik.into(),
+    }))
+}
+
+pub async fn solve_ik_pose(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<MoveToPoseRequest>,
+) -> ApiResult<SolveIKResponse> {
+    let snapshot = state.services.scene.snapshot()?;
+    let default_ee = *snapshot.chain.end_effector();
+    let (frame, goal) = payload.to_ik_goal(default_ee);
+
+    let (joints, ik) = state.services.scene.solve_ik(frame, goal)?;
+    Ok(Json(SolveIKResponse {
+        joints,
+        ik_result: ik.into(),
+    }))
+}
+
+/// Apply solved joint angles to the runtime (move the robot).
+pub async fn execute_ik(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<ExecuteIKRequest>,
+) -> ApiResult<RuntimeStateResponse> {
+    let snapshot = state
+        .services
+        .scene
+        .execute(Command::SetJoints(payload.joint_angles))?;
+    Ok(Json(to_api_response(&snapshot)))
+}
+
 pub async fn validate(
     _state: State<Arc<AppState>>,
     Json(payload): Json<ValidateRequest>,

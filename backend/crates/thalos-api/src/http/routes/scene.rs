@@ -21,6 +21,11 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/scene/move-to-position", post(handler::move_to_position))
         .route("/scene/move-to-pose", post(handler::move_to_pose))
 
+        // IK solve (no mutation) + execute
+        .route("/scene/solve-ik-position", post(handler::solve_ik_position))
+        .route("/scene/solve-ik-pose", post(handler::solve_ik_pose))
+        .route("/scene/execute-ik", post(handler::execute_ik))
+
         // Utilities
         .route("/scene/validate", post(handler::validate))
         .route("/scene/diff", post(handler::diff))

@@ -1,6 +1,7 @@
 use serde::Deserialize;
 
 use thalos_core::{
+    kinematics::inverse::IKGoal,
     math::geometry::{
         rigid::Transform3D,
         rotations::{Quaternion, UnitQuaternion},
@@ -70,6 +71,11 @@ pub struct PoseTargetDto {
     pub rotation: [f64; 4],
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ExecuteIKRequest {
+    pub joint_angles: Vec<f64>,
+}
+
 fn default_epsilon() -> f64 {
     1e-6
 }
@@ -94,6 +100,13 @@ impl MoveToPositionRequest {
         let target = Vector3::new(self.target[0], self.target[1], self.target[2]);
         Command::MoveToPosition { frame, target }
     }
+
+    /// Build an IKGoal from this request (no Command wrapping).
+    pub fn to_ik_goal(&self, default_ee: FrameId) -> (FrameId, IKGoal) {
+        let frame = self.frame_id.map_or(default_ee, FrameId::Id);
+        let target = Vector3::new(self.target[0], self.target[1], self.target[2]);
+        (frame, IKGoal::Position(target))
+    }
 }
 
 impl MoveToPoseRequest {
@@ -104,10 +117,17 @@ impl MoveToPoseRequest {
         let target = self.target.to_pose(frame);
         Command::MoveToPose { frame, target }
     }
+
+    /// Build an IKGoal from this request (no Command wrapping).
+    pub fn to_ik_goal(&self, default_ee: FrameId) -> (FrameId, IKGoal) {
+        let frame = self.frame_id.map_or(default_ee, FrameId::Id);
+        let target = self.target.to_pose(frame);
+        (frame, IKGoal::Pose(target))
+    }
 }
 
 impl PoseTargetDto {
-    fn to_pose(&self, target_frame: FrameId) -> Pose {
+    pub fn to_pose(&self, target_frame: FrameId) -> Pose {
         let [tx, ty, tz] = self.translation;
         let [qw, qx, qy, qz] = self.rotation;
 
