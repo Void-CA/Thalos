@@ -50,11 +50,7 @@ import { IkTarget, IkResult } from '../../scene.types';
       <div class="actions">
         <button (click)="onPreview()">Preview</button>
         <button class="solve" (click)="onSolve()">Solve</button>
-        <button
-          class="execute"
-          [disabled]="!solvedQ()"
-          (click)="onExecute()"
-        >Execute</button>
+        <button class="execute" (click)="onExecute()">Execute</button>
       </div>
 
       <!-- Solved Q display (despues de Solve) -->
@@ -202,12 +198,13 @@ export class IkTargetPanel {
     this.store.solveIK(this.buildTarget());
   }
 
-  // ── Step 3: Execute (aplica q resueltos, mueve robot) ──
+  // ── Step 3: Execute (solve + execute en un solo llamado API) ──
 
   protected onExecute(): void {
-    const q = this.solvedQ();
-    if (q) {
-      this.store.executeIK(q);
-    }
+    this.store.updateTarget(this.buildTarget());
+    this.store.moveToTarget({
+      type: this.type() === 'position' ? 'moveToPosition' : 'moveToPose',
+      target: this.buildTarget(),
+    });
   }
 }

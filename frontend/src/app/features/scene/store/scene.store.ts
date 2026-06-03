@@ -9,6 +9,7 @@ import type { IkCommand, IkResult, IkTarget, RuntimeInfo, SceneData, SceneState,
 
 type SceneEvent =
   | { type: 'scene'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null }
+  | { type: 'ik-executed'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null }
   | { type: 'solve'; joints: number[]; ikResult: IkResult }
   | { type: 'target'; target: IkTarget | null }
   | { type: 'error'; message: string };
@@ -41,6 +42,28 @@ function toSceneEvent(res: RuntimeStateResponse): SceneEvent {
 
   return {
     type: 'scene',
+    data: toSceneData(res.scene),
+    runtime: {
+      robot: res.robot,
+      joints: res.joints,
+      generatedAt: res.generated_at,
+    },
+    ikResult,
+  };
+}
+
+/** Map the API response from a monolithic IK move (solves + executes). */
+function toIkExecutedEvent(res: RuntimeStateResponse): SceneEvent {
+  const ikResult: IkResult | null = res.ik_result
+    ? {
+        status: res.ik_result.status,
+        iterations: res.ik_result.iterations,
+        finalError: res.ik_result.final_error,
+      }
+    : null;
+
+  return {
+    type: 'ik-executed',
     data: toSceneData(res.scene),
     runtime: {
       robot: res.robot,
@@ -116,7 +139,7 @@ export class SceneStore {
       ),
     ),
 
-    // Pipeline 3: IK commands → moveToPosition / moveToPose API (mutates runtime)
+    // Pipeline 3: monolithic IK move (solve + execute in one API call)
     this.ikSubject.pipe(
       switchMap(cmd => {
         const req = cmd.target.type === 'position'
@@ -129,7 +152,7 @@ export class SceneStore {
               undefined,
             );
         return req.pipe(
-          map(toSceneEvent),
+          map(toIkExecutedEvent),
           catchError(err =>
             of({ type: 'error' as const, message: err.message ?? 'IK execute failed' }),
           ),
@@ -180,6 +203,15 @@ export class SceneStore {
             runtime: event.runtime,
             ikResult: event.ikResult,
             solvedQ: null,
+            ikTarget: state.ikTarget,
+            ui: { loading: false, error: null },
+          };
+        case 'ik-executed':
+          return {
+            data: event.data,
+            runtime: event.runtime,
+            ikResult: event.ikResult,
+            solvedQ: event.runtime.joints,
             ikTarget: state.ikTarget,
             ui: { loading: false, error: null },
           };
