@@ -7,7 +7,7 @@ use super::*;
 /// 13. DLS CONVERGE EN TARGETS ALCANZABLES: el solver debe converger
 ///     al target (1, 1, 0) con status Converged y error < tolerancia.
 #[test]
-fn test_dls_converges_reachable_target() {
+fn converges_reachable_target() {
     let (fk, ee) = build_2dof_planar_arm();
     let solver = DampedLeastSquaresSolver::new(fk, ee, 500, 1e-6, 0.1);
 
@@ -45,7 +45,7 @@ fn test_dls_converges_reachable_target() {
 ///     desde q=[0,0] aunque el target tenga componente radial.
 ///     Target (1.2, 0.5, 0) — bien dentro del workspace.
 #[test]
-fn test_dls_converges_from_singular() {
+fn converges_from_singular() {
     let (fk, ee) = build_2dof_planar_arm();
     let solver = DampedLeastSquaresSolver::new(fk, ee, 500, 1e-6, 0.1);
 
@@ -71,7 +71,7 @@ fn test_dls_converges_from_singular() {
 ///     converge en menos iteraciones que JT porque el damping evita
 ///     el estancamiento cerca de la singularidad.
 #[test]
-fn test_dls_faster_than_jt_from_singular() {
+fn faster_than_jt_from_singular() {
     let (fk, ee) = build_2dof_planar_arm();
 
     let target = Vector3::new(1.2, 0.5, 0.0);
@@ -116,7 +116,7 @@ fn test_dls_faster_than_jt_from_singular() {
 
 /// 16. DLS CON TARGET INALCANZABLE: debe devolver MaxIterations sin NaN.
 #[test]
-fn test_dls_unreachable_target_no_nan() {
+fn unreachable_target_no_nan() {
     let (fk, ee) = build_2dof_planar_arm();
     let solver = DampedLeastSquaresSolver::new(fk, ee, 200, 1e-6, 0.1);
 
@@ -154,7 +154,7 @@ fn test_dls_unreachable_target_no_nan() {
 
 /// 17. DLS CON HISTORIAL: verificar que with_history(true) funciona.
 #[test]
-fn test_dls_error_history() {
+fn error_history() {
     let (fk, ee) = build_2dof_planar_arm();
     let solver = DampedLeastSquaresSolver::new(fk, ee, 500, 1e-6, 0.1)
         .with_history(true);

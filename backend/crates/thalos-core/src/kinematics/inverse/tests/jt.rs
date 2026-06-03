@@ -4,7 +4,7 @@ use super::*;
 
 /// El resultado expone status, iterations y final_error correctamente.
 #[test]
-fn test_result_exposes_metadata() {
+fn result_exposes_metadata() {
     let (fk, ee) = build_2dof_planar_arm();
     let solver = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5);
 
@@ -41,7 +41,7 @@ fn test_result_exposes_metadata() {
 
 /// Historial de errores se registra con with_history(true).
 #[test]
-fn test_error_history_is_recorded() {
+fn error_history_is_recorded() {
     let (fk, ee) = build_2dof_planar_arm();
     let solver = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5)
         .with_history(true);
@@ -83,7 +83,7 @@ fn test_error_history_is_recorded() {
 /// Brazo planar 2R (L1=L2=1), target (1, 1, 0).
 /// Solución esperada: q1 ≈ 0°, q2 ≈ 90°.
 #[test]
-fn test_2dof_planar_arm_known_solution() {
+fn two_dof_planar_arm_known_solution() {
     let (fk, ee) = build_2dof_planar_arm();
     let solver = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5);
 
@@ -109,7 +109,7 @@ fn test_2dof_planar_arm_known_solution() {
 
 /// Consistencia FK: después de IK, FK(position(q)) ≈ target.
 #[test]
-fn test_fk_ik_consistency() {
+fn fk_ik_consistency() {
     let (fk, ee) = build_2dof_planar_arm();
     let solver = JacobianTransposeSolver::new(fk.clone(), ee, 500, 1e-6, 0.5);
 
@@ -134,7 +134,7 @@ fn test_fk_ik_consistency() {
 
 /// 1-DOF: L=1, target (0, 1, 0). Solución analítica: θ = π/2.
 #[test]
-fn test_1dof_reaches_known_target() {
+fn one_dof_reaches_known_target() {
     let (fk, ee) = build_1dof_arm(1.0);
     let solver = JacobianTransposeSolver::new(fk, ee, 100, 1e-6, 0.5);
 
@@ -162,7 +162,7 @@ fn test_1dof_reaches_known_target() {
 /// Jacobiano geométrico vs. numérico (diferencias finitas).
 /// Verifica cada columna del Jacobiano lineal en 5 configuraciones.
 #[test]
-fn test_jacobian_matches_numerical() {
+fn jacobian_matches_numerical() {
     let (fk, ee) = build_2dof_planar_arm();
 
     let geometric = GeometricJacobian::new(fk.clone(), ee.clone());
@@ -206,7 +206,7 @@ fn test_jacobian_matches_numerical() {
 /// allá. Desde q=[0,0] el error es radial puro → J^T·e = 0 → solver no
 /// se mueve → test determinista.
 #[test]
-fn test_unreachable_target_returns_max_iterations() {
+fn unreachable_target_returns_max_iterations() {
     let (fk, ee) = build_2dof_planar_arm();
     let solver = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5);
 
@@ -249,7 +249,7 @@ fn test_unreachable_target_returns_max_iterations() {
 
 /// Múltiples targets inalcanzables: error escala con la distancia.
 #[test]
-fn test_unreachable_target_error_equals_distance() {
+fn unreachable_target_error_equals_distance() {
     let (fk, ee) = build_2dof_planar_arm();
     let solver = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5);
 
@@ -291,7 +291,7 @@ fn test_unreachable_target_error_equals_distance() {
 
 /// Robuster: targets inalcanzables no producen explosión numérica.
 #[test]
-fn test_unreachable_target_does_not_explode() {
+fn unreachable_target_does_not_explode() {
     let (fk, ee) = build_2dof_planar_arm();
 
     let start_configs = [
@@ -347,7 +347,7 @@ fn test_unreachable_target_does_not_explode() {
 /// el error no decrece → solver atascado. Misma config no-singular
 /// converge sin problema.
 #[test]
-fn test_singular_radial_error_blocks_convergence() {
+fn singular_radial_error_blocks_convergence() {
     let (fk, ee) = build_2dof_planar_arm();
     let target = Vector3::new(1.5, 0.0, 0.0);
 
@@ -395,7 +395,7 @@ fn test_singular_radial_error_blocks_convergence() {
 
 /// Historial monotónico en singularidad: error nunca aumenta.
 #[test]
-fn test_singular_config_error_history_monotonic() {
+fn singular_config_error_history_monotonic() {
     let (fk, ee) = build_2dof_planar_arm();
     let solver = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5)
         .with_history(true);
@@ -431,7 +431,7 @@ fn test_singular_config_error_history_monotonic() {
 
 /// Sin oscilación: diferencias consecutivas de error decrecen.
 #[test]
-fn test_singular_config_no_oscillation() {
+fn singular_config_no_oscillation() {
     let (fk, ee) = build_2dof_planar_arm();
     let solver = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5)
         .with_history(true);

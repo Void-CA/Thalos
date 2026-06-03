@@ -7,7 +7,7 @@ use super::*;
 /// det(JᵀJ) ≈ 0 en q=[0,0] (brazo extendido): Jacobiano rank-deficient,
 /// condition_number = ∞.
 #[test]
-fn test_singularity_detection_at_full_extension() {
+fn detection_at_full_extension() {
     let (fk, ee) = build_2dof_planar_arm();
     let jac = GeometricJacobian::new(fk, ee);
 
@@ -43,7 +43,7 @@ fn test_singularity_detection_at_full_extension() {
 
 /// det(JᵀJ) >> 0 en q=[π/3, π/4]: rango completo.
 #[test]
-fn test_singularity_detection_at_articulated() {
+fn detection_at_articulated() {
     let (fk, ee) = build_2dof_planar_arm();
     let jac = GeometricJacobian::new(fk, ee);
 
@@ -81,7 +81,7 @@ fn test_singularity_detection_at_articulated() {
 
 /// Comparativa singular vs no-singular.
 #[test]
-fn test_singularity_condition_number_comparison() {
+fn condition_number_comparison() {
     let (fk, ee) = build_2dof_planar_arm();
     let jac = GeometricJacobian::new(fk, ee);
 

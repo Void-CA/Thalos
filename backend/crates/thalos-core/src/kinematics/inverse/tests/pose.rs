@@ -40,7 +40,7 @@ fn orientation_angle(a: &UnitQuaternion, b: &UnitQuaternion) -> f64 {
 
 /// DLS converge a una pose conocida desde q0=[0,0].
 #[test]
-fn test_dls_pose_ik_reaches_known_pose() {
+fn dls_pose_ik_reaches_known_pose() {
     let (fk, ee) = build_2dof_planar_arm();
     let target_pose = make_target_pose(ee, &[PI / 4.0, PI / 3.0]);
     let solver = DampedLeastSquaresSolver::new(fk, ee, 500, 1e-6, 0.1);
@@ -76,7 +76,7 @@ fn test_dls_pose_ik_reaches_known_pose() {
 
 /// Consistencia FK/IK para pose: IK(FK(q)) ≈ q para pose completa.
 #[test]
-fn test_dls_pose_ik_fk_consistency() {
+fn pose_ik_fk_consistency() {
     let (fk, ee) = build_2dof_planar_arm();
 
     let q_orig = vec![0.5, 1.0];
@@ -125,7 +125,7 @@ fn test_dls_pose_ik_fk_consistency() {
 /// DLS converge más rápido que JT para pose desde q0=[0,0] (el damping
 /// evita el overshoot en el espacio 6D). JT necesita α más chico.
 #[test]
-fn test_dls_pose_faster_than_jt_from_singular() {
+fn pose_faster_than_jt_from_singular() {
     let (fk, ee) = build_2dof_planar_arm();
 
     let target_pose = make_target_pose(ee, &[PI / 3.0, PI / 6.0]);
@@ -173,7 +173,7 @@ fn test_dls_pose_faster_than_jt_from_singular() {
 /// Position IK no puede moverse (J_lin^T·e=0), pero pose IK tiene
 /// gradiente de orientación en el Jacobiano completo 6×n.
 #[test]
-fn test_dls_pose_converges_where_position_ik_stagnates() {
+fn pose_converges_where_position_ik_stagnates() {
     let (fk, ee) = build_2dof_planar_arm();
 
     // Target radial: posición (√2, 0, 0) con orientación Z-45°.
