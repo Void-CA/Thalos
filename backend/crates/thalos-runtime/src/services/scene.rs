@@ -7,6 +7,7 @@ use thalos_core::{
     },
     models::{RobotModel, RobotRegistry},
     robot::serial_chain::SerialChain,
+    spatial::frame::FrameId,
 };
 
 use crate::backends::RobotBackend;
@@ -122,6 +123,23 @@ impl SceneService {
         };
 
         self.snapshot_with_ik(ik_result)
+    }
+
+    /// Solve IK for the given frame and goal WITHOUT mutating state.
+    /// Returns the solved joint angles and solver metadata.
+    pub fn solve_ik(
+        &self,
+        frame: FrameId,
+        goal: IKGoal,
+    ) -> Result<(Vec<f64>, IKResult), RuntimeError> {
+        let runtime = self.runtime.read().unwrap();
+        let fk = ForwardKinematics::new(runtime.active_robot.chain.clone());
+        let solver = DampedLeastSquaresSolver::new(fk, frame, IK_MAX_ITERS, IK_TOLERANCE, IK_LAMBDA);
+
+        let q0 = runtime.active_robot.joints.clone();
+        let result = solver.solve(&q0, goal);
+
+        Ok((result.q.clone(), result))
     }
 
     /// Build a snapshot, injecting optional IK metadata.
@@ -443,6 +461,31 @@ mod tests {
         let snap2 = svc.snapshot().unwrap();
 
         assert_eq!(snap1.joints, snap2.joints);
+    }
+
+
+    // ─── SolveIK (no mutation) ────────────────────────────────────────
+
+    #[test]
+    fn solve_ik_returns_joints_without_mutating_state() {
+        let svc = make_service(RobotModel::Scara);
+        let snap0 = svc.snapshot().unwrap();
+        let ee_frame = ee(&snap0);
+        let initial_joints = snap0.joints.clone();
+
+        let target = Vector3::new(0.3, 0.3, 0.0);
+        let (solved_joints, ik) = svc.solve_ik(ee_frame, IKGoal::Position(target)).unwrap();
+
+        // Must return solved joints distinct from initial
+        assert_ne!(solved_joints, initial_joints, "solve_ik must propose new joints");
+        assert!(ik.status.is_converged(), "IK must converge");
+
+        // State must NOT have changed
+        let snap1 = svc.snapshot().unwrap();
+        assert_eq!(
+            snap1.joints, initial_joints,
+            "solve_ik must NOT mutate runtime state",
+        );
     }
 
 
