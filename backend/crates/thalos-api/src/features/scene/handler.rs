@@ -32,18 +32,17 @@ fn build_visual_scene(snapshot: &thalos_runtime::RuntimeSnapshot) -> VisualScene
 }
 
 
+/// Build an API response from a RuntimeSnapshot.
+fn to_api_response(snapshot: &thalos_runtime::RuntimeSnapshot) -> RuntimeStateResponse {
+    let scene: VisualSceneDto = build_visual_scene(snapshot).into();
+    RuntimeStateResponse::from_snapshot(snapshot, scene)
+}
+
 pub async fn get_scene(
     State(state): State<Arc<AppState>>,
 ) -> ApiResult<RuntimeStateResponse> {
     let snapshot = state.services.scene.snapshot()?;
-    let scene = build_visual_scene(&snapshot);
-
-    Ok(Json(RuntimeStateResponse {
-        robot: snapshot.robot.metadata().into(),
-        joints: snapshot.joints,
-        scene: scene.into(),
-        generated_at: snapshot.generated_at,
-    }))
+    Ok(Json(to_api_response(&snapshot)))
 }
 
 pub async fn set_joints(
@@ -55,14 +54,7 @@ pub async fn set_joints(
         .scene
         .execute(Command::SetJoints(payload.joint_angles))?;
 
-    let scene = build_visual_scene(&snapshot);
-
-    Ok(Json(RuntimeStateResponse {
-        robot: snapshot.robot.metadata().into(),
-        joints: snapshot.joints,
-        scene: scene.into(),
-        generated_at: snapshot.generated_at,
-    }))
+    Ok(Json(to_api_response(&snapshot)))
 }
 
 pub async fn load_robot(
@@ -70,37 +62,20 @@ pub async fn load_robot(
     Json(payload): Json<LoadRobotRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
     let cmd = payload.into_command()?;
-
     let snapshot = state.services.scene.execute(cmd)?;
-
-    let scene = build_visual_scene(&snapshot);
-
-    Ok(Json(RuntimeStateResponse {
-        robot: snapshot.robot.metadata().into(),
-        joints: snapshot.joints,
-        scene: scene.into(),
-        generated_at: snapshot.generated_at,
-    }))
+    Ok(Json(to_api_response(&snapshot)))
 }
 
 pub async fn move_to_position(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<MoveToPositionRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
-    // Snapshot para resolver frame por defecto (end effector)
     let snapshot = state.services.scene.snapshot()?;
     let default_ee = *snapshot.chain.end_effector();
     let cmd = payload.into_command(default_ee);
 
     let snapshot = state.services.scene.execute(cmd)?;
-    let scene = build_visual_scene(&snapshot);
-
-    Ok(Json(RuntimeStateResponse {
-        robot: snapshot.robot.metadata().into(),
-        joints: snapshot.joints,
-        scene: scene.into(),
-        generated_at: snapshot.generated_at,
-    }))
+    Ok(Json(to_api_response(&snapshot)))
 }
 
 pub async fn move_to_pose(
@@ -112,14 +87,7 @@ pub async fn move_to_pose(
     let cmd = payload.into_command(default_ee);
 
     let snapshot = state.services.scene.execute(cmd)?;
-    let scene = build_visual_scene(&snapshot);
-
-    Ok(Json(RuntimeStateResponse {
-        robot: snapshot.robot.metadata().into(),
-        joints: snapshot.joints,
-        scene: scene.into(),
-        generated_at: snapshot.generated_at,
-    }))
+    Ok(Json(to_api_response(&snapshot)))
 }
 
 pub async fn validate(

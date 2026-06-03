@@ -1,11 +1,13 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::features::robots::dto::RobotMetadataDto;
+use thalos_core::kinematics::inverse::result::IKResult;
 use thalos_visual::{
     ChangedFrame, FrameStyle, PrimitiveGeometry, SceneDiff, VisualFrame, VisualJointAxis,
     VisualLink, VisualPrimitive, VisualScene, VisualTwist,
 };
+
+use crate::features::robots::dto::RobotMetadataDto;
 
 // ── Scene response DTOs ──
 
@@ -77,14 +79,46 @@ pub struct VisualPrimitiveDto {
 
 // ── Runtime response ──
 
+/// Result of an IK solver execution (DTO mirror of core's IKResult without the q vector).
+#[derive(Debug, Serialize)]
+pub struct IkResultDto {
+    pub status: String,
+    pub iterations: usize,
+    pub final_error: f64,
+}
+
 /// Full runtime state: the active robot, its joint angles, and the computed scene.
 /// Returned by every endpoint that touches the runtime.
+/// When produced by an IK command, `ik_result` carries solver metadata.
 #[derive(Debug, Serialize)]
 pub struct RuntimeStateResponse {
     pub robot: RobotMetadataDto,
     pub joints: Vec<f64>,
     pub scene: VisualSceneDto,
+    pub ik_result: Option<IkResultDto>,
     pub generated_at: DateTime<Utc>,
+}
+
+impl RuntimeStateResponse {
+    /// Build from a RuntimeSnapshot and its derived VisualScene.
+    pub fn from_snapshot(
+        snapshot: &thalos_runtime::RuntimeSnapshot,
+        scene: VisualSceneDto,
+    ) -> Self {
+        Self {
+            robot: snapshot.robot.metadata().into(),
+            joints: snapshot.joints.clone(),
+            scene,
+            ik_result: snapshot.ik_result.as_ref().map(|ik| {
+                IkResultDto {
+                    status: format!("{:?}", ik.status),
+                    iterations: ik.iterations,
+                    final_error: ik.final_error,
+                }
+            }),
+            generated_at: snapshot.generated_at,
+        }
+    }
 }
 
 
@@ -310,6 +344,19 @@ impl From<VisualSceneDto> for VisualScene {
             joint_axes: s.joint_axes.into_iter().map(Into::into).collect(),
             twists: s.twists.into_iter().map(Into::into).collect(),
             primitives: s.primitives.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+
+// ── IKResult → IkResultDto ──
+
+impl From<IKResult> for IkResultDto {
+    fn from(ik: IKResult) -> Self {
+        Self {
+            status: format!("{:?}", ik.status),
+            iterations: ik.iterations,
+            final_error: ik.final_error,
         }
     }
 }

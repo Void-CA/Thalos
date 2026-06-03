@@ -3,7 +3,7 @@ use std::sync::RwLock;
 use thalos_core::{
     kinematics::{
         forward::{result::FKResult, ForwardKinematics},
-        inverse::{DampedLeastSquaresSolver, IKGoal, IKSolver},
+        inverse::{result::IKResult, DampedLeastSquaresSolver, IKGoal, IKSolver},
     },
     models::{RobotModel, RobotRegistry},
     robot::serial_chain::SerialChain,
@@ -50,21 +50,24 @@ impl SceneService {
 
         let fk_result = Self::compute_fk(&runtime.active_robot.chain, &runtime.active_robot.joints);
 
+        let ik_result = None;
         Ok(RuntimeSnapshot {
             robot: runtime.active_robot.model,
             joints: runtime.active_robot.joints.clone(),
             chain: runtime.active_robot.chain.clone(),
             fk_result,
+            ik_result,
             generated_at: chrono::Utc::now(),
         })
     }
 
     /// Applies a command and returns the resulting snapshot.
     pub fn execute(&self, cmd: Command) -> Result<RuntimeSnapshot, RuntimeError> {
-        match cmd {
+        let ik_result: Option<IKResult> = match cmd {
             Command::SetJoints(joints) => {
                 let mut runtime = self.runtime.write().unwrap();
                 runtime.active_robot.joints = joints;
+                None
             }
             Command::LoadRobot(model) => {
                 let chain = RobotRegistry::create_default(model);
@@ -72,43 +75,401 @@ impl SceneService {
 
                 let mut runtime = self.runtime.write().unwrap();
                 runtime.active_robot = ActiveRobot::new(model, chain, vec![0.0; dof]);
+                None
             }
             Command::MoveToPosition { frame, target } => {
-                let mut runtime = self.runtime.write().unwrap();
+                let result = {
+                    let mut runtime = self.runtime.write().unwrap();
 
-                let fk = ForwardKinematics::new(runtime.active_robot.chain.clone());
-                let solver = DampedLeastSquaresSolver::new(
-                    fk,
-                    frame,
-                    IK_MAX_ITERS,
-                    IK_TOLERANCE,
-                    IK_LAMBDA,
-                );
+                    let fk = ForwardKinematics::new(runtime.active_robot.chain.clone());
+                    let solver = DampedLeastSquaresSolver::new(
+                        fk,
+                        frame,
+                        IK_MAX_ITERS,
+                        IK_TOLERANCE,
+                        IK_LAMBDA,
+                    );
 
-                let q0 = runtime.active_robot.joints.clone();
-                let result = solver.solve(&q0, IKGoal::Position(target));
+                    let q0 = runtime.active_robot.joints.clone();
+                    let result = solver.solve(&q0, IKGoal::Position(target));
 
-                runtime.active_robot.joints = result.q;
+                    runtime.active_robot.joints = result.q.clone();
+                    result
+                };
+                Some(result)
             }
             Command::MoveToPose { frame, target } => {
-                let mut runtime = self.runtime.write().unwrap();
+                let result = {
+                    let mut runtime = self.runtime.write().unwrap();
 
-                let fk = ForwardKinematics::new(runtime.active_robot.chain.clone());
-                let solver = DampedLeastSquaresSolver::new(
-                    fk,
-                    frame,
-                    IK_MAX_ITERS,
-                    IK_TOLERANCE,
-                    IK_LAMBDA,
-                );
+                    let fk = ForwardKinematics::new(runtime.active_robot.chain.clone());
+                    let solver = DampedLeastSquaresSolver::new(
+                        fk,
+                        frame,
+                        IK_MAX_ITERS,
+                        IK_TOLERANCE,
+                        IK_LAMBDA,
+                    );
 
-                let q0 = runtime.active_robot.joints.clone();
-                let result = solver.solve(&q0, IKGoal::Pose(target));
+                    let q0 = runtime.active_robot.joints.clone();
+                    let result = solver.solve(&q0, IKGoal::Pose(target));
 
-                runtime.active_robot.joints = result.q;
+                    runtime.active_robot.joints = result.q.clone();
+                    result
+                };
+                Some(result)
             }
-        }
+        };
 
-        self.snapshot()
+        self.snapshot_with_ik(ik_result)
+    }
+
+    /// Build a snapshot, injecting optional IK metadata.
+    fn snapshot_with_ik(&self, ik_result: Option<IKResult>) -> Result<RuntimeSnapshot, RuntimeError> {
+        let runtime = self.runtime.read().unwrap();
+        let fk_result = Self::compute_fk(&runtime.active_robot.chain, &runtime.active_robot.joints);
+
+        Ok(RuntimeSnapshot {
+            robot: runtime.active_robot.model,
+            joints: runtime.active_robot.joints.clone(),
+            chain: runtime.active_robot.chain.clone(),
+            fk_result,
+            ik_result,
+            generated_at: chrono::Utc::now(),
+        })
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// TESTS
+// ═══════════════════════════════════════════════════════════════════════
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::backends::InternalBackend;
+    use thalos_core::{
+        math::geometry::{
+            rigid::Transform3D,
+            rotations::UnitQuaternion,
+            vectors::Vector3,
+        },
+        models::RobotModel,
+        spatial::{frame::FrameId, pose::Pose},
+    };
+
+    // ─── Helpers ───────────────────────────────────────────────────────
+
+    /// Create a SceneService with the given model and default backend.
+    fn make_service(model: RobotModel) -> SceneService {
+        SceneService::new(Box::new(InternalBackend), model)
+    }
+
+    /// Resolve the end effector frame from a snapshot's chain.
+    fn ee(snapshot: &RuntimeSnapshot) -> FrameId {
+        *snapshot.chain.end_effector()
+    }
+
+    /// Assert that the FK position of the end effector in `snapshot`
+    /// is within `tol` of the expected `target` position.
+    fn assert_ee_at(snapshot: &RuntimeSnapshot, target: Vector3, tol: f64) {
+        let frame = ee(snapshot);
+        let pose = snapshot.fk_result.pose(&frame)
+            .expect("end effector must exist in FK result");
+        let pos = pose.translation();
+        let error = (target - pos).magnitude();
+        assert!(
+            error < tol,
+            "EE position error: {:.4} (tol {:.4})\n  expected: {:.4?}\n  actual:   {:.4?}",
+            error, tol, target, pos,
+        );
+    }
+
+
+    // ─── SetJoints ────────────────────────────────────────────────────
+
+    #[test]
+    fn set_joints_updates_state_and_fk() {
+        let svc = make_service(RobotModel::Scara);
+        let joints = vec![0.5, -0.3, 0.1, 0.0];
+
+        let snap = svc.execute(Command::SetJoints(joints.clone())).unwrap();
+
+        assert_eq!(snap.joints, joints);
+        assert_eq!(snap.robot, RobotModel::Scara);
+        // FK must be valid after setting joints
+        let _pose = snap.fk_result.pose(&ee(&snap))
+            .expect("FK result must contain end effector");
+    }
+
+    // NOTE: no hay test de "SetJoints con DOF incorrecto" porque el FK
+    // evalúa contra la cadena cinemática y paniquea si el tamaño de joints
+    // no coincide. La validación de DOF es responsabilidad del caller.
+
+
+    // ─── LoadRobot ────────────────────────────────────────────────────
+
+    #[test]
+    fn load_robot_changes_model_and_resets_joints() {
+        let svc = make_service(RobotModel::Scara);
+        // Set some joints first
+        svc.execute(Command::SetJoints(vec![1.0, 2.0, 3.0, 4.0])).unwrap();
+
+        let snap = svc.execute(Command::LoadRobot(RobotModel::Planar3R)).unwrap();
+
+        assert_eq!(snap.robot, RobotModel::Planar3R);
+        assert_eq!(snap.joints.len(), 3, "Planar3R has 3 DOF");
+        // Joints reset to zero
+        assert!(snap.joints.iter().all(|&j| j == 0.0));
+    }
+
+    #[test]
+    fn load_robot_twice_produces_independent_snapshots() {
+        let svc = make_service(RobotModel::Scara);
+
+        let snap1 = svc.execute(Command::LoadRobot(RobotModel::Planar2R)).unwrap();
+        let snap2 = svc.execute(Command::LoadRobot(RobotModel::Scara)).unwrap();
+
+        assert_eq!(snap1.robot, RobotModel::Planar2R);
+        assert_eq!(snap2.robot, RobotModel::Scara);
+        assert_eq!(snap1.joints.len(), 2);
+        assert_eq!(snap2.joints.len(), 4);
+    }
+
+
+    // ─── MoveToPosition (IK + FK round-trip) ──────────────────────────
+
+    /// Single execution of MoveToPosition on a SCARA: the solver should
+    /// bring the end effector within tolerance of the target.
+    #[test]
+    fn move_to_position_converges_scara() {
+        let svc = make_service(RobotModel::Scara);
+        let snap0 = svc.snapshot().unwrap();
+        let ee = ee(&snap0);
+        let target = Vector3::new(0.3, 0.3, 0.0); // well within SCARA workspace
+
+        let snap = svc.execute(Command::MoveToPosition {
+            frame: ee,
+            target,
+        }).unwrap();
+
+        assert_ee_at(&snap, target, 0.01);
+    }
+
+    /// Sequential MoveToPosition commands: each should converge from the
+    /// previous configuration.
+    #[test]
+    fn move_to_position_sequential() {
+        let svc = make_service(RobotModel::Scara);
+
+        let targets = [
+            Vector3::new(0.3, 0.3, 0.0),
+            Vector3::new(-0.2, 0.5, 0.0),
+            Vector3::new(0.0, 0.0, 0.0),
+        ];
+
+        let mut snap = svc.snapshot().unwrap();
+        for &target in &targets {
+            let ee = ee(&snap);
+            snap = svc.execute(Command::MoveToPosition { frame: ee, target }).unwrap();
+            assert_ee_at(&snap, target, 0.01);
+        }
+    }
+
+    /// MoveToPosition with a custom frame (not the end effector).
+    /// The child frame "link_2" should move to the target.
+    /// NOTE: target includes a Y component to avoid the X-axis singularity
+    /// at full extension (q=[0,…,0]).
+    #[test]
+    fn move_to_position_custom_frame() {
+        let svc = make_service(RobotModel::Scara);
+        let snap = svc.snapshot().unwrap();
+
+        // SCARA creates frames in order: link_1 (id 0), link_2 (id 1), …
+        let link2 = FrameId::Id(1);
+        let _link2_initial = snap.fk_result.pose(&link2)
+            .expect("link_2 frame must exist")
+            .translation();
+
+        // Target bien dentro del workspace, lejos de singularidades
+        let target = Vector3::new(1.5, 0.5, 0.0);
+
+        let snap = svc.execute(Command::MoveToPosition {
+            frame: link2,
+            target,
+        }).unwrap();
+
+        let final_pos = snap.fk_result.pose(&link2)
+            .unwrap()
+            .translation();
+        let error = (target - final_pos).magnitude();
+        assert!(
+            error < 0.01,
+            "link_2 position error: {:.4} (target {:.4?}, actual {:.4?})",
+            error, target, final_pos,
+        );
+    }
+
+    /// Reachable target close to the initial configuration with a Y offset
+    /// to avoid the X-axis singularity (full extension at q=[0,0,0,0]).
+    #[test]
+    fn move_to_position_nearby() {
+        let svc = make_service(RobotModel::Scara);
+        let snap0 = svc.snapshot().unwrap();
+        let ee = ee(&snap0);
+
+        // Target with Y component: evita singularidad de extensión total
+        let target = Vector3::new(0.3, 0.1, 0.0);
+
+        let snap = svc.execute(Command::MoveToPosition {
+            frame: ee,
+            target,
+        }).unwrap();
+
+        assert_ee_at(&snap, target, 0.01);
+    }
+
+
+    // ─── MoveToPose (IK + FK round-trip with orientation) ─────────────
+
+    /// MoveToPose with identity rotation (same as initial SCARA orientation).
+    /// Since the orientation is already matched, the solver primarily works
+    /// on position error, but exercises the full 6-DOF IK path.
+    #[test]
+    fn move_to_pose_converges_with_identity_rotation() {
+        let svc = make_service(RobotModel::Scara);
+        let snap0 = svc.snapshot().unwrap();
+        let ee_frame = ee(&snap0);
+
+        let target_pos = Vector3::new(0.3, 0.3, 0.0);
+        let identity_rot = UnitQuaternion::identity();
+        let target_pose = Pose::new(
+            FrameId::World,
+            ee_frame,
+            Transform3D {
+                translation: target_pos,
+                rotation: identity_rot,
+            },
+        );
+
+        let snap = svc.execute(Command::MoveToPose {
+            frame: ee_frame,
+            target: target_pose,
+        }).unwrap();
+
+        assert_ee_at(&snap, target_pos, 0.01);
+    }
+
+    /// MoveToPose converges when both position and orientation targets
+    /// can be satisfied (using a planar 3R arm, targeting identity rot +
+    /// a reachable position).
+    #[test]
+    fn move_to_pose_3r_converges() {
+        let svc = make_service(RobotModel::Planar3R);
+        let snap0 = svc.snapshot().unwrap();
+        let ee_frame = ee(&snap0);
+
+        let target_pos = Vector3::new(0.8, 0.5, 0.0);
+        let identity_rot = UnitQuaternion::identity();
+        let target_pose = Pose::new(
+            FrameId::World,
+            ee_frame,
+            Transform3D {
+                translation: target_pos,
+                rotation: identity_rot,
+            },
+        );
+
+        let snap = svc.execute(Command::MoveToPose {
+            frame: ee_frame,
+            target: target_pose,
+        }).unwrap();
+
+        assert_ee_at(&snap, target_pos, 0.01);
+    }
+
+
+    // ─── Snapshot consistency ─────────────────────────────────────────
+
+    #[test]
+    fn snapshot_after_ik_differs_from_initial() {
+        let svc = make_service(RobotModel::Scara);
+        let snap0 = svc.snapshot().unwrap();
+        let ee_frame = ee(&snap0);
+        let initial_joints = snap0.joints.clone();
+
+        let target = Vector3::new(0.2, 0.6, 0.0);
+        let snap1 = svc.execute(Command::MoveToPosition {
+            frame: ee_frame,
+            target,
+        }).unwrap();
+
+        // Joints must have changed
+        assert_ne!(snap1.joints, initial_joints);
+        // Timestamps should differ
+        assert!(snap1.generated_at > snap0.generated_at);
+    }
+
+    /// After an IK command, the snapshot carries solver metadata.
+    #[test]
+    fn move_to_position_includes_ik_result() {
+        let svc = make_service(RobotModel::Scara);
+        let snap0 = svc.snapshot().unwrap();
+        let ee_frame = ee(&snap0);
+
+        // Non-IK snapshot → ik_result is None
+        assert!(snap0.ik_result.is_none(), "snapshot() must not have ik_result");
+
+        let target = Vector3::new(0.3, 0.3, 0.0);
+        let snap1 = svc.execute(Command::MoveToPosition {
+            frame: ee_frame,
+            target,
+        }).unwrap();
+
+        let ik = snap1.ik_result.as_ref()
+            .expect("IK command snapshot must have ik_result");
+        assert!(ik.status.is_converged(), "IK should converge: {:?}", ik.status);
+        assert!(ik.iterations > 0, "IK should run at least one iteration");
+        assert!(ik.final_error.is_finite(), "final_error must be finite");
+    }
+
+    /// Multiple snapshots without mutations must return consistent joints.
+    #[test]
+    fn snapshot_is_deterministic() {
+        let svc = make_service(RobotModel::Scara);
+
+        let snap1 = svc.snapshot().unwrap();
+        let snap2 = svc.snapshot().unwrap();
+
+        assert_eq!(snap1.joints, snap2.joints);
+    }
+
+
+    // ─── Edge cases ───────────────────────────────────────────────────
+
+    #[test]
+    fn move_to_position_unreachable_still_produces_valid_fk() {
+        let svc = make_service(RobotModel::Scara);
+        let snap0 = svc.snapshot().unwrap();
+        let ee_frame = ee(&snap0);
+
+        // Target far outside SCARA workspace
+        let target = Vector3::new(10.0, 10.0, 0.0);
+
+        let snap = svc.execute(Command::MoveToPosition {
+            frame: ee_frame,
+            target,
+        }).unwrap();
+
+        // Even if IK fails to converge, the snapshot must have valid FK
+        let pose = snap.fk_result.pose(&ee_frame)
+            .expect("end effector must exist after failed IK");
+        let _pos = pose.translation();
+
+        // Joints must all be finite (no NaN from failed IK)
+        for &j in &snap.joints {
+            assert!(j.is_finite(), "joint {} is not finite", j);
+        }
     }
 }
