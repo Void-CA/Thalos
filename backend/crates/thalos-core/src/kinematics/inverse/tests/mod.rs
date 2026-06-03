@@ -1,6 +1,7 @@
 pub mod bench;
 pub mod dls;
 pub mod jt;
+pub mod pose;
 pub mod singularity;
 
 use crate::prelude::*;
