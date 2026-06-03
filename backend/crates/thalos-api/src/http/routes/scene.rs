@@ -17,6 +17,10 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/scene/joints", post(handler::set_joints))
         .route("/scene/robot", post(handler::load_robot))
 
+        // IK motion commands
+        .route("/scene/move-to-position", post(handler::move_to_position))
+        .route("/scene/move-to-pose", post(handler::move_to_pose))
+
         // Utilities
         .route("/scene/validate", post(handler::validate))
         .route("/scene/diff", post(handler::diff))

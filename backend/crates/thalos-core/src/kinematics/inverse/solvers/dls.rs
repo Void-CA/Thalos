@@ -13,6 +13,7 @@ use crate::kinematics::inverse::{
 pub struct DampedLeastSquaresSolver {
     jacobian: GeometricJacobian,
     fk: ForwardKinematics,
+    end_effector: FrameId,
     max_iters: usize,
     tolerance: f64,
     lambda: f64,
@@ -31,6 +32,7 @@ impl DampedLeastSquaresSolver {
         Self {
             jacobian,
             fk,
+            end_effector,
             max_iters,
             tolerance,
             lambda,
@@ -61,17 +63,18 @@ impl IKSolver for DampedLeastSquaresSolver {
             let jacobian = self.jacobian.evaluate(q.as_slice());
 
             // Extract error vector and Jacobian matrix based on goal type
+            let ee_pose = fk_result.pose(&self.end_effector)
+                .expect("target frame not found in FK result");
             let (error_vec, j_mat, magnitude) = match &goal {
                 IKGoal::Position(target_pos) => {
-                    let p = fk_result.ee_position().unwrap();
+                    let p = ee_pose.translation();
                     let error = *target_pos - p;
                     let mag = error.magnitude();
                     let j_lin = jacobian.linear().clone_owned();
                     (DynamicVector::from(error), j_lin, mag)
                 }
                 IKGoal::Pose(target_pose) => {
-                    let current_pose = fk_result.ee_pose().unwrap();
-                    let error = compute_pose_error(current_pose, target_pose);
+                    let error = compute_pose_error(ee_pose, target_pose);
                     let mag = error.magnitude();
                     let j_full = jacobian.full();
                     (error, j_full, mag)
@@ -119,10 +122,13 @@ impl IKSolver for DampedLeastSquaresSolver {
         let fk_result = self.fk.evaluate(q.as_slice());
         let final_error = match &goal {
             IKGoal::Position(target_pos) => {
-                (*target_pos - fk_result.ee_position().unwrap()).magnitude()
+                let p = fk_result.pose(&self.end_effector)
+                    .expect("target frame not found").translation();
+                (*target_pos - p).magnitude()
             }
             IKGoal::Pose(target_pose) => {
-                let current = fk_result.ee_pose().unwrap();
+                let current = fk_result.pose(&self.end_effector)
+                    .expect("target frame not found");
                 compute_pose_error(current, target_pose).magnitude()
             }
         };

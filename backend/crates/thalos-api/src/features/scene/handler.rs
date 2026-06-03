@@ -69,13 +69,49 @@ pub async fn load_robot(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<LoadRobotRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
-    let model = RobotModel::from_id(&payload.robot_id)?;
+    let cmd = payload.into_command()?;
 
-    let snapshot = state
-        .services
-        .scene
-        .execute(Command::LoadRobot(model))?;
+    let snapshot = state.services.scene.execute(cmd)?;
 
+    let scene = build_visual_scene(&snapshot);
+
+    Ok(Json(RuntimeStateResponse {
+        robot: snapshot.robot.metadata().into(),
+        joints: snapshot.joints,
+        scene: scene.into(),
+        generated_at: snapshot.generated_at,
+    }))
+}
+
+pub async fn move_to_position(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<MoveToPositionRequest>,
+) -> ApiResult<RuntimeStateResponse> {
+    // Snapshot para resolver frame por defecto (end effector)
+    let snapshot = state.services.scene.snapshot()?;
+    let default_ee = *snapshot.chain.end_effector();
+    let cmd = payload.into_command(default_ee);
+
+    let snapshot = state.services.scene.execute(cmd)?;
+    let scene = build_visual_scene(&snapshot);
+
+    Ok(Json(RuntimeStateResponse {
+        robot: snapshot.robot.metadata().into(),
+        joints: snapshot.joints,
+        scene: scene.into(),
+        generated_at: snapshot.generated_at,
+    }))
+}
+
+pub async fn move_to_pose(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<MoveToPoseRequest>,
+) -> ApiResult<RuntimeStateResponse> {
+    let snapshot = state.services.scene.snapshot()?;
+    let default_ee = *snapshot.chain.end_effector();
+    let cmd = payload.into_command(default_ee);
+
+    let snapshot = state.services.scene.execute(cmd)?;
     let scene = build_visual_scene(&snapshot);
 
     Ok(Json(RuntimeStateResponse {

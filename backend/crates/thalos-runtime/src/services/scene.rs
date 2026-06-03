@@ -1,7 +1,10 @@
 use std::sync::RwLock;
 
 use thalos_core::{
-    kinematics::forward::{result::FKResult, ForwardKinematics},
+    kinematics::{
+        forward::{result::FKResult, ForwardKinematics},
+        inverse::{DampedLeastSquaresSolver, IKGoal, IKSolver},
+    },
     models::{RobotModel, RobotRegistry},
     robot::serial_chain::SerialChain,
 };
@@ -11,6 +14,12 @@ use crate::commands::Command;
 use crate::error::RuntimeError;
 use crate::snapshots::RuntimeSnapshot;
 use crate::state::robot::{ActiveRobot, SceneRuntime};
+
+
+/// Default IK solver configuration.
+const IK_MAX_ITERS: usize = 500;
+const IK_TOLERANCE: f64 = 1e-6;
+const IK_LAMBDA: f64 = 0.1;
 
 
 pub struct SceneService {
@@ -63,6 +72,40 @@ impl SceneService {
 
                 let mut runtime = self.runtime.write().unwrap();
                 runtime.active_robot = ActiveRobot::new(model, chain, vec![0.0; dof]);
+            }
+            Command::MoveToPosition { frame, target } => {
+                let mut runtime = self.runtime.write().unwrap();
+
+                let fk = ForwardKinematics::new(runtime.active_robot.chain.clone());
+                let solver = DampedLeastSquaresSolver::new(
+                    fk,
+                    frame,
+                    IK_MAX_ITERS,
+                    IK_TOLERANCE,
+                    IK_LAMBDA,
+                );
+
+                let q0 = runtime.active_robot.joints.clone();
+                let result = solver.solve(&q0, IKGoal::Position(target));
+
+                runtime.active_robot.joints = result.q;
+            }
+            Command::MoveToPose { frame, target } => {
+                let mut runtime = self.runtime.write().unwrap();
+
+                let fk = ForwardKinematics::new(runtime.active_robot.chain.clone());
+                let solver = DampedLeastSquaresSolver::new(
+                    fk,
+                    frame,
+                    IK_MAX_ITERS,
+                    IK_TOLERANCE,
+                    IK_LAMBDA,
+                );
+
+                let q0 = runtime.active_robot.joints.clone();
+                let result = solver.solve(&q0, IKGoal::Pose(target));
+
+                runtime.active_robot.joints = result.q;
             }
         }
 
