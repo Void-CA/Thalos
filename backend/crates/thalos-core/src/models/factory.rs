@@ -188,6 +188,19 @@ impl RobotModel {
                 d1: -1.0,
                 d2: 1.0,
             },
+            RobotModel::Manipulator3DOF => RobotSpec::Manipulator3DOF {
+                l1: 1.0,
+                l2: 1.0,
+                l3: 1.0,
+            },
+            RobotModel::Manipulator6DOF => RobotSpec::Manipulator6DOF {
+                l1: 1.0,
+                l2: 1.0,
+                l3: 1.0,
+                l4: 1.0,
+                l5: 1.0,
+                l6: 1.0,
+            },
         }
     }
 
@@ -197,6 +210,8 @@ impl RobotModel {
             "planar_3r" => Ok(RobotModel::Planar3R),
             "single_revolute" => Ok(RobotModel::SingleRevolute),
             "scara" => Ok(RobotModel::Scara),
+            "manipulator_3dof" => Ok(RobotModel::Manipulator3DOF),
+            "manipulator_6dof" => Ok(RobotModel::Manipulator6DOF),
             _ => Err(RobotModelError::InvalidRobotId { id: id.to_string() }),
         }
     }
@@ -206,6 +221,8 @@ impl RobotModel {
             RobotModel::Planar3R,
             RobotModel::SingleRevolute,
             RobotModel::Scara,
+            RobotModel::Manipulator3DOF,
+            RobotModel::Manipulator6DOF,
         ]
     }
 }
@@ -263,6 +280,9 @@ impl RobotRegistry {
             }
             (RobotModel::Scara, RobotSpec::Scara { a1, a2, d1, d2 }) => {
                 Ok(super::scara::factory::create_scara_robot(*a1, *a2, *d1, *d2))
+            }
+            (RobotModel::Manipulator3DOF, RobotSpec::Manipulator3DOF { l1, l2, l3 }) => {
+                Ok(super::manipulator_3dof::factory::create_manipulator_3dof(*l1, *l2, *l3))
             }
             _ => Err(RobotModelError::ModelSpecMismatch { model, spec }),
         }

@@ -16,6 +16,14 @@ impl UnitVector3 {
     pub fn z_axis() -> Self {
         Self(Vector3::z_axis())
     }
+
+    pub fn y_axis() -> Self {
+        Self(Vector3::y_axis())
+    }
+
+    pub fn x_axis() -> Self {
+        Self(Vector3::x_axis())
+    }
 }
 
 impl std::ops::Deref for UnitVector3 {

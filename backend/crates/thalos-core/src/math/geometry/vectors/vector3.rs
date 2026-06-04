@@ -42,4 +42,12 @@ impl Vector3 {
         Self { x: 0.0, y: 0.0, z: 1.0 }
     }
 
+    pub fn y_axis() -> Self {
+        Self { x: 0.0, y: 1.0, z: 0.0 }
+    }
+
+    pub fn x_axis() -> Self {
+        Self { x: 1.0, y: 0.0, z: 0.0 }
+    }
+
 }
