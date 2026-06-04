@@ -1,125 +1,12 @@
-use std::f64::consts::PI;
-
-use crate::models::RobotMetadata;
-use crate::models::error::RobotModelError;
-use crate::robot::joint::{JointInfo, JointKind, JointLimits};
+use super::error::RobotModelError;
+use super::manipulator_3dof::{self, Manipulator3DOFSpec};
+use super::manipulator_6dof::{self, Manipulator6DOFSpec};
+use super::metadata::RobotMetadata;
+use super::planar_2r::{self, Planar2RSpec};
+use super::planar_3r::{self, Planar3RSpec};
+use super::scara::{self, ScaraSpec};
+use super::single_revolute::{self, SingleRevoluteSpec};
 use crate::robot::serial_chain::SerialChain;
-
-// ── Static joint descriptors per robot model ──
-
-const JOINTS_SINGLE_REVOLUTE: &[JointInfo] = &[JointInfo {
-    name: "joint_1",
-    kind: JointKind::Revolute,
-    limits: Some(JointLimits { min: -PI, max: PI }),
-}];
-
-const JOINTS_PLANAR_2R: &[JointInfo] = &[
-    JointInfo {
-        name: "joint_1",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-    JointInfo {
-        name: "joint_2",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-];
-
-const JOINTS_PLANAR_3R: &[JointInfo] = &[
-    JointInfo {
-        name: "joint_1",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-    JointInfo {
-        name: "joint_2",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-    JointInfo {
-        name: "joint_3",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-];
-
-const JOINTS_SCARA: &[JointInfo] = &[
-    JointInfo {
-        name: "joint_1",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-    JointInfo {
-        name: "joint_2",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-    JointInfo {
-        name: "joint_3",
-        kind: JointKind::Prismatic,
-        limits: Some(JointLimits {
-            min: -1.0,
-            max: 1.0,
-        }),
-    },
-    JointInfo {
-        name: "joint_4",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-];
-
-const JOINTS_MANIPULATOR_3DOF: &[JointInfo] = &[
-    JointInfo {
-        name: "joint_1",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-    JointInfo {
-        name: "joint_2",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-    JointInfo {
-        name: "joint_3",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-];
-
-const JOINTS_MANIPULATOR_6DOF: &[JointInfo] = &[
-    JointInfo {
-        name: "joint_1",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-    JointInfo {
-        name: "joint_2",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-    JointInfo {
-        name: "joint_3",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-    JointInfo {
-        name: "joint_4",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-    JointInfo {
-        name: "joint_5",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-    JointInfo {
-        name: "joint_6",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RobotModel {
@@ -138,69 +25,53 @@ impl RobotModel {
                 id: "planar_2r",
                 display_name: "Planar 2R",
                 dof: 2,
-                joints: JOINTS_PLANAR_2R,
+                joints: planar_2r::JOINTS_PLANAR_2R,
             },
             RobotModel::Planar3R => RobotMetadata {
                 id: "planar_3r",
                 display_name: "Planar 3R",
                 dof: 3,
-                joints: JOINTS_PLANAR_3R,
+                joints: planar_3r::JOINTS_PLANAR_3R,
             },
             RobotModel::SingleRevolute => RobotMetadata {
                 id: "single_revolute",
                 display_name: "Single Revolute",
                 dof: 1,
-                joints: JOINTS_SINGLE_REVOLUTE,
+                joints: single_revolute::JOINTS_SINGLE_REVOLUTE,
             },
             RobotModel::Scara => RobotMetadata {
                 id: "scara",
                 display_name: "SCARA",
                 dof: 4,
-                joints: JOINTS_SCARA,
+                joints: scara::JOINTS_SCARA,
             },
             RobotModel::Manipulator3DOF => RobotMetadata {
                 id: "manipulator_3dof",
                 display_name: "Manipulator 3DOF",
                 dof: 3,
-                joints: JOINTS_MANIPULATOR_3DOF,
+                joints: manipulator_3dof::JOINTS_MANIPULATOR_3DOF,
             },
             RobotModel::Manipulator6DOF => RobotMetadata {
                 id: "manipulator_6dof",
                 display_name: "Manipulator 6DOF",
                 dof: 6,
-                joints: JOINTS_MANIPULATOR_6DOF,
+                joints: manipulator_6dof::JOINTS_MANIPULATOR_6DOF,
             },
         }
     }
 
     pub fn default_spec(&self) -> RobotSpec {
         match self {
-            RobotModel::Planar2R => RobotSpec::Planar2R { l1: 1.0, l2: 1.0 },
-            RobotModel::Planar3R => RobotSpec::Planar3R {
-                l1: 1.0,
-                l2: 1.0,
-                l3: 1.0,
-            },
-            RobotModel::SingleRevolute => RobotSpec::SingleRevolute { l1: 1.0 },
-            RobotModel::Scara => RobotSpec::Scara {
-                a1: 1.0,
-                a2: 1.0,
-                d1: -1.0,
-                d2: 1.0,
-            },
-            RobotModel::Manipulator3DOF => RobotSpec::Manipulator3DOF {
-                l1: 1.0,
-                l2: 1.0,
-                l3: 1.0,
-            },
-            RobotModel::Manipulator6DOF => RobotSpec::Manipulator6DOF {
-                l1: 1.0,
-                l2: 1.0,
-                l3: 1.0,
-                l4: 1.0,
-                l5: 1.0,
-                l6: 1.0,
-            },
+            RobotModel::Planar2R => RobotSpec::Planar2R(planar_2r::DEFAULT_SPEC),
+            RobotModel::Planar3R => RobotSpec::Planar3R(planar_3r::DEFAULT_SPEC),
+            RobotModel::SingleRevolute => RobotSpec::SingleRevolute(single_revolute::DEFAULT_SPEC),
+            RobotModel::Scara => RobotSpec::Scara(scara::DEFAULT_SPEC),
+            RobotModel::Manipulator3DOF => {
+                RobotSpec::Manipulator3DOF(manipulator_3dof::DEFAULT_SPEC)
+            }
+            RobotModel::Manipulator6DOF => {
+                RobotSpec::Manipulator6DOF(manipulator_6dof::DEFAULT_SPEC)
+            }
         }
     }
 
@@ -215,6 +86,7 @@ impl RobotModel {
             _ => Err(RobotModelError::InvalidRobotId { id: id.to_string() }),
         }
     }
+
     pub fn all() -> &'static [RobotModel] {
         &[
             RobotModel::Planar2R,
@@ -227,63 +99,41 @@ impl RobotModel {
     }
 }
 
-
-#[derive(Debug, Clone)]
+/// Spec de geometría de un robot. Cada robot define su propio struct nominal
+/// (ver `models/<robot>/spec.rs`); este enum es un wrapper discriminante que
+/// permite despachar entre tipos heterogéneos preservando la API pública.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RobotSpec {
-    Planar2R {
-        l1: f64,
-        l2: f64,
-    },
-    Planar3R {
-        l1: f64,
-        l2: f64,
-        l3: f64,
-    },
-    SingleRevolute {
-        l1: f64,
-    },
-    Scara {
-        a1: f64,
-        a2: f64,
-        d1: f64,
-        d2: f64,
-    },
-    Manipulator3DOF {
-        l1: f64,
-        l2: f64,
-        l3: f64,
-    },  
-    Manipulator6DOF {
-        l1: f64,
-        l2: f64,
-        l3: f64,
-        l4: f64,
-        l5: f64,
-        l6: f64,
-    },
+    Planar2R(Planar2RSpec),
+    Planar3R(Planar3RSpec),
+    SingleRevolute(SingleRevoluteSpec),
+    Scara(ScaraSpec),
+    Manipulator3DOF(Manipulator3DOFSpec),
+    Manipulator6DOF(Manipulator6DOFSpec),
 }
 
 pub struct RobotRegistry;
 
 impl RobotRegistry {
-    /// Construye un robot validando consistencia model/spec.
+    /// Construye un robot validando consistencia model↔spec.
     pub fn create(model: RobotModel, spec: RobotSpec) -> Result<SerialChain, RobotModelError> {
         match (&model, &spec) {
-            (RobotModel::Planar2R, RobotSpec::Planar2R { l1, l2 }) => {
-                Ok(super::planar_2r::factory::create_planar_2r(*l1, *l2))
+            (RobotModel::Planar2R, RobotSpec::Planar2R(s)) => {
+                Ok(super::planar_2r::factory::create_planar_2r(s.l1, s.l2))
             }
-            (RobotModel::Planar3R, RobotSpec::Planar3R { l1, l2, l3 }) => {
-                Ok(super::planar_3r::factory::create_planar_3r(*l1, *l2, *l3))
+            (RobotModel::Planar3R, RobotSpec::Planar3R(s)) => {
+                Ok(super::planar_3r::factory::create_planar_3r(s.l1, s.l2, s.l3))
             }
-            (RobotModel::SingleRevolute, RobotSpec::SingleRevolute { l1 }) => {
-                Ok(super::single_revolute::factory::create_single_revolute(*l1))
+            (RobotModel::SingleRevolute, RobotSpec::SingleRevolute(s)) => {
+                Ok(super::single_revolute::factory::create_single_revolute(s.l))
             }
-            (RobotModel::Scara, RobotSpec::Scara { a1, a2, d1, d2 }) => {
-                Ok(super::scara::factory::create_scara_robot(*a1, *a2, *d1, *d2))
+            (RobotModel::Scara, RobotSpec::Scara(s)) => {
+                Ok(super::scara::factory::create_scara_robot(s.a1, s.a2, s.d1, s.d2))
             }
-            (RobotModel::Manipulator3DOF, RobotSpec::Manipulator3DOF { l1, l2, l3 }) => {
-                Ok(super::manipulator_3dof::factory::create_manipulator_3dof(*l1, *l2, *l3))
+            (RobotModel::Manipulator3DOF, RobotSpec::Manipulator3DOF(s)) => {
+                Ok(super::manipulator_3dof::factory::create_manipulator_3dof(s.l1, s.l2, s.l3))
             }
+            // 6DOF factory todavía no implementado: caemos al mismatch.
             _ => Err(RobotModelError::ModelSpecMismatch { model, spec }),
         }
     }
