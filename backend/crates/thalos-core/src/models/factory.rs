@@ -70,12 +70,65 @@ const JOINTS_SCARA: &[JointInfo] = &[
     },
 ];
 
+const JOINTS_MANIPULATOR_3DOF: &[JointInfo] = &[
+    JointInfo {
+        name: "joint_1",
+        kind: JointKind::Revolute,
+        limits: Some(JointLimits { min: -PI, max: PI }),
+    },
+    JointInfo {
+        name: "joint_2",
+        kind: JointKind::Revolute,
+        limits: Some(JointLimits { min: -PI, max: PI }),
+    },
+    JointInfo {
+        name: "joint_3",
+        kind: JointKind::Revolute,
+        limits: Some(JointLimits { min: -PI, max: PI }),
+    },
+];
+
+const JOINTS_MANIPULATOR_6DOF: &[JointInfo] = &[
+    JointInfo {
+        name: "joint_1",
+        kind: JointKind::Revolute,
+        limits: Some(JointLimits { min: -PI, max: PI }),
+    },
+    JointInfo {
+        name: "joint_2",
+        kind: JointKind::Revolute,
+        limits: Some(JointLimits { min: -PI, max: PI }),
+    },
+    JointInfo {
+        name: "joint_3",
+        kind: JointKind::Revolute,
+        limits: Some(JointLimits { min: -PI, max: PI }),
+    },
+    JointInfo {
+        name: "joint_4",
+        kind: JointKind::Revolute,
+        limits: Some(JointLimits { min: -PI, max: PI }),
+    },
+    JointInfo {
+        name: "joint_5",
+        kind: JointKind::Revolute,
+        limits: Some(JointLimits { min: -PI, max: PI }),
+    },
+    JointInfo {
+        name: "joint_6",
+        kind: JointKind::Revolute,
+        limits: Some(JointLimits { min: -PI, max: PI }),
+    },
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RobotModel {
     Planar2R,
     Planar3R,
     SingleRevolute,
     Scara,
+    Manipulator3DOF,
+    Manipulator6DOF,
 }
 
 impl RobotModel {
@@ -104,6 +157,18 @@ impl RobotModel {
                 display_name: "SCARA",
                 dof: 4,
                 joints: JOINTS_SCARA,
+            },
+            RobotModel::Manipulator3DOF => RobotMetadata {
+                id: "manipulator_3dof",
+                display_name: "Manipulator 3DOF",
+                dof: 3,
+                joints: JOINTS_MANIPULATOR_3DOF,
+            },
+            RobotModel::Manipulator6DOF => RobotMetadata {
+                id: "manipulator_6dof",
+                display_name: "Manipulator 6DOF",
+                dof: 6,
+                joints: JOINTS_MANIPULATOR_6DOF,
             },
         }
     }
@@ -165,6 +230,19 @@ pub enum RobotSpec {
         a2: f64,
         d1: f64,
         d2: f64,
+    },
+    Manipulator3DOF {
+        l1: f64,
+        l2: f64,
+        l3: f64,
+    },  
+    Manipulator6DOF {
+        l1: f64,
+        l2: f64,
+        l3: f64,
+        l4: f64,
+        l5: f64,
+        l6: f64,
     },
 }
 

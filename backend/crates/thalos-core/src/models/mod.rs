@@ -5,6 +5,9 @@ pub mod single_revolute;
 pub mod planar_2r;
 pub mod planar_3r;
 pub mod scara;
+pub mod manipulator_3dof;
+pub mod manipulator_6dof;
+
 mod error;
 
 pub use factory::{RobotModel, RobotRegistry, RobotSpec};
