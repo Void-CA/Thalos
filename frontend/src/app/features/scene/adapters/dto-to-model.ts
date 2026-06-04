@@ -37,6 +37,7 @@ function toFrameStyle(dto: FrameStyleDto): SceneFrameStyle {
 
 function toLink(dto: VisualSceneDto['links'][number]): SceneLink {
   return {
+    id: String(dto.id),
     start: dto.start,
     end: dto.end,
   };

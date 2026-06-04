@@ -39,6 +39,7 @@ impl From<VisualFrame> for VisualFrameDto {
 impl From<VisualLink> for VisualLinkDto {
     fn from(l: VisualLink) -> Self {
         Self {
+            id: l.id,
             start: l.start,
             end: l.end,
         }
@@ -149,6 +150,7 @@ impl From<VisualFrameDto> for VisualFrame {
 impl From<VisualLinkDto> for VisualLink {
     fn from(l: VisualLinkDto) -> Self {
         Self {
+            id: l.id,
             start: l.start,
             end: l.end,
         }

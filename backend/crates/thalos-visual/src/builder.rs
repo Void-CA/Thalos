@@ -118,6 +118,7 @@ impl SceneBuilder {
             });
 
             links.push(VisualLink {
+                id: segment.joint.id(),
                 start: self.normalize_point(&parent_pose.transform().translation),
                 end: self.normalize_point(&child_pose.transform().translation),
             });

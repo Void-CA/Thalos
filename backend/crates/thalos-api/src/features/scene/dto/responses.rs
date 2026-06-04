@@ -3,6 +3,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use thalos_core::robot::joint::JointId;
 
 use crate::features::robots::dto::RobotMetadataDto;
 
@@ -39,6 +40,9 @@ pub struct VisualFrameDto {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct VisualLinkDto {
+    /// Joint id of the segment that produced this link. Stable, unique within
+    /// the chain. Mirrors `thalos_visual::VisualLink::id`.
+    pub id: JointId,
     pub start: [f64; 3],
     pub end: [f64; 3],
 }

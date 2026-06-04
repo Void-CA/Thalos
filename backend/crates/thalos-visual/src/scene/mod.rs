@@ -2,6 +2,7 @@ pub mod precision;
 pub mod diff;
 
 use serde::{Deserialize, Serialize};
+use thalos_core::robot::joint::JointId;
 
 pub use precision::VisualPrecision;
 pub use diff::{SceneDiff, ChangedFrame};
@@ -18,11 +19,6 @@ pub enum PrimitiveGeometry {
     Box { width: f64, height: f64, depth: f64 },
 }
 
-/// Elemento visual con geometría primitiva (cilindro, esfera, caja).
-///
-/// A diferencia de `VisualFrame` (que representa un sistema de coordenadas),
-/// `VisualPrimitive` representa un objeto 3D con volumen. Útil para modelar
-/// columnas de SCARA, bases de robot, marcadores TCP, etc.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct VisualPrimitive {
     pub id: VisualId,
@@ -137,8 +133,17 @@ pub struct VisualFrame {
     pub style: Option<FrameStyle>,
 }
 
+/// A visual link is the geometric representation of a kinematic segment —
+/// the rigid offset between two frames in the chain. One `VisualLink` is
+/// produced per `Segment` in the serial chain.
+///
+/// `id` carries the **joint id** of the segment that produced this link, not
+/// a positional index. This makes link identity stable across robot swaps
+/// and aligned with the domain: links, joint_axes and twists all live
+/// "on top of" a joint, and they now share the same id space.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct VisualLink {
+    pub id: JointId,
     pub start: [f64; 3],
     pub end: [f64; 3],
 }

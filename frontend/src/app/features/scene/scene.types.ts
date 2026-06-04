@@ -43,6 +43,9 @@ export interface SceneFrame {
 }
 
 export interface SceneLink {
+  /** Joint id of the segment that produced this link. Stable, unique within
+   *  the chain. Used by the renderer as the reconciliation key. */
+  id: string;
   start: [number, number, number];
   end: [number, number, number];
 }

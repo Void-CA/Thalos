@@ -162,13 +162,19 @@ export class ThreeRendererService {
   }
 
   private syncLinks(links: SceneLink[]): void {
-    const incoming = new Set<string>();
-    let idx = 0;
+    // Tracks links actually present in the scene (visible cylinders). A link
+    // with zero length is skipped and does NOT count as live — its previous
+    // slot, if any, is disposed below. This is the key invariant that
+    // prevents ghost meshes when switching between robots with different
+    // joint topologies (e.g. 3DOF → SCARA, where some segments have
+    // identity transforms and produce start == end).
+    const rendered = new Set<string>();
 
     for (const link of links) {
-      // Use positional index as id (no id field on SceneLink)
-      const key = `link_${idx++}`;
-      incoming.add(key);
+      // Use the link's structural id (joint id of the source segment) as
+      // the reconciliation key. Stable across robot swaps — switching from
+      // a 3DOF to a SCARA will never reuse a key from the previous chain.
+      const key = link.id;
 
       this.scratchDir
         .set(link.end[0] - link.start[0], link.end[1] - link.start[1], link.end[2] - link.start[2]);
@@ -198,11 +204,16 @@ export class ThreeRendererService {
       this.scratchVec.copy(this.scratchDir).normalize();
       mesh.quaternion.setFromUnitVectors(this.linkUp, this.scratchVec);
       mesh.scale.set(1, len, 1);
+
+      // Mark as rendered only after the slot exists and was updated.
+      rendered.add(key);
     }
 
-    // Dispose removed links
+    // Dispose links that are no longer rendered. A slot survives only if
+    // its key was rendered this frame — zero-length links and links that
+    // disappeared from the snapshot are both disposed uniformly.
     for (const [key, slot] of this.linkSlots) {
-      if (!incoming.has(key)) {
+      if (!rendered.has(key)) {
         this.contentGroup!.remove(slot.mesh);
         slot.mesh.geometry.dispose();
         (slot.mesh.material as THREE.Material).dispose();

@@ -22,6 +22,7 @@ export interface VisualFrameDto {
 }
 
 export interface VisualLinkDto {
+  id: number;
   start: [number, number, number];
   end: [number, number, number];
 }

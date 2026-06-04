@@ -149,8 +149,8 @@ fn orphan_link_detected() {
             frame("link_1", Some("world"), [1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
         ],
         links: vec![
-            link([0.0, 0.0, 0.0], [1.0, 0.0, 0.0]),
-            link([5.0, 0.0, 0.0], [10.0, 0.0, 0.0]),
+            link(0, [0.0, 0.0, 0.0], [1.0, 0.0, 0.0]),
+            link(1, [5.0, 0.0, 0.0], [10.0, 0.0, 0.0]),
         ],
         ..Default::default()
     };
@@ -214,6 +214,6 @@ fn frame(
     }
 }
 
-fn link(start: [f64; 3], end: [f64; 3]) -> thalos_visual::VisualLink {
-    thalos_visual::VisualLink { start, end }
+fn link(id: u32, start: [f64; 3], end: [f64; 3]) -> thalos_visual::VisualLink {
+    thalos_visual::VisualLink { id, start, end }
 }
