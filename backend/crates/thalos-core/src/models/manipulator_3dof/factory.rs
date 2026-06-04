@@ -11,14 +11,14 @@ pub fn create_manipulator_3dof(l1: f64, l2: f64, l3: f64) -> SerialChain {
     let joint1 = JointType::Revolute(
         RevoluteJoint::new(
             0,
-            UnitVector3::z_axis(),
+            UnitVector3::y_axis(),
             JointLimits::new(-PI, PI),
             Transform3D::identity(),
         ),
     );
     let link1 = Link {
         id: 0,
-        transform: Transform3D::from_translation(Vector3::new(0.0, 0.0, l1)),
+        transform: Transform3D::from_translation(Vector3::new(0.0, l1, 0.0)),
     };
     builder.add_segment(
         Segment {
@@ -33,7 +33,7 @@ pub fn create_manipulator_3dof(l1: f64, l2: f64, l3: f64) -> SerialChain {
     let joint2 = JointType::Revolute(
         RevoluteJoint::new(
             1,
-            UnitVector3::y_axis(),
+            UnitVector3::z_axis(),
             JointLimits::new(-PI, PI),
             Transform3D::identity(),
         ),
@@ -55,7 +55,7 @@ pub fn create_manipulator_3dof(l1: f64, l2: f64, l3: f64) -> SerialChain {
     let joint3 = JointType::Revolute(
         RevoluteJoint::new(
             2,
-            UnitVector3::y_axis(),
+            UnitVector3::z_axis(),
             JointLimits::new(-PI, PI),
             Transform3D::identity(),
         ),
