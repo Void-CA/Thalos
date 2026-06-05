@@ -1,3 +1,4 @@
+use super::cylindrical_rpp::{self, CylindricalRPPSpec};
 use super::error::RobotModelError;
 use super::manipulator_3dof::{self, Manipulator3DOFSpec};
 use super::manipulator_6dof::{self, Manipulator6DOFSpec};
@@ -6,6 +7,7 @@ use super::planar_2r::{self, Planar2RSpec};
 use super::planar_3r::{self, Planar3RSpec};
 use super::scara::{self, ScaraSpec};
 use super::single_revolute::{self, SingleRevoluteSpec};
+use super::spherical_polar_rrp::{self, SphericalPolarRRPSpec};
 use crate::robot::serial_chain::SerialChain;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -16,6 +18,8 @@ pub enum RobotModel {
     Scara,
     Manipulator3DOF,
     Manipulator6DOF,
+    CylindricalRPP,
+    SphericalPolarRRP,
 }
 
 impl RobotModel {
@@ -57,6 +61,18 @@ impl RobotModel {
                 dof: 6,
                 joints: manipulator_6dof::JOINTS_MANIPULATOR_6DOF,
             },
+            RobotModel::CylindricalRPP => RobotMetadata {
+                id: "cylindrical_rpp",
+                display_name: "Cylindrical RPP",
+                dof: 3,
+                joints: cylindrical_rpp::JOINTS_CYLINDRICAL_RPP,
+            },
+            RobotModel::SphericalPolarRRP => RobotMetadata {
+                id: "spherical_polar_rrp",
+                display_name: "Spherical-Polar RRP",
+                dof: 3,
+                joints: spherical_polar_rrp::JOINTS_SPHERICAL_POLAR_RRP,
+            },
         }
     }
 
@@ -72,6 +88,12 @@ impl RobotModel {
             RobotModel::Manipulator6DOF => {
                 RobotSpec::Manipulator6DOF(manipulator_6dof::DEFAULT_SPEC)
             }
+            RobotModel::CylindricalRPP => {
+                RobotSpec::CylindricalRPP(cylindrical_rpp::DEFAULT_SPEC)
+            }
+            RobotModel::SphericalPolarRRP => {
+                RobotSpec::SphericalPolarRRP(spherical_polar_rrp::DEFAULT_SPEC)
+            }
         }
     }
 
@@ -83,6 +105,8 @@ impl RobotModel {
             "scara" => Ok(RobotModel::Scara),
             "manipulator_3dof" => Ok(RobotModel::Manipulator3DOF),
             "manipulator_6dof" => Ok(RobotModel::Manipulator6DOF),
+            "cylindrical_rpp" => Ok(RobotModel::CylindricalRPP),
+            "spherical_polar_rrp" => Ok(RobotModel::SphericalPolarRRP),
             _ => Err(RobotModelError::InvalidRobotId { id: id.to_string() }),
         }
     }
@@ -95,6 +119,8 @@ impl RobotModel {
             RobotModel::Scara,
             RobotModel::Manipulator3DOF,
             RobotModel::Manipulator6DOF,
+            RobotModel::CylindricalRPP,
+            RobotModel::SphericalPolarRRP,
         ]
     }
 }
@@ -110,6 +136,8 @@ pub enum RobotSpec {
     Scara(ScaraSpec),
     Manipulator3DOF(Manipulator3DOFSpec),
     Manipulator6DOF(Manipulator6DOFSpec),
+    CylindricalRPP(CylindricalRPPSpec),
+    SphericalPolarRRP(SphericalPolarRRPSpec),
 }
 
 pub struct RobotRegistry;
@@ -133,6 +161,12 @@ impl RobotRegistry {
             (RobotModel::Manipulator3DOF, RobotSpec::Manipulator3DOF(s)) => {
                 Ok(super::manipulator_3dof::factory::create_manipulator_3dof(s.l1, s.l2, s.l3))
             }
+            (RobotModel::CylindricalRPP, RobotSpec::CylindricalRPP(s)) => Ok(
+                super::cylindrical_rpp::factory::create_cylindrical_rpp(s.l1, s.z_min, s.z_max, s.r_min, s.r_max)
+            ),
+            (RobotModel::SphericalPolarRRP, RobotSpec::SphericalPolarRRP(s)) => Ok(
+                super::spherical_polar_rrp::factory::create_spherical_polar_rrp(s.l1, s.r_min, s.r_max)
+            ),
             // 6DOF factory todavía no implementado: caemos al mismatch.
             _ => Err(RobotModelError::ModelSpecMismatch { model, spec }),
         }

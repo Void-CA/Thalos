@@ -81,9 +81,9 @@ export class IkTargetPanel {
   // ── Local state ──
 
   protected readonly type = signal<'position' | 'pose'>('position');
-  protected readonly x = signal(2.0);
-  protected readonly y = signal(1.0);
-  protected readonly z = signal(0);
+  protected readonly x = signal(0.5);
+  protected readonly y = signal(0.5);
+  protected readonly z = signal(0.5);
   protected readonly qw = signal(1.0);
   protected readonly qx = signal(0);
   protected readonly qy = signal(0);
