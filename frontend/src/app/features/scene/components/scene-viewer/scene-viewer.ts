@@ -1,21 +1,21 @@
 import { AfterViewInit, Component, effect, ElementRef, inject, ViewChild } from '@angular/core';
 import { SceneStore } from '../../store/scene.store';
 import { ThreeRendererService } from '../../services/three-renderer.service';
-import { IkTargetPanel } from '../ik-target-panel/ik-target-panel';
 import { rotationDtoToQuaternion } from '../../utils/rotation';
 
 /**
  * Contenedor Three.js que renderiza la escena robótica + gizmo IK.
  *
  * Reacciona al SceneStore.state via effect() — sin subscriptions manuales.
+ *
+ * Componente PURO de renderizado: no monta paneles de control.
+ * El panel IK vive en el sidebar de la app (ver app.html).
  */
 @Component({
   selector: 'scene-viewer',
   standalone: true,
-  imports: [IkTargetPanel],
   template: `
     <canvas #canvas></canvas>
-    <ik-target-panel class="ik-overlay" />
   `,
   styleUrl: './scene-viewer.scss',
 })

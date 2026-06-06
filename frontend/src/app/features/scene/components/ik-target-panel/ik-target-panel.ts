@@ -10,6 +10,11 @@ import type { RotationDto } from '../../scene-api.types';
  * 2. **Solve** — corre IK en backend, muestra q1..qn, NO mueve el robot
  * 3. **Execute** — aplica los q resueltos y mueve el robot
  *
+ * Layout en 3 cards visuales:
+ *  - **Inputs**: tipo de target + coords + (rotación si pose)
+ *  - **Actions**: Preview / Solve / Execute
+ *  - **Outputs**: resultados de solo lectura (joints resueltos + status)
+ *
  * Sin subscribe — signals + effects.
  */
 @Component({
@@ -17,78 +22,151 @@ import type { RotationDto } from '../../scene-api.types';
   standalone: true,
   template: `
     <div class="ik-panel">
-      <h3>Inverse Kinematics</h3>
+      <!-- ── INPUTS ── -->
+      <section class="ik-panel__inputs" aria-labelledby="ik-inputs-label">
+        <h4 id="ik-inputs-label" class="ik-panel__label">Target</h4>
 
-      <!-- Type toggle -->
-      <div class="row">
-        <label class="toggle">
-          <input type="radio" name="ik-type" value="position" [checked]="type() === 'position'" (change)="type.set('position')" />
-          Position
-        </label>
-        <label class="toggle">
-          <input type="radio" name="ik-type" value="pose" [checked]="type() === 'pose'" (change)="type.set('pose')" />
-          Pose
-        </label>
-      </div>
+        <!-- Type segmented control -->
+        <div
+          class="segmented"
+          role="radiogroup"
+          aria-label="IK target type"
+        >
+          <button
+            type="button"
+            role="radio"
+            class="segmented__btn"
+            [class.is-active]="type() === 'position'"
+            [attr.aria-checked]="type() === 'position'"
+            (click)="type.set('position')"
+          >
+            Position
+          </button>
+          <button
+            type="button"
+            role="radio"
+            class="segmented__btn"
+            [class.is-active]="type() === 'pose'"
+            [attr.aria-checked]="type() === 'pose'"
+            (click)="type.set('pose')"
+          >
+            Pose
+          </button>
+        </div>
 
-      <!-- Position inputs -->
-      <label>X <input type="number" step="0.01" [value]="x()" (input)="x.set(+$any($event.target).value)" /></label>
-      <label>Y <input type="number" step="0.01" [value]="y()" (input)="y.set(+$any($event.target).value)" /></label>
-      <label>Z <input type="number" step="0.01" [value]="z()" (input)="z.set(+$any($event.target).value)" /></label>
+        <!-- Position coords (always visible) -->
+        <div class="coord-grid">
+          <label>X
+            <input type="number" step="0.01" [value]="x()" (input)="x.set(+$any($event.target).value)" />
+          </label>
+          <label>Y
+            <input type="number" step="0.01" [value]="y()" (input)="y.set(+$any($event.target).value)" />
+          </label>
+          <label>Z
+            <input type="number" step="0.01" [value]="z()" (input)="z.set(+$any($event.target).value)" />
+          </label>
+        </div>
 
-      <!-- Rotation inputs (solo en modo pose) -->
-      @if (type() === 'pose') {
-        <fieldset>
-          <legend>Rotation</legend>
-          <div class="row">
-            <label class="toggle">
-              <input type="radio" name="ik-rot" value="ypr" [checked]="rotationFormat() === 'ypr'" (change)="rotationFormat.set('ypr')" />
-              Yaw / Pitch / Roll
-            </label>
-            <label class="toggle">
-              <input type="radio" name="ik-rot" value="quaternion" [checked]="rotationFormat() === 'quaternion'" (change)="rotationFormat.set('quaternion')" />
-              Quaternion
-            </label>
+        <!-- Rotation: progressive disclosure — only when Pose -->
+        @if (type() === 'pose') {
+          <div class="rotation">
+            <h5 class="ik-panel__sublabel">Rotation</h5>
+
+            <div
+              class="segmented segmented--small"
+              role="radiogroup"
+              aria-label="Rotation format"
+            >
+              <button
+                type="button"
+                role="radio"
+                class="segmented__btn"
+                [class.is-active]="rotationFormat() === 'ypr'"
+                [attr.aria-checked]="rotationFormat() === 'ypr'"
+                (click)="rotationFormat.set('ypr')"
+              >
+                Euler
+              </button>
+              <button
+                type="button"
+                role="radio"
+                class="segmented__btn"
+                [class.is-active]="rotationFormat() === 'quaternion'"
+                [attr.aria-checked]="rotationFormat() === 'quaternion'"
+                (click)="rotationFormat.set('quaternion')"
+              >
+                Quaternion
+              </button>
+            </div>
+
+            @if (rotationFormat() === 'ypr') {
+              <div class="coord-grid">
+                <label>Yaw (Z) °
+                  <input type="number" step="1" [value]="yawDeg()"   (input)="yawDeg.set(+$any($event.target).value)" />
+                </label>
+                <label>Pitch (Y) °
+                  <input type="number" step="1" [value]="pitchDeg()" (input)="pitchDeg.set(+$any($event.target).value)" />
+                </label>
+                <label>Roll (X) °
+                  <input type="number" step="1" [value]="rollDeg()"  (input)="rollDeg.set(+$any($event.target).value)" />
+                </label>
+              </div>
+            } @else {
+              <div class="coord-grid coord-grid--quaternion">
+                <label>W
+                  <input type="number" step="0.01" [value]="qw()" (input)="qw.set(+$any($event.target).value)" />
+                </label>
+                <label>X
+                  <input type="number" step="0.01" [value]="qx()" (input)="qx.set(+$any($event.target).value)" />
+                </label>
+                <label>Y
+                  <input type="number" step="0.01" [value]="qy()" (input)="qy.set(+$any($event.target).value)" />
+                </label>
+                <label>Z
+                  <input type="number" step="0.01" [value]="qz()" (input)="qz.set(+$any($event.target).value)" />
+                </label>
+              </div>
+            }
           </div>
+        }
+      </section>
 
-          @if (rotationFormat() === 'ypr') {
-            <label>Yaw (Z) °  <input type="number" step="1" [value]="yawDeg()"   (input)="yawDeg.set(+$any($event.target).value)" /></label>
-            <label>Pitch (Y) ° <input type="number" step="1" [value]="pitchDeg()" (input)="pitchDeg.set(+$any($event.target).value)" /></label>
-            <label>Roll (X) ° <input type="number" step="1" [value]="rollDeg()"  (input)="rollDeg.set(+$any($event.target).value)" /></label>
-          } @else {
-            <label>W <input type="number" step="0.01" [value]="qw()" (input)="qw.set(+$any($event.target).value)" /></label>
-            <label>X <input type="number" step="0.01" [value]="qx()" (input)="qx.set(+$any($event.target).value)" /></label>
-            <label>Y <input type="number" step="0.01" [value]="qy()" (input)="qy.set(+$any($event.target).value)" /></label>
-            <label>Z <input type="number" step="0.01" [value]="qz()" (input)="qz.set(+$any($event.target).value)" /></label>
-          }
-        </fieldset>
-      }
+      <!-- ── ACTIONS ── -->
+      <section class="ik-panel__actions" aria-label="IK actions">
+        <button type="button" class="action" (click)="onPreview()">Preview</button>
+        <button type="button" class="action action--solve" (click)="onSolve()">Solve</button>
+        <button type="button" class="action action--execute" (click)="onExecute()">Execute</button>
+      </section>
 
-      <!-- 3 botones -->
-      <div class="actions">
-        <button (click)="onPreview()">Preview</button>
-        <button class="solve" (click)="onSolve()">Solve</button>
-        <button class="execute" (click)="onExecute()">Execute</button>
-      </div>
+      <!-- ── OUTPUTS ── -->
+      <section class="ik-panel__outputs" aria-labelledby="ik-outputs-label">
+        <h4 id="ik-outputs-label" class="ik-panel__label">Results</h4>
 
-      <!-- Solved Q display (despues de Solve) -->
-      @if (solvedQ(); as q) {
-        <div class="solved-q">
-          <span class="solved-label">Solved joints</span>
-          @for (v of q; track $index) {
-            <span class="q-value">q{{ $index + 1 }}: {{ v.toFixed(4) }}</span>
-          }
-        </div>
-      }
+        @if (solvedQ(); as q) {
+          <div class="solved-q">
+            <span class="solved-q__label">Solved joints</span>
+            <div class="solved-q__chips">
+              @for (v of q; track $index) {
+                <span class="q-value">q{{ $index + 1 }}: {{ v.toFixed(4) }}</span>
+              }
+            </div>
+          </div>
+        } @else {
+          <p class="solved-q__empty">No solution yet</p>
+        }
 
-      <!-- Feedback IK result -->
-      @if (result(); as r) {
-        <div class="feedback" [class.ok]="r.status === 'Converged'" [class.warn]="r.status === 'MaxIterations'">
-          <span class="status">{{ r.status }}</span>
-          <span class="detail">iters: {{ r.iterations }} </span>
-          <span class="detail">final error: {{ r.finalError.toFixed(2) }}</span>
-        </div>
-      }
+        @if (result(); as r) {
+          <div
+            class="feedback"
+            [class.feedback--ok]="r.status === 'Converged'"
+            [class.feedback--warn]="r.status === 'MaxIterations'"
+          >
+            <span class="feedback__status">{{ r.status }}</span>
+            <span class="feedback__detail">iters: {{ r.iterations }}</span>
+            <span class="feedback__detail">final error: {{ r.finalError.toFixed(2) }}</span>
+          </div>
+        }
+      </section>
     </div>
   `,
   styleUrl: './ik-target-panel.scss',

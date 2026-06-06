@@ -19,13 +19,79 @@
   min-width: 0;
 }
 
-.side-panel {
-  width: 280px;
-  padding: 1rem;
+.right-sidebar {
+  width: 320px;
+  padding: 0.75rem;
   background: $bg-surface;
   color: $text-primary;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 0.75rem;
   border-left: 1px solid $border-subtle;
+  overflow-y: auto;
+
+  // Dark themed scrollbars (WebKit + Firefox)
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: $bg-surface;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: $border-default;
+    border-radius: $radius-sm;
+  }
+  scrollbar-color: $border-default $bg-surface;
+  scrollbar-width: thin;
+}
+
+// ── Accordion (native <details>) ──
+.accordion {
+  background: $bg-surface;
+  border: 1px solid $border-subtle;
+  border-radius: $radius-md;
+  overflow: hidden;
+
+  &__header {
+    // Reset native marker (Chrome / Safari / Firefox)
+    list-style: none;
+    cursor: pointer;
+    padding: 0.6rem 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: $text-secondary;
+    user-select: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+  }
+
+  &__title {
+    font-weight: 600;
+  }
+
+  &__chevron {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-right: 2px solid $text-muted;
+    border-bottom: 2px solid $text-muted;
+    transform: rotate(45deg);
+    transition: transform $transition-fast ease;
+  }
+
+  &[open] > &__header {
+    border-bottom: 1px solid $border-subtle;
+  }
+  &[open] > &__header > &__chevron {
+    transform: rotate(-135deg);
+  }
+
+  &__body {
+    padding: 0.6rem 0.8rem 0.8rem;
+  }
 }

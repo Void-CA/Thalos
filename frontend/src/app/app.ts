@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { SceneViewer } from './features/scene/components/scene-viewer/scene-viewer';
 import { JointControl } from './features/scene/components/joint-control/joint-control';
+import { IkTargetPanel } from './features/scene/components/ik-target-panel/ik-target-panel';
 import { RobotCatalog } from './features/robots/components/robot-catalog/robot-catalog';
 
 /**
@@ -13,7 +14,7 @@ import { RobotCatalog } from './features/robots/components/robot-catalog/robot-c
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [SceneViewer, JointControl, RobotCatalog],
+  imports: [SceneViewer, JointControl, IkTargetPanel, RobotCatalog],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

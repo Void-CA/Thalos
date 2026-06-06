@@ -3,7 +3,24 @@
     <robot-catalog />
   </aside>
   <scene-viewer class="viewport" />
-  <aside class="side-panel">
-    <joint-control />
+  <aside class="right-sidebar">
+    <details class="accordion" open>
+      <summary class="accordion__header">
+        <span class="accordion__title">Forward Kinematics</span>
+        <span class="accordion__chevron" aria-hidden="true"></span>
+      </summary>
+      <div class="accordion__body">
+        <joint-control />
+      </div>
+    </details>
+    <details class="accordion" open>
+      <summary class="accordion__header">
+        <span class="accordion__title">Inverse Kinematics</span>
+        <span class="accordion__chevron" aria-hidden="true"></span>
+      </summary>
+      <div class="accordion__body">
+        <ik-target-panel />
+      </div>
+    </details>
   </aside>
 </div>

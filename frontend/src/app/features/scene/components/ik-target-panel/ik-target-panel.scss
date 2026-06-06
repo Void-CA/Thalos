@@ -2,146 +2,224 @@
 
 .ik-panel {
   font-family: $font-mono;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
 
-  h3 {
-    margin: 0 0 0.75rem;
-    font-size: 0.9rem;
+// ── Section labels ──
+.ik-panel__label {
+  margin: 0 0 0.5rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.55;
+  font-weight: 600;
+}
+
+.ik-panel__sublabel {
+  margin: 0.5rem 0 0.4rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.5;
+  font-weight: 500;
+}
+
+// ── INPUTS card ──
+.ik-panel__inputs {
+  background: $bg-card;
+  border: 1px solid $border-subtle;
+  border-radius: $radius-md;
+  padding: 0.6rem 0.7rem 0.7rem;
+}
+
+.coord-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+
+  &--quaternion {
+    // 4 fields (W,X,Y,Z) → 2 cols to avoid orphan row
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+  opacity: 0.85;
+}
+
+input[type='number'] {
+  width: 10ch; // DONT TOUCH THIS WIDTH
+  padding: 0.2rem 0.3rem;
+  font-family: $font-mono;
+  font-size: 0.8rem;
+  background: $bg-input;
+  border: 1px solid $border-default;
+  color: $text-muted;
+  border-radius: $radius-sm;
+}
+
+.rotation {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed $border-subtle;
+}
+
+// ── Segmented control ──
+.segmented {
+  display: flex;
+  background: $bg-input;
+  border: 1px solid $border-default;
+  border-radius: $radius-sm;
+  padding: 2px;
+  gap: 2px;
+  margin-bottom: 0.5rem;
+
+  &__btn {
+    flex: 1;
+    padding: 0.25rem 0.4rem;
+    font-family: $font-mono;
+    font-size: 0.75rem;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    color: $text-muted;
+    border-radius: 2px;
+    transition: background $transition-fast, color $transition-fast;
+
+    &:hover:not(.is-active) {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    &.is-active {
+      background: $accent;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    &:focus-visible {
+      outline: 1px solid $accent;
+      outline-offset: 1px;
+    }
+  }
+
+  &--small .segmented__btn {
+    padding: 0.18rem 0.3rem;
+    font-size: 0.7rem;
+  }
+}
+
+// ── ACTIONS ──
+.ik-panel__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.4rem;
+}
+
+.action {
+  padding: 0.45rem 0.4rem;
+  font-family: $font-mono;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: $bg-elevated;
+  border: 1px solid $border-hover;
+  color: $text-muted;
+  border-radius: $radius-sm;
+  transition: filter $transition-fast;
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  &:hover:not(:disabled) {
+    filter: brightness(1.2);
+  }
+
+  &--solve {
+    background: $solve-bg;
+    border-color: $solve-border;
+    color: #fff;
+  }
+  &--execute {
+    background: $execute-bg;
+    border-color: $execute-border;
+    color: #fff;
+  }
+}
+
+// ── OUTPUTS card (read-only, visually distinct) ──
+.ik-panel__outputs {
+  background: $bg-elevated;          // lighter than inputs card → signals "informational"
+  border: 1px solid $border-default; // slightly stronger border
+  border-style: dashed;              // dashed reinforces "read-only / result"
+  border-radius: $radius-md;
+  padding: 0.6rem 0.7rem 0.7rem;
+}
+
+.solved-q {
+  &__label {
+    display: block;
+    font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    opacity: 0.7;
-  }
-
-  .row {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .toggle {
-    font-size: 0.8rem;
-    cursor: pointer;
-  }
-
-  label {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    margin-bottom: 0.3rem;
-    font-size: 0.8rem;
-  }
-
-  input[type='number'] {
-    width: 10ch; // DONT TOUCH THIS WIDTH
-    padding: 0.15rem 0.3rem;
-    font-family: $font-mono;
-    font-size: 0.8rem;
-    background: $bg-input;
-    border: 1px solid $border-default;
-    color: $text-muted;
-    border-radius: $radius-sm;
-  }
-
-  fieldset {
-    border: 1px solid $border-default;
-    border-radius: $radius-sm;
-    margin: 0.5rem 0;
-    padding: 0.4rem 0.6rem;
-  }
-
-  legend {
-    font-size: 0.75rem;
     opacity: 0.6;
-    padding: 0 0.3rem;
+    margin-bottom: 0.25rem;
   }
 
-  .actions {
-    display: flex;
-    gap: 0.4rem;
-    margin-top: 0.5rem;
-  }
-
-  button {
-    flex: 1;
-    padding: 0.3rem 0.4rem;
-    font-family: $font-mono;
-    font-size: 0.75rem;
-    cursor: pointer;
-    background: $bg-elevated;
-    border: 1px solid $border-hover;
-    color: $text-muted;
-    border-radius: $radius-sm;
-
-    &:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-
-    &:hover:not(:disabled) {
-      filter: brightness(1.2);
-    }
-
-    &.solve {
-      background: $solve-bg;
-      border-color: $solve-border;
-      color: #fff;
-    }
-
-    &.execute {
-      background: $execute-bg;
-      border-color: $execute-border;
-      color: #fff;
-    }
-  }
-
-  .solved-q {
-    margin-top: 0.5rem;
+  &__chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.3rem 0.6rem;
+    gap: 0.25rem 0.4rem;
   }
 
-  .solved-label {
-    width: 100%;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    opacity: 0.6;
-    margin-bottom: 0.15rem;
-  }
-
-  .q-value {
-    font-size: 0.8rem;
-    background: #1a2a1a;
-    padding: 0.1rem 0.4rem;
-    border-radius: $radius-sm;
-    border: 1px solid #2a4a2a;
-  }
-
-  .feedback {
-    margin-top: 0.5rem;
-    padding: 0.3rem 0.5rem;
-    border-radius: $radius-sm;
+  &__empty {
+    margin: 0;
     font-size: 0.75rem;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+    opacity: 0.4;
+    font-style: italic;
+  }
+}
 
-    &.ok {
-      background: $success-bg;
-      border: 1px solid $success-border;
-    }
+.q-value {
+  font-size: 0.75rem;
+  background: #1a2a1a;
+  padding: 0.1rem 0.4rem;
+  border-radius: $radius-sm;
+  border: 1px solid #2a4a2a;
+  color: #b8e0b8;
+}
 
-    &.warn {
-      background: $warn-bg;
-      border: 1px solid $warn-border;
-    }
+.feedback {
+  margin-top: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: $radius-sm;
+  font-size: 0.72rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+
+  &--ok {
+    background: $success-bg;
+    border: 1px solid $success-border;
+  }
+  &--warn {
+    background: $warn-bg;
+    border: 1px solid $warn-border;
   }
 
-  .status {
-    font-weight: bold;
+  &__status {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.7rem;
   }
-
-  .detail {
-    opacity: 0.7;
+  &__detail {
+    opacity: 0.75;
   }
 }
