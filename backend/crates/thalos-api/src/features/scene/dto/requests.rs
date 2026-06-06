@@ -59,7 +59,7 @@ pub struct MoveToPoseRequest {
     /// Which frame to move (defaults to end effector if `None`).
     #[serde(default)]
     pub frame_id: Option<u64>,
-    /// Target pose with translation and rotation (quaternion `[w, x, y, z]`).
+    /// Target pose with translation and rotation.
     pub target: PoseTargetDto,
 }
 
@@ -67,8 +67,31 @@ pub struct MoveToPoseRequest {
 pub struct PoseTargetDto {
     /// Translation `[x, y, z]` in world coordinates.
     pub translation: [f64; 3],
-    /// Unit quaternion `[w, x, y, z]` for orientation.
-    pub rotation: [f64; 4],
+    /// Rotation expressed in the chosen representation. Conversion to
+    /// `UnitQuaternion` happens once in `to_pose`, so all downstream code
+    /// (IK solver, scene building) keeps working in the canonical form.
+    pub rotation: RotationDto,
+}
+
+/// Rotation input — the client picks the representation that fits the user.
+///
+/// Wire format (serde tagged enum):
+/// ```json
+/// { "kind": "Quaternion", "value": { "w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0 } }
+/// { "kind": "Ypr",        "value": { "roll": 0.0, "pitch": 0.0, "yaw": 0.0 } }
+/// ```
+///
+/// `Ypr` uses ZYX intrinsic order — i.e. roll around X, then pitch around Y,
+/// then yaw around Z — matching `thalos_core::UnitQuaternion::from_euler` and
+/// `to_euler`. Angles are in radians; the client converts to/from degrees
+/// for display.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", content = "value")]
+pub enum RotationDto {
+    /// Unit quaternion `[w, x, y, z]`.
+    Quaternion { w: f64, x: f64, y: f64, z: f64 },
+    /// ZYX Euler angles (roll, pitch, yaw) in radians.
+    Ypr { roll: f64, pitch: f64, yaw: f64 },
 }
 
 #[derive(Debug, Deserialize)]
@@ -129,12 +152,22 @@ impl MoveToPoseRequest {
 impl PoseTargetDto {
     pub fn to_pose(&self, target_frame: FrameId) -> Pose {
         let [tx, ty, tz] = self.translation;
-        let [qw, qx, qy, qz] = self.rotation;
-
         let translation = Vector3::new(tx, ty, tz);
-        let q = Quaternion::new(qw, qx, qy, qz);
-        let rotation = UnitQuaternion::new(q.normalize_or_identity())
-            .unwrap_or(UnitQuaternion::identity());
+
+        // Single source of truth: the core owns the math. Whether the client
+        // sent a quaternion or ZYX Euler angles, the conversion to a unit
+        // quaternion goes through the core (`UnitQuaternion::new` /
+        // `UnitQuaternion::from_euler`). No duplicated trig here.
+        let rotation = match self.rotation {
+            RotationDto::Quaternion { w, x, y, z } => {
+                let q = Quaternion::new(w, x, y, z);
+                UnitQuaternion::new(q.normalize_or_identity())
+                    .unwrap_or_else(|_| UnitQuaternion::identity())
+            }
+            RotationDto::Ypr { roll, pitch, yaw } => {
+                UnitQuaternion::from_euler(roll, pitch, yaw)
+            }
+        };
 
         let transform = Transform3D {
             translation,

@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { SceneStore } from '../../store/scene.store';
 import { IkTarget, IkResult } from '../../scene.types';
+import type { RotationDto } from '../../scene-api.types';
 
 /**
  * Panel de control IK con flujo de 3 pasos:
@@ -38,11 +39,28 @@ import { IkTarget, IkResult } from '../../scene.types';
       <!-- Rotation inputs (solo en modo pose) -->
       @if (type() === 'pose') {
         <fieldset>
-          <legend>Quaternion (w x y z)</legend>
-          <label>W <input type="number" step="0.01" [value]="qw()" (input)="qw.set(+$any($event.target).value)" /></label>
-          <label>X <input type="number" step="0.01" [value]="qx()" (input)="qx.set(+$any($event.target).value)" /></label>
-          <label>Y <input type="number" step="0.01" [value]="qy()" (input)="qy.set(+$any($event.target).value)" /></label>
-          <label>Z <input type="number" step="0.01" [value]="qz()" (input)="qz.set(+$any($event.target).value)" /></label>
+          <legend>Rotation</legend>
+          <div class="row">
+            <label class="toggle">
+              <input type="radio" name="ik-rot" value="ypr" [checked]="rotationFormat() === 'ypr'" (change)="rotationFormat.set('ypr')" />
+              Yaw / Pitch / Roll
+            </label>
+            <label class="toggle">
+              <input type="radio" name="ik-rot" value="quaternion" [checked]="rotationFormat() === 'quaternion'" (change)="rotationFormat.set('quaternion')" />
+              Quaternion
+            </label>
+          </div>
+
+          @if (rotationFormat() === 'ypr') {
+            <label>Yaw (Z) °  <input type="number" step="1" [value]="yawDeg()"   (input)="yawDeg.set(+$any($event.target).value)" /></label>
+            <label>Pitch (Y) ° <input type="number" step="1" [value]="pitchDeg()" (input)="pitchDeg.set(+$any($event.target).value)" /></label>
+            <label>Roll (X) ° <input type="number" step="1" [value]="rollDeg()"  (input)="rollDeg.set(+$any($event.target).value)" /></label>
+          } @else {
+            <label>W <input type="number" step="0.01" [value]="qw()" (input)="qw.set(+$any($event.target).value)" /></label>
+            <label>X <input type="number" step="0.01" [value]="qx()" (input)="qx.set(+$any($event.target).value)" /></label>
+            <label>Y <input type="number" step="0.01" [value]="qy()" (input)="qy.set(+$any($event.target).value)" /></label>
+            <label>Z <input type="number" step="0.01" [value]="qz()" (input)="qz.set(+$any($event.target).value)" /></label>
+          }
         </fieldset>
       }
 
@@ -84,6 +102,19 @@ export class IkTargetPanel {
   protected readonly x = signal(0.5);
   protected readonly y = signal(0.5);
   protected readonly z = signal(0.5);
+
+  /** Rotation input format. YPR is the default — it matches how humans
+   *  intuitively describe orientation. The wire format sent to the API
+   *  is the tagged enum `RotationDto`; the math (quaternion ↔ Euler)
+   *  is owned by `thalos_core::UnitQuaternion`, not by this component. */
+  protected readonly rotationFormat = signal<'ypr' | 'quaternion'>('ypr');
+
+  /** YPR inputs in DEGREES — converted to radians at submit time. */
+  protected readonly yawDeg = signal(0);
+  protected readonly pitchDeg = signal(0);
+  protected readonly rollDeg = signal(0);
+
+  /** Quaternion inputs as raw values. */
   protected readonly qw = signal(1.0);
   protected readonly qx = signal(0);
   protected readonly qy = signal(0);
@@ -97,13 +128,30 @@ export class IkTargetPanel {
   // ── Build target from form ──
 
   private buildTarget(): IkTarget {
-    return this.type() === 'position'
-      ? { type: 'position', translation: [this.x(), this.y(), this.z()] }
-      : {
-          type: 'pose',
-          translation: [this.x(), this.y(), this.z()],
-          rotation: [this.qw(), this.qx(), this.qy(), this.qz()],
-        };
+    if (this.type() === 'position') {
+      return { type: 'position', translation: [this.x(), this.y(), this.z()] };
+    }
+
+    const rotation: RotationDto =
+      this.rotationFormat() === 'ypr'
+        ? {
+            kind: 'Ypr',
+            value: {
+              yaw:   this.yawDeg()   * Math.PI / 180,
+              pitch: this.pitchDeg() * Math.PI / 180,
+              roll:  this.rollDeg()  * Math.PI / 180,
+            },
+          }
+        : {
+            kind: 'Quaternion',
+            value: { w: this.qw(), x: this.qx(), y: this.qy(), z: this.qz() },
+          };
+
+    return {
+      type: 'pose',
+      translation: [this.x(), this.y(), this.z()],
+      rotation,
+    };
   }
 
   // ── Step 1: Preview (gizmo only) ──

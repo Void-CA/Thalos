@@ -27,6 +27,25 @@ export interface VisualLinkDto {
   end: [number, number, number];
 }
 
+// ── IK request types (wire format = mirror de thalos_api::RotationDto) ──
+
+/**
+ * Rotation input — the client picks the representation that fits the user.
+ * Single source of truth for the math lives in `thalos_core::UnitQuaternion`.
+ *
+ * Wire format (serde tagged enum):
+ *   { kind: 'Quaternion', value: { w, x, y, z } }
+ *   { kind: 'Ypr',        value: { roll, pitch, yaw } }   // ZYX intrinsic, radians
+ */
+export type RotationDto =
+  | { kind: 'Quaternion'; value: { w: number; x: number; y: number; z: number } }
+  | { kind: 'Ypr'; value: { roll: number; pitch: number; yaw: number } };
+
+export interface PoseTargetDto {
+  translation: [number, number, number];
+  rotation: RotationDto;
+}
+
 export interface VisualJointAxisDto {
   origin: [number, number, number];
   axis: [number, number, number];
@@ -97,10 +116,7 @@ export interface MoveToPositionRequest {
 }
 
 export interface MoveToPoseRequest {
-  target: {
-    translation: [number, number, number];
-    rotation: [number, number, number, number];
-  };
+  target: PoseTargetDto;
   frame_id?: number;
 }
 

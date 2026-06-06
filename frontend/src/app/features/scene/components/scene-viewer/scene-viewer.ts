@@ -2,6 +2,7 @@ import { AfterViewInit, Component, effect, ElementRef, inject, ViewChild } from 
 import { SceneStore } from '../../store/scene.store';
 import { ThreeRendererService } from '../../services/three-renderer.service';
 import { IkTargetPanel } from '../ik-target-panel/ik-target-panel';
+import { rotationDtoToQuaternion } from '../../utils/rotation';
 
 /**
  * Contenedor Three.js que renderiza la escena robótica + gizmo IK.
@@ -30,9 +31,13 @@ export class SceneViewer implements AfterViewInit {
       if (state.data) {
         this.renderer.applyScene(state.data);
       }
-      // IK gizmo
+      // IK gizmo — rotation is in wire format (RotationDto), Three.js wants
+      // a quaternion tuple. Convert at the boundary, not in the renderer.
       if (state.ikTarget) {
-        this.renderer.setTarget(state.ikTarget.translation, state.ikTarget.rotation);
+        const quat = state.ikTarget.rotation
+          ? rotationDtoToQuaternion(state.ikTarget.rotation)
+          : undefined;
+        this.renderer.setTarget(state.ikTarget.translation, quat);
       } else {
         this.renderer.clearTarget();
       }

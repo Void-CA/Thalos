@@ -84,11 +84,13 @@ export interface SceneData {
 
 // ── IK types ──
 
-/** Target para un comando IK. */
+import type { RotationDto } from './scene-api.types';
+
+/** Target para un comando IK. La rotación usa el mismo wire format que la API. */
 export interface IkTarget {
   type: 'position' | 'pose';
   translation: [number, number, number];
-  rotation?: [number, number, number, number]; // quaternion [w, x, y, z]
+  rotation?: RotationDto;
 }
 
 /** Comando IK enviado al store. */
