@@ -6,6 +6,7 @@ impl From<RuntimeError> for ApiError {
     fn from(e: RuntimeError) -> Self {
         match e {
             RuntimeError::RobotModel(e) => e.into(),
+            RuntimeError::Workspace(e) => e.into(),
         }
     }
 }

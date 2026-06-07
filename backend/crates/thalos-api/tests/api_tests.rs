@@ -506,3 +506,145 @@ async fn scara_joint_kinds_include_prismatic() {
     assert!(joints[0]["min"].is_number());
     assert!(joints[2]["max"].is_number());
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Workspace
+// ═══════════════════════════════════════════════════════════════════════
+
+// 5.8: POST /workspace/sample returns WorkspaceDto with metrics + bounds
+
+#[tokio::test]
+async fn workspace_sample_scara_returns_metrics_and_bounds() {
+    let app = test_app();
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/workspace/sample",
+        Some(json!({
+            "robot_id": "scara",
+            "samples": 500,
+            "seed": 0,
+            "tolerance": 0.001,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+
+    // Has metrics
+    let metrics = body.get("metrics").expect("must contain metrics");
+    assert!(metrics["sample_count"].as_u64().unwrap() >= 500);
+    assert!(metrics["max_reach"].as_f64().unwrap() > 0.0);
+    assert!(metrics["bounding_volume"].as_f64().unwrap() > 0.0);
+    assert!(metrics.get("centroid").is_some());
+
+    // Has bounds
+    let bounds = body.get("bounds").expect("must contain bounds");
+    assert!(bounds.get("min").is_some());
+    assert!(bounds.get("max").is_some());
+
+    // Samples should NOT be present by default
+    assert!(body.get("samples").is_none(), "samples must be absent by default");
+}
+
+// 5.9: POST /workspace/sample with include_samples: true
+
+#[tokio::test]
+async fn workspace_sample_include_samples_returns_samples() {
+    let app = test_app();
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/workspace/sample",
+        Some(json!({
+            "robot_id": "planar_2r",
+            "samples": 10,
+            "seed": 0,
+            "tolerance": 0.001,
+            "include_samples": true,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+
+    let samples = body.get("samples").expect("must contain samples when include_samples=true");
+    let arr = samples.as_array().unwrap();
+    assert_eq!(arr.len(), 10, "must have 10 samples");
+
+    // Each sample must have q and position
+    for sample in arr {
+        assert!(sample.get("q").is_some(), "sample must have q");
+        assert!(sample.get("position").is_some(), "sample must have position");
+        let q = sample["q"].as_array().unwrap();
+        assert_eq!(q.len(), 2, "planar_2r has 2 DOF");
+    }
+}
+
+// 5.10: POST /workspace/reachability with point inside disc
+
+#[tokio::test]
+async fn workspace_reachability_inside_returns_reachable() {
+    let app = test_app();
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/workspace/reachability",
+        Some(json!({
+            "point": { "x": 0.0, "y": 0.0, "z": 0.0 },
+            "tolerance": 0.5,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+
+    assert_eq!(body["reachable"], true, "Scara center should be reachable");
+    assert_eq!(body["nearest_distance"], 0.0);
+}
+
+// 5.11: POST /workspace/reachability with NaN point → 400
+
+#[tokio::test]
+async fn workspace_reachability_nan_point_returns_validation_error() {
+    let app = test_app();
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/workspace/reachability",
+        Some(json!({
+            "point": { "x": "not_a_number", "y": 0.0, "z": 0.0 },
+            "tolerance": 0.1,
+        })),
+    )
+    .await;
+    // serde should reject non-numeric input at deserialization → 422
+    // But serde with axum Json extractor returns 422 automatically
+    assert!(
+        status == StatusCode::UNPROCESSABLE_ENTITY || status == StatusCode::BAD_REQUEST,
+        "NaN/non-numeric point must be rejected, got {}",
+        status,
+    );
+}
+
+// 5.12: POST /workspace/sample with invalid robot_id → 404
+
+#[tokio::test]
+async fn workspace_sample_invalid_robot_returns_not_found() {
+    let app = test_app();
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/workspace/sample",
+        Some(json!({
+            "robot_id": "non_existent_robot",
+            "samples": 100,
+            "seed": 0,
+            "tolerance": 0.001,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let body = body.expect("response must be valid JSON");
+    assert_eq!(body["code"], "not_found");
+}

@@ -7,3 +7,4 @@ edition = "2024"
 thalos_core = { path = "../thalos-core" }
 thiserror = "2"
 chrono = "0.4"
+rand = "0.8"

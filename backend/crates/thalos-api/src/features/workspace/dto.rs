@@ -1,0 +1,140 @@
+//! DTOs (Data Transfer Objects) for workspace analysis endpoints.
+//!
+//! All DTOs derive `Serialize` / `Deserialize` for JSON transport via axum.
+//! Domain types from `thalos_core` are converted explicitly; serde is NOT
+//! added to the core crate (boundary enforcement).
+
+use serde::{Deserialize, Serialize};
+
+use thalos_core::analysis::workspace::{
+    BoundingBox, Reachability, WorkspaceMetrics, WorkspaceSample,
+};
+use thalos_core::math::geometry::vectors::Vector3;
+
+// ─── Requests ────────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct SampleRequest {
+    pub robot_id: String,
+    #[serde(default = "default_samples")]
+    pub samples: usize,
+    #[serde(default)]
+    pub seed: u64,
+    #[serde(default = "default_tolerance")]
+    pub tolerance: f64,
+    #[serde(default)]
+    pub include_samples: bool,
+}
+
+fn default_samples() -> usize { 10_000 }
+fn default_tolerance() -> f64 { 1e-3 }
+
+#[derive(Debug, Deserialize)]
+pub struct ReachabilityRequest {
+    pub point: PointDto,
+    #[serde(default = "default_tolerance")]
+    pub tolerance: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PointDto {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+}
+
+impl From<PointDto> for Vector3 {
+    fn from(p: PointDto) -> Self {
+        Vector3::new(p.x, p.y, p.z)
+    }
+}
+
+// ─── Responses ───────────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct WorkspaceDto {
+    pub metrics: WorkspaceMetricsDto,
+    pub bounds: BoundingBoxDto,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub samples: Option<Vec<WorkspaceSampleDto>>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WorkspaceMetricsDto {
+    pub bounding_volume: f64,
+    pub max_reach: f64,
+    pub min_reach: f64,
+    pub centroid: PointDto,
+    pub sample_count: usize,
+}
+
+impl From<WorkspaceMetrics> for WorkspaceMetricsDto {
+    fn from(m: WorkspaceMetrics) -> Self {
+        Self {
+            bounding_volume: m.bounding_volume,
+            max_reach: m.max_reach,
+            min_reach: m.min_reach,
+            centroid: PointDto {
+                x: m.centroid.x,
+                y: m.centroid.y,
+                z: m.centroid.z,
+            },
+            sample_count: m.sample_count,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct BoundingBoxDto {
+    pub min: PointDto,
+    pub max: PointDto,
+}
+
+impl From<BoundingBox> for BoundingBoxDto {
+    fn from(bb: BoundingBox) -> Self {
+        Self {
+            min: PointDto { x: bb.min.x, y: bb.min.y, z: bb.min.z },
+            max: PointDto { x: bb.max.x, y: bb.max.y, z: bb.max.z },
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct WorkspaceSampleDto {
+    pub q: Vec<f64>,
+    pub position: PointDto,
+}
+
+impl From<&WorkspaceSample> for WorkspaceSampleDto {
+    fn from(s: &WorkspaceSample) -> Self {
+        Self {
+            q: s.q.clone(),
+            position: PointDto {
+                x: s.position.x,
+                y: s.position.y,
+                z: s.position.z,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct ReachabilityDto {
+    pub reachable: bool,
+    pub nearest_distance: f64,
+}
+
+impl From<Reachability> for ReachabilityDto {
+    fn from(r: Reachability) -> Self {
+        match r {
+            Reachability::Reachable => Self {
+                reachable: true,
+                nearest_distance: 0.0,
+            },
+            Reachability::OutOfWorkspace { nearest_distance } => Self {
+                reachable: false,
+                nearest_distance,
+            },
+        }
+    }
+}

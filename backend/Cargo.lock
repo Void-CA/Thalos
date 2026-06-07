@@ -1139,6 +1139,7 @@ name = "thalos_runtime"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "rand",
  "thalos_core",
  "thiserror",
 ]
