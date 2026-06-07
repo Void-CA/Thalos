@@ -1,6 +1,7 @@
 import { AfterViewInit, Component, effect, ElementRef, inject, ViewChild } from '@angular/core';
 import { SceneStore } from '../../store/scene.store';
 import { ThreeRendererService } from '../../services/three-renderer.service';
+import { WorkspaceStore } from '../../../workspace/store/workspace.store';
 import { rotationDtoToQuaternion } from '../../utils/rotation';
 
 /**
@@ -23,9 +24,11 @@ export class SceneViewer implements AfterViewInit {
   @ViewChild('canvas') private readonly canvasRef!: ElementRef<HTMLCanvasElement>;
 
   private readonly store = inject(SceneStore);
+  private readonly workspace = inject(WorkspaceStore);
   private readonly renderer = inject(ThreeRendererService);
 
   constructor() {
+    // Sync robot scene + IK gizmo
     effect(() => {
       const state = this.store.state();
       if (state.data) {
@@ -40,6 +43,17 @@ export class SceneViewer implements AfterViewInit {
         this.renderer.setTarget(state.ikTarget.translation, quat);
       } else {
         this.renderer.clearTarget();
+      }
+    });
+
+    // Sync point cloud overlay from workspace analysis
+    effect(() => {
+      const cloud = this.workspace.pointCloud();
+      const show = this.workspace.showPointCloud();
+      if (cloud && show) {
+        this.renderer.setPointCloud(cloud);
+      } else {
+        this.renderer.clearPointCloud();
       }
     });
   }

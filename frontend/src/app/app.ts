@@ -4,7 +4,6 @@ import { JointControl } from './features/scene/components/joint-control/joint-co
 import { IkTargetPanel } from './features/scene/components/ik-target-panel/ik-target-panel';
 import { RobotCatalog } from './features/robots/components/robot-catalog/robot-catalog';
 import { WorkspacePanel } from './features/workspace/components/workspace-panel/workspace-panel';
-import { WorkspaceRenderer } from './features/workspace/components/workspace-renderer/workspace-renderer';
 
 /**
  * Layout shell — solo compone UI.
@@ -16,7 +15,7 @@ import { WorkspaceRenderer } from './features/workspace/components/workspace-ren
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [SceneViewer, JointControl, IkTargetPanel, RobotCatalog, WorkspacePanel, WorkspaceRenderer],
+  imports: [SceneViewer, JointControl, IkTargetPanel, RobotCatalog, WorkspacePanel],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

@@ -1,7 +1,7 @@
-import { Component, inject } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { Component, computed, effect, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RobotApiService } from '../../../robots/services/robot-api.service';
+import { RobotStore } from '../../../robots/store/robot.store';
+import { SceneStore } from '../../../scene/store/scene.store';
 import { WorkspaceStore } from '../../store/workspace.store';
 
 @Component({
@@ -10,56 +10,51 @@ import { WorkspaceStore } from '../../store/workspace.store';
   imports: [FormsModule],
   template: `
     <div class="workspace-panel">
-      <h3 class="panel-title">Workspace Analysis</h3>
+      <!-- ── INPUTS ── -->
+      <section class="workspace-panel__inputs">
+        <h4 class="workspace-panel__label">Config</h4>
+        <div class="coord-grid">
+          <label>Samples
+            <input type="number" [(ngModel)]="samples" min="100" max="100000" step="100" />
+          </label>
+          <label>Seed
+            <input type="number" [(ngModel)]="seed" />
+          </label>
+          <label>Tolerance
+            <input type="number" [(ngModel)]="tolerance" step="0.001" min="0.001" />
+          </label>
+        </div>
+      </section>
 
-      <!-- Sampling form -->
-      <div class="form-group">
-        <label>
-          Robot
-          <select [(ngModel)]="selectedRobot" (change)="onRobotChange()">
-            <option value="" disabled>Select robot</option>
-            @for (robot of robots(); track robot.id) {
-              <option [value]="robot.id">{{ robot.display_name }}</option>
-            }
-          </select>
+      <!-- ── ACTIONS ── -->
+      <section class="workspace-panel__actions">
+        <button
+          class="action action--sample"
+          (click)="onSample()"
+          [disabled]="store.loading() || !robotId()"
+        >
+          {{ store.loading() ? 'Sampling\u2026' : 'Sample Workspace' }}
+        </button>
+
+        <label class="toggle">
+          <input
+            type="checkbox"
+            [checked]="store.showPointCloud()"
+            (change)="store.setShowPointCloud($any($event.target).checked)"
+          />
+          <span class="toggle__label">Show Point Cloud</span>
         </label>
-      </div>
+      </section>
 
-      <div class="form-row">
-        <label>
-          Samples
-          <input type="number" [(ngModel)]="samples" min="100" max="100000" step="100" />
-        </label>
-        <label>
-          Seed
-          <input type="number" [(ngModel)]="seed" />
-        </label>
-      </div>
-
-      <div class="form-row">
-        <label>
-          Tolerance
-          <input type="number" [(ngModel)]="tolerance" step="0.001" min="0.001" />
-        </label>
-      </div>
-
-      <button
-        class="btn-sample"
-        (click)="onSample()"
-        [disabled]="store.loading() || !selectedRobot"
-      >
-        {{ store.loading() ? 'Sampling…' : 'Sample Workspace' }}
-      </button>
-
-      <!-- Metrics display -->
+      <!-- ── RESULTS ── -->
       @if (store.data(); as data) {
-        <div class="metrics-card">
-          <h4>Metrics</h4>
-          <table>
+        <section class="workspace-panel__outputs">
+          <h4 class="workspace-panel__label">Metrics</h4>
+          <table class="metrics-table">
             <tr><td>Samples</td><td>{{ data.metrics.sampleCount }}</td></tr>
             <tr><td>Max Reach</td><td>{{ data.metrics.maxReach.toFixed(4) }} m</td></tr>
             <tr><td>Min Reach</td><td>{{ data.metrics.minReach.toFixed(4) }} m</td></tr>
-            <tr><td>Bounding Volume</td><td>{{ data.metrics.boundingVolume.toFixed(4) }} m³</td></tr>
+            <tr><td>Bounding Volume</td><td>{{ data.metrics.boundingVolume.toFixed(4) }} m&sup3;</td></tr>
             <tr>
               <td>Centroid</td>
               <td>({{ data.metrics.centroid[0].toFixed(3) }},
@@ -67,107 +62,73 @@ import { WorkspaceStore } from '../../store/workspace.store';
                   {{ data.metrics.centroid[2].toFixed(3) }})</td>
             </tr>
           </table>
-        </div>
+        </section>
       }
 
-      <!-- Reachability query -->
+      <!-- ── EVALUATE IK TARGET ── -->
       @if (store.hasData()) {
-        <hr class="divider" />
-        <h4>Check Reachability</h4>
-
-        <div class="form-row triple">
-          <label>X <input type="number" [(ngModel)]="queryPoint[0]" step="0.1" /></label>
-          <label>Y <input type="number" [(ngModel)]="queryPoint[1]" step="0.1" /></label>
-          <label>Z <input type="number" [(ngModel)]="queryPoint[2]" step="0.1" /></label>
-        </div>
-
         <button
-          class="btn-query"
-          (click)="onCheck()"
-          [disabled]="store.loading()"
+          class="action action--eval"
+          (click)="onEvaluate()"
+          [disabled]="store.loading() || !ikTarget()"
         >
-          {{ store.loading() ? 'Checking…' : 'Check Reachability' }}
+          {{ store.loading() ? 'Evaluating\u2026' : 'Evaluate Current IK Target' }}
         </button>
 
         @if (store.reachability(); as r) {
-          <div class="reachability-result" [class.reachable]="r.reachable" [class.unreachable]="!r.reachable">
-            <strong>{{ r.reachable ? '✓ Reachable' : '✗ Out of Workspace' }}</strong>
+          <div
+            class="feedback"
+            [class.is-reachable]="r.reachable"
+            [class.is-unreachable]="!r.reachable"
+          >
+            <strong>{{ r.reachable ? '\u2713 Reachable' : '\u2717 Out of Workspace' }}</strong>
             @if (!r.reachable) {
-              <span> — nearest distance: {{ r.nearestDistance.toFixed(4) }} m</span>
+              <span> &mdash; nearest distance: {{ r.nearestDistance.toFixed(4) }} m</span>
             }
           </div>
         }
       }
 
-      <!-- Error display -->
+      <!-- ── ERROR ── -->
       @if (store.error(); as err) {
         <div class="error-msg">{{ err }}</div>
       }
     </div>
   `,
-  styles: [`
-    .workspace-panel { padding: 0.5rem; font-size: 0.85rem; }
-    .panel-title { margin: 0 0 0.75rem; font-size: 1rem; font-weight: 600; }
-    .form-group { margin-bottom: 0.5rem; }
-    .form-group label { display: flex; flex-direction: column; gap: 0.25rem; }
-    .form-group select { width: 100%; }
-    .form-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
-    .form-row label { flex: 1; display: flex; flex-direction: column; gap: 0.2rem; }
-    .form-row.triple label { flex: 1; }
-    .form-row input, .form-group select {
-      padding: 0.3rem; border: 1px solid #555; border-radius: 4px;
-      background: #2a2a2a; color: #ddd; font-size: 0.8rem;
-    }
-    .btn-sample, .btn-query {
-      width: 100%; padding: 0.5rem; margin-top: 0.4rem;
-      border: none; border-radius: 4px; cursor: pointer; font-weight: 600;
-    }
-    .btn-sample { background: #4a90d9; color: #fff; }
-    .btn-sample:disabled { background: #444; color: #888; cursor: not-allowed; }
-    .btn-query { background: #7b61ff; color: #fff; }
-    .btn-query:disabled { background: #444; color: #888; cursor: not-allowed; }
-    .metrics-card {
-      margin-top: 0.75rem; padding: 0.5rem; background: #2a2a2a;
-      border-radius: 4px; border: 1px solid #444;
-    }
-    .metrics-card h4 { margin: 0 0 0.4rem; }
-    .metrics-card table { width: 100%; border-collapse: collapse; }
-    .metrics-card td { padding: 0.2rem 0.4rem; border-bottom: 1px solid #333; }
-    .metrics-card td:first-child { color: #999; }
-    .metrics-card td:last-child { text-align: right; font-family: monospace; }
-    .divider { border: none; border-top: 1px solid #444; margin: 0.75rem 0; }
-    .reachability-result {
-      margin-top: 0.5rem; padding: 0.4rem; border-radius: 4px;
-      text-align: center; font-size: 0.9rem;
-    }
-    .reachable { background: #1a3a1a; color: #5f5; border: 1px solid #2a5a2a; }
-    .unreachable { background: #3a1a1a; color: #f55; border: 1px solid #5a2a2a; }
-    .error-msg { margin-top: 0.5rem; padding: 0.4rem; background: #3a1a1a; color: #f88; border-radius: 4px; font-size: 0.8rem; }
-    h4 { margin: 0.5rem 0 0.3rem; }
-  `],
+  styleUrl: './workspace-panel.scss',
 })
 export class WorkspacePanel {
-  private readonly robotApi = inject(RobotApiService);
   readonly store = inject(WorkspaceStore);
+  private readonly robotStore = inject(RobotStore);
+  private readonly sceneStore = inject(SceneStore);
 
-  private readonly robotsObs = this.robotApi.getRobots();
-  readonly robots = toSignal(this.robotsObs, { initialValue: [] });
+  /** Currently selected robot ID from the global catalog. */
+  protected readonly robotId = this.robotStore.selectedId;
 
-  selectedRobot = '';
+  /** Current IK target (null if gizmo not placed). */
+  protected readonly ikTarget = computed(() => this.sceneStore.state().ikTarget);
+
   samples = 5_000;
   seed = 0;
   tolerance = 0.001;
-  queryPoint: [number, number, number] = [0.0, 0.0, 0.0];
 
-  onRobotChange(): void {
-    this.store.reset();
+  constructor() {
+    // Reset workspace data when the user switches robots
+    effect(() => {
+      this.robotStore.selectedId();
+      this.store.reset();
+    });
   }
 
   onSample(): void {
-    this.store.sample(this.selectedRobot, this.samples, this.seed, this.tolerance);
+    const id = this.robotId();
+    if (!id) return;
+    this.store.sample(id, this.samples, this.seed, this.tolerance);
   }
 
-  onCheck(): void {
-    this.store.checkReachability(this.queryPoint, this.tolerance);
+  onEvaluate(): void {
+    const target = this.ikTarget();
+    if (!target) return;
+    this.store.checkReachability(target.translation, this.tolerance);
   }
 }

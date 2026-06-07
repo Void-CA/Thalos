@@ -7,6 +7,8 @@ const INITIAL_UI: WorkspaceUiState = { loading: false, error: null };
 
 const INITIAL_STATE: WorkspaceState = {
   data: null,
+  pointCloud: null,
+  showPointCloud: false,
   reachability: null,
   ui: INITIAL_UI,
 };
@@ -35,12 +37,20 @@ export class WorkspaceStore {
   // ── State signals ──
 
   private readonly dataSignal = signal<WorkspaceData | null>(null);
+  private readonly pointCloudSignal = signal<[number, number, number][] | null>(null);
+  private readonly showPointCloudSignal = signal(false);
   private readonly reachabilitySignal = signal<ReachabilityResult | null>(null);
   private readonly loadingSignal = signal(false);
   private readonly errorSignal = signal<string | null>(null);
 
   /** Current workspace data (metrics + bounds). */
   readonly data: Signal<WorkspaceData | null> = this.dataSignal.asReadonly();
+
+  /** Sampled point cloud positions, if available. */
+  readonly pointCloud: Signal<[number, number, number][] | null> = this.pointCloudSignal.asReadonly();
+
+  /** Whether the point cloud overlay is visible in the 3D viewer. */
+  readonly showPointCloud: Signal<boolean> = this.showPointCloudSignal.asReadonly();
 
   /** Last reachability query result. */
   readonly reachability: Signal<ReachabilityResult | null> = this.reachabilitySignal.asReadonly();
@@ -56,11 +66,18 @@ export class WorkspaceStore {
 
   // ── Actions ──
 
+  /** Toggle point cloud visibility in the 3D viewer. */
+  setShowPointCloud(v: boolean): void {
+    this.showPointCloudSignal.set(v);
+  }
+
   /** Sample a workspace for the given robot and config. */
   async sample(robotId: string, samples: number, seed: number, tolerance: number): Promise<void> {
     this.loadingSignal.set(true);
     this.errorSignal.set(null);
     this.reachabilitySignal.set(null);
+    this.pointCloudSignal.set(null);
+    this.showPointCloudSignal.set(false);
 
     try {
       const dto = await this.api.sample({
@@ -68,7 +85,7 @@ export class WorkspaceStore {
         samples,
         seed,
         tolerance,
-        include_samples: false,
+        include_samples: true,
       }).toPromise();
 
       if (!dto) throw new Error('Empty response');
@@ -77,6 +94,13 @@ export class WorkspaceStore {
         metrics: toMetrics(dto.metrics),
         bounds: toBounds(dto.bounds),
       });
+
+      // Extract point cloud from samples
+      if (dto.samples && dto.samples.length > 0) {
+        this.pointCloudSignal.set(
+          dto.samples.map(s => [s.position.x, s.position.y, s.position.z] as [number, number, number]),
+        );
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Sampling failed';
       this.errorSignal.set(msg);
@@ -113,6 +137,8 @@ export class WorkspaceStore {
   /** Reset all state. */
   reset(): void {
     this.dataSignal.set(null);
+    this.pointCloudSignal.set(null);
+    this.showPointCloudSignal.set(false);
     this.reachabilitySignal.set(null);
     this.loadingSignal.set(false);
     this.errorSignal.set(null);

@@ -27,6 +27,8 @@ export class ThreeRendererService {
   private contentGroup: THREE.Group | null = null;
   private targetGroup: THREE.Group | null = null;
   private compassGroup: THREE.Group | null = null;
+  private workspaceGroup: THREE.Group | null = null;
+  private pointCloudMesh: THREE.Points | null = null;
   private frameId: number | null = null;
 
   // ── Scene content caches (id → slot) ──
@@ -74,6 +76,10 @@ export class ThreeRendererService {
     // Content container
     this.contentGroup = new THREE.Group();
     this.scene.add(this.contentGroup);
+
+    // Workspace overlay (point cloud, AABB) — renders ON TOP of the robot
+    this.workspaceGroup = new THREE.Group();
+    this.scene.add(this.workspaceGroup);
 
     // IK target gizmo — hidden by default
     this.targetGroup = new THREE.Group();
@@ -417,6 +423,53 @@ export class ThreeRendererService {
     }
   }
 
+  // ── Point cloud (workspace overlay) ──
+
+  /** Render sampled workspace points in the 3D scene. */
+  setPointCloud(positions: [number, number, number][]): void {
+    this.clearPointCloud();
+    if (!this.workspaceGroup) return;
+
+    const geo = new THREE.BufferGeometry();
+    const vertices = new Float32Array(positions.length * 3);
+    for (let i = 0; i < positions.length; i++) {
+      vertices[i * 3]     = positions[i][0];
+      vertices[i * 3 + 1] = positions[i][1];
+      vertices[i * 3 + 2] = positions[i][2];
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+
+    const mat = new THREE.PointsMaterial({
+      color: 0xff8800,
+      size: 0.015,
+      sizeAttenuation: true,
+      transparent: true,
+      opacity: 0.7,
+      depthTest: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+
+    this.pointCloudMesh = new THREE.Points(geo, mat);
+    this.pointCloudMesh.frustumCulled = true;
+
+    this.workspaceGroup.add(this.pointCloudMesh);
+    this.workspaceGroup.visible = true;
+  }
+
+  /** Remove the point cloud overlay from the scene. */
+  clearPointCloud(): void {
+    if (this.pointCloudMesh) {
+      this.workspaceGroup?.remove(this.pointCloudMesh);
+      this.pointCloudMesh.geometry.dispose();
+      (this.pointCloudMesh.material as THREE.Material).dispose();
+      this.pointCloudMesh = null;
+    }
+    if (this.workspaceGroup) {
+      this.workspaceGroup.visible = false;
+    }
+  }
+
   dispose(): void {
     if (this.frameId !== null) {
       cancelAnimationFrame(this.frameId);
@@ -447,6 +500,14 @@ export class ThreeRendererService {
       mat.dispose();
     }
     this.matCache.clear();
+
+    // Dispose workspace overlay
+    if (this.workspaceGroup) {
+      this.disposeGroup(this.workspaceGroup);
+      this.scene?.remove(this.workspaceGroup);
+    }
+    this.pointCloudMesh = null;
+    this.workspaceGroup = null;
 
     this.scene = null;
     this.camera = null;

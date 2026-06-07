@@ -30,6 +30,8 @@ export interface WorkspaceUiState {
 
 export interface WorkspaceState {
     data: WorkspaceData | null;
+    pointCloud: [number, number, number][] | null;
+    showPointCloud: boolean;
     reachability: ReachabilityResult | null;
     ui: WorkspaceUiState;
 }
