@@ -47,7 +47,7 @@ cadena.
 maneja *serial* chains (abiertas). No soporta cadenas cerradas (parallel) ni
 ramificaciones (tree).
 
-## Términos del workspace
+## Términos del workspace (Cargo)
 
 **Crate** — Paquete de Rust. Thalos tiene 4: `thalos-core`, `thalos-visual`,
 `thalos-runtime`, `thalos-api`.
@@ -57,6 +57,44 @@ configuración de build.
 
 **Feature** — Módulo funcional dentro de `thalos-api` (`scene`, `robots`,
 y futuros: `planning`, `control`, etc.).
+
+## Términos del workspace analysis
+
+**Workspace Analysis** — Técnica para caracterizar el espacio de trabajo de un
+manipulador mediante muestreo Monte Carlo de configuraciones articulares.
+
+**Workspace** — Dataset inmutable de muestras de configuraciones articulares
+con posiciones del end-effector, bounds y métricas derivadas.
+
+**WorkspaceSample** — Unidad atómica del análisis: configuración articular `q`
++ posición 3D del end-effector.
+
+**BoundingBox** — Caja alineada a ejes (AABB) que envuelve todas las
+posiciones muestreadas. No es el volumen real del workspace.
+
+**WorkspaceMetrics** — Métricas derivadas del conjunto de posiciones:
+`bounding_volume`, `max_reach`, `min_reach`, `centroid`, `sample_count`.
+
+**WorkspaceConfig** — Parámetros de muestreo: `samples`, `seed`, `tolerance`.
+
+**WorkspaceSampler** — Algoritmo de muestreo Monte Carlo que genera configuraciones
+articulares uniformes dentro de los límites y evalúa FK.
+
+**Reachability** — Resultado de una consulta de alcanzabilidad: `Reachable` u
+`OutOfWorkspace { nearest_distance }`.
+
+**WorkspaceService** — Servicio stateless en `thalos-runtime` que orquesta el
+muestreo y las consultas de alcanzabilidad.
+
+**WorkspaceVisual** — Representación visual compuesta por `BoundsWireframe`
+(AABB como 12 aristas) y `SamplePointCloud` (nube de puntos 3D) con overlay
+opcional del robot.
+
+**WorkspacePanel** — Componente Angular con formulario de configuración,
+visualización de métricas y consulta de alcanzabilidad.
+
+**WorkspaceRenderer** — Componente Angular/Three.js que renderiza el wireframe
+del AABB y la nube de puntos.
 
 ## Términos del runtime
 

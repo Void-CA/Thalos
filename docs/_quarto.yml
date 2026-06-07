@@ -16,6 +16,7 @@ book:
     - vision.qmd
     - architecture.qmd
     - workspace.qmd
+    - workspace-analysis.qmd
     - domain.qmd
     - flow.qmd
     - maturity.qmd
