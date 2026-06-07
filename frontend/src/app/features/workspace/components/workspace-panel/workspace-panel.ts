@@ -1,7 +1,6 @@
-import { Component, computed, effect, inject } from '@angular/core';
+import { Component, effect, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RobotStore } from '../../../robots/store/robot.store';
-import { SceneStore } from '../../../scene/store/scene.store';
 import { WorkspaceStore } from '../../store/workspace.store';
 
 @Component({
@@ -65,30 +64,6 @@ import { WorkspaceStore } from '../../store/workspace.store';
         </section>
       }
 
-      <!-- ── EVALUATE IK TARGET ── -->
-      @if (store.hasData()) {
-        <button
-          class="action action--eval"
-          (click)="onEvaluate()"
-          [disabled]="store.loading() || !ikTarget()"
-        >
-          {{ store.loading() ? 'Evaluating\u2026' : 'Evaluate Current IK Target' }}
-        </button>
-
-        @if (store.reachability(); as r) {
-          <div
-            class="feedback"
-            [class.is-reachable]="r.reachable"
-            [class.is-unreachable]="!r.reachable"
-          >
-            <strong>{{ r.reachable ? '\u2713 Reachable' : '\u2717 Out of Workspace' }}</strong>
-            @if (!r.reachable) {
-              <span> &mdash; nearest distance: {{ r.nearestDistance.toFixed(4) }} m</span>
-            }
-          </div>
-        }
-      }
-
       <!-- ── ERROR ── -->
       @if (store.error(); as err) {
         <div class="error-msg">{{ err }}</div>
@@ -100,13 +75,9 @@ import { WorkspaceStore } from '../../store/workspace.store';
 export class WorkspacePanel {
   readonly store = inject(WorkspaceStore);
   private readonly robotStore = inject(RobotStore);
-  private readonly sceneStore = inject(SceneStore);
 
   /** Currently selected robot ID from the global catalog. */
   protected readonly robotId = this.robotStore.selectedId;
-
-  /** Current IK target (null if gizmo not placed). */
-  protected readonly ikTarget = computed(() => this.sceneStore.state().ikTarget);
 
   samples = 5_000;
   seed = 0;
@@ -124,11 +95,5 @@ export class WorkspacePanel {
     const id = this.robotId();
     if (!id) return;
     this.store.sample(id, this.samples, this.seed, this.tolerance);
-  }
-
-  onEvaluate(): void {
-    const target = this.ikTarget();
-    if (!target) return;
-    this.store.checkReachability(target.translation, this.tolerance);
   }
 }

@@ -85,12 +85,6 @@ input[type='number'] {
   color: #fff;
 }
 
-.action--eval {
-  background: $solve-bg;
-  border-color: $solve-border;
-  color: #fff;
-}
-
 /* ── Point cloud toggle ── */
 .toggle {
   display: flex;
@@ -132,24 +126,6 @@ input[type='number'] {
     text-align: right;
     font-family: $font-mono;
     color: $text-secondary;
-  }
-}
-
-/* ── Reachability feedback ── */
-.feedback {
-  margin-top: 0.5rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: $radius-sm;
-  font-size: 0.72rem;
-  text-align: center;
-
-  &.is-reachable {
-    background: $success-bg;
-    border: 1px solid $success-border;
-  }
-  &.is-unreachable {
-    background: $warn-bg;
-    border: 1px solid $warn-border;
   }
 }
 
