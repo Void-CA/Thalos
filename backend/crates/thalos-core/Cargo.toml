@@ -7,3 +7,14 @@ edition = "2024"
 nalgebra = "0.34.2"
 rand = "0.8"
 thiserror = "2"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "workspace_sampling"
+harness = false
+
+[[bench]]
+name = "reachability"
+harness = false
