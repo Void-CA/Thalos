@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>6&nbsp; Flujo interno del sistema – Thalos — Documentación Técnica</title>
+<title>7&nbsp; Flujo interno del sistema – Thalos — Documentación Técnica</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -85,7 +85,7 @@ ul.task-list li input[type="checkbox"] {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./flow.html"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Flujo interno del sistema</span></a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./flow.html"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Flujo interno del sistema</span></a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
       <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
@@ -139,26 +139,32 @@ ul.task-list li input[type="checkbox"] {
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="./workspace-analysis.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Análisis de Workspace</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="./domain.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Definiciones internas del dominio</span></span></a>
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Definiciones internas del dominio</span></span></a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./flow.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Flujo interno del sistema</span></span></a>
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Flujo interno del sistema</span></span></a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./maturity.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Estado de madurez</span></span></a>
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Estado de madurez</span></span></a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./contributing.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Contribución a Thalos</span></span></a>
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Contribución a Thalos</span></span></a>
   </div>
 </li>
         <li class="sidebar-item sidebar-item-section">
@@ -188,20 +194,20 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">Table of contents</h2>
    
   <ul>
-  <li><a href="#pipeline-completo-end-to-end" id="toc-pipeline-completo-end-to-end" class="nav-link active" data-scroll-target="#pipeline-completo-end-to-end"><span class="header-section-number">6.1</span> Pipeline completo (end-to-end)</a>
+  <li><a href="#pipeline-completo-end-to-end" id="toc-pipeline-completo-end-to-end" class="nav-link active" data-scroll-target="#pipeline-completo-end-to-end"><span class="header-section-number">7.1</span> Pipeline completo (end-to-end)</a>
   <ul class="collapse">
-  <li><a href="#flujo-setjoints" id="toc-flujo-setjoints" class="nav-link" data-scroll-target="#flujo-setjoints"><span class="header-section-number">6.1.1</span> Flujo: SetJoints</a></li>
-  <li><a href="#flujo-loadrobot" id="toc-flujo-loadrobot" class="nav-link" data-scroll-target="#flujo-loadrobot"><span class="header-section-number">6.1.2</span> Flujo: LoadRobot</a></li>
+  <li><a href="#flujo-setjoints" id="toc-flujo-setjoints" class="nav-link" data-scroll-target="#flujo-setjoints"><span class="header-section-number">7.1.1</span> Flujo: SetJoints</a></li>
+  <li><a href="#flujo-loadrobot" id="toc-flujo-loadrobot" class="nav-link" data-scroll-target="#flujo-loadrobot"><span class="header-section-number">7.1.2</span> Flujo: LoadRobot</a></li>
   </ul></li>
-  <li><a href="#flujo-de-fk-detalle-matemático" id="toc-flujo-de-fk-detalle-matemático" class="nav-link" data-scroll-target="#flujo-de-fk-detalle-matemático"><span class="header-section-number">6.2</span> Flujo de FK (detalle matemático)</a></li>
-  <li><a href="#flujo-de-jacobiano-detalle-matemático" id="toc-flujo-de-jacobiano-detalle-matemático" class="nav-link" data-scroll-target="#flujo-de-jacobiano-detalle-matemático"><span class="header-section-number">6.3</span> Flujo de Jacobiano (detalle matemático)</a>
+  <li><a href="#flujo-de-fk-detalle-matemático" id="toc-flujo-de-fk-detalle-matemático" class="nav-link" data-scroll-target="#flujo-de-fk-detalle-matemático"><span class="header-section-number">7.2</span> Flujo de FK (detalle matemático)</a></li>
+  <li><a href="#flujo-de-jacobiano-detalle-matemático" id="toc-flujo-de-jacobiano-detalle-matemático" class="nav-link" data-scroll-target="#flujo-de-jacobiano-detalle-matemático"><span class="header-section-number">7.3</span> Flujo de Jacobiano (detalle matemático)</a>
   <ul class="collapse">
-  <li><a href="#geométrico" id="toc-geométrico" class="nav-link" data-scroll-target="#geométrico"><span class="header-section-number">6.3.1</span> Geométrico</a></li>
-  <li><a href="#numérico-diferencias-finitas-centrales" id="toc-numérico-diferencias-finitas-centrales" class="nav-link" data-scroll-target="#numérico-diferencias-finitas-centrales"><span class="header-section-number">6.3.2</span> Numérico (diferencias finitas centrales)</a></li>
+  <li><a href="#geométrico" id="toc-geométrico" class="nav-link" data-scroll-target="#geométrico"><span class="header-section-number">7.3.1</span> Geométrico</a></li>
+  <li><a href="#numérico-diferencias-finitas-centrales" id="toc-numérico-diferencias-finitas-centrales" class="nav-link" data-scroll-target="#numérico-diferencias-finitas-centrales"><span class="header-section-number">7.3.2</span> Numérico (diferencias finitas centrales)</a></li>
   </ul></li>
-  <li><a href="#flujo-de-scenediff" id="toc-flujo-de-scenediff" class="nav-link" data-scroll-target="#flujo-de-scenediff"><span class="header-section-number">6.4</span> Flujo de SceneDiff</a></li>
-  <li><a href="#flujo-de-primitives" id="toc-flujo-de-primitives" class="nav-link" data-scroll-target="#flujo-de-primitives"><span class="header-section-number">6.5</span> Flujo de Primitives</a></li>
-  <li><a href="#relación-entre-conceptos" id="toc-relación-entre-conceptos" class="nav-link" data-scroll-target="#relación-entre-conceptos"><span class="header-section-number">6.6</span> Relación entre conceptos</a></li>
+  <li><a href="#flujo-de-scenediff" id="toc-flujo-de-scenediff" class="nav-link" data-scroll-target="#flujo-de-scenediff"><span class="header-section-number">7.4</span> Flujo de SceneDiff</a></li>
+  <li><a href="#flujo-de-primitives" id="toc-flujo-de-primitives" class="nav-link" data-scroll-target="#flujo-de-primitives"><span class="header-section-number">7.5</span> Flujo de Primitives</a></li>
+  <li><a href="#relación-entre-conceptos" id="toc-relación-entre-conceptos" class="nav-link" data-scroll-target="#relación-entre-conceptos"><span class="header-section-number">7.6</span> Relación entre conceptos</a></li>
   </ul>
 </nav>
     </div>
@@ -210,7 +216,7 @@ ul.task-list li input[type="checkbox"] {
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title"><span id="sec-flow" class="quarto-section-identifier"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Flujo interno del sistema</span></span></h1>
+<h1 class="title"><span id="sec-flow" class="quarto-section-identifier"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Flujo interno del sistema</span></span></h1>
 </div>
 
 
@@ -228,11 +234,11 @@ ul.task-list li input[type="checkbox"] {
 
 
 <p>Esta sección describe cómo viajan los datos a través del sistema, desde que el usuario mueve un slider hasta que ve el resultado en pantalla.</p>
-<section id="pipeline-completo-end-to-end" class="level2" data-number="6.1">
-<h2 data-number="6.1" class="anchored" data-anchor-id="pipeline-completo-end-to-end"><span class="header-section-number">6.1</span> Pipeline completo (end-to-end)</h2>
+<section id="pipeline-completo-end-to-end" class="level2" data-number="7.1">
+<h2 data-number="7.1" class="anchored" data-anchor-id="pipeline-completo-end-to-end"><span class="header-section-number">7.1</span> Pipeline completo (end-to-end)</h2>
 <p>Hay dos flujos principales: <strong>set joints</strong> (actualizar ángulos) y <strong>load robot</strong> (cambiar de modelo). Ambos pasan por <code>SceneService::execute(Command)</code>.</p>
-<section id="flujo-setjoints" class="level3" data-number="6.1.1">
-<h3 data-number="6.1.1" class="anchored" data-anchor-id="flujo-setjoints"><span class="header-section-number">6.1.1</span> Flujo: SetJoints</h3>
+<section id="flujo-setjoints" class="level3" data-number="7.1.1">
+<h3 data-number="7.1.1" class="anchored" data-anchor-id="flujo-setjoints"><span class="header-section-number">7.1.1</span> Flujo: SetJoints</h3>
 <div class="cell" data-layout-align="default">
 <div class="cell-output-display">
 <div id="fig-pipeline-e2e" class="quarto-float quarto-figure quarto-figure-center anchored">
@@ -393,15 +399,15 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-pipeline-e2e-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;6.1: Pipeline SetJoints — el usuario mueve un slider y ve el resultado
+Figure&nbsp;7.1: Pipeline SetJoints — el usuario mueve un slider y ve el resultado
 </figcaption>
 </figure>
 </div>
 </div>
 </div>
 </section>
-<section id="flujo-loadrobot" class="level3" data-number="6.1.2">
-<h3 data-number="6.1.2" class="anchored" data-anchor-id="flujo-loadrobot"><span class="header-section-number">6.1.2</span> Flujo: LoadRobot</h3>
+<section id="flujo-loadrobot" class="level3" data-number="7.1.2">
+<h3 data-number="7.1.2" class="anchored" data-anchor-id="flujo-loadrobot"><span class="header-section-number">7.1.2</span> Flujo: LoadRobot</h3>
 <div class="cell" data-layout-align="default">
 <div class="cell-output-display">
 <div id="fig-pipeline-load" class="quarto-float quarto-figure quarto-figure-center anchored">
@@ -592,7 +598,7 @@ Figure&nbsp;6.1: Pipeline SetJoints — el usuario mueve un slider y ve el resul
 </div>
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-pipeline-load-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;6.2: Pipeline LoadRobot — cambiar el modelo activo
+Figure&nbsp;7.2: Pipeline LoadRobot — cambiar el modelo activo
 </figcaption>
 </figure>
 </div>
@@ -600,8 +606,8 @@ Figure&nbsp;6.2: Pipeline LoadRobot — cambiar el modelo activo
 </div>
 </section>
 </section>
-<section id="flujo-de-fk-detalle-matemático" class="level2" data-number="6.2">
-<h2 data-number="6.2" class="anchored" data-anchor-id="flujo-de-fk-detalle-matemático"><span class="header-section-number">6.2</span> Flujo de FK (detalle matemático)</h2>
+<section id="flujo-de-fk-detalle-matemático" class="level2" data-number="7.2">
+<h2 data-number="7.2" class="anchored" data-anchor-id="flujo-de-fk-detalle-matemático"><span class="header-section-number">7.2</span> Flujo de FK (detalle matemático)</h2>
 <p>El algoritmo de <code>ForwardKinematics::evaluate(q)</code>:</p>
 <pre><code>t₀ = Identity
      ↓
@@ -619,10 +625,10 @@ Pose(childᵢ) = (World, childᵢ, tᵢ)</code></pre>
 <li><strong>Prismatic</strong>: <code>Transform3D::from_translation(direction * q)</code></li>
 </ul>
 </section>
-<section id="flujo-de-jacobiano-detalle-matemático" class="level2" data-number="6.3">
-<h2 data-number="6.3" class="anchored" data-anchor-id="flujo-de-jacobiano-detalle-matemático"><span class="header-section-number">6.3</span> Flujo de Jacobiano (detalle matemático)</h2>
-<section id="geométrico" class="level3" data-number="6.3.1">
-<h3 data-number="6.3.1" class="anchored" data-anchor-id="geométrico"><span class="header-section-number">6.3.1</span> Geométrico</h3>
+<section id="flujo-de-jacobiano-detalle-matemático" class="level2" data-number="7.3">
+<h2 data-number="7.3" class="anchored" data-anchor-id="flujo-de-jacobiano-detalle-matemático"><span class="header-section-number">7.3</span> Flujo de Jacobiano (detalle matemático)</h2>
+<section id="geométrico" class="level3" data-number="7.3.1">
+<h3 data-number="7.3.1" class="anchored" data-anchor-id="geométrico"><span class="header-section-number">7.3.1</span> Geométrico</h3>
 <pre><code>Para cada joint i:
   pₑ = posición global del end-effector
   pᵢ = posición del joint i (parent ∘ origin)
@@ -636,8 +642,8 @@ Pose(childᵢ) = (World, childᵢ, tᵢ)</code></pre>
     J_linear[:,i] = zᵢ
     J_angular[:,i] = 0</code></pre>
 </section>
-<section id="numérico-diferencias-finitas-centrales" class="level3" data-number="6.3.2">
-<h3 data-number="6.3.2" class="anchored" data-anchor-id="numérico-diferencias-finitas-centrales"><span class="header-section-number">6.3.2</span> Numérico (diferencias finitas centrales)</h3>
+<section id="numérico-diferencias-finitas-centrales" class="level3" data-number="7.3.2">
+<h3 data-number="7.3.2" class="anchored" data-anchor-id="numérico-diferencias-finitas-centrales"><span class="header-section-number">7.3.2</span> Numérico (diferencias finitas centrales)</h3>
 <pre><code>Para cada joint i:
   q₊ = q,  q₊[i] += ε
   q₋ = q,  q₋[i] -= ε
@@ -649,8 +655,8 @@ Pose(childᵢ) = (World, childᵢ, tᵢ)</code></pre>
   J_angular[:,i] = 0  (solo posición)</code></pre>
 </section>
 </section>
-<section id="flujo-de-scenediff" class="level2" data-number="6.4">
-<h2 data-number="6.4" class="anchored" data-anchor-id="flujo-de-scenediff"><span class="header-section-number">6.4</span> Flujo de SceneDiff</h2>
+<section id="flujo-de-scenediff" class="level2" data-number="7.4">
+<h2 data-number="7.4" class="anchored" data-anchor-id="flujo-de-scenediff"><span class="header-section-number">7.4</span> Flujo de SceneDiff</h2>
 <pre><code>SceneDiff::between(old, new, epsilon)
 
 1. Frames eliminados: en old pero no en new
@@ -660,8 +666,8 @@ Pose(childᵢ) = (World, childᵢ, tᵢ)</code></pre>
    - Ángulo geodésico de rotación: 2·acos(|q_new · q_old|)
    - Si alguno &gt; epsilon → se reporta como cambio</code></pre>
 </section>
-<section id="flujo-de-primitives" class="level2" data-number="6.5">
-<h2 data-number="6.5" class="anchored" data-anchor-id="flujo-de-primitives"><span class="header-section-number">6.5</span> Flujo de Primitives</h2>
+<section id="flujo-de-primitives" class="level2" data-number="7.5">
+<h2 data-number="7.5" class="anchored" data-anchor-id="flujo-de-primitives"><span class="header-section-number">7.5</span> Flujo de Primitives</h2>
 <p>Las primitivas geométricas se construyen en <code>SceneBuilder</code> (o builders específicos como <code>ScaraVisualBuilder</code>) y viajan dentro de <code>VisualScene</code> hasta el frontend.</p>
 <pre><code>ScaraVisualBuilder::build(fk, chain)
 
@@ -688,8 +694,8 @@ Pose(childᵢ) = (World, childᵢ, tᵢ)</code></pre>
   mesh.position = primitive.translation
   mesh.quaternion = [rot.y, rot.z, rot.w, rot.x]  // Rust → Three.js</code></pre>
 </section>
-<section id="relación-entre-conceptos" class="level2" data-number="6.6">
-<h2 data-number="6.6" class="anchored" data-anchor-id="relación-entre-conceptos"><span class="header-section-number">6.6</span> Relación entre conceptos</h2>
+<section id="relación-entre-conceptos" class="level2" data-number="7.6">
+<h2 data-number="7.6" class="anchored" data-anchor-id="relación-entre-conceptos"><span class="header-section-number">7.6</span> Relación entre conceptos</h2>
 <div class="cell" data-layout-align="default">
 <div class="cell-output-display">
 <div id="fig-concept-relations" class="quarto-float quarto-figure quarto-figure-center anchored">
@@ -779,7 +785,7 @@ Pose(childᵢ) = (World, childᵢ, tᵢ)</code></pre>
 </div>
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-concept-relations-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;6.3: Relación entre conceptos del dominio
+Figure&nbsp;7.3: Relación entre conceptos del dominio
 </figcaption>
 </figure>
 </div>
@@ -1193,12 +1199,12 @@ Figure&nbsp;6.3: Relación entre conceptos del dominio
 <nav class="page-navigation">
   <div class="nav-page nav-page-previous">
       <a href="./domain.html" class="pagination-link" aria-label="Definiciones internas del dominio">
-        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Definiciones internas del dominio</span></span>
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Definiciones internas del dominio</span></span>
       </a>          
   </div>
   <div class="nav-page nav-page-next">
       <a href="./maturity.html" class="pagination-link" aria-label="Estado de madurez">
-        <span class="nav-page-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Estado de madurez</span></span> <i class="bi bi-arrow-right-short"></i>
+        <span class="nav-page-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Estado de madurez</span></span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>

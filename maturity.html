@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>7&nbsp; Estado de madurez – Thalos — Documentación Técnica</title>
+<title>8&nbsp; Estado de madurez – Thalos — Documentación Técnica</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -114,7 +114,7 @@ window.Quarto = {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./maturity.html"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Estado de madurez</span></a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./maturity.html"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Estado de madurez</span></a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
       <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
@@ -168,26 +168,32 @@ window.Quarto = {
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="./workspace-analysis.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Análisis de Workspace</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="./domain.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Definiciones internas del dominio</span></span></a>
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Definiciones internas del dominio</span></span></a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./flow.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Flujo interno del sistema</span></span></a>
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Flujo interno del sistema</span></span></a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./maturity.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Estado de madurez</span></span></a>
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Estado de madurez</span></span></a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./contributing.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Contribución a Thalos</span></span></a>
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Contribución a Thalos</span></span></a>
   </div>
 </li>
         <li class="sidebar-item sidebar-item-section">
@@ -217,15 +223,15 @@ window.Quarto = {
     <h2 id="toc-title">Table of contents</h2>
    
   <ul>
-  <li><a href="#matriz-de-madurez" id="toc-matriz-de-madurez" class="nav-link active" data-scroll-target="#matriz-de-madurez"><span class="header-section-number">7.1</span> Matriz de madurez</a></li>
-  <li><a href="#cobertura-de-tests" id="toc-cobertura-de-tests" class="nav-link" data-scroll-target="#cobertura-de-tests"><span class="header-section-number">7.2</span> Cobertura de tests</a>
+  <li><a href="#matriz-de-madurez" id="toc-matriz-de-madurez" class="nav-link active" data-scroll-target="#matriz-de-madurez"><span class="header-section-number">8.1</span> Matriz de madurez</a></li>
+  <li><a href="#cobertura-de-tests" id="toc-cobertura-de-tests" class="nav-link" data-scroll-target="#cobertura-de-tests"><span class="header-section-number">8.2</span> Cobertura de tests</a>
   <ul class="collapse">
-  <li><a href="#thalos-core" id="toc-thalos-core" class="nav-link" data-scroll-target="#thalos-core"><span class="header-section-number">7.2.1</span> <code>thalos-core</code></a></li>
-  <li><a href="#thalos-visual" id="toc-thalos-visual" class="nav-link" data-scroll-target="#thalos-visual"><span class="header-section-number">7.2.2</span> <code>thalos-visual</code></a></li>
-  <li><a href="#thalos-api" id="toc-thalos-api" class="nav-link" data-scroll-target="#thalos-api"><span class="header-section-number">7.2.3</span> <code>thalos-api</code></a></li>
-  <li><a href="#thalos-runtime" id="toc-thalos-runtime" class="nav-link" data-scroll-target="#thalos-runtime"><span class="header-section-number">7.2.4</span> <code>thalos-runtime</code></a></li>
+  <li><a href="#thalos-core" id="toc-thalos-core" class="nav-link" data-scroll-target="#thalos-core"><span class="header-section-number">8.2.1</span> <code>thalos-core</code></a></li>
+  <li><a href="#thalos-visual" id="toc-thalos-visual" class="nav-link" data-scroll-target="#thalos-visual"><span class="header-section-number">8.2.2</span> <code>thalos-visual</code></a></li>
+  <li><a href="#thalos-api" id="toc-thalos-api" class="nav-link" data-scroll-target="#thalos-api"><span class="header-section-number">8.2.3</span> <code>thalos-api</code></a></li>
+  <li><a href="#thalos-runtime" id="toc-thalos-runtime" class="nav-link" data-scroll-target="#thalos-runtime"><span class="header-section-number">8.2.4</span> <code>thalos-runtime</code></a></li>
   </ul></li>
-  <li><a href="#cobertura-deseada" id="toc-cobertura-deseada" class="nav-link" data-scroll-target="#cobertura-deseada"><span class="header-section-number">7.3</span> Cobertura deseada</a></li>
+  <li><a href="#cobertura-deseada" id="toc-cobertura-deseada" class="nav-link" data-scroll-target="#cobertura-deseada"><span class="header-section-number">8.3</span> Cobertura deseada</a></li>
   </ul>
 </nav>
     </div>
@@ -234,7 +240,7 @@ window.Quarto = {
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title"><span id="sec-maturity" class="quarto-section-identifier"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Estado de madurez</span></span></h1>
+<h1 class="title"><span id="sec-maturity" class="quarto-section-identifier"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Estado de madurez</span></span></h1>
 </div>
 
 
@@ -252,8 +258,8 @@ window.Quarto = {
 
 
 <p>Esta sección documenta qué partes de Thalos están <strong>estables</strong>, cuáles están <strong>en desarrollo</strong>, y qué esperar de cada área. Es información crítica para colaboradores y adoptantes tempranos.</p>
-<section id="matriz-de-madurez" class="level2" data-number="7.1">
-<h2 data-number="7.1" class="anchored" data-anchor-id="matriz-de-madurez"><span class="header-section-number">7.1</span> Matriz de madurez</h2>
+<section id="matriz-de-madurez" class="level2" data-number="8.1">
+<h2 data-number="8.1" class="anchored" data-anchor-id="matriz-de-madurez"><span class="header-section-number">8.1</span> Matriz de madurez</h2>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 28%">
@@ -457,38 +463,38 @@ window.Quarto = {
 <li><span class="math inline">\(\circ\)</span> Experimental — Implementación inicial, sujeta a cambios significativos</li>
 </ul>
 </section>
-<section id="cobertura-de-tests" class="level2" data-number="7.2">
-<h2 data-number="7.2" class="anchored" data-anchor-id="cobertura-de-tests"><span class="header-section-number">7.2</span> Cobertura de tests</h2>
-<section id="thalos-core" class="level3" data-number="7.2.1">
-<h3 data-number="7.2.1" class="anchored" data-anchor-id="thalos-core"><span class="header-section-number">7.2.1</span> <code>thalos-core</code></h3>
+<section id="cobertura-de-tests" class="level2" data-number="8.2">
+<h2 data-number="8.2" class="anchored" data-anchor-id="cobertura-de-tests"><span class="header-section-number">8.2</span> Cobertura de tests</h2>
+<section id="thalos-core" class="level3" data-number="8.2.1">
+<h3 data-number="8.2.1" class="anchored" data-anchor-id="thalos-core"><span class="header-section-number">8.2.1</span> <code>thalos-core</code></h3>
 <ul>
 <li><code>math::rotations::quaternion</code> — Álgebra de cuaterniones: identidad, inverso, conjugado, norma, normalización, producto de Hamilton, asociatividad</li>
 <li><code>math::rotations::unit_quaternion</code> — Invariante de norma, Euler ↔︎ quaternion roundtrip, <code>rotate_vector</code>, composición, inverso, <code>from_axis_angle</code></li>
 </ul>
 </section>
-<section id="thalos-visual" class="level3" data-number="7.2.2">
-<h3 data-number="7.2.2" class="anchored" data-anchor-id="thalos-visual"><span class="header-section-number">7.2.2</span> <code>thalos-visual</code></h3>
+<section id="thalos-visual" class="level3" data-number="8.2.2">
+<h3 data-number="8.2.2" class="anchored" data-anchor-id="thalos-visual"><span class="header-section-number">8.2.2</span> <code>thalos-visual</code></h3>
 <ul>
 <li><code>validator_tests</code> — Cada invariante del <code>SceneValidator</code> (world, duplicados, topología, conectividad, finitos, quaternions, links, twists)</li>
 <li><code>scene_snapshots</code> — Snapshots con <code>insta</code> para validación visual de escenas FK</li>
 </ul>
 </section>
-<section id="thalos-api" class="level3" data-number="7.2.3">
-<h3 data-number="7.2.3" class="anchored" data-anchor-id="thalos-api"><span class="header-section-number">7.2.3</span> <code>thalos-api</code></h3>
+<section id="thalos-api" class="level3" data-number="8.2.3">
+<h3 data-number="8.2.3" class="anchored" data-anchor-id="thalos-api"><span class="header-section-number">8.2.3</span> <code>thalos-api</code></h3>
 <ul>
 <li><code>service_tests</code> — <code>SceneService::build_scene</code> con validación</li>
 <li><code>api_tests</code> — Integración HTTP: endpoints responden correctamente</li>
 </ul>
 </section>
-<section id="thalos-runtime" class="level3" data-number="7.2.4">
-<h3 data-number="7.2.4" class="anchored" data-anchor-id="thalos-runtime"><span class="header-section-number">7.2.4</span> <code>thalos-runtime</code></h3>
+<section id="thalos-runtime" class="level3" data-number="8.2.4">
+<h3 data-number="8.2.4" class="anchored" data-anchor-id="thalos-runtime"><span class="header-section-number">8.2.4</span> <code>thalos-runtime</code></h3>
 <ul>
 <li>Sin tests dedicados aún (depende de validación de escena vía <code>thalos-visual</code>)</li>
 </ul>
 </section>
 </section>
-<section id="cobertura-deseada" class="level2" data-number="7.3">
-<h2 data-number="7.3" class="anchored" data-anchor-id="cobertura-deseada"><span class="header-section-number">7.3</span> Cobertura deseada</h2>
+<section id="cobertura-deseada" class="level2" data-number="8.3">
+<h2 data-number="8.3" class="anchored" data-anchor-id="cobertura-deseada"><span class="header-section-number">8.3</span> Cobertura deseada</h2>
 <ul>
 <li>Tests directos para <code>Transform3D::compose()</code> y <code>Transform3D::identity()</code></li>
 <li>Tests para <code>RevoluteJoint::motion()</code> y <code>PrismaticJoint::motion()</code></li>
@@ -906,12 +912,12 @@ window.Quarto = {
 <nav class="page-navigation">
   <div class="nav-page nav-page-previous">
       <a href="./flow.html" class="pagination-link" aria-label="Flujo interno del sistema">
-        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Flujo interno del sistema</span></span>
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Flujo interno del sistema</span></span>
       </a>          
   </div>
   <div class="nav-page nav-page-next">
       <a href="./contributing.html" class="pagination-link" aria-label="Contribución a Thalos">
-        <span class="nav-page-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Contribución a Thalos</span></span> <i class="bi bi-arrow-right-short"></i>
+        <span class="nav-page-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Contribución a Thalos</span></span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>

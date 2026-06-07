@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>5&nbsp; Definiciones internas del dominio – Thalos — Documentación Técnica</title>
+<title>6&nbsp; Definiciones internas del dominio – Thalos — Documentación Técnica</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -69,7 +69,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="site_libs/quarto-search/quarto-search.js"></script>
 <meta name="quarto:offset" content="./">
 <link href="./flow.html" rel="next">
-<link href="./workspace.html" rel="prev">
+<link href="./workspace-analysis.html" rel="prev">
 <script src="site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
 <script src="site_libs/quarto-html/popper.min.js"></script>
@@ -120,7 +120,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./domain.html"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Definiciones internas del dominio</span></a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./domain.html"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Definiciones internas del dominio</span></a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
       <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
@@ -174,26 +174,32 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="./workspace-analysis.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Análisis de Workspace</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="./domain.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Definiciones internas del dominio</span></span></a>
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Definiciones internas del dominio</span></span></a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./flow.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Flujo interno del sistema</span></span></a>
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Flujo interno del sistema</span></span></a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./maturity.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Estado de madurez</span></span></a>
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Estado de madurez</span></span></a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./contributing.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Contribución a Thalos</span></span></a>
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Contribución a Thalos</span></span></a>
   </div>
 </li>
         <li class="sidebar-item sidebar-item-section">
@@ -223,25 +229,25 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">Table of contents</h2>
    
   <ul>
-  <li><a href="#serial-chain" id="toc-serial-chain" class="nav-link active" data-scroll-target="#serial-chain"><span class="header-section-number">5.1</span> Serial Chain</a></li>
-  <li><a href="#joint" id="toc-joint" class="nav-link" data-scroll-target="#joint"><span class="header-section-number">5.2</span> Joint</a>
+  <li><a href="#serial-chain" id="toc-serial-chain" class="nav-link active" data-scroll-target="#serial-chain"><span class="header-section-number">6.1</span> Serial Chain</a></li>
+  <li><a href="#joint" id="toc-joint" class="nav-link" data-scroll-target="#joint"><span class="header-section-number">6.2</span> Joint</a>
   <ul class="collapse">
-  <li><a href="#revolutejoint" id="toc-revolutejoint" class="nav-link" data-scroll-target="#revolutejoint"><span class="header-section-number">5.2.1</span> RevoluteJoint</a></li>
-  <li><a href="#prismaticjoint" id="toc-prismaticjoint" class="nav-link" data-scroll-target="#prismaticjoint"><span class="header-section-number">5.2.2</span> PrismaticJoint</a></li>
-  <li><a href="#jointtype-enum-unificado" id="toc-jointtype-enum-unificado" class="nav-link" data-scroll-target="#jointtype-enum-unificado"><span class="header-section-number">5.2.3</span> JointType (enum unificado)</a></li>
+  <li><a href="#revolutejoint" id="toc-revolutejoint" class="nav-link" data-scroll-target="#revolutejoint"><span class="header-section-number">6.2.1</span> RevoluteJoint</a></li>
+  <li><a href="#prismaticjoint" id="toc-prismaticjoint" class="nav-link" data-scroll-target="#prismaticjoint"><span class="header-section-number">6.2.2</span> PrismaticJoint</a></li>
+  <li><a href="#jointtype-enum-unificado" id="toc-jointtype-enum-unificado" class="nav-link" data-scroll-target="#jointtype-enum-unificado"><span class="header-section-number">6.2.3</span> JointType (enum unificado)</a></li>
   </ul></li>
-  <li><a href="#link" id="toc-link" class="nav-link" data-scroll-target="#link"><span class="header-section-number">5.3</span> Link</a></li>
-  <li><a href="#segment" id="toc-segment" class="nav-link" data-scroll-target="#segment"><span class="header-section-number">5.4</span> Segment</a></li>
-  <li><a href="#sec-spatial-system" id="toc-sec-spatial-system" class="nav-link" data-scroll-target="#sec-spatial-system"><span class="header-section-number">5.5</span> Sistema espacial</a>
+  <li><a href="#link" id="toc-link" class="nav-link" data-scroll-target="#link"><span class="header-section-number">6.3</span> Link</a></li>
+  <li><a href="#segment" id="toc-segment" class="nav-link" data-scroll-target="#segment"><span class="header-section-number">6.4</span> Segment</a></li>
+  <li><a href="#sec-spatial-system" id="toc-sec-spatial-system" class="nav-link" data-scroll-target="#sec-spatial-system"><span class="header-section-number">6.5</span> Sistema espacial</a>
   <ul class="collapse">
-  <li><a href="#frame" id="toc-frame" class="nav-link" data-scroll-target="#frame"><span class="header-section-number">5.5.1</span> Frame</a></li>
-  <li><a href="#frameregistry" id="toc-frameregistry" class="nav-link" data-scroll-target="#frameregistry"><span class="header-section-number">5.5.2</span> FrameRegistry</a></li>
-  <li><a href="#pose" id="toc-pose" class="nav-link" data-scroll-target="#pose"><span class="header-section-number">5.5.3</span> Pose</a></li>
-  <li><a href="#framegraph" id="toc-framegraph" class="nav-link" data-scroll-target="#framegraph"><span class="header-section-number">5.5.4</span> FrameGraph</a></li>
-  <li><a href="#cómo-conecta-el-sistema-espacial-con-el-resto" id="toc-cómo-conecta-el-sistema-espacial-con-el-resto" class="nav-link" data-scroll-target="#cómo-conecta-el-sistema-espacial-con-el-resto"><span class="header-section-number">5.5.5</span> ¿Cómo conecta el sistema espacial con el resto?</a></li>
+  <li><a href="#frame" id="toc-frame" class="nav-link" data-scroll-target="#frame"><span class="header-section-number">6.5.1</span> Frame</a></li>
+  <li><a href="#frameregistry" id="toc-frameregistry" class="nav-link" data-scroll-target="#frameregistry"><span class="header-section-number">6.5.2</span> FrameRegistry</a></li>
+  <li><a href="#pose" id="toc-pose" class="nav-link" data-scroll-target="#pose"><span class="header-section-number">6.5.3</span> Pose</a></li>
+  <li><a href="#framegraph" id="toc-framegraph" class="nav-link" data-scroll-target="#framegraph"><span class="header-section-number">6.5.4</span> FrameGraph</a></li>
+  <li><a href="#cómo-conecta-el-sistema-espacial-con-el-resto" id="toc-cómo-conecta-el-sistema-espacial-con-el-resto" class="nav-link" data-scroll-target="#cómo-conecta-el-sistema-espacial-con-el-resto"><span class="header-section-number">6.5.5</span> ¿Cómo conecta el sistema espacial con el resto?</a></li>
   </ul></li>
-  <li><a href="#model" id="toc-model" class="nav-link" data-scroll-target="#model"><span class="header-section-number">5.6</span> Model</a></li>
-  <li><a href="#glosario-rápido" id="toc-glosario-rápido" class="nav-link" data-scroll-target="#glosario-rápido"><span class="header-section-number">5.7</span> Glosario rápido</a></li>
+  <li><a href="#model" id="toc-model" class="nav-link" data-scroll-target="#model"><span class="header-section-number">6.6</span> Model</a></li>
+  <li><a href="#glosario-rápido" id="toc-glosario-rápido" class="nav-link" data-scroll-target="#glosario-rápido"><span class="header-section-number">6.7</span> Glosario rápido</a></li>
   </ul>
 </nav>
     </div>
@@ -250,7 +256,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title"><span id="sec-domain" class="quarto-section-identifier"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Definiciones internas del dominio</span></span></h1>
+<h1 class="title"><span id="sec-domain" class="quarto-section-identifier"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Definiciones internas del dominio</span></span></h1>
 </div>
 
 
@@ -269,8 +275,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <p>Esta es probablemente la sección <strong>más importante</strong> de la documentación. Define el vocabulario del sistema, los límites conceptuales, y lo que cada término significa <strong>exactamente</strong> dentro de Thalos.</p>
 <p>Los archivos cambian. Los conceptos sobreviven.</p>
-<section id="serial-chain" class="level2" data-number="5.1">
-<h2 data-number="5.1" class="anchored" data-anchor-id="serial-chain"><span class="header-section-number">5.1</span> Serial Chain</h2>
+<section id="serial-chain" class="level2" data-number="6.1">
+<h2 data-number="6.1" class="anchored" data-anchor-id="serial-chain"><span class="header-section-number">6.1</span> Serial Chain</h2>
 <p>Una <strong>Serial Chain</strong> es una secuencia ordenada de segmentos conectados por joints, donde cada elemento depende cinemáticamente del anterior. Es la <strong>única</strong> topología robótica que Thalos soporta actualmente.</p>
 <div class="cell" data-layout-align="default">
 <div class="cell-output-display">
@@ -346,7 +352,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-serial-chain-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;5.1: Modelo interno de SerialChain — composición en árbol
+Figure&nbsp;6.1: Modelo interno de SerialChain — composición en árbol
 </figcaption>
 </figure>
 </div>
@@ -360,12 +366,12 @@ Figure&nbsp;5.1: Modelo interno de SerialChain — composición en árbol
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>Lo que NO es</strong>: Thalos no soporta robots paralelos, mecanismos cerrados, árboles cinemáticos, ni sistemas híbridos.</p>
 </section>
-<section id="joint" class="level2" data-number="5.2">
-<h2 data-number="5.2" class="anchored" data-anchor-id="joint"><span class="header-section-number">5.2</span> Joint</h2>
+<section id="joint" class="level2" data-number="6.2">
+<h2 data-number="6.2" class="anchored" data-anchor-id="joint"><span class="header-section-number">6.2</span> Joint</h2>
 <p>Elemento que introduce <strong>movimiento relativo</strong> entre dos segmentos. Cada joint tiene un origen (transform local), un eje de movimiento, y límites físicos.</p>
 <p>Dos tipos:</p>
-<section id="revolutejoint" class="level3" data-number="5.2.1">
-<h3 data-number="5.2.1" class="anchored" data-anchor-id="revolutejoint"><span class="header-section-number">5.2.1</span> RevoluteJoint</h3>
+<section id="revolutejoint" class="level3" data-number="6.2.1">
+<h3 data-number="6.2.1" class="anchored" data-anchor-id="revolutejoint"><span class="header-section-number">6.2.1</span> RevoluteJoint</h3>
 <p>Movimiento rotacional alrededor de un eje. Usa <code>UnitQuaternion::from_axis_angle()</code> para generar la transformación de movimiento.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> RevoluteJoint <span class="op">{</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> id<span class="op">:</span> JointId<span class="op">,</span></span>
@@ -374,8 +380,8 @@ Figure&nbsp;5.1: Modelo interno de SerialChain — composición en árbol
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> origin<span class="op">:</span> Transform3D<span class="op">,</span>   <span class="co">// transform local del joint</span></span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="prismaticjoint" class="level3" data-number="5.2.2">
-<h3 data-number="5.2.2" class="anchored" data-anchor-id="prismaticjoint"><span class="header-section-number">5.2.2</span> PrismaticJoint</h3>
+<section id="prismaticjoint" class="level3" data-number="6.2.2">
+<h3 data-number="6.2.2" class="anchored" data-anchor-id="prismaticjoint"><span class="header-section-number">6.2.2</span> PrismaticJoint</h3>
 <p>Movimiento de traslación a lo largo de un eje.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> PrismaticJoint <span class="op">{</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> id<span class="op">:</span> JointId<span class="op">,</span></span>
@@ -384,8 +390,8 @@ Figure&nbsp;5.1: Modelo interno de SerialChain — composición en árbol
 <span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> origin<span class="op">:</span> Transform3D<span class="op">,</span>     <span class="co">// transform local del joint</span></span>
 <span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="jointtype-enum-unificado" class="level3" data-number="5.2.3">
-<h3 data-number="5.2.3" class="anchored" data-anchor-id="jointtype-enum-unificado"><span class="header-section-number">5.2.3</span> JointType (enum unificado)</h3>
+<section id="jointtype-enum-unificado" class="level3" data-number="6.2.3">
+<h3 data-number="6.2.3" class="anchored" data-anchor-id="jointtype-enum-unificado"><span class="header-section-number">6.2.3</span> JointType (enum unificado)</h3>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> JointType <span class="op">{</span></span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    Revolute(RevoluteJoint)<span class="op">,</span></span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    Prismatic(PrismaticJoint)<span class="op">,</span></span>
@@ -393,8 +399,8 @@ Figure&nbsp;5.1: Modelo interno de SerialChain — composición en árbol
 <p><code>JointType</code> delega a la variante concreta para <code>motion(q)</code>, <code>origin()</code>, <code>axis()</code>, <code>axis_world(transform)</code>, y <code>kind()</code>.</p>
 </section>
 </section>
-<section id="link" class="level2" data-number="5.3">
-<h2 data-number="5.3" class="anchored" data-anchor-id="link"><span class="header-section-number">5.3</span> Link</h2>
+<section id="link" class="level2" data-number="6.3">
+<h2 data-number="6.3" class="anchored" data-anchor-id="link"><span class="header-section-number">6.3</span> Link</h2>
 <p>Elemento <strong>rígido</strong> entre dos joints. Representa la geometría física del eslabón: una transformación fija desde el child frame del joint anterior hasta el origen del siguiente.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> Link <span class="op">{</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> id<span class="op">:</span> LinkId<span class="op">,</span></span>
@@ -402,8 +408,8 @@ Figure&nbsp;5.1: Modelo interno de SerialChain — composición en árbol
 <span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Si el link es recto y de longitud <code>L</code> a lo largo del eje X, su transform sería <code>Transform3D::from_translation(Vector3::new(L, 0.0, 0.0))</code>.</p>
 </section>
-<section id="segment" class="level2" data-number="5.4">
-<h2 data-number="5.4" class="anchored" data-anchor-id="segment"><span class="header-section-number">5.4</span> Segment</h2>
+<section id="segment" class="level2" data-number="6.4">
+<h2 data-number="6.4" class="anchored" data-anchor-id="segment"><span class="header-section-number">6.4</span> Segment</h2>
 <p>Unidad estructural que agrupa un <strong>joint</strong> y un <strong>link</strong>, conectando dos frames (parent y child). Es la abstracción de “eslabón + articulación” que compone la cadena.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> Segment <span class="op">{</span></span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> parent<span class="op">:</span> FrameId<span class="op">,</span>      <span class="co">// frame del segmento anterior</span></span>
@@ -440,12 +446,12 @@ Figure&nbsp;5.1: Modelo interno de SerialChain — composición en árbol
 </table>
 <p>Un <code>Segment</code> no es “un link con un joint adentro”. Es la <strong>relación completa</strong> entre dos frames de la cadena.</p>
 </section>
-<section id="sec-spatial-system" class="level2" data-number="5.5">
-<h2 data-number="5.5" class="anchored" data-anchor-id="sec-spatial-system"><span class="header-section-number">5.5</span> Sistema espacial</h2>
+<section id="sec-spatial-system" class="level2" data-number="6.5">
+<h2 data-number="6.5" class="anchored" data-anchor-id="sec-spatial-system"><span class="header-section-number">6.5</span> Sistema espacial</h2>
 <p>El sistema espacial de Thalos es, conceptualmente, una de las piezas más importantes. Es el <strong>puente</strong> entre el dominio robótico (estructuras de robot) y el dominio cinemático (FK, jacobianos). También es el modelo que la visualización proyecta al mundo exterior.</p>
 <p>Lo que hace especial a este diseño es que trata los <strong>frames</strong> como entidades explícitas con identidad propia, no como strings o índices implícitos.</p>
-<section id="frame" class="level3" data-number="5.5.1">
-<h3 data-number="5.5.1" class="anchored" data-anchor-id="frame"><span class="header-section-number">5.5.1</span> Frame</h3>
+<section id="frame" class="level3" data-number="6.5.1">
+<h3 data-number="6.5.1" class="anchored" data-anchor-id="frame"><span class="header-section-number">6.5.1</span> Frame</h3>
 <p>Un <strong>Frame</strong> es un sistema de referencia espacial. Es la unidad fundamental de la representación espacial en Thalos.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> FrameId <span class="op">{</span></span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    World<span class="op">,</span>         <span class="co">// frame raíz global (siempre existe)</span></span>
@@ -458,8 +464,8 @@ Figure&nbsp;5.1: Modelo interno de SerialChain — composición en árbol
 <span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><code>FrameId::World</code> es el frame canónico — toda pose global se expresa relativa a World. Los <code>FrameId::Id(n)</code> se crean automáticamente por el <code>FrameRegistry</code> o pueden asignarse manualmente para casos especiales.</p>
 </section>
-<section id="frameregistry" class="level3" data-number="5.5.2">
-<h3 data-number="5.5.2" class="anchored" data-anchor-id="frameregistry"><span class="header-section-number">5.5.2</span> FrameRegistry</h3>
+<section id="frameregistry" class="level3" data-number="6.5.2">
+<h3 data-number="6.5.2" class="anchored" data-anchor-id="frameregistry"><span class="header-section-number">6.5.2</span> FrameRegistry</h3>
 <p>Registro central que mapea <code>FrameId</code>s a <code>Frame</code>s. Es el <strong>índice</strong> de todos los frames de una cadena.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> FrameRegistry <span class="op">{</span></span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    frames<span class="op">:</span> HashMap<span class="op">&lt;</span>FrameId<span class="op">,</span> Frame<span class="op">&gt;,</span></span>
@@ -473,8 +479,8 @@ Figure&nbsp;5.1: Modelo interno de SerialChain — composición en árbol
 <li>El registro es la fuente de verdad de qué frames existen</li>
 </ul>
 </section>
-<section id="pose" class="level3" data-number="5.5.3">
-<h3 data-number="5.5.3" class="anchored" data-anchor-id="pose"><span class="header-section-number">5.5.3</span> Pose</h3>
+<section id="pose" class="level3" data-number="6.5.3">
+<h3 data-number="6.5.3" class="anchored" data-anchor-id="pose"><span class="header-section-number">6.5.3</span> Pose</h3>
 <p>Una <strong>Pose</strong> es la relación espacial entre dos frames: la transformación rígida que lleva del frame <code>reference</code> al frame <code>target</code>.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> Pose <span class="op">{</span></span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    reference<span class="op">:</span> FrameId<span class="op">,</span></span>
@@ -484,8 +490,8 @@ Figure&nbsp;5.1: Modelo interno de SerialChain — composición en árbol
 <p>Semántica: - <code>Pose::new(world, child, t)</code> → “el frame <code>child</code> está en <code>t</code> relativo al mundo” - <code>is_global()</code> → <code>true</code> si <code>reference == FrameId::World</code> - <code>transform()</code> devuelve la <code>Transform3D</code> que mapea puntos de <code>reference</code> a <code>target</code></p>
 <p>El <code>FKResult</code> contiene un <code>HashMap&lt;FrameId, Pose&gt;</code> con la pose global de cada frame de la cadena para una configuración <code>q</code> dada.</p>
 </section>
-<section id="framegraph" class="level3" data-number="5.5.4">
-<h3 data-number="5.5.4" class="anchored" data-anchor-id="framegraph"><span class="header-section-number">5.5.4</span> FrameGraph</h3>
+<section id="framegraph" class="level3" data-number="6.5.4">
+<h3 data-number="6.5.4" class="anchored" data-anchor-id="framegraph"><span class="header-section-number">6.5.4</span> FrameGraph</h3>
 <p>Grafo de relaciones espaciales (esqueleto inicial). Actualmente declarado pero no implementado. Su propósito futuro será permitir:</p>
 <ul>
 <li>Navegación entre frames parent/child</li>
@@ -494,8 +500,8 @@ Figure&nbsp;5.1: Modelo interno de SerialChain — composición en árbol
 <li>Consultas del tipo “dame la pose del frame A relativa al frame B”</li>
 </ul>
 </section>
-<section id="cómo-conecta-el-sistema-espacial-con-el-resto" class="level3" data-number="5.5.5">
-<h3 data-number="5.5.5" class="anchored" data-anchor-id="cómo-conecta-el-sistema-espacial-con-el-resto"><span class="header-section-number">5.5.5</span> ¿Cómo conecta el sistema espacial con el resto?</h3>
+<section id="cómo-conecta-el-sistema-espacial-con-el-resto" class="level3" data-number="6.5.5">
+<h3 data-number="6.5.5" class="anchored" data-anchor-id="cómo-conecta-el-sistema-espacial-con-el-resto"><span class="header-section-number">6.5.5</span> ¿Cómo conecta el sistema espacial con el resto?</h3>
 <div class="cell" data-layout-align="default">
 <div class="cell-output-display">
 <div id="fig-spatial-flow" class="quarto-float quarto-figure quarto-figure-center anchored">
@@ -585,7 +591,7 @@ Figure&nbsp;5.1: Modelo interno de SerialChain — composición en árbol
 </div>
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-spatial-flow-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;5.2: Pipeline espacial: FK, visualización y validación
+Figure&nbsp;6.2: Pipeline espacial: FK, visualización y validación
 </figcaption>
 </figure>
 </div>
@@ -594,8 +600,8 @@ Figure&nbsp;5.2: Pipeline espacial: FK, visualización y validación
 <p>El sistema espacial es la <strong>columna vertebral</strong> que permite que el análisis cinemático se traduzca a representación visual sin acoplamiento.</p>
 </section>
 </section>
-<section id="model" class="level2" data-number="5.6">
-<h2 data-number="5.6" class="anchored" data-anchor-id="model"><span class="header-section-number">5.6</span> Model</h2>
+<section id="model" class="level2" data-number="6.6">
+<h2 data-number="6.6" class="anchored" data-anchor-id="model"><span class="header-section-number">6.6</span> Model</h2>
 <p>Configuración estructural <strong>concreta</strong> de un robot. Combina un modelo genérico (enum <code>RobotModel</code>) con parámetros específicos (enum <code>RobotSpec</code>).</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> RobotModel <span class="op">{</span></span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    Planar2R<span class="op">,</span></span>
@@ -613,8 +619,8 @@ Figure&nbsp;5.2: Pipeline espacial: FK, visualización y validación
 <p><code>RobotRegistry::create(model, spec)</code> valida que model y spec coincidan y construye la <code>SerialChain</code> correspondiente usando la fábrica adecuada.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> robot <span class="op">=</span> <span class="pp">RobotRegistry::</span>create(<span class="pp">RobotModel::</span>Planar2R<span class="op">,</span> <span class="pp">RobotSpec::</span>Planar2R <span class="op">{</span> l1<span class="op">:</span> <span class="dv">1.0</span><span class="op">,</span> l2<span class="op">:</span> <span class="dv">1.0</span> <span class="op">}</span>)<span class="op">?;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="glosario-rápido" class="level2" data-number="5.7">
-<h2 data-number="5.7" class="anchored" data-anchor-id="glosario-rápido"><span class="header-section-number">5.7</span> Glosario rápido</h2>
+<section id="glosario-rápido" class="level2" data-number="6.7">
+<h2 data-number="6.7" class="anchored" data-anchor-id="glosario-rápido"><span class="header-section-number">6.7</span> Glosario rápido</h2>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 42%">
@@ -1088,13 +1094,13 @@ Figure&nbsp;5.2: Pipeline espacial: FK, visualización y validación
   </script>
 <nav class="page-navigation">
   <div class="nav-page nav-page-previous">
-      <a href="./workspace.html" class="pagination-link" aria-label="Arquitectura del workspace">
-        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Arquitectura del workspace</span></span>
+      <a href="./workspace-analysis.html" class="pagination-link" aria-label="Análisis de Workspace">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Análisis de Workspace</span></span>
       </a>          
   </div>
   <div class="nav-page nav-page-next">
       <a href="./flow.html" class="pagination-link" aria-label="Flujo interno del sistema">
-        <span class="nav-page-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Flujo interno del sistema</span></span> <i class="bi bi-arrow-right-short"></i>
+        <span class="nav-page-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Flujo interno del sistema</span></span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>

@@ -184,7 +184,7 @@
     "href": "architecture.html#sec-reading-order",
     "title": "3  Filosofía arquitectónica",
     "section": "3.6 Cómo leer el proyecto",
-    "text": "3.6 Cómo leer el proyecto\nSi sos nuevo en el código, este es el orden recomendado para entender Thalos de concepto a implementación:\n\n\n\n\n\n\n\n\nPaso\nQué leer\nPor qué\n\n\n\n\nChapter 5\nDefiniciones del dominio\nEntender el vocabulario antes de ver código\n\n\nChapter 3\nFilosofía arquitectónica\nEntender por qué está estructurado así\n\n\nChapter 6\nFlujo interno del sistema\nVer cómo viajan los datos de punta a punta\n\n\nthalos-core::math\nVectores, cuaterniones, transforms\nLa base matemática de todo\n\n\nthalos-core::robot\nJoints, links, segments, serial chain\nCómo se modela un robot\n\n\nthalos-core::kinematics\nFK, jacobianos\nLos algoritmos centrales\n\n\nthalos-core::spatial\nFrames, poses, registries\nEl sistema de coordenadas\n\n\nthalos-visual\nScene builder, validator, diff, primitives, FrameStyle\nCómo se proyecta el dominio a visual\n\n\nthalos-runtime\nSceneService, Command, RobotBackend\nCómo se orquesta el estado mutable\n\n\nthalos-api\nServices, handlers, routes, DTOs\nCómo se expone a otros sistemas\n\n\nFrontend Angular\nScene store (signals), three renderer\nCómo se ve del lado del cliente\n\n\n\nLos archivos cambian. Los conceptos sobreviven.",
+    "text": "3.6 Cómo leer el proyecto\nSi sos nuevo en el código, este es el orden recomendado para entender Thalos de concepto a implementación:\n\n\n\n\n\n\n\n\nPaso\nQué leer\nPor qué\n\n\n\n\nChapter 6\nDefiniciones del dominio\nEntender el vocabulario antes de ver código\n\n\nChapter 3\nFilosofía arquitectónica\nEntender por qué está estructurado así\n\n\nChapter 7\nFlujo interno del sistema\nVer cómo viajan los datos de punta a punta\n\n\nthalos-core::math\nVectores, cuaterniones, transforms\nLa base matemática de todo\n\n\nthalos-core::robot\nJoints, links, segments, serial chain\nCómo se modela un robot\n\n\nthalos-core::kinematics\nFK, jacobianos\nLos algoritmos centrales\n\n\nthalos-core::spatial\nFrames, poses, registries\nEl sistema de coordenadas\n\n\nthalos-visual\nScene builder, validator, diff, primitives, FrameStyle\nCómo se proyecta el dominio a visual\n\n\nthalos-runtime\nSceneService, Command, RobotBackend\nCómo se orquesta el estado mutable\n\n\nthalos-api\nServices, handlers, routes, DTOs\nCómo se expone a otros sistemas\n\n\nFrontend Angular\nScene store (signals), three renderer\nCómo se ve del lado del cliente\n\n\n\nLos archivos cambian. Los conceptos sobreviven.",
     "crumbs": [
       "<span class='chapter-number'>3</span>  <span class='chapter-title'>Filosofía arquitectónica</span>"
     ]
@@ -260,273 +260,353 @@
     ]
   },
   {
+    "objectID": "workspace-analysis.html",
+    "href": "workspace-analysis.html",
+    "title": "5  Análisis de Workspace",
+    "section": "",
+    "text": "5.1 Introducción\nEl análisis de workspace es una técnica fundamental en robótica que permite caracterizar el espacio de trabajo de un manipulador: el conjunto de posiciones (y opcionalmente orientaciones) que el end-effector puede alcanzar dadas las limitaciones físicas de sus articulaciones.\nThalos implementa análisis de workspace mediante muestreo Monte Carlo: en lugar de calcular analíticamente la frontera del workspace (complejo y dependiente de la geometría del robot), se muestrean configuraciones articulares aleatorias uniformes, se evalúa la cinemática directa (FK) para cada una, y se construye un dataset de posiciones alcanzables.\nEste enfoque tiene varias ventajas:\nworkspace_pipeline\n\n\n\nconfig\n\nWorkspaceConfig\n(samples, seed, tolerance)\n\n\n\nsampler\n\nWorkspaceSampler\n::sample()\n\n\n\nconfig-&gt;sampler\n\n\n\n\n\nchain\n\nSerialChain\n(joints, links, FK)\n\n\n\nchain-&gt;sampler\n\n\n\n\n\nws\n\nWorkspace\n(dataset inmutable)\n\n\n\nsampler-&gt;ws\n\n\n\n\n\nreach\n\nReachability\nquery\n\n\n\nws-&gt;reach\n\n\n\n\n\nvisual\n\nWorkspaceVisual\n(wireframe + point cloud)\n\n\n\nws-&gt;visual\n\n\n\n\n\napi\n\nAPI HTTP\nJSON DTOs\n\n\n\nws-&gt;api\n\n\n\n\n\n\n\n\nFigure 5.1: Diagrama conceptual del pipeline de análisis de workspace",
+    "crumbs": [
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Análisis de Workspace</span>"
+    ]
+  },
+  {
+    "objectID": "workspace-analysis.html#introducción",
+    "href": "workspace-analysis.html#introducción",
+    "title": "5  Análisis de Workspace",
+    "section": "",
+    "text": "Robot-agnóstico: funciona para cualquier SerialChain\nParalelizable: cada muestra es independiente (embarazosamente paralelo)\nAproximación probabilística: la calidad mejora con más muestras\nBase para análisis avanzados: singularidades, manipulabilidad, validación de trayectorias",
+    "crumbs": [
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Análisis de Workspace</span>"
+    ]
+  },
+  {
+    "objectID": "workspace-analysis.html#conceptos-fundamentales",
+    "href": "workspace-analysis.html#conceptos-fundamentales",
+    "title": "5  Análisis de Workspace",
+    "section": "5.2 Conceptos fundamentales",
+    "text": "5.2 Conceptos fundamentales\n\n5.2.1 WorkspaceSample\nLa unidad atómica del análisis: una configuración articular q y la posición 3D del end-effector que produce.\npub struct WorkspaceSample {\n    pub q: Vec&lt;f64&gt;,          // configuración articular\n    pub position: Vector3,    // posición del end-effector\n}\nInvariante: position == FK(chain, q).ee_position() (garantizado por el sampler).\n\n\n5.2.2 BoundingBox\nCaja alineada a ejes (AABB) que envuelve todas las posiciones muestreadas. Es la aproximación más simple del workspace: un ortoedro definido por sus esquinas mínima y máxima.\npub struct BoundingBox {\n    pub min: Vector3,\n    pub max: Vector3,\n}\n\n\n5.2.3 WorkspaceMetrics\nMétricas derivadas del conjunto de posiciones. Calculadas en una pasada O(n) durante la construcción del Workspace.\npub struct WorkspaceMetrics {\n    pub bounding_volume: f64, // volumen del AABB (no del workspace real)\n    pub max_reach: f64,       // distancia máxima al origen\n    pub min_reach: f64,       // distancia mínima al origen\n    pub centroid: Vector3,    // media aritmética de posiciones\n    pub sample_count: usize,  // número de muestras\n}\n\n⚠️ bounding_volume ≠ volumen del workspace real. El volumen del AABB sobreestima drásticamente el workspace (especialmente para robots con huecos internos). Métricas de forma real (convex hull, voxelización) están planificadas para fases futuras.\n\n\n\n5.2.4 WorkspaceConfig\nParámetros de configuración para el muestreo y las consultas de alcanzabilidad.\npub struct WorkspaceConfig {\n    pub samples: usize,   // &gt; 0, número de configuraciones a muestrear\n    pub seed: u64,        // semilla determinista (StdRng::seed_from_u64)\n    pub tolerance: f64,   // &gt;= 0, tolerancia en metros para reachability\n}\nValores por defecto: samples = 10_000, seed = 0xDEAD_BEEF, tolerance = 1e-3.\n\n\n5.2.5 Workspace\nDataset inmutable que contiene las muestras, bounds y métricas derivadas.\npub struct Workspace {\n    samples: Vec&lt;WorkspaceSample&gt;,  // privado\n    bounds: BoundingBox,            // privado\n    metrics: WorkspaceMetrics,      // privado\n}\nMétodos públicos:\n\nfrom_samples(samples) — constructor único, O(n) secuencial, rechaza vacío\nsamples() -&gt; &[WorkspaceSample] — vista de las muestras\nbounds() -&gt; &BoundingBox — AABB derivado\nmetrics() -&gt; &WorkspaceMetrics — métricas derivadas\nis_reachable(point, tolerance) -&gt; Result&lt;Reachability, WorkspaceError&gt; — consulta de alcanzabilidad",
+    "crumbs": [
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Análisis de Workspace</span>"
+    ]
+  },
+  {
+    "objectID": "workspace-analysis.html#sec-workspace-sampling",
+    "href": "workspace-analysis.html#sec-workspace-sampling",
+    "title": "5  Análisis de Workspace",
+    "section": "5.3 Muestreo Monte Carlo",
+    "text": "5.3 Muestreo Monte Carlo\nEl WorkspaceSampler implementa el algoritmo de muestreo:\n\nRecibe un SerialChain + WorkspaceConfig + RNG\nPara cada muestra:\n\nGenera una configuración articular aleatoria uniforme dentro de los límites de cada joint\nEvalúa FK con ForwardKinematics::evaluate(q)\nExtrae ee_position() del resultado\n\nConstruye un Workspace con todas las muestras\n\npub struct WorkspaceSampler;\n\nimpl WorkspaceSampler {\n    pub fn sample&lt;R: Rng + SeedableRng&gt;(\n        &self,\n        chain: &SerialChain,\n        config: WorkspaceConfig,\n        rng: &mut R,\n    ) -&gt; Result&lt;Workspace, WorkspaceError&gt;;\n}\nEl RNG se inyecta externamente, lo que permite:\n\nTests deterministas (R1): fijando la semilla, el mismo chain + config produce siempre el mismo Workspace\nProducción: WorkspaceService::sample() usa StdRng::seed_from_u64(seed) para crear un RNG determinista a partir de la semilla\n\nLa función que genera un joint value aleatorio es:\nq_j ~ U(limit_j.min, limit_j.max)\ndonde limit_j son los límites físicos del j-ésimo joint. Cada joint se muestrea independientemente.\n\n5.3.1 Invariantes clave\n\n\n\n\n\n\n\n\nID\nInvariante\n¿Dónde se valida?\n\n\n\n\nFK\nposition == FK(chain, q).ee_position()\nSampler (garantizado)\n\n\nR1\nMismo chain + config + seed → mismo Workspace\nTests de integración\n\n\nR2\nsample_count == config.samples\nWorkspace::from_samples()\n\n\nR3\nsamples.q[i].len() == n_dof\nPor construcción\n\n\nR8\nRechaza samples = 0\nWorkspaceError::InvalidSampleCount",
+    "crumbs": [
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Análisis de Workspace</span>"
+    ]
+  },
+  {
+    "objectID": "workspace-analysis.html#sec-workspace-reachability",
+    "href": "workspace-analysis.html#sec-workspace-reachability",
+    "title": "5  Análisis de Workspace",
+    "section": "5.4 Consulta de alcanzabilidad",
+    "text": "5.4 Consulta de alcanzabilidad\nLa consulta de alcanzabilidad determina si un punto p en el espacio 3D es alcanzable por el end-effector, dentro de una tolerancia dada.\npub enum Reachability {\n    /// El punto está dentro de la tolerancia de al menos una muestra.\n    Reachable,\n    /// El punto está más lejos que la tolerancia de toda muestra.\n    OutOfWorkspace {\n        nearest_distance: f64,  // distancia mínima a cualquier muestra\n    },\n}\n\n5.4.1 Algoritmo (Workspace::is_reachable)\n\nValidación de entrada:\n\ntolerance &gt;= 0 y no NaN → InvalidTolerance si falla\npoint sin NaN ni Infinity → InvalidPoint si falla\n\nBúsqueda lineal O(n) sobre todas las posiciones muestreadas\nSi min_distance &lt;= tolerance → Reachable\nSi no → OutOfWorkspace { nearest_distance: min_distance }\n\n\nLa búsqueda lineal es deliberada (D1): para datasets de ~10K-100K muestras es suficiente. Optimizaciones espaciales (KD-tree, octree) están planificadas para cuando el tamaño del workspace lo justifique.",
+    "crumbs": [
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Análisis de Workspace</span>"
+    ]
+  },
+  {
+    "objectID": "workspace-analysis.html#arquitectura-por-capas",
+    "href": "workspace-analysis.html#arquitectura-por-capas",
+    "title": "5  Análisis de Workspace",
+    "section": "5.5 Arquitectura por capas",
+    "text": "5.5 Arquitectura por capas\nEl análisis de workspace atraviesa todas las capas del sistema, manteniendo la separación de responsabilidades:\n┌─────────────────────────────────────────────────────────────┐\n│                    thalos-core (dominio)                     │\n│  Workspace │ WorkspaceSample │ WorkspaceSampler              │\n│  BoundingBox │ WorkspaceMetrics │ Reachability               │\n│  WorkspaceConfig │ WorkspaceError                           │\n└──────────────────────┬──────────────────────────────────────┘\n                       │\n                       ▼\n┌─────────────────────────────────────────────────────────────┐\n│                  thalos-runtime (orquestación)               │\n│  WorkspaceService (stateless)                                │\n│    · sample(model, config) → Arc&lt;Workspace&gt;                  │\n│    · query(ws, point, tolerance) → Reachability              │\n└──────────────────────┬──────────────────────────────────────┘\n                       │\n              ┌────────┴────────┐\n              ▼                  ▼\n┌─────────────────────┐  ┌──────────────────────────┐\n│   thalos-api (HTTP)  │  │ thalos-visual (visual)    │\n│                      │  │                          │\n│ POST /workspace/     │  │ WorkspaceVisual           │\n│   sample             │  │ · BoundsWireframe         │\n│ POST /workspace/     │  │ · SamplePointCloud        │\n│   reachability       │  │ · robot_overlay           │\n└──────────┬──────────┘  └──────────┬───────────────┘\n           │                        │\n           └────────┬───────────────┘\n                    ▼\n┌────────────────────────────────────┐\n│       Frontend (Angular)           │\n│  WorkspacePanel (form + metrics)   │\n│  WorkspaceRenderer (Three.js)      │\n└────────────────────────────────────┘\n\n5.5.1 thalos-core\nResponsabilidad: tipos de dominio y algoritmo de muestreo. No sabe de HTTP, visualización ni runtime.\nCrate puro: depende solo de nalgebra para tipos matemáticos, thiserror para errores, y rand para el sampler.\n\n\n5.5.2 thalos-runtime\nWorkspaceService — servicio stateless (sin estado mutable). Toma un RobotModel y config, construye la SerialChain via RobotRegistry, crea un StdRng con la semilla, y delega en WorkspaceSampler.\nTodas las funciones son pub fn estáticas — no requieren instancia:\nimpl WorkspaceService {\n    pub fn sample(model: RobotModel, config: WorkspaceConfig)\n        -&gt; Result&lt;Arc&lt;Workspace&gt;, RuntimeError&gt;;\n\n    pub fn query(workspace: &Workspace, point: &Vector3, tolerance: f64)\n        -&gt; Result&lt;Reachability, WorkspaceError&gt;;\n}\nDevuelve Arc&lt;Workspace&gt; para permitir compartir el dataset entre hilos sin copia (D10). Un futuro cacheo con HashMap&lt;WorkspaceKey, Arc&lt;Workspace&gt;&gt; es trivial de agregar.\n\n\n5.5.3 thalos-api\nDos endpoints HTTP, ambos POST:\n\n5.5.3.1 POST /api/v1/workspace/sample\n// Request\n{\n  \"robot_id\": \"scara\",\n  \"samples\": 50000,\n  \"seed\": 42,\n  \"tolerance\": 0.001,\n  \"include_samples\": false\n}\n\n// Response (include_samples: false)\n{\n  \"metrics\": {\n    \"bounding_volume\": 8.234,\n    \"max_reach\": 2.121,\n    \"min_reach\": 0.453,\n    \"centroid\": { \"x\": 0.0, \"y\": 0.8, \"z\": -0.2 },\n    \"sample_count\": 50000\n  },\n  \"bounds\": {\n    \"min\": { \"x\": -1.5, \"y\": -1.5, \"z\": -0.5 },\n    \"max\": { \"x\":  1.5, \"y\":  1.5, \"z\":  0.5 }\n  }\n}\n\n\n5.5.3.2 POST /api/v1/workspace/reachability\nAutocontenido: muestrea un workspace SCARA con parámetros por defecto (10K muestras, tolerancia 1e-3) y ejecuta la consulta:\n// Request\n{\n  \"point\": { \"x\": 0.5, \"y\": 0.5, \"z\": 0.0 },\n  \"tolerance\": 0.01\n}\n\n// Response\n{\n  \"reachable\": true,\n  \"nearest_distance\": 0.0023\n}\n\n\n\n5.5.4 thalos-visual\nWorkspaceVisual — representación visual completa del workspace:\n\nBoundsWireframe: AABB como 12 aristas (wireframe) definido por min/max\nSamplePointCloud: nube de puntos 3D (todas las posiciones muestreadas)\nrobot_overlay: Option&lt;VisualScene&gt;: escena del robot superpuesta (opcional, para contexto visual)\n\npub struct WorkspaceVisual {\n    pub bounds_wireframe: BoundsWireframe,\n    pub samples_points: SamplePointCloud,\n    pub robot_overlay: Option&lt;VisualScene&gt;,\n}\npub struct BoundsWireframe {\n    pub min: [f64; 3],\n    pub max: [f64; 3],\n}\n// Provee edges() -&gt; 12 segmentos [(start, end); 12]\n\npub struct SamplePointCloud {\n    pub points: Vec&lt;[f64; 3]&gt;,\n    pub count: usize,\n}\n\n\n5.5.5 Frontend (Angular)\nDos componentes standalone en la feature workspace:\n\n5.5.5.1 WorkspacePanel\nPanel lateral con:\n\nFormulario: selector de robot, número de muestras, semilla, tolerancia, toggle de incluir muestras en respuesta\nMétricas: muestra bounding_volume, max_reach, min_reach, centroid\nConsulta de alcanzabilidad: inputs X/Y/Z + tolerance, botón “Check”, y resultado (Reachable / OutOfWorkspace con distancia)\n\nEstado reactivo via WorkspaceStore (Angular Signals):\ninterface WorkspaceState {\n  loading: boolean;\n  error: string | null;\n  metrics: WorkspaceMetrics | null;\n  bounds: BoundingBox | null;\n  reachability: ReachabilityResult | null;\n}\n\n\n5.5.5.2 WorkspaceRenderer\nCanvas Three.js que renderiza:\n\nAABB wireframe (12 aristas) del BoundsWireframe\n(Futuro) nube de puntos 3D del SamplePointCloud\n\nUsa effect() para reaccionar a cambios en el store, renderizando sobre un canvas standalone sin depender del ThreeRendererService del scene viewer.",
+    "crumbs": [
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Análisis de Workspace</span>"
+    ]
+  },
+  {
+    "objectID": "workspace-analysis.html#mapa-de-errores",
+    "href": "workspace-analysis.html#mapa-de-errores",
+    "title": "5  Análisis de Workspace",
+    "section": "5.6 Mapa de errores",
+    "text": "5.6 Mapa de errores\n\n\n\n\n\n\n\n\nError\nCausa\nCódigo HTTP\n\n\n\n\nInvalidSampleCount(n)\nsamples == 0\n422\n\n\nInvalidTolerance(t)\ntolerance &lt; 0 o NaN\n422\n\n\nInvalidPoint(s)\ncoordenada NaN o Infinity\n422\n\n\nEmptyWorkspace\ndataset interno vacío (no debería ocurrir si se usa el sampler)\n500\n\n\nRobotModelError\nrobot_id no existe en el catálogo\n404",
+    "crumbs": [
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Análisis de Workspace</span>"
+    ]
+  },
+  {
+    "objectID": "workspace-analysis.html#tests",
+    "href": "workspace-analysis.html#tests",
+    "title": "5  Análisis de Workspace",
+    "section": "5.7 Tests",
+    "text": "5.7 Tests\nEl workspace analysis tiene 71 tests unitarios + 7 tests de visualización, distribuidos así:\n\n\n\n\n\n\n\n\nCapa\nTests\nCobertura\n\n\n\n\nCore (dominio)\n44\nWorkspace, Sampler, Reachability, BoundingBox, Metrics\n\n\nRuntime\n11\nWorkspaceService::sample, WorkspaceService::query\n\n\nAPI (integración)\n5\nEndpoints HTTP, DTO conversion, error mapping\n\n\nVisual\n7 (2 snapshot)\nWorkspaceVisual, BoundsWireframe::edges, SamplePointCloud\n\n\n\n\n5.7.1 Invariantes bajo test\n\nR1 (determinismo): mismo seed → mismo workspace\nR2 (conteo): samples.len() == config.samples\nR3 (dimensionalidad): cada q tiene n_dof elementos\nR4 (reachability): punto conocido → Reachable; punto lejano → OutOfWorkspace\nR5 (tolerance): tolerance = 0 → solo puntos exactos\nR6 (punto inválido): NaN o Infinity → InvalidPoint\nR7 (parámetros inválidos): samples = 0 → error; tolerance &lt; 0 → error\nR8 (jacobiano): FK produce ee_position para joint values aleatorios\nD4 (RNG): StdRng::seed_from_u64 para determinismo\nD1 (búsqueda lineal): implementación O(n) actual, optimización futura",
+    "crumbs": [
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Análisis de Workspace</span>"
+    ]
+  },
+  {
     "objectID": "domain.html",
     "href": "domain.html",
-    "title": "5  Definiciones internas del dominio",
+    "title": "6  Definiciones internas del dominio",
     "section": "",
-    "text": "5.1 Serial Chain\nEsta es probablemente la sección más importante de la documentación. Define el vocabulario del sistema, los límites conceptuales, y lo que cada término significa exactamente dentro de Thalos.\nLos archivos cambian. Los conceptos sobreviven.\nUna Serial Chain es una secuencia ordenada de segmentos conectados por joints, donde cada elemento depende cinemáticamente del anterior. Es la única topología robótica que Thalos soporta actualmente.\nserial_chain\n\n\n\nchain\n\nSerialChain\n\n\n\nseg\n\nSegment\n(Vec&lt;Segment&gt;)\n\n\n\nchain-&gt;seg\n\n\n\n\n\nee\n\n\n\n\n\nEndEffector\n\n\n\nchain-&gt;ee\n\n\n\n\n\njoint\n\nJoint\n\n\n\nseg-&gt;joint\n\n\n\n\n\nlink\n\nLink\n\n\n\nseg-&gt;link\n\n\n\n\n\n\n\n\nFigure 5.1: Modelo interno de SerialChain — composición en árbol\nImplementación:\nLo que NO es: Thalos no soporta robots paralelos, mecanismos cerrados, árboles cinemáticos, ni sistemas híbridos.",
+    "text": "6.1 Serial Chain\nEsta es probablemente la sección más importante de la documentación. Define el vocabulario del sistema, los límites conceptuales, y lo que cada término significa exactamente dentro de Thalos.\nLos archivos cambian. Los conceptos sobreviven.\nUna Serial Chain es una secuencia ordenada de segmentos conectados por joints, donde cada elemento depende cinemáticamente del anterior. Es la única topología robótica que Thalos soporta actualmente.\nserial_chain\n\n\n\nchain\n\nSerialChain\n\n\n\nseg\n\nSegment\n(Vec&lt;Segment&gt;)\n\n\n\nchain-&gt;seg\n\n\n\n\n\nee\n\n\n\n\n\nEndEffector\n\n\n\nchain-&gt;ee\n\n\n\n\n\njoint\n\nJoint\n\n\n\nseg-&gt;joint\n\n\n\n\n\nlink\n\nLink\n\n\n\nseg-&gt;link\n\n\n\n\n\n\n\n\nFigure 6.1: Modelo interno de SerialChain — composición en árbol\nImplementación:\nLo que NO es: Thalos no soporta robots paralelos, mecanismos cerrados, árboles cinemáticos, ni sistemas híbridos.",
     "crumbs": [
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Definiciones internas del dominio</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Definiciones internas del dominio</span>"
     ]
   },
   {
     "objectID": "domain.html#serial-chain",
     "href": "domain.html#serial-chain",
-    "title": "5  Definiciones internas del dominio",
+    "title": "6  Definiciones internas del dominio",
     "section": "",
     "text": "pub struct SerialChain {\n    pub segments: Vec&lt;Segment&gt;,\n    pub frames: FrameRegistry,\n    pub end_effector: FrameId,\n}",
     "crumbs": [
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Definiciones internas del dominio</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Definiciones internas del dominio</span>"
     ]
   },
   {
     "objectID": "domain.html#joint",
     "href": "domain.html#joint",
-    "title": "5  Definiciones internas del dominio",
-    "section": "5.2 Joint",
-    "text": "5.2 Joint\nElemento que introduce movimiento relativo entre dos segmentos. Cada joint tiene un origen (transform local), un eje de movimiento, y límites físicos.\nDos tipos:\n\n5.2.1 RevoluteJoint\nMovimiento rotacional alrededor de un eje. Usa UnitQuaternion::from_axis_angle() para generar la transformación de movimiento.\npub struct RevoluteJoint {\n    pub id: JointId,\n    pub axis: UnitVector3,     // eje de rotación (normalizado)\n    pub limits: JointLimits,   // [min, max] en radianes\n    pub origin: Transform3D,   // transform local del joint\n}\n\n\n5.2.2 PrismaticJoint\nMovimiento de traslación a lo largo de un eje.\npub struct PrismaticJoint {\n    pub id: JointId,\n    pub direction: UnitVector3,  // dirección de deslizamiento\n    pub distance_limits: JointLimits,  // [min, max] en unidades de distancia\n    pub origin: Transform3D,     // transform local del joint\n}\n\n\n5.2.3 JointType (enum unificado)\npub enum JointType {\n    Revolute(RevoluteJoint),\n    Prismatic(PrismaticJoint),\n}\nJointType delega a la variante concreta para motion(q), origin(), axis(), axis_world(transform), y kind().",
+    "title": "6  Definiciones internas del dominio",
+    "section": "6.2 Joint",
+    "text": "6.2 Joint\nElemento que introduce movimiento relativo entre dos segmentos. Cada joint tiene un origen (transform local), un eje de movimiento, y límites físicos.\nDos tipos:\n\n6.2.1 RevoluteJoint\nMovimiento rotacional alrededor de un eje. Usa UnitQuaternion::from_axis_angle() para generar la transformación de movimiento.\npub struct RevoluteJoint {\n    pub id: JointId,\n    pub axis: UnitVector3,     // eje de rotación (normalizado)\n    pub limits: JointLimits,   // [min, max] en radianes\n    pub origin: Transform3D,   // transform local del joint\n}\n\n\n6.2.2 PrismaticJoint\nMovimiento de traslación a lo largo de un eje.\npub struct PrismaticJoint {\n    pub id: JointId,\n    pub direction: UnitVector3,  // dirección de deslizamiento\n    pub distance_limits: JointLimits,  // [min, max] en unidades de distancia\n    pub origin: Transform3D,     // transform local del joint\n}\n\n\n6.2.3 JointType (enum unificado)\npub enum JointType {\n    Revolute(RevoluteJoint),\n    Prismatic(PrismaticJoint),\n}\nJointType delega a la variante concreta para motion(q), origin(), axis(), axis_world(transform), y kind().",
     "crumbs": [
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Definiciones internas del dominio</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Definiciones internas del dominio</span>"
     ]
   },
   {
     "objectID": "domain.html#link",
     "href": "domain.html#link",
-    "title": "5  Definiciones internas del dominio",
-    "section": "5.3 Link",
-    "text": "5.3 Link\nElemento rígido entre dos joints. Representa la geometría física del eslabón: una transformación fija desde el child frame del joint anterior hasta el origen del siguiente.\npub struct Link {\n    pub id: LinkId,\n    pub transform: Transform3D,  // transform rígido del eslabón\n}\nSi el link es recto y de longitud L a lo largo del eje X, su transform sería Transform3D::from_translation(Vector3::new(L, 0.0, 0.0)).",
+    "title": "6  Definiciones internas del dominio",
+    "section": "6.3 Link",
+    "text": "6.3 Link\nElemento rígido entre dos joints. Representa la geometría física del eslabón: una transformación fija desde el child frame del joint anterior hasta el origen del siguiente.\npub struct Link {\n    pub id: LinkId,\n    pub transform: Transform3D,  // transform rígido del eslabón\n}\nSi el link es recto y de longitud L a lo largo del eje X, su transform sería Transform3D::from_translation(Vector3::new(L, 0.0, 0.0)).",
     "crumbs": [
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Definiciones internas del dominio</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Definiciones internas del dominio</span>"
     ]
   },
   {
     "objectID": "domain.html#segment",
     "href": "domain.html#segment",
-    "title": "5  Definiciones internas del dominio",
-    "section": "5.4 Segment",
-    "text": "5.4 Segment\nUnidad estructural que agrupa un joint y un link, conectando dos frames (parent y child). Es la abstracción de “eslabón + articulación” que compone la cadena.\npub struct Segment {\n    pub parent: FrameId,      // frame del segmento anterior\n    pub child: FrameId,       // frame de este segmento\n    pub joint: JointType,     // articulación (revolute | prismatic)\n    pub link: Link,           // eslabón rígido\n}\nLa razón por la que Segment existe aparte de Link:\n\n\n\n\n\n\n\nConcepto\nRepresenta\n\n\n\n\nJoint\nEl movimiento relativo\n\n\nLink\nLa geometría rígida\n\n\nSegment\nLa unidad completa: joint + link + conexión entre frames\n\n\n\nUn Segment no es “un link con un joint adentro”. Es la relación completa entre dos frames de la cadena.",
+    "title": "6  Definiciones internas del dominio",
+    "section": "6.4 Segment",
+    "text": "6.4 Segment\nUnidad estructural que agrupa un joint y un link, conectando dos frames (parent y child). Es la abstracción de “eslabón + articulación” que compone la cadena.\npub struct Segment {\n    pub parent: FrameId,      // frame del segmento anterior\n    pub child: FrameId,       // frame de este segmento\n    pub joint: JointType,     // articulación (revolute | prismatic)\n    pub link: Link,           // eslabón rígido\n}\nLa razón por la que Segment existe aparte de Link:\n\n\n\n\n\n\n\nConcepto\nRepresenta\n\n\n\n\nJoint\nEl movimiento relativo\n\n\nLink\nLa geometría rígida\n\n\nSegment\nLa unidad completa: joint + link + conexión entre frames\n\n\n\nUn Segment no es “un link con un joint adentro”. Es la relación completa entre dos frames de la cadena.",
     "crumbs": [
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Definiciones internas del dominio</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Definiciones internas del dominio</span>"
     ]
   },
   {
     "objectID": "domain.html#sec-spatial-system",
     "href": "domain.html#sec-spatial-system",
-    "title": "5  Definiciones internas del dominio",
-    "section": "5.5 Sistema espacial",
-    "text": "5.5 Sistema espacial\nEl sistema espacial de Thalos es, conceptualmente, una de las piezas más importantes. Es el puente entre el dominio robótico (estructuras de robot) y el dominio cinemático (FK, jacobianos). También es el modelo que la visualización proyecta al mundo exterior.\nLo que hace especial a este diseño es que trata los frames como entidades explícitas con identidad propia, no como strings o índices implícitos.\n\n5.5.1 Frame\nUn Frame es un sistema de referencia espacial. Es la unidad fundamental de la representación espacial en Thalos.\npub enum FrameId {\n    World,         // frame raíz global (siempre existe)\n    Id(u64),       // frame numerado\n}\n\npub struct Frame {\n    id: FrameId,\n    name: String,\n}\nFrameId::World es el frame canónico — toda pose global se expresa relativa a World. Los FrameId::Id(n) se crean automáticamente por el FrameRegistry o pueden asignarse manualmente para casos especiales.\n\n\n5.5.2 FrameRegistry\nRegistro central que mapea FrameIds a Frames. Es el índice de todos los frames de una cadena.\npub struct FrameRegistry {\n    frames: HashMap&lt;FrameId, Frame&gt;,\n    next_id: u64,\n}\nOperaciones: - create(name) → crea un nuevo Frame con ID auto-incremental, lo registra, y devuelve el FrameId - register(frame) → registra un frame existente (útil para IDs predefinidos como World) - get(id) → lookup por ID - contains(id) → verifica existencia\nLa SerialChain contiene un FrameRegistry completo. Cada Segment referencia frames por su FrameId, no por nombre. Esto significa que:\n\nNo puede haber frames huérfanos (el builder valida)\nNo puede haber colisiones de nombres (los IDs son numéricos)\nEl registro es la fuente de verdad de qué frames existen\n\n\n\n5.5.3 Pose\nUna Pose es la relación espacial entre dos frames: la transformación rígida que lleva del frame reference al frame target.\npub struct Pose {\n    reference: FrameId,\n    target: FrameId,\n    transform: Transform3D,   // T_reference→target\n}\nSemántica: - Pose::new(world, child, t) → “el frame child está en t relativo al mundo” - is_global() → true si reference == FrameId::World - transform() devuelve la Transform3D que mapea puntos de reference a target\nEl FKResult contiene un HashMap&lt;FrameId, Pose&gt; con la pose global de cada frame de la cadena para una configuración q dada.\n\n\n5.5.4 FrameGraph\nGrafo de relaciones espaciales (esqueleto inicial). Actualmente declarado pero no implementado. Su propósito futuro será permitir:\n\nNavegación entre frames parent/child\nComposición de transformaciones a lo largo del grafo\nDetección de ciclos en el grafo de referencia\nConsultas del tipo “dame la pose del frame A relativa al frame B”\n\n\n\n5.5.5 ¿Cómo conecta el sistema espacial con el resto?\n\n\n\n\n\n\n\n\nspatial_flow\n\n\n\nchain\n\nSerialChain\n+ FrameRegistry\n\n\n\nfkres\n\nFKResult\n(poses por frame)\n\n\n\n\nfk\n\nFK::evaluate(q)\n\n\n\nchain-&gt;fk\n\n\n\n\n\nscene\n\nVisualScene\n\n\n\n\nbuilder\n\nSceneBuilder\n::from_fk()\n\n\n\nfkres-&gt;builder\n\n\n\n\n\nvld\n\nSceneValidator\n::validate()\n\n\n\nscene-&gt;vld\n\n\n\n\n\nfk-&gt;fkres\n\n\n\n\n\n\nbuilder-&gt;scene\n\n\n\n\n\n\n\n\n\nFigure 5.2: Pipeline espacial: FK, visualización y validación\n\n\n\n\n\nEl sistema espacial es la columna vertebral que permite que el análisis cinemático se traduzca a representación visual sin acoplamiento.",
+    "title": "6  Definiciones internas del dominio",
+    "section": "6.5 Sistema espacial",
+    "text": "6.5 Sistema espacial\nEl sistema espacial de Thalos es, conceptualmente, una de las piezas más importantes. Es el puente entre el dominio robótico (estructuras de robot) y el dominio cinemático (FK, jacobianos). También es el modelo que la visualización proyecta al mundo exterior.\nLo que hace especial a este diseño es que trata los frames como entidades explícitas con identidad propia, no como strings o índices implícitos.\n\n6.5.1 Frame\nUn Frame es un sistema de referencia espacial. Es la unidad fundamental de la representación espacial en Thalos.\npub enum FrameId {\n    World,         // frame raíz global (siempre existe)\n    Id(u64),       // frame numerado\n}\n\npub struct Frame {\n    id: FrameId,\n    name: String,\n}\nFrameId::World es el frame canónico — toda pose global se expresa relativa a World. Los FrameId::Id(n) se crean automáticamente por el FrameRegistry o pueden asignarse manualmente para casos especiales.\n\n\n6.5.2 FrameRegistry\nRegistro central que mapea FrameIds a Frames. Es el índice de todos los frames de una cadena.\npub struct FrameRegistry {\n    frames: HashMap&lt;FrameId, Frame&gt;,\n    next_id: u64,\n}\nOperaciones: - create(name) → crea un nuevo Frame con ID auto-incremental, lo registra, y devuelve el FrameId - register(frame) → registra un frame existente (útil para IDs predefinidos como World) - get(id) → lookup por ID - contains(id) → verifica existencia\nLa SerialChain contiene un FrameRegistry completo. Cada Segment referencia frames por su FrameId, no por nombre. Esto significa que:\n\nNo puede haber frames huérfanos (el builder valida)\nNo puede haber colisiones de nombres (los IDs son numéricos)\nEl registro es la fuente de verdad de qué frames existen\n\n\n\n6.5.3 Pose\nUna Pose es la relación espacial entre dos frames: la transformación rígida que lleva del frame reference al frame target.\npub struct Pose {\n    reference: FrameId,\n    target: FrameId,\n    transform: Transform3D,   // T_reference→target\n}\nSemántica: - Pose::new(world, child, t) → “el frame child está en t relativo al mundo” - is_global() → true si reference == FrameId::World - transform() devuelve la Transform3D que mapea puntos de reference a target\nEl FKResult contiene un HashMap&lt;FrameId, Pose&gt; con la pose global de cada frame de la cadena para una configuración q dada.\n\n\n6.5.4 FrameGraph\nGrafo de relaciones espaciales (esqueleto inicial). Actualmente declarado pero no implementado. Su propósito futuro será permitir:\n\nNavegación entre frames parent/child\nComposición de transformaciones a lo largo del grafo\nDetección de ciclos en el grafo de referencia\nConsultas del tipo “dame la pose del frame A relativa al frame B”\n\n\n\n6.5.5 ¿Cómo conecta el sistema espacial con el resto?\n\n\n\n\n\n\n\n\nspatial_flow\n\n\n\nchain\n\nSerialChain\n+ FrameRegistry\n\n\n\nfkres\n\nFKResult\n(poses por frame)\n\n\n\n\nfk\n\nFK::evaluate(q)\n\n\n\nchain-&gt;fk\n\n\n\n\n\nscene\n\nVisualScene\n\n\n\n\nbuilder\n\nSceneBuilder\n::from_fk()\n\n\n\nfkres-&gt;builder\n\n\n\n\n\nvld\n\nSceneValidator\n::validate()\n\n\n\nscene-&gt;vld\n\n\n\n\n\nfk-&gt;fkres\n\n\n\n\n\n\nbuilder-&gt;scene\n\n\n\n\n\n\n\n\n\nFigure 6.2: Pipeline espacial: FK, visualización y validación\n\n\n\n\n\nEl sistema espacial es la columna vertebral que permite que el análisis cinemático se traduzca a representación visual sin acoplamiento.",
     "crumbs": [
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Definiciones internas del dominio</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Definiciones internas del dominio</span>"
     ]
   },
   {
     "objectID": "domain.html#model",
     "href": "domain.html#model",
-    "title": "5  Definiciones internas del dominio",
-    "section": "5.6 Model",
-    "text": "5.6 Model\nConfiguración estructural concreta de un robot. Combina un modelo genérico (enum RobotModel) con parámetros específicos (enum RobotSpec).\npub enum RobotModel {\n    Planar2R,\n    Planar3R,\n    SingleRevolute,\n    Scara,\n}\n\npub enum RobotSpec {\n    Planar2R { l1: f64, l2: f64 },\n    Planar3R { l1: f64, l2: f64, l3: f64 },\n    SingleRevolute { l1: f64 },\n    Scara { a1: f64, a2: f64, d1: f64, d2: f64 },\n}\nRobotRegistry::create(model, spec) valida que model y spec coincidan y construye la SerialChain correspondiente usando la fábrica adecuada.\nlet robot = RobotRegistry::create(RobotModel::Planar2R, RobotSpec::Planar2R { l1: 1.0, l2: 1.0 })?;",
+    "title": "6  Definiciones internas del dominio",
+    "section": "6.6 Model",
+    "text": "6.6 Model\nConfiguración estructural concreta de un robot. Combina un modelo genérico (enum RobotModel) con parámetros específicos (enum RobotSpec).\npub enum RobotModel {\n    Planar2R,\n    Planar3R,\n    SingleRevolute,\n    Scara,\n}\n\npub enum RobotSpec {\n    Planar2R { l1: f64, l2: f64 },\n    Planar3R { l1: f64, l2: f64, l3: f64 },\n    SingleRevolute { l1: f64 },\n    Scara { a1: f64, a2: f64, d1: f64, d2: f64 },\n}\nRobotRegistry::create(model, spec) valida que model y spec coincidan y construye la SerialChain correspondiente usando la fábrica adecuada.\nlet robot = RobotRegistry::create(RobotModel::Planar2R, RobotSpec::Planar2R { l1: 1.0, l2: 1.0 })?;",
     "crumbs": [
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Definiciones internas del dominio</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Definiciones internas del dominio</span>"
     ]
   },
   {
     "objectID": "domain.html#glosario-rápido",
     "href": "domain.html#glosario-rápido",
-    "title": "5  Definiciones internas del dominio",
-    "section": "5.7 Glosario rápido",
-    "text": "5.7 Glosario rápido\n\n\n\n\n\n\n\nTérmino\nDefinición\n\n\n\n\nSerial Chain\nSecuencia ordenada de segmentos conectados por joints\n\n\nJoint\nArticulación que introduce movimiento (revolute o prismatic)\n\n\nLink\nElemento rígido entre joints\n\n\nSegment\nUnidad estructural: joint + link + conexión entre frames\n\n\nPose\nPosición + orientación de un frame relativo a otro\n\n\nFrame\nSistema de referencia espacial\n\n\nFrameRegistry\nRegistro central de frames con auto-incremento\n\n\nFrameGraph\nGrafo de relaciones entre frames (esqueleto)\n\n\nModel\nConfiguración paramétrica de un robot concreto\n\n\nFK\nCálculo de poses dado un vector de configuración q\n\n\nJacobian\nMatriz que relaciona velocidades de joints con velocidades del end-effector\n\n\nVisualScene\nProyección visual serializable del estado cinemático\n\n\nSceneDiff\nDelta entre dos escenas visuales",
+    "title": "6  Definiciones internas del dominio",
+    "section": "6.7 Glosario rápido",
+    "text": "6.7 Glosario rápido\n\n\n\n\n\n\n\nTérmino\nDefinición\n\n\n\n\nSerial Chain\nSecuencia ordenada de segmentos conectados por joints\n\n\nJoint\nArticulación que introduce movimiento (revolute o prismatic)\n\n\nLink\nElemento rígido entre joints\n\n\nSegment\nUnidad estructural: joint + link + conexión entre frames\n\n\nPose\nPosición + orientación de un frame relativo a otro\n\n\nFrame\nSistema de referencia espacial\n\n\nFrameRegistry\nRegistro central de frames con auto-incremento\n\n\nFrameGraph\nGrafo de relaciones entre frames (esqueleto)\n\n\nModel\nConfiguración paramétrica de un robot concreto\n\n\nFK\nCálculo de poses dado un vector de configuración q\n\n\nJacobian\nMatriz que relaciona velocidades de joints con velocidades del end-effector\n\n\nVisualScene\nProyección visual serializable del estado cinemático\n\n\nSceneDiff\nDelta entre dos escenas visuales",
     "crumbs": [
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Definiciones internas del dominio</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Definiciones internas del dominio</span>"
     ]
   },
   {
     "objectID": "flow.html",
     "href": "flow.html",
-    "title": "6  Flujo interno del sistema",
+    "title": "7  Flujo interno del sistema",
     "section": "",
-    "text": "6.1 Pipeline completo (end-to-end)\nEsta sección describe cómo viajan los datos a través del sistema, desde que el usuario mueve un slider hasta que ve el resultado en pantalla.\nHay dos flujos principales: set joints (actualizar ángulos) y load robot (cambiar de modelo). Ambos pasan por SceneService::execute(Command).",
+    "text": "7.1 Pipeline completo (end-to-end)\nEsta sección describe cómo viajan los datos a través del sistema, desde que el usuario mueve un slider hasta que ve el resultado en pantalla.\nHay dos flujos principales: set joints (actualizar ángulos) y load robot (cambiar de modelo). Ambos pasan por SceneService::execute(Command).",
     "crumbs": [
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Flujo interno del sistema</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Flujo interno del sistema</span>"
     ]
   },
   {
     "objectID": "flow.html#pipeline-completo-end-to-end",
     "href": "flow.html#pipeline-completo-end-to-end",
-    "title": "6  Flujo interno del sistema",
+    "title": "7  Flujo interno del sistema",
     "section": "",
-    "text": "6.1.1 Flujo: SetJoints\n\n\n\n\n\n\n\n\ne2e\n\n\ncluster_frontend\n\nFrontend (Angular)\n\n\ncluster_runtime\n\nRuntime (thalos-runtime)\n\n\n\nuser\n\nUsuario\n\n\n\njctrl\n\nJointControl\n(signal + slider)\n\n\n\nuser-&gt;jctrl\n\n\n\n\n\nsstore\n\nSceneStore\nmerge + scan + toSignal\n\n\n\njctrl-&gt;sstore\n\n\nsetJointAngles(q)\n\n\n\nasvc\n\nSceneApiService\nHTTP client\n\n\n\nsstore-&gt;asvc\n\n\n\n\n\nsview\n\nSceneViewer\n(Three.js)\n\n\n\n\nhandler\n\nHandler\n\n\n\nasvc-&gt;handler\n\n\n\n\n\nservice\n\nSceneService\n::execute(Command::SetJoints)\n\n\n\nhandler-&gt;service\n\n\n\n\n\nruntime\n\nRwLock&lt;SceneRuntime&gt;\n(mut: joints)\n\n\n\nservice-&gt;runtime\n\n\n\n\n\nfk\n\nFK::evaluate(q)\n\n\n\nruntime-&gt;fk\n\n\n\n\n\nbuilder\n\nSceneBuilder\n::from_fk()\n\n\n\nfk-&gt;builder\n\n\n\n\n\nvld\n\nSceneValidator\n\n\n\nbuilder-&gt;vld\n\n\n\n\n\nvld-&gt;sstore\n\n\n\n\n\n\n\n\nFigure 6.1: Pipeline SetJoints — el usuario mueve un slider y ve el resultado\n\n\n\n\n\n\n\n6.1.2 Flujo: LoadRobot\n\n\n\n\n\n\n\n\nload\n\n\ncluster_frontend\n\nFrontend (Angular)\n\n\ncluster_backend\n\nBackend (Rust)\n\n\n\nuser\n\nUsuario\n\n\n\ncatalog\n\nRobotCatalog\n\n\n\nuser-&gt;catalog\n\n\n\n\n\nrstore\n\nRobotStore\n\n\n\ncatalog-&gt;rstore\n\n\nselect(id)\n\n\n\nsstore2\n\nSceneStore\nloadRobot(id)\n\n\n\ncatalog-&gt;sstore2\n\n\nloadRobot(id)\n\n\n\nasvc2\n\nSceneApiService\n\n\n\nsstore2-&gt;asvc2\n\n\n\n\n\nhandler2\n\nHandler\n\n\n\nasvc2-&gt;handler2\n\n\n\n\n\nservice2\n\nSceneService\n::execute(Command::LoadRobot)\n\n\n\nhandler2-&gt;service2\n\n\n\n\n\nbackend\n\nRobotBackend\n::resolve_model()\n\n\n\nservice2-&gt;backend\n\n\n\n\n\nchain\n\nRobotRegistry\n::create_default()\n\n\n\nbackend-&gt;chain\n\n\n\n\n\nruntime2\n\nRwLock&lt;SceneRuntime&gt;\n(new ActiveRobot)\n\n\n\nchain-&gt;runtime2\n\n\n\n\n\nfk2\n\nFK::evaluate(q)\n\n\n\nruntime2-&gt;fk2\n\n\n\n\n\nbuilder2\n\nSceneBuilder\n::from_fk()\n\n\n\nfk2-&gt;builder2\n\n\n\n\n\nvld2\n\nSceneValidator\n\n\n\nbuilder2-&gt;vld2\n\n\n\n\n\nvld2-&gt;sstore2\n\n\nJSON 200 (RuntimeStateResponse)\n\n\n\n\n\n\nFigure 6.2: Pipeline LoadRobot — cambiar el modelo activo",
+    "text": "7.1.1 Flujo: SetJoints\n\n\n\n\n\n\n\n\ne2e\n\n\ncluster_frontend\n\nFrontend (Angular)\n\n\ncluster_runtime\n\nRuntime (thalos-runtime)\n\n\n\nuser\n\nUsuario\n\n\n\njctrl\n\nJointControl\n(signal + slider)\n\n\n\nuser-&gt;jctrl\n\n\n\n\n\nsstore\n\nSceneStore\nmerge + scan + toSignal\n\n\n\njctrl-&gt;sstore\n\n\nsetJointAngles(q)\n\n\n\nasvc\n\nSceneApiService\nHTTP client\n\n\n\nsstore-&gt;asvc\n\n\n\n\n\nsview\n\nSceneViewer\n(Three.js)\n\n\n\n\nhandler\n\nHandler\n\n\n\nasvc-&gt;handler\n\n\n\n\n\nservice\n\nSceneService\n::execute(Command::SetJoints)\n\n\n\nhandler-&gt;service\n\n\n\n\n\nruntime\n\nRwLock&lt;SceneRuntime&gt;\n(mut: joints)\n\n\n\nservice-&gt;runtime\n\n\n\n\n\nfk\n\nFK::evaluate(q)\n\n\n\nruntime-&gt;fk\n\n\n\n\n\nbuilder\n\nSceneBuilder\n::from_fk()\n\n\n\nfk-&gt;builder\n\n\n\n\n\nvld\n\nSceneValidator\n\n\n\nbuilder-&gt;vld\n\n\n\n\n\nvld-&gt;sstore\n\n\n\n\n\n\n\n\nFigure 7.1: Pipeline SetJoints — el usuario mueve un slider y ve el resultado\n\n\n\n\n\n\n\n7.1.2 Flujo: LoadRobot\n\n\n\n\n\n\n\n\nload\n\n\ncluster_frontend\n\nFrontend (Angular)\n\n\ncluster_backend\n\nBackend (Rust)\n\n\n\nuser\n\nUsuario\n\n\n\ncatalog\n\nRobotCatalog\n\n\n\nuser-&gt;catalog\n\n\n\n\n\nrstore\n\nRobotStore\n\n\n\ncatalog-&gt;rstore\n\n\nselect(id)\n\n\n\nsstore2\n\nSceneStore\nloadRobot(id)\n\n\n\ncatalog-&gt;sstore2\n\n\nloadRobot(id)\n\n\n\nasvc2\n\nSceneApiService\n\n\n\nsstore2-&gt;asvc2\n\n\n\n\n\nhandler2\n\nHandler\n\n\n\nasvc2-&gt;handler2\n\n\n\n\n\nservice2\n\nSceneService\n::execute(Command::LoadRobot)\n\n\n\nhandler2-&gt;service2\n\n\n\n\n\nbackend\n\nRobotBackend\n::resolve_model()\n\n\n\nservice2-&gt;backend\n\n\n\n\n\nchain\n\nRobotRegistry\n::create_default()\n\n\n\nbackend-&gt;chain\n\n\n\n\n\nruntime2\n\nRwLock&lt;SceneRuntime&gt;\n(new ActiveRobot)\n\n\n\nchain-&gt;runtime2\n\n\n\n\n\nfk2\n\nFK::evaluate(q)\n\n\n\nruntime2-&gt;fk2\n\n\n\n\n\nbuilder2\n\nSceneBuilder\n::from_fk()\n\n\n\nfk2-&gt;builder2\n\n\n\n\n\nvld2\n\nSceneValidator\n\n\n\nbuilder2-&gt;vld2\n\n\n\n\n\nvld2-&gt;sstore2\n\n\nJSON 200 (RuntimeStateResponse)\n\n\n\n\n\n\nFigure 7.2: Pipeline LoadRobot — cambiar el modelo activo",
     "crumbs": [
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Flujo interno del sistema</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Flujo interno del sistema</span>"
     ]
   },
   {
     "objectID": "flow.html#flujo-de-fk-detalle-matemático",
     "href": "flow.html#flujo-de-fk-detalle-matemático",
-    "title": "6  Flujo interno del sistema",
-    "section": "6.2 Flujo de FK (detalle matemático)",
-    "text": "6.2 Flujo de FK (detalle matemático)\nEl algoritmo de ForwardKinematics::evaluate(q):\nt₀ = Identity\n     ↓\nPara cada segmento i:\n     ↓\ntᵢ = tᵢ₋₁                     // transform acumulado del segmento anterior\ntᵢ = tᵢ ∘ jointᵢ.origin()     // transform local del joint\ntᵢ = tᵢ ∘ jointᵢ.motion(qᵢ)   // movimiento articular\ntᵢ = tᵢ ∘ linkᵢ.transform      // eslabón rígido\n     ↓\nPose(childᵢ) = (World, childᵢ, tᵢ)\nDonde joint.motion(q) para cada tipo:\n\nRevolute: Transform3D::from_rotation(UnitQuaternion::from_axis_angle(axis, q))\nPrismatic: Transform3D::from_translation(direction * q)",
+    "title": "7  Flujo interno del sistema",
+    "section": "7.2 Flujo de FK (detalle matemático)",
+    "text": "7.2 Flujo de FK (detalle matemático)\nEl algoritmo de ForwardKinematics::evaluate(q):\nt₀ = Identity\n     ↓\nPara cada segmento i:\n     ↓\ntᵢ = tᵢ₋₁                     // transform acumulado del segmento anterior\ntᵢ = tᵢ ∘ jointᵢ.origin()     // transform local del joint\ntᵢ = tᵢ ∘ jointᵢ.motion(qᵢ)   // movimiento articular\ntᵢ = tᵢ ∘ linkᵢ.transform      // eslabón rígido\n     ↓\nPose(childᵢ) = (World, childᵢ, tᵢ)\nDonde joint.motion(q) para cada tipo:\n\nRevolute: Transform3D::from_rotation(UnitQuaternion::from_axis_angle(axis, q))\nPrismatic: Transform3D::from_translation(direction * q)",
     "crumbs": [
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Flujo interno del sistema</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Flujo interno del sistema</span>"
     ]
   },
   {
     "objectID": "flow.html#flujo-de-jacobiano-detalle-matemático",
     "href": "flow.html#flujo-de-jacobiano-detalle-matemático",
-    "title": "6  Flujo interno del sistema",
-    "section": "6.3 Flujo de Jacobiano (detalle matemático)",
-    "text": "6.3 Flujo de Jacobiano (detalle matemático)\n\n6.3.1 Geométrico\nPara cada joint i:\n  pₑ = posición global del end-effector\n  pᵢ = posición del joint i (parent ∘ origin)\n  zᵢ = eje del joint i en frame global\n\n  Si Revolute:\n    J_linear[:,i] = zᵢ × (pₑ - pᵢ)\n    J_angular[:,i] = zᵢ\n\n  Si Prismatic:\n    J_linear[:,i] = zᵢ\n    J_angular[:,i] = 0\n\n\n6.3.2 Numérico (diferencias finitas centrales)\nPara cada joint i:\n  q₊ = q,  q₊[i] += ε\n  q₋ = q,  q₋[i] -= ε\n\n  p₊ = FK(q₊).end_effector_position\n  p₋ = FK(q₋).end_effector_position\n\n  J_linear[:,i] = (p₊ - p₋) / (2ε)\n  J_angular[:,i] = 0  (solo posición)",
+    "title": "7  Flujo interno del sistema",
+    "section": "7.3 Flujo de Jacobiano (detalle matemático)",
+    "text": "7.3 Flujo de Jacobiano (detalle matemático)\n\n7.3.1 Geométrico\nPara cada joint i:\n  pₑ = posición global del end-effector\n  pᵢ = posición del joint i (parent ∘ origin)\n  zᵢ = eje del joint i en frame global\n\n  Si Revolute:\n    J_linear[:,i] = zᵢ × (pₑ - pᵢ)\n    J_angular[:,i] = zᵢ\n\n  Si Prismatic:\n    J_linear[:,i] = zᵢ\n    J_angular[:,i] = 0\n\n\n7.3.2 Numérico (diferencias finitas centrales)\nPara cada joint i:\n  q₊ = q,  q₊[i] += ε\n  q₋ = q,  q₋[i] -= ε\n\n  p₊ = FK(q₊).end_effector_position\n  p₋ = FK(q₋).end_effector_position\n\n  J_linear[:,i] = (p₊ - p₋) / (2ε)\n  J_angular[:,i] = 0  (solo posición)",
     "crumbs": [
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Flujo interno del sistema</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Flujo interno del sistema</span>"
     ]
   },
   {
     "objectID": "flow.html#flujo-de-scenediff",
     "href": "flow.html#flujo-de-scenediff",
-    "title": "6  Flujo interno del sistema",
-    "section": "6.4 Flujo de SceneDiff",
-    "text": "6.4 Flujo de SceneDiff\nSceneDiff::between(old, new, epsilon)\n\n1. Frames eliminados: en old pero no en new\n2. Frames agregados: en new pero no en old\n3. Frames modificados:\n   - Distancia euclídea de traslación: ‖t_new − t_old‖\n   - Ángulo geodésico de rotación: 2·acos(|q_new · q_old|)\n   - Si alguno &gt; epsilon → se reporta como cambio",
+    "title": "7  Flujo interno del sistema",
+    "section": "7.4 Flujo de SceneDiff",
+    "text": "7.4 Flujo de SceneDiff\nSceneDiff::between(old, new, epsilon)\n\n1. Frames eliminados: en old pero no en new\n2. Frames agregados: en new pero no en old\n3. Frames modificados:\n   - Distancia euclídea de traslación: ‖t_new − t_old‖\n   - Ángulo geodésico de rotación: 2·acos(|q_new · q_old|)\n   - Si alguno &gt; epsilon → se reporta como cambio",
     "crumbs": [
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Flujo interno del sistema</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Flujo interno del sistema</span>"
     ]
   },
   {
     "objectID": "flow.html#flujo-de-primitives",
     "href": "flow.html#flujo-de-primitives",
-    "title": "6  Flujo interno del sistema",
-    "section": "6.5 Flujo de Primitives",
-    "text": "6.5 Flujo de Primitives\nLas primitivas geométricas se construyen en SceneBuilder (o builders específicos como ScaraVisualBuilder) y viajan dentro de VisualScene hasta el frontend.\nScaraVisualBuilder::build(fk, chain)\n\n1. SceneBuilder::from_fk(fk) → VisualScene base (frames + links + axes)\n2. Extraer poses de link_1 y link_2 del FKResult\n3. Crear primitives:\n   - \"base_column\": Cylinder(radius=0.08, height=0.4) en [0, 0, -0.2]\n   - \"link_1_body\": cylinder_between(world, link_1, radius=0.045)\n   - \"link_2_body\": cylinder_between(link_1, link_2, radius=0.035)\n4. Pushear primitives a scene.primitives\n5. Devolver VisualScene completa\nEn el frontend, ThreeRendererService.renderPrimitives() recorre las primitives y crea meshes Three.js:\nPor cada primitiva:\n  geometry → switch(type):\n    Cylinder → CylinderGeometry(radius, height)\n    Sphere   → SphereGeometry(radius)\n    Box      → BoxGeometry(width, height, depth)\n\n  color ← heuristic: id.includes(\"column\") → gris\n                         id.includes(\"link_1\") → azul\n                         id.includes(\"link_2\") → verde\n\n  mesh = new Mesh(geometry, material)\n  mesh.position = primitive.translation\n  mesh.quaternion = [rot.y, rot.z, rot.w, rot.x]  // Rust → Three.js",
+    "title": "7  Flujo interno del sistema",
+    "section": "7.5 Flujo de Primitives",
+    "text": "7.5 Flujo de Primitives\nLas primitivas geométricas se construyen en SceneBuilder (o builders específicos como ScaraVisualBuilder) y viajan dentro de VisualScene hasta el frontend.\nScaraVisualBuilder::build(fk, chain)\n\n1. SceneBuilder::from_fk(fk) → VisualScene base (frames + links + axes)\n2. Extraer poses de link_1 y link_2 del FKResult\n3. Crear primitives:\n   - \"base_column\": Cylinder(radius=0.08, height=0.4) en [0, 0, -0.2]\n   - \"link_1_body\": cylinder_between(world, link_1, radius=0.045)\n   - \"link_2_body\": cylinder_between(link_1, link_2, radius=0.035)\n4. Pushear primitives a scene.primitives\n5. Devolver VisualScene completa\nEn el frontend, ThreeRendererService.renderPrimitives() recorre las primitives y crea meshes Three.js:\nPor cada primitiva:\n  geometry → switch(type):\n    Cylinder → CylinderGeometry(radius, height)\n    Sphere   → SphereGeometry(radius)\n    Box      → BoxGeometry(width, height, depth)\n\n  color ← heuristic: id.includes(\"column\") → gris\n                         id.includes(\"link_1\") → azul\n                         id.includes(\"link_2\") → verde\n\n  mesh = new Mesh(geometry, material)\n  mesh.position = primitive.translation\n  mesh.quaternion = [rot.y, rot.z, rot.w, rot.x]  // Rust → Three.js",
     "crumbs": [
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Flujo interno del sistema</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Flujo interno del sistema</span>"
     ]
   },
   {
     "objectID": "flow.html#relación-entre-conceptos",
     "href": "flow.html#relación-entre-conceptos",
-    "title": "6  Flujo interno del sistema",
-    "section": "6.6 Relación entre conceptos",
-    "text": "6.6 Relación entre conceptos\n\n\n\n\n\n\n\n\nrelations\n\n\n\nmodel\n\nRobotRegistry\n::create()\n\n\n\nchain\n\nSerialChain\n\n\n\nmodel-&gt;chain\n\n\n\n\n\nfk\n\nForwardKinematics\n::evaluate(q)\n\n\n\nchain-&gt;fk\n\n\n\n\n\njcb\n\nJacobianSolver\n::evaluate(q)\n\n\n\nchain-&gt;jcb\n\n\n\n\n\nfkout\n\nFKResult →\nSceneBuilder →\nVisualScene\n\n\n\nfk-&gt;fkout\n\n\n\n\n\njcbout\n\nJacobian →\nSceneBuilder →\nVisualScene\n+ Twists\n\n\n\njcb-&gt;jcbout\n\n\n\n\n\n\n\n\nFigure 6.3: Relación entre conceptos del dominio",
+    "title": "7  Flujo interno del sistema",
+    "section": "7.6 Relación entre conceptos",
+    "text": "7.6 Relación entre conceptos\n\n\n\n\n\n\n\n\nrelations\n\n\n\nmodel\n\nRobotRegistry\n::create()\n\n\n\nchain\n\nSerialChain\n\n\n\nmodel-&gt;chain\n\n\n\n\n\nfk\n\nForwardKinematics\n::evaluate(q)\n\n\n\nchain-&gt;fk\n\n\n\n\n\njcb\n\nJacobianSolver\n::evaluate(q)\n\n\n\nchain-&gt;jcb\n\n\n\n\n\nfkout\n\nFKResult →\nSceneBuilder →\nVisualScene\n\n\n\nfk-&gt;fkout\n\n\n\n\n\njcbout\n\nJacobian →\nSceneBuilder →\nVisualScene\n+ Twists\n\n\n\njcb-&gt;jcbout\n\n\n\n\n\n\n\n\nFigure 7.3: Relación entre conceptos del dominio",
     "crumbs": [
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Flujo interno del sistema</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Flujo interno del sistema</span>"
     ]
   },
   {
     "objectID": "maturity.html",
     "href": "maturity.html",
-    "title": "7  Estado de madurez",
+    "title": "8  Estado de madurez",
     "section": "",
-    "text": "7.1 Matriz de madurez\nEsta sección documenta qué partes de Thalos están estables, cuáles están en desarrollo, y qué esperar de cada área. Es información crítica para colaboradores y adoptantes tempranos.\nEstados:",
+    "text": "8.1 Matriz de madurez\nEsta sección documenta qué partes de Thalos están estables, cuáles están en desarrollo, y qué esperar de cada área. Es información crítica para colaboradores y adoptantes tempranos.\nEstados:",
     "crumbs": [
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Estado de madurez</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Estado de madurez</span>"
     ]
   },
   {
     "objectID": "maturity.html#matriz-de-madurez",
     "href": "maturity.html#matriz-de-madurez",
-    "title": "7  Estado de madurez",
+    "title": "8  Estado de madurez",
     "section": "",
     "text": "Área\nEstado\nNotas\n\n\n\n\nmath::vectors\n\\(\\blacksquare\\) Estable\nVector3, UnitVector3\n\n\nmath::rotations::Quaternion\n\\(\\blacksquare\\) Estable\nÁlgebra completa\n\n\nmath::rotations::UnitQuaternion\n\\(\\blacksquare\\) Estable\nSO(3) con invariante de norma\n\n\nmath::rotations::ops\n\\(\\circ\\) Experimental\nOperaciones entre tipos, sin probar\n\n\nmath::rigid::Transform3D\n\\(\\blacksquare\\) Estable\nAPI congelada, faltan tests directos\n\n\nmath::algebra::DynamicMatrix\n\\(\\blacksquare\\) Estable\nAlias de DMatrix\n\n\nmath::traits\n\\(\\circ\\) Experimental\nTraits Cross, Dot — pueden cambiar\n\n\nrobot::joint\n\\(\\blacksquare\\) Estable\nJointType, RevoluteJoint, PrismaticJoint\n\n\nrobot::link\n\\(\\blacksquare\\) Estable\nLink simple\n\n\nrobot::segment\n\\(\\blacksquare\\) Estable\nSegment\n\n\nrobot::serial_chain\n\\(\\blacksquare\\) Estable\nEstructura central del dominio\n\n\nrobot::builder\n\\(\\blacksquare\\) Estable\nSerialChainBuilder con validación\n\n\nkinematics::forward\n\\(\\blacksquare\\) Estable\nFK probado indirectamente vía snapshots\n\n\nkinematics::jacobian::GeometricJacobian\n\\(\\blacktriangle\\) Desarrollo\nSin tests dedicados\n\n\nkinematics::jacobian::NumericalJacobian\n\\(\\blacktriangle\\) Desarrollo\nSin tests dedicados\n\n\nspatial::frame\n\\(\\blacksquare\\) Estable\nFrameId, Frame, FrameRegistry\n\n\nspatial::pose\n\\(\\blacksquare\\) Estable\nPose\n\n\nspatial::frame::graph\n\\(\\circ\\) Experimental\nSolo esqueleto declarado\n\n\nmodels::factory\n\\(\\blacksquare\\) Estable\nRobotRegistry, RobotModel, RobotSpec\n\n\nModelos concretos\n\\(\\blacksquare\\) Estable\nFactory + tests FK por modelo\n\n\nthalos-visual::scene\n\\(\\blacktriangle\\) Desarrollo\nVisualScene, VisualFrame, primitives, FrameStyle — API estable pero puede crecer\n\n\nthalos-visual::builder\n\\(\\blacktriangle\\) Desarrollo\nSceneBuilder, ScaraVisualBuilder, cylinder_between\n\n\nthalos-visual::validator\n\\(\\blacksquare\\) Estable\n8 invariantes, tests con insta\n\n\nthalos-visual::diff\n\\(\\blacksquare\\) Estable\nSceneDiff::between()\n\n\nthalos-visual::precision\n\\(\\blacksquare\\) Estable\nVisualPrecision\n\n\nthalos-runtime::scene\n\\(\\blacktriangle\\) Desarrollo\nSceneService, Command, RuntimeSnapshot — estable pero crecerá\n\n\nthalos-runtime::backends\n\\(\\circ\\) Experimental\nRobotBackend trait — puede necesitar más métodos\n\n\nthalos-runtime::state\n\\(\\circ\\) Experimental\nSceneRuntime, ActiveRobot — sujeto a cambios\n\n\nthalos-api::handlers\n\\(\\blacktriangle\\) Desarrollo\nHandlers REST escena + robots\n\n\nthalos-api::dto\n\\(\\blacktriangle\\) Desarrollo\nRuntimeStateResponse, VisualSceneDto, mirrors completos\n\n\nthalos-api::routes\n\\(\\circ\\) Experimental\nRouting puede cambiar / reorganizarse\n\n\nthalos-api::robots\n\\(\\circ\\) Experimental\nCatálogo de robots — feature nuevo\n\n\nFrontend: Scene feature\n\\(\\blacktriangle\\) Desarrollo\nSignals + RxJS, stable pero en evolución\n\n\nFrontend: Robots feature\n\\(\\circ\\) Experimental\nCatálogo + selección — feature nuevo\n\n\nFrontend: ThreeRenderer\n\\(\\blacktriangle\\) Desarrollo\nPrimitives, FrameStyle, compass — puede sumar features\n\n\nFrontend: RobotCatalog\n\\(\\circ\\) Experimental\nUI de selección de robots, puede cambiar\n\n\n\n\n\n\\(\\blacksquare\\) Estable — API congelada, sin cambios breaking esperados\n\\(\\blacktriangle\\) Desarrollo — Implementado pero puede cambiar\n\\(\\circ\\) Experimental — Implementación inicial, sujeta a cambios significativos",
     "crumbs": [
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Estado de madurez</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Estado de madurez</span>"
     ]
   },
   {
     "objectID": "maturity.html#cobertura-de-tests",
     "href": "maturity.html#cobertura-de-tests",
-    "title": "7  Estado de madurez",
-    "section": "7.2 Cobertura de tests",
-    "text": "7.2 Cobertura de tests\n\n7.2.1 thalos-core\n\nmath::rotations::quaternion — Álgebra de cuaterniones: identidad, inverso, conjugado, norma, normalización, producto de Hamilton, asociatividad\nmath::rotations::unit_quaternion — Invariante de norma, Euler ↔︎ quaternion roundtrip, rotate_vector, composición, inverso, from_axis_angle\n\n\n\n7.2.2 thalos-visual\n\nvalidator_tests — Cada invariante del SceneValidator (world, duplicados, topología, conectividad, finitos, quaternions, links, twists)\nscene_snapshots — Snapshots con insta para validación visual de escenas FK\n\n\n\n7.2.3 thalos-api\n\nservice_tests — SceneService::build_scene con validación\napi_tests — Integración HTTP: endpoints responden correctamente\n\n\n\n7.2.4 thalos-runtime\n\nSin tests dedicados aún (depende de validación de escena vía thalos-visual)",
+    "title": "8  Estado de madurez",
+    "section": "8.2 Cobertura de tests",
+    "text": "8.2 Cobertura de tests\n\n8.2.1 thalos-core\n\nmath::rotations::quaternion — Álgebra de cuaterniones: identidad, inverso, conjugado, norma, normalización, producto de Hamilton, asociatividad\nmath::rotations::unit_quaternion — Invariante de norma, Euler ↔︎ quaternion roundtrip, rotate_vector, composición, inverso, from_axis_angle\n\n\n\n8.2.2 thalos-visual\n\nvalidator_tests — Cada invariante del SceneValidator (world, duplicados, topología, conectividad, finitos, quaternions, links, twists)\nscene_snapshots — Snapshots con insta para validación visual de escenas FK\n\n\n\n8.2.3 thalos-api\n\nservice_tests — SceneService::build_scene con validación\napi_tests — Integración HTTP: endpoints responden correctamente\n\n\n\n8.2.4 thalos-runtime\n\nSin tests dedicados aún (depende de validación de escena vía thalos-visual)",
     "crumbs": [
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Estado de madurez</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Estado de madurez</span>"
     ]
   },
   {
     "objectID": "maturity.html#cobertura-deseada",
     "href": "maturity.html#cobertura-deseada",
-    "title": "7  Estado de madurez",
-    "section": "7.3 Cobertura deseada",
-    "text": "7.3 Cobertura deseada\n\nTests directos para Transform3D::compose() y Transform3D::identity()\nTests para RevoluteJoint::motion() y PrismaticJoint::motion()\nTests para SerialChainBuilder (éxito y error)\nIntegración FK con modelos conocidos\nComparación GeometricJacobian vs NumericalJacobian (deberían coincidir dentro de tolerancia)\nSnapshots por modelo robótico (Planar3R, SCARA, etc.)\nTests de frontend con Angular Testing Library",
+    "title": "8  Estado de madurez",
+    "section": "8.3 Cobertura deseada",
+    "text": "8.3 Cobertura deseada\n\nTests directos para Transform3D::compose() y Transform3D::identity()\nTests para RevoluteJoint::motion() y PrismaticJoint::motion()\nTests para SerialChainBuilder (éxito y error)\nIntegración FK con modelos conocidos\nComparación GeometricJacobian vs NumericalJacobian (deberían coincidir dentro de tolerancia)\nSnapshots por modelo robótico (Planar3R, SCARA, etc.)\nTests de frontend con Angular Testing Library",
     "crumbs": [
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Estado de madurez</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Estado de madurez</span>"
     ]
   },
   {
     "objectID": "contributing.html",
     "href": "contributing.html",
-    "title": "8  Contribución a Thalos",
+    "title": "9  Contribución a Thalos",
     "section": "",
-    "text": "8.1 Convenciones generales\nEsta guía asume que ya leíste las secciones de arquitectura (Chapter 3) y dominio (Chapter 5). Este documento cubre cómo contribuir de forma efectiva y consistente.",
+    "text": "9.1 Convenciones generales\nEsta guía asume que ya leíste las secciones de arquitectura (Chapter 3) y dominio (Chapter 6). Este documento cubre cómo contribuir de forma efectiva y consistente.",
     "crumbs": [
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Contribución a Thalos</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Contribución a Thalos</span>"
     ]
   },
   {
     "objectID": "contributing.html#convenciones-generales",
     "href": "contributing.html#convenciones-generales",
-    "title": "8  Contribución a Thalos",
+    "title": "9  Contribución a Thalos",
     "section": "",
     "text": "Idioma del código: inglés (nombres de tipos, funciones, tests, mensajes de error)\nIdioma de la documentación: español (este libro)\nCommits: conventional commits (feat:, fix:, refactor:, docs:, test:)\nFormato: cargo fmt antes de cada commit\nLints: cargo clippy sin warnings",
     "crumbs": [
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Contribución a Thalos</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Contribución a Thalos</span>"
     ]
   },
   {
     "objectID": "contributing.html#estructura-esperada-por-crate",
     "href": "contributing.html#estructura-esperada-por-crate",
-    "title": "8  Contribución a Thalos",
-    "section": "8.2 Estructura esperada por crate",
-    "text": "8.2 Estructura esperada por crate\n\n8.2.1 thalos-core\ncrates/thalos-core/src/\n├── lib.rs            # Declaración de módulos públicos\n├── prelude.rs        # Re-exportaciones convenientes (opcional)\n├── &lt;mod&gt;/\n│   ├── mod.rs        # Declaración de submódulos + re-exportaciones\n│   ├── &lt;type&gt;.rs     # Un tipo por archivo (preferentemente)\n│   └── ...           # Archivos de soporte\nReglas:\n\nUn tipo principal por archivo. RevoluteJoint va en revolute.rs, no en joint.rs junto con PrismaticJoint.\nLos enums unificadores (como JointType) van en el archivo que lleva el nombre del concepto (joint.rs).\nLos tests unitarios van al final del archivo que testean, en un módulo #[cfg(test)] mod &lt;type&gt;_tests { ... }.\nLas fábricas de modelos concretos van en models/&lt;name&gt;/factory.rs.\n\n\n\n8.2.2 thalos-visual\ncrates/thalos-visual/src/\n├── lib.rs            # Re-exportaciones públicas\n├── scene/\n│   ├── mod.rs        # VisualScene, VisualFrame, VisualPrimitive, FrameStyle, etc.\n│   ├── precision.rs  # VisualPrecision (normalización numérica)\n│   └── diff.rs       # SceneDiff, ChangedFrame\n├── builder.rs        # SceneBuilder (FK → VisualScene) + helpers (cylinder_between, align_y_to)\n├── scara.rs          # ScaraVisualBuilder (builders específicos por robot)\n├── validator.rs      # SceneValidator (invariantes)\n└── utils.rs          # Utilidades pequeñas\n\nLos tipos visuales se declaran en scene/mod.rs con derive(Serialize, Deserialize).\nSceneBuilder importa del core pero no modifica estructuras del core.\nSceneValidator es autónomo: solo recibe un &VisualScene y devuelve Result&lt;(), SceneError&gt;.\nLos builders específicos (ej: ScaraVisualBuilder) van en archivos separados y extienden SceneBuilder para generar primitivas geométricas.\nLos helpers geométricos (cylinder_between, align_y_to) viven en builder.rs y se exportan para reuso.\n\n\n\n8.2.3 thalos-runtime\ncrates/thalos-runtime/src/\n├── lib.rs            # Re-exportaciones públicas\n├── error.rs          # RuntimeError\n├── commands/\n│   └── mod.rs        # Command enum (SetJoints, LoadRobot)\n├── state/\n│   ├── mod.rs\n│   └── robot.rs      # SceneRuntime, ActiveRobot\n├── services/\n│   ├── mod.rs\n│   └── scene.rs      # SceneService (orquestador principal)\n├── backends/\n│   ├── mod.rs        # RobotBackend trait\n│   └── internal.rs   # InternalBackend\n└── snapshots/\n    ├── mod.rs\n    └── scene.rs      # RuntimeSnapshot\nReglas:\n\nSceneService es el único punto de entrada para mutaciones del sistema.\nLos Command son tipados e inmutables — representan intenciones.\nLos RobotBackend siguen strategy pattern — el default es InternalBackend.\nEl runtime no sabe de HTTP — no importa nada de thalos-api.\nSceneService::execute() siempre devuelve un RuntimeSnapshot completo.\n\n\n\n8.2.4 thalos-api\ncrates/thalos-api/src/\n├── main.rs           # Entrypoint\n├── lib.rs            # Re-exportaciones\n├── app/\n│   ├── mod.rs        # AppState + Services\n│   ├── state.rs      # Estado global\n│   ├── prelude.rs    # Re-exportaciones del crate\n│   ├── error.rs      # ApiError (conversión a HTTP)\n│   ├── dto.rs        # DTOs de error compartidos\n│   └── types.rs      # ApiResult alias\n├── features/\n│   ├── scene/        # Feature de escena\n│   │   ├── mod.rs\n│   │   ├── handler.rs    # Handlers axum\n│   │   ├── dto/\n│   │   │   ├── mod.rs\n│   │   │   ├── requests.rs  # SetJointsRequest, LoadRobotRequest, etc.\n│   │   │   └── responses.rs # VisualSceneDto, RuntimeStateResponse, etc.\n│   │   └── error.rs\n│   └── robots/       # Feature de catálogo\n│       ├── mod.rs\n│       ├── handler.rs\n│       ├── service.rs    # RobotService\n│       ├── dto.rs        # RobotMetadataDto\n│       └── error.rs\n└── http/\n    ├── mod.rs        # app_router()\n    └── routes/\n        ├── mod.rs\n        ├── scene.rs  # Rutas de escena\n        └── robots.rs # Rutas de robots",
+    "title": "9  Contribución a Thalos",
+    "section": "9.2 Estructura esperada por crate",
+    "text": "9.2 Estructura esperada por crate\n\n9.2.1 thalos-core\ncrates/thalos-core/src/\n├── lib.rs            # Declaración de módulos públicos\n├── prelude.rs        # Re-exportaciones convenientes (opcional)\n├── &lt;mod&gt;/\n│   ├── mod.rs        # Declaración de submódulos + re-exportaciones\n│   ├── &lt;type&gt;.rs     # Un tipo por archivo (preferentemente)\n│   └── ...           # Archivos de soporte\nReglas:\n\nUn tipo principal por archivo. RevoluteJoint va en revolute.rs, no en joint.rs junto con PrismaticJoint.\nLos enums unificadores (como JointType) van en el archivo que lleva el nombre del concepto (joint.rs).\nLos tests unitarios van al final del archivo que testean, en un módulo #[cfg(test)] mod &lt;type&gt;_tests { ... }.\nLas fábricas de modelos concretos van en models/&lt;name&gt;/factory.rs.\n\n\n\n9.2.2 thalos-visual\ncrates/thalos-visual/src/\n├── lib.rs            # Re-exportaciones públicas\n├── scene/\n│   ├── mod.rs        # VisualScene, VisualFrame, VisualPrimitive, FrameStyle, etc.\n│   ├── precision.rs  # VisualPrecision (normalización numérica)\n│   └── diff.rs       # SceneDiff, ChangedFrame\n├── builder.rs        # SceneBuilder (FK → VisualScene) + helpers (cylinder_between, align_y_to)\n├── scara.rs          # ScaraVisualBuilder (builders específicos por robot)\n├── validator.rs      # SceneValidator (invariantes)\n└── utils.rs          # Utilidades pequeñas\n\nLos tipos visuales se declaran en scene/mod.rs con derive(Serialize, Deserialize).\nSceneBuilder importa del core pero no modifica estructuras del core.\nSceneValidator es autónomo: solo recibe un &VisualScene y devuelve Result&lt;(), SceneError&gt;.\nLos builders específicos (ej: ScaraVisualBuilder) van en archivos separados y extienden SceneBuilder para generar primitivas geométricas.\nLos helpers geométricos (cylinder_between, align_y_to) viven en builder.rs y se exportan para reuso.\n\n\n\n9.2.3 thalos-runtime\ncrates/thalos-runtime/src/\n├── lib.rs            # Re-exportaciones públicas\n├── error.rs          # RuntimeError\n├── commands/\n│   └── mod.rs        # Command enum (SetJoints, LoadRobot)\n├── state/\n│   ├── mod.rs\n│   └── robot.rs      # SceneRuntime, ActiveRobot\n├── services/\n│   ├── mod.rs\n│   └── scene.rs      # SceneService (orquestador principal)\n├── backends/\n│   ├── mod.rs        # RobotBackend trait\n│   └── internal.rs   # InternalBackend\n└── snapshots/\n    ├── mod.rs\n    └── scene.rs      # RuntimeSnapshot\nReglas:\n\nSceneService es el único punto de entrada para mutaciones del sistema.\nLos Command son tipados e inmutables — representan intenciones.\nLos RobotBackend siguen strategy pattern — el default es InternalBackend.\nEl runtime no sabe de HTTP — no importa nada de thalos-api.\nSceneService::execute() siempre devuelve un RuntimeSnapshot completo.\n\n\n\n9.2.4 thalos-api\ncrates/thalos-api/src/\n├── main.rs           # Entrypoint\n├── lib.rs            # Re-exportaciones\n├── app/\n│   ├── mod.rs        # AppState + Services\n│   ├── state.rs      # Estado global\n│   ├── prelude.rs    # Re-exportaciones del crate\n│   ├── error.rs      # ApiError (conversión a HTTP)\n│   ├── dto.rs        # DTOs de error compartidos\n│   └── types.rs      # ApiResult alias\n├── features/\n│   ├── scene/        # Feature de escena\n│   │   ├── mod.rs\n│   │   ├── handler.rs    # Handlers axum\n│   │   ├── dto/\n│   │   │   ├── mod.rs\n│   │   │   ├── requests.rs  # SetJointsRequest, LoadRobotRequest, etc.\n│   │   │   └── responses.rs # VisualSceneDto, RuntimeStateResponse, etc.\n│   │   └── error.rs\n│   └── robots/       # Feature de catálogo\n│       ├── mod.rs\n│       ├── handler.rs\n│       ├── service.rs    # RobotService\n│       ├── dto.rs        # RobotMetadataDto\n│       └── error.rs\n└── http/\n    ├── mod.rs        # app_router()\n    └── routes/\n        ├── mod.rs\n        ├── scene.rs  # Rutas de escena\n        └── robots.rs # Rutas de robots",
     "crumbs": [
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Contribución a Thalos</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Contribución a Thalos</span>"
     ]
   },
   {
     "objectID": "contributing.html#cómo-agregar-un-modelo-robótico-nuevo",
     "href": "contributing.html#cómo-agregar-un-modelo-robótico-nuevo",
-    "title": "8  Contribución a Thalos",
-    "section": "8.3 Cómo agregar un modelo robótico nuevo",
-    "text": "8.3 Cómo agregar un modelo robótico nuevo\nAgregar un robot concreto (ej: RRBot) requiere:\n1. Crear la estructura de directorios\nmake robot NAME=rrbot\n# Crea:\n#   src/models/rrbot/\n#   ├── mod.rs\n#   ├── factory.rs\n#   └── tests/\n#       ├── mod.rs\n#       └── fk.rs\n2. Implementar la fábrica en factory.rs\nuse thalos_core::prelude::*;\n\npub fn create_rrbot(l1: f64, l2: f64) -&gt; SerialChain {\n    let mut builder = SerialChainBuilder::new();\n\n    let base = builder.create_frame(\"base\");\n    let joint_1 = builder.create_frame(\"joint_1\");\n    let joint_2 = builder.create_frame(\"joint_2\");\n    let ee = builder.create_frame(\"ee\");\n\n    // ... configurar joints, links, segments ...\n\n    builder.set_end_effector(ee);\n    builder.build().expect(\"RRBot debe ser válido\")\n}\n3. Agregar variante a RobotModel y RobotSpec\nEn models/factory.rs, agregar:\npub enum RobotModel {\n    // ... existentes ...\n    Rrbot,\n}\n\npub enum RobotSpec {\n    // ... existentes ...\n    Rrbot { l1: f64, l2: f64 },\n}\nY el match correspondiente en RobotRegistry::create().\n4. Exportar la fábrica\nEn models/mod.rs:\npub mod factories {\n    // ... existentes ...\n    pub use crate::models::rrbot::factory::create_rrbot;\n}\n5. Escribir tests de FK\nEn tests/fk.rs:\n#[cfg(test)]\nmod rrbot_fk_tests {\n    use thalos_core::prelude::*;\n\n    #[test]\n    fn test_home_position() {\n        let robot = create_rrbot(1.0, 1.0);\n        let fk = ForwardKinematics::new(robot);\n        let result = fk.evaluate(&[0.0, 0.0]);\n\n        let ee_pose = result.pose(\n            &FrameId::Id(3) // ID del end-effector\n        ).expect(\"end effector pose\");\n\n        // assert! ...\n    }\n}",
+    "title": "9  Contribución a Thalos",
+    "section": "9.3 Cómo agregar un modelo robótico nuevo",
+    "text": "9.3 Cómo agregar un modelo robótico nuevo\nAgregar un robot concreto (ej: RRBot) requiere:\n1. Crear la estructura de directorios\nmake robot NAME=rrbot\n# Crea:\n#   src/models/rrbot/\n#   ├── mod.rs\n#   ├── factory.rs\n#   └── tests/\n#       ├── mod.rs\n#       └── fk.rs\n2. Implementar la fábrica en factory.rs\nuse thalos_core::prelude::*;\n\npub fn create_rrbot(l1: f64, l2: f64) -&gt; SerialChain {\n    let mut builder = SerialChainBuilder::new();\n\n    let base = builder.create_frame(\"base\");\n    let joint_1 = builder.create_frame(\"joint_1\");\n    let joint_2 = builder.create_frame(\"joint_2\");\n    let ee = builder.create_frame(\"ee\");\n\n    // ... configurar joints, links, segments ...\n\n    builder.set_end_effector(ee);\n    builder.build().expect(\"RRBot debe ser válido\")\n}\n3. Agregar variante a RobotModel y RobotSpec\nEn models/factory.rs, agregar:\npub enum RobotModel {\n    // ... existentes ...\n    Rrbot,\n}\n\npub enum RobotSpec {\n    // ... existentes ...\n    Rrbot { l1: f64, l2: f64 },\n}\nY el match correspondiente en RobotRegistry::create().\n4. Exportar la fábrica\nEn models/mod.rs:\npub mod factories {\n    // ... existentes ...\n    pub use crate::models::rrbot::factory::create_rrbot;\n}\n5. Escribir tests de FK\nEn tests/fk.rs:\n#[cfg(test)]\nmod rrbot_fk_tests {\n    use thalos_core::prelude::*;\n\n    #[test]\n    fn test_home_position() {\n        let robot = create_rrbot(1.0, 1.0);\n        let fk = ForwardKinematics::new(robot);\n        let result = fk.evaluate(&[0.0, 0.0]);\n\n        let ee_pose = result.pose(\n            &FrameId::Id(3) // ID del end-effector\n        ).expect(\"end effector pose\");\n\n        // assert! ...\n    }\n}",
     "crumbs": [
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Contribución a Thalos</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Contribución a Thalos</span>"
     ]
   },
   {
     "objectID": "contributing.html#cómo-agregar-tests",
     "href": "contributing.html#cómo-agregar-tests",
-    "title": "8  Contribución a Thalos",
-    "section": "8.4 Cómo agregar tests",
-    "text": "8.4 Cómo agregar tests\n\n8.4.1 Tests unitarios (en el mismo archivo)\n#[cfg(test)]\nmod vector3_tests {\n    use super::*;\n\n    #[test]\n    fn test_magnitude() {\n        let v = Vector3::new(3.0, 4.0, 0.0);\n        assert!((v.magnitude() - 5.0).abs() &lt; EPS);\n    }\n}\n\n\n8.4.2 Tests de integración (en tests/)\nUsar insta para snapshots cuando sea posible:\n#[test]\nfn test_planar_2r_scene() {\n    let robot = RobotRegistry::create_default(RobotModel::Planar2R);\n    let fk = ForwardKinematics::new(robot);\n    let result = fk.evaluate(&[0.5, 0.3]);\n    let scene = SceneBuilder::new(fk.robot()).from_fk(&result);\n    insta::assert_json_snapshot!(scene);\n}\nLos snapshots permiten detectar visualmente cambios no deseados en CI sin abrir un visor 3D.",
+    "title": "9  Contribución a Thalos",
+    "section": "9.4 Cómo agregar tests",
+    "text": "9.4 Cómo agregar tests\n\n9.4.1 Tests unitarios (en el mismo archivo)\n#[cfg(test)]\nmod vector3_tests {\n    use super::*;\n\n    #[test]\n    fn test_magnitude() {\n        let v = Vector3::new(3.0, 4.0, 0.0);\n        assert!((v.magnitude() - 5.0).abs() &lt; EPS);\n    }\n}\n\n\n9.4.2 Tests de integración (en tests/)\nUsar insta para snapshots cuando sea posible:\n#[test]\nfn test_planar_2r_scene() {\n    let robot = RobotRegistry::create_default(RobotModel::Planar2R);\n    let fk = ForwardKinematics::new(robot);\n    let result = fk.evaluate(&[0.5, 0.3]);\n    let scene = SceneBuilder::new(fk.robot()).from_fk(&result);\n    insta::assert_json_snapshot!(scene);\n}\nLos snapshots permiten detectar visualmente cambios no deseados en CI sin abrir un visor 3D.",
     "crumbs": [
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Contribución a Thalos</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Contribución a Thalos</span>"
     ]
   },
   {
     "objectID": "contributing.html#qué-evitar",
     "href": "contributing.html#qué-evitar",
-    "title": "8  Contribución a Thalos",
-    "section": "8.5 Qué evitar",
-    "text": "8.5 Qué evitar\n\n8.5.1 No hacer\n\nImportar thalos-visual, thalos-runtime o thalos-api desde thalos-core\nPoner lógica de negocios en handlers HTTP\nUsar unwrap() o expect() en código de producción (salvo en main.rs o tests)\nAgregar dependencias pesadas al core (thalos-core solo debe tener nalgebra y thiserror)\nNormalizaciones silenciosas — si una operación puede fallar, que retorne Result\nMezclar DTOs con tipos del dominio — los DTOs de API son independientes\n\n\n\n8.5.2 Sí hacer\n\nValidar invariantes en construcción (new() retorna Result)\nDocumentar el por qué de las decisiones (no solo el qué)\nMantener los tests al lado del código que testean\nUsar thiserror para errores del dominio\nSeguir la estructura de archivos establecida",
+    "title": "9  Contribución a Thalos",
+    "section": "9.5 Qué evitar",
+    "text": "9.5 Qué evitar\n\n9.5.1 No hacer\n\nImportar thalos-visual, thalos-runtime o thalos-api desde thalos-core\nPoner lógica de negocios en handlers HTTP\nUsar unwrap() o expect() en código de producción (salvo en main.rs o tests)\nAgregar dependencias pesadas al core (thalos-core solo debe tener nalgebra y thiserror)\nNormalizaciones silenciosas — si una operación puede fallar, que retorne Result\nMezclar DTOs con tipos del dominio — los DTOs de API son independientes\n\n\n\n9.5.2 Sí hacer\n\nValidar invariantes en construcción (new() retorna Result)\nDocumentar el por qué de las decisiones (no solo el qué)\nMantener los tests al lado del código que testean\nUsar thiserror para errores del dominio\nSeguir la estructura de archivos establecida",
     "crumbs": [
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Contribución a Thalos</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Contribución a Thalos</span>"
     ]
   },
   {
     "objectID": "contributing.html#flujo-de-trabajo-para-contribuciones",
     "href": "contributing.html#flujo-de-trabajo-para-contribuciones",
-    "title": "8  Contribución a Thalos",
-    "section": "8.6 Flujo de trabajo para contribuciones",
-    "text": "8.6 Flujo de trabajo para contribuciones\n\nLeer la documentación de dominio y arquitectura\nCrear un issue o discussion describiendo el cambio\nImplementar siguiendo las convenciones del crate correspondiente\nAgregar tests (unitarios + integración con snapshot si aplica)\nCorrer cargo test y cargo clippy\nEnviar PR con conventional commit",
+    "title": "9  Contribución a Thalos",
+    "section": "9.6 Flujo de trabajo para contribuciones",
+    "text": "9.6 Flujo de trabajo para contribuciones\n\nLeer la documentación de dominio y arquitectura\nCrear un issue o discussion describiendo el cambio\nImplementar siguiendo las convenciones del crate correspondiente\nAgregar tests (unitarios + integración con snapshot si aplica)\nCorrer cargo test y cargo clippy\nEnviar PR con conventional commit",
     "crumbs": [
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Contribución a Thalos</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Contribución a Thalos</span>"
     ]
   },
   {
     "objectID": "contributing.html#checklist-pre-pr",
     "href": "contributing.html#checklist-pre-pr",
-    "title": "8  Contribución a Thalos",
-    "section": "8.7 Checklist pre-PR",
-    "text": "8.7 Checklist pre-PR\n\ncargo fmt aplicado\ncargo clippy sin warnings\ncargo test pasa completo\nNo se violan las reglas arquitectónicas (Section 3.2)\nLos nuevos tipos tienen Debug, Clone, y Serialize si corresponde\nLas funciones que pueden fallar retornan Result\nLos invariantes se validan en construcción",
+    "title": "9  Contribución a Thalos",
+    "section": "9.7 Checklist pre-PR",
+    "text": "9.7 Checklist pre-PR\n\ncargo fmt aplicado\ncargo clippy sin warnings\ncargo test pasa completo\nNo se violan las reglas arquitectónicas (Section 3.2)\nLos nuevos tipos tienen Debug, Clone, y Serialize si corresponde\nLas funciones que pueden fallar retornan Result\nLos invariantes se validan en construcción",
     "crumbs": [
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Contribución a Thalos</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Contribución a Thalos</span>"
     ]
   },
   {
@@ -552,11 +632,22 @@
     ]
   },
   {
-    "objectID": "glossary.html#términos-del-workspace",
-    "href": "glossary.html#términos-del-workspace",
+    "objectID": "glossary.html#términos-del-workspace-cargo",
+    "href": "glossary.html#términos-del-workspace-cargo",
     "title": "Appendix A — Glosario",
-    "section": "A.3 Términos del workspace",
-    "text": "A.3 Términos del workspace\nCrate — Paquete de Rust. Thalos tiene 4: thalos-core, thalos-visual, thalos-runtime, thalos-api.\nWorkspace — Conjunto de crates que comparten un Cargo.lock y configuración de build.\nFeature — Módulo funcional dentro de thalos-api (scene, robots, y futuros: planning, control, etc.).",
+    "section": "A.3 Términos del workspace (Cargo)",
+    "text": "A.3 Términos del workspace (Cargo)\nCrate — Paquete de Rust. Thalos tiene 4: thalos-core, thalos-visual, thalos-runtime, thalos-api.\nWorkspace — Conjunto de crates que comparten un Cargo.lock y configuración de build.\nFeature — Módulo funcional dentro de thalos-api (scene, robots, y futuros: planning, control, etc.).",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>A</span>  <span class='chapter-title'>Glosario</span>"
+    ]
+  },
+  {
+    "objectID": "glossary.html#términos-del-workspace-analysis",
+    "href": "glossary.html#términos-del-workspace-analysis",
+    "title": "Appendix A — Glosario",
+    "section": "A.4 Términos del workspace analysis",
+    "text": "A.4 Términos del workspace analysis\nWorkspace Analysis — Técnica para caracterizar el espacio de trabajo de un manipulador mediante muestreo Monte Carlo de configuraciones articulares.\nWorkspace — Dataset inmutable de muestras de configuraciones articulares con posiciones del end-effector, bounds y métricas derivadas.\nWorkspaceSample — Unidad atómica del análisis: configuración articular q + posición 3D del end-effector.\nBoundingBox — Caja alineada a ejes (AABB) que envuelve todas las posiciones muestreadas. No es el volumen real del workspace.\nWorkspaceMetrics — Métricas derivadas del conjunto de posiciones: bounding_volume, max_reach, min_reach, centroid, sample_count.\nWorkspaceConfig — Parámetros de muestreo: samples, seed, tolerance.\nWorkspaceSampler — Algoritmo de muestreo Monte Carlo que genera configuraciones articulares uniformes dentro de los límites y evalúa FK.\nReachability — Resultado de una consulta de alcanzabilidad: Reachable u OutOfWorkspace { nearest_distance }.\nWorkspaceService — Servicio stateless en thalos-runtime que orquesta el muestreo y las consultas de alcanzabilidad.\nWorkspaceVisual — Representación visual compuesta por BoundsWireframe (AABB como 12 aristas) y SamplePointCloud (nube de puntos 3D) con overlay opcional del robot.\nWorkspacePanel — Componente Angular con formulario de configuración, visualización de métricas y consulta de alcanzabilidad.\nWorkspaceRenderer — Componente Angular/Three.js que renderiza el wireframe del AABB y la nube de puntos.",
     "crumbs": [
       "Appendices",
       "<span class='chapter-number'>A</span>  <span class='chapter-title'>Glosario</span>"
@@ -566,8 +657,8 @@
     "objectID": "glossary.html#términos-del-runtime",
     "href": "glossary.html#términos-del-runtime",
     "title": "Appendix A — Glosario",
-    "section": "A.4 Términos del runtime",
-    "text": "A.4 Términos del runtime\nSceneService — Orquestador central. Mantiene SceneRuntime (el estado mutable) y expone snapshot() y execute(Command). Es el punto único de entrada para toda mutación del sistema.\nCommand — Enum que tipa las mutaciones del runtime: SetJoints(Vec&lt;f64&gt;) y LoadRobot(String). Se ejecutan via SceneService::execute().\nRuntimeSnapshot — Estado puntual del sistema: robot activo, joints actuales, escena visual validada y timestamp. Es el valor de retorno unificado.\nSceneRuntime — Contenedor del estado mutable: envuelve ActiveRobot dentro de un RwLock para acceso concurrente.\nActiveRobot — Robot actualmente cargado: modelo, cadena cinemática (SerialChain) y ángulos articulares (Vec&lt;f64&gt;).\nRobotBackend — Trait (strategy) para resolver modelos robóticos por ID. InternalBackend usa el catálogo built-in; implementaciones custom pueden integrar hardware, archivos de configuración o redes.",
+    "section": "A.5 Términos del runtime",
+    "text": "A.5 Términos del runtime\nSceneService — Orquestador central. Mantiene SceneRuntime (el estado mutable) y expone snapshot() y execute(Command). Es el punto único de entrada para toda mutación del sistema.\nCommand — Enum que tipa las mutaciones del runtime: SetJoints(Vec&lt;f64&gt;) y LoadRobot(String). Se ejecutan via SceneService::execute().\nRuntimeSnapshot — Estado puntual del sistema: robot activo, joints actuales, escena visual validada y timestamp. Es el valor de retorno unificado.\nSceneRuntime — Contenedor del estado mutable: envuelve ActiveRobot dentro de un RwLock para acceso concurrente.\nActiveRobot — Robot actualmente cargado: modelo, cadena cinemática (SerialChain) y ángulos articulares (Vec&lt;f64&gt;).\nRobotBackend — Trait (strategy) para resolver modelos robóticos por ID. InternalBackend usa el catálogo built-in; implementaciones custom pueden integrar hardware, archivos de configuración o redes.",
     "crumbs": [
       "Appendices",
       "<span class='chapter-number'>A</span>  <span class='chapter-title'>Glosario</span>"
@@ -577,8 +668,8 @@
     "objectID": "glossary.html#términos-del-frontend",
     "href": "glossary.html#términos-del-frontend",
     "title": "Appendix A — Glosario",
-    "section": "A.5 Términos del frontend",
-    "text": "A.5 Términos del frontend\nSceneStore — Servicio Angular con estado reactivo. Usa dos pipelines RxJS paralelos (joints + load robot) mergados con merge() + scan(), expuestos como Signal&lt;SceneState&gt; vía toSignal().\nRobotStore — Store con signals puras para el catálogo de robots. Expone robots, selectedId, loading y error como WritableSignal.\nThreeRendererService — Servicio Angular que renderiza SceneData en Three.js. Maneja frames con FrameStyle, links cilíndricos, primitivas geométricas y brújula 3D.\nRobotCatalog — Componente orquestador que lista robots del catálogo y al seleccionar uno dispara RobotStore.select() + SceneStore.loadRobot().\ndto-to-model — Adapter que traduce DTOs del API (snake_case) a tipos internos del frontend (camelCase). Incluye conversión de geometrías (PrimitiveGeometryDto → ScenePrimitive).",
+    "section": "A.6 Términos del frontend",
+    "text": "A.6 Términos del frontend\nSceneStore — Servicio Angular con estado reactivo. Usa dos pipelines RxJS paralelos (joints + load robot) mergados con merge() + scan(), expuestos como Signal&lt;SceneState&gt; vía toSignal().\nRobotStore — Store con signals puras para el catálogo de robots. Expone robots, selectedId, loading y error como WritableSignal.\nThreeRendererService — Servicio Angular que renderiza SceneData en Three.js. Maneja frames con FrameStyle, links cilíndricos, primitivas geométricas y brújula 3D.\nRobotCatalog — Componente orquestador que lista robots del catálogo y al seleccionar uno dispara RobotStore.select() + SceneStore.loadRobot().\ndto-to-model — Adapter que traduce DTOs del API (snake_case) a tipos internos del frontend (camelCase). Incluye conversión de geometrías (PrimitiveGeometryDto → ScenePrimitive).",
     "crumbs": [
       "Appendices",
       "<span class='chapter-number'>A</span>  <span class='chapter-title'>Glosario</span>"
@@ -588,8 +679,8 @@
     "objectID": "glossary.html#términos-visuales",
     "href": "glossary.html#términos-visuales",
     "title": "Appendix A — Glosario",
-    "section": "A.6 Términos visuales",
-    "text": "A.6 Términos visuales\nVisualPrimitive — Elemento 3D con volumen (cilindro, esfera, caja) que complementa frames y links en la escena. Tiene id, translation, rotation y geometry. Ej: base column del SCARA, cuerpos de links.\nFrameStyle — Configuración visual de un frame individual: longitud/radio de ejes, colores RGB, esfera de origen y etiquetas. Cada VisualFrame puede tener su propio FrameStyle o usar defaults del frontend.\nScaraVisualBuilder — Builder específico para el robot SCARA. Genera primitivas geométricas (base column, link bodies) además de los frames y links estándar. Es un ejemplo del patrón “builder por robot”.\ncylinder_between — Helper que construye un VisualPrimitive::Cylinder entre dos puntos 3D, calculando altura (distancia), punto medio y rotación (para alinear el eje Y del cilindro con la dirección del segmento).\nalign_y_to — Helper que produce un quaternion que rota el eje Y canónico (0,1,0) para alinearse con una dirección arbitraria. Se usa internamente por cylinder_between y es exportado para uso en builders personalizados.",
+    "section": "A.7 Términos visuales",
+    "text": "A.7 Términos visuales\nVisualPrimitive — Elemento 3D con volumen (cilindro, esfera, caja) que complementa frames y links en la escena. Tiene id, translation, rotation y geometry. Ej: base column del SCARA, cuerpos de links.\nFrameStyle — Configuración visual de un frame individual: longitud/radio de ejes, colores RGB, esfera de origen y etiquetas. Cada VisualFrame puede tener su propio FrameStyle o usar defaults del frontend.\nScaraVisualBuilder — Builder específico para el robot SCARA. Genera primitivas geométricas (base column, link bodies) además de los frames y links estándar. Es un ejemplo del patrón “builder por robot”.\ncylinder_between — Helper que construye un VisualPrimitive::Cylinder entre dos puntos 3D, calculando altura (distancia), punto medio y rotación (para alinear el eje Y del cilindro con la dirección del segmento).\nalign_y_to — Helper que produce un quaternion que rota el eje Y canónico (0,1,0) para alinearse con una dirección arbitraria. Se usa internamente por cylinder_between y es exportado para uso en builders personalizados.",
     "crumbs": [
       "Appendices",
       "<span class='chapter-number'>A</span>  <span class='chapter-title'>Glosario</span>"
@@ -599,8 +690,8 @@
     "objectID": "glossary.html#convenciones-de-código",
     "href": "glossary.html#convenciones-de-código",
     "title": "Appendix A — Glosario",
-    "section": "A.7 Convenciones de código",
-    "text": "A.7 Convenciones de código\nError explícito — Toda operación que pueda fallar retorna Result. No hay unwrap() ocultos, expect() silenciosos, ni fallbacks mágicos.\nInvariante de construcción — Un tipo que representa un concepto con restricciones matemáticas valida esas restricciones en new(). UnitQuaternion::new() falla si la norma no es ≈ 1.\nNormalización controlada — VisualPrecision expone explícitamente los parámetros de redondeo. Nada se normaliza “porque sí”.\nPhantomData — Uso de tipos fantasma para asegurar en compilación que transformaciones entre frames incompatibles no se compongan accidentalmente.",
+    "section": "A.8 Convenciones de código",
+    "text": "A.8 Convenciones de código\nError explícito — Toda operación que pueda fallar retorna Result. No hay unwrap() ocultos, expect() silenciosos, ni fallbacks mágicos.\nInvariante de construcción — Un tipo que representa un concepto con restricciones matemáticas valida esas restricciones en new(). UnitQuaternion::new() falla si la norma no es ≈ 1.\nNormalización controlada — VisualPrecision expone explícitamente los parámetros de redondeo. Nada se normaliza “porque sí”.\nPhantomData — Uso de tipos fantasma para asegurar en compilación que transformaciones entre frames incompatibles no se compongan accidentalmente.",
     "crumbs": [
       "Appendices",
       "<span class='chapter-number'>A</span>  <span class='chapter-title'>Glosario</span>"

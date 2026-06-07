@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>5&nbsp; Análisis de Workspace – Thalos — Documentación Técnica</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./domain.html" rel="next">
+<link href="./workspace.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-078ea89416ea4a2644c7a15719cd19d6.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./workspace-analysis.html"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Análisis de Workspace</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Thalos — Documentación Técnica</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/Void-CA/Thalos" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Thalos</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./vision.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Visión del proyecto</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./architecture.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Filosofía arquitectónica</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./workspace.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Arquitectura del workspace</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./workspace-analysis.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Análisis de Workspace</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./domain.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Definiciones internas del dominio</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./flow.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Flujo interno del sistema</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./maturity.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Estado de madurez</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./contributing.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Contribución a Thalos</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./glossary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">Glosario</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#introducción" id="toc-introducción" class="nav-link active" data-scroll-target="#introducción"><span class="header-section-number">5.1</span> Introducción</a></li>
+  <li><a href="#conceptos-fundamentales" id="toc-conceptos-fundamentales" class="nav-link" data-scroll-target="#conceptos-fundamentales"><span class="header-section-number">5.2</span> Conceptos fundamentales</a>
+  <ul class="collapse">
+  <li><a href="#workspacesample" id="toc-workspacesample" class="nav-link" data-scroll-target="#workspacesample"><span class="header-section-number">5.2.1</span> WorkspaceSample</a></li>
+  <li><a href="#boundingbox" id="toc-boundingbox" class="nav-link" data-scroll-target="#boundingbox"><span class="header-section-number">5.2.2</span> BoundingBox</a></li>
+  <li><a href="#workspacemetrics" id="toc-workspacemetrics" class="nav-link" data-scroll-target="#workspacemetrics"><span class="header-section-number">5.2.3</span> WorkspaceMetrics</a></li>
+  <li><a href="#workspaceconfig" id="toc-workspaceconfig" class="nav-link" data-scroll-target="#workspaceconfig"><span class="header-section-number">5.2.4</span> WorkspaceConfig</a></li>
+  <li><a href="#workspace" id="toc-workspace" class="nav-link" data-scroll-target="#workspace"><span class="header-section-number">5.2.5</span> Workspace</a></li>
+  </ul></li>
+  <li><a href="#sec-workspace-sampling" id="toc-sec-workspace-sampling" class="nav-link" data-scroll-target="#sec-workspace-sampling"><span class="header-section-number">5.3</span> Muestreo Monte Carlo</a>
+  <ul class="collapse">
+  <li><a href="#invariantes-clave" id="toc-invariantes-clave" class="nav-link" data-scroll-target="#invariantes-clave"><span class="header-section-number">5.3.1</span> Invariantes clave</a></li>
+  </ul></li>
+  <li><a href="#sec-workspace-reachability" id="toc-sec-workspace-reachability" class="nav-link" data-scroll-target="#sec-workspace-reachability"><span class="header-section-number">5.4</span> Consulta de alcanzabilidad</a>
+  <ul class="collapse">
+  <li><a href="#algoritmo-workspaceis_reachable" id="toc-algoritmo-workspaceis_reachable" class="nav-link" data-scroll-target="#algoritmo-workspaceis_reachable"><span class="header-section-number">5.4.1</span> Algoritmo (<code>Workspace::is_reachable</code>)</a></li>
+  </ul></li>
+  <li><a href="#arquitectura-por-capas" id="toc-arquitectura-por-capas" class="nav-link" data-scroll-target="#arquitectura-por-capas"><span class="header-section-number">5.5</span> Arquitectura por capas</a>
+  <ul class="collapse">
+  <li><a href="#thalos-core" id="toc-thalos-core" class="nav-link" data-scroll-target="#thalos-core"><span class="header-section-number">5.5.1</span> thalos-core</a></li>
+  <li><a href="#thalos-runtime" id="toc-thalos-runtime" class="nav-link" data-scroll-target="#thalos-runtime"><span class="header-section-number">5.5.2</span> thalos-runtime</a></li>
+  <li><a href="#thalos-api" id="toc-thalos-api" class="nav-link" data-scroll-target="#thalos-api"><span class="header-section-number">5.5.3</span> thalos-api</a></li>
+  <li><a href="#thalos-visual" id="toc-thalos-visual" class="nav-link" data-scroll-target="#thalos-visual"><span class="header-section-number">5.5.4</span> thalos-visual</a></li>
+  <li><a href="#sec-workspace-frontend" id="toc-sec-workspace-frontend" class="nav-link" data-scroll-target="#sec-workspace-frontend"><span class="header-section-number">5.5.5</span> Frontend (Angular)</a></li>
+  </ul></li>
+  <li><a href="#mapa-de-errores" id="toc-mapa-de-errores" class="nav-link" data-scroll-target="#mapa-de-errores"><span class="header-section-number">5.6</span> Mapa de errores</a></li>
+  <li><a href="#tests" id="toc-tests" class="nav-link" data-scroll-target="#tests"><span class="header-section-number">5.7</span> Tests</a>
+  <ul class="collapse">
+  <li><a href="#invariantes-bajo-test" id="toc-invariantes-bajo-test" class="nav-link" data-scroll-target="#invariantes-bajo-test"><span class="header-section-number">5.7.1</span> Invariantes bajo test</a></li>
+  </ul></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title"><span id="sec-workspace-analysis" class="quarto-section-identifier"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Análisis de Workspace</span></span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="introducción" class="level2" data-number="5.1">
+<h2 data-number="5.1" class="anchored" data-anchor-id="introducción"><span class="header-section-number">5.1</span> Introducción</h2>
+<p>El análisis de workspace es una técnica fundamental en robótica que permite <strong>caracterizar el espacio de trabajo</strong> de un manipulador: el conjunto de posiciones (y opcionalmente orientaciones) que el end-effector puede alcanzar dadas las limitaciones físicas de sus articulaciones.</p>
+<p>Thalos implementa análisis de workspace mediante <strong>muestreo Monte Carlo</strong>: en lugar de calcular analíticamente la frontera del workspace (complejo y dependiente de la geometría del robot), se muestrean configuraciones articulares aleatorias uniformes, se evalúa la cinemática directa (FK) para cada una, y se construye un dataset de posiciones alcanzables.</p>
+<p>Este enfoque tiene varias ventajas:</p>
+<ul>
+<li><strong>Robot-agnóstico</strong>: funciona para cualquier <code>SerialChain</code></li>
+<li><strong>Paralelizable</strong>: cada muestra es independiente (embarazosamente paralelo)</li>
+<li><strong>Aproximación probabilística</strong>: la calidad mejora con más muestras</li>
+<li><strong>Base para análisis avanzados</strong>: singularidades, manipulabilidad, validación de trayectorias</li>
+</ul>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div id="fig-workspace-pipeline" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-workspace-pipeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div>
+<svg width="672" height="480" viewbox="0.00 0.00 654.16 158.00" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" style="; max-width: none; max-height: none">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 154)">
+<title>workspace_pipeline</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-154 650.16,-154 650.16,4 -4,4"></polygon>
+<!-- config -->
+<g id="node1" class="node">
+<title>config</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M135.43,-122C135.43,-122 11.86,-122 11.86,-122 5.86,-122 -0.14,-116 -0.14,-110 -0.14,-110 -0.14,-96 -0.14,-96 -0.14,-90 5.86,-84 11.86,-84 11.86,-84 135.43,-84 135.43,-84 141.43,-84 147.43,-90 147.43,-96 147.43,-96 147.43,-110 147.43,-110 147.43,-116 141.43,-122 135.43,-122"></path>
+<text text-anchor="middle" x="73.64" y="-106" font-family="sans-serif" font-size="10.00">WorkspaceConfig</text>
+<text text-anchor="middle" x="73.64" y="-94" font-family="sans-serif" font-size="10.00">(samples, seed, tolerance)</text>
+</g>
+<!-- sampler -->
+<g id="node3" class="node">
+<title>sampler</title>
+<path fill="#d4e6f1" stroke="black" stroke-width="1.5" d="M293.74,-94C293.74,-94 195.14,-94 195.14,-94 189.14,-94 183.14,-88 183.14,-82 183.14,-82 183.14,-68 183.14,-68 183.14,-62 189.14,-56 195.14,-56 195.14,-56 293.74,-56 293.74,-56 299.74,-56 305.74,-62 305.74,-68 305.74,-68 305.74,-82 305.74,-82 305.74,-88 299.74,-94 293.74,-94"></path>
+<text text-anchor="middle" x="244.44" y="-78" font-family="sans-serif" font-size="10.00">WorkspaceSampler</text>
+<text text-anchor="middle" x="244.44" y="-66" font-family="sans-serif" font-size="10.00">::sample()</text>
+</g>
+<!-- config&#45;&gt;sampler -->
+<g id="edge1" class="edge">
+<title>config-&gt;sampler</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M147.56,-89C147.56,-89 173.22,-89 173.22,-89"></path>
+<polygon fill="black" stroke="black" stroke-width="1.5" points="173.22,-92.5 183.22,-89 173.22,-85.5 173.22,-92.5"></polygon>
+</g>
+<!-- chain -->
+<g id="node2" class="node">
+<title>chain</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M119.26,-66C119.26,-66 28.02,-66 28.02,-66 22.02,-66 16.02,-60 16.02,-54 16.02,-54 16.02,-40 16.02,-40 16.02,-34 22.02,-28 28.02,-28 28.02,-28 119.26,-28 119.26,-28 125.26,-28 131.26,-34 131.26,-40 131.26,-40 131.26,-54 131.26,-54 131.26,-60 125.26,-66 119.26,-66"></path>
+<text text-anchor="middle" x="73.64" y="-50" font-family="sans-serif" font-size="10.00">SerialChain</text>
+<text text-anchor="middle" x="73.64" y="-38" font-family="sans-serif" font-size="10.00">(joints, links, FK)</text>
+</g>
+<!-- chain&#45;&gt;sampler -->
+<g id="edge2" class="edge">
+<title>chain-&gt;sampler</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M131.47,-61C131.47,-61 173.17,-61 173.17,-61"></path>
+<polygon fill="black" stroke="black" stroke-width="1.5" points="173.17,-64.5 183.17,-61 173.17,-57.5 173.17,-64.5"></polygon>
+</g>
+<!-- ws -->
+<g id="node4" class="node">
+<title>ws</title>
+<path fill="#d5f5e3" stroke="black" stroke-width="1.5" d="M450.46,-94C450.46,-94 353.63,-94 353.63,-94 347.63,-94 341.63,-88 341.63,-82 341.63,-82 341.63,-68 341.63,-68 341.63,-62 347.63,-56 353.63,-56 353.63,-56 450.46,-56 450.46,-56 456.46,-56 462.46,-62 462.46,-68 462.46,-68 462.46,-82 462.46,-82 462.46,-88 456.46,-94 450.46,-94"></path>
+<text text-anchor="middle" x="402.04" y="-78" font-family="sans-serif" font-size="10.00">Workspace</text>
+<text text-anchor="middle" x="402.04" y="-66" font-family="sans-serif" font-size="10.00">(dataset inmutable)</text>
+</g>
+<!-- sampler&#45;&gt;ws -->
+<g id="edge3" class="edge">
+<title>sampler-&gt;ws</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M305.82,-75C305.82,-75 331.6,-75 331.6,-75"></path>
+<polygon fill="black" stroke="black" stroke-width="1.5" points="331.6,-78.5 341.6,-75 331.6,-71.5 331.6,-78.5"></polygon>
+</g>
+<!-- reach -->
+<g id="node5" class="node">
+<title>reach</title>
+<path fill="#fcf3cf" stroke="black" stroke-width="1.5" d="M607.37,-150C607.37,-150 537.29,-150 537.29,-150 531.29,-150 525.29,-144 525.29,-138 525.29,-138 525.29,-124 525.29,-124 525.29,-118 531.29,-112 537.29,-112 537.29,-112 607.37,-112 607.37,-112 613.37,-112 619.37,-118 619.37,-124 619.37,-124 619.37,-138 619.37,-138 619.37,-144 613.37,-150 607.37,-150"></path>
+<text text-anchor="middle" x="572.33" y="-134" font-family="sans-serif" font-size="10.00">Reachability</text>
+<text text-anchor="middle" x="572.33" y="-122" font-family="sans-serif" font-size="10.00">query</text>
+</g>
+<!-- ws&#45;&gt;reach -->
+<g id="edge4" class="edge">
+<title>ws-&gt;reach</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M402.16,-94.03C402.16,-105.15 402.16,-117 402.16,-117 402.16,-117 514.93,-117 514.93,-117"></path>
+<polygon fill="black" stroke="black" stroke-width="1.5" points="514.93,-120.5 524.93,-117 514.93,-113.5 514.93,-120.5"></polygon>
+</g>
+<!-- visual -->
+<g id="node6" class="node">
+<title>visual</title>
+<path fill="#f0e6f6" stroke="black" stroke-width="1.5" d="M633.99,-94C633.99,-94 510.67,-94 510.67,-94 504.67,-94 498.67,-88 498.67,-82 498.67,-82 498.67,-68 498.67,-68 498.67,-62 504.67,-56 510.67,-56 510.67,-56 633.99,-56 633.99,-56 639.99,-56 645.99,-62 645.99,-68 645.99,-68 645.99,-82 645.99,-82 645.99,-88 639.99,-94 633.99,-94"></path>
+<text text-anchor="middle" x="572.33" y="-78" font-family="sans-serif" font-size="10.00">WorkspaceVisual</text>
+<text text-anchor="middle" x="572.33" y="-66" font-family="sans-serif" font-size="10.00">(wireframe + point cloud)</text>
+</g>
+<!-- ws&#45;&gt;visual -->
+<g id="edge5" class="edge">
+<title>ws-&gt;visual</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M462.56,-75C462.56,-75 488.59,-75 488.59,-75"></path>
+<polygon fill="black" stroke="black" stroke-width="1.5" points="488.59,-78.5 498.59,-75 488.59,-71.5 488.59,-78.5"></polygon>
+</g>
+<!-- api -->
+<g id="node7" class="node">
+<title>api</title>
+<path fill="#fadbd8" stroke="black" stroke-width="1.5" d="M607.67,-38C607.67,-38 536.99,-38 536.99,-38 530.99,-38 524.99,-32 524.99,-26 524.99,-26 524.99,-12 524.99,-12 524.99,-6 530.99,0 536.99,0 536.99,0 607.67,0 607.67,0 613.67,0 619.67,-6 619.67,-12 619.67,-12 619.67,-26 619.67,-26 619.67,-32 613.67,-38 607.67,-38"></path>
+<text text-anchor="middle" x="572.33" y="-22" font-family="sans-serif" font-size="10.00">API HTTP</text>
+<text text-anchor="middle" x="572.33" y="-10" font-family="sans-serif" font-size="10.00">JSON DTOs</text>
+</g>
+<!-- ws&#45;&gt;api -->
+<g id="edge6" class="edge">
+<title>ws-&gt;api</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M402.16,-55.97C402.16,-44.85 402.16,-33 402.16,-33 402.16,-33 514.93,-33 514.93,-33"></path>
+<polygon fill="black" stroke="black" stroke-width="1.5" points="514.93,-36.5 524.93,-33 514.93,-29.5 514.93,-36.5"></polygon>
+</g>
+</g>
+</svg>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-workspace-pipeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;5.1: Diagrama conceptual del pipeline de análisis de workspace
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="conceptos-fundamentales" class="level2" data-number="5.2">
+<h2 data-number="5.2" class="anchored" data-anchor-id="conceptos-fundamentales"><span class="header-section-number">5.2</span> Conceptos fundamentales</h2>
+<section id="workspacesample" class="level3" data-number="5.2.1">
+<h3 data-number="5.2.1" class="anchored" data-anchor-id="workspacesample"><span class="header-section-number">5.2.1</span> WorkspaceSample</h3>
+<p>La <strong>unidad atómica</strong> del análisis: una configuración articular <code>q</code> y la posición 3D del end-effector que produce.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> WorkspaceSample <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> q<span class="op">:</span> <span class="dt">Vec</span><span class="op">&lt;</span><span class="dt">f64</span><span class="op">&gt;,</span>          <span class="co">// configuración articular</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> position<span class="op">:</span> Vector3<span class="op">,</span>    <span class="co">// posición del end-effector</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Invariante: <code>position == FK(chain, q).ee_position()</code> (garantizado por el sampler).</p>
+</section>
+<section id="boundingbox" class="level3" data-number="5.2.2">
+<h3 data-number="5.2.2" class="anchored" data-anchor-id="boundingbox"><span class="header-section-number">5.2.2</span> BoundingBox</h3>
+<p>Caja alineada a ejes (AABB) que <strong>envuelve</strong> todas las posiciones muestreadas. Es la aproximación más simple del workspace: un ortoedro definido por sus esquinas mínima y máxima.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> BoundingBox <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> min<span class="op">:</span> Vector3<span class="op">,</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> max<span class="op">:</span> Vector3<span class="op">,</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="workspacemetrics" class="level3" data-number="5.2.3">
+<h3 data-number="5.2.3" class="anchored" data-anchor-id="workspacemetrics"><span class="header-section-number">5.2.3</span> WorkspaceMetrics</h3>
+<p>Métricas derivadas del conjunto de posiciones. Calculadas en una pasada O(n) durante la construcción del <code>Workspace</code>.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> WorkspaceMetrics <span class="op">{</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> bounding_volume<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span> <span class="co">// volumen del AABB (no del workspace real)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> max_reach<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span>       <span class="co">// distancia máxima al origen</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> min_reach<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span>       <span class="co">// distancia mínima al origen</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> centroid<span class="op">:</span> Vector3<span class="op">,</span>    <span class="co">// media aritmética de posiciones</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> sample_count<span class="op">:</span> <span class="dt">usize</span><span class="op">,</span>  <span class="co">// número de muestras</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<blockquote class="blockquote">
+<p><strong>⚠️ <code>bounding_volume</code> ≠ volumen del workspace real</strong>. El volumen del AABB sobreestima drásticamente el workspace (especialmente para robots con huecos internos). Métricas de forma real (convex hull, voxelización) están planificadas para fases futuras.</p>
+</blockquote>
+</section>
+<section id="workspaceconfig" class="level3" data-number="5.2.4">
+<h3 data-number="5.2.4" class="anchored" data-anchor-id="workspaceconfig"><span class="header-section-number">5.2.4</span> WorkspaceConfig</h3>
+<p>Parámetros de configuración para el muestreo y las consultas de alcanzabilidad.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> WorkspaceConfig <span class="op">{</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> samples<span class="op">:</span> <span class="dt">usize</span><span class="op">,</span>   <span class="co">// &gt; 0, número de configuraciones a muestrear</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> seed<span class="op">:</span> <span class="dt">u64</span><span class="op">,</span>        <span class="co">// semilla determinista (StdRng::seed_from_u64)</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> tolerance<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span>   <span class="co">// &gt;= 0, tolerancia en metros para reachability</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Valores por defecto: <code>samples = 10_000</code>, <code>seed = 0xDEAD_BEEF</code>, <code>tolerance = 1e-3</code>.</p>
+</section>
+<section id="workspace" class="level3" data-number="5.2.5">
+<h3 data-number="5.2.5" class="anchored" data-anchor-id="workspace"><span class="header-section-number">5.2.5</span> Workspace</h3>
+<p>Dataset inmutable que contiene las muestras, bounds y métricas derivadas.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> Workspace <span class="op">{</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    samples<span class="op">:</span> <span class="dt">Vec</span><span class="op">&lt;</span>WorkspaceSample<span class="op">&gt;,</span>  <span class="co">// privado</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    bounds<span class="op">:</span> BoundingBox<span class="op">,</span>            <span class="co">// privado</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    metrics<span class="op">:</span> WorkspaceMetrics<span class="op">,</span>      <span class="co">// privado</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Métodos públicos:</p>
+<ul>
+<li><code>from_samples(samples)</code> — constructor único, O(n) secuencial, rechaza vacío</li>
+<li><code>samples() -&gt; &amp;[WorkspaceSample]</code> — vista de las muestras</li>
+<li><code>bounds() -&gt; &amp;BoundingBox</code> — AABB derivado</li>
+<li><code>metrics() -&gt; &amp;WorkspaceMetrics</code> — métricas derivadas</li>
+<li><code>is_reachable(point, tolerance) -&gt; Result&lt;Reachability, WorkspaceError&gt;</code> — consulta de alcanzabilidad</li>
+</ul>
+</section>
+</section>
+<section id="sec-workspace-sampling" class="level2" data-number="5.3">
+<h2 data-number="5.3" class="anchored" data-anchor-id="sec-workspace-sampling"><span class="header-section-number">5.3</span> Muestreo Monte Carlo</h2>
+<p>El <code>WorkspaceSampler</code> implementa el algoritmo de muestreo:</p>
+<ol type="1">
+<li>Recibe un <code>SerialChain</code> + <code>WorkspaceConfig</code> + RNG</li>
+<li>Para cada muestra:
+<ol type="a">
+<li>Genera una configuración articular aleatoria <strong>uniforme</strong> dentro de los límites de cada joint</li>
+<li>Evalúa FK con <code>ForwardKinematics::evaluate(q)</code></li>
+<li>Extrae <code>ee_position()</code> del resultado</li>
+</ol></li>
+<li>Construye un <code>Workspace</code> con todas las muestras</li>
+</ol>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> WorkspaceSampler<span class="op">;</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="kw">impl</span> WorkspaceSampler <span class="op">{</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> <span class="kw">fn</span> sample<span class="op">&lt;</span>R<span class="op">:</span> Rng <span class="op">+</span> SeedableRng<span class="op">&gt;</span>(</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>        <span class="op">&amp;</span><span class="kw">self</span><span class="op">,</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>        chain<span class="op">:</span> <span class="op">&amp;</span>SerialChain<span class="op">,</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>        config<span class="op">:</span> WorkspaceConfig<span class="op">,</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>        rng<span class="op">:</span> <span class="op">&amp;</span><span class="kw">mut</span> R<span class="op">,</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    ) <span class="op">-&gt;</span> <span class="dt">Result</span><span class="op">&lt;</span>Workspace<span class="op">,</span> WorkspaceError<span class="op">&gt;;</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>El RNG se inyecta externamente, lo que permite:</p>
+<ul>
+<li><strong>Tests deterministas</strong> (R1): fijando la semilla, el mismo <code>chain</code> + <code>config</code> produce siempre el mismo <code>Workspace</code></li>
+<li><strong>Producción</strong>: <code>WorkspaceService::sample()</code> usa <code>StdRng::seed_from_u64(seed)</code> para crear un RNG determinista a partir de la semilla</li>
+</ul>
+<p>La función que genera un joint value aleatorio es:</p>
+<pre><code>q_j ~ U(limit_j.min, limit_j.max)</code></pre>
+<p>donde <code>limit_j</code> son los límites físicos del <code>j</code>-ésimo joint. Cada joint se muestrea independientemente.</p>
+<section id="invariantes-clave" class="level3" data-number="5.3.1">
+<h3 data-number="5.3.1" class="anchored" data-anchor-id="invariantes-clave"><span class="header-section-number">5.3.1</span> Invariantes clave</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 11%">
+<col style="width: 32%">
+<col style="width: 55%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>ID</th>
+<th>Invariante</th>
+<th>¿Dónde se valida?</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>FK</td>
+<td><code>position == FK(chain, q).ee_position()</code></td>
+<td>Sampler (garantizado)</td>
+</tr>
+<tr class="even">
+<td>R1</td>
+<td>Mismo <code>chain + config + seed</code> → mismo <code>Workspace</code></td>
+<td>Tests de integración</td>
+</tr>
+<tr class="odd">
+<td>R2</td>
+<td><code>sample_count == config.samples</code></td>
+<td><code>Workspace::from_samples()</code></td>
+</tr>
+<tr class="even">
+<td>R3</td>
+<td><code>samples.q[i].len() == n_dof</code></td>
+<td>Por construcción</td>
+</tr>
+<tr class="odd">
+<td>R8</td>
+<td>Rechaza <code>samples = 0</code></td>
+<td><code>WorkspaceError::InvalidSampleCount</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="sec-workspace-reachability" class="level2" data-number="5.4">
+<h2 data-number="5.4" class="anchored" data-anchor-id="sec-workspace-reachability"><span class="header-section-number">5.4</span> Consulta de alcanzabilidad</h2>
+<p>La consulta de alcanzabilidad determina si un punto <code>p</code> en el espacio 3D es alcanzable por el end-effector, dentro de una tolerancia dada.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> Reachability <span class="op">{</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">/// El punto está dentro de la tolerancia de al menos una muestra.</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    Reachable<span class="op">,</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">/// El punto está más lejos que la tolerancia de toda muestra.</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    OutOfWorkspace <span class="op">{</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>        nearest_distance<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span>  <span class="co">// distancia mínima a cualquier muestra</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">},</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<section id="algoritmo-workspaceis_reachable" class="level3" data-number="5.4.1">
+<h3 data-number="5.4.1" class="anchored" data-anchor-id="algoritmo-workspaceis_reachable"><span class="header-section-number">5.4.1</span> Algoritmo (<code>Workspace::is_reachable</code>)</h3>
+<ol type="1">
+<li><strong>Validación de entrada</strong>:
+<ul>
+<li><code>tolerance</code> &gt;= 0 y no NaN → <code>InvalidTolerance</code> si falla</li>
+<li><code>point</code> sin NaN ni Infinity → <code>InvalidPoint</code> si falla</li>
+</ul></li>
+<li><strong>Búsqueda lineal</strong> O(n) sobre todas las posiciones muestreadas</li>
+<li>Si <code>min_distance &lt;= tolerance</code> → <code>Reachable</code></li>
+<li>Si no → <code>OutOfWorkspace { nearest_distance: min_distance }</code></li>
+</ol>
+<blockquote class="blockquote">
+<p>La búsqueda lineal es deliberada (D1): para datasets de ~10K-100K muestras es suficiente. Optimizaciones espaciales (KD-tree, octree) están planificadas para cuando el tamaño del workspace lo justifique.</p>
+</blockquote>
+</section>
+</section>
+<section id="arquitectura-por-capas" class="level2" data-number="5.5">
+<h2 data-number="5.5" class="anchored" data-anchor-id="arquitectura-por-capas"><span class="header-section-number">5.5</span> Arquitectura por capas</h2>
+<p>El análisis de workspace atraviesa todas las capas del sistema, manteniendo la separación de responsabilidades:</p>
+<pre><code>┌─────────────────────────────────────────────────────────────┐
+│                    thalos-core (dominio)                     │
+│  Workspace │ WorkspaceSample │ WorkspaceSampler              │
+│  BoundingBox │ WorkspaceMetrics │ Reachability               │
+│  WorkspaceConfig │ WorkspaceError                           │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  thalos-runtime (orquestación)               │
+│  WorkspaceService (stateless)                                │
+│    · sample(model, config) → Arc&lt;Workspace&gt;                  │
+│    · query(ws, point, tolerance) → Reachability              │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+              ┌────────┴────────┐
+              ▼                  ▼
+┌─────────────────────┐  ┌──────────────────────────┐
+│   thalos-api (HTTP)  │  │ thalos-visual (visual)    │
+│                      │  │                          │
+│ POST /workspace/     │  │ WorkspaceVisual           │
+│   sample             │  │ · BoundsWireframe         │
+│ POST /workspace/     │  │ · SamplePointCloud        │
+│   reachability       │  │ · robot_overlay           │
+└──────────┬──────────┘  └──────────┬───────────────┘
+           │                        │
+           └────────┬───────────────┘
+                    ▼
+┌────────────────────────────────────┐
+│       Frontend (Angular)           │
+│  WorkspacePanel (form + metrics)   │
+│  WorkspaceRenderer (Three.js)      │
+└────────────────────────────────────┘</code></pre>
+<section id="thalos-core" class="level3" data-number="5.5.1">
+<h3 data-number="5.5.1" class="anchored" data-anchor-id="thalos-core"><span class="header-section-number">5.5.1</span> thalos-core</h3>
+<p><strong>Responsabilidad</strong>: tipos de dominio y algoritmo de muestreo. No sabe de HTTP, visualización ni runtime.</p>
+<p>Crate puro: depende solo de <code>nalgebra</code> para tipos matemáticos, <code>thiserror</code> para errores, y <code>rand</code> para el sampler.</p>
+</section>
+<section id="thalos-runtime" class="level3" data-number="5.5.2">
+<h3 data-number="5.5.2" class="anchored" data-anchor-id="thalos-runtime"><span class="header-section-number">5.5.2</span> thalos-runtime</h3>
+<p><strong><code>WorkspaceService</code></strong> — servicio stateless (sin estado mutable). Toma un <code>RobotModel</code> y config, construye la <code>SerialChain</code> via <code>RobotRegistry</code>, crea un <code>StdRng</code> con la semilla, y delega en <code>WorkspaceSampler</code>.</p>
+<p>Todas las funciones son <code>pub fn</code> estáticas — no requieren instancia:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">impl</span> WorkspaceService <span class="op">{</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> <span class="kw">fn</span> sample(model<span class="op">:</span> RobotModel<span class="op">,</span> config<span class="op">:</span> WorkspaceConfig)</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>        <span class="op">-&gt;</span> <span class="dt">Result</span><span class="op">&lt;</span>Arc<span class="op">&lt;</span>Workspace<span class="op">&gt;,</span> RuntimeError<span class="op">&gt;;</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> <span class="kw">fn</span> query(workspace<span class="op">:</span> <span class="op">&amp;</span>Workspace<span class="op">,</span> point<span class="op">:</span> <span class="op">&amp;</span>Vector3<span class="op">,</span> tolerance<span class="op">:</span> <span class="dt">f64</span>)</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>        <span class="op">-&gt;</span> <span class="dt">Result</span><span class="op">&lt;</span>Reachability<span class="op">,</span> WorkspaceError<span class="op">&gt;;</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Devuelve <code>Arc&lt;Workspace&gt;</code> para permitir compartir el dataset entre hilos sin copia (D10). Un futuro cacheo con <code>HashMap&lt;WorkspaceKey, Arc&lt;Workspace&gt;&gt;</code> es trivial de agregar.</p>
+</section>
+<section id="thalos-api" class="level3" data-number="5.5.3">
+<h3 data-number="5.5.3" class="anchored" data-anchor-id="thalos-api"><span class="header-section-number">5.5.3</span> thalos-api</h3>
+<p>Dos endpoints HTTP, ambos <code>POST</code>:</p>
+<section id="post-apiv1workspacesample" class="level4" data-number="5.5.3.1">
+<h4 data-number="5.5.3.1" class="anchored" data-anchor-id="post-apiv1workspacesample"><span class="header-section-number">5.5.3.1</span> <code>POST /api/v1/workspace/sample</code></h4>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="er">//</span> <span class="er">Request</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"robot_id"</span><span class="fu">:</span> <span class="st">"scara"</span><span class="fu">,</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"samples"</span><span class="fu">:</span> <span class="dv">50000</span><span class="fu">,</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"seed"</span><span class="fu">:</span> <span class="dv">42</span><span class="fu">,</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"tolerance"</span><span class="fu">:</span> <span class="fl">0.001</span><span class="fu">,</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"include_samples"</span><span class="fu">:</span> <span class="kw">false</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a><span class="er">//</span> <span class="er">Response</span> <span class="er">(include_samples:</span> <span class="kw">false</span><span class="er">)</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"metrics"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"bounding_volume"</span><span class="fu">:</span> <span class="fl">8.234</span><span class="fu">,</span></span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"max_reach"</span><span class="fu">:</span> <span class="fl">2.121</span><span class="fu">,</span></span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"min_reach"</span><span class="fu">:</span> <span class="fl">0.453</span><span class="fu">,</span></span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"centroid"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"x"</span><span class="fu">:</span> <span class="fl">0.0</span><span class="fu">,</span> <span class="dt">"y"</span><span class="fu">:</span> <span class="fl">0.8</span><span class="fu">,</span> <span class="dt">"z"</span><span class="fu">:</span> <span class="fl">-0.2</span> <span class="fu">},</span></span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"sample_count"</span><span class="fu">:</span> <span class="dv">50000</span></span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">},</span></span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"bounds"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"min"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"x"</span><span class="fu">:</span> <span class="fl">-1.5</span><span class="fu">,</span> <span class="dt">"y"</span><span class="fu">:</span> <span class="fl">-1.5</span><span class="fu">,</span> <span class="dt">"z"</span><span class="fu">:</span> <span class="fl">-0.5</span> <span class="fu">},</span></span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"max"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"x"</span><span class="fu">:</span>  <span class="fl">1.5</span><span class="fu">,</span> <span class="dt">"y"</span><span class="fu">:</span>  <span class="fl">1.5</span><span class="fu">,</span> <span class="dt">"z"</span><span class="fu">:</span>  <span class="fl">0.5</span> <span class="fu">}</span></span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="post-apiv1workspacereachability" class="level4" data-number="5.5.3.2">
+<h4 data-number="5.5.3.2" class="anchored" data-anchor-id="post-apiv1workspacereachability"><span class="header-section-number">5.5.3.2</span> <code>POST /api/v1/workspace/reachability</code></h4>
+<p>Autocontenido: muestrea un workspace SCARA con parámetros por defecto (10K muestras, tolerancia 1e-3) y ejecuta la consulta:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="er">//</span> <span class="er">Request</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"point"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"x"</span><span class="fu">:</span> <span class="fl">0.5</span><span class="fu">,</span> <span class="dt">"y"</span><span class="fu">:</span> <span class="fl">0.5</span><span class="fu">,</span> <span class="dt">"z"</span><span class="fu">:</span> <span class="fl">0.0</span> <span class="fu">},</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"tolerance"</span><span class="fu">:</span> <span class="fl">0.01</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="er">//</span> <span class="er">Response</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"reachable"</span><span class="fu">:</span> <span class="kw">true</span><span class="fu">,</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"nearest_distance"</span><span class="fu">:</span> <span class="fl">0.0023</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+</section>
+<section id="thalos-visual" class="level3" data-number="5.5.4">
+<h3 data-number="5.5.4" class="anchored" data-anchor-id="thalos-visual"><span class="header-section-number">5.5.4</span> thalos-visual</h3>
+<p><strong><code>WorkspaceVisual</code></strong> — representación visual completa del workspace:</p>
+<ul>
+<li><code>BoundsWireframe</code>: AABB como 12 aristas (wireframe) definido por <code>min</code>/<code>max</code></li>
+<li><code>SamplePointCloud</code>: nube de puntos 3D (todas las posiciones muestreadas)</li>
+<li><code>robot_overlay: Option&lt;VisualScene&gt;</code>: escena del robot superpuesta (opcional, para contexto visual)</li>
+</ul>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> WorkspaceVisual <span class="op">{</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> bounds_wireframe<span class="op">:</span> BoundsWireframe<span class="op">,</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> samples_points<span class="op">:</span> SamplePointCloud<span class="op">,</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> robot_overlay<span class="op">:</span> <span class="dt">Option</span><span class="op">&lt;</span>VisualScene<span class="op">&gt;,</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> BoundsWireframe <span class="op">{</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> min<span class="op">:</span> [<span class="dt">f64</span><span class="op">;</span> <span class="dv">3</span>]<span class="op">,</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> max<span class="op">:</span> [<span class="dt">f64</span><span class="op">;</span> <span class="dv">3</span>]<span class="op">,</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="co">// Provee edges() -&gt; 12 segmentos [(start, end); 12]</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> SamplePointCloud <span class="op">{</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> points<span class="op">:</span> <span class="dt">Vec</span><span class="op">&lt;</span>[<span class="dt">f64</span><span class="op">;</span> <span class="dv">3</span>]<span class="op">&gt;,</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> count<span class="op">:</span> <span class="dt">usize</span><span class="op">,</span></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="sec-workspace-frontend" class="level3" data-number="5.5.5">
+<h3 data-number="5.5.5" class="anchored" data-anchor-id="sec-workspace-frontend"><span class="header-section-number">5.5.5</span> Frontend (Angular)</h3>
+<p>Dos componentes standalone en la feature <code>workspace</code>:</p>
+<section id="workspacepanel" class="level4" data-number="5.5.5.1">
+<h4 data-number="5.5.5.1" class="anchored" data-anchor-id="workspacepanel"><span class="header-section-number">5.5.5.1</span> WorkspacePanel</h4>
+<p>Panel lateral con:</p>
+<ul>
+<li><strong>Formulario</strong>: selector de robot, número de muestras, semilla, tolerancia, toggle de incluir muestras en respuesta</li>
+<li><strong>Métricas</strong>: muestra <code>bounding_volume</code>, <code>max_reach</code>, <code>min_reach</code>, <code>centroid</code></li>
+<li><strong>Consulta de alcanzabilidad</strong>: inputs X/Y/Z + tolerance, botón “Check”, y resultado (Reachable / OutOfWorkspace con distancia)</li>
+</ul>
+<p>Estado reactivo via <code>WorkspaceStore</code> (Angular Signals):</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode typescript code-with-copy"><code class="sourceCode typescript"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">interface</span> WorkspaceState {</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  loading<span class="op">:</span> <span class="dt">boolean</span><span class="op">;</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  error<span class="op">:</span> <span class="dt">string</span> <span class="op">|</span> <span class="dt">null</span><span class="op">;</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  metrics<span class="op">:</span> WorkspaceMetrics <span class="op">|</span> <span class="dt">null</span><span class="op">;</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  bounds<span class="op">:</span> BoundingBox <span class="op">|</span> <span class="dt">null</span><span class="op">;</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>  reachability<span class="op">:</span> ReachabilityResult <span class="op">|</span> <span class="dt">null</span><span class="op">;</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="workspacerenderer" class="level4" data-number="5.5.5.2">
+<h4 data-number="5.5.5.2" class="anchored" data-anchor-id="workspacerenderer"><span class="header-section-number">5.5.5.2</span> WorkspaceRenderer</h4>
+<p>Canvas Three.js que renderiza:</p>
+<ul>
+<li>AABB wireframe (12 aristas) del <code>BoundsWireframe</code></li>
+<li>(Futuro) nube de puntos 3D del <code>SamplePointCloud</code></li>
+</ul>
+<p>Usa <code>effect()</code> para reaccionar a cambios en el store, renderizando sobre un canvas standalone sin depender del <code>ThreeRendererService</code> del scene viewer.</p>
+</section>
+</section>
+</section>
+<section id="mapa-de-errores" class="level2" data-number="5.6">
+<h2 data-number="5.6" class="anchored" data-anchor-id="mapa-de-errores"><span class="header-section-number">5.6</span> Mapa de errores</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 48%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Error</th>
+<th>Causa</th>
+<th>Código HTTP</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>InvalidSampleCount(n)</code></td>
+<td><code>samples == 0</code></td>
+<td>422</td>
+</tr>
+<tr class="even">
+<td><code>InvalidTolerance(t)</code></td>
+<td><code>tolerance &lt; 0</code> o <code>NaN</code></td>
+<td>422</td>
+</tr>
+<tr class="odd">
+<td><code>InvalidPoint(s)</code></td>
+<td>coordenada NaN o Infinity</td>
+<td>422</td>
+</tr>
+<tr class="even">
+<td><code>EmptyWorkspace</code></td>
+<td>dataset interno vacío (no debería ocurrir si se usa el sampler)</td>
+<td>500</td>
+</tr>
+<tr class="odd">
+<td><code>RobotModelError</code></td>
+<td><code>robot_id</code> no existe en el catálogo</td>
+<td>404</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="tests" class="level2" data-number="5.7">
+<h2 data-number="5.7" class="anchored" data-anchor-id="tests"><span class="header-section-number">5.7</span> Tests</h2>
+<p>El workspace analysis tiene <strong>71 tests unitarios + 7 tests de visualización</strong>, distribuidos así:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 29%">
+<col style="width: 45%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Capa</th>
+<th>Tests</th>
+<th>Cobertura</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Core (dominio)</td>
+<td>44</td>
+<td><code>Workspace</code>, <code>Sampler</code>, <code>Reachability</code>, <code>BoundingBox</code>, <code>Metrics</code></td>
+</tr>
+<tr class="even">
+<td>Runtime</td>
+<td>11</td>
+<td><code>WorkspaceService::sample</code>, <code>WorkspaceService::query</code></td>
+</tr>
+<tr class="odd">
+<td>API (integración)</td>
+<td>5</td>
+<td>Endpoints HTTP, DTO conversion, error mapping</td>
+</tr>
+<tr class="even">
+<td>Visual</td>
+<td>7 (2 snapshot)</td>
+<td><code>WorkspaceVisual</code>, <code>BoundsWireframe::edges</code>, <code>SamplePointCloud</code></td>
+</tr>
+</tbody>
+</table>
+<section id="invariantes-bajo-test" class="level3" data-number="5.7.1">
+<h3 data-number="5.7.1" class="anchored" data-anchor-id="invariantes-bajo-test"><span class="header-section-number">5.7.1</span> Invariantes bajo test</h3>
+<ul>
+<li><strong>R1</strong> (determinismo): mismo seed → mismo workspace</li>
+<li><strong>R2</strong> (conteo): <code>samples.len() == config.samples</code></li>
+<li><strong>R3</strong> (dimensionalidad): cada <code>q</code> tiene <code>n_dof</code> elementos</li>
+<li><strong>R4</strong> (reachability): punto conocido → <code>Reachable</code>; punto lejano → <code>OutOfWorkspace</code></li>
+<li><strong>R5</strong> (tolerance): <code>tolerance = 0</code> → solo puntos exactos</li>
+<li><strong>R6</strong> (punto inválido): NaN o Infinity → <code>InvalidPoint</code></li>
+<li><strong>R7</strong> (parámetros inválidos): <code>samples = 0</code> → error; <code>tolerance &lt; 0</code> → error</li>
+<li><strong>R8</strong> (jacobiano): FK produce <code>ee_position</code> para joint values aleatorios</li>
+<li><strong>D4</strong> (RNG): <code>StdRng::seed_from_u64</code> para determinismo</li>
+<li><strong>D1</strong> (búsqueda lineal): implementación O(n) actual, optimización futura</li>
+</ul>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./workspace.html" class="pagination-link" aria-label="Arquitectura del workspace">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Arquitectura del workspace</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./domain.html" class="pagination-link" aria-label="Definiciones internas del dominio">
+        <span class="nav-page-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Definiciones internas del dominio</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
