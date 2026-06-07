@@ -24,3 +24,9 @@ pub use crate::kinematics::{
     inverse::{DampedLeastSquaresSolver, IKGoal, IKResult, IKStatus, IKSolver, JacobianTransposeSolver, SingularityReport},
 };
 
+pub use crate::analysis::workspace::{
+    Workspace, WorkspaceConfig, WorkspaceSample, WorkspaceMetrics,
+    BoundingBox, WorkspaceKey, WorkspaceSampler, WorkspaceError,
+    Reachability,
+};
+

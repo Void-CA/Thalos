@@ -10,7 +10,7 @@ use super::single_revolute::{self, SingleRevoluteSpec};
 use super::spherical_polar_rrp::{self, SphericalPolarRRPSpec};
 use crate::robot::serial_chain::SerialChain;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RobotModel {
     Planar2R,
     Planar3R,
