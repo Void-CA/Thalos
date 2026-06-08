@@ -20,6 +20,29 @@ impl JointLimits {
     pub fn new(min: f64, max: f64) -> Self {
         Self { min, max }
     }
+
+    /// Recorta un valor al rango [min, max].
+    /// Para prismáticos con topes duros.
+    pub fn clamp(&self, value: f64) -> f64 {
+        value.clamp(self.min, self.max)
+    }
+
+    /// Normaliza un valor angular al rango [min, max] usando wrapping
+    /// modular. Para revolutos continuos como [-π, π].
+    ///
+    /// Si el rango es inválido (min >= max), cae a [`clamp`] para evitar
+    /// NaN en la operación `%`.
+    pub fn wrap(&self, value: f64) -> f64 {
+        let range = self.max - self.min;
+        if range <= 0.0 {
+            return self.clamp(value);
+        }
+        let mut wrapped = (value - self.min) % range;
+        if wrapped < 0.0 {
+            wrapped += range;
+        }
+        wrapped + self.min
+    }
 }
 
 

@@ -1,6 +1,7 @@
 use crate::kinematics::forward::ForwardKinematics;
 use crate::kinematics::jacobian::{GeometricJacobian, JacobianSolver};
 use crate::math::algebra::vector::DynamicVector;
+use crate::robot::joint::{JointKind, JointLimits};
 use crate::spatial::frame::FrameId;
 use crate::kinematics::inverse::{
     result::IKResult,
@@ -54,6 +55,23 @@ impl IKSolver for JacobianTransposeSolver {
             None
         };
 
+        // Extraer límites articulares para clamping post-iteración
+        let n_joints = self.fk.robot().segments.len();
+        let joint_limits: Vec<JointLimits> = self
+            .fk
+            .robot()
+            .segments
+            .iter()
+            .map(|s| s.joint.limits())
+            .collect();
+        let joint_kinds: Vec<JointKind> = self
+            .fk
+            .robot()
+            .segments
+            .iter()
+            .map(|s| s.joint.kind())
+            .collect();
+
         for iteration in 0..self.max_iters {
             let fk_result = self.fk.evaluate(q.as_slice());
             let jacobian = self.jacobian.evaluate(q.as_slice());
@@ -98,6 +116,14 @@ impl IKSolver for JacobianTransposeSolver {
                 }
             };
             q += dq;
+
+            // Aplicar límites articulares: wrap para revolutos, clamp para prismáticos
+            for i in 0..n_joints {
+                q[i] = match joint_kinds[i] {
+                    JointKind::Revolute => joint_limits[i].wrap(q[i]),
+                    JointKind::Prismatic => joint_limits[i].clamp(q[i]),
+                };
+            }
         }
 
         // Último error después de agotar iteraciones

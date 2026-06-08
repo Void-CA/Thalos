@@ -60,10 +60,7 @@ impl WorkspaceSampler {
     }
 }
 
-/// Sample a value uniformly within `[limits.min, limits.max]`.
-/// For revolute joints the range is angular; for prismatic it's linear.
-/// Both are handled identically because the limit semantics are
-/// "uniform within [min, max]" regardless of unit.
+
 fn uniform_within<R: Rng>(rng: &mut R, limits: JointLimits) -> f64 {
     limits.min + rand::Rng::r#gen::<f64>(rng) * (limits.max - limits.min)
 }
