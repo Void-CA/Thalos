@@ -117,19 +117,22 @@ impl SceneBuilder {
                 style: None,
             });
 
-            links.push(VisualLink {
-                id: segment.joint.id(),
-                start: self.normalize_point(&parent_pose.transform().translation),
-                end: self.normalize_point(&child_pose.transform().translation),
-            });
+            // Fixed joints no tienen link ni axis visual (se dibujan como primitiva aparte)
+            if segment.joint.dof() > 0 {
+                links.push(VisualLink {
+                    id: segment.joint.id(),
+                    start: self.normalize_point(&parent_pose.transform().translation),
+                    end: self.normalize_point(&child_pose.transform().translation),
+                });
 
-            let joint_transform = parent_pose.transform().compose(segment.joint.origin());
-            let axis = segment.joint.axis_world(&joint_transform);
+                let joint_transform = parent_pose.transform().compose(segment.joint.origin());
+                let axis = segment.joint.axis_world(&joint_transform);
 
-            joint_axes.push(VisualJointAxis {
-                origin: self.normalize_point(&joint_transform.translation),
-                axis: self.normalize_point(&axis),
-            });
+                joint_axes.push(VisualJointAxis {
+                    origin: self.normalize_point(&joint_transform.translation),
+                    axis: self.normalize_point(&axis),
+                });
+            }
         }
 
         VisualScene {
@@ -144,23 +147,28 @@ impl SceneBuilder {
     pub fn from_fk_with_jacobian(&self, fk: &FKResult, jacobian: &Jacobian) -> VisualScene {
         let mut scene = self.from_fk(fk);
 
-        for (i, segment) in self.chain.segments.iter().enumerate() {
+        let mut col = 0;
+        for segment in self.chain.segments.iter() {
+            // Fixed joints no contribuyen al Jacobiano
+            if segment.joint.dof() == 0 { continue; }
+
             let parent_pose = fk.pose(&segment.parent).expect("Parent pose not found");
             let joint_transform = parent_pose.transform().compose(segment.joint.origin());
 
             scene.twists.push(VisualTwist {
                 origin: self.normalize_point(&joint_transform.translation),
                 linear: [
-                    self.precision.normalize(jacobian.linear()[(0, i)]),
-                    self.precision.normalize(jacobian.linear()[(1, i)]),
-                    self.precision.normalize(jacobian.linear()[(2, i)]),
+                    self.precision.normalize(jacobian.linear()[(0, col)]),
+                    self.precision.normalize(jacobian.linear()[(1, col)]),
+                    self.precision.normalize(jacobian.linear()[(2, col)]),
                 ],
                 angular: [
-                    self.precision.normalize(jacobian.angular()[(0, i)]),
-                    self.precision.normalize(jacobian.angular()[(1, i)]),
-                    self.precision.normalize(jacobian.angular()[(2, i)]),
+                    self.precision.normalize(jacobian.angular()[(0, col)]),
+                    self.precision.normalize(jacobian.angular()[(1, col)]),
+                    self.precision.normalize(jacobian.angular()[(2, col)]),
                 ],
             });
+            col += 1;
         }
 
         scene

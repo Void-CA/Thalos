@@ -4,7 +4,7 @@ use thalos_core::{
 };
 
 use crate::builder::{cylinder_between, SceneBuilder};
-use crate::scene::{VisualPrimitive, VisualScene};
+use crate::scene::VisualScene;
 
 /// Builder visual específico para el robot SCARA.
 ///
@@ -23,14 +23,20 @@ impl ScaraVisualBuilder {
         let builder = SceneBuilder::new(chain);
         let mut scene = builder.from_fk(fk);
 
-        // Los frames link_1 y link_2 son los hijos de los segmentos 0 y 1.
-        // Esto es específico del SCARA (orden: World → link_1 → link_2 → ...).
-        let link1_id = &chain.segments[0].child;
-        let link2_id = &chain.segments[1].child;
+        // Árbol actual: segment[0] = base (Fixed), segment[1] = joint1 → link1, segment[2] = joint2 → link2
+        let base_id = &chain.segments[0].child;
+        let link1_id = &chain.segments[1].child;
+        let link2_id = &chain.segments[2].child;
 
+        let base_pose = fk.pose(base_id).expect("SCARA must have base frame");
         let link1_pose = fk.pose(link1_id).expect("SCARA must have link_1 frame");
         let link2_pose = fk.pose(link2_id).expect("SCARA must have link_2 frame");
 
+        let t_base: [f64; 3] = [
+            base_pose.transform().translation.x,
+            base_pose.transform().translation.y,
+            base_pose.transform().translation.z,
+        ];
         let t_link1: [f64; 3] = [
             link1_pose.transform().translation.x,
             link1_pose.transform().translation.y,
@@ -42,13 +48,17 @@ impl ScaraVisualBuilder {
             link2_pose.transform().translation.z,
         ];
 
-        // 1. Base column — cilindro vertical fijo en el origen
-        scene.primitives.push(VisualPrimitive::cylinder("base_column", 0.08, 0.4)
-            .with_translation([0.0, 0.0, -0.2]));
+        // 1. Base column — cilindro desde world hasta la base (FK-driven)
+        let base_height = (t_base[1] - 0.0).abs();
+        if base_height > 1e-6 {
+            scene.primitives.push(
+                cylinder_between("base_column", [0.0, 0.0, 0.0], t_base, 0.08),
+            );
+        }
 
-        // 2. Link 1 — cilindro desde world (0,0,0) hasta link_1 frame
+        // 2. Link 1 — cilindro desde base frame hasta link_1 frame
         scene.primitives.push(
-            cylinder_between("link_1_body", [0.0, 0.0, 0.0], t_link1, 0.045),
+            cylinder_between("link_1_body", t_base, t_link1, 0.045),
         );
 
         // 3. Link 2 — cilindro desde link_1 hasta link_2
