@@ -35,6 +35,14 @@ import { WorkspaceStore } from '../../store/workspace.store';
           {{ store.loading() ? 'Sampling\u2026' : 'Sample Workspace' }}
         </button>
 
+        <button
+          class="action action--singularity"
+          (click)="onAnalyzeSingularity()"
+          [disabled]="store.loading() || !robotId()"
+        >
+          {{ store.loading() ? 'Analyzing\u2026' : 'Singularity Analysis' }}
+        </button>
+
         <label class="toggle">
           <input
             type="checkbox"
@@ -45,10 +53,10 @@ import { WorkspaceStore } from '../../store/workspace.store';
         </label>
       </section>
 
-      <!-- ── RESULTS ── -->
+      <!-- ── WORKSPACE METRICS ── -->
       @if (store.data(); as data) {
         <section class="workspace-panel__outputs">
-          <h4 class="workspace-panel__label">Metrics</h4>
+          <h4 class="workspace-panel__label">Workspace Metrics</h4>
           <table class="metrics-table">
             <tr><td>Samples</td><td>{{ data.metrics.sampleCount }}</td></tr>
             <tr><td>Max Reach</td><td>{{ data.metrics.maxReach.toFixed(4) }} m</td></tr>
@@ -60,6 +68,19 @@ import { WorkspaceStore } from '../../store/workspace.store';
                   {{ data.metrics.centroid[1].toFixed(3) }},
                   {{ data.metrics.centroid[2].toFixed(3) }})</td>
             </tr>
+          </table>
+        </section>
+      }
+
+      <!-- ── SINGULARITY METRICS ── -->
+      @if (store.singularity(); as s) {
+        <section class="workspace-panel__outputs">
+          <h4 class="workspace-panel__label singularity-title">Singularity Metrics</h4>
+          <table class="metrics-table">
+            <tr><td>Normal</td><td class="state-normal">{{ s.metrics.normalCount }}</td></tr>
+            <tr><td>Near Singular</td><td class="state-near">{{ s.metrics.nearSingularCount }}</td></tr>
+            <tr><td>Singular</td><td class="state-singular">{{ s.metrics.singularCount }}</td></tr>
+            <tr><td>Avg Condition #</td><td>{{ s.metrics.avgConditionNumber.toFixed(2) }}</td></tr>
           </table>
         </section>
       }
@@ -82,6 +103,7 @@ export class WorkspacePanel {
   samples = 5_000;
   seed = 0;
   tolerance = 0.001;
+  nearSingularThreshold = 100;
 
   constructor() {
     // Reset workspace data when the user switches robots
@@ -95,5 +117,11 @@ export class WorkspacePanel {
     const id = this.robotId();
     if (!id) return;
     this.store.sample(id, this.samples, this.seed, this.tolerance);
+  }
+
+  onAnalyzeSingularity(): void {
+    const id = this.robotId();
+    if (!id) return;
+    this.store.analyzeSingularity(id, this.samples, this.seed, this.tolerance, this.nearSingularThreshold);
   }
 }

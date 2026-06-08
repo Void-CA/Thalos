@@ -1,7 +1,10 @@
 import { Injectable, inject, Signal, signal, computed } from '@angular/core';
 import { WorkspaceApiService } from '../services/workspace-api.service';
-import type { WorkspaceDto } from '../workspace-api.types';
-import type { WorkspaceData, WorkspaceMetrics, WorkspaceBounds, WorkspaceState, WorkspaceUiState, ReachabilityResult } from '../workspace.types';
+import type { SingularityResponse, WorkspaceDto } from '../workspace-api.types';
+import type {
+  ColoredPoint, SingularityData, SingularityMetrics,
+  WorkspaceData, WorkspaceMetrics, WorkspaceBounds, WorkspaceState, WorkspaceUiState, ReachabilityResult,
+} from '../workspace.types';
 
 const INITIAL_UI: WorkspaceUiState = { loading: false, error: null };
 
@@ -10,6 +13,7 @@ const INITIAL_STATE: WorkspaceState = {
   pointCloud: null,
   showPointCloud: false,
   reachability: null,
+  singularity: null,
   ui: INITIAL_UI,
 };
 
@@ -30,6 +34,25 @@ function toBounds(dto: WorkspaceDto['bounds']): WorkspaceBounds {
   };
 }
 
+function toSingularityData(dto: SingularityResponse): SingularityData {
+  const m = dto.metrics;
+  const points: ColoredPoint[] = dto.samples?.map(s => ({
+    position: [s.position.x, s.position.y, s.position.z] as [number, number, number],
+    state: s.state as ColoredPoint['state'],
+  })) ?? [];
+
+  return {
+    metrics: {
+      totalSamples: m.total_samples,
+      singularCount: m.singular_count,
+      nearSingularCount: m.near_singular_count,
+      normalCount: m.normal_count,
+      avgConditionNumber: m.avg_condition_number,
+    },
+    points,
+  };
+}
+
 @Injectable({ providedIn: 'root' })
 export class WorkspaceStore {
   private readonly api = inject(WorkspaceApiService);
@@ -40,6 +63,7 @@ export class WorkspaceStore {
   private readonly pointCloudSignal = signal<[number, number, number][] | null>(null);
   private readonly showPointCloudSignal = signal(false);
   private readonly reachabilitySignal = signal<ReachabilityResult | null>(null);
+  private readonly singularitySignal = signal<SingularityData | null>(null);
   private readonly loadingSignal = signal(false);
   private readonly errorSignal = signal<string | null>(null);
 
@@ -54,6 +78,9 @@ export class WorkspaceStore {
 
   /** Last reachability query result. */
   readonly reachability: Signal<ReachabilityResult | null> = this.reachabilitySignal.asReadonly();
+
+  /** Singularity analysis data (metrics + colored point cloud). */
+  readonly singularity: Signal<SingularityData | null> = this.singularitySignal.asReadonly();
 
   /** Loading state. */
   readonly loading: Signal<boolean> = this.loadingSignal.asReadonly();
@@ -134,12 +161,46 @@ export class WorkspaceStore {
     }
   }
 
+  /** Run singularity analysis on the current workspace data. */
+  async analyzeSingularity(robotId: string, samples: number, seed: number, tolerance: number, threshold: number): Promise<void> {
+    this.loadingSignal.set(true);
+    this.errorSignal.set(null);
+
+    try {
+      const dto = await this.api.analyzeSingularity({
+        robot_id: robotId,
+        samples,
+        seed,
+        tolerance,
+        near_singular_condition_threshold: threshold,
+        include_samples: true,
+      }).toPromise();
+
+      if (!dto) throw new Error('Empty response');
+
+      const data = toSingularityData(dto);
+      this.singularitySignal.set(data);
+
+      // Replace point cloud with colored version
+      if (data.points.length > 0) {
+        this.pointCloudSignal.set(data.points.map(p => p.position));
+      }
+      this.showPointCloudSignal.set(true);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Singularity analysis failed';
+      this.errorSignal.set(msg);
+    } finally {
+      this.loadingSignal.set(false);
+    }
+  }
+
   /** Reset all state. */
   reset(): void {
     this.dataSignal.set(null);
     this.pointCloudSignal.set(null);
     this.showPointCloudSignal.set(false);
     this.reachabilitySignal.set(null);
+    this.singularitySignal.set(null);
     this.loadingSignal.set(false);
     this.errorSignal.set(null);
   }

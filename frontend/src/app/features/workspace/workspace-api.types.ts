@@ -53,3 +53,35 @@ export interface ErrorResponse {
     error: string;
     code: string;
 }
+
+// ── Singularity analysis ──
+
+export interface SingularityRequest {
+    robot_id: string;
+    samples?: number;
+    seed?: number;
+    tolerance?: number;
+    near_singular_condition_threshold?: number;
+    include_samples?: boolean;
+}
+
+export interface SingularityMetricsDto {
+    total_samples: number;
+    singular_count: number;
+    near_singular_count: number;
+    normal_count: number;
+    avg_condition_number: number;
+    min_condition_number: number;
+    max_condition_number: number;
+    avg_sigma_min: number;
+}
+
+export interface SingularitySampleDto {
+    position: PointDto;
+    state: string;
+}
+
+export interface SingularityResponse {
+    metrics: SingularityMetricsDto;
+    samples?: SingularitySampleDto[];
+}

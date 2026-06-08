@@ -48,9 +48,13 @@ export class SceneViewer implements AfterViewInit {
 
     // Sync point cloud overlay from workspace analysis
     effect(() => {
+      const singularity = this.workspace.singularity();
       const cloud = this.workspace.pointCloud();
       const show = this.workspace.showPointCloud();
-      if (cloud && show) {
+
+      if (singularity && show) {
+        this.renderer.setColoredPointCloud(singularity.points);
+      } else if (cloud && show) {
         this.renderer.setPointCloud(cloud);
       } else {
         this.renderer.clearPointCloud();

@@ -1,7 +1,10 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { WorkspaceDto, ReachabilityDto, SampleRequest, ReachabilityRequest } from '../workspace-api.types';
+import {
+  WorkspaceDto, ReachabilityDto, SampleRequest, ReachabilityRequest,
+  SingularityRequest, SingularityResponse,
+} from '../workspace-api.types';
 import { API_BASE_URL } from '../../../shared/api/api-config';
 
 @Injectable({ providedIn: 'root' })
@@ -15,5 +18,9 @@ export class WorkspaceApiService {
 
   checkReachability(req: ReachabilityRequest): Observable<ReachabilityDto> {
     return this.http.post<ReachabilityDto>(`${this.baseUrl}/workspace/reachability`, req);
+  }
+
+  analyzeSingularity(req: SingularityRequest): Observable<SingularityResponse> {
+    return this.http.post<SingularityResponse>(`${this.baseUrl}/workspace/singularity`, req);
   }
 }

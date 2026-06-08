@@ -425,7 +425,7 @@ export class ThreeRendererService {
 
   // ── Point cloud (workspace overlay) ──
 
-  /** Render sampled workspace points in the 3D scene. */
+  /** Render sampled workspace points in the 3D scene (monochrome). */
   setPointCloud(positions: [number, number, number][]): void {
     this.clearPointCloud();
     if (!this.workspaceGroup) return;
@@ -448,6 +448,56 @@ export class ThreeRendererService {
       depthTest: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
+    });
+
+    this.pointCloudMesh = new THREE.Points(geo, mat);
+    this.pointCloudMesh.frustumCulled = true;
+
+    this.workspaceGroup.add(this.pointCloudMesh);
+    this.workspaceGroup.visible = true;
+  }
+
+  /** Render colored workspace points based on singularity state. */
+  setColoredPointCloud(points: { position: [number, number, number]; state: 'normal' | 'near_singular' | 'singular' }[]): void {
+    this.clearPointCloud();
+    if (!this.workspaceGroup) return;
+
+    const geo = new THREE.BufferGeometry();
+    const vertices = new Float32Array(points.length * 3);
+    const colors = new Float32Array(points.length * 3);
+
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      vertices[i * 3]     = p.position[0];
+      vertices[i * 3 + 1] = p.position[1];
+      vertices[i * 3 + 2] = p.position[2];
+
+      // Green = normal, Yellow = near_singular, Red = singular
+      let r: number, g: number, b: number;
+      switch (p.state) {
+        case 'normal':
+          r = 0.2; g = 0.9; b = 0.2; break;
+        case 'near_singular':
+          r = 0.9; g = 0.8; b = 0.1; break;
+        case 'singular':
+          r = 0.9; g = 0.1; b = 0.1; break;
+      }
+      colors[i * 3]     = r;
+      colors[i * 3 + 1] = g;
+      colors[i * 3 + 2] = b;
+    }
+
+    geo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const mat = new THREE.PointsMaterial({
+      size: 0.015,
+      sizeAttenuation: true,
+      transparent: true,
+      opacity: 0.8,
+      depthTest: true,
+      depthWrite: false,
+      vertexColors: true,
     });
 
     this.pointCloudMesh = new THREE.Points(geo, mat);

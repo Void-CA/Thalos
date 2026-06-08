@@ -44,6 +44,12 @@ input[type='number'] {
     border-color: $solve-bg;
     color: #fff;
   }
+
+  &--singularity {
+    background: #5a4a1a;
+    border-color: #5a4a1a;
+    color: #ffe;
+  }
 }
 
 // ── Point cloud toggle ──
@@ -86,6 +92,25 @@ input[type='number'] {
     font-family: $font-mono;
     color: $text-secondary;
   }
+}
+
+// ── Singularity state coloring ──
+
+.singularity-title {
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-top: 0.5rem;
+}
+
+.state-normal {
+  color: #33dd33 !important;
+}
+
+.state-near {
+  color: #eebb22 !important;
+}
+
+.state-singular {
+  color: #ee3333 !important;
 }
 
 // ── Error ──
