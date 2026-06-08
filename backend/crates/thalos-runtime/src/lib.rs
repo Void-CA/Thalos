@@ -10,4 +10,5 @@ pub use error::RuntimeError;
 pub use services::scene::SceneService;
 pub use services::singularity::SingularityService;
 pub use services::workspace::WorkspaceService;
+pub use services::manipulability::ManipulabilityService;
 pub use snapshots::scene::RuntimeSnapshot;
