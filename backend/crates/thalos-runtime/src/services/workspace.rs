@@ -19,8 +19,6 @@ use thalos_core::models::{RobotModel, RobotRegistry};
 use crate::error::RuntimeError;
 
 /// Stateless service for workspace sampling and reachability queries.
-///
-/// All methods are `pub static fn` — no state, no `&self`.
 pub struct WorkspaceService;
 
 impl WorkspaceService {

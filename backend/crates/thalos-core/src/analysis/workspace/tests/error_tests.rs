@@ -3,7 +3,7 @@
 //! Covers: Display impl (per `#[error("...")]`), Debug impl, PartialEq,
 //! and that the four variants exist with the documented fields.
 
-use super::error::WorkspaceError;
+use crate::analysis::workspace::WorkspaceError;
 
 #[test]
 fn invalid_sample_count_displays_value() {

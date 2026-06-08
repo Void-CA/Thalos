@@ -13,15 +13,8 @@ pub mod types;
 pub mod workspace;
 
 #[cfg(test)]
-mod error_tests;
-#[cfg(test)]
-mod reachability_tests;
-#[cfg(test)]
-mod sampler_tests;
-#[cfg(test)]
-mod types_tests;
-#[cfg(test)]
-mod workspace_tests;
+pub mod tests;
+
 
 pub use config::WorkspaceConfig;
 pub use error::WorkspaceError;

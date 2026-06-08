@@ -7,7 +7,7 @@
 //! - `WorkspaceConfig` defaults
 //! - The position == FK(q) invariant (R2)
 
-use super::{Workspace, WorkspaceConfig, WorkspaceSample};
+use crate::analysis::workspace::{Workspace, WorkspaceConfig, WorkspaceSample};
 use crate::math::geometry::vectors::Vector3;
 use crate::models::RobotModel;
 

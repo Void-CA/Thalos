@@ -3,16 +3,14 @@
 //! Covers R1 (happy/edge), R2 (nearest_distance accuracy), R3 (determinism),
 //! R4 (NaN/negative/empty validation), R5 (performance budget 100k <50ms).
 
-use super::reachability::Reachability;
-use super::{Workspace, WorkspaceSample};
+use crate::analysis::workspace::{Reachability, Workspace, WorkspaceSample};
 use crate::math::geometry::vectors::Vector3;
 use crate::models::{RobotModel, RobotRegistry};
+use crate::prelude::{WorkspaceConfig, WorkspaceSampler};
 use crate::robot::serial_chain::SerialChain;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
-/// Build a small test workspace from hand-crafted samples positioned
-/// on a 2D disc (z=0) at known radii.
 fn disc_workspace() -> Workspace {
     let samples: Vec<WorkspaceSample> = (0..200)
         .map(|i| {
@@ -208,12 +206,12 @@ fn empty_workspace_returns_out_of_workspace() {
 fn scara_default_workspace_has_reachable_center() {
     let mut rng = StdRng::seed_from_u64(0);
     let chain: SerialChain = RobotRegistry::create_default(RobotModel::Scara);
-    let config = super::WorkspaceConfig {
+    let config = WorkspaceConfig {
         samples: 500,
         seed: 0,
         tolerance: 1e-3,
     };
-    let ws = super::sampler::WorkspaceSampler
+    let ws = WorkspaceSampler
         .sample(&chain, config, &mut rng)
         .unwrap();
 

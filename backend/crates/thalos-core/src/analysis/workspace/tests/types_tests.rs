@@ -4,7 +4,7 @@
 //! Eq, Hash) and field-level invariants of `WorkspaceSample`, `BoundingBox`,
 //! `WorkspaceMetrics` and `WorkspaceKey`.
 
-use super::types::{
+use crate::analysis::workspace::types::{
     BoundingBox, WorkspaceKey, WorkspaceMetrics, WorkspaceSample,
 };
 use crate::math::geometry::vectors::Vector3;
