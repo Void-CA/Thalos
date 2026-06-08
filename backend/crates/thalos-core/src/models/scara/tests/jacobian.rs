@@ -3,7 +3,7 @@ use crate::models::factories::create_scara_robot;
 
 // Helper para crear un robot SCARA y sus componentes
 fn setup_scara_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame::FrameId) {
-    let robot = create_scara_robot(1.0, 1.0, -1.0, 1.0);
+    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
     let end_effector = robot.end_effector().clone();
     let fk = ForwardKinematics::new(robot);
     let jacobian = NumericalJacobian::new(fk.clone(), end_effector.clone());

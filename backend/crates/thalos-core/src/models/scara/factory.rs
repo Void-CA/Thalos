@@ -1,10 +1,11 @@
 use crate::prelude::*;
 
 pub fn create_scara_robot(
-    l1: f64,     // Longitud del primer brazo
-    l2: f64,     // Longitud del segundo brazo
-    z_min: f64,  // Límite inferior del eje Z
-    z_max: f64,  // Límite superior del eje Z
+    base_height: f64,  // Altura de la base (elevación del joint 1)
+    l1: f64,           // Longitud del primer brazo
+    l2: f64,           // Longitud del segundo brazo
+    z_min: f64,        // Límite inferior del eje Z
+    z_max: f64,        // Límite superior del eje Z
 ) -> SerialChain {
 
     let mut builder = SerialChainBuilder::new();
@@ -19,9 +20,11 @@ pub fn create_scara_robot(
     let joint1 = JointType::Revolute(
         RevoluteJoint::new(
             0,
-            UnitVector3::z_axis(),      // Rotación alrededor de Z
+            UnitVector3::z_axis(),
             JointLimits::new(-PI, PI),
-            Transform3D::identity()
+            Transform3D::from_translation(
+                Vector3::new(0.0, 0.0, base_height)
+            )
         )
     );
 
@@ -67,7 +70,7 @@ pub fn create_scara_robot(
     let joint3 = JointType::Prismatic(
         PrismaticJoint::new(
             2,
-            UnitVector3::z_axis(),      // Movimiento vertical
+            UnitVector3::z_axis(),
             JointLimits::new(z_min, z_max),
             Transform3D::identity()
         )
