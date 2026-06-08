@@ -8,5 +8,6 @@ pub mod error;
 pub use commands::Command;
 pub use error::RuntimeError;
 pub use services::scene::SceneService;
+pub use services::singularity::SingularityService;
 pub use services::workspace::WorkspaceService;
 pub use snapshots::scene::RuntimeSnapshot;
