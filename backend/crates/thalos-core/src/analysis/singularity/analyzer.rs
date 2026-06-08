@@ -163,4 +163,33 @@ mod tests {
             "Expected at least some normal samples, got 0"
         );
     }
+
+    #[test]
+fn detect_known_planar_2r_singularity() {
+    let (_chain, jac) = build_planar_2r();
+
+    let q = vec![0.0, 0.0];
+
+    let jacobian = jac.evaluate(&q);
+    let report = SingularityReport::analyze(&jacobian);
+
+    println!("rank = {}", report.rank);
+    println!("cond = {}", report.condition_number);
+    println!("sv = {:?}", report.singular_values);
+
+    assert_eq!(report.rank, 1);
+
+    assert!(
+        report.condition_number.is_infinite(),
+        "expected infinite condition number, got {}",
+        report.condition_number
+    );
+
+    let state = classify(
+        &report,
+        &SingularityConfig::default(),
+    );
+
+    assert_eq!(state, SingularityState::Singular);
+}
 }

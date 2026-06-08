@@ -5,3 +5,4 @@
 
 pub mod workspace;
 pub mod singularity;
+pub mod manipulability;
