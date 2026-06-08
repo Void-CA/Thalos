@@ -7,7 +7,7 @@ pub fn create_manipulator_3dof(l1: f64, l2: f64, l3: f64) -> SerialChain {
     let link_2_frame = builder.create_frame("link_2");
     let link_3_frame = builder.create_frame("link_3");
 
-    // Joint 1 — yaw de base, eje Z
+    // Joint 1 — yaw de base, eje Y (vertical)
     let joint1 = JointType::Revolute(
         RevoluteJoint::new(
             0,
@@ -29,7 +29,7 @@ pub fn create_manipulator_3dof(l1: f64, l2: f64, l3: f64) -> SerialChain {
         },
     );
 
-    // Joint 2 — hombro, eje Y
+    // Joint 2 — hombro, eje Z (profundidad)
     let joint2 = JointType::Revolute(
         RevoluteJoint::new(
             1,
@@ -51,7 +51,7 @@ pub fn create_manipulator_3dof(l1: f64, l2: f64, l3: f64) -> SerialChain {
         },
     );
 
-    // Joint 3 — codo, eje Y (paralelo a joint 2)
+    // Joint 3 — codo, eje Z (paralelo a joint 2)
     let joint3 = JointType::Revolute(
         RevoluteJoint::new(
             2,

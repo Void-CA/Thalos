@@ -13,9 +13,6 @@ fn fresh_pair() -> (GeometricJacobian, NumericalJacobian) {
 
 #[test]
 fn geometric_matches_numerical_at_zero_config() {
-    // Solo comparamos la parte lineal: NumericalJacobian siempre devuelve
-    // angular=0 (ver kinematics/jacobian/numerical.rs). La parte angular
-    // se valida en otros tests contra valores analíticos.
     let (geo, num) = fresh_pair();
     let q = [0.0, 0.0, 0.0];
 
@@ -62,59 +59,59 @@ fn geometric_matches_numerical_at_multiple_configs() {
 
 #[test]
 fn at_zero_config_analytical_values() {
-    // En q = (0, 0, 0) con l1=l2=l3=1:
-    //   p_1 = (0, 0, 0),  z_1 = (0, 0, 1)
-    //   p_2 = (0, 0, 1),  z_2 = (0, 1, 0)
-    //   p_3 = (1, 0, 1),  z_3 = (0, 1, 0)
-    //   p_ee = (2, 0, 1)
+    // En q = (0, 0, 0) con l1=l2=l3=1 (Y-up: Y=vertical, Z=depth):
+    //   p_1 = (0, 0, 0),  ω_1 = (0, 1, 0)   (y_axis)
+    //   p_2 = (0, 1, 0),  ω_2 = (0, 0, 1)   (z_axis)
+    //   p_3 = (1, 1, 0),  ω_3 = (0, 0, 1)   (z_axis)
+    //   p_ee = (2, 1, 0)
     //
-    // J_v[:, i] = z_i × (p_ee - p_i):
-    //   col 0 = (0, 0, 1) × (2, 0, 1) = (0, 2, 0)
-    //   col 1 = (0, 1, 0) × (2, 0, 0) = (0, 0, -2)
-    //   col 2 = (0, 1, 0) × (1, 0, 0) = (0, 0, -1)
+    // J_v[:, i] = ω_i × (p_ee - p_i):
+    //   col 0 = (0, 1, 0) × (2, 1, 0) = (0, 0, -2)
+    //   col 1 = (0, 0, 1) × (2, 0, 0) = (0, 2, 0)
+    //   col 2 = (0, 0, 1) × (1, 0, 0) = (0, 1, 0)
     //
     // Singularidad estructural: en q=(0,0,0) ninguna junta puede producir
-    // velocidad en X. Joint 1 (eje Z) solo produce velocidad en Y; joints
-    // 2 y 3 (ejes Y) solo producen velocidad en Z. Por lo tanto la columna
+    // velocidad en X. Joint 1 (eje Y) solo produce velocidad en Z; joints
+    // 2 y 3 (ejes Z) solo producen velocidad en Y. Por lo tanto la columna
     // X de J_v es toda cero → det(J·J^T) = 0 → rank-deficient.
     let (geo, _) = fresh_pair();
     let j = geo.evaluate(&[0.0, 0.0, 0.0]);
 
     // Lineal
     assert!(j.linear[(0, 0)].abs() < EPS, "dx/dq1 should be 0, got {}", j.linear[(0, 0)]);
-    assert!((j.linear[(1, 0)] - 2.0).abs() < EPS, "dy/dq1 should be 2, got {}", j.linear[(1, 0)]);
-    assert!(j.linear[(2, 0)].abs() < EPS, "dz/dq1 should be 0, got {}", j.linear[(2, 0)]);
+    assert!(j.linear[(1, 0)].abs() < EPS, "dy/dq1 should be 0, got {}", j.linear[(1, 0)]);
+    assert!((j.linear[(2, 0)] - -2.0).abs() < EPS, "dz/dq1 should be -2, got {}", j.linear[(2, 0)]);
 
     assert!(j.linear[(0, 1)].abs() < EPS, "dx/dq2 should be 0, got {}", j.linear[(0, 1)]);
-    assert!(j.linear[(1, 1)].abs() < EPS, "dy/dq2 should be 0, got {}", j.linear[(1, 1)]);
-    assert!((j.linear[(2, 1)] - -2.0).abs() < EPS, "dz/dq2 should be -2, got {}", j.linear[(2, 1)]);
+    assert!((j.linear[(1, 1)] - 2.0).abs() < EPS, "dy/dq2 should be 2, got {}", j.linear[(1, 1)]);
+    assert!(j.linear[(2, 1)].abs() < EPS, "dz/dq2 should be 0, got {}", j.linear[(2, 1)]);
 
     assert!(j.linear[(0, 2)].abs() < EPS, "dx/dq3 should be 0, got {}", j.linear[(0, 2)]);
-    assert!(j.linear[(1, 2)].abs() < EPS, "dy/dq3 should be 0, got {}", j.linear[(1, 2)]);
-    assert!((j.linear[(2, 2)] - -1.0).abs() < EPS, "dz/dq3 should be -1, got {}", j.linear[(2, 2)]);
+    assert!((j.linear[(1, 2)] - 1.0).abs() < EPS, "dy/dq3 should be 1, got {}", j.linear[(1, 2)]);
+    assert!(j.linear[(2, 2)].abs() < EPS, "dz/dq3 should be 0, got {}", j.linear[(2, 2)]);
 
     // Angular: cada joint aporta su eje en frame mundo
-    assert!(j.angular[(0, 0)].abs() < EPS && j.angular[(1, 0)].abs() < EPS, "ωx,ωy/dq1 should be 0");
-    assert!((j.angular[(2, 0)] - 1.0).abs() < EPS, "ωz/dq1 should be 1");
+    assert!(j.angular[(0, 0)].abs() < EPS && j.angular[(2, 0)].abs() < EPS, "ωx,ωz/dq1 should be 0");
+    assert!((j.angular[(1, 0)] - 1.0).abs() < EPS, "ωy/dq1 should be 1");
 
-    assert!(j.angular[(0, 1)].abs() < EPS && j.angular[(2, 1)].abs() < EPS, "ωx,ωz/dq2 should be 0");
-    assert!((j.angular[(1, 1)] - 1.0).abs() < EPS, "ωy/dq2 should be 1");
+    assert!(j.angular[(0, 1)].abs() < EPS && j.angular[(1, 1)].abs() < EPS, "ωx,ωy/dq2 should be 0");
+    assert!((j.angular[(2, 1)] - 1.0).abs() < EPS, "ωz/dq2 should be 1");
 
-    assert!(j.angular[(0, 2)].abs() < EPS && j.angular[(2, 2)].abs() < EPS, "ωx,ωz/dq3 should be 0");
-    assert!((j.angular[(1, 2)] - 1.0).abs() < EPS, "ωy/dq3 should be 1");
+    assert!(j.angular[(0, 2)].abs() < EPS && j.angular[(1, 2)].abs() < EPS, "ωx,ωy/dq3 should be 0");
+    assert!((j.angular[(2, 2)] - 1.0).abs() < EPS, "ωz/dq3 should be 1");
 }
 
 #[test]
 fn at_arm_vertical_analytical_values() {
-    // q = (0, -π/2, 0): brazo alineado con Z mundial.
-    //   p_1 = (0, 0, 0),  z_1 = (0, 0, 1)
-    //   p_2 = (0, 0, 1),  z_2 = (0, 1, 0)
-    //   p_3 = (0, 0, 2),  z_3 = (0, 1, 0)
-    //   p_ee = (0, 0, 3)
+    // q = (0, -π/2, 0): brazo alineado con -Y mundial.
+    //   p_1 = (0, 0, 0),  ω_1 = (0, 1, 0)
+    //   p_2 = (0, 1, 0),  ω_2 = (0, 0, 1)
+    //   p_3 = (0, 0, 0),  ω_3 = (0, 0, 1)   (tras Rz(-π/2)·(1,0,0) = (0,-1,0))
+    //   p_ee = (0, -1, 0)
     //
-    // J_v col 0 = (0, 0, 1) × (0, 0, 3) = (0, 0, 0)  ← singular
-    // J_v col 1 = (0, 1, 0) × (0, 0, 2) = (2, 0, 0)
-    // J_v col 2 = (0, 1, 0) × (0, 0, 1) = (1, 0, 0)
+    // J_v col 0 = (0, 1, 0) × (0, -1, 0) = (0, 0, 0)  ← singular
+    // J_v col 1 = (0, 0, 1) × (0, -2, 0) = (2, 0, 0)
+    // J_v col 2 = (0, 0, 1) × (0, -1, 0) = (1, 0, 0)
     let (geo, _) = fresh_pair();
     let j = geo.evaluate(&[0.0, -PI / 2.0, 0.0]);
 
@@ -135,13 +132,13 @@ fn at_arm_vertical_analytical_values() {
 fn singularity_detected_via_jjt_determinant() {
     let (geo, _) = fresh_pair();
 
-    // Singular 1: q = (0, 0, 0) — brazo en X, ninguna junta mueve el efector en X
+    // Singular 1: q = (0, 0, 0) — brazo en X, columna X de J_v nula
     let j_sing = geo.evaluate(&[0.0, 0.0, 0.0]);
     let jjt_sing = &j_sing.linear * &j_sing.linear.transpose();
     let det_sing = jjt_sing.determinant();
     assert!(det_sing.abs() < 1e-6, "Singular config should have det~0, got {}", det_sing);
 
-    // Singular 2: q = (0, -π/2, 0) — brazo en Z, q1 no genera vel lineal
+    // Singular 2: q = (0, -π/2, 0) — brazo en -Y, q1 no genera vel lineal
     let j_vert = geo.evaluate(&[0.0, -PI / 2.0, 0.0]);
     let jjt_vert = &j_vert.linear * &j_vert.linear.transpose();
     let det_vert = jjt_vert.determinant();
@@ -199,8 +196,8 @@ fn propagates_velocities_via_geometric_jacobian() {
 #[test]
 fn angular_velocity_at_canonical_config() {
     // En q = (0, 0, 0), los ejes de las juntas en frame mundo son:
-    //   q1 → Z, q2 → Y, q3 → Y
-    // → ω = q̇1·ẑ + q̇2·ŷ + q̇3·ŷ = (0, q̇2+q̇3, q̇1)
+    //   q1 → Y, q2 → Z, q3 → Z
+    // → ω = q̇₁·ŷ + q̇₂·ẑ + q̇₃·ẑ = (0, q̇₁, q̇₂+q̇₃)
     // Comparamos contra J_ω · q̇ con un q̇ cualquiera no trivial.
     let (geo, _) = fresh_pair();
     let j = geo.evaluate(&[0.0, 0.0, 0.0]);
@@ -209,8 +206,8 @@ fn angular_velocity_at_canonical_config() {
     let omega_pred = &j.angular * nalgebra::DVector::from_vec(q_dot.to_vec());
 
     let expected_x = 0.0;
-    let expected_y = q_dot[1] + q_dot[2];
-    let expected_z = q_dot[0];
+    let expected_y = q_dot[0];
+    let expected_z = q_dot[1] + q_dot[2];
 
     assert!(
         (omega_pred[0] - expected_x).abs() < EPS,

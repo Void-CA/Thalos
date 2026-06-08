@@ -86,22 +86,22 @@ fn velocity_matches_finite_difference() {
 #[test]
 fn at_zero_config_only_y_and_z_motion() {
     // En q = (0, 0, 0) el brazo apunta en +X mundial.
-    // Joint 1 (eje Z) solo mueve el efector en Y.
-    // Joints 2 y 3 (ejes Y) solo mueven el efector en Z.
+    // Joint 1 (eje Y) solo mueve el efector en Z.
+    // Joints 2 y 3 (ejes Z) solo mueven el efector en Y.
     // → la columna X del Jacobiano debe ser toda cero: singular.
     let (jacobian, _, _) = setup();
     let j = jacobian.evaluate(&[0.0, 0.0, 0.0]);
 
     // Columna de q1
     assert!(j.linear()[(0, 0)].abs() < 1e-6, "dx/dq1 should be 0");
-    assert!(j.linear()[(1, 0)].abs() > 0.5, "dy/dq1 should be non-zero (l2+l3=2)");
-    assert!(j.linear()[(2, 0)].abs() < 1e-6, "dz/dq1 should be 0");
+    assert!(j.linear()[(1, 0)].abs() < 1e-6, "dy/dq1 should be 0");
+    assert!(j.linear()[(2, 0)].abs() > 0.5, "dz/dq1 should be non-zero (l2+l3=2)");
 
     // Columnas de q2 y q3
     for col in 1..3 {
         assert!(j.linear()[(0, col)].abs() < 1e-6, "dx/dq{} should be 0", col + 1);
-        assert!(j.linear()[(1, col)].abs() < 1e-6, "dy/dq{} should be 0", col + 1);
-        assert!(j.linear()[(2, col)].abs() > 0.5, "dz/dq{} should be significant", col + 1);
+        assert!(j.linear()[(1, col)].abs() > 0.5, "dy/dq{} should be significant", col + 1);
+        assert!(j.linear()[(2, col)].abs() < 1e-6, "dz/dq{} should be 0", col + 1);
     }
 }
 
@@ -122,8 +122,8 @@ fn zero_config_is_singular() {
 
 #[test]
 fn vertical_arm_is_also_singular() {
-    // q = (0, -π/2, 0) deja el brazo alineado con Z mundial.
-    // Joint 1 (eje Z) queda colineal con el brazo: no genera velocidad lineal.
+    // q = (0, -π/2, 0) deja el brazo alineado con -Y mundial.
+    // Joint 1 (eje Y) queda colineal con el brazo: no genera velocidad lineal.
     let (jacobian, _, _) = setup();
     let j = jacobian.evaluate(&[0.0, -PI / 2.0, 0.0]);
 
@@ -209,32 +209,32 @@ fn reconstruction_from_motion_at_multiple_configs() {
 
 #[test]
 fn base_yaw_analytical_formula() {
-    // Joint 1 rota sobre Z. Para rotación pura sobre Z, la velocidad
-    // lineal de un punto p = (x, y, z) es v = ω × p, donde ω = (0, 0, 1).
-    // → dx/dq1 = -y, dy/dq1 = x, dz/dq1 = 0.
+    // Joint 1 rota sobre Y (vertical). Para rotación pura sobre Y, la velocidad
+    // lineal de un punto p = (x, y, z) es v = ω × p, donde ω = (0, 1, 0).
+    // → dx/dq1 = z, dy/dq1 = 0, dz/dq1 = -x.
     //
-    // En q = (π/2, -π/4, 0), el efector está en (0, √2, 1+√2).
+    // En q = (π/2, -π/4, 0), el efector está en (0, -0.414214, -1.414214).
     // Verificamos la fórmula analítica contra el Jacobiano numérico.
     let (jacobian, fk, ee) = setup();
     let q = [PI / 2.0, -PI / 4.0, 0.0];
     let j = jacobian.evaluate(&q);
 
     let t = fk.evaluate(&q).pose(&ee).unwrap().transform().translation;
-    let y = t.y;
+    let z = t.z;
 
     assert!(
-        (j.linear()[(0, 0)] - (-y)).abs() < 1e-4,
-        "dx/dq1 should be -y_ee = {}, got {}",
-        -y, j.linear()[(0, 0)]
+        (j.linear()[(0, 0)] - z).abs() < 1e-4,
+        "dx/dq1 should be z_ee = {}, got {}",
+        z, j.linear()[(0, 0)]
     );
     assert!(
-        (j.linear()[(1, 0)] - t.x).abs() < 1e-4,
-        "dy/dq1 should be x_ee = {}, got {}",
-        t.x, j.linear()[(1, 0)]
+        j.linear()[(1, 0)].abs() < 1e-6,
+        "dy/dq1 should be 0 (Y rotation doesn't change y), got {}",
+        j.linear()[(1, 0)]
     );
     assert!(
-        j.linear()[(2, 0)].abs() < 1e-6,
-        "dz/dq1 should be 0 (Z rotation doesn't change z), got {}",
-        j.linear()[(2, 0)]
+        (j.linear()[(2, 0)] - (-t.x)).abs() < 1e-4,
+        "dz/dq1 should be -x_ee = {}, got {}",
+        -t.x, j.linear()[(2, 0)]
     );
 }
