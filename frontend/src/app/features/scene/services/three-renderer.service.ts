@@ -16,6 +16,10 @@ interface PrimitiveSlot {
   mesh: THREE.Mesh;
 }
 
+interface SceneOverlay {
+  attach(scene: THREE.Scene): void;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ThreeRendererService {
   private readonly ngZone = inject(NgZone);
@@ -27,9 +31,8 @@ export class ThreeRendererService {
   private contentGroup: THREE.Group | null = null;
   private targetGroup: THREE.Group | null = null;
   private compassGroup: THREE.Group | null = null;
-  private workspaceGroup: THREE.Group | null = null;
-  private pointCloudMesh: THREE.Points | null = null;
   private frameId: number | null = null;
+  private readonly overlays = new Set<SceneOverlay>();
 
   // ── Scene content caches (id → slot) ──
   private frameSlots = new Map<string, FrameSlot>();
@@ -77,10 +80,6 @@ export class ThreeRendererService {
     this.contentGroup = new THREE.Group();
     this.scene.add(this.contentGroup);
 
-    // Workspace overlay (point cloud, AABB) — renders ON TOP of the robot
-    this.workspaceGroup = new THREE.Group();
-    this.scene.add(this.workspaceGroup);
-
     // IK target gizmo — hidden by default
     this.targetGroup = new THREE.Group();
     this.buildTargetGizmo(this.targetGroup);
@@ -96,18 +95,24 @@ export class ThreeRendererService {
     // Resize
     window.addEventListener('resize', this.onResize);
 
+    for (const overlay of this.overlays) {
+      overlay.attach(this.scene);
+    }
+
     // rAF loop — runs outside Angular zone to avoid unnecessary CD
     this.ngZone.runOutsideAngular(() => this.startLoop());
   }
 
-  /**
-   * Apply a scene snapshot. Diffs against cached slots and only updates
-   * transforms / creates new objects when needed.
-   *
-   *  - Frames / links / primitives keyed by `id` are reused.
-   *  - Removed ids have their slots disposed.
-   *  - New ids have their meshes built once.
-   */
+  /** Register an overlay so it can attach to the renderer scene. */
+  registerOverlay(overlay: SceneOverlay): void {
+    if (this.overlays.has(overlay)) return;
+    this.overlays.add(overlay);
+
+    if (this.scene) {
+      overlay.attach(this.scene);
+    }
+  }
+
   applyScene(scene: SceneData): void {
     if (!this.contentGroup) return;
 
@@ -423,158 +428,6 @@ export class ThreeRendererService {
     }
   }
 
-  // ── Point cloud (workspace overlay) ──
-
-  /** Render sampled workspace points in the 3D scene (monochrome). */
-  setPointCloud(positions: [number, number, number][]): void {
-    this.clearPointCloud();
-    if (!this.workspaceGroup) return;
-
-    const geo = new THREE.BufferGeometry();
-    const vertices = new Float32Array(positions.length * 3);
-    for (let i = 0; i < positions.length; i++) {
-      vertices[i * 3]     = positions[i][0];
-      vertices[i * 3 + 1] = positions[i][1];
-      vertices[i * 3 + 2] = positions[i][2];
-    }
-    geo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-
-    const mat = new THREE.PointsMaterial({
-      color: 0xff8800,
-      size: 0.015,
-      sizeAttenuation: true,
-      transparent: true,
-      opacity: 0.7,
-      depthTest: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-
-    this.pointCloudMesh = new THREE.Points(geo, mat);
-    this.pointCloudMesh.frustumCulled = true;
-
-    this.workspaceGroup.add(this.pointCloudMesh);
-    this.workspaceGroup.visible = true;
-  }
-
-  /** Render a gradient point cloud based on a normalized value [0, 1].
-   *  Green (1.0) → Yellow (0.5) → Red (0.0). */
-  setGradientPointCloud(points: { position: [number, number, number]; normalized: number }[]): void {
-    this.clearPointCloud();
-    if (!this.workspaceGroup) return;
-
-    const geo = new THREE.BufferGeometry();
-    const vertices = new Float32Array(points.length * 3);
-    const colors = new Float32Array(points.length * 3);
-
-    for (let i = 0; i < points.length; i++) {
-      const p = points[i];
-      vertices[i * 3]     = p.position[0];
-      vertices[i * 3 + 1] = p.position[1];
-      vertices[i * 3 + 2] = p.position[2];
-
-      // Green → Yellow → Red based on normalized [0, 1]
-      const t = Math.max(0, Math.min(1, p.normalized));
-      let r: number, g: number;
-      if (t > 0.5) {
-        // Yellow (t=0.5) → Green (t=1.0)
-        const u = (t - 0.5) * 2;
-        r = 0.9 - u * 0.7;
-        g = 0.8 + u * 0.1;
-      } else {
-        // Red (t=0) → Yellow (t=0.5)
-        const u = t * 2;
-        r = 0.9 - u * 0.0;
-        g = 0.1 + u * 0.7;
-      }
-      colors[i * 3]     = r;
-      colors[i * 3 + 1] = g;
-      colors[i * 3 + 2] = 0.1;
-    }
-
-    geo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    const mat = new THREE.PointsMaterial({
-      size: 0.015,
-      sizeAttenuation: true,
-      transparent: true,
-      opacity: 0.8,
-      depthTest: true,
-      depthWrite: false,
-      vertexColors: true,
-    });
-
-    this.pointCloudMesh = new THREE.Points(geo, mat);
-    this.pointCloudMesh.frustumCulled = true;
-
-    this.workspaceGroup.add(this.pointCloudMesh);
-    this.workspaceGroup.visible = true;
-  }
-
-  /** Render colored workspace points based on singularity state. */
-  setColoredPointCloud(points: { position: [number, number, number]; state: 'normal' | 'near_singular' | 'singular' }[]): void {
-    this.clearPointCloud();
-    if (!this.workspaceGroup) return;
-
-    const geo = new THREE.BufferGeometry();
-    const vertices = new Float32Array(points.length * 3);
-    const colors = new Float32Array(points.length * 3);
-
-    for (let i = 0; i < points.length; i++) {
-      const p = points[i];
-      vertices[i * 3]     = p.position[0];
-      vertices[i * 3 + 1] = p.position[1];
-      vertices[i * 3 + 2] = p.position[2];
-
-      // Green = normal, Yellow = near_singular, Red = singular
-      let r: number, g: number, b: number;
-      switch (p.state) {
-        case 'normal':
-          r = 0.2; g = 0.9; b = 0.2; break;
-        case 'near_singular':
-          r = 0.9; g = 0.8; b = 0.1; break;
-        case 'singular':
-          r = 0.9; g = 0.1; b = 0.1; break;
-      }
-      colors[i * 3]     = r;
-      colors[i * 3 + 1] = g;
-      colors[i * 3 + 2] = b;
-    }
-
-    geo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    const mat = new THREE.PointsMaterial({
-      size: 0.015,
-      sizeAttenuation: true,
-      transparent: true,
-      opacity: 0.8,
-      depthTest: true,
-      depthWrite: false,
-      vertexColors: true,
-    });
-
-    this.pointCloudMesh = new THREE.Points(geo, mat);
-    this.pointCloudMesh.frustumCulled = true;
-
-    this.workspaceGroup.add(this.pointCloudMesh);
-    this.workspaceGroup.visible = true;
-  }
-
-  /** Remove the point cloud overlay from the scene. */
-  clearPointCloud(): void {
-    if (this.pointCloudMesh) {
-      this.workspaceGroup?.remove(this.pointCloudMesh);
-      this.pointCloudMesh.geometry.dispose();
-      (this.pointCloudMesh.material as THREE.Material).dispose();
-      this.pointCloudMesh = null;
-    }
-    if (this.workspaceGroup) {
-      this.workspaceGroup.visible = false;
-    }
-  }
-
   dispose(): void {
     if (this.frameId !== null) {
       cancelAnimationFrame(this.frameId);
@@ -605,14 +458,6 @@ export class ThreeRendererService {
       mat.dispose();
     }
     this.matCache.clear();
-
-    // Dispose workspace overlay
-    if (this.workspaceGroup) {
-      this.disposeGroup(this.workspaceGroup);
-      this.scene?.remove(this.workspaceGroup);
-    }
-    this.pointCloudMesh = null;
-    this.workspaceGroup = null;
 
     this.scene = null;
     this.camera = null;

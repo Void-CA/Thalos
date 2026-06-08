@@ -1,6 +1,7 @@
 import { AfterViewInit, Component, effect, ElementRef, inject, ViewChild } from '@angular/core';
 import { SceneStore } from '../../store/scene.store';
 import { ThreeRendererService } from '../../services/three-renderer.service';
+import { WorkspaceOverlayService } from '../../services/workspace-overlay.service';
 import { WorkspaceStore } from '../../../workspace/store/workspace.store';
 import { rotationDtoToQuaternion } from '../../utils/rotation';
 
@@ -26,6 +27,7 @@ export class SceneViewer implements AfterViewInit {
   private readonly store = inject(SceneStore);
   private readonly workspace = inject(WorkspaceStore);
   private readonly renderer = inject(ThreeRendererService);
+  private readonly overlay = inject(WorkspaceOverlayService);
 
   constructor() {
     // Sync robot scene + IK gizmo
@@ -46,27 +48,35 @@ export class SceneViewer implements AfterViewInit {
       }
     });
 
-    // Sync point cloud overlay from workspace analysis
-    // Priority: manipulability (gradient) > singularity (state colors) > monochrome
+    // Sync point cloud overlay from workspace analysis.
+    // Priority: manipulability (gradient) > singularity (state colors) > monochrome.
     effect(() => {
-      const manip = this.workspace.manipulability();
-      const singularity = this.workspace.singularity();
-      const cloud = this.workspace.pointCloud();
-      const show = this.workspace.showPointCloud();
-
-      if (manip && show) {
-        this.renderer.setGradientPointCloud(manip.points);
-      } else if (singularity && show) {
-        this.renderer.setColoredPointCloud(singularity.points);
-      } else if (cloud && show) {
-        this.renderer.setPointCloud(cloud);
-      } else {
-        this.renderer.clearPointCloud();
-      }
+      this.syncPointCloudOverlay();
     });
   }
 
   ngAfterViewInit(): void {
     this.renderer.init(this.canvasRef.nativeElement);
+
+    this.renderer.registerOverlay(this.overlay);
+
+    this.syncPointCloudOverlay();
+  }
+
+  private syncPointCloudOverlay(): void {
+    const manip = this.workspace.manipulability();
+    const singularity = this.workspace.singularity();
+    const cloud = this.workspace.pointCloud();
+    const show = this.workspace.showPointCloud();
+
+    if (manip && show) {
+      this.overlay.setGradientPointCloud(manip.points);
+    } else if (singularity && show) {
+      this.overlay.setColoredPointCloud(singularity.points);
+    } else if (cloud && show) {
+      this.overlay.setPointCloud(cloud);
+    } else {
+      this.overlay.clear();
+    }
   }
 }
