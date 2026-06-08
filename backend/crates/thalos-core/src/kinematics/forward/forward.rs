@@ -38,17 +38,20 @@ impl ForwardKinematics {
             ),
         );
 
+        let mut q_idx = 0;
+
         for segment in &self.chain.segments {
 
             // joint local origin
             t = t.compose(segment.joint.origin());
 
-            // joint motion
-            let q_i = q[segment.joint.id() as usize];
-
-            let joint_motion = segment.joint.motion(q_i);
-
-            t = t.compose(&joint_motion);
+            // joint motion (solo si aporta DOF; Fixed no consume q)
+            if segment.joint.dof() > 0 {
+                let q_i = q[q_idx];
+                let joint_motion = segment.joint.motion(q_i);
+                t = t.compose(&joint_motion);
+                q_idx += 1;
+            }
 
             // rigid link transform
             t = t.compose(&segment.link.transform);

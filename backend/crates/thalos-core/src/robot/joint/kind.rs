@@ -2,6 +2,7 @@
 pub enum JointKind {
     Revolute,
     Prismatic,
+    Fixed,
 }
 
 impl std::fmt::Display for JointKind {
@@ -12,6 +13,7 @@ impl std::fmt::Display for JointKind {
         match self {
             JointKind::Revolute => write!(f, "revolute"),
             JointKind::Prismatic => write!(f, "prismatic"),
+            JointKind::Fixed => write!(f, "fixed"),
         }
     }
 }

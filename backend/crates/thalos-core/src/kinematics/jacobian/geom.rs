@@ -37,11 +37,13 @@ impl JacobianSolver for GeometricJacobian {
 
         let robot = self.fk.robot();
 
-        let n = robot.segments.len();
+        let n_dof: usize = robot.segments.iter()
+            .map(|s| s.joint.dof())
+            .sum();
 
-        let mut linear = DynamicMatrix::zeros(3, n);
+        let mut linear = DynamicMatrix::zeros(3, n_dof);
 
-        let mut angular = DynamicMatrix::zeros(3, n);
+        let mut angular = DynamicMatrix::zeros(3, n_dof);
 
         // Pose global del end-effector
         let ee_pose = result.pose(&self.end_effector)
@@ -50,7 +52,14 @@ impl JacobianSolver for GeometricJacobian {
         let p_e =
             ee_pose.transform().translation;
 
-        for (i, segment) in robot.segments.iter().enumerate() {
+        let mut col = 0;
+
+        for segment in robot.segments.iter() {
+
+            // Fixed joint: no contribuye al Jacobiano
+            if segment.joint.dof() == 0 {
+                continue;
+            }
 
             // Pose global del parent
             let parent_pose =
@@ -79,39 +88,45 @@ impl JacobianSolver for GeometricJacobian {
                     let linear_part =
                         z_i.cross(p_e - p_i);
 
-                    linear[(0, i)] =
+                    linear[(0, col)] =
                         linear_part.x;
 
-                    linear[(1, i)] =
+                    linear[(1, col)] =
                         linear_part.y;
 
-                    linear[(2, i)] =
+                    linear[(2, col)] =
                         linear_part.z;
 
-                    angular[(0, i)] =
+                    angular[(0, col)] =
                         z_i.x;
 
-                    angular[(1, i)] =
+                    angular[(1, col)] =
                         z_i.y;
 
-                    angular[(2, i)] =
+                    angular[(2, col)] =
                         z_i.z;
                 }
 
                 JointKind::Prismatic => {
 
-                    linear[(0, i)] =
+                    linear[(0, col)] =
                         z_i.x;
 
-                    linear[(1, i)] =
+                    linear[(1, col)] =
                         z_i.y;
 
-                    linear[(2, i)] =
+                    linear[(2, col)] =
                         z_i.z;
 
                     // angular = 0
                 }
+
+                JointKind::Fixed => {
+                    // no debe llegar acá (filtrado arriba)
+                }
             }
+
+            col += 1;
         }
 
         Jacobian::new(linear, angular)

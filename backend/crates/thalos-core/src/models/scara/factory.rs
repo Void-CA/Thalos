@@ -11,38 +11,60 @@ pub fn create_scara_robot(
     let mut builder = SerialChainBuilder::new();
 
     // Frames (marcos de referencia)
+    let base_frame = builder.create_frame("base");
     let link_1_frame = builder.create_frame("link_1");
     let link_2_frame = builder.create_frame("link_2");
     let prismatic_frame = builder.create_frame("prismatic_joint");
     let wrist_frame = builder.create_frame("wrist");
 
-    // Joint 1: Revoluta en Y (vertical, base)
-    let joint1 = JointType::Revolute(
-        RevoluteJoint::new(
-            0,
-            UnitVector3::y_axis(),
-            JointLimits::new(-PI, PI),
+    // ── Segmento 0: Base fija ──────────────────────────────────
+    // La base es un joint fijo que eleva la cadena a base_height.
+    // No consume q, no contribuye al Jacobiano.
+    let base_joint = JointType::Fixed(
+        FixedJoint::new(
             Transform3D::from_translation(
                 Vector3::new(0.0, base_height, 0.0)
             )
         )
     );
 
-    let link1 = Link {
+    let base_link = Link {
         id: 0,
+        transform: Transform3D::identity(),
+    };
+
+    builder.add_segment(Segment {
+        parent: FrameId::World,
+        child: base_frame.clone(),
+        joint: base_joint,
+        link: base_link,
+    });
+
+    // ── Segmento 1: Revoluta en Y (base rotacional) ────────────
+    let joint1 = JointType::Revolute(
+        RevoluteJoint::new(
+            0,
+            UnitVector3::y_axis(),
+            JointLimits::new(-PI, PI),
+            Transform3D::identity(),
+        )
+    );
+
+    let link1 = Link {
+        id: 1,
         transform: Transform3D::from_translation(
             Vector3::new(l1, 0.0, 0.0)
         ),
     };
 
     builder.add_segment(Segment {
-        parent: FrameId::World,
+        parent: base_frame,
         child: link_1_frame.clone(),
         joint: joint1,
         link: link1,
     });
 
-    // Joint 2: Revoluta en Y (codo)
+    // ── Segmento 2: Revoluta en Y (codo) ───────────────────────
     let joint2 = JointType::Revolute(
         RevoluteJoint::new(
             1,
@@ -53,7 +75,7 @@ pub fn create_scara_robot(
     );
 
     let link2 = Link {
-        id: 1,
+        id: 2,
         transform: Transform3D::from_translation(
             Vector3::new(l2, 0.0, 0.0)
         ),
@@ -66,7 +88,7 @@ pub fn create_scara_robot(
         link: link2,
     });
 
-    // Joint 3: Prismática en Y (vertical)
+    // ── Segmento 3: Prismática en Y (vertical) ────────────────
     let joint3 = JointType::Prismatic(
         PrismaticJoint::new(
             2,
@@ -77,8 +99,8 @@ pub fn create_scara_robot(
     );
 
     let link3 = Link {
-        id: 2,
-        transform: Transform3D::identity(), // Sin desplazamiento fijo
+        id: 3,
+        transform: Transform3D::identity(),
     };
 
     builder.add_segment(Segment {
@@ -88,7 +110,7 @@ pub fn create_scara_robot(
         link: link3,
     });
 
-    // Joint 4: Revoluta en Y (muñeca)
+    // ── Segmento 4: Revoluta en Y (muñeca) ─────────────────────
     let joint4 = JointType::Revolute(
         RevoluteJoint::new(
             3,
@@ -99,9 +121,9 @@ pub fn create_scara_robot(
     );
 
     let link4 = Link {
-        id: 3,
+        id: 4,
         transform: Transform3D::from_translation(
-            Vector3::new(0.0, 0.0, 0.0)  // El efector final está en la punta
+            Vector3::new(0.0, 0.0, 0.0)
         ),
     };
 

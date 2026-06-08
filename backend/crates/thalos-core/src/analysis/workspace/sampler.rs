@@ -35,10 +35,16 @@ impl WorkspaceSampler {
 
         let mut samples = Vec::with_capacity(config.samples);
 
+        let n_dof: usize = chain.segments.iter()
+            .map(|s| s.joint.dof())
+            .sum();
+
         for _ in 0..config.samples {
             // Sample a random q within each joint's limits (R6).
-            let mut q = Vec::with_capacity(chain.segments.len());
+            // Fixed joints no se samplean (no contribuyen DOF).
+            let mut q = Vec::with_capacity(n_dof);
             for segment in &chain.segments {
+                if segment.joint.dof() == 0 { continue; }
                 let limits = segment.joint.limits();
                 let q_i = uniform_within(rng, limits);
                 q.push(q_i);

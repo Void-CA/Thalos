@@ -3,7 +3,9 @@ use crate::robot::joint::{JointInfo, JointKind, JointLimits};
 
 /// Spec geométrica de un robot SCARA (Selective Compliance Assembly Robot Arm).
 ///
-/// 3 joints revolute en Z + 1 prismatic en Z (movimiento vertical).
+/// Convención Y-up: 3 revolutos en Y (vertical) + 1 prismático en Y.
+/// La base (altura `base_height`) se modela como un segmento fijo
+/// (FixedJoint) separado de los 4 joints actuados.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ScaraSpec {
     pub base_height: f64,

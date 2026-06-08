@@ -2,6 +2,7 @@ use crate::math::geometry::rigid::Transform3D;
 
 use crate::math::geometry::vectors::UnitVector3;
 use crate::robot::joint::{
+    fixed::FixedJoint,
     prismatic::PrismaticJoint, 
     revolute::RevoluteJoint,
     kind::JointKind
@@ -50,13 +51,26 @@ impl JointLimits {
 pub enum JointType {
     Revolute(RevoluteJoint),
     Prismatic(PrismaticJoint),
+    Fixed(FixedJoint),
 }
 
 impl JointType {
+    /// Número de grados de libertad que aporta este joint.
+    ///
+    /// - `Revolute`, `Prismatic` → 1
+    /// - `Fixed` → 0
+    pub fn dof(&self) -> usize {
+        match self {
+            JointType::Revolute(_) | JointType::Prismatic(_) => 1,
+            JointType::Fixed(_) => 0,
+        }
+    }
+
     pub fn limits(&self) -> JointLimits {
         match self {
             JointType::Revolute(rev) => rev.limits,
             JointType::Prismatic(pris) => pris.distance_limits,
+            JointType::Fixed(_) => JointLimits { min: 0.0, max: 0.0 },
         }
     }
 
@@ -64,6 +78,7 @@ impl JointType {
         match self {
             JointType::Revolute(rev) => rev.id,
             JointType::Prismatic(pris) => pris.id,
+            JointType::Fixed(_) => 0,
         }
     }
 
@@ -71,6 +86,7 @@ impl JointType {
         match self {
             JointType::Revolute(j) => j.motion(q),
             JointType::Prismatic(j) => j.motion(q),
+            JointType::Fixed(j) => j.motion(q),
         }
     }
 
@@ -78,6 +94,7 @@ impl JointType {
         match self {
             JointType::Revolute(j) => &j.origin,
             JointType::Prismatic(j) => &j.origin,
+            JointType::Fixed(j) => &j.origin,
         }
     }
 
@@ -85,6 +102,7 @@ impl JointType {
         match self {
             JointType::Revolute(j) => j.axis,
             JointType::Prismatic(j) => j.direction,
+            JointType::Fixed(_) => UnitVector3::y_axis(),
         }
     }
 
@@ -92,6 +110,7 @@ impl JointType {
         match self {
             JointType::Revolute(_) => JointKind::Revolute,
             JointType::Prismatic(_) => JointKind::Prismatic,
+            JointType::Fixed(_) => JointKind::Fixed,
         }
     }
 

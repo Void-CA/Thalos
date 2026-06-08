@@ -2,20 +2,20 @@ use crate::prelude::*;
 use crate::models::factories::create_scara_robot;
 
 #[test]
-fn returns_four_poses() {
+fn returns_six_poses() {
     let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
 
     let fk = ForwardKinematics::new(robot);
 
-    // Configuración: todas las juntas en cero
+    // Configuración: 4 DOFs (q no incluye la base fija)
     let result = fk.evaluate(&[0.0, 0.0, 0.0, 0.0]);
 
     let frames: Vec<_> = result.frames().collect();
 
     assert_eq!(
         frames.len(),
-        5,  // 4 segmentos = 4 frames móviles + world frame? Ajusta según tu implementación
-        "SCARA should generate exactly 5 poses (one per joint + world pose)",
+        6,  // 5 segmentos (1 fixed + 4 actuados) = 5 frames móviles + world frame
+        "SCARA should generate exactly 6 poses (base + 4 joints + world pose)",
     );
 }
 

@@ -60,12 +60,16 @@ impl IKSolver for DampedLeastSquaresSolver {
         let lambda_sq = self.lambda * self.lambda;
 
         // Extraer límites articulares para clamping post-iteración
-        let n_joints = self.fk.robot().segments.len();
+        // Solo joints actuados (Fixed no consume q, no tiene límites activos)
+        let n_joints: usize = self.fk.robot().segments.iter()
+            .map(|s| s.joint.dof())
+            .sum();
         let joint_limits: Vec<JointLimits> = self
             .fk
             .robot()
             .segments
             .iter()
+            .filter(|s| s.joint.dof() > 0)
             .map(|s| s.joint.limits())
             .collect();
         let joint_kinds: Vec<JointKind> = self
@@ -73,6 +77,7 @@ impl IKSolver for DampedLeastSquaresSolver {
             .robot()
             .segments
             .iter()
+            .filter(|s| s.joint.dof() > 0)
             .map(|s| s.joint.kind())
             .collect();
 
@@ -136,10 +141,12 @@ impl IKSolver for DampedLeastSquaresSolver {
             q += dq;
 
             // Aplicar límites articulares: wrap para revolutos, clamp para prismáticos
+            // Fixed no debería llegar acá (filtrado por dof() > 0)
             for i in 0..n_joints {
                 q[i] = match joint_kinds[i] {
                     JointKind::Revolute => joint_limits[i].wrap(q[i]),
                     JointKind::Prismatic => joint_limits[i].clamp(q[i]),
+                    JointKind::Fixed => unreachable!("Fixed joints are filtered out"),
                 };
             }
         }
