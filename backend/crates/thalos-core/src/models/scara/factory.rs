@@ -1,16 +1,20 @@
 use crate::prelude::*;
 
+/// Construye un robot SCARA a partir de geometría y límites.
+///
+/// Normalmente no se llama directamente — usar [`ScaraSpec::build`] en su lugar.
 pub fn create_scara_robot(
-    base_height: f64,  // Altura de la base (elevación del joint 1)
-    l1: f64,           // Longitud del primer brazo
-    l2: f64,           // Longitud del segundo brazo
-    z_min: f64,        // Límite inferior del eje Z
-    z_max: f64,        // Límite superior del eje Z
+    base_height: f64,
+    l1: f64,
+    l2: f64,
+    limits_j1: JointLimits,
+    limits_j2: JointLimits,
+    limits_j3: JointLimits,
+    limits_j4: JointLimits,
 ) -> SerialChain {
 
     let mut builder = SerialChainBuilder::new();
 
-    // Frames (marcos de referencia)
     let base_frame = builder.create_frame("base");
     let link_1_frame = builder.create_frame("link_1");
     let link_2_frame = builder.create_frame("link_2");
@@ -18,8 +22,6 @@ pub fn create_scara_robot(
     let wrist_frame = builder.create_frame("wrist");
 
     // ── Segmento 0: Base fija ──────────────────────────────────
-    // La base es un joint fijo que eleva la cadena a base_height.
-    // No consume q, no contribuye al Jacobiano.
     let base_joint = JointType::Fixed(
         FixedJoint::new(
             Transform3D::from_translation(
@@ -45,7 +47,7 @@ pub fn create_scara_robot(
         RevoluteJoint::new(
             0,
             UnitVector3::y_axis(),
-            JointLimits::new(-PI, PI),
+            limits_j1,
             Transform3D::identity(),
         )
     );
@@ -69,7 +71,7 @@ pub fn create_scara_robot(
         RevoluteJoint::new(
             1,
             UnitVector3::y_axis(),
-            JointLimits::new(-PI, PI),
+            limits_j2,
             Transform3D::identity()
         )
     );
@@ -93,7 +95,7 @@ pub fn create_scara_robot(
         PrismaticJoint::new(
             2,
             UnitVector3::y_axis(),
-            JointLimits::new(z_min, z_max),
+            limits_j3,
             Transform3D::identity()
         )
     );
@@ -115,7 +117,7 @@ pub fn create_scara_robot(
         RevoluteJoint::new(
             3,
             UnitVector3::y_axis(),
-            JointLimits::new(-PI, PI),
+            limits_j4,
             Transform3D::identity()
         )
     );
@@ -134,7 +136,6 @@ pub fn create_scara_robot(
         link: link4,
     });
 
-    // Establecer el efector final
     builder.set_end_effector(wrist_frame);
 
     builder.build().unwrap()

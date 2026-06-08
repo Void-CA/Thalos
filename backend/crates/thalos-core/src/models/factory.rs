@@ -156,9 +156,7 @@ impl RobotRegistry {
                 Ok(super::single_revolute::factory::create_single_revolute(s.l))
             }
             (RobotModel::Scara, RobotSpec::Scara(s)) => {
-                Ok(super::scara::factory::create_scara_robot(
-                    s.base_height, s.a1, s.a2, s.d1, s.d2,
-                ))
+                Ok(s.build())
             }
             (RobotModel::Manipulator3DOF, RobotSpec::Manipulator3DOF(s)) => {
                 Ok(super::manipulator_3dof::factory::create_manipulator_3dof(s.l1, s.l2, s.l3))

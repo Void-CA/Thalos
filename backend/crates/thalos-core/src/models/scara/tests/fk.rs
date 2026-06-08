@@ -1,9 +1,9 @@
+use crate::models::scara::ScaraSpec;
 use crate::prelude::*;
-use crate::models::factories::create_scara_robot;
 
 #[test]
 fn returns_six_poses() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
+    let robot = ScaraSpec::ideal().build();
 
     let fk = ForwardKinematics::new(robot);
 
@@ -21,7 +21,7 @@ fn returns_six_poses() {
 
 #[test]
 fn zero_configuration_places_end_effector_at_2_0_0() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
+    let robot = ScaraSpec::ideal().build();
 
     let end_effector = robot
         .segments
@@ -50,7 +50,7 @@ fn zero_configuration_places_end_effector_at_2_0_0() {
 
 #[test]
 fn first_joint_90_deg_places_end_effector_at_0_0_neg2() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
+    let robot = ScaraSpec::ideal().build();
 
     let end_effector = robot
         .segments
@@ -81,7 +81,7 @@ fn first_joint_90_deg_places_end_effector_at_0_0_neg2() {
 
 #[test]
 fn folded_configuration_places_end_effector_at_1_0_neg1() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
+    let robot = ScaraSpec::ideal().build();
 
     let end_effector = robot
         .segments
@@ -113,7 +113,9 @@ fn folded_configuration_places_end_effector_at_1_0_neg1() {
 
 #[test]
 fn prismatic_joint_moves_end_effector_vertically() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -2.0, 2.0);
+    let mut spec = ScaraSpec::ideal();
+    spec.joint_limits[2] = JointLimits { min: -2.0, max: 2.0 };
+    let robot = spec.build();
 
     let end_effector = robot
         .segments
@@ -142,7 +144,9 @@ fn prismatic_joint_moves_end_effector_vertically() {
 
 #[test]
 fn prismatic_joint_negative_movement() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -2.0, 2.0);
+    let mut spec = ScaraSpec::ideal();
+    spec.joint_limits[2] = JointLimits { min: -2.0, max: 2.0 };
+    let robot = spec.build();
 
     let end_effector = robot
         .segments
@@ -171,7 +175,7 @@ fn prismatic_joint_negative_movement() {
 
 #[test]
 fn wrist_rotation_affects_orientation_but_not_position() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
+    let robot = ScaraSpec::ideal().build();
 
     let end_effector = robot
         .segments
@@ -210,7 +214,7 @@ fn wrist_rotation_affects_orientation_but_not_position() {
 
 #[test]
 fn combined_motions_accumulate_correctly() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
+    let robot = ScaraSpec::ideal().build();
 
     let end_effector = robot
         .segments
@@ -267,7 +271,9 @@ fn combined_motions_accumulate_correctly() {
 
 #[test]
 fn workspace_limits_test() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -2.0, 2.0);
+    let mut spec = ScaraSpec::ideal();
+    spec.joint_limits[2] = JointLimits { min: -2.0, max: 2.0 };
+    let robot = spec.build();
 
     let end_effector = robot
         .segments
@@ -296,7 +302,7 @@ fn workspace_limits_test() {
 
 #[test]
 fn position_independent_of_wrist_rotation() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
+    let robot = ScaraSpec::ideal().build();
 
     let end_effector = robot
         .segments

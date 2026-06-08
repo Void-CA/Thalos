@@ -1,11 +1,11 @@
+use crate::models::scara::ScaraSpec;
 use crate::prelude::*;
-use crate::models::factories::create_scara_robot;
 
 #[test]
 fn geometric_matches_numerical() {
     let q = [0.4, -0.7, 0.2, 0.5];
 
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
+    let robot = ScaraSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
 
     let fk1 = ForwardKinematics::new(robot.clone());
@@ -30,7 +30,7 @@ fn geometric_matches_numerical() {
 
 #[test]
 fn at_zero() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
+    let robot = ScaraSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -77,7 +77,7 @@ fn at_zero() {
 
 #[test]
 fn at_ninety_degrees() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
+    let robot = ScaraSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -94,7 +94,7 @@ fn at_ninety_degrees() {
 
 #[test]
 fn prismatic_joint_only_affects_z() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
+    let robot = ScaraSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -122,7 +122,7 @@ fn prismatic_joint_only_affects_z() {
 
 #[test]
 fn wrist_joint_does_not_affect_position() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
+    let robot = ScaraSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -148,7 +148,7 @@ fn wrist_joint_does_not_affect_position() {
 
 #[test]
 fn angular_accumulation() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
+    let robot = ScaraSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -181,7 +181,7 @@ fn angular_accumulation() {
 
 #[test]
 fn linear_velocity_consistency() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
+    let robot = ScaraSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot.clone());
     let jacobian = GeometricJacobian::new(fk, end_effector.clone());
@@ -213,7 +213,7 @@ fn linear_velocity_consistency() {
 
 #[test]
 fn propagates_velocities() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
+    let robot = ScaraSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot.clone());
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -270,7 +270,7 @@ fn propagates_velocities() {
 
 #[test]
 fn singularity_detection() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
+    let robot = ScaraSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -310,7 +310,7 @@ fn singularity_detection() {
 
 #[test]
 fn linearity() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
+    let robot = ScaraSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -361,7 +361,7 @@ fn linearity() {
 
 #[test]
 fn independent_xy_and_z_motions() {
-    let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
+    let robot = ScaraSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);

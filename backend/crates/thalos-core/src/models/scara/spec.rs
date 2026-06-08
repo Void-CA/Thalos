@@ -1,48 +1,81 @@
 use crate::math::constants::PI;
 use crate::robot::joint::{JointInfo, JointKind, JointLimits};
 
-/// Spec geométrica de un robot SCARA (Selective Compliance Assembly Robot Arm).
-///
-/// Convención Y-up: 3 revolutos en Y (vertical) + 1 prismático en Y.
-/// La base (altura `base_height`) se modela como un segmento fijo
-/// (FixedJoint) separado de los 4 joints actuados.
+/// Spec completa de un robot SCARA.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ScaraSpec {
     pub base_height: f64,
     pub a1: f64,
     pub a2: f64,
-    pub d1: f64,
-    pub d2: f64,
+    /// Límites de los 4 joints actuados:
+    /// `[joint_1 (revolute), joint_2 (revolute), joint_3 (prismatic), joint_4 (revolute)]`
+    pub joint_limits: [JointLimits; 4],
 }
 
 impl ScaraSpec {
-    pub const fn new(base_height: f64, a1: f64, a2: f64, d1: f64, d2: f64) -> Self {
-        Self { base_height, a1, a2, d1, d2 }
+    pub const fn new(
+        base_height: f64,
+        a1: f64,
+        a2: f64,
+        joint_limits: [JointLimits; 4],
+    ) -> Self {
+        Self { base_height, a1, a2, joint_limits }
+    }
+
+    /// Robot ideal: rangos completos, geometría redonda.
+    pub const fn ideal() -> Self {
+        Self {
+            base_height: 0.0,
+            a1: 1.0,
+            a2: 1.0,
+            joint_limits: [
+                JointLimits { min: -PI, max: PI },
+                JointLimits { min: -PI, max: PI },
+                JointLimits { min: -1.0, max: 1.0 },
+                JointLimits { min: -PI, max: PI },
+            ],
+        }
+    }
+
+    /// Robot canónico: parámetros realistas para un SCARA de escritorio.
+    pub fn canonical() -> Self {
+        Self {
+            base_height: 0.15,
+            a1: 0.4,
+            a2: 0.3,
+            joint_limits: [
+                JointLimits { min: -140.0_f64.to_radians(), max: 140.0_f64.to_radians() },
+                JointLimits { min: -150.0_f64.to_radians(), max: 150.0_f64.to_radians() },
+                JointLimits { min: 0.0, max: 0.2 },
+                JointLimits { min: -2.0 * PI, max: 2.0 * PI },
+            ],
+        }
+    }
+
+    /// Construye la `SerialChain` a partir de esta spec.
+    pub fn build(&self) -> crate::robot::serial_chain::SerialChain {
+        let [jl1, jl2, jl3, jl4] = self.joint_limits;
+        super::factory::create_scara_robot(self.base_height, self.a1, self.a2, jl1, jl2, jl3, jl4)
+    }
+
+    /// Información de joints.
+    pub const fn joints(&self) -> [JointInfo; 4] {
+        let [j1, j2, j3, j4] = self.joint_limits;
+        [
+            JointInfo { name: "joint_1", kind: JointKind::Revolute, limits: Some(j1) },
+            JointInfo { name: "joint_2", kind: JointKind::Revolute, limits: Some(j2) },
+            JointInfo { name: "joint_3", kind: JointKind::Prismatic, limits: Some(j3) },
+            JointInfo { name: "joint_4", kind: JointKind::Revolute, limits: Some(j4) },
+        ]
     }
 }
 
-pub const DEFAULT: ScaraSpec = ScaraSpec::new(0.5, 1.0, 1.0, -1.0, 1.0);
+/// Spec por defecto: [`ScaraSpec::ideal`].
+pub const DEFAULT: ScaraSpec = ScaraSpec::ideal();
 
-/// R-R-P-R: revolute, revolute, prismatic, revolute. Todos en Z.
-pub const JOINTS: &[JointInfo] = &[
-    JointInfo {
-        name: "joint_1",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-    JointInfo {
-        name: "joint_2",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-    JointInfo {
-        name: "joint_3",
-        kind: JointKind::Prismatic,
-        limits: Some(JointLimits { min: -1.0, max: 1.0 }),
-    },
-    JointInfo {
-        name: "joint_4",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-];
+/// Joints del SCARA ideal (const para compatibilidad con API).
+pub static JOINTS: &[JointInfo] = {
+    const IDEAL: ScaraSpec = ScaraSpec::ideal();
+    const ARRAY: [JointInfo; 4] = IDEAL.joints();
+    &ARRAY
+};

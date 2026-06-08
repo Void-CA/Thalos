@@ -11,7 +11,7 @@ use crate::robot::joint::{
 
 pub type JointId = u32;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct JointLimits {
     pub min: f64,
     pub max: f64,
