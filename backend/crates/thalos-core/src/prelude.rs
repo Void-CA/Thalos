@@ -20,13 +20,17 @@ pub use crate::spatial::frame::{FrameId, Frame, FrameRegistry};
 
 pub use crate::kinematics::{
     forward::ForwardKinematics,
-    jacobian::{JacobianSolver, Jacobian, NumericalJacobian, GeometricJacobian},
-    inverse::{DampedLeastSquaresSolver, IKGoal, IKResult, IKStatus, IKSolver, JacobianTransposeSolver, SingularityReport},
+    jacobian::{JacobianSolver, Jacobian, NumericalJacobian, GeometricJacobian, SingularityReport},
+    inverse::{DampedLeastSquaresSolver, IKGoal, IKResult, IKStatus, IKSolver, JacobianTransposeSolver},
 };
 
 pub use crate::analysis::workspace::{
     Workspace, WorkspaceConfig, WorkspaceSample, WorkspaceMetrics,
     BoundingBox, WorkspaceKey, WorkspaceSampler, WorkspaceError,
     Reachability,
+};
+pub use crate::analysis::singularity::{
+    SingularityAnalyzer, SingularityAnalysis, SingularitySample,
+    SingularityState, SingularityConfig, SingularityMetrics,
 };
 

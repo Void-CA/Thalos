@@ -1,5 +1,7 @@
-//! Workspace analysis submodule — placeholder.
+//! Analysis modules over workspace datasets.
 //!
-//! Real types (`Workspace`, `WorkspaceSample`, etc.) are added in subsequent tasks.
+//! Each submodule consumes the fundamental [`Workspace`](workspace::Workspace)
+//! dataset and produces a derived analysis (singularity, manipulability, …).
 
 pub mod workspace;
+pub mod singularity;
