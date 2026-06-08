@@ -49,7 +49,7 @@ fn zero_configuration_places_end_effector_at_2_0_0() {
 }
 
 #[test]
-fn first_joint_90_deg_places_end_effector_at_0_2_0() {
+fn first_joint_90_deg_places_end_effector_at_0_0_neg2() {
     let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
 
     let end_effector = robot
@@ -62,6 +62,8 @@ fn first_joint_90_deg_places_end_effector_at_0_2_0() {
     let fk = ForwardKinematics::new(robot);
 
     // q1=90°, q2=0, d3=0, q4=0
+    // Y-up: arm rotates around Y → lies in XZ plane
+    // Ry(90°) * (l1, 0, 0) = (0, 0, -l1)
     let result = fk.evaluate(&[PI / 2.0, 0.0, 0.0, 0.0]);
 
     let pose = result.pose(&end_effector).unwrap();
@@ -70,15 +72,15 @@ fn first_joint_90_deg_places_end_effector_at_0_2_0() {
 
     assert!(
         t.x.abs() < EPS
-            && (t.y - 2.0).abs() < EPS
-            && t.z.abs() < EPS,
-        "SCARA with first joint at 90° should be at (0, 2, 0), got ({}, {}, {})",
+            && t.y.abs() < EPS
+            && (t.z + 2.0).abs() < EPS,
+        "SCARA with first joint at 90° should be at (0, 0, -2), got ({}, {}, {})",
         t.x, t.y, t.z
     );
 }
 
 #[test]
-fn folded_configuration_places_end_effector_at_1_1_0() {
+fn folded_configuration_places_end_effector_at_1_0_neg1() {
     let robot = create_scara_robot(0.0, 1.0, 1.0, -1.0, 1.0);
 
     let end_effector = robot
@@ -91,8 +93,9 @@ fn folded_configuration_places_end_effector_at_1_1_0() {
     let fk = ForwardKinematics::new(robot);
 
     // q1=90°, q2=-90°, d3=0, q4=0
-    // Link1: (0,1)
-    // Link2: (1,1) - el segundo brazo rota -90° relativo, apuntando hacia la derecha
+    // Y-up: Ry(90°)*Ry(-90°) = Ry(0), brazos en XZ
+    // Link1: Ry(90°)*(1,0,0) = (0, 0, -1)
+    // Link2: identity*(1,0,0) = (1, 0, 0) → (1, 0, -1)
     let result = fk.evaluate(&[PI / 2.0, -PI / 2.0, 0.0, 0.0]);
 
     let pose = result.pose(&end_effector).unwrap();
@@ -101,9 +104,9 @@ fn folded_configuration_places_end_effector_at_1_1_0() {
 
     assert!(
         (t.x - 1.0).abs() < EPS
-            && (t.y - 1.0).abs() < EPS
-            && t.z.abs() < EPS,
-        "Folded SCARA should be at (1, 1, 0), got ({}, {}, {})",
+            && t.y.abs() < EPS
+            && (t.z + 1.0).abs() < EPS,
+        "Folded SCARA should be at (1, 0, -1), got ({}, {}, {})",
         t.x, t.y, t.z
     );
 }
@@ -130,9 +133,9 @@ fn prismatic_joint_moves_end_effector_vertically() {
 
     assert!(
         (t.x - 2.0).abs() < EPS
-            && t.y.abs() < EPS
-            && (t.z - 0.5).abs() < EPS,
-        "Prismatic joint at 0.5 should place end effector at z=0.5, got ({}, {}, {})",
+            && (t.y - 0.5).abs() < EPS
+            && t.z.abs() < EPS,
+        "Prismatic joint at 0.5 should place end effector at y=0.5, got ({}, {}, {})",
         t.x, t.y, t.z
     );
 }
@@ -159,9 +162,9 @@ fn prismatic_joint_negative_movement() {
 
     assert!(
         (t.x - 2.0).abs() < EPS
-            && t.y.abs() < EPS
-            && (t.z + 1.0).abs() < EPS,
-        "Prismatic joint at -1.0 should place end effector at z=-1.0, got ({}, {}, {})",
+            && (t.y + 1.0).abs() < EPS
+            && t.z.abs() < EPS,
+        "Prismatic joint at -1.0 should place end effector at y=-1.0, got ({}, {}, {})",
         t.x, t.y, t.z
     );
 }
@@ -196,12 +199,12 @@ fn wrist_rotation_affects_orientation_but_not_position() {
         t.x, t.y, t.z
     );
 
-    // Verificar orientación (debería tener rotación de 90° en Z)
+    // Verificar orientación (debería tener rotación de 90° en Y)
     let euler = orientation.to_euler();
     assert!(
-        (euler.2 - PI / 2.0).abs() < EPS, // Asumiendo orden ZYX
-        "Wrist should be rotated 90° in Z, got {} rad",
-        euler.2
+        (euler.1 - PI / 2.0).abs() < EPS,
+        "Wrist should be rotated 90° in Y (pitch), got {} rad",
+        euler.1
     );
 }
 
@@ -220,23 +223,26 @@ fn combined_motions_accumulate_correctly() {
 
     // q1=45°, q2=45°, d3=0.3, q4=90°
     // Esto prueba la acumulación de todas las transformaciones
+    // Y-up: Ry(q1): brazo en plano XZ, prismático en Y
     let result = fk.evaluate(&[
         PI / 4.0,    // 45°
         PI / 4.0,    // 45° más = 90° total para el brazo
-        0.3,         // Subir 0.3
-        PI / 2.0     // Muñeca rotada 90°
+        0.3,         // Subir 0.3 en Y
+        PI / 2.0     // Muñeca rotada 90° en Y
     ]);
 
     let pose = result.pose(&end_effector).unwrap();
 
     let t = &pose.transform().translation;
     
-    // Cálculo esperado:
-    // Posición XY = (1*cos45° + 1*cos90°, 1*sin45° + 1*sin90°)
-    // = (0.7071 + 0, 0.7071 + 1) = (0.7071, 1.7071)
+    // Cálculo esperado (Y-up):
+    // Ry(q1)*(1,0,0) + Ry(q1+q2)*(1,0,0) + prismático(0,0.3,0)
+    // = (cos45, 0, -sin45) + (cos90, 0, -sin90) + (0, 0.3, 0)
+    // = (0.7071, 0, -0.7071) + (0, 0, -1) + (0, 0.3, 0)
+    // = (0.7071, 0.3, -1.7071)
     let expected_x = 1.0 * (PI / 4.0).cos() + 1.0 * (PI / 2.0).cos();
-    let expected_y = 1.0 * (PI / 4.0).sin() + 1.0 * (PI / 2.0).sin();
-    let expected_z = 0.3;
+    let expected_z = -1.0 * (PI / 4.0).sin() - 1.0 * (PI / 2.0).sin();
+    let expected_y = 0.3;
 
     assert!(
         (t.x - expected_x).abs() < EPS
@@ -247,13 +253,15 @@ fn combined_motions_accumulate_correctly() {
         t.x, t.y, t.z
     );
 
-    // Verificar orientación final (q1+q2+q4 = 45°+45°+90° = 180°)
+    // Verificar orientación final (q1+q2+q4 = 45°+45°+90° = 180° en Y)
+    // Usamos el ángulo del cuaternión directamente porque Ry(180°) sufre gimbal
+    // lock en ángulos Euler ZYX (pitch = 0, roll + yaw = π).
     let orientation = pose.transform().rotation;
-    let euler = orientation.to_euler();
+    let angle = 2.0 * orientation.inner().w.abs().acos();
     assert!(
-        (euler.2 - PI).abs() < EPS,
-        "Final orientation should be 180°, got {} rad",
-        euler.2
+        (angle - PI).abs() < EPS,
+        "Final orientation should be 180°, got {} rad (quat w={})",
+        angle, orientation.inner().w
     );
 }
 
@@ -271,7 +279,7 @@ fn workspace_limits_test() {
     let fk = ForwardKinematics::new(robot);
 
     // Probar configuración en el límite del workspace
-    // Brazos completamente extendidos en X positiva
+    // Brazos completamente extendidos en X positiva, prismático en Y
     let result = fk.evaluate(&[0.0, 0.0, 2.0, 0.0]);
 
     let pose = result.pose(&end_effector).unwrap();
@@ -279,9 +287,9 @@ fn workspace_limits_test() {
 
     assert!(
         (t.x - 2.0).abs() < EPS
-            && t.y.abs() < EPS
-            && (t.z - 2.0).abs() < EPS,
-        "Extended SCARA at max Z should be at (2, 0, 2), got ({}, {}, {})",
+            && (t.y - 2.0).abs() < EPS
+            && t.z.abs() < EPS,
+        "Extended SCARA at max Y should be at (2, 2, 0), got ({}, {}, {})",
         t.x, t.y, t.z
     );
 }

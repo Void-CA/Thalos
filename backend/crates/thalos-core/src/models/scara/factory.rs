@@ -16,14 +16,14 @@ pub fn create_scara_robot(
     let prismatic_frame = builder.create_frame("prismatic_joint");
     let wrist_frame = builder.create_frame("wrist");
 
-    // Joint 1: Revoluta en Z (base)
+    // Joint 1: Revoluta en Y (vertical, base)
     let joint1 = JointType::Revolute(
         RevoluteJoint::new(
             0,
-            UnitVector3::z_axis(),
+            UnitVector3::y_axis(),
             JointLimits::new(-PI, PI),
             Transform3D::from_translation(
-                Vector3::new(0.0, 0.0, base_height)
+                Vector3::new(0.0, base_height, 0.0)
             )
         )
     );
@@ -42,11 +42,11 @@ pub fn create_scara_robot(
         link: link1,
     });
 
-    // Joint 2: Revoluta en Z (codo)
+    // Joint 2: Revoluta en Y (codo)
     let joint2 = JointType::Revolute(
         RevoluteJoint::new(
             1,
-            UnitVector3::z_axis(),
+            UnitVector3::y_axis(),
             JointLimits::new(-PI, PI),
             Transform3D::identity()
         )
@@ -66,11 +66,11 @@ pub fn create_scara_robot(
         link: link2,
     });
 
-    // Joint 3: Prismática en Z (vertical)
+    // Joint 3: Prismática en Y (vertical)
     let joint3 = JointType::Prismatic(
         PrismaticJoint::new(
             2,
-            UnitVector3::z_axis(),
+            UnitVector3::y_axis(),
             JointLimits::new(z_min, z_max),
             Transform3D::identity()
         )
@@ -88,11 +88,11 @@ pub fn create_scara_robot(
         link: link3,
     });
 
-    // Joint 4: Revoluta en Z (muñeca)
+    // Joint 4: Revoluta en Y (muñeca)
     let joint4 = JointType::Revolute(
         RevoluteJoint::new(
             3,
-            UnitVector3::z_axis(),
+            UnitVector3::y_axis(),
             JointLimits::new(-PI, PI),
             Transform3D::identity()
         )
