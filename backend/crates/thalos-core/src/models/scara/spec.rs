@@ -1,5 +1,6 @@
-use crate::math::constants::PI;
-use crate::robot::joint::{JointInfo, JointKind, JointLimits};
+
+use crate::prelude::*;
+
 
 /// Spec completa de un robot SCARA.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -38,22 +39,22 @@ impl ScaraSpec {
     }
 
     /// Robot canónico: parámetros realistas para un SCARA de escritorio.
-    pub fn canonical() -> Self {
+    pub const fn canonical() -> Self {
         Self {
-            base_height: 0.15,
-            a1: 0.4,
-            a2: 0.3,
+            base_height: 0.5,
+            a1: 1.0,
+            a2: 0.8,
             joint_limits: [
                 JointLimits { min: -140.0_f64.to_radians(), max: 140.0_f64.to_radians() },
                 JointLimits { min: -150.0_f64.to_radians(), max: 150.0_f64.to_radians() },
-                JointLimits { min: 0.0, max: 0.2 },
+                JointLimits { min: -0.5, max: 0.0 },
                 JointLimits { min: -2.0 * PI, max: 2.0 * PI },
             ],
         }
     }
 
     /// Construye la `SerialChain` a partir de esta spec.
-    pub fn build(&self) -> crate::robot::serial_chain::SerialChain {
+    pub fn build(&self) -> SerialChain {
         let [jl1, jl2, jl3, jl4] = self.joint_limits;
         super::factory::create_scara_robot(self.base_height, self.a1, self.a2, jl1, jl2, jl3, jl4)
     }
@@ -70,12 +71,12 @@ impl ScaraSpec {
     }
 }
 
-/// Spec por defecto: [`ScaraSpec::ideal`].
-pub const DEFAULT: ScaraSpec = ScaraSpec::ideal();
+/// Spec por defecto: [`ScaraSpec::canonical`].
+pub const DEFAULT: ScaraSpec = ScaraSpec::canonical();
 
-/// Joints del SCARA ideal (const para compatibilidad con API).
+/// Joints del SCARA canonical (const para compatibilidad con API).
 pub static JOINTS: &[JointInfo] = {
-    const IDEAL: ScaraSpec = ScaraSpec::ideal();
-    const ARRAY: [JointInfo; 4] = IDEAL.joints();
+    const CANONICAL: ScaraSpec = ScaraSpec::canonical();
+    const ARRAY: [JointInfo; 4] = CANONICAL.joints();
     &ARRAY
 };
