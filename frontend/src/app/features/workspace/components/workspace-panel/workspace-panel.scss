@@ -1,56 +1,34 @@
 @use '../../../../../styles/variables' as *;
+@use '../../../../shared/styles/panel' as panel;
+
+// ── Container ──
 
 .workspace-panel {
-  font-family: $font-mono;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
+  @include panel.container;
 }
 
-/* ── Section labels ── */
+// ── Section labels ──
+
 .workspace-panel__label {
-  margin: 0 0 0.5rem;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  opacity: 0.55;
-  font-weight: 600;
+  @include panel.section-label;
 }
 
-/* ── INPUTS card ── */
+// ── INPUTS card ──
+
 .workspace-panel__inputs {
-  background: $bg-card;
-  border: 1px solid $border-subtle;
-  border-radius: $radius-md;
-  padding: 0.6rem 0.7rem 0.7rem;
+  @include panel.card-input;
 }
 
 .coord-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.4rem;
-
-  label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    font-size: 0.7rem;
-    opacity: 0.85;
-  }
+  @include panel.coord-grid;
 }
 
 input[type='number'] {
-  width: 10ch;
-  padding: 0.2rem 0.3rem;
-  font-family: $font-mono;
-  font-size: 0.8rem;
-  background: $bg-input;
-  border: 1px solid $border-default;
-  color: $text-secondary;
-  border-radius: $radius-sm;
+  @include panel.number-input;
 }
 
-/* ── ACTIONS ── */
+// ── ACTIONS ──
+
 .workspace-panel__actions {
   display: flex;
   flex-direction: column;
@@ -58,34 +36,18 @@ input[type='number'] {
 }
 
 .action {
+  @include panel.action-base;
   width: 100%;
-  padding: 0.45rem 0.4rem;
-  font-family: $font-mono;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  background: $bg-elevated;
-  border: 1px solid $border-hover;
-  color: $text-muted;
-  border-radius: $radius-sm;
-  transition: filter $transition-fast;
 
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-  &:hover:not(:disabled) {
-    filter: brightness(1.2);
+  &--sample {
+    background: $solve-bg;
+    border-color: $solve-bg;
+    color: #fff;
   }
 }
 
-.action--sample {
-  background: $solve-bg;
-  border-color: $solve-bg;
-  color: #fff;
-}
+// ── Point cloud toggle ──
 
-/* ── Point cloud toggle ── */
 .toggle {
   display: flex;
   align-items: center;
@@ -101,13 +63,10 @@ input[type='number'] {
   }
 }
 
-/* ── OUTPUTS card (read-only, visually distinct) ── */
+// ── OUTPUTS card (read-only, visually distinct) ──
+
 .workspace-panel__outputs {
-  background: $bg-elevated;
-  border: 1px solid $border-default;
-  border-style: dashed;
-  border-radius: $radius-md;
-  padding: 0.6rem 0.7rem 0.7rem;
+  @include panel.card-output;
 }
 
 .metrics-table {
@@ -129,7 +88,8 @@ input[type='number'] {
   }
 }
 
-/* ── Error ── */
+// ── Error ──
+
 .error-msg {
   padding: 0.4rem;
   background: #3a1a1a;

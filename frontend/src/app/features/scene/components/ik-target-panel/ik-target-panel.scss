@@ -1,20 +1,16 @@
 @use '../../../../../styles/variables' as *;
+@use '../../../../shared/styles/panel' as panel;
+
+// ── Container ──
 
 .ik-panel {
-  font-family: $font-mono;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
+  @include panel.container;
 }
 
 // ── Section labels ──
+
 .ik-panel__label {
-  margin: 0 0 0.5rem;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  opacity: 0.55;
-  font-weight: 600;
+  @include panel.section-label;
 }
 
 .ik-panel__sublabel {
@@ -27,41 +23,21 @@
 }
 
 // ── INPUTS card ──
+
 .ik-panel__inputs {
-  background: $bg-card;
-  border: 1px solid $border-subtle;
-  border-radius: $radius-md;
-  padding: 0.6rem 0.7rem 0.7rem;
+  @include panel.card-input;
 }
 
 .coord-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.4rem;
+  @include panel.coord-grid;
 
   &--quaternion {
-    // 4 fields (W,X,Y,Z) → 2 cols to avoid orphan row
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
-label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  font-size: 0.7rem;
-  opacity: 0.85;
-}
-
 input[type='number'] {
-  width: 10ch; // DONT TOUCH THIS WIDTH
-  padding: 0.2rem 0.3rem;
-  font-family: $font-mono;
-  font-size: 0.8rem;
-  background: $bg-input;
-  border: 1px solid $border-default;
-  color: $text-muted;
-  border-radius: $radius-sm;
+  @include panel.number-input;
 }
 
 .rotation {
@@ -71,6 +47,7 @@ input[type='number'] {
 }
 
 // ── Segmented control ──
+
 .segmented {
   display: flex;
   background: $bg-input;
@@ -115,6 +92,7 @@ input[type='number'] {
 }
 
 // ── ACTIONS ──
+
 .ik-panel__actions {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -122,24 +100,7 @@ input[type='number'] {
 }
 
 .action {
-  padding: 0.45rem 0.4rem;
-  font-family: $font-mono;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  background: $bg-elevated;
-  border: 1px solid $border-hover;
-  color: $text-muted;
-  border-radius: $radius-sm;
-  transition: filter $transition-fast;
-
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-  &:hover:not(:disabled) {
-    filter: brightness(1.2);
-  }
+  @include panel.action-base;
 
   &--solve {
     background: $solve-bg;
@@ -154,12 +115,9 @@ input[type='number'] {
 }
 
 // ── OUTPUTS card (read-only, visually distinct) ──
+
 .ik-panel__outputs {
-  background: $bg-elevated;          // lighter than inputs card → signals "informational"
-  border: 1px solid $border-default; // slightly stronger border
-  border-style: dashed;              // dashed reinforces "read-only / result"
-  border-radius: $radius-md;
-  padding: 0.6rem 0.7rem 0.7rem;
+  @include panel.card-output;
 }
 
 .solved-q {
