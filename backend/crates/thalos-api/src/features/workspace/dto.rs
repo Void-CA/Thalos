@@ -6,6 +6,9 @@
 
 use serde::{Deserialize, Serialize};
 
+use thalos_core::analysis::singularity::{
+    SingularityMetrics, SingularityState,
+};
 use thalos_core::analysis::workspace::{
     BoundingBox, Reachability, WorkspaceMetrics, WorkspaceSample,
 };
@@ -88,6 +91,82 @@ impl From<WorkspaceMetrics> for WorkspaceMetricsDto {
 pub struct BoundingBoxDto {
     pub min: PointDto,
     pub max: PointDto,
+}
+
+// ─── Singularity DTOs ───────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct SingularityRequest {
+    pub robot_id: String,
+    #[serde(default = "default_samples")]
+    pub samples: usize,
+    #[serde(default)]
+    pub seed: u64,
+    #[serde(default = "default_tolerance")]
+    pub tolerance: f64,
+    #[serde(default = "default_near_singular_threshold")]
+    pub near_singular_condition_threshold: f64,
+    #[serde(default)]
+    pub include_samples: bool,
+}
+
+fn default_near_singular_threshold() -> f64 { 100.0 }
+
+#[derive(Debug, Serialize)]
+pub struct SingularityResponse {
+    pub metrics: SingularityMetricsDto,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub samples: Option<Vec<SingularitySampleDto>>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SingularityMetricsDto {
+    pub total_samples: usize,
+    pub singular_count: usize,
+    pub near_singular_count: usize,
+    pub normal_count: usize,
+    pub avg_condition_number: f64,
+    pub min_condition_number: f64,
+    pub max_condition_number: f64,
+    pub avg_sigma_min: f64,
+}
+
+impl From<SingularityMetrics> for SingularityMetricsDto {
+    fn from(m: SingularityMetrics) -> Self {
+        Self {
+            total_samples: m.total_samples,
+            singular_count: m.singular_count,
+            near_singular_count: m.near_singular_count,
+            normal_count: m.normal_count,
+            avg_condition_number: m.avg_condition_number,
+            min_condition_number: m.min_condition_number,
+            max_condition_number: m.max_condition_number,
+            avg_sigma_min: m.avg_sigma_min,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct SingularitySampleDto {
+    pub position: PointDto,
+    pub state: String,
+}
+
+impl From<&thalos_core::analysis::singularity::SingularitySample> for SingularitySampleDto {
+    fn from(s: &thalos_core::analysis::singularity::SingularitySample) -> Self {
+        Self {
+            position: PointDto {
+                x: s.position.x,
+                y: s.position.y,
+                z: s.position.z,
+            },
+            state: match s.state {
+                SingularityState::Normal => "normal".into(),
+                SingularityState::NearSingular => "near_singular".into(),
+                SingularityState::Singular => "singular".into(),
+            },
+        }
+    }
 }
 
 impl From<BoundingBox> for BoundingBoxDto {
