@@ -50,6 +50,12 @@ input[type='number'] {
     border-color: #5a4a1a;
     color: #ffe;
   }
+
+  &--manipulability {
+    background: #1a4a3a;
+    border-color: #1a4a3a;
+    color: #efe;
+  }
 }
 
 // ── Point cloud toggle ──

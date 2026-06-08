@@ -457,6 +457,61 @@ export class ThreeRendererService {
     this.workspaceGroup.visible = true;
   }
 
+  /** Render a gradient point cloud based on a normalized value [0, 1].
+   *  Green (1.0) → Yellow (0.5) → Red (0.0). */
+  setGradientPointCloud(points: { position: [number, number, number]; normalized: number }[]): void {
+    this.clearPointCloud();
+    if (!this.workspaceGroup) return;
+
+    const geo = new THREE.BufferGeometry();
+    const vertices = new Float32Array(points.length * 3);
+    const colors = new Float32Array(points.length * 3);
+
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      vertices[i * 3]     = p.position[0];
+      vertices[i * 3 + 1] = p.position[1];
+      vertices[i * 3 + 2] = p.position[2];
+
+      // Green → Yellow → Red based on normalized [0, 1]
+      const t = Math.max(0, Math.min(1, p.normalized));
+      let r: number, g: number;
+      if (t > 0.5) {
+        // Yellow (t=0.5) → Green (t=1.0)
+        const u = (t - 0.5) * 2;
+        r = 0.9 - u * 0.7;
+        g = 0.8 + u * 0.1;
+      } else {
+        // Red (t=0) → Yellow (t=0.5)
+        const u = t * 2;
+        r = 0.9 - u * 0.0;
+        g = 0.1 + u * 0.7;
+      }
+      colors[i * 3]     = r;
+      colors[i * 3 + 1] = g;
+      colors[i * 3 + 2] = 0.1;
+    }
+
+    geo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const mat = new THREE.PointsMaterial({
+      size: 0.015,
+      sizeAttenuation: true,
+      transparent: true,
+      opacity: 0.8,
+      depthTest: true,
+      depthWrite: false,
+      vertexColors: true,
+    });
+
+    this.pointCloudMesh = new THREE.Points(geo, mat);
+    this.pointCloudMesh.frustumCulled = true;
+
+    this.workspaceGroup.add(this.pointCloudMesh);
+    this.workspaceGroup.visible = true;
+  }
+
   /** Render colored workspace points based on singularity state. */
   setColoredPointCloud(points: { position: [number, number, number]; state: 'normal' | 'near_singular' | 'singular' }[]): void {
     this.clearPointCloud();

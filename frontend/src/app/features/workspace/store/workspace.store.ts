@@ -1,8 +1,8 @@
 import { Injectable, inject, Signal, signal, computed } from '@angular/core';
 import { WorkspaceApiService } from '../services/workspace-api.service';
-import type { SingularityResponse, WorkspaceDto } from '../workspace-api.types';
+import type { ManipulabilityResponse, SingularityResponse, WorkspaceDto } from '../workspace-api.types';
 import type {
-  ColoredPoint, SingularityData, SingularityMetrics,
+  ColoredPoint, ManipulabilityData, SingularityData, SingularityMetrics,
   WorkspaceData, WorkspaceMetrics, WorkspaceBounds, WorkspaceState, WorkspaceUiState, ReachabilityResult,
 } from '../workspace.types';
 
@@ -14,6 +14,7 @@ const INITIAL_STATE: WorkspaceState = {
   showPointCloud: false,
   reachability: null,
   singularity: null,
+  manipulability: null,
   ui: INITIAL_UI,
 };
 
@@ -31,6 +32,32 @@ function toBounds(dto: WorkspaceDto['bounds']): WorkspaceBounds {
   return {
     min: [dto.min.x, dto.min.y, dto.min.z],
     max: [dto.max.x, dto.max.y, dto.max.z],
+  };
+}
+
+function toManipulabilityData(dto: ManipulabilityResponse): ManipulabilityData {
+  const m = dto.metrics;
+  const maxY = m.max_yoshikawa;
+  const minY = m.min_yoshikawa;
+  const range = maxY - minY || 1;
+
+  const points: ManipulabilityData['points'] = dto.samples?.map(s => ({
+    position: [s.position.x, s.position.y, s.position.z] as [number, number, number],
+    yoshikawa: s.yoshikawa,
+    normalized: (s.yoshikawa - minY) / range,
+  })) ?? [];
+
+  return {
+    metrics: {
+      totalSamples: m.total_samples,
+      avgYoshikawa: m.avg_yoshikawa,
+      minYoshikawa: m.min_yoshikawa,
+      maxYoshikawa: m.max_yoshikawa,
+      avgIsotropy: m.avg_isotropy,
+      minIsotropy: m.min_isotropy,
+      maxIsotropy: m.max_isotropy,
+    },
+    points,
   };
 }
 
@@ -64,6 +91,7 @@ export class WorkspaceStore {
   private readonly showPointCloudSignal = signal(false);
   private readonly reachabilitySignal = signal<ReachabilityResult | null>(null);
   private readonly singularitySignal = signal<SingularityData | null>(null);
+  private readonly manipulabilitySignal = signal<ManipulabilityData | null>(null);
   private readonly loadingSignal = signal(false);
   private readonly errorSignal = signal<string | null>(null);
 
@@ -81,6 +109,9 @@ export class WorkspaceStore {
 
   /** Singularity analysis data (metrics + colored point cloud). */
   readonly singularity: Signal<SingularityData | null> = this.singularitySignal.asReadonly();
+
+  /** Manipulability analysis data (metrics + gradient points). */
+  readonly manipulability: Signal<ManipulabilityData | null> = this.manipulabilitySignal.asReadonly();
 
   /** Loading state. */
   readonly loading: Signal<boolean> = this.loadingSignal.asReadonly();
@@ -161,6 +192,37 @@ export class WorkspaceStore {
     }
   }
 
+  /** Run manipulability analysis. Updates point cloud with green→red gradient. */
+  async analyzeManipulability(robotId: string, samples: number, seed: number, tolerance: number): Promise<void> {
+    this.loadingSignal.set(true);
+    this.errorSignal.set(null);
+
+    try {
+      const dto = await this.api.analyzeManipulability({
+        robot_id: robotId,
+        samples,
+        seed,
+        tolerance,
+        include_samples: true,
+      }).toPromise();
+
+      if (!dto) throw new Error('Empty response');
+
+      const data = toManipulabilityData(dto);
+      this.manipulabilitySignal.set(data);
+
+      if (data.points.length > 0) {
+        this.pointCloudSignal.set(data.points.map(p => p.position));
+      }
+      this.showPointCloudSignal.set(true);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Manipulability analysis failed';
+      this.errorSignal.set(msg);
+    } finally {
+      this.loadingSignal.set(false);
+    }
+  }
+
   /** Run singularity analysis on the current workspace data. */
   async analyzeSingularity(robotId: string, samples: number, seed: number, tolerance: number, threshold: number): Promise<void> {
     this.loadingSignal.set(true);
@@ -201,6 +263,7 @@ export class WorkspaceStore {
     this.showPointCloudSignal.set(false);
     this.reachabilitySignal.set(null);
     this.singularitySignal.set(null);
+    this.manipulabilitySignal.set(null);
     this.loadingSignal.set(false);
     this.errorSignal.set(null);
   }

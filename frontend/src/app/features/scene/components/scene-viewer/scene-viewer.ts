@@ -47,12 +47,16 @@ export class SceneViewer implements AfterViewInit {
     });
 
     // Sync point cloud overlay from workspace analysis
+    // Priority: manipulability (gradient) > singularity (state colors) > monochrome
     effect(() => {
+      const manip = this.workspace.manipulability();
       const singularity = this.workspace.singularity();
       const cloud = this.workspace.pointCloud();
       const show = this.workspace.showPointCloud();
 
-      if (singularity && show) {
+      if (manip && show) {
+        this.renderer.setGradientPointCloud(manip.points);
+      } else if (singularity && show) {
         this.renderer.setColoredPointCloud(singularity.points);
       } else if (cloud && show) {
         this.renderer.setPointCloud(cloud);

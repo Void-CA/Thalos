@@ -85,3 +85,34 @@ export interface SingularityResponse {
     metrics: SingularityMetricsDto;
     samples?: SingularitySampleDto[];
 }
+
+// ── Manipulability analysis ──
+
+export interface ManipulabilityRequest {
+    robot_id: string;
+    samples?: number;
+    seed?: number;
+    tolerance?: number;
+    include_samples?: boolean;
+}
+
+export interface ManipulabilityMetricsDto {
+    total_samples: number;
+    avg_yoshikawa: number;
+    min_yoshikawa: number;
+    max_yoshikawa: number;
+    avg_isotropy: number;
+    min_isotropy: number;
+    max_isotropy: number;
+}
+
+export interface ManipulabilitySampleDto {
+    position: PointDto;
+    yoshikawa: number;
+    isotropy: number;
+}
+
+export interface ManipulabilityResponse {
+    metrics: ManipulabilityMetricsDto;
+    samples?: ManipulabilitySampleDto[];
+}

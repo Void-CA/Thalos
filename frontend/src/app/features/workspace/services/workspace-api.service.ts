@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import {
+  ManipulabilityRequest, ManipulabilityResponse,
   WorkspaceDto, ReachabilityDto, SampleRequest, ReachabilityRequest,
   SingularityRequest, SingularityResponse,
 } from '../workspace-api.types';
@@ -22,5 +23,9 @@ export class WorkspaceApiService {
 
   analyzeSingularity(req: SingularityRequest): Observable<SingularityResponse> {
     return this.http.post<SingularityResponse>(`${this.baseUrl}/workspace/singularity`, req);
+  }
+
+  analyzeManipulability(req: ManipulabilityRequest): Observable<ManipulabilityResponse> {
+    return this.http.post<ManipulabilityResponse>(`${this.baseUrl}/workspace/manipulability`, req);
   }
 }

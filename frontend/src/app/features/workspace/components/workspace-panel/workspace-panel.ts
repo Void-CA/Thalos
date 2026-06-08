@@ -43,6 +43,14 @@ import { WorkspaceStore } from '../../store/workspace.store';
           {{ store.loading() ? 'Analyzing\u2026' : 'Singularity Analysis' }}
         </button>
 
+        <button
+          class="action action--manipulability"
+          (click)="onAnalyzeManipulability()"
+          [disabled]="store.loading() || !robotId()"
+        >
+          {{ store.loading() ? 'Analyzing\u2026' : 'Manipulability' }}
+        </button>
+
         <label class="toggle">
           <input
             type="checkbox"
@@ -85,6 +93,20 @@ import { WorkspaceStore } from '../../store/workspace.store';
         </section>
       }
 
+      <!-- ── MANIPULABILITY METRICS ── -->
+      @if (store.manipulability(); as m) {
+        <section class="workspace-panel__outputs">
+          <h4 class="workspace-panel__label singularity-title">Manipulability Metrics</h4>
+          <table class="metrics-table">
+            <tr><td>Samples</td><td>{{ m.metrics.totalSamples }}</td></tr>
+            <tr><td>Avg Yoshikawa</td><td>{{ m.metrics.avgYoshikawa.toFixed(4) }}</td></tr>
+            <tr><td>Min Yoshikawa</td><td>{{ m.metrics.minYoshikawa.toFixed(4) }}</td></tr>
+            <tr><td>Max Yoshikawa</td><td>{{ m.metrics.maxYoshikawa.toFixed(4) }}</td></tr>
+            <tr><td>Avg Isotropy</td><td>{{ m.metrics.avgIsotropy.toFixed(4) }}</td></tr>
+          </table>
+        </section>
+      }
+
       <!-- ── ERROR ── -->
       @if (store.error(); as err) {
         <div class="error-msg">{{ err }}</div>
@@ -123,5 +145,11 @@ export class WorkspacePanel {
     const id = this.robotId();
     if (!id) return;
     this.store.analyzeSingularity(id, this.samples, this.seed, this.tolerance, this.nearSingularThreshold);
+  }
+
+  onAnalyzeManipulability(): void {
+    const id = this.robotId();
+    if (!id) return;
+    this.store.analyzeManipulability(id, this.samples, this.seed, this.tolerance);
   }
 }

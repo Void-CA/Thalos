@@ -43,6 +43,29 @@ export interface SingularityData {
     points: ColoredPoint[];
 }
 
+export interface ManipulabilityPoint {
+    position: [number, number, number];
+    /** Raw Yoshikawa value */
+    yoshikawa: number;
+    /** Normalized [0, 1] for color mapping */
+    normalized: number;
+}
+
+export interface ManipulabilityMetricsData {
+    totalSamples: number;
+    avgYoshikawa: number;
+    minYoshikawa: number;
+    maxYoshikawa: number;
+    avgIsotropy: number;
+    minIsotropy: number;
+    maxIsotropy: number;
+}
+
+export interface ManipulabilityData {
+    metrics: ManipulabilityMetricsData;
+    points: ManipulabilityPoint[];
+}
+
 export interface WorkspaceUiState {
     loading: boolean;
     error: string | null;
@@ -54,5 +77,6 @@ export interface WorkspaceState {
     showPointCloud: boolean;
     reachability: ReachabilityResult | null;
     singularity: SingularityData | null;
+    manipulability: ManipulabilityData | null;
     ui: WorkspaceUiState;
 }
