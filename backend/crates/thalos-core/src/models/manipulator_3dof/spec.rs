@@ -1,41 +1,58 @@
 use crate::math::constants::PI;
 use crate::robot::joint::{JointInfo, JointKind, JointLimits};
 
-/// Spec geométrica de un manipulador 3DOF estilo PUMA-base (columna vertical).
+/// Spec de un manipulador 3DOF estilo PUMA-base (columna vertical).
 ///
 /// Convención Y-up: joint 1 (yaw, eje Y vertical), joint 2 (hombro, eje Z
 /// profundidad), joint 3 (codo, eje Z, paralelo a joint 2). Los links se
-/// extienden en +X local, así que la posición del efector vive en el plano z=0.
+/// extienden en +X local.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Manipulator3DOFSpec {
     pub l1: f64,
     pub l2: f64,
     pub l3: f64,
+    pub joint_limits: [JointLimits; 3],
 }
 
 impl Manipulator3DOFSpec {
-    pub const fn new(l1: f64, l2: f64, l3: f64) -> Self {
-        Self { l1, l2, l3 }
+    pub const fn new(l1: f64, l2: f64, l3: f64, joint_limits: [JointLimits; 3]) -> Self {
+        Self { l1, l2, l3, joint_limits }
+    }
+
+    /// Robot ideal: tres revolutos con rango completo.
+    pub const fn ideal() -> Self {
+        Self {
+            l1: 1.0,
+            l2: 1.0,
+            l3: 1.0,
+            joint_limits: [
+                JointLimits { min: -PI, max: PI },
+                JointLimits { min: -PI, max: PI },
+                JointLimits { min: -PI, max: PI },
+            ],
+        }
+    }
+
+    pub fn build(&self) -> crate::robot::serial_chain::SerialChain {
+        let [jl1, jl2, jl3] = self.joint_limits;
+        super::factory::create_manipulator_3dof(self.l1, self.l2, self.l3, jl1, jl2, jl3)
+    }
+
+    /// Y-Z-Z: joint 1 en Y (vertical), joints 2 y 3 en Z (profundidad).
+    pub const fn joints(&self) -> [JointInfo; 3] {
+        let [j1, j2, j3] = self.joint_limits;
+        [
+            JointInfo { name: "joint_1", kind: JointKind::Revolute, limits: Some(j1) },
+            JointInfo { name: "joint_2", kind: JointKind::Revolute, limits: Some(j2) },
+            JointInfo { name: "joint_3", kind: JointKind::Revolute, limits: Some(j3) },
+        ]
     }
 }
 
-pub const DEFAULT: Manipulator3DOFSpec = Manipulator3DOFSpec::new(1.0, 1.0, 1.0);
+pub const DEFAULT: Manipulator3DOFSpec = Manipulator3DOFSpec::ideal();
 
-/// Y-Z-Z: 1 revolute en Y (vertical), 2 revolutes en Z (profundidad).
-pub const JOINTS: &[JointInfo] = &[
-    JointInfo {
-        name: "joint_1",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-    JointInfo {
-        name: "joint_2",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-    JointInfo {
-        name: "joint_3",
-        kind: JointKind::Revolute,
-        limits: Some(JointLimits { min: -PI, max: PI }),
-    },
-];
+pub static JOINTS: &[JointInfo] = {
+    const S: Manipulator3DOFSpec = Manipulator3DOFSpec::ideal();
+    const J: [JointInfo; 3] = S.joints();
+    &J
+};

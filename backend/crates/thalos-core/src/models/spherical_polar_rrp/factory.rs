@@ -2,16 +2,13 @@ use crate::prelude::*;
 
 /// Construye un robot esférico-polar RRP (R en Z, R en Y, P en X).
 ///
-/// - `l1`    : altura fija de la base (offset Z desde el world al primer joint).
-/// - `r_min`,
-///   `r_max` : límites del prismatic radial (eje X local).
-///
-/// FK del efector (origen del frame final):
+/// FK del efector:
 ///     p = ( r·cosφ·cosθ, r·cosφ·sinθ, -r·sinφ )
 pub fn create_spherical_polar_rrp(
     l1: f64,
-    r_min: f64,
-    r_max: f64,
+    limits_j1: JointLimits,
+    limits_j2: JointLimits,
+    limits_j3: JointLimits,
 ) -> SerialChain {
     let mut builder = SerialChainBuilder::new();
 
@@ -21,12 +18,7 @@ pub fn create_spherical_polar_rrp(
 
     // Joint 1 — Revolute en Z (azimut θ)
     let joint1 = JointType::Revolute(
-        RevoluteJoint::new(
-            0,
-            UnitVector3::z_axis(),
-            JointLimits::new(-PI, PI),
-            Transform3D::identity(),
-        ),
+        RevoluteJoint::new(0, UnitVector3::z_axis(), limits_j1, Transform3D::identity()),
     );
     let link1 = Link {
         id: 0,
@@ -41,12 +33,7 @@ pub fn create_spherical_polar_rrp(
 
     // Joint 2 — Revolute en Y (polar φ)
     let joint2 = JointType::Revolute(
-        RevoluteJoint::new(
-            1,
-            UnitVector3::y_axis(),
-            JointLimits::new(-PI_2, PI_2),
-            Transform3D::identity(),
-        ),
+        RevoluteJoint::new(1, UnitVector3::y_axis(), limits_j2, Transform3D::identity()),
     );
     let link2 = Link {
         id: 1,
@@ -61,12 +48,7 @@ pub fn create_spherical_polar_rrp(
 
     // Joint 3 — Prismatic en X (extensión radial r)
     let joint3 = JointType::Prismatic(
-        PrismaticJoint::new(
-            2,
-            UnitVector3::x_axis(),
-            JointLimits::new(r_min, r_max),
-            Transform3D::identity(),
-        ),
+        PrismaticJoint::new(2, UnitVector3::x_axis(), limits_j3, Transform3D::identity()),
     );
     let link3 = Link {
         id: 2,

@@ -1,9 +1,9 @@
 use crate::prelude::*;
-use crate::models::factories::create_planar_3r;
+use crate::models::planar_3r::Planar3RSpec;
 
 // Helper para crear un robot y sus componentes
 fn setup_robot() -> (NumericalJacobian, ForwardKinematics, crate::spatial::frame::FrameId) {
-    let robot = create_planar_3r(1.0, 1.0, 1.0);
+    let robot = Planar3RSpec::ideal().build();
     let end_effector = robot.end_effector().clone();
     let fk = ForwardKinematics::new(robot);
     let jacobian = NumericalJacobian::new(fk.clone(), end_effector.clone());

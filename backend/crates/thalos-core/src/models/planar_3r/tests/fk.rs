@@ -1,10 +1,10 @@
 use crate::prelude::*;
-use crate::models::factories::create_planar_3r;
+use crate::models::planar_3r::Planar3RSpec;
 
 #[test]
 fn returns_three_poses() {
 
-    let robot = create_planar_3r(1.0, 1.0, 1.0);
+    let robot = Planar3RSpec::ideal().build();
 
     let fk = ForwardKinematics::new(robot);
 
@@ -22,7 +22,7 @@ fn returns_three_poses() {
 #[test]
 fn zero_configuration_places_end_effector_at_3_0_0() {
 
-    let robot = create_planar_3r(1.0, 1.0, 1.0);
+    let robot = Planar3RSpec::ideal().build();
 
     let end_effector = robot
         .segments
@@ -55,7 +55,7 @@ fn zero_configuration_places_end_effector_at_3_0_0() {
 #[test]
 fn first_joint_90_deg_places_end_effector_at_0_3_0() {
 
-    let robot = create_planar_3r(1.0, 1.0, 1.0);
+    let robot = Planar3RSpec::ideal().build();
 
     let end_effector = robot
         .segments
@@ -88,7 +88,7 @@ fn first_joint_90_deg_places_end_effector_at_0_3_0() {
 #[test]
 fn folded_configuration_places_end_effector_at_2_1_0() {
 
-    let robot = create_planar_3r(1.0, 1.0, 1.0);
+    let robot = Planar3RSpec::ideal().build();
 
     let end_effector = robot
         .segments
@@ -133,7 +133,7 @@ fn folded_configuration_places_end_effector_at_2_1_0() {
 #[test]
 fn third_joint_rotates_relative_to_second_joint() {
 
-    let robot = create_planar_3r(1.0, 1.0, 1.0);
+    let robot = Planar3RSpec::ideal().build();
 
     let end_effector = robot
         .segments
@@ -180,7 +180,7 @@ fn third_joint_rotates_relative_to_second_joint() {
 #[test]
 fn all_joint_rotations_accumulate_correctly() {
 
-    let robot = create_planar_3r(1.0, 1.0, 1.0);
+    let robot = Planar3RSpec::ideal().build();
 
     let end_effector = robot
         .segments

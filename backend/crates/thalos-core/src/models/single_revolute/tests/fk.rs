@@ -1,8 +1,8 @@
 use crate::prelude::*;
-use crate::models::factories::create_single_revolute;
+use crate::models::single_revolute::SingleRevoluteSpec;
 
 fn setup() -> (SerialChain, ForwardKinematics) {
-    let robot = create_single_revolute(1.0);
+    let robot = SingleRevoluteSpec::ideal().build();
     let fk = ForwardKinematics::new(robot.clone());
     (robot, fk)
 }

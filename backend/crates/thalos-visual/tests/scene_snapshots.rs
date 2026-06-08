@@ -2,13 +2,13 @@ use std::f64::consts::PI;
 
 use thalos_core::{
     kinematics::forward::ForwardKinematics,
-    models::factories::create_planar_2r,
+    models::planar_2r::Planar2RSpec,
 };
 use thalos_visual::{SceneBuilder, SceneDiff, VisualPrecision};
 
 #[test]
 fn planar_2r_zero_config() {
-    let robot = create_planar_2r(1.0, 1.0);
+    let robot = Planar2RSpec::ideal().build();
     let fk = ForwardKinematics::new(robot.clone());
     let result = fk.evaluate(&[0.0, 0.0]);
 
@@ -20,7 +20,7 @@ fn planar_2r_zero_config() {
 
 #[test]
 fn planar_2r_bent_config() {
-    let robot = create_planar_2r(1.0, 1.0);
+    let robot = Planar2RSpec::ideal().build();
     let fk = ForwardKinematics::new(robot.clone());
     let result = fk.evaluate(&[PI / 2.0, 0.0]);
 
@@ -37,7 +37,7 @@ fn precision_canonicalizes_noise() {
         decimal_places: 6,
     };
 
-    let robot = create_planar_2r(1.0, 1.0);
+    let robot = Planar2RSpec::ideal().build();
     let fk = ForwardKinematics::new(robot.clone());
     let result = fk.evaluate(&[PI / 2.0, 0.0]);
 
@@ -69,7 +69,7 @@ fn precision_canonicalizes_noise() {
 
 #[test]
 fn diff_detects_translation_and_rotation() {
-    let robot = create_planar_2r(1.0, 1.0);
+    let robot = Planar2RSpec::ideal().build();
     let fk = ForwardKinematics::new(robot.clone());
     let builder = SceneBuilder::new(&robot);
 
@@ -102,7 +102,7 @@ fn diff_detects_translation_and_rotation() {
 
 #[test]
 fn diff_identical_scenes() {
-    let robot = create_planar_2r(1.0, 1.0);
+    let robot = Planar2RSpec::ideal().build();
     let fk = ForwardKinematics::new(robot.clone());
     let builder = SceneBuilder::new(&robot);
 
@@ -118,7 +118,7 @@ fn diff_identical_scenes() {
 
 #[test]
 fn dump_json() {
-    let robot = create_planar_2r(1.0, 1.0);
+    let robot = Planar2RSpec::ideal().build();
     let fk = ForwardKinematics::new(robot.clone());
     let result = fk.evaluate(&[0.0, 0.0]);
 

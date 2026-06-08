@@ -1,8 +1,8 @@
 use crate::prelude::*;
-use crate::models::factories::create_manipulator_3dof;
+use crate::models::manipulator_3dof::Manipulator3DOFSpec;
 
 fn fresh_pair() -> (GeometricJacobian, NumericalJacobian) {
-    let robot = create_manipulator_3dof(1.0, 1.0, 1.0);
+    let robot = Manipulator3DOFSpec::ideal().build();
     let ee = robot.end_effector().clone();
     let fk1 = ForwardKinematics::new(robot.clone());
     let fk2 = ForwardKinematics::new(robot);
@@ -155,7 +155,7 @@ fn singularity_detected_via_jjt_determinant() {
 fn propagates_velocities_via_geometric_jacobian() {
     // v_ee = J · q̇ debe coincidir con finite difference de la FK.
     let (geo, fk) = {
-        let robot = create_manipulator_3dof(1.0, 1.0, 1.0);
+        let robot = Manipulator3DOFSpec::ideal().build();
         let ee = robot.end_effector().clone();
         let fk = ForwardKinematics::new(robot);
         let geo = GeometricJacobian::new(fk.clone(), ee);

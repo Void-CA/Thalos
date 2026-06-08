@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::models::factories::create_manipulator_3dof;
+use crate::models::manipulator_3dof::Manipulator3DOFSpec;
 
 fn ee_translation(fk: &ForwardKinematics, q: &[f64], ee: &FrameId) -> Vector3 {
     fk.evaluate(q)
@@ -11,7 +11,7 @@ fn ee_translation(fk: &ForwardKinematics, q: &[f64], ee: &FrameId) -> Vector3 {
 }
 
 fn build() -> (ForwardKinematics, FrameId) {
-    let robot = create_manipulator_3dof(1.0, 1.0, 1.0);
+    let robot = Manipulator3DOFSpec::ideal().build();
     let ee = robot.end_effector().clone();
     let fk = ForwardKinematics::new(robot);
     (fk, ee)
@@ -19,7 +19,7 @@ fn build() -> (ForwardKinematics, FrameId) {
 
 #[test]
 fn has_three_segments_and_three_joints() {
-    let robot = create_manipulator_3dof(1.0, 1.0, 1.0);
+    let robot = Manipulator3DOFSpec::ideal().build();
     assert_eq!(robot.segments.len(), 3, "Should have exactly three segments");
     assert_eq!(robot.segments[0].joint.id(), 0);
     assert_eq!(robot.segments[1].joint.id(), 1);

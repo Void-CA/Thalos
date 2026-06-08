@@ -2,20 +2,13 @@ use crate::prelude::*;
 
 /// Construye un robot cilíndrico RPP (R en Z, P en Z, P en X).
 ///
-/// - `l1`    : altura fija de la base (offset Z desde el world al primer joint).
-/// - `z_min`,
-///   `z_max` : límites del prismatic vertical (eje Z).
-/// - `r_min`,
-///   `r_max` : límites del prismatic radial (eje X local).
-///
-/// FK del efector (origen del frame final):
+/// FK del efector:
 ///     p = ( r·cosθ, r·sinθ, l1 + z )
 pub fn create_cylindrical_rpp(
     l1: f64,
-    z_min: f64,
-    z_max: f64,
-    r_min: f64,
-    r_max: f64,
+    limits_j1: JointLimits,
+    limits_j2: JointLimits,
+    limits_j3: JointLimits,
 ) -> SerialChain {
     let mut builder = SerialChainBuilder::new();
 
@@ -25,12 +18,7 @@ pub fn create_cylindrical_rpp(
 
     // Joint 1 — Revolute en Z (azimut θ)
     let joint1 = JointType::Revolute(
-        RevoluteJoint::new(
-            0,
-            UnitVector3::z_axis(),
-            JointLimits::new(-PI, PI),
-            Transform3D::identity(),
-        ),
+        RevoluteJoint::new(0, UnitVector3::z_axis(), limits_j1, Transform3D::identity()),
     );
     let link1 = Link {
         id: 0,
@@ -45,12 +33,7 @@ pub fn create_cylindrical_rpp(
 
     // Joint 2 — Prismatic en Z (elevación z)
     let joint2 = JointType::Prismatic(
-        PrismaticJoint::new(
-            1,
-            UnitVector3::z_axis(),
-            JointLimits::new(z_min, z_max),
-            Transform3D::identity(),
-        ),
+        PrismaticJoint::new(1, UnitVector3::z_axis(), limits_j2, Transform3D::identity()),
     );
     let link2 = Link {
         id: 1,
@@ -65,12 +48,7 @@ pub fn create_cylindrical_rpp(
 
     // Joint 3 — Prismatic en X (extensión radial r)
     let joint3 = JointType::Prismatic(
-        PrismaticJoint::new(
-            2,
-            UnitVector3::x_axis(),
-            JointLimits::new(r_min, r_max),
-            Transform3D::identity(),
-        ),
+        PrismaticJoint::new(2, UnitVector3::x_axis(), limits_j3, Transform3D::identity()),
     );
     let link3 = Link {
         id: 2,

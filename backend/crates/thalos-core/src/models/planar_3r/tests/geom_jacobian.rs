@@ -1,11 +1,11 @@
 use crate::prelude::*;
-use crate::models::factories::create_planar_3r;
+use crate::models::planar_3r::Planar3RSpec;
 
 #[test]
 fn geometric_matches_numerical() {
     let q = [0.4, -0.7, 0.3];
 
-    let robot = create_planar_3r(1.0, 1.0, 1.0);
+    let robot = Planar3RSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
 
     let fk1 = ForwardKinematics::new(robot.clone());
@@ -30,7 +30,7 @@ fn geometric_matches_numerical() {
 
 #[test]
 fn at_zero() {
-    let robot = create_planar_3r(1.0, 1.0, 1.0);
+    let robot = Planar3RSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -63,7 +63,7 @@ fn at_zero() {
 
 #[test]
 fn at_ninety_degrees() {
-    let robot = create_planar_3r(1.0, 1.0, 1.0);
+    let robot = Planar3RSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -89,7 +89,7 @@ fn at_ninety_degrees() {
 
 #[test]
 fn at_folded_configuration() {
-    let robot = create_planar_3r(1.0, 1.0, 1.0);
+    let robot = Planar3RSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -113,7 +113,7 @@ fn at_folded_configuration() {
 
 #[test]
 fn angular_velocity_accumulation() {
-    let robot = create_planar_3r(1.0, 1.0, 1.0);
+    let robot = Planar3RSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -141,7 +141,7 @@ fn angular_velocity_accumulation() {
 
 #[test]
 fn linear_velocity_consistency() {
-    let robot = create_planar_3r(1.0, 1.0, 1.0);
+    let robot = Planar3RSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot.clone());
     let jacobian = GeometricJacobian::new(fk, end_effector.clone());
@@ -173,7 +173,7 @@ fn linear_velocity_consistency() {
 
 #[test]
 fn propagates_velocities() {
-    let robot = create_planar_3r(1.0, 1.0, 1.0);
+    let robot = Planar3RSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot.clone());
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -233,7 +233,7 @@ fn propagates_velocities() {
 
 #[test]
 fn singularity_detection() {
-    let robot = create_planar_3r(1.0, 1.0, 1.0);
+    let robot = Planar3RSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -273,7 +273,7 @@ fn singularity_detection() {
 
 #[test]
 fn linearity() {
-    let robot = create_planar_3r(1.0, 1.0, 1.0);
+    let robot = Planar3RSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -323,7 +323,7 @@ fn linearity() {
 
 #[test]
 fn angular_consistency() {
-    let robot = create_planar_3r(1.0, 1.0, 1.0);
+    let robot = Planar3RSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -356,7 +356,7 @@ fn angular_consistency() {
 
 #[test]
 fn joint_contributions() {
-    let robot = create_planar_3r(1.0, 1.0, 1.0);
+    let robot = Planar3RSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);

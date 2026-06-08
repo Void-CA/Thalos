@@ -1,11 +1,11 @@
 use crate::prelude::*;
-use crate::models::factories::create_single_revolute;
+use crate::models::single_revolute::SingleRevoluteSpec;
 
 #[test]
 fn geometric_matches_numerical() {
     let q = [0.4];
 
-    let robot = create_single_revolute(1.0);
+    let robot = SingleRevoluteSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
 
     let fk1 = ForwardKinematics::new(robot.clone());
@@ -28,7 +28,7 @@ fn geometric_matches_numerical() {
 
 #[test]
 fn at_zero() {
-    let robot = create_single_revolute(1.0);
+    let robot = SingleRevoluteSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -49,7 +49,7 @@ fn at_zero() {
 
 #[test]
 fn at_ninety_degrees() {
-    let robot = create_single_revolute(1.0);
+    let robot = SingleRevoluteSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -65,7 +65,7 @@ fn at_ninety_degrees() {
 
 #[test]
 fn at_pi() {
-    let robot = create_single_revolute(1.0);
+    let robot = SingleRevoluteSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -81,7 +81,7 @@ fn at_pi() {
 
 #[test]
 fn angular_consistency() {
-    let robot = create_single_revolute(1.0);
+    let robot = SingleRevoluteSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -107,7 +107,7 @@ fn angular_consistency() {
 
 #[test]
 fn propagates_velocity() {
-    let robot = create_single_revolute(1.0);
+    let robot = SingleRevoluteSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot.clone());
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -154,7 +154,7 @@ fn propagates_velocity() {
 
 #[test]
 fn linearity() {
-    let robot = create_single_revolute(1.0);
+    let robot = SingleRevoluteSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);
@@ -195,7 +195,7 @@ fn linearity() {
 
 #[test]
 fn velocity_consistency() {
-    let robot = create_single_revolute(1.0);
+    let robot = SingleRevoluteSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot.clone());
     let jacobian = GeometricJacobian::new(fk, end_effector.clone());
@@ -226,7 +226,7 @@ fn velocity_consistency() {
 
 #[test]
 fn linear_magnitude() {
-    let robot = create_single_revolute(1.0);
+    let robot = SingleRevoluteSpec::ideal().build();
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot);
     let jacobian = GeometricJacobian::new(fk, end_effector);

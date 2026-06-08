@@ -146,27 +146,13 @@ impl RobotRegistry {
     /// Construye un robot validando consistencia model↔spec.
     pub fn create(model: RobotModel, spec: RobotSpec) -> Result<SerialChain, RobotModelError> {
         match (&model, &spec) {
-            (RobotModel::Planar2R, RobotSpec::Planar2R(s)) => {
-                Ok(super::planar_2r::factory::create_planar_2r(s.l1, s.l2))
-            }
-            (RobotModel::Planar3R, RobotSpec::Planar3R(s)) => {
-                Ok(super::planar_3r::factory::create_planar_3r(s.l1, s.l2, s.l3))
-            }
-            (RobotModel::SingleRevolute, RobotSpec::SingleRevolute(s)) => {
-                Ok(super::single_revolute::factory::create_single_revolute(s.l))
-            }
-            (RobotModel::Scara, RobotSpec::Scara(s)) => {
-                Ok(s.build())
-            }
-            (RobotModel::Manipulator3DOF, RobotSpec::Manipulator3DOF(s)) => {
-                Ok(super::manipulator_3dof::factory::create_manipulator_3dof(s.l1, s.l2, s.l3))
-            }
-            (RobotModel::CylindricalRPP, RobotSpec::CylindricalRPP(s)) => Ok(
-                super::cylindrical_rpp::factory::create_cylindrical_rpp(s.l1, s.z_min, s.z_max, s.r_min, s.r_max)
-            ),
-            (RobotModel::SphericalPolarRRP, RobotSpec::SphericalPolarRRP(s)) => Ok(
-                super::spherical_polar_rrp::factory::create_spherical_polar_rrp(s.l1, s.r_min, s.r_max)
-            ),
+            (RobotModel::Planar2R, RobotSpec::Planar2R(s)) => Ok(s.build()),
+            (RobotModel::Planar3R, RobotSpec::Planar3R(s)) => Ok(s.build()),
+            (RobotModel::SingleRevolute, RobotSpec::SingleRevolute(s)) => Ok(s.build()),
+            (RobotModel::Scara, RobotSpec::Scara(s)) => Ok(s.build()),
+            (RobotModel::Manipulator3DOF, RobotSpec::Manipulator3DOF(s)) => Ok(s.build()),
+            (RobotModel::CylindricalRPP, RobotSpec::CylindricalRPP(s)) => Ok(s.build()),
+            (RobotModel::SphericalPolarRRP, RobotSpec::SphericalPolarRRP(s)) => Ok(s.build()),
             // 6DOF factory todavía no implementado: caemos al mismatch.
             _ => Err(RobotModelError::ModelSpecMismatch { model, spec }),
         }

@@ -1,8 +1,8 @@
 use crate::prelude::*;
-use crate::models::factories::create_manipulator_3dof;
+use crate::models::manipulator_3dof::Manipulator3DOFSpec;
 
 fn setup() -> (NumericalJacobian, ForwardKinematics, FrameId) {
-    let robot = create_manipulator_3dof(1.0, 1.0, 1.0);
+    let robot = Manipulator3DOFSpec::ideal().build();
     let ee = robot.end_effector().clone();
     let fk = ForwardKinematics::new(robot);
     let jacobian = NumericalJacobian::new(fk.clone(), ee.clone());

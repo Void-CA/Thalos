@@ -1,11 +1,11 @@
 use crate::prelude::*;
-use crate::models::factories::create_planar_2r;
+use crate::models::planar_2r::Planar2RSpec;
 
 
 #[test]
     fn returns_two_poses() {
 
-        let robot = create_planar_2r(1.0, 1.0);
+        let robot = Planar2RSpec::ideal().build();
 
         let fk = ForwardKinematics::new(robot);
 
@@ -23,7 +23,7 @@ use crate::models::factories::create_planar_2r;
     #[test]
     fn all_poses_are_global() {
 
-        let robot = create_planar_2r(1.0, 1.0);
+        let robot = Planar2RSpec::ideal().build();
 
         let fk = ForwardKinematics::new(robot);
 
@@ -49,7 +49,7 @@ use crate::models::factories::create_planar_2r;
     #[test]
     fn zero_configuration_places_end_effector_at_2_0_0() {
 
-        let robot = create_planar_2r(1.0, 1.0);
+        let robot = Planar2RSpec::ideal().build();
 
         let end_effector = robot
             .segments
@@ -82,7 +82,7 @@ use crate::models::factories::create_planar_2r;
     #[test]
     fn first_joint_90_deg_places_end_effector_at_0_2_0() {
 
-        let robot = create_planar_2r(1.0, 1.0);
+        let robot = Planar2RSpec::ideal().build();
 
         let end_effector = robot
             .segments
@@ -115,7 +115,7 @@ use crate::models::factories::create_planar_2r;
     #[test]
     fn folded_configuration_places_end_effector_at_1_1_0() {
 
-        let robot = create_planar_2r(1.0, 1.0);
+        let robot = Planar2RSpec::ideal().build();
 
         let end_effector = robot
             .segments
@@ -148,7 +148,7 @@ use crate::models::factories::create_planar_2r;
     #[test]
     fn first_link_pose_is_correct_at_zero_configuration() {
 
-        let robot = create_planar_2r(1.0, 1.0);
+        let robot = Planar2RSpec::ideal().build();
 
         let first_link = robot
             .segments
@@ -181,7 +181,7 @@ use crate::models::factories::create_planar_2r;
     #[test]
     fn second_joint_rotates_relative_to_first_joint() {
 
-        let robot = create_planar_2r(1.0, 1.0);
+        let robot = Planar2RSpec::ideal().build();
 
         let end_effector = robot
             .segments

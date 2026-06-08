@@ -2,7 +2,7 @@ use std::f64::consts::PI;
 
 use thalos_core::{
     kinematics::forward::ForwardKinematics,
-    models::factories::create_planar_2r,
+    models::planar_2r::Planar2RSpec,
 };
 use thalos_visual::{
     SceneBuilder, SceneError, SceneValidator, VisualScene,
@@ -10,7 +10,7 @@ use thalos_visual::{
 
 #[test]
 fn valid_scene_passes() {
-    let robot = create_planar_2r(1.0, 1.0);
+    let robot = Planar2RSpec::ideal().build();
     let fk = ForwardKinematics::new(robot.clone());
     let builder = SceneBuilder::new(&robot);
     let scene = builder.from_fk(&fk.evaluate(&[0.5, 0.3]));
@@ -166,7 +166,7 @@ fn orphan_link_detected() {
 
 #[test]
 fn twists_mismatch_detected() {
-    let robot = create_planar_2r(1.0, 1.0);
+    let robot = Planar2RSpec::ideal().build();
     let fk = ForwardKinematics::new(robot.clone());
     let builder = SceneBuilder::new(&robot);
     let mut scene = builder.from_fk(&fk.evaluate(&[0.3, 0.5]));
