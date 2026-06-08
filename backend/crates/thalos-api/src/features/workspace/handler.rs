@@ -14,13 +14,14 @@ use axum::{
 use thalos_core::analysis::workspace::WorkspaceConfig;
 use thalos_core::math::geometry::vectors::Vector3;
 use thalos_core::models::RobotModel;
-use thalos_runtime::{SingularityService as RuntimeSingularityService, WorkspaceService as RuntimeWorkspaceService};
+use thalos_runtime::{ManipulabilityService as RuntimeManipulabilityService, SingularityService as RuntimeSingularityService, WorkspaceService as RuntimeWorkspaceService};
 
 use thalos_core::analysis::singularity::SingularityConfig;
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
 use crate::features::workspace::dto::{
+    ManipulabilityRequest, ManipulabilityResponse, ManipulabilitySampleDto,
     ReachabilityDto, ReachabilityRequest, SampleRequest,
     SingularityRequest, SingularityResponse, SingularitySampleDto,
     WorkspaceDto, WorkspaceSampleDto,
@@ -107,6 +108,36 @@ pub async fn singularity(
     };
 
     Ok(Json(SingularityResponse {
+        metrics: analysis.metrics.into(),
+        samples,
+    }))
+}
+
+/// POST /api/v1/workspace/manipulability
+pub async fn manipulability(
+    State(_state): State<Arc<AppState>>,
+    Json(req): Json<ManipulabilityRequest>,
+) -> ApiResult<ManipulabilityResponse> {
+    let model = RobotModel::from_id(&req.robot_id)
+        .map_err(|_| ApiError::NotFound {
+            message: format!("Robot '{}' not found", req.robot_id),
+        })?;
+
+    let config = thalos_core::analysis::workspace::WorkspaceConfig {
+        samples: req.samples,
+        seed: req.seed,
+        tolerance: req.tolerance,
+    };
+
+    let analysis = RuntimeManipulabilityService::analyze(model, config)?;
+
+    let samples = if req.include_samples {
+        Some(analysis.samples.iter().map(ManipulabilitySampleDto::from).collect())
+    } else {
+        None
+    };
+
+    Ok(Json(ManipulabilityResponse {
         metrics: analysis.metrics.into(),
         samples,
     }))

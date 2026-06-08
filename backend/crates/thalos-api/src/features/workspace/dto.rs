@@ -6,6 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use thalos_core::analysis::manipulability::ManipulabilityMetrics;
 use thalos_core::analysis::singularity::{
     SingularityMetrics, SingularityState,
 };
@@ -165,6 +166,74 @@ impl From<&thalos_core::analysis::singularity::SingularitySample> for Singularit
                 SingularityState::NearSingular => "near_singular".into(),
                 SingularityState::Singular => "singular".into(),
             },
+        }
+    }
+}
+
+// ─── Manipulability DTOs ────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct ManipulabilityRequest {
+    pub robot_id: String,
+    #[serde(default = "default_samples")]
+    pub samples: usize,
+    #[serde(default)]
+    pub seed: u64,
+    #[serde(default = "default_tolerance")]
+    pub tolerance: f64,
+    #[serde(default)]
+    pub include_samples: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ManipulabilityResponse {
+    pub metrics: ManipulabilityMetricsDto,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub samples: Option<Vec<ManipulabilitySampleDto>>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ManipulabilityMetricsDto {
+    pub total_samples: usize,
+    pub avg_yoshikawa: f64,
+    pub min_yoshikawa: f64,
+    pub max_yoshikawa: f64,
+    pub avg_isotropy: f64,
+    pub min_isotropy: f64,
+    pub max_isotropy: f64,
+}
+
+impl From<ManipulabilityMetrics> for ManipulabilityMetricsDto {
+    fn from(m: ManipulabilityMetrics) -> Self {
+        Self {
+            total_samples: m.total_samples,
+            avg_yoshikawa: m.avg_yoshikawa,
+            min_yoshikawa: m.min_yoshikawa,
+            max_yoshikawa: m.max_yoshikawa,
+            avg_isotropy: m.avg_isotropy,
+            min_isotropy: m.min_isotropy,
+            max_isotropy: m.max_isotropy,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct ManipulabilitySampleDto {
+    pub position: PointDto,
+    pub yoshikawa: f64,
+    pub isotropy: f64,
+}
+
+impl From<&thalos_core::analysis::manipulability::ManipulabilitySample> for ManipulabilitySampleDto {
+    fn from(s: &thalos_core::analysis::manipulability::ManipulabilitySample) -> Self {
+        Self {
+            position: PointDto {
+                x: s.position.x,
+                y: s.position.y,
+                z: s.position.z,
+            },
+            yoshikawa: s.manipulability.yoshikawa,
+            isotropy: s.manipulability.isotropy,
         }
     }
 }
