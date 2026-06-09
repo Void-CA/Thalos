@@ -5,4 +5,6 @@ members = [
     "crates/thalos-api",
     "crates/thalos-core",
     "crates/thalos-visual",
-    "crates/thalos-runtime"]
+    "crates/thalos-runtime", 
+    "crates/thalos-planning"
+    ]

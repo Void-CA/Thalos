@@ -1363,6 +1363,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "thalos-planning"
+version = "0.1.0"
+
+[[package]]
 name = "thalos_api"
 version = "0.1.0"
 dependencies = [
