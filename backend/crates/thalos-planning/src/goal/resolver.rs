@@ -7,12 +7,14 @@ use thalos_core::{
     spatial::pose::Pose,
 };
 
+use thalos_core::robot::state::RobotState;
+
 use crate::{
     error::{IkFailureReason, PlanningError},
     motion::planner::PlanningContext,
 };
 
-use super::types::{GoalMetadata, JointGoal, PoseGoal, ValidatedGoal};
+use super::types::{GoalMetadata, JointGoal, ResolvedPoseGoal, ValidatedGoal};
 
 #[derive(Debug, Clone)]
 pub struct GoalResolverConfig {
@@ -50,7 +52,7 @@ impl GoalResolver {
         &self,
         ctx: &PlanningContext,
         pose: &Pose,
-    ) -> Result<ValidatedGoal<PoseGoal>, PlanningError> {
+    ) -> Result<ValidatedGoal<ResolvedPoseGoal>, PlanningError> {
         let ik_result = ctx
             .ik_solver
             .solve(ctx.current_state.as_slice(), IKGoal::Pose(pose.clone()));
@@ -81,7 +83,10 @@ impl GoalResolver {
         }
 
         Ok(ValidatedGoal {
-            goal: PoseGoal(pose.clone()),
+            goal: ResolvedPoseGoal {
+                pose: pose.clone(),
+                state: RobotState::new(ik_result.q),
+            },
             metadata,
         })
     }

@@ -8,7 +8,7 @@ use thalos_core::{
 
 use crate::{
     error::PlanningError,
-    goal::{PoseGoal, ValidatedGoal},
+    goal::{ResolvedPoseGoal, ValidatedGoal},
     interpolate::cartesian,
     motion::planner::{MotionPlanner, PlanningContext, PlanningResult},
     trajectory::{Trajectory, TrajectoryPoint},
@@ -50,14 +50,14 @@ impl Default for MoveLPlanner {
 }
 
 impl MotionPlanner for MoveLPlanner {
-    type Goal = PoseGoal;
+    type Goal = ResolvedPoseGoal;
 
     fn plan(
         &self,
         ctx: &PlanningContext,
-        goal: &ValidatedGoal<PoseGoal>,
+        goal: &ValidatedGoal<ResolvedPoseGoal>,
     ) -> PlanningResult {
-        let target_pose = &goal.goal.0;
+        let target_pose = &goal.goal.pose;
 
         let fk = ForwardKinematics::new(ctx.robot.clone());
         let fk_result = fk.evaluate(ctx.current_state.as_slice());
@@ -82,25 +82,32 @@ impl MotionPlanner for MoveLPlanner {
         let mut q_current = ctx.current_state.as_slice().to_vec();
 
         for (i, transform) in cartesian_waypoints.iter().enumerate() {
-            let waypoint_pose = Pose::new(
-                target_pose.reference_id(),
-                target_pose.target_id(),
-                transform.clone(),
-            );
+            let is_last = i == n - 1;
 
-            let ik_result = ctx
-                .ik_solver
-                .solve(&q_current, IKGoal::Pose(waypoint_pose));
+            if is_last {
+                // Use the validated resolved state — the resolver already paid IK + analysis
+                q_current = goal.goal.state.as_slice().to_vec();
+            } else {
+                let waypoint_pose = Pose::new(
+                    target_pose.reference_id(),
+                    target_pose.target_id(),
+                    transform.clone(),
+                );
 
-            match ik_result.status {
-                IKStatus::Converged => {
-                    q_current = ik_result.q;
-                }
-                IKStatus::MaxIterations => {
-                    return Err(PlanningError::IkFailed {
-                        target_pose: target_pose.clone(),
-                        reason: crate::error::IkFailureReason::NoSolution,
-                    });
+                let ik_result = ctx
+                    .ik_solver
+                    .solve(&q_current, IKGoal::Pose(waypoint_pose));
+
+                match ik_result.status {
+                    IKStatus::Converged => {
+                        q_current = ik_result.q;
+                    }
+                    IKStatus::MaxIterations => {
+                        return Err(PlanningError::IkFailed {
+                            target_pose: target_pose.clone(),
+                            reason: crate::error::IkFailureReason::NoSolution,
+                        });
+                    }
                 }
             }
 
@@ -125,7 +132,7 @@ impl MotionPlanner for MoveLPlanner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::goal::GoalMetadata;
+    use crate::goal::{GoalMetadata, ResolvedPoseGoal};
     use thalos_core::{
         kinematics::inverse::{IKResult, IKSolver},
         models::{RobotModel, RobotRegistry},
@@ -157,7 +164,10 @@ mod tests {
         let target_pose = result.ee_pose().cloned().unwrap();
 
         let goal = ValidatedGoal {
-            goal: PoseGoal(target_pose),
+            goal: ResolvedPoseGoal {
+                pose: target_pose,
+                state: RobotState::new(vec![0.5, 0.3]),
+            },
             metadata: GoalMetadata::default(),
         };
 
