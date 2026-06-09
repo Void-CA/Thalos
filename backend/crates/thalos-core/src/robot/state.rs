@@ -17,4 +17,8 @@ impl RobotState {
     pub fn zero(dof: usize) -> Self {
         Self { joints: vec![0.0; dof] }
     }
+
+    pub fn as_slice(&self) -> &[f64] {
+        &self.joints
+    }
 }
