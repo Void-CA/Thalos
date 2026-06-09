@@ -5,6 +5,8 @@ pub use crate::robot::{
     segment::Segment,
     error::RobotBuilderError,
     builder::SerialChainBuilder,
+    state::RobotState,
+    active_robot::ActiveRobot,
 };
 
 pub use crate::math::{

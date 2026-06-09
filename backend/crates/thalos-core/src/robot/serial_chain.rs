@@ -2,7 +2,7 @@ use crate::spatial::frame::{Frame, FrameId, FrameRegistry};
 
 use super::segment::Segment;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct SerialChain {
     pub segments: Vec<Segment>,
     pub frames: FrameRegistry,
