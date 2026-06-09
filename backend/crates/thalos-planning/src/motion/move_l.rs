@@ -132,7 +132,7 @@ impl MotionPlanner for MoveLPlanner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::goal::{GoalMetadata, ResolvedPoseGoal};
+    use crate::goal::{GoalMetadata, PlanningAssessment, ResolvedPoseGoal};
     use thalos_core::{
         kinematics::inverse::{IKResult, IKSolver},
         models::{RobotModel, RobotRegistry},
@@ -169,6 +169,7 @@ mod tests {
                 state: RobotState::new(vec![0.5, 0.3]),
             },
             metadata: GoalMetadata::default(),
+            assessment: PlanningAssessment::accepted(),
         };
 
         let traj = planner.plan(&ctx, &goal).expect("plan should succeed");

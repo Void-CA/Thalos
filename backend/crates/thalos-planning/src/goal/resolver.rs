@@ -14,12 +14,12 @@ use crate::{
     motion::planner::PlanningContext,
 };
 
-use super::types::{GoalMetadata, JointGoal, ResolvedPoseGoal, ValidatedGoal};
+use super::policy::PlanningPolicy;
+use super::types::{GoalMetadata, JointGoal, MetricAction, ResolvedPoseGoal, ValidatedGoal};
 
 #[derive(Debug, Clone)]
 pub struct GoalResolverConfig {
-    pub check_singularity: bool,
-    pub singularity_threshold: f64,
+    pub policy: PlanningPolicy,
     pub check_joint_limits: bool,
     pub strict_limits: bool,
 }
@@ -27,18 +27,13 @@ pub struct GoalResolverConfig {
 impl Default for GoalResolverConfig {
     fn default() -> Self {
         Self {
-            check_singularity: true,
-            singularity_threshold: 1000.0,
+            policy: PlanningPolicy::default(),
             check_joint_limits: true,
             strict_limits: true,
         }
     }
 }
 
-/// Validates goals and enriches them with singularity/manipulability metadata.
-///
-/// Singularities are never treated as hard errors — they are reported
-/// as metadata so the caller or planner decides how to handle them.
 pub struct GoalResolver {
     pub config: GoalResolverConfig,
 }
@@ -73,14 +68,9 @@ impl GoalResolver {
             self.validate_joint_limits(ctx, &ik_result.q)?;
         }
 
-        if self.config.check_singularity {
-            if let Some((singularity, manipulability)) =
-                self.analyze_configuration(ctx, &ik_result.q)
-            {
-                metadata.singularity = Some(singularity);
-                metadata.manipulability = Some(manipulability);
-            }
-        }
+        let q = &ik_result.q;
+        self.enrich_metadata(ctx, q, &mut metadata);
+        let assessment = self.config.policy.evaluate(&metadata);
 
         Ok(ValidatedGoal {
             goal: ResolvedPoseGoal {
@@ -88,6 +78,7 @@ impl GoalResolver {
                 state: RobotState::new(ik_result.q),
             },
             metadata,
+            assessment,
         })
     }
 
@@ -102,19 +93,30 @@ impl GoalResolver {
             self.validate_joint_limits(ctx, target)?;
         }
 
-        if self.config.check_singularity {
-            if let Some((singularity, manipulability)) =
-                self.analyze_configuration(ctx, target)
-            {
-                metadata.singularity = Some(singularity);
-                metadata.manipulability = Some(manipulability);
-            }
-        }
+        self.enrich_metadata(ctx, target, &mut metadata);
+        let assessment = self.config.policy.evaluate(&metadata);
 
         Ok(ValidatedGoal {
             goal: JointGoal(target.to_vec()),
             metadata,
+            assessment,
         })
+    }
+
+    /// Populate metadata with singularity/manipulability when at least one
+    /// policy metric is active. Avoids paying SVD cost when everything is `Ignore`.
+    fn enrich_metadata(&self, ctx: &PlanningContext, q: &[f64], metadata: &mut GoalMetadata) {
+        let active = !matches!(
+            (self.config.policy.singularity, self.config.policy.manipulability),
+            (MetricAction::Ignore, MetricAction::Ignore)
+        );
+
+        if active {
+            if let Some((singularity, manipulability)) = self.analyze_configuration(ctx, q) {
+                metadata.singularity = Some(singularity);
+                metadata.manipulability = Some(manipulability);
+            }
+        }
     }
 
     fn validate_joint_limits(

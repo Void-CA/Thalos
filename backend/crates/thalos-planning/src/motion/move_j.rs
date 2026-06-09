@@ -47,7 +47,7 @@ impl MotionPlanner for MoveJPlanner {
         goal: &ValidatedGoal<JointGoal>,
     ) -> PlanningResult {
         let start = ctx.current_state.as_slice();
-        let target = &goal.goal.0;
+        let target = &goal.goal.as_slice();
 
         let waypoints = joint::trapezoidal_profile(
             start,
@@ -64,7 +64,7 @@ impl MotionPlanner for MoveJPlanner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::goal::GoalMetadata;
+    use crate::goal::{GoalMetadata, PlanningAssessment};
     use thalos_core::{
         kinematics::inverse::{IKGoal, IKResult, IKSolver},
         models::{RobotModel, RobotRegistry},
@@ -93,6 +93,7 @@ mod tests {
         let goal = ValidatedGoal {
             goal: JointGoal(vec![1.0, 1.0]),
             metadata: GoalMetadata::default(),
+            assessment: PlanningAssessment::accepted(),
         };
         let traj = planner.plan(&ctx, &goal).expect("plan should succeed");
         assert!(!traj.is_empty(), "trajectory should have waypoints");
@@ -113,6 +114,7 @@ mod tests {
         let goal = ValidatedGoal {
             goal: JointGoal(target.clone()),
             metadata: GoalMetadata::default(),
+            assessment: PlanningAssessment::accepted(),
         };
         let traj = planner.plan(&ctx, &goal).expect("plan should succeed");
         let first = &traj.waypoints()[0];
