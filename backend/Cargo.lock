@@ -1367,6 +1367,7 @@ name = "thalos-planning"
 version = "0.1.0"
 dependencies = [
  "thalos_core",
+ "thiserror",
 ]
 
 [[package]]
