@@ -3,7 +3,9 @@ use thalos_core::{
     robot::{serial_chain::SerialChain, state::RobotState},
 };
 
-use crate::{error::PlanningError, goal::ValidatedGoal, trajectory::Trajectory};
+use thalos_core::trajectory::Trajectory;
+
+use crate::{error::PlanningError, goal::ValidatedGoal};
 
 pub struct PlanningContext<'a> {
     pub robot: &'a SerialChain,

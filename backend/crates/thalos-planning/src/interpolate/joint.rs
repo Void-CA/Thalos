@@ -1,4 +1,4 @@
-use crate::trajectory::TrajectoryPoint;
+use thalos_core::trajectory::TrajectoryPoint;
 
 pub fn lerp(start: &[f64], end: &[f64], t: f64) -> Vec<f64> {
     let t = t.clamp(0.0, 1.0);

@@ -1404,6 +1404,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "rand",
+ "thalos-planning",
  "thalos_core",
  "thiserror",
 ]
