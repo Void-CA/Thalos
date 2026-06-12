@@ -18,7 +18,10 @@ pub use crate::math::{
     constants::{EPS, PI, PI_2}
 };
 
-pub use crate::spatial::frame::{FrameId, Frame, FrameRegistry};
+pub use crate::spatial::{
+    frame::{FrameId, Frame, FrameRegistry},
+    pose::Pose
+    };
 
 pub use crate::kinematics::{
     forward::ForwardKinematics,
