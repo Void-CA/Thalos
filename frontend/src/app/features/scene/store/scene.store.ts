@@ -113,6 +113,9 @@ export class SceneStore {
   /** Input stream: gizmo target position (no API call — just UX state). */
   private readonly targetSubject = new Subject<IkTarget | null>();
 
+  /** Input stream: external state snapshots (MoveJ/MoveL results, etc.). */
+  private readonly applySnapshotSubject = new Subject<RuntimeStateResponse>();
+
   /** Single source of truth: latest scene data + UI state. */
   readonly state$: Observable<SceneState> = merge(
     // Pipeline 1: joint angle changes → setJoints API
@@ -207,6 +210,11 @@ export class SceneStore {
     this.targetSubject.pipe(
       map(target => ({ type: 'target' as const, target })),
     ),
+
+    // Pipeline 7: external state snapshots (MoveJ/MoveL results, etc.)
+    this.applySnapshotSubject.pipe(
+      map(toSceneEvent),
+    ),
   ).pipe(
     scan((state, event): SceneState => {
       switch (event.type) {
@@ -286,5 +294,10 @@ export class SceneStore {
   /** Update the gizmo target position (no API call). */
   updateTarget(target: IkTarget | null): void {
     this.targetSubject.next(target);
+  }
+
+  /** Inject a full runtime state snapshot into the store (from MoveJ/MoveL, etc.). */
+  applySnapshot(res: RuntimeStateResponse): void {
+    this.applySnapshotSubject.next(res);
   }
 }

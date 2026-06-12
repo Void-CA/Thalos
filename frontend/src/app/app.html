@@ -1,35 +1,75 @@
 <div class="layout">
-  <aside class="catalog-panel">
-    <robot-catalog />
-  </aside>
-  <scene-viewer class="viewport" />
-  <aside class="right-sidebar">
-    <details class="accordion" open>
-      <summary class="accordion__header">
-        <span class="accordion__title">Forward Kinematics</span>
-        <span class="accordion__chevron" aria-hidden="true"></span>
-      </summary>
-      <div class="accordion__body">
-        <joint-control />
-      </div>
-    </details>
-    <details class="accordion" open>
-      <summary class="accordion__header">
-        <span class="accordion__title">Inverse Kinematics</span>
-        <span class="accordion__chevron" aria-hidden="true"></span>
-      </summary>
-      <div class="accordion__body">
-        <ik-target-panel />
-      </div>
-    </details>
-    <details class="accordion">
-      <summary class="accordion__header">
-        <span class="accordion__title">Workspace Analysis</span>
-        <span class="accordion__chevron" aria-hidden="true"></span>
-      </summary>
-      <div class="accordion__body">
-        <workspace-panel />
-      </div>
-    </details>
-  </aside>
+  <!-- ── Top Bar: mode + system status ── -->
+  <top-bar class="layout__top" />
+
+  <!-- ── Main content area ── -->
+  <div class="layout__body">
+    <!-- LEFT — always visible: robot catalog -->
+    <aside class="layout__left">
+      <robot-catalog />
+    </aside>
+
+    <!-- CENTER — pure Three.js renderer -->
+    <scene-viewer class="layout__center" />
+
+    <!-- RIGHT — dynamic tool context per mode -->
+    <aside class="layout__right">
+      @switch (modeStore.mode()) {
+        @case ('analysis') {
+          <details class="accordion" open>
+            <summary class="accordion__header">
+              <span class="accordion__title">Forward Kinematics</span>
+              <span class="accordion__chevron"></span>
+            </summary>
+            <div class="accordion__body">
+              <joint-control />
+            </div>
+          </details>
+          <details class="accordion" open>
+            <summary class="accordion__header">
+              <span class="accordion__title">Inverse Kinematics</span>
+              <span class="accordion__chevron"></span>
+            </summary>
+            <div class="accordion__body">
+              <ik-target-panel />
+            </div>
+          </details>
+          <details class="accordion">
+            <summary class="accordion__header">
+              <span class="accordion__title">Workspace Analysis</span>
+              <span class="accordion__chevron"></span>
+            </summary>
+            <div class="accordion__body">
+              <workspace-panel />
+            </div>
+          </details>
+        }
+        @case ('planning') {
+          <details class="accordion" open>
+            <summary class="accordion__header">
+              <span class="accordion__title">Motion Planning</span>
+              <span class="accordion__chevron"></span>
+            </summary>
+            <div class="accordion__body">
+              <planning-panel />
+            </div>
+          </details>
+        }
+        @case ('execution') {
+          <details class="accordion" open>
+            <summary class="accordion__header">
+              <span class="accordion__title">Execution</span>
+              <span class="accordion__chevron"></span>
+            </summary>
+            <div class="accordion__body">
+              <p class="layout__placeholder">Execution controls coming soon</p>
+            </div>
+          </details>
+        }
+      }
+    </aside>
+  </div>
+
+  <!-- ── Bottom: system observability ── -->
+  <bottom-panel class="layout__bottom" />
 </div>

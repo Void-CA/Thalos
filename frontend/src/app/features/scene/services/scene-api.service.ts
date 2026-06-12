@@ -81,4 +81,24 @@ export class SceneApiService {
       { joint_angles: jointAngles } as ExecuteIKRequest,
     );
   }
+
+  // ── Motion endpoints (MoveJ / MoveL) ──
+
+  moveJ(target: number[], velocity?: number): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/motion/movej`,
+      { target, ...(velocity !== undefined ? { velocity } : {}) },
+    );
+  }
+
+  moveL(
+    target: MoveToPoseRequest['target'],
+    frame_id?: number,
+    velocity?: number,
+  ): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/motion/movel`,
+      { target, ...(frame_id !== undefined ? { frame_id } : {}), ...(velocity !== undefined ? { velocity } : {}) },
+    );
+  }
 }

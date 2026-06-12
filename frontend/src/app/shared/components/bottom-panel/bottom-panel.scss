@@ -1,0 +1,34 @@
+@use 'variables' as *;
+
+.bottom-panel {
+  background: $bg-surface;
+  border-top: 1px solid $border-subtle;
+  padding: 0.5rem 1rem;
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 0.7rem;
+
+  &__section {
+    &[open] > &__header {
+      margin-bottom: 0.5rem;
+    }
+  }
+
+  &__header {
+    cursor: pointer;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: $text-secondary;
+    font-weight: 600;
+    user-select: none;
+  }
+
+  &__json {
+    margin: 0;
+    color: $text-muted;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+}
