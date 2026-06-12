@@ -648,3 +648,182 @@ async fn workspace_sample_invalid_robot_returns_not_found() {
     let body = body.expect("response must be valid JSON");
     assert_eq!(body["code"], "not_found");
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Motion endpoints — MoveJ / MoveL (#18)
+// ────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn movej_accepts_valid_request() {
+    let app = test_app();
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/motion/movej",
+        Some(json!({
+            "target": [1.0, 0.5],
+            "velocity": 1.0,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+    assert_eq!(body["status"], "accepted");
+    assert_eq!(body["target_joints"], json!([1.0, 0.5]));
+}
+
+#[tokio::test]
+async fn movej_accepts_minimal_request() {
+    let app = test_app();
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/motion/movej",
+        Some(json!({
+            "target": [0.5, -0.3],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+    assert_eq!(body["status"], "accepted");
+    assert_eq!(body["target_joints"], json!([0.5, -0.3]));
+}
+
+#[tokio::test]
+async fn movej_rejects_missing_target() {
+    let app = test_app();
+    let (status, _body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/motion/movej",
+        Some(json!({
+            "velocity": 1.0,
+        })),
+    )
+    .await;
+    assert!(
+        status.is_client_error(),
+        "missing target must be rejected, got {status}",
+    );
+}
+
+#[tokio::test]
+async fn movej_updates_runtime_joints() {
+    let app = test_app();
+    // Execute MoveJ
+    let (status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/motion/movej",
+        Some(json!({
+            "target": [1.0, 2.0],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Verify the runtime state was updated
+    let (status, body) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+    assert_eq!(body["joints"], json!([1.0, 2.0]));
+}
+
+#[tokio::test]
+async fn movel_accepts_valid_request() {
+    let app = test_app();
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/motion/movel",
+        Some(json!({
+            "target": {
+                "translation": [0.3, 0.4, 0.0],
+                "rotation": {
+                    "kind": "Quaternion",
+                    "value": { "w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0 }
+                }
+            }
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+    assert_eq!(body["status"], "accepted");
+}
+
+#[tokio::test]
+async fn movel_accepts_with_frame_id() {
+    let app = test_app();
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/motion/movel",
+        Some(json!({
+            "frame_id": 1,
+            "target": {
+                "translation": [0.5, 0.0, 0.0],
+                "rotation": {
+                    "kind": "Quaternion",
+                    "value": { "w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0 }
+                }
+            },
+            "velocity": 0.5,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+    assert_eq!(body["status"], "accepted");
+}
+
+#[tokio::test]
+async fn movel_rejects_missing_target() {
+    let app = test_app();
+    let (status, _body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/motion/movel",
+        Some(json!({
+            "frame_id": 0,
+        })),
+    )
+    .await;
+    assert!(
+        status.is_client_error(),
+        "missing target must be rejected, got {status}",
+    );
+}
+
+#[tokio::test]
+async fn movel_with_unreachable_target_still_returns_accepted() {
+    // Even when IK fails to converge, the endpoint should still produce
+    // a valid response — the runtime applies the best-effort result.
+    let app = test_app();
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/motion/movel",
+        Some(json!({
+            "target": {
+                "translation": [100.0, 100.0, 0.0],
+                "rotation": {
+                    "kind": "Quaternion",
+                    "value": { "w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0 }
+                }
+            }
+        })),
+    )
+    .await;
+    // The endpoint still accepts the request — IK failure is not an HTTP error
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+    assert_eq!(body["status"], "accepted");
+    // Joints should be finite (no NaN from failed IK)
+    let joints = body["target_joints"].as_array().expect("target_joints must be an array");
+    for j in joints {
+        let val = j.as_f64().unwrap();
+        assert!(val.is_finite(), "joint {val} must be finite");
+    }
+}
