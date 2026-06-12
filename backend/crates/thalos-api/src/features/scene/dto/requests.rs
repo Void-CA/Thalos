@@ -10,6 +10,7 @@ use thalos_core::{
     models::{RobotModel, RobotModelError},
     spatial::{frame::FrameId, pose::Pose},
 };
+use thalos_runtime::commands::kinematics::KinematicsCommand;
 use thalos_runtime::Command;
 
 use super::responses::VisualSceneDto;
@@ -121,7 +122,7 @@ impl MoveToPositionRequest {
     pub fn into_command(&self, default_ee: FrameId) -> Command {
         let frame = self.frame_id.map_or(default_ee, FrameId::Id);
         let target = Vector3::new(self.target[0], self.target[1], self.target[2]);
-        Command::MoveToPosition { frame, target }
+        Command::Kinematics(KinematicsCommand::MoveToPosition { frame, target })
     }
 
     /// Build an IKGoal from this request (no Command wrapping).
@@ -138,7 +139,7 @@ impl MoveToPoseRequest {
     pub fn into_command(&self, default_ee: FrameId) -> Command {
         let frame = self.frame_id.map_or(default_ee, FrameId::Id);
         let target = self.target.to_pose(frame);
-        Command::MoveToPose { frame, target }
+        Command::Kinematics(KinematicsCommand::MoveToPose { frame, target })
     }
 
     /// Build an IKGoal from this request (no Command wrapping).
