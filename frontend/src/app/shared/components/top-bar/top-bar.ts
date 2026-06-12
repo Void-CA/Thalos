@@ -23,11 +23,6 @@ import type { AppMode } from '../../types/app-mode';
       </div>
 
       <div class="top-bar__spacer"></div>
-
-      <div class="top-bar__status">
-        <span class="top-bar__dot top-bar__dot--online"></span>
-        <span class="top-bar__status-text">Connected</span>
-      </div>
     </header>
   `,
   styleUrl: './top-bar.scss',
