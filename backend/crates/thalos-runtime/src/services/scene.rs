@@ -59,6 +59,8 @@ impl SceneService {
             chain: runtime.active_robot.chain.clone(),
             fk_result,
             ik_result,
+            active_trajectory: runtime.active_trajectory.clone(),
+            trajectory_progress: runtime.trajectory_progress(),
             generated_at: chrono::Utc::now(),
         })
     }
@@ -94,6 +96,8 @@ impl SceneService {
             chain: runtime.active_robot.chain.clone(),
             fk_result,
             ik_result,
+            active_trajectory: runtime.active_trajectory.clone(),
+            trajectory_progress: runtime.trajectory_progress(),
             generated_at: chrono::Utc::now(),
         })
     }

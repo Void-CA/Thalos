@@ -6,6 +6,7 @@ use thalos_core::{
         inverse::result::IKResult,
     },
     models::RobotModel,
+    prelude::Trajectory,
     robot::serial_chain::SerialChain,
 };
 
@@ -25,6 +26,10 @@ pub struct RuntimeSnapshot {
     pub fk_result: FKResult,
     /// Solver metadata when this snapshot was produced by an IK command.
     pub ik_result: Option<IKResult>,
+    /// Active planned trajectory, if any.
+    pub active_trajectory: Option<Trajectory>,
+    /// Progress of the active trajectory as a fraction 0.0–1.0.
+    pub trajectory_progress: Option<f64>,
     /// When this snapshot was taken.
     pub generated_at: DateTime<Utc>,
 }

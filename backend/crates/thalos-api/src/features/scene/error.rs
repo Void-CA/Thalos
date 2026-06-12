@@ -7,6 +7,7 @@ impl From<RuntimeError> for ApiError {
         match e {
             RuntimeError::RobotModel(e) => e.into(),
             RuntimeError::Workspace(e) => e.into(),
+            RuntimeError::Planning(e) => e.into()
         }
     }
 }

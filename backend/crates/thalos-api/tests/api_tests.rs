@@ -827,3 +827,35 @@ async fn movel_with_unreachable_target_still_returns_accepted() {
         assert!(val.is_finite(), "joint {val} must be finite");
     }
 }
+
+// ─── Trajectory state lifecycle (#23) ─────────────────────────────
+
+#[tokio::test]
+async fn movej_trajectory_persists_across_scene_snapshots() {
+    let app = test_app();
+
+    // Execute MoveJ → stores trajectory in runtime
+    let (status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/motion/movej",
+        Some(json!({
+            "target": [0.7, -0.4],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // First scene snapshot: joints should be at target
+    let (status, body) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+    assert_eq!(body["joints"], json!([0.7, -0.4]));
+
+    // Second scene snapshot (no mutation in between): state is consistent
+    let (status, body) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+    assert_eq!(body["joints"], json!([0.7, -0.4]));
+    assert_eq!(body["robot"]["dof"], 2);
+}

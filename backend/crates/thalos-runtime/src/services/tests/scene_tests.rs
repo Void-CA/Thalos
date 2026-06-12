@@ -2,6 +2,7 @@
 use crate::{
     backends::InternalBackend,
     commands::kinematics::KinematicsCommand,
+    commands::motion::MotionCommands,
     Command, RuntimeSnapshot, SceneService,
 };
 use thalos_core::{
@@ -352,5 +353,182 @@ fn move_to_position_unreachable_still_produces_valid_fk() {
     for &j in &snap.joints {
         assert!(j.is_finite(), "joint {} is not finite", j);
     }
+}
+
+
+// ─── PlanAndMoveJ (joint-space trajectory) ─────────────────────────
+
+#[test]
+fn plan_and_movej_stores_trajectory_in_snapshot() {
+    let svc = make_service(RobotModel::Planar2R);
+    let initial = svc.snapshot().unwrap();
+    assert!(
+        initial.active_trajectory.is_none(),
+        "initial snapshot must not have active_trajectory",
+    );
+    assert!(
+        initial.trajectory_progress.is_none(),
+        "initial snapshot must not have trajectory_progress",
+    );
+
+    let snap = svc
+        .execute(Command::Motion(MotionCommands::PlanAndMoveJ {
+            target: vec![1.0, 0.5],
+            max_velocity: None,
+            max_acceleration: None,
+            time_step: None,
+        }))
+        .unwrap();
+
+    let traj = snap
+        .active_trajectory
+        .as_ref()
+        .expect("snapshot must have active_trajectory after PlanAndMoveJ");
+    assert!(
+        traj.len() >= 2,
+        "trajectory should have at least 2 waypoints, got {}",
+        traj.len(),
+    );
+
+    let progress = snap
+        .trajectory_progress
+        .expect("snapshot must have trajectory_progress");
+    assert!(
+        (0.0..=1.0).contains(&progress),
+        "trajectory_progress must be in [0, 1], got {progress}",
+    );
+}
+
+#[test]
+fn plan_and_movej_reaches_target_position() {
+    let svc = make_service(RobotModel::Planar2R);
+    let target = vec![1.5, -0.8];
+
+    let snap = svc
+        .execute(Command::Motion(MotionCommands::PlanAndMoveJ {
+            target: target.clone(),
+            max_velocity: None,
+            max_acceleration: None,
+            time_step: None,
+        }))
+        .unwrap();
+
+    assert_eq!(snap.joints, target, "joints must match the target after PlanAndMoveJ");
+}
+
+#[test]
+fn plan_and_movej_trajectory_starts_at_initial_position() {
+    let svc = make_service(RobotModel::Planar2R);
+    let initial = svc.snapshot().unwrap().joints;
+
+    let snap = svc
+        .execute(Command::Motion(MotionCommands::PlanAndMoveJ {
+            target: vec![1.0, 0.5],
+            max_velocity: None,
+            max_acceleration: None,
+            time_step: None,
+        }))
+        .unwrap();
+
+    let traj = snap.active_trajectory.as_ref().unwrap();
+    let first_waypoint = &traj.waypoints()[0];
+
+    assert_eq!(
+        first_waypoint.joints(),
+        &initial,
+        "first waypoint must equal initial position",
+    );
+}
+
+#[test]
+fn plan_and_movej_with_velocity_param() {
+    let svc = make_service(RobotModel::Planar2R);
+
+    let snap = svc
+        .execute(Command::Motion(MotionCommands::PlanAndMoveJ {
+            target: vec![0.5, -0.3],
+            max_velocity: Some(2.0),
+            max_acceleration: Some(1.0),
+            time_step: None,
+        }))
+        .unwrap();
+
+    assert_eq!(snap.joints, vec![0.5, -0.3]);
+    assert!(snap.active_trajectory.is_some());
+}
+
+
+// ─── PlanAndMoveL (cartesian → joint-space trajectory) ─────────────
+
+#[test]
+fn plan_and_movel_stores_trajectory_in_snapshot() {
+    let svc = make_service(RobotModel::Planar2R);
+    let snap0 = svc.snapshot().unwrap();
+    let ee = *snap0.chain.end_effector();
+
+    let target_pos = Vector3::new(0.3, 0.4, 0.0);
+    let target_pose = Pose::new(
+        FrameId::World,
+        ee,
+        Transform3D {
+            translation: target_pos,
+            rotation: UnitQuaternion::identity(),
+        },
+    );
+
+    let snap = svc
+        .execute(Command::Motion(MotionCommands::PlanAndMoveL {
+            frame: ee,
+            target_pose,
+            max_velocity: None,
+            max_acceleration: None,
+            time_step: None,
+            cartesian_step: None,
+        }))
+        .unwrap();
+
+    let traj = snap
+        .active_trajectory
+        .as_ref()
+        .expect("snapshot must have active_trajectory after PlanAndMoveL");
+    assert!(
+        traj.len() >= 2,
+        "trajectory should have at least 2 waypoints, got {}",
+        traj.len(),
+    );
+
+    // Joints must be finite
+    for &j in &snap.joints {
+        assert!(j.is_finite(), "joint {} is not finite", j);
+    }
+}
+
+#[test]
+fn snapshot_includes_trajectory_after_plan_command() {
+    let svc = make_service(RobotModel::Planar2R);
+
+    let snap1 = svc.snapshot().unwrap();
+    assert!(snap1.active_trajectory.is_none());
+
+    svc.execute(Command::Motion(MotionCommands::PlanAndMoveJ {
+        target: vec![0.8, -0.4],
+        max_velocity: None,
+        max_acceleration: None,
+        time_step: None,
+    }))
+    .unwrap();
+
+    let snap2 = svc.snapshot().unwrap();
+    assert!(
+        snap2.active_trajectory.is_some(),
+        "snapshot() must include active_trajectory after planning command",
+    );
+
+    // Trajectory persists in subsequent snapshots until replaced
+    let snap3 = svc.snapshot().unwrap();
+    assert!(
+        snap3.active_trajectory.is_some(),
+        "trajectory must persist across snapshots",
+    );
 }
 
