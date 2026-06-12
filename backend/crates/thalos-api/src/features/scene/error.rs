@@ -4,10 +4,21 @@ use thalos_runtime::RuntimeError;
 
 impl From<RuntimeError> for ApiError {
     fn from(e: RuntimeError) -> Self {
+        let code = e.error_code();
+
         match e {
-            RuntimeError::RobotModel(e) => e.into(),
-            RuntimeError::Workspace(e) => e.into(),
-            RuntimeError::Planning(e) => e.into()
+            RuntimeError::RobotModel(e) => ApiError::Validation {
+                message: e.to_string(),
+                code: code.into(),
+            },
+            RuntimeError::Workspace(e) => ApiError::Validation {
+                message: e.to_string(),
+                code: code.into(),
+            },
+            RuntimeError::Planning(e) => ApiError::Validation {
+                message: e.to_string(),
+                code: code.into(),
+            },
         }
     }
 }

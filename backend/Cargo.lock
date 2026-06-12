@@ -1378,7 +1378,6 @@ dependencies = [
  "chrono",
  "serde",
  "serde_json",
- "thalos-planning",
  "thalos_core",
  "thalos_runtime",
  "thalos_visual",
