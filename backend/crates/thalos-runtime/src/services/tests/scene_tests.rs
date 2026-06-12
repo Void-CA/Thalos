@@ -363,12 +363,8 @@ fn plan_and_movej_stores_trajectory_in_snapshot() {
     let svc = make_service(RobotModel::Planar2R);
     let initial = svc.snapshot().unwrap();
     assert!(
-        initial.active_trajectory.is_none(),
-        "initial snapshot must not have active_trajectory",
-    );
-    assert!(
-        initial.trajectory_progress.is_none(),
-        "initial snapshot must not have trajectory_progress",
+        initial.active_plan.is_none(),
+        "initial snapshot must not have active_plan",
     );
 
     let snap = svc
@@ -380,10 +376,11 @@ fn plan_and_movej_stores_trajectory_in_snapshot() {
         }))
         .unwrap();
 
-    let traj = snap
-        .active_trajectory
+    let plan = snap
+        .active_plan
         .as_ref()
-        .expect("snapshot must have active_trajectory after PlanAndMoveJ");
+        .expect("snapshot must have active_plan after PlanAndMoveJ");
+    let traj = &plan.trajectory;
     assert!(
         traj.len() >= 2,
         "trajectory should have at least 2 waypoints, got {}",
@@ -391,7 +388,7 @@ fn plan_and_movej_stores_trajectory_in_snapshot() {
     );
 
     let progress = snap
-        .trajectory_progress
+        .trajectory_progress()
         .expect("snapshot must have trajectory_progress");
     assert!(
         (0.0..=1.0).contains(&progress),
@@ -430,8 +427,8 @@ fn plan_and_movej_trajectory_starts_at_initial_position() {
         }))
         .unwrap();
 
-    let traj = snap.active_trajectory.as_ref().unwrap();
-    let first_waypoint = &traj.waypoints()[0];
+    let plan = snap.active_plan.as_ref().unwrap();
+    let first_waypoint = &plan.trajectory.waypoints()[0];
 
     assert_eq!(
         first_waypoint.joints(),
@@ -454,7 +451,7 @@ fn plan_and_movej_with_velocity_param() {
         .unwrap();
 
     assert_eq!(snap.joints, vec![0.5, -0.3]);
-    assert!(snap.active_trajectory.is_some());
+    assert!(snap.active_plan.is_some());
 }
 
 
@@ -487,10 +484,11 @@ fn plan_and_movel_stores_trajectory_in_snapshot() {
         }))
         .unwrap();
 
-    let traj = snap
-        .active_trajectory
+    let plan = snap
+        .active_plan
         .as_ref()
-        .expect("snapshot must have active_trajectory after PlanAndMoveL");
+        .expect("snapshot must have active_plan after PlanAndMoveL");
+    let traj = &plan.trajectory;
     assert!(
         traj.len() >= 2,
         "trajectory should have at least 2 waypoints, got {}",
@@ -508,7 +506,7 @@ fn snapshot_includes_trajectory_after_plan_command() {
     let svc = make_service(RobotModel::Planar2R);
 
     let snap1 = svc.snapshot().unwrap();
-    assert!(snap1.active_trajectory.is_none());
+    assert!(snap1.active_plan.is_none());
 
     svc.execute(Command::Motion(MotionCommands::PlanAndMoveJ {
         target: vec![0.8, -0.4],
@@ -520,15 +518,15 @@ fn snapshot_includes_trajectory_after_plan_command() {
 
     let snap2 = svc.snapshot().unwrap();
     assert!(
-        snap2.active_trajectory.is_some(),
-        "snapshot() must include active_trajectory after planning command",
+        snap2.active_plan.is_some(),
+        "snapshot() must include active_plan after planning command",
     );
 
     // Trajectory persists in subsequent snapshots until replaced
     let snap3 = svc.snapshot().unwrap();
     assert!(
-        snap3.active_trajectory.is_some(),
-        "trajectory must persist across snapshots",
+        snap3.active_plan.is_some(),
+        "plan must persist across snapshots",
     );
 }
 

@@ -1,31 +1,31 @@
-use chrono::{DateTime, Utc};
-
 use thalos_core::kinematics::{
     forward::ForwardKinematics,
     inverse::{DampedLeastSquaresSolver, IKGoal, IKResult, IKSolver},
 };
-use thalos_core::prelude::Trajectory;
 use thalos_core::spatial::frame::FrameId;
 
 pub use thalos_core::prelude::ActiveRobot;
+
+use crate::plan::{ActiveMotionPlan, MotionType};
 
 const IK_MAX_ITERS: usize = 500;
 const IK_TOLERANCE: f64 = 1e-6;
 const IK_LAMBDA: f64 = 0.1;
 
-/// Runtime mutable state: the currently active robot and its joint angles.
+/// Runtime mutable state: the currently active robot and its motion plan.
 pub struct SceneRuntime {
     pub active_robot: ActiveRobot,
-    pub active_trajectory: Option<Trajectory>,
-    pub trajectory_started_at: Option<DateTime<Utc>>,
+    pub active_plan: Option<ActiveMotionPlan>,
+    /// Monotonic counter for plan IDs.
+    next_plan_id: u64,
 }
 
 impl SceneRuntime {
     pub fn new(active_robot: ActiveRobot) -> Self {
         Self {
             active_robot,
-            active_trajectory: None,
-            trajectory_started_at: None,
+            active_plan: None,
+            next_plan_id: 0,
         }
     }
 
@@ -41,33 +41,46 @@ impl SceneRuntime {
         result
     }
 
-    /// Store a planned trajectory and mark it as active.
-    pub fn set_trajectory(&mut self, trajectory: Trajectory) {
-        self.active_trajectory = Some(trajectory);
-        self.trajectory_started_at = Some(Utc::now());
+    /// Store a planned trajectory as a Completed plan.
+    ///
+    /// Sets state to `Completed` because the caller (PlanAndMoveJ/L)
+    /// has already set joints to the final target position.
+    pub fn set_completed_plan(&mut self, trajectory: impl Into<thalos_core::prelude::Trajectory>, motion_type: MotionType) {
+        let tid = self.next_plan_id();
+        self.active_plan = Some(ActiveMotionPlan::completed(tid, trajectory.into(), motion_type));
     }
 
-    /// Clear the active trajectory without applying any state change.
-    pub fn clear_trajectory(&mut self) {
-        self.active_trajectory = None;
-        self.trajectory_started_at = None;
+    /// Store a plan without executing (Created state, execution deferred).
+    pub fn set_created_plan(&mut self, trajectory: impl Into<thalos_core::prelude::Trajectory>, motion_type: MotionType) {
+        let tid = self.next_plan_id();
+        self.active_plan = Some(ActiveMotionPlan::created(tid, trajectory.into(), motion_type));
+    }
+
+    /// Clear the active plan.
+    pub fn clear_plan(&mut self) {
+        self.active_plan = None;
     }
 
     /// Advance the active trajectory by `dt` seconds (elapsed simulation time).
     /// Updates `active_robot.joints` to the interpolated position at elapsed time.
-    /// Returns `true` if the trajectory is still in progress, `false` if complete or no trajectory.
+    /// Returns `true` if the trajectory is still in progress, `false` if complete or no plan.
     pub fn advance_trajectory(&mut self, dt: f64) -> bool {
-        let Some(ref trajectory) = self.active_trajectory else {
+        let Some(ref plan) = self.active_plan else {
             return false;
         };
 
-        if trajectory.is_empty() {
-            self.clear_trajectory();
+        if plan.state.is_terminal() {
             return false;
         }
 
-        let elapsed = self
-            .trajectory_started_at
+        let trajectory = &plan.trajectory;
+        if trajectory.is_empty() {
+            self.clear_plan();
+            return false;
+        }
+
+        let elapsed = plan
+            .started_at
             .map(|start| (Utc::now() - start).num_seconds() as f64 + dt)
             .unwrap_or(0.0);
 
@@ -78,7 +91,10 @@ impl SceneRuntime {
         if elapsed >= duration || duration == 0.0 {
             let last = waypoints.last().unwrap();
             self.active_robot.joints = last.joints().to_vec();
-            self.clear_trajectory();
+            // Transition to completed if still active
+            if let Some(ref mut p) = self.active_plan {
+                p.complete();
+            }
             return false;
         }
 
@@ -105,18 +121,15 @@ impl SceneRuntime {
 
     /// Progress of the active trajectory as a fraction 0.0–1.0.
     pub fn trajectory_progress(&self) -> Option<f64> {
-        let trajectory = self.active_trajectory.as_ref()?;
-        if trajectory.is_empty() {
-            return Some(1.0);
-        }
-        let duration = trajectory.duration();
-        if duration == 0.0 {
-            return Some(1.0);
-        }
-        let elapsed = self
-            .trajectory_started_at
-            .map(|start| (Utc::now() - start).num_seconds() as f64)
-            .unwrap_or(0.0);
-        Some((elapsed / duration).clamp(0.0, 1.0))
+        self.active_plan.as_ref().map(|p| p.progress())
+    }
+
+    fn next_plan_id(&mut self) -> String {
+        let id = self.next_plan_id;
+        self.next_plan_id += 1;
+        format!("plan-{}", id)
     }
 }
+
+// Needed in advance_trajectory for Utc::now()
+use chrono::Utc;

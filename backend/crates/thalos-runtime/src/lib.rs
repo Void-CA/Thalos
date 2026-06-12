@@ -1,3 +1,4 @@
+pub mod plan;
 pub mod state;
 pub mod services;
 pub mod commands;
@@ -7,6 +8,7 @@ pub mod error;
 
 pub use commands::dispatch::Command;
 pub use error::RuntimeError;
+pub use plan::{ActiveMotionPlan, MotionType, PlanState};
 pub use services::scene::SceneService;
 pub use services::singularity::SingularityService;
 pub use services::workspace::WorkspaceService;

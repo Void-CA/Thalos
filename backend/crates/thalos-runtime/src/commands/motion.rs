@@ -20,6 +20,7 @@ use thalos_planning::{
     motion::move_j::{MoveJConfig, MoveJPlanner},
 };
 
+use crate::plan::MotionType;
 use crate::{RuntimeError, commands::handler::ExecutableCommand, state::robot::SceneRuntime};
 
 const IK_MAX_ITERS: usize = 500;
@@ -110,7 +111,7 @@ impl ExecutableCommand for MotionCommands {
                     .map(|p| p.joints().to_vec())
                     .unwrap_or_else(|| target.clone());
                 runtime.active_robot.joints = last;
-                runtime.set_trajectory(trajectory);
+                runtime.set_completed_plan(trajectory, MotionType::MoveJ);
 
                 Ok(None)
             }
@@ -152,7 +153,7 @@ impl ExecutableCommand for MotionCommands {
                 let trajectory = planner.plan(&ctx, &goal)?;
 
                 runtime.active_robot.joints = target;
-                runtime.set_trajectory(trajectory);
+                runtime.set_completed_plan(trajectory, MotionType::MoveL);
 
                 Ok(None)
             }

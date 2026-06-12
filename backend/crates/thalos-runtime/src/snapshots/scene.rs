@@ -6,9 +6,10 @@ use thalos_core::{
         inverse::result::IKResult,
     },
     models::RobotModel,
-    prelude::Trajectory,
     robot::serial_chain::SerialChain,
 };
+
+use crate::plan::ActiveMotionPlan;
 
 /// Immutable snapshot of the runtime state at a point in time.
 ///
@@ -26,10 +27,15 @@ pub struct RuntimeSnapshot {
     pub fk_result: FKResult,
     /// Solver metadata when this snapshot was produced by an IK command.
     pub ik_result: Option<IKResult>,
-    /// Active planned trajectory, if any.
-    pub active_trajectory: Option<Trajectory>,
-    /// Progress of the active trajectory as a fraction 0.0–1.0.
-    pub trajectory_progress: Option<f64>,
+    /// Active motion plan, if any.
+    pub active_plan: Option<ActiveMotionPlan>,
     /// When this snapshot was taken.
     pub generated_at: DateTime<Utc>,
+}
+
+impl RuntimeSnapshot {
+    /// Progress of the active plan's trajectory as a fraction 0.0–1.0.
+    pub fn trajectory_progress(&self) -> Option<f64> {
+        self.active_plan.as_ref().map(|p| p.progress())
+    }
 }
