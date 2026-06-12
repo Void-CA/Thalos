@@ -82,7 +82,35 @@ export interface RuntimeStateResponse {
   joints: number[];
   scene: VisualSceneDto;
   ik_result: IkResultDto | null;
+  active_plan: ActivePlanDto | null;
   generated_at: string;
+}
+
+// ── Active plan DTOs ──
+
+export interface ActivePlanDto {
+  plan_id: string;
+  state: string;
+  motion_type: string;
+  trajectory_progress: number | null;
+  visualization: TrajectoryVisualizationDto | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface TrajectoryVisualizationDto {
+  waypoints: VisualWaypointDto[];
+  motion_type: string;
+}
+
+export interface VisualWaypointDto {
+  position: [number, number, number];
+  orientation: [number, number, number, number];
+  joints: number[];
+  timestamp: number;
+  is_start: boolean;
+  is_end: boolean;
 }
 
 export interface ValidateResponse {

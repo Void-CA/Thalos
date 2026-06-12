@@ -1,7 +1,7 @@
 // ── Adapter: VisualSceneDto (API contract) → SceneData (runtime state) ──
 
-import type { VisualSceneDto, PrimitiveGeometryDto, FrameStyleDto } from '../scene-api.types';
-import type { SceneData, SceneFrame, SceneFrameStyle, SceneJointAxis, SceneLink, ScenePrimitive, SceneTwist } from '../scene.types';
+import type { ActivePlanDto, TrajectoryVisualizationDto, VisualSceneDto, PrimitiveGeometryDto, FrameStyleDto, VisualWaypointDto } from '../scene-api.types';
+import type { ActivePlan, SceneData, SceneFrame, SceneFrameStyle, SceneJointAxis, SceneLink, ScenePrimitive, SceneTwist, TrajectoryVisualization, VisualWaypoint } from '../scene.types';
 
 export function toSceneData(dto: VisualSceneDto): SceneData {
   return {
@@ -76,4 +76,38 @@ function toGeometry(dto: PrimitiveGeometryDto): ScenePrimitive['geometry'] {
   }
   // Box
   return { type: 'box', ...dto.Box };
+}
+
+// ── ActivePlan adapters ──
+
+export function toActivePlan(dto: ActivePlanDto | null): ActivePlan | null {
+  if (!dto) return null;
+  return {
+    planId: dto.plan_id,
+    state: dto.state,
+    motionType: dto.motion_type,
+    trajectoryProgress: dto.trajectory_progress,
+    visualization: dto.visualization ? toTrajectoryVisualization(dto.visualization) : null,
+    createdAt: dto.created_at,
+    startedAt: dto.started_at,
+    completedAt: dto.completed_at,
+  };
+}
+
+function toTrajectoryVisualization(dto: TrajectoryVisualizationDto): TrajectoryVisualization {
+  return {
+    waypoints: dto.waypoints.map(toVisualWaypoint),
+    motionType: dto.motion_type,
+  };
+}
+
+function toVisualWaypoint(dto: VisualWaypointDto): VisualWaypoint {
+  return {
+    position: dto.position,
+    orientation: dto.orientation,
+    joints: dto.joints,
+    timestamp: dto.timestamp,
+    isStart: dto.is_start,
+    isEnd: dto.is_end,
+  };
 }

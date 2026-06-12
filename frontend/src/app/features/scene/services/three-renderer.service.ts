@@ -1,7 +1,7 @@
 import { Injectable, NgZone, inject } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { DEFAULT_FRAME_STYLE, SceneData, SceneFrame, SceneLink, ScenePrimitive } from '../scene.types';
+import { DEFAULT_FRAME_STYLE, SceneData, SceneFrame, SceneLink, ScenePrimitive, VisualWaypoint } from '../scene.types';
 
 interface FrameSlot {
   group: THREE.Group;
@@ -14,6 +14,12 @@ interface LinkSlot {
 
 interface PrimitiveSlot {
   mesh: THREE.Mesh;
+}
+
+interface TrajectorySlot {
+  group: THREE.Group;
+  line: THREE.Line;
+  markers: THREE.Mesh[];
 }
 
 interface SceneOverlay {
@@ -32,6 +38,7 @@ export class ThreeRendererService {
   private targetGroup: THREE.Group | null = null;
   private compassGroup: THREE.Group | null = null;
   private frameId: number | null = null;
+  private trajectorySlot: TrajectorySlot | null = null;
   private readonly overlays = new Set<SceneOverlay>();
 
   // ── Scene content caches (id → slot) ──
@@ -428,6 +435,71 @@ export class ThreeRendererService {
     }
   }
 
+  // ── Trajectory rendering ──
+
+  /** Render or update the trajectory path + waypoint markers. */
+  syncTrajectory(waypoints: VisualWaypoint[]): void {
+    if (!this.contentGroup) return;
+
+    // Dispose previous trajectory slot if any
+    this.clearTrajectory();
+
+    if (waypoints.length < 2) return;
+
+    const group = new THREE.Group();
+
+    // ── Path line ──
+    const pts = waypoints.map(wp => new THREE.Vector3(wp.position[0], wp.position[1], wp.position[2]));
+    const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+    const lineMat = new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 2 });
+    const line = new THREE.Line(lineGeo, lineMat);
+    group.add(line);
+
+    // ── Waypoint markers ──
+    const markers: THREE.Mesh[] = [];
+    const markerGeo = new THREE.SphereGeometry(0.025, 12, 12);
+
+    for (let i = 0; i < waypoints.length; i++) {
+      const wp = waypoints[i];
+      let color: number;
+      if (wp.isStart) {
+        color = 0x44cc44; // green
+      } else if (wp.isEnd) {
+        color = 0xcc4444; // red
+      } else {
+        color = 0xcccccc; // grey
+      }
+
+      const mat = new THREE.MeshStandardMaterial({ color });
+      const mesh = new THREE.Mesh(markerGeo.clone(), mat);
+      mesh.position.set(wp.position[0], wp.position[1], wp.position[2]);
+      // Orient marker to waypoint orientation for visual cues
+      mesh.quaternion.set(wp.orientation[1], wp.orientation[2], wp.orientation[3], wp.orientation[0]);
+      group.add(mesh);
+      markers.push(mesh);
+    }
+
+    this.contentGroup.add(group);
+    this.trajectorySlot = { group, line, markers };
+  }
+
+  /** Remove the trajectory overlay from the scene. */
+  clearTrajectory(): void {
+    if (!this.trajectorySlot) return;
+    this.contentGroup?.remove(this.trajectorySlot.group);
+    this.disposeTrajectory(this.trajectorySlot);
+    this.trajectorySlot = null;
+  }
+
+  private disposeTrajectory(slot: TrajectorySlot): void {
+    slot.line.geometry.dispose();
+    (slot.line.material as THREE.Material).dispose();
+    for (const m of slot.markers) {
+      m.geometry.dispose();
+      (m.material as THREE.Material).dispose();
+    }
+  }
+
   dispose(): void {
     if (this.frameId !== null) {
       cancelAnimationFrame(this.frameId);
@@ -458,6 +530,11 @@ export class ThreeRendererService {
       mat.dispose();
     }
     this.matCache.clear();
+
+    if (this.trajectorySlot) {
+      this.disposeTrajectory(this.trajectorySlot);
+      this.trajectorySlot = null;
+    }
 
     this.scene = null;
     this.camera = null;

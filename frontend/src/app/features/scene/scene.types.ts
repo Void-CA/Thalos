@@ -112,12 +112,40 @@ export interface SceneUiState {
   error: string | null;
 }
 
-/** Estado completo del store — runtime snapshot + datos de escena + IK + estado de UI. */
+/** Estado completo del store — runtime snapshot + datos de escena + IK + plan activo + estado de UI. */
 export interface SceneState {
   data: SceneData | null;
   runtime: RuntimeInfo | null;
   ikResult: IkResult | null;
   solvedQ: number[] | null;
   ikTarget: IkTarget | null;
+  activePlan: ActivePlan | null;
   ui: SceneUiState;
+}
+
+// ── Active plan types ──
+
+export interface ActivePlan {
+  planId: string;
+  state: string;
+  motionType: string;
+  trajectoryProgress: number | null;
+  visualization: TrajectoryVisualization | null;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface TrajectoryVisualization {
+  waypoints: VisualWaypoint[];
+  motionType: string;
+}
+
+export interface VisualWaypoint {
+  position: [number, number, number];
+  orientation: [number, number, number, number];
+  joints: number[];
+  timestamp: number;
+  isStart: boolean;
+  isEnd: boolean;
 }

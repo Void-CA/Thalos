@@ -3,14 +3,14 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { BehaviorSubject, concat, merge, Observable, of, Subject } from 'rxjs';
 import { auditTime, catchError, distinctUntilChanged, map, scan, switchMap } from 'rxjs/operators';
 import { SceneApiService } from '../services/scene-api.service';
-import { toSceneData } from '../adapters/dto-to-model';
+import { toSceneData, toActivePlan } from '../adapters/dto-to-model';
 import type { RuntimeStateResponse, SolveIKResponse } from '../scene-api.types';
-import type { IkCommand, IkResult, IkTarget, RuntimeInfo, SceneData, SceneState, SceneUiState } from '../scene.types';
+import type { ActivePlan, IkCommand, IkResult, IkTarget, RuntimeInfo, SceneData, SceneState, SceneUiState } from '../scene.types';
 
 type SceneEvent =
   | { type: 'loading' }
-  | { type: 'scene'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null }
-  | { type: 'ik-executed'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null }
+  | { type: 'scene'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null; activePlan: ActivePlan | null }
+  | { type: 'ik-executed'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null; activePlan: ActivePlan | null }
   | { type: 'solve'; joints: number[]; ikResult: IkResult }
   | { type: 'target'; target: IkTarget | null }
   | { type: 'error'; message: string };
@@ -26,12 +26,13 @@ const INITIAL_STATE: SceneState = {
   ikResult: null,
   solvedQ: null,
   ikTarget: null,
+  activePlan: null,
   ui: INITIAL_UI,
 };
 
 const DEFAULT_Q: number[] = [0, 0];
 
-/** Map the API response into the internal (data + runtime + ik) event. */
+/** Map the API response into the internal (data + runtime + ik + plan) event. */
 function toSceneEvent(res: RuntimeStateResponse): SceneEvent {
   const ikResult: IkResult | null = res.ik_result
     ? {
@@ -50,6 +51,7 @@ function toSceneEvent(res: RuntimeStateResponse): SceneEvent {
       generatedAt: res.generated_at,
     },
     ikResult,
+    activePlan: toActivePlan(res.active_plan),
   };
 }
 
@@ -72,6 +74,7 @@ function toIkExecutedEvent(res: RuntimeStateResponse): SceneEvent {
       generatedAt: res.generated_at,
     },
     ikResult,
+    activePlan: toActivePlan(res.active_plan),
   };
 }
 
@@ -216,6 +219,7 @@ export class SceneStore {
             ikResult: event.ikResult,
             solvedQ: null,
             ikTarget: state.ikTarget,
+            activePlan: event.activePlan,
             ui: { loading: false, error: null },
           };
         case 'ik-executed':
@@ -225,6 +229,7 @@ export class SceneStore {
             ikResult: event.ikResult,
             solvedQ: event.runtime.joints,
             ikTarget: state.ikTarget,
+            activePlan: event.activePlan,
             ui: { loading: false, error: null },
           };
         case 'solve':

@@ -30,7 +30,7 @@ export class SceneViewer implements AfterViewInit {
   private readonly overlay = inject(WorkspaceOverlayService);
 
   constructor() {
-    // Sync robot scene + IK gizmo
+    // Sync robot scene + IK gizmo + trajectory overlay
     effect(() => {
       const state = this.store.state();
       if (state.data) {
@@ -45,6 +45,13 @@ export class SceneViewer implements AfterViewInit {
         this.renderer.setTarget(state.ikTarget.translation, quat);
       } else {
         this.renderer.clearTarget();
+      }
+      // Trajectory overlay — waypoints from the active plan
+      const vis = state.activePlan?.visualization;
+      if (vis && vis.waypoints.length > 0) {
+        this.renderer.syncTrajectory(vis.waypoints);
+      } else {
+        this.renderer.clearTrajectory();
       }
     });
 
