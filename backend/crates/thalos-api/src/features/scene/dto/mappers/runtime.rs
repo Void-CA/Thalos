@@ -12,14 +12,8 @@ impl From<IKResult> for IkResultDto {
     }
 }
 
-/// Associate methods on RuntimeStateResponse.
-///
-/// The struct itself is defined in `super::responses`.
+
 impl RuntimeStateResponse {
-    /// Build from a RuntimeSnapshot and its derived VisualScene.
-    ///
-    /// `active_plan` is optionally pre-built with visualization payload.
-    /// Use `build_plan_for_snapshot` in the handler to construct it.
     pub fn from_snapshot(
         snapshot: &thalos_runtime::RuntimeSnapshot,
         scene: VisualSceneDto,
