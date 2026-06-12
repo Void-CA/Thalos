@@ -44,3 +44,5 @@ pub use crate::analysis::manipulability::{
     ManipulabilityMetrics,
 };
 
+pub use crate::trajectory::{Trajectory, TrajectoryPoint};
+
