@@ -1,10 +1,3 @@
-//! Stateless workspace service — sampling + reachability queries.
-//!
-//! Delegates to `thalos_core::analysis::workspace` for the actual logic.
-//! This service is stateless (D5: no cache); each call reconstructs the
-//! `Workspace` from scratch. Consumers that need caching should wrap this
-//! service with their own `HashMap<WorkspaceKey, Arc<Workspace>>`.
-
 use std::sync::Arc;
 
 use rand::rngs::StdRng;
@@ -22,10 +15,6 @@ use crate::error::RuntimeError;
 pub struct WorkspaceService;
 
 impl WorkspaceService {
-    /// Sample a workspace for the given robot model and config.
-    ///
-    /// Returns `Arc<Workspace>` so the result can be cheaply shared
-    /// across threads or cached by consumers (D10).
     pub fn sample(
         model: RobotModel,
         config: WorkspaceConfig,
