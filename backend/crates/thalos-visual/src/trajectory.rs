@@ -1,3 +1,5 @@
+
+
 use serde::{Deserialize, Serialize};
 
 use thalos_core::{
@@ -8,39 +10,30 @@ use thalos_core::{
 };
 
 use crate::scene::precision::VisualPrecision;
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum VisualMotionType {
     MoveJ,
     MoveL,
 }
 
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-pub enum WaypointType {
-    Start,
-    Goal,
-    Via,
-}
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct VisualWaypoint {
     pub position: [f64; 3],
     pub orientation: [f64; 4],
     pub joints: Vec<f64>,
     pub timestamp: f64,
-    pub waypoint_type: WaypointType,
+    pub is_start: bool,
+    pub is_end: bool,
 }
-//
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TrajectoryVisualization {
     pub waypoints: Vec<VisualWaypoint>,
     pub motion_type: VisualMotionType,
 }
-
 pub struct TrajectoryVisualBuilder;
 
 impl TrajectoryVisualBuilder {
-    ///
     pub fn build(
         trajectory: &Trajectory,
         chain: &SerialChain,
@@ -70,23 +63,13 @@ impl TrajectoryVisualBuilder {
                 })
                 .unwrap_or_default();
 
-            let waypoint_type = if n == 1 {
-                // Single waypoint IS the goal (start == goal).
-                WaypointType::Goal
-            } else if i == 0 {
-                WaypointType::Start
-            } else if i == n - 1 {
-                WaypointType::Goal
-            } else {
-                WaypointType::Via
-            };
-
             waypoints.push(VisualWaypoint {
                 position,
                 orientation,
                 joints: point.joints().to_vec(),
                 timestamp: point.timestamp(),
-                waypoint_type,
+                is_start: i == 0,
+                is_end: i == n - 1,
             });
         }
 
@@ -135,8 +118,8 @@ mod tests {
         let vis = TrajectoryVisualBuilder::build(&traj, &chain, ee, VisualMotionType::MoveL);
 
         assert_eq!(vis.waypoints.len(), 1);
-        // Single waypoint is both Start and Goal — marks as Goal.
-        assert_eq!(vis.waypoints[0].waypoint_type, WaypointType::Goal);
+        assert!(vis.waypoints[0].is_start);
+        assert!(vis.waypoints[0].is_end);
     }
 
     #[test]
@@ -151,8 +134,10 @@ mod tests {
         let vis = TrajectoryVisualBuilder::build(&traj, &chain, ee, VisualMotionType::MoveJ);
 
         assert_eq!(vis.waypoints.len(), 2);
-        assert_eq!(vis.waypoints[0].waypoint_type, WaypointType::Start);
-        assert_eq!(vis.waypoints[1].waypoint_type, WaypointType::Goal);
+        assert!(vis.waypoints[0].is_start);
+        assert!(!vis.waypoints[0].is_end);
+        assert!(!vis.waypoints[1].is_start);
+        assert!(vis.waypoints[1].is_end);
     }
 
     #[test]
