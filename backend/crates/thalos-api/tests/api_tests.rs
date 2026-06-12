@@ -668,8 +668,10 @@ async fn movej_accepts_valid_request() {
     .await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
-    assert_eq!(body["status"], "accepted");
-    assert_eq!(body["target_joints"], json!([1.0, 0.5]));
+    let plan = body["active_plan"].as_object().expect("active_plan must be present");
+    assert_eq!(plan["state"], "Completed");
+    assert_eq!(plan["motion_type"], "movej");
+    assert_eq!(body["joints"], json!([1.0, 0.5]));
 }
 
 #[tokio::test]
@@ -686,8 +688,10 @@ async fn movej_accepts_minimal_request() {
     .await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
-    assert_eq!(body["status"], "accepted");
-    assert_eq!(body["target_joints"], json!([0.5, -0.3]));
+    let plan = body["active_plan"].as_object().expect("active_plan must be present");
+    assert_eq!(plan["state"], "Completed");
+    assert_eq!(plan["motion_type"], "movej");
+    assert_eq!(body["joints"], json!([0.5, -0.3]));
 }
 
 #[tokio::test]
@@ -750,7 +754,9 @@ async fn movel_accepts_valid_request() {
     .await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
-    assert_eq!(body["status"], "accepted");
+    let plan = body["active_plan"].as_object().expect("active_plan must be present");
+    assert_eq!(plan["state"], "Completed");
+    assert_eq!(plan["motion_type"], "movel");
 }
 
 #[tokio::test]
@@ -775,7 +781,9 @@ async fn movel_accepts_with_frame_id() {
     .await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
-    assert_eq!(body["status"], "accepted");
+    let plan = body["active_plan"].as_object().expect("active_plan must be present");
+    assert_eq!(plan["state"], "Completed");
+    assert_eq!(plan["motion_type"], "movel");
 }
 
 #[tokio::test]
@@ -819,9 +827,11 @@ async fn movel_with_unreachable_target_still_returns_accepted() {
     // The endpoint still accepts the request — IK failure is not an HTTP error
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
-    assert_eq!(body["status"], "accepted");
+    let plan = body["active_plan"].as_object().expect("active_plan must be present");
+    assert_eq!(plan["state"], "Completed");
+    assert_eq!(plan["motion_type"], "movel");
     // Joints should be finite (no NaN from failed IK)
-    let joints = body["target_joints"].as_array().expect("target_joints must be an array");
+    let joints = body["joints"].as_array().expect("joints must be an array");
     for j in joints {
         let val = j.as_f64().unwrap();
         assert!(val.is_finite(), "joint {val} must be finite");

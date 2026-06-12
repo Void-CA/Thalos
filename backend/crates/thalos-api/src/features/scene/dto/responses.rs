@@ -92,9 +92,12 @@ pub struct SolveIKResponse {
     pub ik_result: IkResultDto,
 }
 
-/// Full runtime state: the active robot, its joint angles, and the computed scene.
+/// Full runtime state: the active robot, its joint angles, the computed scene,
+/// and any active motion plan.
+///
 /// Returned by every endpoint that touches the runtime.
 /// When produced by an IK command, `ik_result` carries solver metadata.
+/// When a motion plan is active, `active_plan` carries plan state + visualization.
 ///
 /// Construction is in `mappers::runtime`.
 #[derive(Debug, Serialize)]
@@ -103,7 +106,41 @@ pub struct RuntimeStateResponse {
     pub joints: Vec<f64>,
     pub scene: VisualSceneDto,
     pub ik_result: Option<IkResultDto>,
+    pub active_plan: Option<ActivePlanDto>,
     pub generated_at: DateTime<Utc>,
+}
+
+// ── Plan and trajectory visualisation DTOs ──
+
+/// Active motion plan metadata exposed by the API.
+#[derive(Debug, Serialize)]
+pub struct ActivePlanDto {
+    pub plan_id: String,
+    pub state: String,
+    pub motion_type: String,
+    pub trajectory_progress: Option<f64>,
+    pub visualization: Option<TrajectoryVisualizationDto>,
+    pub created_at: DateTime<Utc>,
+    pub started_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+/// Trajectory visualisation — the data contract for the frontend's 3D renderer.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TrajectoryVisualizationDto {
+    pub waypoints: Vec<VisualWaypointDto>,
+    pub motion_type: String,
+}
+
+/// A single waypoint in 3D space for the frontend to render.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct VisualWaypointDto {
+    pub position: [f64; 3],
+    pub orientation: [f64; 4],
+    pub joints: Vec<f64>,
+    pub timestamp: f64,
+    pub is_start: bool,
+    pub is_end: bool,
 }
 
 // ── Validate response ──

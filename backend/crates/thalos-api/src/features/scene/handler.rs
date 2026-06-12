@@ -13,11 +13,12 @@ use thalos_visual::{
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
+use crate::features::scene::dto::mappers::runtime::build_plan_dto;
 use crate::features::scene::dto::*;
 
 
 /// Build a VisualScene from a RuntimeSnapshot.
-fn build_visual_scene(snapshot: &thalos_runtime::RuntimeSnapshot) -> VisualScene {
+pub(crate) fn build_visual_scene(snapshot: &thalos_runtime::RuntimeSnapshot) -> VisualScene {
     let robot = snapshot.robot;
     let fk = &snapshot.fk_result;
     let chain = &snapshot.chain;
@@ -33,9 +34,10 @@ fn build_visual_scene(snapshot: &thalos_runtime::RuntimeSnapshot) -> VisualScene
 
 
 /// Build an API response from a RuntimeSnapshot.
-fn to_api_response(snapshot: &thalos_runtime::RuntimeSnapshot) -> RuntimeStateResponse {
+pub(crate) fn to_api_response(snapshot: &thalos_runtime::RuntimeSnapshot) -> RuntimeStateResponse {
     let scene: VisualSceneDto = build_visual_scene(snapshot).into();
-    RuntimeStateResponse::from_snapshot(snapshot, scene)
+    let plan = build_plan_dto(snapshot);
+    RuntimeStateResponse::from_snapshot(snapshot, scene, plan)
 }
 
 pub async fn get_scene(
