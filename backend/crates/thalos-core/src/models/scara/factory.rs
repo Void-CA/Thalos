@@ -33,6 +33,7 @@ pub fn create_scara_robot(
     let base_link = Link {
         id: 0,
         transform: Transform3D::identity(),
+        collision_geometry: None,
     };
 
     builder.add_segment(Segment {
@@ -57,6 +58,7 @@ pub fn create_scara_robot(
         transform: Transform3D::from_translation(
             Vector3::new(l1, 0.0, 0.0)
         ),
+        collision_geometry: None,
     };
 
     builder.add_segment(Segment {
@@ -81,6 +83,7 @@ pub fn create_scara_robot(
         transform: Transform3D::from_translation(
             Vector3::new(l2, 0.0, 0.0)
         ),
+        collision_geometry: None,
     };
 
     builder.add_segment(Segment {
@@ -103,6 +106,7 @@ pub fn create_scara_robot(
     let link3 = Link {
         id: 3,
         transform: Transform3D::identity(),
+        collision_geometry: None,
     };
 
     builder.add_segment(Segment {
@@ -127,6 +131,7 @@ pub fn create_scara_robot(
         transform: Transform3D::from_translation(
             Vector3::new(0.0, 0.0, 0.0)
         ),
+        collision_geometry: None,
     };
 
     builder.add_segment(Segment {

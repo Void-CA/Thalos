@@ -18,6 +18,7 @@ pub fn create_planar_2r(
     let link1 = Link {
         id: 0,
         transform: Transform3D::from_translation(Vector3::new(l1, 0.0, 0.0)),
+        collision_geometry: None,
     };
     builder.add_segment(Segment {
         parent: FrameId::World,
@@ -33,6 +34,7 @@ pub fn create_planar_2r(
     let link2 = Link {
         id: 1,
         transform: Transform3D::from_translation(Vector3::new(l2, 0.0, 0.0)),
+        collision_geometry: None,
     };
     builder.add_segment(Segment {
         parent: link_1_frame,
