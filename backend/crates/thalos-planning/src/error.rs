@@ -24,6 +24,13 @@ pub enum PlanningError {
 
     #[error("Goal unreachable: {reason}")]
     UnreachableGoal { reason: String },
+
+    /// Se detectó una colisión durante la planificación o validación
+    /// de una trayectoria.
+    #[error("Collision detected between {:?} and {:?}", involved.0, involved.1)]
+    CollisionDetected {
+        involved: (thalos_core::collision::EntityId, thalos_core::collision::EntityId),
+    },
 }
 
 impl From<&str> for PlanningError {

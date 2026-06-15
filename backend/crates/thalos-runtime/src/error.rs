@@ -40,6 +40,7 @@ impl RuntimeError {
                 PlanningError::JointLimitViolation { .. } => "joint_limit_violation",
                 PlanningError::InvalidGoal(_) => "invalid_goal",
                 PlanningError::UnreachableGoal { .. } => "unreachable_goal",
+                PlanningError::CollisionDetected { .. } => "collision_detected",
             },
         }
     }
