@@ -4,6 +4,7 @@ resolver = "2"
 members = [
     "crates/thalos-api",
     "crates/thalos-core",
+    "crates/thalos-collision",
     "crates/thalos-visual",
     "crates/thalos-runtime", 
     "crates/thalos-planning"
