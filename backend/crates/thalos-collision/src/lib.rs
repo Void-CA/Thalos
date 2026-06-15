@@ -7,6 +7,9 @@ use thalos_core::math::{
     traits::products::{Cross, Dot},
 };
 
+/// Epsilon para comparaciones de punto flotante en detección de colisiones.
+const COLLISION_EPS: f64 = 1e-9;
+
 /// Detector de colisiones O(n²) sin optimizaciones.
 ///
 /// Implementa detección exacta para:
@@ -37,13 +40,25 @@ impl CollisionChecker for NaiveCollisionChecker {
                     collisions.push(CollisionPair::new(
                         a.entity.clone(),
                         b.entity.clone(),
-                        CollisionType::SelfCollision,
+                        classify_collision(&a.entity, &b.entity),
                     ));
                 }
             }
         }
 
         CollisionResult::new(collisions)
+    }
+}
+
+/// Determina semánticamente el tipo de colisión según las entidades
+/// involucradas.
+///
+/// - Link ↔ Link → SelfCollision
+/// - Cualquier interacción con Obstacle o Tool → EnvironmentCollision
+fn classify_collision(a: &EntityId, b: &EntityId) -> CollisionType {
+    match (a, b) {
+        (EntityId::Link(_), EntityId::Link(_)) => CollisionType::SelfCollision,
+        _ => CollisionType::EnvironmentCollision,
     }
 }
 
@@ -79,7 +94,7 @@ fn sphere_vs_sphere(r1: f64, pose1: &Transform3D, r2: f64, pose2: &Transform3D) 
     let delta = pose1.translation - pose2.translation;
     let dist_sq = delta.dot(delta);
     let radius_sum = r1 + r2;
-    dist_sq <= radius_sum * radius_sum
+    dist_sq <= radius_sum * radius_sum + COLLISION_EPS
 }
 
 // ─── Box-Box (SAT) ──────────────────────────────────────────────
@@ -102,7 +117,9 @@ fn box_vs_box(
         let center = pose_b.translation - pose_a.translation;
         let center_proj = center.dot(axis).abs();
 
-        if center_proj > proj_a + proj_b {
+        // COLLISION_EPS evita falsos negativos por error de punto flotante
+        // en casos donde las cajas están apenas tocándose.
+        if center_proj > proj_a + proj_b + COLLISION_EPS {
             return false; // Separados en este eje
         }
     }
@@ -140,12 +157,17 @@ fn sat_axes(axes_a: &[Vector3; 3], axes_b: &[Vector3; 3]) -> Vec<Vector3> {
     axes.extend_from_slice(axes_b);
 
     // 9 productos cruz A_i × B_j
-    let eps = 1e-12;
+    //
+    // NOTA sobre normalización: SAT funciona correctamente con ejes no
+    // normalizados siempre que proj_a, proj_b y center_proj se calculen
+    // contra el MISMO vector (como hacemos acá). Si en el futuro alguien
+    // reusa estos ejes en otro contexto (ej. distancia de penetración),
+    // va a necesitar normalizar.
+    let cross_eps = 1e-12;
     for i in 0..3 {
         for j in 0..3 {
             let cross = axes_a[i].cross(axes_b[j]);
-            if cross.dot(cross) > eps {
-                // No es necesario normalizar para la prueba de separación
+            if cross.dot(cross) > cross_eps {
                 axes.push(cross);
             }
         }
@@ -176,7 +198,7 @@ fn sphere_vs_box(
     );
 
     let delta = local_center - closest;
-    delta.dot(delta) <= sphere_radius * sphere_radius
+    delta.dot(delta) <= sphere_radius * sphere_radius + COLLISION_EPS
 }
 
 #[cfg(test)]
@@ -270,6 +292,22 @@ mod tests {
         );
         let result = NaiveCollisionChecker.check(&[sphere, box_body], &CollisionMatrix::new());
         assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn self_collision_classified_for_links() {
+        let a = CollisionBody::new(EntityId::Link(1), CollisionGeometry::Sphere(Sphere::new(1.0)), Transform3D::identity());
+        let b = CollisionBody::new(EntityId::Link(2), CollisionGeometry::Sphere(Sphere::new(1.0)), Transform3D::from_translation(Vector3::new(0.5, 0.0, 0.0)));
+        let result = NaiveCollisionChecker.check(&[a, b], &CollisionMatrix::new());
+        assert_eq!(result.collisions[0].collision_type, CollisionType::SelfCollision);
+    }
+
+    #[test]
+    fn environment_collision_classified_for_obstacle() {
+        let link = CollisionBody::new(EntityId::Link(0), CollisionGeometry::Sphere(Sphere::new(1.0)), Transform3D::identity());
+        let obstacle = CollisionBody::new(EntityId::Obstacle(0), CollisionGeometry::Sphere(Sphere::new(1.0)), Transform3D::from_translation(Vector3::new(0.5, 0.0, 0.0)));
+        let result = NaiveCollisionChecker.check(&[link, obstacle], &CollisionMatrix::new());
+        assert_eq!(result.collisions[0].collision_type, CollisionType::EnvironmentCollision);
     }
 
     #[test]
