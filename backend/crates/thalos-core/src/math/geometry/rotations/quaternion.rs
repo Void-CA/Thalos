@@ -1,17 +1,5 @@
 use crate::math::{constants, error::MathError};
 
-
-/// Modelo algebraico del cuaternión.
-///
-/// `Quaternion` es un número hipercomplejo (w, x, y, z). No representa
-/// una orientación — para eso está [`UnitQuaternion`](super::UnitQuaternion).
-///
-/// # Invariante
-/// - Ninguna: todo (w, x, y, z) ∈ ℝ⁴ es un cuaternión válido.
-///
-/// # Filosofía de errores
-/// - `normalize()` e `inverse()` retornan [`Result`] — no hay fallbacks silenciosos.
-/// - Si querés un fallback explícito, usá `normalize_or_identity()` o `inverse_or_identity()`.
 #[derive(Debug, Clone, Copy)]
 pub struct Quaternion {
     pub w: f64,
@@ -24,36 +12,21 @@ impl Quaternion {
     pub fn new(w: f64, x: f64, y: f64, z: f64) -> Self {
         Self { w, x, y, z }
     }
-
-    /// Elemento neutro del producto de Hamilton: (1, 0, 0, 0).
-    ///
-    /// Es infalible: (1,0,0,0) tiene norma exactamente 1.
     pub fn identity() -> Self {
         Self { w: 1.0, x: 0.0, y: 0.0, z: 0.0 }
     }
-
-    /// Norma al cuadrado: w² + x² + y² + z².
     pub fn norm_squared(&self) -> f64 {
         self.w * self.w
             + self.x * self.x
             + self.y * self.y
             + self.z * self.z
     }
-
-    /// Norma euclídea: √(w² + x² + y² + z²).
     pub fn norm(&self) -> f64 {
         self.norm_squared().sqrt()
     }
-
-    /// `true` si la norma al cuadrado difiere de 1 en menos de [`EPS`](constants::EPS).
     pub fn is_unit(&self) -> bool {
         (self.norm_squared() - 1.0).abs() < constants::EPS
     }
-
-    /// Normaliza el cuaternión a norma = 1.
-    ///
-    /// # Errors
-    /// Retorna [`MathError::ZeroQuaternionNormalization`] si `norm < EPS`.
     pub fn normalize(&self) -> Result<Self, MathError> {
         let norm = self.norm();
 
@@ -68,18 +41,9 @@ impl Quaternion {
             z: self.z / norm,
         })
     }
-
-    /// Normaliza o retorna la identidad si la norma es muy pequeña.
-    ///
-    /// Es el FALLBACK EXPLÍCITO de [`normalize()`](Self::normalize).
-    /// Preferí llamar a `normalize()` y manejar el `Result` siempre que puedas.
     pub fn normalize_or_identity(&self) -> Self {
         self.normalize().unwrap_or_else(|_| Self::identity())
     }
-
-    /// Conjugado: (w, -x, -y, -z).
-    ///
-    /// Operación infalible — no depende de la norma.
     pub fn conjugate(&self) -> Self {
         Self {
             w: self.w,
@@ -88,11 +52,6 @@ impl Quaternion {
             z: -self.z,
         }
     }
-
-    /// Inverso multiplicativo: conj(q) / ‖q‖².
-    ///
-    /// # Errors
-    /// Retorna [`MathError::ZeroQuaternionInverse`] si `norm_squared < EPS`.
     pub fn inverse(&self) -> Result<Self, MathError> {
         let norm_sq = self.norm_squared();
 
@@ -109,11 +68,6 @@ impl Quaternion {
             z: c.z / norm_sq,
         })
     }
-
-    /// Inverso o retorna la identidad si la norma es muy pequeña.
-    ///
-    /// Es el FALLBACK EXPLÍCITO de [`inverse()`](Self::inverse).
-    /// Preferí llamar a `inverse()` y manejar el `Result` siempre que puedas.
     pub fn inverse_or_identity(&self) -> Self {
         self.inverse().unwrap_or_else(|_| Self::identity())
     }
