@@ -1,16 +1,15 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SceneApiService } from '../scene/services/scene-api.service';
 import { SceneStore } from '../scene/store/scene.store';
-import { JointSlider, JointSliderEntry } from '../../shared/components/joint-slider/joint-slider';
-import type { JointMetadataDto } from '../robots/robot-api.types';
+import { JointEditor } from '../../shared/components/joint-editor/joint-editor';
 
 type MotionKind = 'movej' | 'movel';
 
 @Component({
   selector: 'planning-panel',
   standalone: true,
-  imports: [FormsModule, JointSlider],
+  imports: [FormsModule, JointEditor],
   template: `
     <div class="planning-panel">
       <!-- Motion type selector -->
@@ -26,19 +25,15 @@ type MotionKind = 'movej' | 'movel';
         }
       </div>
 
-      <!-- ── MoveJ: per-joint sliders + number inputs ── -->
+      <!-- ── MoveJ: JointEditor + actions ── -->
       @if (motionKind() === 'movej') {
-        @let joints = jointMeta();
-        @if (joints.length > 0) {
+        @if (dof() > 0) {
           <div class="planning-panel__section">
             <span class="planning-panel__section-label">
               Joint Targets ({{ dof() }})
             </span>
 
-            <joint-slider
-              [joints]="sliderEntries()"
-              (valueChange)="setJoint($event.index, $event.value)"
-            />
+            <joint-editor #editor />
           </div>
 
           <!-- Velocity -->
@@ -56,7 +51,7 @@ type MotionKind = 'movej' | 'movel';
 
           <!-- Actions -->
           <div class="planning-panel__actions">
-            <button class="planning-panel__reset" (click)="resetToCurrent()">
+            <button class="planning-panel__reset" (click)="editor.reset()">
               Reset
             </button>
             <button
@@ -77,14 +72,14 @@ type MotionKind = 'movej' | 'movel';
                 <input
                   class="planning-panel__input"
                   type="text"
-                  [(ngModel)]="jointsInput"
+                  [(ngModel)]="rawInput"
                   placeholder="e.g. 1.0, 0.5, -0.3"
                 />
               </label>
               <button
                 class="planning-panel__apply-raw"
                 (click)="applyRawInput()"
-                [disabled]="!jointsInput.trim()"
+                [disabled]="!rawInput.trim()"
               >
                 Apply Raw
               </button>
@@ -178,7 +173,6 @@ type MotionKind = 'movej' | 'movel';
           </label>
         </section>
 
-        <!-- Actions -->
         <div class="planning-panel__actions">
           <button class="planning-panel__submit" (click)="executeMoveL()" [disabled]="loading()">
             {{ loading() ? 'Executing…' : 'Execute MoveL' }}
@@ -198,66 +192,28 @@ export class PlanningPanel {
   private readonly api = inject(SceneApiService);
   private readonly store = inject(SceneStore);
 
+  @ViewChild('editor') private readonly editor!: JointEditor;
+
   protected readonly motionKind = signal<MotionKind>('movej');
   protected readonly motionKinds: MotionKind[] = ['movej', 'movel'];
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
 
-  /** Joint values the user is editing — mirrors robot DOF. */
-  protected readonly jointValues = signal<number[]>([]);
+  /** DOF del robot cargado (para @if en template). */
+  protected readonly dof = computed(
+    () => this.store.state()?.runtime?.robot.joints.length ?? 0,
+  );
 
-  /** Number of joints (derived). */
-  protected readonly dof = computed(() => this.jointValues().length);
+  // ── Raw input ──
 
-  /** Build JointSliderEntry[] from runtime metadata + local values. */
-  protected readonly sliderEntries = computed<JointSliderEntry[]>(() => {
-    const r = this.store.state()?.runtime;
-    if (!r) return [];
-    const vals = this.jointValues();
-    return r.robot.joints.map((j: JointMetadataDto, i: number) => ({
-      name: j.name || `J${i + 1}`,
-      value: vals[i] ?? 0,
-      min: j.min ?? -Math.PI,
-      max: j.max ?? Math.PI,
-    }));
-  });
-
-  /** Sync sliders from the robot's current joint angles. */
-  private syncFromRuntime(): void {
-    const r = this.store.state()?.runtime;
-    if (r) {
-      this.jointValues.set([...r.joints]);
-    }
-  }
-
-  constructor() {
-    this.syncFromRuntime();
-  }
-
-  // ── Joint editing ──
-
-  protected setJoint(index: number, value: number): void {
-    this.jointValues.update(prev => {
-      const next = [...prev];
-      next[index] = value;
-      return next;
-    });
-  }
-
-  protected resetToCurrent(): void {
-    this.syncFromRuntime();
-  }
-
-  // ── Raw input for power users ──
-
-  protected jointsInput = '';
+  protected rawInput = '';
 
   protected applyRawInput(): void {
-    const parts = this.jointsInput.split(',').map(s => parseFloat(s.trim()));
+    const parts = this.rawInput.split(',').map(s => parseFloat(s.trim()));
     if (parts.some(isNaN) || parts.length === 0) return;
-    const dof = this.dof();
-    const adjusted = Array.from({ length: dof }, (_, i) => parts[i] ?? 0);
-    this.jointValues.set(adjusted);
+    const n = this.dof();
+    const adjusted = Array.from({ length: n }, (_, i) => parts[i] ?? 0);
+    this.editor.setValues(adjusted);
   }
 
   // ── Velocity (shared MoveJ / MoveL) ──
@@ -277,8 +233,8 @@ export class PlanningPanel {
   // ── Execution ──
 
   protected executeMoveJ(): void {
-    const parts = this.jointValues();
-    if (parts.length === 0) return;
+    const parts = this.editor?.values();
+    if (!parts || parts.length === 0) return;
 
     this.error.set(null);
     this.loading.set(true);
@@ -286,7 +242,7 @@ export class PlanningPanel {
     this.api.moveJ(parts, this.parseFloatOpt(this.velocityStr)).subscribe({
       next: res => {
         this.store.applySnapshot(res);
-        this.syncFromRuntime();
+        this.editor.reset();
         this.loading.set(false);
       },
       error: (err: Error) => {
@@ -296,15 +252,19 @@ export class PlanningPanel {
     });
   }
 
-  // ── MoveL (unchanged) ──
+  // ── MoveL ──
 
+  protected readonly moveLRotFormat = signal<'euler' | 'quaternion'>('euler');
+  protected moveLYawStr = '0';
+  protected moveLPitchStr = '0';
+  protected moveLRollStr = '0';
+  protected moveLQwStr = '1';
+  protected moveLQxStr = '0';
+  protected moveLQyStr = '0';
+  protected moveLQzStr = '0';
   protected txStr = '0.3';
   protected tyStr = '0';
   protected tzStr = '0';
-  protected qwStr = '1';
-  protected qxStr = '0';
-  protected qyStr = '0';
-  protected qzStr = '0';
   protected frameIdStr = '';
 
   protected executeMoveL(): void {
@@ -313,11 +273,24 @@ export class PlanningPanel {
     const tz = this.parseFloatOpt(this.tzStr) ?? 0;
     const translation: [number, number, number] = [tx, ty, tz];
 
-    const qw = this.parseFloatOpt(this.qwStr) ?? 1;
-    const qx = this.parseFloatOpt(this.qxStr) ?? 0;
-    const qy = this.parseFloatOpt(this.qyStr) ?? 0;
-    const qz = this.parseFloatOpt(this.qzStr) ?? 0;
-    const rotation = { kind: 'Quaternion' as const, value: { w: qw, x: qx, y: qy, z: qz } };
+    const rotation = this.moveLRotFormat() === 'euler'
+      ? {
+          kind: 'Ypr' as const,
+          value: {
+            yaw:   (this.parseFloatOpt(this.moveLYawStr) ?? 0) * Math.PI / 180,
+            pitch: (this.parseFloatOpt(this.moveLPitchStr) ?? 0) * Math.PI / 180,
+            roll:  (this.parseFloatOpt(this.moveLRollStr) ?? 0) * Math.PI / 180,
+          },
+        }
+      : {
+          kind: 'Quaternion' as const,
+          value: {
+            w: this.parseFloatOpt(this.moveLQwStr) ?? 1,
+            x: this.parseFloatOpt(this.moveLQxStr) ?? 0,
+            y: this.parseFloatOpt(this.moveLQyStr) ?? 0,
+            z: this.parseFloatOpt(this.moveLQzStr) ?? 0,
+          },
+        };
 
     this.error.set(null);
     this.loading.set(true);
@@ -329,7 +302,6 @@ export class PlanningPanel {
     ).subscribe({
       next: res => {
         this.store.applySnapshot(res);
-        this.syncFromRuntime();
         this.loading.set(false);
       },
       error: (err: Error) => {

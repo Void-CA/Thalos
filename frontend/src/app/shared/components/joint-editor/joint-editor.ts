@@ -170,12 +170,20 @@ export class JointEditor {
 
   // ── Público ──
 
+  /** DOF actual (derivado del robot cargado). */
+  readonly dof = computed(() => this.store.state()?.runtime?.robot.joints.length ?? 0);
+
   /** Sincroniza valores desde runtime.joints. */
   reset(): void {
     const r = this.store.state()?.runtime;
     if (r) {
       this.values.set([...r.joints]);
     }
+  }
+
+  /** Setea valores programáticamente (raw input, etc.). */
+  setValues(v: number[]): void {
+    this.values.set(v);
   }
 
   // ── Template handlers ──
