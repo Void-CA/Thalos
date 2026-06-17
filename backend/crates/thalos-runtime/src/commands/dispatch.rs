@@ -35,6 +35,7 @@ impl ExecutableCommand for Command {
                 let dof = model.metadata().dof;
                 let chain = RobotRegistry::create_default(*model);
                 runtime.active_robot = ActiveRobot::new(*model, chain, vec![0.0; dof]);
+                runtime.active_plan = None;
                 Ok(None)
             }
             Command::Kinematics(cmd) => cmd.execute(runtime).map(Some),
