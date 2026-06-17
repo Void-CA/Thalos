@@ -94,6 +94,35 @@ fn load_robot_twice_produces_independent_snapshots() {
     assert_eq!(snap2.joints.len(), 4);
 }
 
+#[test]
+fn load_robot_clears_active_plan() {
+    let svc = make_service(RobotModel::Planar2R);
+
+    // Create a plan for Planar2R
+    let snap = svc
+        .execute(Command::Motion(MotionCommands::PlanAndMoveJ {
+            target: vec![0.5, 0.3],
+            max_velocity: None,
+            max_acceleration: None,
+            time_step: None,
+        }))
+        .unwrap();
+    assert!(
+        snap.active_plan.is_some(),
+        "plan must exist after PlanAndMoveJ",
+    );
+
+    // Load a different robot — plan must be cleared
+    let snap = svc.execute(Command::LoadRobot(RobotModel::Scara)).unwrap();
+    assert!(
+        snap.active_plan.is_none(),
+        "active_plan must be None after LoadRobot",
+    );
+    // New robot has 4 DOF, initialised to zero
+    assert_eq!(snap.joints.len(), 4);
+    assert!(snap.joints.iter().all(|&j| j == 0.0));
+}
+
 
 // ─── MoveToPosition (IK + FK round-trip) ──────────────────────────
 
