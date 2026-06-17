@@ -141,11 +141,12 @@ export interface TrajectoryVisualization {
   motionType: string;
 }
 
+export type WaypointType = 'Start' | 'Goal' | 'Via';
+
 export interface VisualWaypoint {
   position: [number, number, number];
   orientation: [number, number, number, number];
   joints: number[];
   timestamp: number;
-  isStart: boolean;
-  isEnd: boolean;
+  waypointType: WaypointType;
 }

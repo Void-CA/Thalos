@@ -438,7 +438,7 @@ export class ThreeRendererService {
   // ── Trajectory rendering ──
 
   /** Render or update the trajectory path + waypoint markers. */
-  syncTrajectory(waypoints: VisualWaypoint[]): void {
+  syncTrajectory(waypoints: VisualWaypoint[], motionType?: string): void {
     if (!this.contentGroup) return;
 
     // Dispose previous trajectory slot if any
@@ -448,10 +448,11 @@ export class ThreeRendererService {
 
     const group = new THREE.Group();
 
-    // ── Path line ──
+    // ── Path line — color indicates motion type ──
     const pts = waypoints.map(wp => new THREE.Vector3(wp.position[0], wp.position[1], wp.position[2]));
     const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
-    const lineMat = new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 2 });
+    const lineColor = motionType === 'movel' ? 0x33ccff : 0xff8800;
+    const lineMat = new THREE.LineBasicMaterial({ color: lineColor, linewidth: 2 });
     const line = new THREE.Line(lineGeo, lineMat);
     group.add(line);
 
@@ -459,15 +460,19 @@ export class ThreeRendererService {
     const markers: THREE.Mesh[] = [];
     const markerGeo = new THREE.SphereGeometry(0.025, 12, 12);
 
-    for (let i = 0; i < waypoints.length; i++) {
+      for (let i = 0; i < waypoints.length; i++) {
       const wp = waypoints[i];
       let color: number;
-      if (wp.isStart) {
-        color = 0x44cc44; // green
-      } else if (wp.isEnd) {
-        color = 0xcc4444; // red
-      } else {
-        color = 0xcccccc; // grey
+      switch (wp.waypointType) {
+        case 'Start':
+          color = 0x44cc44; // green
+          break;
+        case 'Goal':
+          color = 0xcc4444; // red
+          break;
+        default:
+          color = 0xcccccc; // grey (Via)
+          break;
       }
 
       const mat = new THREE.MeshStandardMaterial({ color });

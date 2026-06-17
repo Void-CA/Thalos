@@ -107,7 +107,6 @@ function toVisualWaypoint(dto: VisualWaypointDto): VisualWaypoint {
     orientation: dto.orientation,
     joints: dto.joints,
     timestamp: dto.timestamp,
-    isStart: dto.is_start,
-    isEnd: dto.is_end,
+    waypointType: dto.waypoint_type,
   };
 }

@@ -12,60 +12,21 @@
     <!-- CENTER — pure Three.js renderer -->
     <scene-viewer class="layout__center" />
 
-    <!-- RIGHT — dynamic tool context per mode -->
+    <!-- RIGHT — schema-driven tool context per mode -->
     <aside class="layout__right">
-      @switch (modeStore.mode()) {
-        @case ('analysis') {
-          <details class="accordion" open>
-            <summary class="accordion__header">
-              <span class="accordion__title">Forward Kinematics</span>
-              <span class="accordion__chevron"></span>
-            </summary>
-            <div class="accordion__body">
-              <joint-control />
-            </div>
-          </details>
-          <details class="accordion" open>
-            <summary class="accordion__header">
-              <span class="accordion__title">Inverse Kinematics</span>
-              <span class="accordion__chevron"></span>
-            </summary>
-            <div class="accordion__body">
-              <ik-target-panel />
-            </div>
-          </details>
-          <details class="accordion">
-            <summary class="accordion__header">
-              <span class="accordion__title">Workspace Analysis</span>
-              <span class="accordion__chevron"></span>
-            </summary>
-            <div class="accordion__body">
-              <workspace-panel />
-            </div>
-          </details>
-        }
-        @case ('planning') {
-          <details class="accordion" open>
-            <summary class="accordion__header">
-              <span class="accordion__title">Motion Planning</span>
-              <span class="accordion__chevron"></span>
-            </summary>
-            <div class="accordion__body">
-              <planning-panel />
-            </div>
-          </details>
-        }
-        @case ('execution') {
-          <details class="accordion" open>
-            <summary class="accordion__header">
-              <span class="accordion__title">Execution</span>
-              <span class="accordion__chevron"></span>
-            </summary>
-            <div class="accordion__body">
-              <p class="layout__placeholder">Execution controls coming soon</p>
-            </div>
-          </details>
-        }
+      @for (tool of currentTools(); track tool.id) {
+        <details class="accordion" [open]="tool.defaultOpen">
+          <summary class="accordion__header">
+            <span class="accordion__title">{{ tool.label }}</span>
+            <span class="accordion__chevron"></span>
+          </summary>
+          <div class="accordion__body">
+            <ng-container *ngComponentOutlet="tool.component" />
+          </div>
+        </details>
+      }
+      @if (currentTools().length === 0) {
+        <p class="layout__placeholder">No tools available for this mode</p>
       }
     </aside>
   </div>

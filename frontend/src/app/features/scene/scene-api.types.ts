@@ -104,13 +104,14 @@ export interface TrajectoryVisualizationDto {
   motion_type: string;
 }
 
+export type WaypointTypeDto = 'Start' | 'Goal' | 'Via';
+
 export interface VisualWaypointDto {
   position: [number, number, number];
   orientation: [number, number, number, number];
   joints: number[];
   timestamp: number;
-  is_start: boolean;
-  is_end: boolean;
+  waypoint_type: WaypointTypeDto;
 }
 
 export interface ValidateResponse {
