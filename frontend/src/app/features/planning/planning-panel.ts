@@ -1,22 +1,16 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SceneApiService } from '../scene/services/scene-api.service';
 import { SceneStore } from '../scene/store/scene.store';
+import { JointSlider, JointSliderEntry } from '../../shared/components/joint-slider/joint-slider';
 import type { JointMetadataDto } from '../robots/robot-api.types';
 
 type MotionKind = 'movej' | 'movel';
 
-interface JointInfo {
-  name: string;
-  min: number;
-  max: number;
-}
-
 @Component({
   selector: 'planning-panel',
   standalone: true,
-  imports: [FormsModule, DecimalPipe],
+  imports: [FormsModule, JointSlider],
   template: `
     <div class="planning-panel">
       <!-- Motion type selector -->
@@ -41,32 +35,10 @@ interface JointInfo {
               Joint Targets ({{ dof() }})
             </span>
 
-            @for (meta of joints; track $index; let i = $index) {
-              <div class="joint-row">
-                <span class="joint-row__name">{{ meta.name }}</span>
-                <input
-                  type="range"
-                  class="joint-row__slider"
-                  [min]="meta.min"
-                  [max]="meta.max"
-                  step="0.01"
-                  [value]="jointValues()[i]"
-                  (input)="setJoint(i, +$any($event.target).value)"
-                />
-                <span class="joint-row__range">
-                  {{ meta.min | number:'1.1-1' }}
-                </span>
-                <input
-                  type="number"
-                  class="joint-row__number"
-                  [min]="meta.min"
-                  [max]="meta.max"
-                  step="0.01"
-                  [value]="jointValues()[i]"
-                  (input)="setJoint(i, +$any($event.target).value)"
-                />
-              </div>
-            }
+            <joint-slider
+              [joints]="sliderEntries()"
+              (valueChange)="setJoint($event.index, $event.value)"
+            />
           </div>
 
           <!-- Velocity -->
@@ -128,78 +100,87 @@ interface JointInfo {
         }
       }
 
-      <!-- ── MoveL form (unchanged) ── -->
+      <!-- ── MoveL form (IK-style card inputs) ── -->
       @if (motionKind() === 'movel') {
-        <div class="planning-panel__form">
-          <fieldset class="planning-panel__fieldset">
-            <legend class="planning-panel__legend">Translation</legend>
-            <div class="planning-panel__row">
-              <label>
-                <span class="planning-panel__label--inline">X</span>
-                <input class="planning-panel__input--inline" type="number" step="0.1" [(ngModel)]="txStr" />
-              </label>
-              <label>
-                <span class="planning-panel__label--inline">Y</span>
-                <input class="planning-panel__input--inline" type="number" step="0.1" [(ngModel)]="tyStr" />
-              </label>
-              <label>
-                <span class="planning-panel__label--inline">Z</span>
-                <input class="planning-panel__input--inline" type="number" step="0.1" [(ngModel)]="tzStr" />
-              </label>
-            </div>
-          </fieldset>
+        <section class="planning-panel__card">
+          <h4 class="planning-panel__card-label">Target</h4>
 
-          <fieldset class="planning-panel__fieldset">
-            <legend class="planning-panel__legend">Rotation (quaternion)</legend>
-            <div class="planning-panel__row">
-              <label>
-                <span class="planning-panel__label--inline">W</span>
-                <input class="planning-panel__input--inline" type="number" step="0.1" [(ngModel)]="qwStr" />
-              </label>
-              <label>
-                <span class="planning-panel__label--inline">X</span>
-                <input class="planning-panel__input--inline" type="number" step="0.1" [(ngModel)]="qxStr" />
-              </label>
-              <label>
-                <span class="planning-panel__label--inline">Y</span>
-                <input class="planning-panel__input--inline" type="number" step="0.1" [(ngModel)]="qyStr" />
-              </label>
-              <label>
-                <span class="planning-panel__label--inline">Z</span>
-                <input class="planning-panel__input--inline" type="number" step="0.1" [(ngModel)]="qzStr" />
-              </label>
-            </div>
-          </fieldset>
+          <!-- Translation coord grid -->
+          <div class="planning-panel__coord-grid">
+            <label>X
+              <input type="number" step="0.01" [(ngModel)]="txStr" />
+            </label>
+            <label>Y
+              <input type="number" step="0.01" [(ngModel)]="tyStr" />
+            </label>
+            <label>Z
+              <input type="number" step="0.01" [(ngModel)]="tzStr" />
+            </label>
+          </div>
 
+          <!-- Rotation with format toggle -->
+          <div class="planning-panel__rotation">
+            <div class="segmented" role="radiogroup" aria-label="Rotation format">
+              <button
+                type="button"
+                role="radio"
+                class="segmented__btn"
+                [class.is-active]="moveLRotFormat() === 'euler'"
+                (click)="moveLRotFormat.set('euler')"
+              >Euler</button>
+              <button
+                type="button"
+                role="radio"
+                class="segmented__btn"
+                [class.is-active]="moveLRotFormat() === 'quaternion'"
+                (click)="moveLRotFormat.set('quaternion')"
+              >Quaternion</button>
+            </div>
+
+            @if (moveLRotFormat() === 'euler') {
+              <div class="planning-panel__coord-grid">
+                <label>Yaw °
+                  <input type="number" step="1" [(ngModel)]="moveLYawStr" />
+                </label>
+                <label>Pitch °
+                  <input type="number" step="1" [(ngModel)]="moveLPitchStr" />
+                </label>
+                <label>Roll °
+                  <input type="number" step="1" [(ngModel)]="moveLRollStr" />
+                </label>
+              </div>
+            } @else {
+              <div class="planning-panel__coord-grid planning-panel__coord-grid--quat">
+                <label>W
+                  <input type="number" step="0.01" [(ngModel)]="moveLQwStr" />
+                </label>
+                <label>X
+                  <input type="number" step="0.01" [(ngModel)]="moveLQxStr" />
+                </label>
+                <label>Y
+                  <input type="number" step="0.01" [(ngModel)]="moveLQyStr" />
+                </label>
+                <label>Z
+                  <input type="number" step="0.01" [(ngModel)]="moveLQzStr" />
+                </label>
+              </div>
+            }
+          </div>
+
+          <!-- Options -->
           <label class="planning-panel__field">
             <span class="planning-panel__label">Frame ID (optional)</span>
-            <input
-              class="planning-panel__input"
-              type="number"
-              step="1"
-              min="0"
-              [(ngModel)]="frameIdStr"
-              placeholder="0"
-            />
+            <input class="planning-panel__input" type="number" step="1" min="0" [(ngModel)]="frameIdStr" placeholder="0" />
           </label>
-
           <label class="planning-panel__field">
             <span class="planning-panel__label">Velocity (optional)</span>
-            <input
-              class="planning-panel__input"
-              type="number"
-              step="0.1"
-              min="0.01"
-              [(ngModel)]="velocityStr"
-              placeholder="default"
-            />
+            <input class="planning-panel__input" type="number" step="0.1" min="0.01" [(ngModel)]="velocityStr" placeholder="default" />
           </label>
+        </section>
 
-          <button
-            class="planning-panel__submit"
-            (click)="executeMoveL()"
-            [disabled]="loading()"
-          >
+        <!-- Actions -->
+        <div class="planning-panel__actions">
+          <button class="planning-panel__submit" (click)="executeMoveL()" [disabled]="loading()">
             {{ loading() ? 'Executing…' : 'Execute MoveL' }}
           </button>
         </div>
@@ -225,37 +206,31 @@ export class PlanningPanel {
   /** Joint values the user is editing — mirrors robot DOF. */
   protected readonly jointValues = signal<number[]>([]);
 
-  /** Processed joint metadata with fallbacks. */
-  protected readonly jointMeta = signal<JointInfo[]>([]);
-
   /** Number of joints (derived). */
-  protected readonly dof = computed(() => this.jointMeta().length);
+  protected readonly dof = computed(() => this.jointValues().length);
 
-  /** Whether runtime data is available. */
-  private readonly runtime = computed(() => this.store.state().runtime);
-
-  /** Build JointInfo[] from runtime metadata, with sensible defaults. */
-  private buildJointMeta(): JointInfo[] {
-    const r = this.runtime();
+  /** Build JointSliderEntry[] from runtime metadata + local values. */
+  protected readonly sliderEntries = computed<JointSliderEntry[]>(() => {
+    const r = this.store.state()?.runtime;
     if (!r) return [];
+    const vals = this.jointValues();
     return r.robot.joints.map((j: JointMetadataDto, i: number) => ({
       name: j.name || `J${i + 1}`,
+      value: vals[i] ?? 0,
       min: j.min ?? -Math.PI,
       max: j.max ?? Math.PI,
     }));
-  }
+  });
 
   /** Sync sliders from the robot's current joint angles. */
   private syncFromRuntime(): void {
-    const r = this.runtime();
+    const r = this.store.state()?.runtime;
     if (r) {
       this.jointValues.set([...r.joints]);
-      this.jointMeta.set(this.buildJointMeta());
     }
   }
 
   constructor() {
-    // Pull initial values from store on creation.
     this.syncFromRuntime();
   }
 
@@ -280,13 +255,12 @@ export class PlanningPanel {
   protected applyRawInput(): void {
     const parts = this.jointsInput.split(',').map(s => parseFloat(s.trim()));
     if (parts.some(isNaN) || parts.length === 0) return;
-    // Pad or truncate to match DOF
-    const meta = this.jointMeta();
-    const adjusted = meta.map((_, i) => parts[i] ?? 0);
+    const dof = this.dof();
+    const adjusted = Array.from({ length: dof }, (_, i) => parts[i] ?? 0);
     this.jointValues.set(adjusted);
   }
 
-  // ── Velocity (shared between MoveJ / MoveL) ──
+  // ── Velocity (shared MoveJ / MoveL) ──
 
   protected velocityStr = '';
 
