@@ -452,13 +452,13 @@ export class ThreeRendererService {
     const pts = waypoints.map(wp => new THREE.Vector3(wp.position[0], wp.position[1], wp.position[2]));
     const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
     const lineColor = motionType === 'movel' ? 0x33ccff : 0xff8800;
-    const lineMat = new THREE.LineBasicMaterial({ color: lineColor, linewidth: 2 });
+    const lineMat = new THREE.LineBasicMaterial({ color: lineColor});
     const line = new THREE.Line(lineGeo, lineMat);
     group.add(line);
 
     // ── Waypoint markers ──
     const markers: THREE.Mesh[] = [];
-    const markerGeo = new THREE.SphereGeometry(0.025, 12, 12);
+    const markerGeo = new THREE.SphereGeometry(0.005, 12, 12);
 
       for (let i = 0; i < waypoints.length; i++) {
       const wp = waypoints[i];
