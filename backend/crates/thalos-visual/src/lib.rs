@@ -8,6 +8,6 @@ pub mod workspace;
 pub use builder::{SceneBuilder, align_y_to, cylinder_between};
 pub use scene::*;
 pub use scara::ScaraVisualBuilder;
-pub use trajectory::{TrajectoryVisualBuilder, TrajectoryVisualization, VisualMotionType, VisualWaypoint};
+pub use trajectory::{TrajectoryVisualBuilder, TrajectoryVisualization, VisualMotionType, VisualWaypoint, WaypointType};
 pub use validator::{SceneError, SceneValidator};
 pub use workspace::WorkspaceVisual;

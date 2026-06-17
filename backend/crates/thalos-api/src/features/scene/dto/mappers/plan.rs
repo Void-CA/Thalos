@@ -1,11 +1,11 @@
 // ── ActiveMotionPlan → ActivePlanDto ──
 
 use thalos_visual::{
-    TrajectoryVisualization, VisualMotionType, VisualWaypoint,
+    TrajectoryVisualization, VisualMotionType, VisualWaypoint, WaypointType,
 };
 
 use crate::features::scene::dto::{
-    ActivePlanDto, TrajectoryVisualizationDto, VisualWaypointDto,
+    ActivePlanDto, TrajectoryVisualizationDto, VisualWaypointDto, WaypointTypeDto,
 };
 
 impl From<&thalos_runtime::ActiveMotionPlan> for ActivePlanDto {
@@ -70,8 +70,11 @@ impl From<VisualWaypoint> for VisualWaypointDto {
             orientation: w.orientation,
             joints: w.joints,
             timestamp: w.timestamp,
-            is_start: w.is_start,
-            is_end: w.is_end,
+            waypoint_type: match w.waypoint_type {
+                WaypointType::Start => WaypointTypeDto::Start,
+                WaypointType::Goal => WaypointTypeDto::Goal,
+                WaypointType::Via => WaypointTypeDto::Via,
+            },
         }
     }
 }

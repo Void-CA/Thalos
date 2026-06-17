@@ -1,4 +1,11 @@
-
+//! Visual representation of a planned trajectory for 3D rendering.
+//!
+//! `TrajectoryVisualization` is a standalone type (not merged into `VisualScene`)
+//! because trajectories are dynamic overlays rendered differently from static
+//! scene geometry — paths, waypoints, orientation gizmos, animation playback.
+//!
+//! The frontend (Three.js) handles the actual rendering; these types
+//! define the data contract.
 
 use serde::{Deserialize, Serialize};
 
@@ -10,30 +17,68 @@ use thalos_core::{
 };
 
 use crate::scene::precision::VisualPrecision;
+
+// ─── Types ──────────────────────────────────────────────────────────────
+
+/// How the trajectory was planned — affects visual styling on the frontend.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum VisualMotionType {
     MoveJ,
     MoveL,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct VisualWaypoint {
-    pub position: [f64; 3],
-    pub orientation: [f64; 4],
-    pub joints: Vec<f64>,
-    pub timestamp: f64,
-    pub is_start: bool,
-    pub is_end: bool,
+/// Semantic role of a waypoint along a trajectory.
+///
+/// The frontend uses this to pick colours and icons — it does NOT
+/// derive semantics from position within the waypoint list.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub enum WaypointType {
+    /// First waypoint (trajectory start).
+    Start,
+    /// Last waypoint (trajectory goal/target).
+    Goal,
+    /// Any intermediate waypoint along the path.
+    Via,
 }
 
+/// A single waypoint in 3D space, ready for frontend rendering.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct VisualWaypoint {
+    /// 3D position in world space (computed via FK from joint angles).
+    pub position: [f64; 3],
+    /// Orientation quaternion `[w, x, y, z]` at this waypoint.
+    pub orientation: [f64; 4],
+    /// Joint angles at this waypoint.
+    pub joints: Vec<f64>,
+    /// Timestamp along the trajectory (seconds from start).
+    pub timestamp: f64,
+    /// Semantic role — Start, Goal, or Via.
+    pub waypoint_type: WaypointType,
+}
+
+/// Complete visual representation of a planned trajectory.
+///
+/// - `waypoints`: 3D positions + orientations along the path
+/// - `motion_type`: how the trajectory was planned (affects styling)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TrajectoryVisualization {
     pub waypoints: Vec<VisualWaypoint>,
     pub motion_type: VisualMotionType,
 }
+
+// ─── Builder ────────────────────────────────────────────────────────────
+
+/// Builds a `TrajectoryVisualization` from a planned trajectory and chain.
+///
+/// For each waypoint in the trajectory, FK is computed to obtain the
+/// end-effector position and orientation in world space.
 pub struct TrajectoryVisualBuilder;
 
 impl TrajectoryVisualBuilder {
+    /// Build a visualisation from a joint-space `Trajectory` and `SerialChain`.
+    ///
+    /// `end_effector` is the frame whose pose is tracked along the path.
+    /// `motion_type` tags the visualisation for frontend styling.
     pub fn build(
         trajectory: &Trajectory,
         chain: &SerialChain,
@@ -63,13 +108,22 @@ impl TrajectoryVisualBuilder {
                 })
                 .unwrap_or_default();
 
+            let waypoint_type = if n == 1 {
+                WaypointType::Goal
+            } else if i == 0 {
+                WaypointType::Start
+            } else if i == n - 1 {
+                WaypointType::Goal
+            } else {
+                WaypointType::Via
+            };
+
             waypoints.push(VisualWaypoint {
                 position,
                 orientation,
                 joints: point.joints().to_vec(),
                 timestamp: point.timestamp(),
-                is_start: i == 0,
-                is_end: i == n - 1,
+                waypoint_type,
             });
         }
 
@@ -79,6 +133,8 @@ impl TrajectoryVisualBuilder {
         }
     }
 }
+
+/// Normalise a quaternion `[w, x, y, z]` to unit length.
 fn normalize_quat(q: &mut [f64; 4]) {
     let norm_sq = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3];
     if norm_sq > 0.0 {
@@ -110,7 +166,7 @@ mod tests {
     }
 
     #[test]
-    fn build_single_waypoint_marks_start_and_end() {
+    fn build_single_waypoint_marks_goal() {
         let chain = RobotRegistry::create_default(RobotModel::Planar2R);
         let ee = *chain.end_effector();
         let traj = Trajectory::new(vec![TrajectoryPoint::new(vec![0.0, 0.0], 0.0)]);
@@ -118,8 +174,8 @@ mod tests {
         let vis = TrajectoryVisualBuilder::build(&traj, &chain, ee, VisualMotionType::MoveL);
 
         assert_eq!(vis.waypoints.len(), 1);
-        assert!(vis.waypoints[0].is_start);
-        assert!(vis.waypoints[0].is_end);
+        // Single waypoint IS the goal (start == goal).
+        assert_eq!(vis.waypoints[0].waypoint_type, WaypointType::Goal);
     }
 
     #[test]
@@ -134,10 +190,26 @@ mod tests {
         let vis = TrajectoryVisualBuilder::build(&traj, &chain, ee, VisualMotionType::MoveJ);
 
         assert_eq!(vis.waypoints.len(), 2);
-        assert!(vis.waypoints[0].is_start);
-        assert!(!vis.waypoints[0].is_end);
-        assert!(!vis.waypoints[1].is_start);
-        assert!(vis.waypoints[1].is_end);
+        assert_eq!(vis.waypoints[0].waypoint_type, WaypointType::Start);
+        assert_eq!(vis.waypoints[1].waypoint_type, WaypointType::Goal);
+    }
+
+    #[test]
+    fn build_three_waypoints_marks_via() {
+        let chain = RobotRegistry::create_default(RobotModel::Planar2R);
+        let ee = *chain.end_effector();
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![0.25, 0.15], 0.5),
+            TrajectoryPoint::new(vec![0.5, 0.3], 1.0),
+        ]);
+
+        let vis = TrajectoryVisualBuilder::build(&traj, &chain, ee, VisualMotionType::MoveJ);
+
+        assert_eq!(vis.waypoints.len(), 3);
+        assert_eq!(vis.waypoints[0].waypoint_type, WaypointType::Start);
+        assert_eq!(vis.waypoints[1].waypoint_type, WaypointType::Via);
+        assert_eq!(vis.waypoints[2].waypoint_type, WaypointType::Goal);
     }
 
     #[test]

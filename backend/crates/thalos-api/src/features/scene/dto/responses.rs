@@ -132,6 +132,14 @@ pub struct TrajectoryVisualizationDto {
     pub motion_type: String,
 }
 
+/// Semantic role of a waypoint — frontend uses this to pick colours.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum WaypointTypeDto {
+    Start,
+    Goal,
+    Via,
+}
+
 /// A single waypoint in 3D space for the frontend to render.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct VisualWaypointDto {
@@ -139,8 +147,7 @@ pub struct VisualWaypointDto {
     pub orientation: [f64; 4],
     pub joints: Vec<f64>,
     pub timestamp: f64,
-    pub is_start: bool,
-    pub is_end: bool,
+    pub waypoint_type: WaypointTypeDto,
 }
 
 // ── Validate response ──
