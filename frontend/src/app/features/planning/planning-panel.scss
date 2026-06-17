@@ -39,6 +39,172 @@
     }
   }
 
+  &__section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  &__section-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: $text-secondary;
+    font-weight: 600;
+    margin-bottom: 0.15rem;
+  }
+
+  // ── Joint row: name | slider | number ──
+
+  .joint-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0;
+
+    &__name {
+      width: 48px;
+      font-size: 0.7rem;
+      color: $text-primary;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    &__slider {
+      flex: 1;
+      min-width: 0;
+      height: 4px;
+      appearance: none;
+      -webkit-appearance: none;
+      background: $border-default;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+
+      &::-webkit-slider-thumb {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: $accent;
+        border: 2px solid $bg-surface;
+        cursor: pointer;
+        transition: filter $transition-fast;
+      }
+
+      &::-webkit-slider-thumb:hover {
+        filter: brightness(1.3);
+      }
+
+      &::-moz-range-thumb {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: $accent;
+        border: 2px solid $bg-surface;
+        cursor: pointer;
+      }
+    }
+
+    &__range {
+      font-size: 0.6rem;
+      color: $text-muted;
+      opacity: 0.5;
+      width: 24px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    &__number {
+      @include panel.number-input;
+      width: 60px;
+      flex-shrink: 0;
+      text-align: right;
+    }
+  }
+
+  // ── Actions ──
+
+  &__actions {
+    display: flex;
+    gap: 0.4rem;
+    margin-top: 0.25rem;
+  }
+
+  &__reset {
+    @include panel.action-base;
+    flex: 0 0 auto;
+    background: transparent;
+    border-color: $border-default;
+    color: $text-muted;
+    font-size: 0.7rem;
+  }
+
+  &__submit {
+    @include panel.action-base;
+    flex: 1;
+  }
+
+  // ── Advanced (raw input collapsible) ──
+
+  &__advanced {
+    border: 1px solid $border-subtle;
+    border-radius: $radius-sm;
+    margin-top: 0.25rem;
+  }
+
+  &__advanced-summary {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: $text-muted;
+    padding: 0.35rem 0.5rem;
+    cursor: pointer;
+    user-select: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+  }
+
+  &__advanced-body {
+    padding: 0 0.5rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  &__apply-raw {
+    @include panel.action-base;
+    font-size: 0.7rem;
+    padding: 0.3rem;
+    align-self: flex-end;
+  }
+
+  // ── Empty state ──
+
+  &__empty {
+    text-align: center;
+    padding: 1.5rem 0.5rem;
+
+    p {
+      margin: 0;
+      font-size: 0.75rem;
+      color: $text-primary;
+    }
+  }
+
+  &__empty-hint {
+    font-size: 0.68rem !important;
+    opacity: 0.5;
+    margin-top: 0.4rem !important;
+  }
+
+  // ── Rest (MoveL form, unchanged) ──
+
   &__form {
     display: flex;
     flex-direction: column;
@@ -101,11 +267,6 @@
       align-items: center;
       gap: 0.2rem;
     }
-  }
-
-  &__submit {
-    @include panel.action-base;
-    margin-top: 0.25rem;
   }
 
   &__error {

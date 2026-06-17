@@ -1,14 +1,22 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SceneApiService } from '../scene/services/scene-api.service';
 import { SceneStore } from '../scene/store/scene.store';
+import type { JointMetadataDto } from '../robots/robot-api.types';
 
 type MotionKind = 'movej' | 'movel';
+
+interface JointInfo {
+  name: string;
+  min: number;
+  max: number;
+}
 
 @Component({
   selector: 'planning-panel',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, DecimalPipe],
   template: `
     <div class="planning-panel">
       <!-- Motion type selector -->
@@ -24,18 +32,44 @@ type MotionKind = 'movej' | 'movel';
         }
       </div>
 
-      <!-- MoveJ form -->
+      <!-- ── MoveJ: per-joint sliders + number inputs ── -->
       @if (motionKind() === 'movej') {
-        <div class="planning-panel__form">
-          <label class="planning-panel__field">
-            <span class="planning-panel__label">Target Joints</span>
-            <input
-              class="planning-panel__input"
-              type="text"
-              [(ngModel)]="jointsInput"
-              placeholder="e.g. 1.0, 0.5, -0.3"
-            />
-          </label>
+        @let joints = jointMeta();
+        @if (joints.length > 0) {
+          <div class="planning-panel__section">
+            <span class="planning-panel__section-label">
+              Joint Targets ({{ dof() }})
+            </span>
+
+            @for (meta of joints; track $index; let i = $index) {
+              <div class="joint-row">
+                <span class="joint-row__name">{{ meta.name }}</span>
+                <input
+                  type="range"
+                  class="joint-row__slider"
+                  [min]="meta.min"
+                  [max]="meta.max"
+                  step="0.01"
+                  [value]="jointValues()[i]"
+                  (input)="setJoint(i, +$any($event.target).value)"
+                />
+                <span class="joint-row__range">
+                  {{ meta.min | number:'1.1-1' }}
+                </span>
+                <input
+                  type="number"
+                  class="joint-row__number"
+                  [min]="meta.min"
+                  [max]="meta.max"
+                  step="0.01"
+                  [value]="jointValues()[i]"
+                  (input)="setJoint(i, +$any($event.target).value)"
+                />
+              </div>
+            }
+          </div>
+
+          <!-- Velocity -->
           <label class="planning-panel__field">
             <span class="planning-panel__label">Velocity (optional)</span>
             <input
@@ -47,17 +81,54 @@ type MotionKind = 'movej' | 'movel';
               placeholder="default"
             />
           </label>
-          <button
-            class="planning-panel__submit"
-            (click)="executeMoveJ()"
-            [disabled]="!jointsInput.trim() || loading()"
-          >
-            {{ loading() ? 'Executing…' : 'Execute MoveJ' }}
-          </button>
-        </div>
+
+          <!-- Actions -->
+          <div class="planning-panel__actions">
+            <button class="planning-panel__reset" (click)="resetToCurrent()">
+              Reset
+            </button>
+            <button
+              class="planning-panel__submit"
+              (click)="executeMoveJ()"
+              [disabled]="loading()"
+            >
+              {{ loading() ? 'Executing…' : 'Execute MoveJ' }}
+            </button>
+          </div>
+
+          <!-- Advanced: raw CSV input for power users -->
+          <details class="planning-panel__advanced">
+            <summary class="planning-panel__advanced-summary">Raw Input</summary>
+            <div class="planning-panel__advanced-body">
+              <label class="planning-panel__field">
+                <span class="planning-panel__label">Comma-separated joints</span>
+                <input
+                  class="planning-panel__input"
+                  type="text"
+                  [(ngModel)]="jointsInput"
+                  placeholder="e.g. 1.0, 0.5, -0.3"
+                />
+              </label>
+              <button
+                class="planning-panel__apply-raw"
+                (click)="applyRawInput()"
+                [disabled]="!jointsInput.trim()"
+              >
+                Apply Raw
+              </button>
+            </div>
+          </details>
+        } @else {
+          <div class="planning-panel__empty">
+            <p>No robot loaded.</p>
+            <p class="planning-panel__empty-hint">
+              Select a robot from the catalog to start planning.
+            </p>
+          </div>
+        }
       }
 
-      <!-- MoveL form -->
+      <!-- ── MoveL form (unchanged) ── -->
       @if (motionKind() === 'movel') {
         <div class="planning-panel__form">
           <fieldset class="planning-panel__fieldset">
@@ -134,7 +205,7 @@ type MotionKind = 'movej' | 'movel';
         </div>
       }
 
-      <!-- Result display -->
+      <!-- Error display -->
       @if (error()) {
         <div class="planning-panel__error">{{ error() }}</div>
       }
@@ -151,17 +222,73 @@ export class PlanningPanel {
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
 
-  // Form fields as strings (ngModel-friendly)
+  /** Joint values the user is editing — mirrors robot DOF. */
+  protected readonly jointValues = signal<number[]>([]);
+
+  /** Processed joint metadata with fallbacks. */
+  protected readonly jointMeta = signal<JointInfo[]>([]);
+
+  /** Number of joints (derived). */
+  protected readonly dof = computed(() => this.jointMeta().length);
+
+  /** Whether runtime data is available. */
+  private readonly runtime = computed(() => this.store.state().runtime);
+
+  /** Build JointInfo[] from runtime metadata, with sensible defaults. */
+  private buildJointMeta(): JointInfo[] {
+    const r = this.runtime();
+    if (!r) return [];
+    return r.robot.joints.map((j: JointMetadataDto, i: number) => ({
+      name: j.name || `J${i + 1}`,
+      min: j.min ?? -Math.PI,
+      max: j.max ?? Math.PI,
+    }));
+  }
+
+  /** Sync sliders from the robot's current joint angles. */
+  private syncFromRuntime(): void {
+    const r = this.runtime();
+    if (r) {
+      this.jointValues.set([...r.joints]);
+      this.jointMeta.set(this.buildJointMeta());
+    }
+  }
+
+  constructor() {
+    // Pull initial values from store on creation.
+    this.syncFromRuntime();
+  }
+
+  // ── Joint editing ──
+
+  protected setJoint(index: number, value: number): void {
+    this.jointValues.update(prev => {
+      const next = [...prev];
+      next[index] = value;
+      return next;
+    });
+  }
+
+  protected resetToCurrent(): void {
+    this.syncFromRuntime();
+  }
+
+  // ── Raw input for power users ──
+
   protected jointsInput = '';
+
+  protected applyRawInput(): void {
+    const parts = this.jointsInput.split(',').map(s => parseFloat(s.trim()));
+    if (parts.some(isNaN) || parts.length === 0) return;
+    // Pad or truncate to match DOF
+    const meta = this.jointMeta();
+    const adjusted = meta.map((_, i) => parts[i] ?? 0);
+    this.jointValues.set(adjusted);
+  }
+
+  // ── Velocity (shared between MoveJ / MoveL) ──
+
   protected velocityStr = '';
-  protected txStr = '0.3';
-  protected tyStr = '0';
-  protected tzStr = '0';
-  protected qwStr = '1';
-  protected qxStr = '0';
-  protected qyStr = '0';
-  protected qzStr = '0';
-  protected frameIdStr = '';
 
   private parseFloatOpt(s: string): number | undefined {
     const v = parseFloat(s);
@@ -173,12 +300,11 @@ export class PlanningPanel {
     return isFinite(v) ? v : undefined;
   }
 
+  // ── Execution ──
+
   protected executeMoveJ(): void {
-    const parts = this.jointsInput.split(',').map(s => parseFloat(s.trim()));
-    if (parts.some(isNaN) || parts.length === 0) {
-      this.error.set('Invalid joint values. Use comma-separated numbers.');
-      return;
-    }
+    const parts = this.jointValues();
+    if (parts.length === 0) return;
 
     this.error.set(null);
     this.loading.set(true);
@@ -186,6 +312,7 @@ export class PlanningPanel {
     this.api.moveJ(parts, this.parseFloatOpt(this.velocityStr)).subscribe({
       next: res => {
         this.store.applySnapshot(res);
+        this.syncFromRuntime();
         this.loading.set(false);
       },
       error: (err: Error) => {
@@ -194,6 +321,17 @@ export class PlanningPanel {
       },
     });
   }
+
+  // ── MoveL (unchanged) ──
+
+  protected txStr = '0.3';
+  protected tyStr = '0';
+  protected tzStr = '0';
+  protected qwStr = '1';
+  protected qxStr = '0';
+  protected qyStr = '0';
+  protected qzStr = '0';
+  protected frameIdStr = '';
 
   protected executeMoveL(): void {
     const tx = this.parseFloatOpt(this.txStr) ?? 0;
@@ -217,6 +355,7 @@ export class PlanningPanel {
     ).subscribe({
       next: res => {
         this.store.applySnapshot(res);
+        this.syncFromRuntime();
         this.loading.set(false);
       },
       error: (err: Error) => {
