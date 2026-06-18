@@ -1,7 +1,7 @@
-use thalos_core::kinematics::{
+use thalos_core::{kinematics::{
     forward::ForwardKinematics,
     inverse::{DampedLeastSquaresSolver, IKGoal, IKResult, IKSolver},
-};
+}, prelude::Trajectory};
 use thalos_core::spatial::frame::FrameId;
 
 pub use thalos_core::prelude::ActiveRobot;
@@ -38,12 +38,12 @@ impl SceneRuntime {
     }
 
     ///
-    pub fn set_completed_plan(&mut self, trajectory: impl Into<thalos_core::prelude::Trajectory>, motion_type: MotionType) {
+    pub fn set_completed_plan(&mut self, trajectory: impl Into<Trajectory>, motion_type: MotionType) {
         let tid = self.next_plan_id();
         self.active_plan = Some(ActiveMotionPlan::completed(tid, trajectory.into(), motion_type));
     }
 
-    pub fn set_created_plan(&mut self, trajectory: impl Into<thalos_core::prelude::Trajectory>, motion_type: MotionType) {
+    pub fn set_created_plan(&mut self, trajectory: impl Into<Trajectory>, motion_type: MotionType) {
         let tid = self.next_plan_id();
         self.active_plan = Some(ActiveMotionPlan::created(tid, trajectory.into(), motion_type));
     }

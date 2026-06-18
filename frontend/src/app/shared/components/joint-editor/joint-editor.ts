@@ -115,9 +115,9 @@ export interface JointEntry {
     }
 
     .je-row__number {
-      width: 60px;
+      width: 70px;
       flex-shrink: 0;
-      text-align: right;
+      text-align: left;
       padding: 0.2rem 0.3rem;
       font-family: monospace;
       font-size: 0.8rem;
