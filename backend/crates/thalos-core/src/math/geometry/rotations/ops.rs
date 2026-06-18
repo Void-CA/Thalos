@@ -41,41 +41,59 @@ impl Sub for Quaternion {
 }
 
 mod tests {
+
+    use crate::math::geometry::{
+        rotations::{Quaternion, UnitQuaternion},
+        vectors::{Vector3, UnitVector3}
+    };
+
     #[test]
     fn test_quaternion_algebra() {
         use super::*;
 
-        let q1 = Quaternion::new(1.2, -3.5, 2.0, -4.0);
-        let q2 = Quaternion::new(0.5, 1.0, -1.2, -2.0);
-
-        let q3 = q1 + q2;
-        let q4 = q2 - q1;
-
-        println!("Suma:\nQ3: {:?}\n", q3);
-        println!("Resta:\nQ4: {:?}\n", q4);
+        let q1 = Quaternion::new(2.0, -1.0, 3.0, 4.0);
+        let q2 = Quaternion::new(-1.0 ,2.0, -1.0, 3.0);
+        let q3 = Quaternion::new(3.0, 1.0, 2.0, -1.0);
+        let q4 = Quaternion::new(1.0, -3.0, -2.0, 2.0);
 
 
-        let q5 =  q4 * q1;
-        let q6 = q3 * q4;
-        let q7 =  q2 * q1;
-        println!("Resultado de multiplicaciones");
-        println!("Q5: {:?}", q5);
-        println!("Q6: {:?}", q6);
+        let q5 = q1 + q2;
 
-        println!("{:.2} {:.2} {:.2} {:.2}",
-            q3.w * q4.w, q3.w * q4.x, q3.w * q4.y, q3.w * q4.z
-        );
-        println!("{:.2} {:.2} {:.2} {:.2}",
-            q3.x * q4.w, q3.x * q4.x, q3.x * q4.y, q3.x * q4.z
-        );
-        println!("{:.2} {:.2} {:.2} {:.2}",
-            q3.y * q4.w, q3.y * q4.x, q3.y * q4.y, q3.y * q4.z
-        );
-        println!("{:.2} {:.2} {:.2} {:.2}",
-            q3.z * q4.w, q3.z * q4.x, q3.z * q4.y, q3.z * q4.z
-        );
+        println!("1. q1 + q2:\n {:?}\n", q5);
 
-        println!("Q7: {:?}", q7);
+        let q6 = q3 - q4;
+
+        println!("2. q3 - q4:\n {:?}\n", q6);
+
+        let q_final = (q5 * q6) * q2;
+        println!("3. (q1 + q2) * (q3 - q2) * q2:\n {:?}\n", q_final)
     }
 
+    #[test]
+    fn test_spatial_rotation() {
+        let point = Vector3::new(2.0, -4.0, 4.0);
+        let axis = Vector3::new(1.0, 2.0, -2.0);
+        let norm = axis.norm();
+        let unit_axis = UnitVector3::new(axis).unwrap();
+
+        let angle : f64 = 60.0;
+        
+        
+        println!("Norma: {:?}", norm);
+        println!("Vector unitario: {:?}", unit_axis);
+
+        let q = UnitQuaternion::from_axis_angle(
+            unit_axis,
+            angle.to_radians()
+        );
+        println!("Q: {:?}", q);
+        println!("Q-1 {:?}", q.inverse());
+
+        let p = Quaternion::new(0.0, point.x, point.y, point.z);
+        println!("Point as quaternion:\n {:?}", p);
+        let w = p * q.into_inner();
+        println!("W: {:?}", w);
+        println!("Rotated vector: {:?}",  q.rotate_vector(point));
+
+    }
 }

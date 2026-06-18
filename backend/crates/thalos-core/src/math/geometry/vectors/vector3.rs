@@ -25,6 +25,10 @@ impl Vector3 {
          self.z * self.z).sqrt()
     }
 
+    pub fn norm(&self) -> f64 {
+        self.magnitude()
+    }
+    
     pub fn normalized(&self) -> Result<Self, MathError> {
         let mag = self.magnitude();
         if mag.abs() < constants::EPS {

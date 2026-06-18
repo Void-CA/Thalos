@@ -12,11 +12,9 @@ const IK_MAX_ITERS: usize = 500;
 const IK_TOLERANCE: f64 = 1e-6;
 const IK_LAMBDA: f64 = 0.1;
 
-/// Runtime mutable state: the currently active robot and its motion plan.
 pub struct SceneRuntime {
     pub active_robot: ActiveRobot,
     pub active_plan: Option<ActiveMotionPlan>,
-    /// Monotonic counter for plan IDs.
     next_plan_id: u64,
 }
 
@@ -29,8 +27,6 @@ impl SceneRuntime {
         }
     }
 
-    /// Solve IK for the given frame and goal, then apply the result by updating
-    /// `active_robot.joints` in-place. Returns the solver metadata.
     pub fn solve_and_apply_ik(&mut self, frame: FrameId, goal: IKGoal) -> IKResult {
         let fk = ForwardKinematics::new(self.active_robot.chain.clone());
         let solver =
@@ -41,29 +37,21 @@ impl SceneRuntime {
         result
     }
 
-    /// Store a planned trajectory as a Completed plan.
     ///
-    /// Sets state to `Completed` because the caller (PlanAndMoveJ/L)
-    /// has already set joints to the final target position.
     pub fn set_completed_plan(&mut self, trajectory: impl Into<thalos_core::prelude::Trajectory>, motion_type: MotionType) {
         let tid = self.next_plan_id();
         self.active_plan = Some(ActiveMotionPlan::completed(tid, trajectory.into(), motion_type));
     }
 
-    /// Store a plan without executing (Created state, execution deferred).
     pub fn set_created_plan(&mut self, trajectory: impl Into<thalos_core::prelude::Trajectory>, motion_type: MotionType) {
         let tid = self.next_plan_id();
         self.active_plan = Some(ActiveMotionPlan::created(tid, trajectory.into(), motion_type));
     }
 
-    /// Clear the active plan.
     pub fn clear_plan(&mut self) {
         self.active_plan = None;
     }
 
-    /// Advance the active trajectory by `dt` seconds (elapsed simulation time).
-    /// Updates `active_robot.joints` to the interpolated position at elapsed time.
-    /// Returns `true` if the trajectory is still in progress, `false` if complete or no plan.
     pub fn advance_trajectory(&mut self, dt: f64) -> bool {
         let Some(ref plan) = self.active_plan else {
             return false;
@@ -119,7 +107,6 @@ impl SceneRuntime {
         true
     }
 
-    /// Progress of the active trajectory as a fraction 0.0–1.0.
     pub fn trajectory_progress(&self) -> Option<f64> {
         self.active_plan.as_ref().map(|p| p.progress())
     }
