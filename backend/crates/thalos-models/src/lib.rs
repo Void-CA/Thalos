@@ -28,5 +28,5 @@ pub mod urdf;
 pub use robot::Robot;
 pub use link::{Link, Inertial};
 pub use joint::{Joint, JointKind, JointLimits};
-pub use geometry::{Geometry, Visual, Collision};
+pub use geometry::{Geometry, Visual, Collision, CollisionGeometry, Sphere, Box3D, Cylinder, Mesh};
 pub use material::{Material, Color};
