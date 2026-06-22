@@ -1,6 +1,6 @@
 use crate::kinematics::forward::ForwardKinematics;
 use crate::kinematics::jacobian::{GeometricJacobian, JacobianSolver};
-use crate::math::algebra::vector::DynamicVector;
+use crate::math::algebra::vector::{DynamicVector, vector_to_dynamic};
 use crate::robot::joint::{JointKind, JointLimits};
 use crate::spatial::frame::FrameId;
 use crate::kinematics::inverse::{
@@ -88,7 +88,7 @@ impl IKSolver for JacobianTransposeSolver {
                     let p = ee_pose.translation();
                     let error = *target_pos - p;
                     let mag = error.magnitude();
-                    (DynamicVector::from(error), mag)
+                    (vector_to_dynamic(error), mag)
                 }
                 IKGoal::Pose(target_pose) => {
                     let error = compute_pose_error(ee_pose, target_pose);

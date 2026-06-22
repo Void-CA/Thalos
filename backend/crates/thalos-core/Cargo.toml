@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+thalos_math = { path = "../thalos-math" }
 nalgebra = "0.34.2"
 rand = "0.8"
 thiserror = "2"

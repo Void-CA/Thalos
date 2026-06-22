@@ -5,7 +5,8 @@ use crate::kinematics::jacobian::{
 };
 
 use crate::math::algebra::DynamicMatrix;
-use crate::math::constants::JACOBIAN_EPS;
+/// Perturbation step for numerical differentiation.
+const JACOBIAN_EPS: f64 = 1e-6;
 use crate::spatial::frame::FrameId;
 
 pub struct NumericalJacobian {
