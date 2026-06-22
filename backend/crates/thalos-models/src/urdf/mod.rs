@@ -1,4 +1,6 @@
 //! URDF format parser and exporter.
 //!
-//! These modules will be filled in once the canonical model types are
-//! stable.
+//! Currently only the parser is implemented. See the
+//! [`parser`] module for usage.
+
+pub mod parser;
