@@ -23,6 +23,23 @@ pub enum JointKind {
     Planar,
 }
 
+impl JointKind {
+    /// Whether this joint is a fixed (rigid) connection.
+    pub fn is_fixed(&self) -> bool {
+        matches!(self, JointKind::Fixed)
+    }
+
+    /// Number of actuated degrees of freedom.
+    pub fn dof(&self) -> usize {
+        match self {
+            JointKind::Revolute | JointKind::Continuous | JointKind::Prismatic => 1,
+            JointKind::Fixed => 0,
+            JointKind::Floating => 6,
+            JointKind::Planar => 3,
+        }
+    }
+}
+
 impl fmt::Display for JointKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

@@ -10,7 +10,7 @@ use crate::robot::joint::{
 };
 
 
-pub type JointId = u32;
+pub use thalos_models::JointId;
 
 #[derive(Debug, Clone)]
 pub enum JointType {
