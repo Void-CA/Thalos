@@ -137,7 +137,8 @@ async fn validate_invalid_scene() {
         "frames": [],
         "links": [],
         "joint_axes": [],
-        "twists": []
+        "twists": [],
+        "primitives": []
     });
 
     let (status, body) = get_json(
@@ -230,7 +231,8 @@ async fn error_code_missing_world() {
             "frames": [],
             "links": [],
             "joint_axes": [],
-            "twists": []
+            "twists": [],
+            "primitives": []
         }})),
     )
     .await;
@@ -254,7 +256,8 @@ async fn error_code_duplicate_id() {
             ],
             "links": [],
             "joint_axes": [],
-            "twists": []
+            "twists": [],
+            "primitives": []
         }})),
     )
     .await;
@@ -278,7 +281,8 @@ async fn error_code_missing_frame() {
             ],
             "links": [],
             "joint_axes": [],
-            "twists": []
+            "twists": [],
+            "primitives": []
         }})),
     )
     .await;
@@ -302,7 +306,8 @@ async fn error_code_non_finite_value() {
             ],
             "links": [],
             "joint_axes": [],
-            "twists": []
+            "twists": [],
+            "primitives": []
         }})),
     )
     .await;
@@ -325,7 +330,8 @@ async fn error_code_invalid_quaternion() {
             ],
             "links": [],
             "joint_axes": [],
-            "twists": []
+            "twists": [],
+            "primitives": []
         }})),
     )
     .await;
@@ -351,7 +357,8 @@ async fn error_code_broken_topology() {
             ],
             "links": [],
             "joint_axes": [],
-            "twists": []
+            "twists": [],
+            "primitives": []
         }})),
     )
     .await;
@@ -373,11 +380,12 @@ async fn error_code_orphan_link() {
                 {"id": "link_1", "parent": "world", "translation": [1,0,0], "rotation": [1,0,0,0]}
             ],
             "links": [
-                {"start": [0,0,0], "end": [1,0,0]},
-                {"start": [5,0,0], "end": [10,0,0]}
+                {"id": 0, "start": [0,0,0], "end": [1,0,0]},
+                {"id": 1, "start": [5,0,0], "end": [10,0,0]}
             ],
             "joint_axes": [],
-            "twists": []
+            "twists": [],
+            "primitives": []
         }})),
     )
     .await;
@@ -479,7 +487,7 @@ async fn list_robots_returns_all_with_joints() {
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
     let robots = body.as_array().expect("response must be an array");
-    assert_eq!(robots.len(), 4, "should have 4 robots");
+    assert_eq!(robots.len(), 8, "should have 8 robots");
 
     for robot in robots {
         let joints = robot["joints"].as_array().expect("each robot must have joints array");
@@ -591,15 +599,15 @@ async fn workspace_reachability_inside_returns_reachable() {
         http::Method::POST,
         "/api/v1/workspace/reachability",
         Some(json!({
-            "point": { "x": 0.0, "y": 0.0, "z": 0.0 },
-            "tolerance": 0.5,
+                    "point": { "x": 0.7, "y": 0.0, "z": 0.5 },
+            "tolerance": 0.1,
         })),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
 
-    assert_eq!(body["reachable"], true, "Scara center should be reachable");
+    assert_eq!(body["reachable"], true, "Scara test point (0.7, 0, 0.5) should be reachable");
     assert_eq!(body["nearest_distance"], 0.0);
 }
 

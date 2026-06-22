@@ -2,14 +2,18 @@ use std::sync::Arc;
 
 use axum::{
     extract::State,
+    http::StatusCode,
+    response::IntoResponse,
     Json,
 };
+use serde_json::{json, Value};
 
 use thalos_core::models::RobotModel;
 use thalos_runtime::Command;
 use thalos_visual::{
     SceneBuilder, SceneDiff, SceneValidator, ScaraVisualBuilder, VisualScene,
 };
+use thalos_visual::validator::SceneError;
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
@@ -137,22 +141,43 @@ pub async fn execute_ik(
     Ok(Json(to_api_response(&snapshot)))
 }
 
+fn scene_error_to_response(err: &SceneError) -> (StatusCode, Json<Value>) {
+    let (code, extra) = match err {
+        SceneError::MissingWorld => ("MISSING_WORLD", json!({})),
+        SceneError::MissingFrame(id) => ("MISSING_FRAME", json!({ "frame": id })),
+        SceneError::DuplicateId { id } => ("DUPLICATE_ID", json!({ "frame": id })),
+        SceneError::BrokenTopology { frame: _ } => ("BROKEN_TOPOLOGY", json!({})),
+        SceneError::NonFiniteValue { frame } => ("NON_FINITE_VALUE", json!({ "frame": frame })),
+        SceneError::InvalidQuaternion { frame, norm } => {
+            ("INVALID_QUATERNION", json!({ "frame": frame, "norm": norm }))
+        }
+        SceneError::OrphanLink { index } => ("ORPHAN_LINK", json!({ "index": index })),
+        SceneError::TwistsMismatch { expected, found } => {
+            ("TWISTS_MISMATCH", json!({ "expected": expected, "found": found }))
+        }
+    };
+
+    let mut body = json!({
+        "error": err.to_string(),
+        "code": code,
+    });
+    if let Some(obj) = extra.as_object() {
+        body.as_object_mut().unwrap().extend(obj.clone());
+    }
+
+    (StatusCode::UNPROCESSABLE_ENTITY, Json(body))
+}
+
 pub async fn validate(
     _state: State<Arc<AppState>>,
     Json(payload): Json<ValidateRequest>,
-) -> ApiResult<ValidateResponse> {
+) -> impl IntoResponse {
     let scene: VisualScene = payload.scene.into();
     let validator = SceneValidator::default();
 
     match validator.validate(&scene) {
-        Ok(_) => Ok(Json(ValidateResponse {
-            valid: true,
-            error: None,
-        })),
-        Err(e) => Ok(Json(ValidateResponse {
-            valid: false,
-            error: Some(e.to_string()),
-        })),
+        Ok(_) => (StatusCode::OK, Json(json!({ "valid": true }))).into_response(),
+        Err(e) => scene_error_to_response(&e).into_response(),
     }
 }
 

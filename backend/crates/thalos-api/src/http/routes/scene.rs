@@ -26,6 +26,9 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/scene/solve-ik-pose", post(handler::solve_ik_pose))
         .route("/scene/execute-ik", post(handler::execute_ik))
 
+        // FK → scene (same as set_joints but exposed as a separate endpoint)
+        .route("/scene/from-fk", post(handler::set_joints))
+
         // Utilities
         .route("/scene/validate", post(handler::validate))
         .route("/scene/diff", post(handler::diff))
