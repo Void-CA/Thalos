@@ -1,7 +1,7 @@
 use std::ops::Mul;
 use crate::{Quaternion, UnitVector3, Vector3, traits::Cross, MathError};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UnitQuaternion {
     q: Quaternion,
 }

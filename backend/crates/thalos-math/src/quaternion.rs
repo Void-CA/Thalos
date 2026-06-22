@@ -1,7 +1,7 @@
 use std::ops::{Add, Mul, Sub};
 use crate::{constants, MathError};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Quaternion {
     pub w: f64,
     pub x: f64,

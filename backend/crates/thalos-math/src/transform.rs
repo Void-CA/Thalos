@@ -6,7 +6,7 @@ use crate::{UnitQuaternion, Vector3};
 /// que sea una rotación válida en SO(3) (norma = 1).
 ///
 /// La traslación es un [`Vector3`] cualquiera.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Transform3D {
     pub translation: Vector3,
     pub rotation: UnitQuaternion,

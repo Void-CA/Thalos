@@ -1,7 +1,7 @@
 use crate::{Vector3, MathError};
 use std::ops::Deref;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UnitVector3(Vector3);
 
 impl UnitVector3 {
