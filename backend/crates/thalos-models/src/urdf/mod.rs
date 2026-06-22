@@ -3,4 +3,10 @@
 //! Currently only the parser is implemented. See the
 //! [`parser`] module for usage.
 
+pub mod attr;
+pub mod error;
+pub mod elements;
 pub mod parser;
+
+// Re-export for convenient access.
+pub use error::UrdfError;
