@@ -1403,6 +1403,7 @@ dependencies = [
  "nalgebra",
  "rand",
  "thalos_math",
+ "thalos_models",
  "thiserror",
 ]
 
@@ -1411,6 +1412,13 @@ name = "thalos_math"
 version = "0.1.0"
 dependencies = [
  "thiserror",
+]
+
+[[package]]
+name = "thalos_models"
+version = "0.1.0"
+dependencies = [
+ "thalos_math",
 ]
 
 [[package]]
