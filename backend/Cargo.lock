@@ -1402,6 +1402,14 @@ dependencies = [
  "criterion",
  "nalgebra",
  "rand",
+ "thalos_math",
+ "thiserror",
+]
+
+[[package]]
+name = "thalos_math"
+version = "0.1.0"
+dependencies = [
  "thiserror",
 ]
 
