@@ -114,7 +114,7 @@ fn folded_configuration_places_end_effector_at_1_0_neg1() {
 #[test]
 fn prismatic_joint_moves_end_effector_vertically() {
     let mut spec = ScaraSpec::ideal();
-    spec.joint_limits[2] = JointLimits { min: -2.0, max: 2.0 };
+    spec.joint_limits[2] = JointLimits::new(-2.0, 2.0);
     let robot = spec.build();
 
     let end_effector = robot
@@ -145,7 +145,7 @@ fn prismatic_joint_moves_end_effector_vertically() {
 #[test]
 fn prismatic_joint_negative_movement() {
     let mut spec = ScaraSpec::ideal();
-    spec.joint_limits[2] = JointLimits { min: -2.0, max: 2.0 };
+    spec.joint_limits[2] = JointLimits::new(-2.0, 2.0);
     let robot = spec.build();
 
     let end_effector = robot
@@ -272,7 +272,7 @@ fn combined_motions_accumulate_correctly() {
 #[test]
 fn workspace_limits_test() {
     let mut spec = ScaraSpec::ideal();
-    spec.joint_limits[2] = JointLimits { min: -2.0, max: 2.0 };
+    spec.joint_limits[2] = JointLimits::new(-2.0, 2.0);
     let robot = spec.build();
 
     let end_effector = robot

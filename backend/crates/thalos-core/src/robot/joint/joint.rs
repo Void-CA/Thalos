@@ -1,51 +1,16 @@
-use crate::math::geometry::rigid::Transform3D;
+pub use thalos_models::JointLimits;
 
+use crate::math::geometry::rigid::Transform3D;
 use crate::math::geometry::vectors::UnitVector3;
 use crate::robot::joint::{
     fixed::FixedJoint,
-    prismatic::PrismaticJoint, 
+    prismatic::PrismaticJoint,
     revolute::RevoluteJoint,
-    kind::JointKind
+    kind::JointKind,
 };
 
 
 pub type JointId = u32;
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct JointLimits {
-    pub min: f64,
-    pub max: f64,
-}
-
-impl JointLimits {
-    pub fn new(min: f64, max: f64) -> Self {
-        Self { min, max }
-    }
-
-    /// Recorta un valor al rango [min, max].
-    /// Para prismáticos con topes duros.
-    pub fn clamp(&self, value: f64) -> f64 {
-        value.clamp(self.min, self.max)
-    }
-
-    /// Normaliza un valor angular al rango [min, max] usando wrapping
-    /// modular. Para revolutos continuos como [-π, π].
-    ///
-    /// Si el rango es inválido (min >= max), cae a [`clamp`] para evitar
-    /// NaN en la operación `%`.
-    pub fn wrap(&self, value: f64) -> f64 {
-        let range = self.max - self.min;
-        if range <= 0.0 {
-            return self.clamp(value);
-        }
-        let mut wrapped = (value - self.min) % range;
-        if wrapped < 0.0 {
-            wrapped += range;
-        }
-        wrapped + self.min
-    }
-}
-
 
 #[derive(Debug, Clone)]
 pub enum JointType {
@@ -70,7 +35,7 @@ impl JointType {
         match self {
             JointType::Revolute(rev) => rev.limits,
             JointType::Prismatic(pris) => pris.distance_limits,
-            JointType::Fixed(_) => JointLimits { min: 0.0, max: 0.0 },
+            JointType::Fixed(_) => JointLimits::new(0.0, 0.0),
         }
     }
 

@@ -26,9 +26,9 @@ impl Manipulator3DOFSpec {
             l2: 1.0,
             l3: 1.0,
             joint_limits: [
-                JointLimits { min: -PI, max: PI },
-                JointLimits { min: -PI, max: PI },
-                JointLimits { min: -PI, max: PI },
+                JointLimits::new(-PI, PI),
+                JointLimits::new(-PI, PI),
+                JointLimits::new(-PI, PI),
             ],
         }
     }

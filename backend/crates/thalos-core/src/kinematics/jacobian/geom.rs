@@ -83,7 +83,7 @@ impl JacobianSolver for GeometricJacobian {
 
             match segment.joint.kind() {
 
-                JointKind::Revolute => {
+                JointKind::Revolute | JointKind::Continuous => {
 
                     let linear_part =
                         z_i.cross(p_e - p_i);
@@ -121,7 +121,7 @@ impl JacobianSolver for GeometricJacobian {
                     // angular = 0
                 }
 
-                JointKind::Fixed => {
+                JointKind::Fixed | JointKind::Floating | JointKind::Planar => {
                     // no debe llegar acá (filtrado arriba)
                 }
             }

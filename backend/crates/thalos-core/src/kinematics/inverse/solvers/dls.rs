@@ -143,9 +143,11 @@ impl IKSolver for DampedLeastSquaresSolver {
             // Fixed no debería llegar acá (filtrado por dof() > 0)
             for i in 0..n_joints {
                 q[i] = match joint_kinds[i] {
-                    JointKind::Revolute => joint_limits[i].wrap(q[i]),
+                    JointKind::Revolute | JointKind::Continuous => joint_limits[i].wrap(q[i]),
                     JointKind::Prismatic => joint_limits[i].clamp(q[i]),
-                    JointKind::Fixed => unreachable!("Fixed joints are filtered out"),
+                    JointKind::Fixed | JointKind::Floating | JointKind::Planar => {
+                        unreachable!("Non-1-DOF joints are filtered out")
+                    }
                 };
             }
         }

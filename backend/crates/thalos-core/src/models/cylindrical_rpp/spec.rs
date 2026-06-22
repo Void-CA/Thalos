@@ -23,9 +23,9 @@ impl CylindricalRPPSpec {
         Self {
             l1: 0.0,
             joint_limits: [
-                JointLimits { min: -PI, max: PI },
-                JointLimits { min: -1.0, max: 1.0 },
-                JointLimits { min: -1.0, max: 1.0 },
+                JointLimits::new(-PI, PI),
+                JointLimits::new(-1.0, 1.0),
+                JointLimits::new(-1.0, 1.0),
             ],
         }
     }
