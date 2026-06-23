@@ -1,11 +1,5 @@
-//! Adapter: [`thalos_models::Robot`] → [`SerialChain`].
-//!
-//! This is the bridge between the canonical model crate and the
-//! core algorithms (FK, IK, Jacobian, …).  Every assumption we make
-//! about the kinematic structure is exercised here.
-
 use std::collections::HashMap;
-
+use thalos_models::urdf::UrdfError;
 use thalos_models::urdf::parser::parse_robot;
 use thalos_models::Robot as ModelRobot;
 
@@ -72,8 +66,8 @@ impl std::fmt::Display for AdapterError {
 
 impl std::error::Error for AdapterError {}
 
-impl From<thalos_models::urdf::parser::UrdfError> for AdapterError {
-    fn from(e: thalos_models::urdf::parser::UrdfError) -> Self {
+impl From<UrdfError> for AdapterError {
+    fn from(e: UrdfError) -> Self {
         AdapterError::Parse(e.to_string())
     }
 }
@@ -187,7 +181,7 @@ pub fn from_robot(robot: &ModelRobot) -> Result<SerialChain, AdapterError> {
 ///
 /// ```
 /// # use thalos_core::robot::adapter;
-/// # use thalos_models::urdf::parser::parse_robot;
+/// # use parse_robot;
 /// let urdf = r#"
 ///   <robot name="arm">
 ///     <link name="base"/><link name="tool"/>
@@ -279,7 +273,7 @@ pub fn from_tip(robot: &ModelRobot, target_name: &str) -> Result<SerialChain, Ad
 ///
 /// ```
 /// # use thalos_core::robot::adapter;
-/// # use thalos_models::urdf::parser::parse_robot;
+/// # use parse_robot;
 /// let urdf = r#"
 ///   <robot name="arm">
 ///     <link name="base"/><link name="tool"/>
