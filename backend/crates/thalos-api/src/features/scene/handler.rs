@@ -92,11 +92,14 @@ pub async fn load_robot_from_urdf(
         }
     })?;
 
-    // Build joint metadata from the parsed URDF joints.
+    // Build joint metadata from parsed URDF joints.
+    // Fixed joints are filtered out — they don't consume a slot in the
+    // runtime joints array and the frontend should not show sliders for them.
     let joints_meta: Vec<JointMeta> = robot
         .bfs_joints()
         .unwrap_or_default()
         .iter()
+        .filter(|j| !j.kind.is_fixed())
         .map(|j| JointMeta {
             name: j.name.clone(),
             kind: j.kind.to_string(),

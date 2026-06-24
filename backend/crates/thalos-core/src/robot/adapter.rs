@@ -353,6 +353,16 @@ pub(crate) fn build_joint_type(
                 .ok_or_else(|| AdapterError::MissingAxis {
                     joint: joint.name.clone(),
                 })?;
+            // Continuous joints without an explicit <limit> have no
+            // mechanical bounds — mark the limits as disabled so
+            // validators and IK solvers know to skip enforcement.
+            let limits = if matches!(joint.kind, thalos_models::JointKind::Continuous)
+                && joint.limits.is_none()
+            {
+                JointLimits::unlimited()
+            } else {
+                limits
+            };
             Ok(JointType::Revolute(RevoluteJoint::new(id, axis, limits, origin)))
         }
         thalos_models::JointKind::Prismatic => {

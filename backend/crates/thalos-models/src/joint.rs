@@ -57,6 +57,10 @@ impl fmt::Display for JointKind {
 ///
 /// Only `min` and `max` are required; `velocity` and `effort` are
 /// optional limits that some planners and controllers respect.
+///
+/// When `enabled` is `false` the joint has no mechanical bounds
+/// (e.g. a URDF `continuous` joint without an explicit `<limit>`).
+/// Callers MUST check `enabled` before enforcing limits.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct JointLimits {
     /// Lower bound (radians for revolute, metres for prismatic).
@@ -67,28 +71,52 @@ pub struct JointLimits {
     pub velocity: Option<f64>,
     /// Maximum effort (torque / force).
     pub effort: Option<f64>,
+    /// Whether these limits are active. When `false` the joint has
+    /// no position bounds and `min`/`max` should be ignored.
+    pub enabled: bool,
 }
 
 impl JointLimits {
+    /// Create an enabled limit range `[min, max]`.
     pub const fn new(min: f64, max: f64) -> Self {
         Self {
             min,
             max,
             velocity: None,
             effort: None,
+            enabled: true,
+        }
+    }
+
+    /// Create a disabled limit — the joint has no mechanical bounds.
+    pub const fn unlimited() -> Self {
+        Self {
+            min: 0.0,
+            max: 0.0,
+            velocity: None,
+            effort: None,
+            enabled: false,
         }
     }
 
     /// Clamp a value to `[min, max]`.
+    ///
+    /// Returns `value` unchanged when limits are disabled.
     pub fn clamp(&self, value: f64) -> f64 {
+        if !self.enabled {
+            return value;
+        }
         value.clamp(self.min, self.max)
     }
 
     /// Wrap a value into `[min, max)` using modular arithmetic.
     ///
     /// Falls back to [`clamp`](Self::clamp) if the range is degenerate
-    /// (`min >= max`).
+    /// (`min >= max`). Returns `value` unchanged when limits are disabled.
     pub fn wrap(&self, value: f64) -> f64 {
+        if !self.enabled {
+            return value;
+        }
         let range = self.max - self.min;
         if range <= 0.0 {
             return self.clamp(value);

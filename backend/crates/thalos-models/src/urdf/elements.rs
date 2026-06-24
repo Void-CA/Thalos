@@ -491,6 +491,7 @@ fn parse_limit(elem: &quick_xml::events::BytesStart<'_>) -> Result<JointLimits, 
         max: upper,
         velocity,
         effort,
+        enabled: true,
     })
 }
 

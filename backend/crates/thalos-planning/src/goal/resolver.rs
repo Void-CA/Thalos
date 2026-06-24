@@ -130,6 +130,14 @@ impl GoalResolver {
                 continue;
             }
             let limits = segment.joint.limits();
+
+            // Joints without mechanical bounds (e.g. URDF continuous
+            // without an explicit <limit>) cannot violate limits.
+            if !limits.enabled {
+                joint_idx += 1;
+                continue;
+            }
+
             let value = q[joint_idx];
 
             if self.config.strict_limits {
