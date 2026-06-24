@@ -116,3 +116,29 @@ export interface ManipulabilityResponse {
     metrics: ManipulabilityMetricsDto;
     samples?: ManipulabilitySampleDto[];
 }
+
+// ── Active-robot endpoints ──
+
+/** Request for /workspace/sample/active — no robot_id needed. */
+export interface ActiveSampleRequest {
+    samples?: number;
+    seed?: number;
+    tolerance?: number;
+    include_samples?: boolean;
+}
+
+/** Request for /workspace/analyze/active. */
+export interface ActiveAnalysisRequest {
+    samples?: number;
+    seed?: number;
+    tolerance?: number;
+    near_singular_condition_threshold?: number;
+}
+
+/** Response from /workspace/analyze/active. */
+export interface ActiveAnalysisResponse {
+    workspace: WorkspaceMetricsDto;
+    bounds: BoundingBoxDto;
+    singularity: SingularityMetricsDto;
+    manipulability: ManipulabilityMetricsDto;
+}

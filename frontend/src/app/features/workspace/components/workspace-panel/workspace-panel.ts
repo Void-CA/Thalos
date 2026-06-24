@@ -1,6 +1,7 @@
-import { Component, effect, inject } from '@angular/core';
+import { Component, computed, effect, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RobotStore } from '../../../robots/store/robot.store';
+import { SceneStore } from '../../../scene/store/scene.store';
 import { WorkspaceStore } from '../../store/workspace.store';
 
 @Component({
@@ -30,7 +31,8 @@ import { WorkspaceStore } from '../../store/workspace.store';
         <button
           class="action action--sample"
           (click)="onSample()"
-          [disabled]="store.loading() || !robotId()"
+          [disabled]="store.loading() || disabledReason() !== null"
+          [title]="disabledReason() ?? ''"
         >
           {{ store.loading() ? 'Sampling\u2026' : 'Sample Workspace' }}
         </button>
@@ -38,7 +40,8 @@ import { WorkspaceStore } from '../../store/workspace.store';
         <button
           class="action action--singularity"
           (click)="onAnalyzeSingularity()"
-          [disabled]="store.loading() || !robotId()"
+          [disabled]="store.loading() || disabledReason() !== null"
+          [title]="disabledReason() ?? ''"
         >
           {{ store.loading() ? 'Analyzing\u2026' : 'Singularity Analysis' }}
         </button>
@@ -46,7 +49,8 @@ import { WorkspaceStore } from '../../store/workspace.store';
         <button
           class="action action--manipulability"
           (click)="onAnalyzeManipulability()"
-          [disabled]="store.loading() || !robotId()"
+          [disabled]="store.loading() || disabledReason() !== null"
+          [title]="disabledReason() ?? ''"
         >
           {{ store.loading() ? 'Analyzing\u2026' : 'Manipulability' }}
         </button>
@@ -118,9 +122,22 @@ import { WorkspaceStore } from '../../store/workspace.store';
 export class WorkspacePanel {
   readonly store = inject(WorkspaceStore);
   private readonly robotStore = inject(RobotStore);
+  private readonly sceneStore = inject(SceneStore);
 
   /** Currently selected robot ID from the global catalog. */
   protected readonly robotId = this.robotStore.selectedId;
+
+  /** True when the scene has an active robot (URDF or canonical). */
+  private readonly hasActiveRobot = computed(() =>
+    this.sceneStore.state().runtime !== null,
+  );
+
+  /** Reason why buttons are disabled, or null if they should be enabled. */
+  protected readonly disabledReason = computed<string | null>(() => {
+    if (this.robotId()) return null;       // canonical robot selected
+    if (this.hasActiveRobot()) return null; // URDF / default robot active
+    return 'No robot loaded';
+  });
 
   samples = 5_000;
   seed = 0;
@@ -135,21 +152,31 @@ export class WorkspacePanel {
     });
   }
 
+  /** Use canonical path when a catalog robot is selected, active path otherwise. */
   onSample(): void {
     const id = this.robotId();
-    if (!id) return;
-    this.store.sample(id, this.samples, this.seed, this.tolerance);
+    if (id) {
+      this.store.sample(id, this.samples, this.seed, this.tolerance);
+    } else {
+      this.store.sampleActive(this.samples, this.seed, this.tolerance);
+    }
   }
 
   onAnalyzeSingularity(): void {
     const id = this.robotId();
-    if (!id) return;
-    this.store.analyzeSingularity(id, this.samples, this.seed, this.tolerance, this.nearSingularThreshold);
+    if (id) {
+      this.store.analyzeSingularity(id, this.samples, this.seed, this.tolerance, this.nearSingularThreshold);
+    } else {
+      this.store.analyzeActive(this.samples, this.seed, this.tolerance, this.nearSingularThreshold);
+    }
   }
 
   onAnalyzeManipulability(): void {
     const id = this.robotId();
-    if (!id) return;
-    this.store.analyzeManipulability(id, this.samples, this.seed, this.tolerance);
+    if (id) {
+      this.store.analyzeManipulability(id, this.samples, this.seed, this.tolerance);
+    } else {
+      this.store.analyzeActive(this.samples, this.seed, this.tolerance, this.nearSingularThreshold);
+    }
   }
 }

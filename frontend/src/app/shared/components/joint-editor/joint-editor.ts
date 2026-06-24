@@ -159,7 +159,9 @@ export class JointEditor {
     effect(() => {
       const r = this.store.state()?.runtime;
       if (r) {
-        const dof = r.robot.joints.length;
+        // Use `dof` (actuated joints) instead of `joints.length`
+        // because URDF metadata includes entries for fixed joints.
+        const dof = r.robot.dof;
         if (dof !== this.prevDof()) {
           this.prevDof.set(dof);
           this.values.set([...r.joints]);
@@ -171,7 +173,7 @@ export class JointEditor {
   // ── Público ──
 
   /** DOF actual (derivado del robot cargado). */
-  readonly dof = computed(() => this.store.state()?.runtime?.robot.joints.length ?? 0);
+  readonly dof = computed(() => this.store.state()?.runtime?.robot.dof ?? 0);
 
   /** Sincroniza valores desde runtime.joints. */
   reset(): void {

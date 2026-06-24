@@ -1,6 +1,6 @@
 import { Injectable, inject, Signal, signal, computed } from '@angular/core';
 import { WorkspaceApiService } from '../services/workspace-api.service';
-import type { ManipulabilityResponse, SingularityResponse, WorkspaceDto } from '../workspace-api.types';
+import type { ActiveAnalysisResponse, ManipulabilityResponse, SingularityResponse, WorkspaceDto } from '../workspace-api.types';
 import type {
   ColoredPoint, ManipulabilityData, SingularityData, SingularityMetrics,
   WorkspaceData, WorkspaceMetrics, WorkspaceBounds, WorkspaceState, WorkspaceUiState, ReachabilityResult,
@@ -250,6 +250,87 @@ export class WorkspaceStore {
       this.showPointCloudSignal.set(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Singularity analysis failed';
+      this.errorSignal.set(msg);
+    } finally {
+      this.loadingSignal.set(false);
+    }
+  }
+
+  /** Sample workspace for the currently loaded robot (no robot_id needed). */
+  async sampleActive(samples: number, seed: number, tolerance: number): Promise<void> {
+    this.loadingSignal.set(true);
+    this.errorSignal.set(null);
+    this.reachabilitySignal.set(null);
+    this.pointCloudSignal.set(null);
+    this.showPointCloudSignal.set(false);
+
+    try {
+      const dto = await this.api.sampleActive({
+        samples,
+        seed,
+        tolerance,
+        include_samples: true,
+      }).toPromise();
+
+      if (!dto) throw new Error('Empty response');
+
+      this.dataSignal.set({
+        metrics: toMetrics(dto.metrics),
+        bounds: toBounds(dto.bounds),
+      });
+
+      if (dto.samples && dto.samples.length > 0) {
+        this.pointCloudSignal.set(
+          dto.samples.map(s => [s.position.x, s.position.y, s.position.z] as [number, number, number]),
+        );
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Sampling failed';
+      this.errorSignal.set(msg);
+    } finally {
+      this.loadingSignal.set(false);
+    }
+  }
+
+  /** Full analysis (workspace + singularity + manipulability) on active robot. */
+  async analyzeActive(
+    samples: number,
+    seed: number,
+    tolerance: number,
+    threshold: number,
+  ): Promise<void> {
+    this.loadingSignal.set(true);
+    this.errorSignal.set(null);
+
+    try {
+      const dto = await this.api.analyzeActive({
+        samples,
+        seed,
+        tolerance,
+        near_singular_condition_threshold: threshold,
+      }).toPromise();
+
+      if (!dto) throw new Error('Empty response');
+
+      // Workspace
+      this.dataSignal.set({
+        metrics: toMetrics(dto.workspace),
+        bounds: toBounds(dto.bounds),
+      });
+
+      // Singularity
+      this.singularitySignal.set(toSingularityData({
+        metrics: dto.singularity,
+        samples: undefined,
+      }));
+
+      // Manipulability
+      this.manipulabilitySignal.set(toManipulabilityData({
+        metrics: dto.manipulability,
+        samples: undefined,
+      }));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Analysis failed';
       this.errorSignal.set(msg);
     } finally {
       this.loadingSignal.set(false);
