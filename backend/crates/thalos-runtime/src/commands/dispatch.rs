@@ -2,6 +2,7 @@ use thalos_core::{
     kinematics::inverse::IKResult,
     models::{RobotModel, RobotRegistry},
     prelude::ActiveRobot,
+    robot::serial_chain::SerialChain,
 };
 
 use crate::{
@@ -10,14 +11,26 @@ use crate::{
         kinematics::KinematicsCommand,
         motion::MotionCommands,
     },
+    snapshots::scene::JointMeta,
     state::robot::SceneRuntime,
     RuntimeError,
 };
+
+/// Placeholder model used for URDF-imported robots.
+///
+/// The visual builder only specializes on `RobotModel::Scara`;
+/// any non-Scara variant falls through to the generic scene builder.
+const URDF_PLACEHOLDER: RobotModel = RobotModel::Planar3R;
 
 #[derive(Debug, Clone)]
 pub enum Command {
     SetJoints(Vec<f64>),
     LoadRobot(RobotModel),
+    LoadUrdfRobot {
+        name: String,
+        joints_meta: Vec<JointMeta>,
+        chain: SerialChain,
+    },
     Kinematics(KinematicsCommand),
     Motion(MotionCommands),
 }
@@ -35,6 +48,20 @@ impl ExecutableCommand for Command {
                 let dof = model.metadata().dof;
                 let chain = RobotRegistry::create_default(*model);
                 runtime.active_robot = ActiveRobot::new(*model, chain, vec![0.0; dof]);
+                runtime.robot_name = model.metadata().display_name.to_string();
+                runtime.joints_meta.clear();
+                runtime.active_plan = None;
+                Ok(None)
+            }
+            Command::LoadUrdfRobot { name, joints_meta, chain } => {
+                let dof = chain.dof_count();
+                runtime.active_robot = ActiveRobot::new(
+                    URDF_PLACEHOLDER,
+                    chain.clone(),
+                    vec![0.0; dof],
+                );
+                runtime.robot_name = name.clone();
+                runtime.joints_meta = joints_meta.clone();
                 runtime.active_plan = None;
                 Ok(None)
             }

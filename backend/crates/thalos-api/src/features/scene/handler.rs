@@ -7,9 +7,10 @@ use axum::{
     Json,
 };
 use serde_json::{json, Value};
+use thalos_models::urdf::parser::parse_robot;
 
-use thalos_core::models::RobotModel;
-use thalos_runtime::Command;
+use thalos_core::{models::RobotModel, robot::adapter};
+use thalos_runtime::{snapshots::scene::JointMeta, Command};
 use thalos_visual::{
     SceneBuilder, SceneDiff, SceneValidator, ScaraVisualBuilder, VisualScene,
 };
@@ -68,6 +69,48 @@ pub async fn load_robot(
     Json(payload): Json<LoadRobotRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
     let cmd = payload.into_command()?;
+    let snapshot = state.services.scene.execute(cmd)?;
+    Ok(Json(to_api_response(&snapshot)))
+}
+
+pub async fn load_robot_from_urdf(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<LoadUrdfRobotRequest>,
+) -> ApiResult<RuntimeStateResponse> {
+    let robot = parse_robot(&payload.urdf_source).map_err(|e| {
+        ApiError::Validation {
+            message: format!("Invalid URDF: {e}"),
+            code: "invalid_urdf".into(),
+        }
+    })?;
+
+    let name = robot.name.clone();
+    let chain = adapter::auto(&robot).map_err(|e| {
+        ApiError::Validation {
+            message: format!("Cannot build chain: {e}"),
+            code: "urdf_chain_error".into(),
+        }
+    })?;
+
+    // Build joint metadata from the parsed URDF joints.
+    let joints_meta: Vec<JointMeta> = robot
+        .bfs_joints()
+        .unwrap_or_default()
+        .iter()
+        .map(|j| JointMeta {
+            name: j.name.clone(),
+            kind: j.kind.to_string(),
+            min: j.limits.map(|l| l.min),
+            max: j.limits.map(|l| l.max),
+        })
+        .collect();
+
+    let cmd = Command::LoadUrdfRobot {
+        name,
+        joints_meta,
+        chain,
+    };
+
     let snapshot = state.services.scene.execute(cmd)?;
     Ok(Json(to_api_response(&snapshot)))
 }

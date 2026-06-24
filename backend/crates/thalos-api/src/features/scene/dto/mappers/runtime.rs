@@ -1,5 +1,7 @@
 use thalos_core::kinematics::inverse::result::IKResult;
 
+use crate::features::robots::dto::{JointMetadataDto, RobotMetadataDto};
+
 use super::super::{ActivePlanDto, IkResultDto, RuntimeStateResponse, VisualSceneDto};
 
 impl From<IKResult> for IkResultDto {
@@ -19,8 +21,30 @@ impl RuntimeStateResponse {
         scene: VisualSceneDto,
         active_plan: Option<ActivePlanDto>,
     ) -> Self {
+        // When the robot was imported from URDF, the runtime carries joint
+        // metadata. Otherwise fall back to the built-in RobotMetadata.
+        let robot = if snapshot.joints_meta.is_empty() {
+            snapshot.robot.metadata().into()
+        } else {
+            RobotMetadataDto {
+                id: "urdf".into(),
+                display_name: snapshot.robot_name.clone(),
+                dof: snapshot.joints.len(),
+                joints: snapshot
+                    .joints_meta
+                    .iter()
+                    .map(|jm| JointMetadataDto {
+                        name: jm.name.clone(),
+                        kind: jm.kind.clone(),
+                        min: jm.min,
+                        max: jm.max,
+                    })
+                    .collect(),
+            }
+        };
+
         Self {
-            robot: snapshot.robot.metadata().into(),
+            robot,
             joints: snapshot.joints.clone(),
             scene,
             ik_result: snapshot.ik_result.as_ref().map(|ik| {

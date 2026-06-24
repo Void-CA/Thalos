@@ -16,6 +16,7 @@ pub fn routes() -> Router<Arc<AppState>> {
         // Runtime mutations
         .route("/scene/joints", post(handler::set_joints))
         .route("/scene/robot", post(handler::load_robot))
+        .route("/scene/robot/from-urdf", post(handler::load_robot_from_urdf))
 
         // IK motion commands
         .route("/scene/move-to-position", post(handler::move_to_position))

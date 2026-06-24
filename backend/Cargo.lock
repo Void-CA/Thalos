@@ -1395,6 +1395,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thalos_core",
+ "thalos_models",
  "thalos_runtime",
  "thalos_visual",
  "tokio",

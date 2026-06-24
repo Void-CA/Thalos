@@ -11,6 +11,18 @@ use thalos_core::{
 
 use crate::plan::ActiveMotionPlan;
 
+/// Lightweight joint metadata for URDF-imported robots.
+///
+/// Mirrors core's `JointInfo` but uses owned strings so it can represent
+/// dynamically-imported robots from URDF source.
+#[derive(Debug, Clone)]
+pub struct JointMeta {
+    pub name: String,
+    pub kind: String,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+}
+
 /// Immutable snapshot of the runtime state at a point in time.
 ///
 /// Contains only domain state — no visual representation.
@@ -19,6 +31,10 @@ use crate::plan::ActiveMotionPlan;
 pub struct RuntimeSnapshot {
     /// The active robot model.
     pub robot: RobotModel,
+    /// Human-readable robot name (from built-in metadata or URDF).
+    pub robot_name: String,
+    /// Joint metadata — empty for built-in robots; populated for URDF imports.
+    pub joints_meta: Vec<JointMeta>,
     /// Current joint angles.
     pub joints: Vec<f64>,
     /// The kinematic chain of the active robot.
