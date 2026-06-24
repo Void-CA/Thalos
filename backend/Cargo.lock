@@ -1440,6 +1440,7 @@ dependencies = [
  "rand",
  "thalos-planning",
  "thalos_core",
+ "thalos_models",
  "thiserror",
 ]
 

@@ -24,11 +24,22 @@ use crate::features::scene::dto::*;
 
 /// Build a VisualScene from a RuntimeSnapshot.
 pub(crate) fn build_visual_scene(snapshot: &thalos_runtime::RuntimeSnapshot) -> VisualScene {
-    let robot = snapshot.robot;
+    // Verify the source model survives the pipeline (temporary).
+    if let Some(src) = &snapshot.robot_source {
+        let visual_count: usize = src.links.values().map(|l| l.visual.len()).sum();
+        tracing::info!(
+            robot = %src.name,
+            links = src.links.len(),
+            visuals = visual_count,
+            "URDF source available for visual pipeline",
+        );
+    }
+
+    let model = snapshot.robot;
     let fk = &snapshot.fk_result;
     let chain = &snapshot.chain;
 
-    match robot {
+    match model {
         RobotModel::Scara => ScaraVisualBuilder::build(fk, chain),
         _ => {
             let builder = SceneBuilder::new(chain);
@@ -112,6 +123,7 @@ pub async fn load_robot_from_urdf(
         name,
         joints_meta,
         chain,
+        robot,
     };
 
     let snapshot = state.services.scene.execute(cmd)?;

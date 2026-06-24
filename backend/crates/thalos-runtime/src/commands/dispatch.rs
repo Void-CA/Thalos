@@ -5,6 +5,8 @@ use thalos_core::{
     robot::serial_chain::SerialChain,
 };
 
+use thalos_models::Robot;
+
 use crate::{
     commands::{
         handler::ExecutableCommand,
@@ -30,6 +32,8 @@ pub enum Command {
         name: String,
         joints_meta: Vec<JointMeta>,
         chain: SerialChain,
+        /// The full URDF model — preserved for visual/collision rendering.
+        robot: Robot,
     },
     Kinematics(KinematicsCommand),
     Motion(MotionCommands),
@@ -53,7 +57,7 @@ impl ExecutableCommand for Command {
                 runtime.active_plan = None;
                 Ok(None)
             }
-            Command::LoadUrdfRobot { name, joints_meta, chain } => {
+            Command::LoadUrdfRobot { name, joints_meta, chain, robot } => {
                 let dof = chain.dof_count();
                 runtime.active_robot = ActiveRobot::new(
                     URDF_PLACEHOLDER,
@@ -62,6 +66,7 @@ impl ExecutableCommand for Command {
                 );
                 runtime.robot_name = name.clone();
                 runtime.joints_meta = joints_meta.clone();
+                runtime.robot_source = Some(robot.clone());
                 runtime.active_plan = None;
                 Ok(None)
             }

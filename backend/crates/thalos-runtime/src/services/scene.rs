@@ -57,6 +57,7 @@ impl SceneService {
         let ik_result = None;
         Ok(RuntimeSnapshot {
             robot: runtime.active_robot.model,
+            robot_source: runtime.robot_source.clone(),
             robot_name: runtime.robot_name.clone(),
             joints_meta: runtime.joints_meta.clone(),
             joints: runtime.active_robot.joints.clone(),
@@ -95,6 +96,7 @@ impl SceneService {
 
         Ok(RuntimeSnapshot {
             robot: runtime.active_robot.model,
+            robot_source: runtime.robot_source.clone(),
             robot_name: runtime.robot_name.clone(),
             joints_meta: runtime.joints_meta.clone(),
             joints: runtime.active_robot.joints.clone(),

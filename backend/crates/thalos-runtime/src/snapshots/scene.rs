@@ -8,6 +8,7 @@ use thalos_core::{
     models::RobotModel,
     robot::serial_chain::SerialChain,
 };
+use thalos_models::Robot;
 
 use crate::plan::ActiveMotionPlan;
 
@@ -29,8 +30,13 @@ pub struct JointMeta {
 /// Visual scene construction is the responsibility of the API layer.
 /// When produced by an IK command, `ik_result` carries the solver metadata.
 pub struct RuntimeSnapshot {
-    /// The active robot model.
+    /// The active robot model (built-in enum — keep for backward compat).
     pub robot: RobotModel,
+    /// Full URDF model when the robot was imported; `None` for built-in robots.
+    ///
+    /// Preserving the source avoids re-parsing and enables visual / collision
+    /// pipelines to consume the original geometry without coupling to URDF.
+    pub robot_source: Option<Robot>,
     /// Human-readable robot name (from built-in metadata or URDF).
     pub robot_name: String,
     /// Joint metadata — empty for built-in robots; populated for URDF imports.
