@@ -90,6 +90,9 @@ export class RobotCatalog implements OnInit {
     const reader = new FileReader();
     reader.onload = () => {
       const source = reader.result as string;
+      // Al importar URDF el catálogo canónico ya no tiene un robot
+      // "seleccionado" — limpiar para evitar el falso positivo visual.
+      this.robotStore.select(null);
       this.sceneStore.loadRobotFromUrdf(source);
     };
     reader.readAsText(file);

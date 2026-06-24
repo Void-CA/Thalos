@@ -127,7 +127,7 @@ pub fn from_robot(robot: &ModelRobot) -> Result<SerialChain, AdapterError> {
         registry.create(link_name);
     }
 
-    for joint in &ordered {
+    for (idx, joint) in ordered.iter().enumerate() {
         let parent_id = link_ids
             .get(joint.parent.as_str())
             .copied()
@@ -143,7 +143,15 @@ pub fn from_robot(robot: &ModelRobot) -> Result<SerialChain, AdapterError> {
                 link: joint.child.clone(),
             })?;
 
-        let parent_frame = FrameId::new(parent_id as u64);
+        // Primer segmento: parent es World en vez del link root.
+        // El FK evaluador solo almacena segment.child + World en su mapa de poses;
+        // si usáramos FrameId(root_link) el SceneBuilder paniquearía al buscar
+        // fk.pose(&segment.parent) porque ese frame no está en FKResult.
+        let parent_frame = if idx == 0 {
+            FrameId::World
+        } else {
+            FrameId::new(parent_id as u64)
+        };
         let child_frame = FrameId::new(child_id as u64);
 
         let joint_type = build_joint_type(joint, &mut joint_counter)?;
@@ -230,7 +238,15 @@ pub fn from_tip(robot: &ModelRobot, target_name: &str) -> Result<SerialChain, Ad
         let parent_link = path.links[i];
         let child_link = path.links[i + 1];
 
-        let parent_frame = FrameId::new(parent_link as u64);
+        // Primer segmento: parent es World en vez del link root.
+        // El FK evaluador solo almacena segment.child + World en su mapa de poses;
+        // si usáramos FrameId(root_link) el SceneBuilder paniquearía al buscar
+        // fk.pose(&segment.parent) porque ese frame no está en FKResult.
+        let parent_frame = if i == 0 {
+            FrameId::World
+        } else {
+            FrameId::new(parent_link as u64)
+        };
         let child_frame = FrameId::new(child_link as u64);
 
         let j_name = graph.joint_name(joint_id).unwrap_or("unknown");
