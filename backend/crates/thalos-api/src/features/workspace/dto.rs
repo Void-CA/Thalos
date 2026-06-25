@@ -302,6 +302,20 @@ pub struct ActiveSampleRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ActiveSingularityRequest {
+    #[serde(default = "default_samples")]
+    pub samples: usize,
+    #[serde(default)]
+    pub seed: u64,
+    #[serde(default = "default_tolerance")]
+    pub tolerance: f64,
+    #[serde(default = "default_near_singular_threshold")]
+    pub near_singular_condition_threshold: f64,
+    #[serde(default)]
+    pub include_samples: bool,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ActiveAnalysisRequest {
     #[serde(default = "default_samples")]
     pub samples: usize,

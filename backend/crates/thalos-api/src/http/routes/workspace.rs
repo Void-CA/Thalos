@@ -16,5 +16,7 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/workspace/analyze/active", post(handler::analyze_active))
         .route("/workspace/reachability", post(handler::reachability))
         .route("/workspace/singularity", post(handler::singularity))
+        .route("/workspace/singularity/active", post(handler::singularity_active))
         .route("/workspace/manipulability", post(handler::manipulability))
+        .route("/workspace/manipulability/active", post(handler::manipulability_active))
 }

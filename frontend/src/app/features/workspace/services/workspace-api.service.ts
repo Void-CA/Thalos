@@ -48,4 +48,14 @@ export class WorkspaceApiService {
   analyzeActive(req: ActiveAnalysisRequest): Observable<ActiveAnalysisResponse> {
     return this.http.post<ActiveAnalysisResponse>(`${this.baseUrl}/workspace/analyze/active`, req);
   }
+
+  /** Singularity analysis for the currently loaded robot. */
+  analyzeSingularityActive(req: ActiveSampleRequest & { near_singular_condition_threshold?: number; include_samples?: boolean }): Observable<SingularityResponse> {
+    return this.http.post<SingularityResponse>(`${this.baseUrl}/workspace/singularity/active`, req);
+  }
+
+  /** Manipulability analysis for the currently loaded robot. */
+  analyzeManipulabilityActive(req: ActiveSampleRequest & { include_samples?: boolean }): Observable<ManipulabilityResponse> {
+    return this.http.post<ManipulabilityResponse>(`${this.baseUrl}/workspace/manipulability/active`, req);
+  }
 }

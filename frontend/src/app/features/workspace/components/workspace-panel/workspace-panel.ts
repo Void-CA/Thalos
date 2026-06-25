@@ -167,7 +167,7 @@ export class WorkspacePanel {
     if (id) {
       this.store.analyzeSingularity(id, this.samples, this.seed, this.tolerance, this.nearSingularThreshold);
     } else {
-      this.store.analyzeActive(this.samples, this.seed, this.tolerance, this.nearSingularThreshold);
+      this.store.analyzeActiveSingularity(this.samples, this.seed, this.tolerance, this.nearSingularThreshold);
     }
   }
 
@@ -176,7 +176,7 @@ export class WorkspacePanel {
     if (id) {
       this.store.analyzeManipulability(id, this.samples, this.seed, this.tolerance);
     } else {
-      this.store.analyzeActive(this.samples, this.seed, this.tolerance, this.nearSingularThreshold);
+      this.store.analyzeActiveManipulability(this.samples, this.seed, this.tolerance);
     }
   }
 }

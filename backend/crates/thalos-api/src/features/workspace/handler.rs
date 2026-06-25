@@ -22,6 +22,7 @@ use crate::app::prelude::*;
 use crate::app::state::AppState;
 use crate::features::workspace::dto::{
     ActiveAnalysisRequest, ActiveAnalysisResponse, ActiveSampleRequest,
+    ActiveSingularityRequest,
     ManipulabilityRequest, ManipulabilityResponse, ManipulabilitySampleDto,
     ReachabilityDto, ReachabilityRequest, SampleRequest,
     SingularityRequest, SingularityResponse, SingularitySampleDto,
@@ -246,5 +247,69 @@ pub async fn analyze_active(
         manipulability: manipulability.metrics.into(),
         singularity_samples,
         manipulability_samples,
+    }))
+}
+
+/// POST /api/v1/workspace/singularity/active
+///
+/// Singularity analysis on the currently loaded (URDF or canonical) robot.
+pub async fn singularity_active(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<ActiveSingularityRequest>,
+) -> ApiResult<SingularityResponse> {
+    let snapshot = state.services.scene.snapshot()?;
+
+    let config = WorkspaceConfig {
+        samples: req.samples,
+        seed: req.seed,
+        tolerance: req.tolerance,
+    };
+
+    let singularity_config = SingularityConfig {
+        near_singular_condition_threshold: req.near_singular_condition_threshold,
+    };
+
+    let analysis =
+        RuntimeSingularityService::analyze_from_chain(&snapshot.chain, config, singularity_config)?;
+
+    let samples = if req.include_samples {
+        Some(analysis.samples.iter().map(SingularitySampleDto::from).collect())
+    } else {
+        None
+    };
+
+    Ok(Json(SingularityResponse {
+        metrics: analysis.metrics.into(),
+        samples,
+    }))
+}
+
+/// POST /api/v1/workspace/manipulability/active
+///
+/// Manipulability analysis on the currently loaded (URDF or canonical) robot.
+pub async fn manipulability_active(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<ActiveSampleRequest>,
+) -> ApiResult<ManipulabilityResponse> {
+    let snapshot = state.services.scene.snapshot()?;
+
+    let config = WorkspaceConfig {
+        samples: req.samples,
+        seed: req.seed,
+        tolerance: req.tolerance,
+    };
+
+    let analysis =
+        RuntimeManipulabilityService::analyze_from_chain(&snapshot.chain, config)?;
+
+    let samples = if req.include_samples {
+        Some(analysis.samples.iter().map(ManipulabilitySampleDto::from).collect())
+    } else {
+        None
+    };
+
+    Ok(Json(ManipulabilityResponse {
+        metrics: analysis.metrics.into(),
+        samples,
     }))
 }

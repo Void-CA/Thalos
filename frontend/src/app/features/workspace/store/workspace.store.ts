@@ -343,6 +343,78 @@ export class WorkspaceStore {
     }
   }
 
+  /** Singularity analysis on the active (URDF) robot. */
+  async analyzeActiveSingularity(
+    samples: number,
+    seed: number,
+    tolerance: number,
+    threshold: number,
+  ): Promise<void> {
+    this.loadingSignal.set(true);
+    this.errorSignal.set(null);
+    // Clear manipulability so the viewer overlay shows singularity
+    this.manipulabilitySignal.set(null);
+
+    try {
+      const dto = await this.api.analyzeSingularityActive({
+        samples,
+        seed,
+        tolerance,
+        near_singular_condition_threshold: threshold,
+        include_samples: true,
+      }).toPromise();
+
+      if (!dto) throw new Error('Empty response');
+
+      this.singularitySignal.set(toSingularityData(dto));
+
+      // Show the colored point cloud
+      if (dto.samples && dto.samples.length > 0) {
+        this.showPointCloudSignal.set(true);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Singularity analysis failed';
+      this.errorSignal.set(msg);
+    } finally {
+      this.loadingSignal.set(false);
+    }
+  }
+
+  /** Manipulability analysis on the active (URDF) robot. */
+  async analyzeActiveManipulability(
+    samples: number,
+    seed: number,
+    tolerance: number,
+  ): Promise<void> {
+    this.loadingSignal.set(true);
+    this.errorSignal.set(null);
+    // Clear singularity so the viewer overlay shows manipulability
+    this.singularitySignal.set(null);
+
+    try {
+      const dto = await this.api.analyzeManipulabilityActive({
+        samples,
+        seed,
+        tolerance,
+        include_samples: true,
+      }).toPromise();
+
+      if (!dto) throw new Error('Empty response');
+
+      this.manipulabilitySignal.set(toManipulabilityData(dto));
+
+      // Show the gradient point cloud
+      if (dto.samples && dto.samples.length > 0) {
+        this.showPointCloudSignal.set(true);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Manipulability analysis failed';
+      this.errorSignal.set(msg);
+    } finally {
+      this.loadingSignal.set(false);
+    }
+  }
+
   /** Reset all state. */
   reset(): void {
     this.dataSignal.set(null);
