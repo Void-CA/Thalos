@@ -18,30 +18,16 @@ import { rotationDtoToQuaternion } from '../../utils/rotation';
   standalone: true,
   template: `
     <canvas #canvas></canvas>
-
-    <!-- Render scale toolbar — presets overlaid on the viewport -->
-    <div class="render-scale-bar">
-      @for (opt of SCALE_OPTIONS; track opt) {
-        <button
-          class="scale-btn"
-          [class.active]="store.renderScale() === opt"
-          (click)="store.setRenderScale(opt)"
-        >{{ opt }}x</button>
-      }
-    </div>
   `,
   styleUrl: './scene-viewer.scss',
 })
 export class SceneViewer implements AfterViewInit {
   @ViewChild('canvas') private readonly canvasRef!: ElementRef<HTMLCanvasElement>;
 
-  protected readonly store = inject(SceneStore);
+  private readonly store = inject(SceneStore);
   private readonly workspace = inject(WorkspaceStore);
   private readonly renderer = inject(ThreeRendererService);
   private readonly overlay = inject(WorkspaceOverlayService);
-
-  /** Render scale presets available in the toolbar. */
-  protected readonly SCALE_OPTIONS = [0.1, 0.25, 0.5, 1, 2, 5, 10];
 
   constructor() {
     // Sync robot scene + IK gizmo + trajectory overlay
@@ -73,11 +59,6 @@ export class SceneViewer implements AfterViewInit {
     // Priority: manipulability (gradient) > singularity (state colors) > monochrome.
     effect(() => {
       this.syncPointCloudOverlay();
-    });
-
-    // Sync render scale to the robot group.
-    effect(() => {
-      this.renderer.setRenderScale(this.store.renderScale());
     });
   }
 
