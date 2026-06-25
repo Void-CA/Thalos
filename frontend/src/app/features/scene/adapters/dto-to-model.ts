@@ -64,6 +64,7 @@ function toPrimitive(dto: VisualSceneDto['primitives'][number]): ScenePrimitive 
     translation: dto.translation,
     rotation: dto.rotation,
     geometry: toGeometry(dto.geometry),
+    color: dto.color ?? null,
   };
 }
 

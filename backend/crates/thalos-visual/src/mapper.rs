@@ -3,6 +3,10 @@ use thalos_models::Robot;
 
 use crate::scene::{PrimitiveGeometry, VisualElement};
 
+fn material_color(material: &thalos_models::Material) -> Option<[f64; 4]> {
+    material.color.map(|c| [c.r, c.g, c.b, c.a])
+}
+
 fn to_primitive(geometry: &thalos_models::geometry::Geometry) -> Option<PrimitiveGeometry> {
     match geometry {
         thalos_models::geometry::Geometry::Sphere { radius } => {
@@ -55,6 +59,7 @@ pub fn map_visuals(robot: &Robot, chain: &SerialChain) -> Vec<VisualElement> {
                 frame_id,
                 origin: visual.origin.clone(),
                 geometry,
+                color: visual.material.as_ref().and_then(material_color),
             });
         }
     }

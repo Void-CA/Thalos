@@ -66,6 +66,8 @@ export interface ScenePrimitive {
   translation: [number, number, number];
   rotation: [number, number, number, number];
   geometry: PrimitiveGeometry;
+  /** RGBA (0..1 each) from URDF material, or null if unspecified. */
+  color: [number, number, number, number] | null;
 }
 
 export type PrimitiveGeometry =

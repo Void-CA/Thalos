@@ -27,6 +27,9 @@ pub struct VisualPrimitive {
     pub translation: [f64; 3],
     pub rotation: [f64; 4],
     pub geometry: PrimitiveGeometry,
+    /// RGBA color from URDF `<material>`, or `None` if unspecified.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<[f64; 4]>,
 }
 
 impl VisualPrimitive {
@@ -36,6 +39,7 @@ impl VisualPrimitive {
             translation: [0.0; 3],
             rotation: [1.0, 0.0, 0.0, 0.0],
             geometry: PrimitiveGeometry::Cylinder { radius, height },
+            color: None,
         }
     }
 
@@ -45,6 +49,7 @@ impl VisualPrimitive {
             translation: [0.0; 3],
             rotation: [1.0, 0.0, 0.0, 0.0],
             geometry: PrimitiveGeometry::Sphere { radius },
+            color: None,
         }
     }
 
@@ -54,6 +59,7 @@ impl VisualPrimitive {
             translation: [0.0; 3],
             rotation: [1.0, 0.0, 0.0, 0.0],
             geometry: PrimitiveGeometry::Box { width, height, depth },
+            color: None,
         }
     }
 
@@ -64,6 +70,11 @@ impl VisualPrimitive {
 
     pub fn with_rotation(mut self, rotation: [f64; 4]) -> Self {
         self.rotation = rotation;
+        self
+    }
+
+    pub fn with_color(mut self, color: [f64; 4]) -> Self {
+        self.color = Some(color);
         self
     }
 }
@@ -87,6 +98,8 @@ pub struct VisualElement {
     pub origin: Transform3D,
     /// Primitive geometry (Sphere, Cylinder, Box).
     pub geometry: PrimitiveGeometry,
+    /// RGBA color from URDF `<material>`, or `None` if unspecified.
+    pub color: Option<[f64; 4]>,
 }
 
 // ── Escena visual ──────────────────────────────────────────────────────

@@ -247,7 +247,7 @@ export class ThreeRendererService {
       incoming.add(p.id);
       let slot = this.primitiveSlots.get(p.id);
 
-      const color = this.colorFor(p.id);
+      const color = p.color ? this.rgbaToColor(p.color) : this.colorFor(p.id);
 
       if (!slot) {
         const geo = this.buildPrimitiveGeometry(p.geometry);
@@ -278,6 +278,12 @@ export class ThreeRendererService {
     }
   }
 
+  /** Convert RGBA (0..1) from URDF to a hex number usable by Three.js. */
+  private rgbaToColor([r, g, b, _a]: [number, number, number, number]): number {
+    return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
+  }
+
+  /** Fallback colour when the backend didn't provide one. */
   private colorFor(id: string): number {
     if (id.includes('column')) return 0x888888;
     if (id.includes('link_1')) return 0x3399ff;
