@@ -311,6 +311,8 @@ pub struct ActiveAnalysisRequest {
     pub tolerance: f64,
     #[serde(default = "default_near_singular_threshold")]
     pub near_singular_condition_threshold: f64,
+    #[serde(default)]
+    pub include_samples: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -319,4 +321,8 @@ pub struct ActiveAnalysisResponse {
     pub bounds: BoundingBoxDto,
     pub singularity: SingularityMetricsDto,
     pub manipulability: ManipulabilityMetricsDto,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub singularity_samples: Option<Vec<SingularitySampleDto>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub manipulability_samples: Option<Vec<ManipulabilitySampleDto>>,
 }

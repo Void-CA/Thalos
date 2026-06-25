@@ -308,6 +308,7 @@ export class WorkspaceStore {
         seed,
         tolerance,
         near_singular_condition_threshold: threshold,
+        include_samples: true,
       }).toPromise();
 
       if (!dto) throw new Error('Empty response');
@@ -318,17 +319,22 @@ export class WorkspaceStore {
         bounds: toBounds(dto.bounds),
       });
 
-      // Singularity
+      // Singularity — includes colored point cloud (state colors)
       this.singularitySignal.set(toSingularityData({
         metrics: dto.singularity,
-        samples: undefined,
+        samples: dto.singularity_samples,
       }));
 
-      // Manipulability
+      // Manipulability — includes gradient point cloud (yoshikawa gradient)
+      // Takes priority over singularity in the viewer overlay (see scene-viewer.ts).
       this.manipulabilitySignal.set(toManipulabilityData({
         metrics: dto.manipulability,
-        samples: undefined,
+        samples: dto.manipulability_samples,
       }));
+
+      // Enable the overlay — the scene viewer picks the right source
+      // based on priority: manipulability > singularity > monochrome.
+      this.showPointCloudSignal.set(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Analysis failed';
       this.errorSignal.set(msg);

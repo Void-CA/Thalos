@@ -227,10 +227,24 @@ pub async fn analyze_active(
     let manipulability =
         RuntimeManipulabilityService::analyze_from_chain(&snapshot.chain, config)?;
 
+    let singularity_samples = if req.include_samples {
+        Some(singularity.samples.iter().map(SingularitySampleDto::from).collect())
+    } else {
+        None
+    };
+
+    let manipulability_samples = if req.include_samples {
+        Some(manipulability.samples.iter().map(ManipulabilitySampleDto::from).collect())
+    } else {
+        None
+    };
+
     Ok(Json(ActiveAnalysisResponse {
         workspace: ws.metrics().clone().into(),
         bounds: ws.bounds().clone().into(),
         singularity: singularity.metrics.into(),
         manipulability: manipulability.metrics.into(),
+        singularity_samples,
+        manipulability_samples,
     }))
 }

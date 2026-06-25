@@ -133,6 +133,7 @@ export interface ActiveAnalysisRequest {
     seed?: number;
     tolerance?: number;
     near_singular_condition_threshold?: number;
+    include_samples?: boolean;
 }
 
 /** Response from /workspace/analyze/active. */
@@ -141,4 +142,6 @@ export interface ActiveAnalysisResponse {
     bounds: BoundingBoxDto;
     singularity: SingularityMetricsDto;
     manipulability: ManipulabilityMetricsDto;
+    singularity_samples?: SingularitySampleDto[];
+    manipulability_samples?: ManipulabilitySampleDto[];
 }
