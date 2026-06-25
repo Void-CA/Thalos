@@ -1,6 +1,10 @@
 use thalos_core::{
     kinematics::{forward::result::FKResult, jacobian::Jacobian},
-    math::geometry::{rigid::Transform3D, vectors::Vector3},
+    math::geometry::{
+        rigid::Transform3D,
+        rotations::UnitQuaternion,
+        vectors::{UnitVector3, Vector3},
+    },
     robot::serial_chain::SerialChain,
     spatial::frame::FrameId,
 };
@@ -68,7 +72,7 @@ pub fn cylinder_between(
     let midpoint = [(from[0] + to[0]) / 2.0, (from[1] + to[1]) / 2.0, (from[2] + to[2]) / 2.0];
     let rotation = align_y_to([dx / height, dy / height, dz / height]);
 
-    VisualPrimitive { id: id.into(), translation: midpoint, rotation, geometry: PrimitiveGeometry::Cylinder { radius, height } }
+    VisualPrimitive { id: id.into(), translation: midpoint, rotation, geometry: PrimitiveGeometry::Cylinder { radius, height }, color: None }
 }
 
 // ── SceneBuilder ──
@@ -158,11 +162,25 @@ impl SceneBuilder {
             };
             let world = pose.transform().compose(&element.origin);
 
+            // Cylinder correction: URDF defines cylinder axis as Z,
+            // Three.js CylinderGeometry defaults to Y.
+            // Post-multiply by +90° around X to map Z_urdf → Y_threejs.
+            let world = if matches!(element.geometry, PrimitiveGeometry::Cylinder { .. }) {
+                let correction = Transform3D::from_rotation(UnitQuaternion::from_axis_angle(
+                    UnitVector3::x_axis(),
+                    std::f64::consts::FRAC_PI_2,
+                ));
+                world.compose(&correction)
+            } else {
+                world
+            };
+
             scene.primitives.push(VisualPrimitive {
                 id: element.id.clone(),
                 translation: self.normalize_tx(&world),
                 rotation: self.normalize_rot(&world),
                 geometry: element.geometry.clone(),
+                color: element.color,
             });
         }
 
