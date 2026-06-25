@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, effect, ElementRef, inject, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, computed, effect, ElementRef, inject, ViewChild } from '@angular/core';
 import { SceneStore } from '../../store/scene.store';
 import { ThreeRendererService } from '../../services/three-renderer.service';
 import { WorkspaceOverlayService } from '../../services/workspace-overlay.service';
@@ -18,6 +18,16 @@ import { rotationDtoToQuaternion } from '../../utils/rotation';
   standalone: true,
   template: `
     <canvas #canvas></canvas>
+
+    <!-- Viewport toolbar -->
+    <div class="viewport-toolbar">
+      <button
+        class="toolbar-btn"
+        (click)="onFitRobot()"
+        [disabled]="hasData() === false"
+        title="Fit Robot"
+      >Fit Robot</button>
+    </div>
   `,
   styleUrl: './scene-viewer.scss',
 })
@@ -28,6 +38,9 @@ export class SceneViewer implements AfterViewInit {
   private readonly workspace = inject(WorkspaceStore);
   private readonly renderer = inject(ThreeRendererService);
   private readonly overlay = inject(WorkspaceOverlayService);
+
+  /** True when the scene has renderable robot data. */
+  protected readonly hasData = computed(() => this.store.state().data !== null);
 
   constructor() {
     // Sync robot scene + IK gizmo + trajectory overlay
@@ -68,6 +81,14 @@ export class SceneViewer implements AfterViewInit {
     this.renderer.registerOverlay(this.overlay);
 
     this.syncPointCloudOverlay();
+  }
+
+  /** Frame the robot in the viewport. */
+  protected onFitRobot(): void {
+    const data = this.store.state().data;
+    if (data) {
+      this.renderer.fitToView(data);
+    }
   }
 
   private syncPointCloudOverlay(): void {

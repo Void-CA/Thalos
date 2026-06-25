@@ -554,6 +554,65 @@ export class ThreeRendererService {
     this.contentGroup = null;
   }
 
+  /**
+   * Frame the robot in the viewport by positioning the camera and orbit
+   * target so the union of all links and primitives fills ~80 % of the view.
+   */
+  fitToView(data: SceneData): void {
+    const camera = this.camera;
+    const controls = this.controls;
+    if (!camera || !controls) return;
+
+    const box = new THREE.Box3();
+
+    // Expand with link endpoints
+    for (const link of data.links) {
+      box.expandByPoint(new THREE.Vector3(link.start[0], link.start[1], link.start[2]));
+      box.expandByPoint(new THREE.Vector3(link.end[0], link.end[1], link.end[2]));
+    }
+
+    // Expand with primitive positions + geometry extents
+    const tmp = new THREE.Vector3();
+    for (const p of data.primitives) {
+      const t = p.translation;
+      const center = new THREE.Vector3(t[0], t[1], t[2]);
+      const g = p.geometry;
+      const half = (() => {
+        switch (g.type) {
+          case 'box': return Math.max(g.width, g.height, g.depth) / 2;
+          case 'sphere': return g.radius;
+          case 'cylinder': return Math.max(g.radius * 2, g.height) / 2;
+        }
+      })();
+      box.expandByPoint(center);
+      tmp.copy(center).addScalar(half);
+      box.expandByPoint(tmp);
+      tmp.copy(center).addScalar(-half);
+      box.expandByPoint(tmp);
+    }
+
+    if (box.isEmpty()) return;
+
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z, 0.01);
+
+    const vFov = camera.fov * Math.PI / 180;
+    const dist = (maxDim / 2) / Math.tan(vFov / 2) * 1.4;
+
+    const dir = new THREE.Vector3().subVectors(camera.position, controls.target);
+    const len = dir.length();
+    if (len > 1e-10) {
+      dir.normalize();
+      camera.position.copy(center).add(dir.multiplyScalar(dist));
+    } else {
+      camera.position.set(center.x, center.y, center.z + dist);
+    }
+
+    controls.target.copy(center);
+    controls.update();
+  }
+
   // ── Private ──
 
   private startLoop(): void {
