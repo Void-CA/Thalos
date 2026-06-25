@@ -157,7 +157,13 @@ impl SceneBuilder {
         let mut scene = self.from_fk(fk);
 
         for element in elements {
-            let Some(pose) = fk.pose(&element.frame_id) else {
+            // FK no computa pose para el root link (base_link) porque el
+            // primer segmento usa FrameId::World como parent. En ese caso
+            // caemos a World (identity), que es la pose correcta del root.
+            let pose = fk
+                .pose(&element.frame_id)
+                .or_else(|| fk.pose(&FrameId::World));
+            let Some(pose) = pose else {
                 continue;
             };
             let world = pose.transform().compose(&element.origin);

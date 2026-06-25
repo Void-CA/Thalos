@@ -45,6 +45,13 @@ impl ExecutableCommand for Command {
     fn execute(&self, runtime: &mut SceneRuntime) -> Result<Option<IKResult>, RuntimeError> {
         match self {
             Command::SetJoints(joints) => {
+                let expected = runtime.active_robot.chain.dof_count();
+                if joints.len() != expected {
+                    return Err(RuntimeError::JointCountMismatch {
+                        expected,
+                        received: joints.len(),
+                    });
+                }
                 runtime.active_robot.joints = joints.clone();
                 Ok(None)
             }
