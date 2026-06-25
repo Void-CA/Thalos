@@ -3,6 +3,8 @@ pub mod diff;
 
 use serde::{Deserialize, Serialize};
 use thalos_core::robot::joint::JointId;
+use thalos_core::math::geometry::rigid::Transform3D;
+use thalos_core::spatial::frame::FrameId;
 
 pub use precision::VisualPrecision;
 pub use diff::{SceneDiff, ChangedFrame};
@@ -64,6 +66,27 @@ impl VisualPrimitive {
         self.rotation = rotation;
         self
     }
+}
+
+/// A visual element extracted from a robot model, before world-space
+/// resolution.
+///
+/// Carries a `frame_id` (link frame) and a local `origin` so the
+/// `SceneBuilder` can resolve the world transform via FK:
+///
+/// ```text
+/// world_pose = fk.pose(frame_id) * origin
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct VisualElement {
+    pub id: VisualId,
+    /// Frame of the link this visual belongs to (resolved once during
+    /// mapping so that per-frame rendering doesn't need name lookups).
+    pub frame_id: FrameId,
+    /// Local origin of the visual element relative to the link frame.
+    pub origin: Transform3D,
+    /// Primitive geometry (Sphere, Cylinder, Box).
+    pub geometry: PrimitiveGeometry,
 }
 
 // ── Escena visual ──────────────────────────────────────────────────────

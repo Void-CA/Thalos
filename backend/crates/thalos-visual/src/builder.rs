@@ -144,6 +144,31 @@ impl SceneBuilder {
         }
     }
 
+    /// Extend a scene with visual elements resolved to world space.
+    ///
+    /// Each element's `frame_id` is looked up in the FK result, then
+    /// its local `origin` is composed to produce the final world
+    /// translation and rotation.
+    pub fn with_visual_elements(&self, fk: &FKResult, elements: &[VisualElement]) -> VisualScene {
+        let mut scene = self.from_fk(fk);
+
+        for element in elements {
+            let Some(pose) = fk.pose(&element.frame_id) else {
+                continue;
+            };
+            let world = pose.transform().compose(&element.origin);
+
+            scene.primitives.push(VisualPrimitive {
+                id: element.id.clone(),
+                translation: self.normalize_tx(&world),
+                rotation: self.normalize_rot(&world),
+                geometry: element.geometry.clone(),
+            });
+        }
+
+        scene
+    }
+
     pub fn from_fk_with_jacobian(&self, fk: &FKResult, jacobian: &Jacobian) -> VisualScene {
         let mut scene = self.from_fk(fk);
 

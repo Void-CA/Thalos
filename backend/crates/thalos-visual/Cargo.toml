@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 thalos_core = { path = "../thalos-core" }
+thalos_models = { path = "../thalos-models" }
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]

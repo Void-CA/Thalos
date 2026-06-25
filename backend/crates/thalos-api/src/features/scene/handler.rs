@@ -12,7 +12,7 @@ use thalos_models::urdf::parser::parse_robot;
 use thalos_core::{models::RobotModel, robot::adapter};
 use thalos_runtime::{snapshots::scene::JointMeta, Command};
 use thalos_visual::{
-    SceneBuilder, SceneDiff, SceneValidator, ScaraVisualBuilder, VisualScene,
+    map_visuals, SceneBuilder, SceneDiff, SceneValidator, ScaraVisualBuilder, VisualScene,
 };
 use thalos_visual::validator::SceneError;
 
@@ -24,26 +24,28 @@ use crate::features::scene::dto::*;
 
 /// Build a VisualScene from a RuntimeSnapshot.
 pub(crate) fn build_visual_scene(snapshot: &thalos_runtime::RuntimeSnapshot) -> VisualScene {
-    // Verify the source model survives the pipeline (temporary).
-    if let Some(src) = &snapshot.robot_source {
-        let visual_count: usize = src.links.values().map(|l| l.visual.len()).sum();
-        tracing::info!(
-            robot = %src.name,
-            links = src.links.len(),
-            visuals = visual_count,
-            "URDF source available for visual pipeline",
-        );
-    }
-
-    let model = snapshot.robot;
     let fk = &snapshot.fk_result;
     let chain = &snapshot.chain;
 
-    match model {
-        RobotModel::Scara => ScaraVisualBuilder::build(fk, chain),
-        _ => {
-            let builder = SceneBuilder::new(chain);
-            builder.from_fk(fk)
+    if let Some(robot) = &snapshot.robot_source {
+        let elements = map_visuals(robot, chain);
+        let visual_count: usize = robot.links.values().map(|l| l.visual.len()).sum();
+        tracing::info!(
+            robot = %robot.name,
+            links = robot.links.len(),
+            visuals = visual_count,
+            mapped = elements.len(),
+            "URDF visual pipeline — primitives from source model",
+        );
+        let builder = SceneBuilder::new(chain);
+        builder.with_visual_elements(fk, &elements)
+    } else {
+        match snapshot.robot {
+            RobotModel::Scara => ScaraVisualBuilder::build(fk, chain),
+            _ => {
+                let builder = SceneBuilder::new(chain);
+                builder.from_fk(fk)
+            }
         }
     }
 }
