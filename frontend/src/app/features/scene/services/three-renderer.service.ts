@@ -208,7 +208,7 @@ export class ThreeRendererService {
         );
         slot = { mesh, baseLen: 1 };
         this.linkSlots.set(key, slot);
-        this.contentGroup!.add(mesh);
+        this.robotGroup!.add(mesh);
       }
 
       const mesh = slot.mesh;
@@ -232,7 +232,7 @@ export class ThreeRendererService {
     // disappeared from the snapshot are both disposed uniformly.
     for (const [key, slot] of this.linkSlots) {
       if (!rendered.has(key)) {
-        this.contentGroup!.remove(slot.mesh);
+        this.robotGroup!.remove(slot.mesh);
         slot.mesh.geometry.dispose();
         (slot.mesh.material as THREE.Material).dispose();
         this.linkSlots.delete(key);
@@ -255,7 +255,7 @@ export class ThreeRendererService {
         const mesh = new THREE.Mesh(geo, this.getMaterial(color));
         slot = { mesh };
         this.primitiveSlots.set(p.id, slot);
-        this.contentGroup!.add(mesh);
+        this.robotGroup!.add(mesh);
       }
 
       slot.mesh.position.set(p.translation[0], p.translation[1], p.translation[2]);
@@ -271,7 +271,7 @@ export class ThreeRendererService {
     // Dispose removed primitives
     for (const [id, slot] of this.primitiveSlots) {
       if (!incoming.has(id)) {
-        this.contentGroup!.remove(slot.mesh);
+        this.robotGroup!.remove(slot.mesh);
         slot.mesh.geometry.dispose();
         this.primitiveSlots.delete(id);
       }
@@ -552,6 +552,14 @@ export class ThreeRendererService {
     this.renderer = null;
     this.controls = null;
     this.contentGroup = null;
+    this.robotGroup = null;
+  }
+
+  /** Apply a uniform scale factor to the robot body (links + primitives only). */
+  setRenderScale(s: number): void {
+    if (this.robotGroup) {
+      this.robotGroup.scale.set(s, s, s);
+    }
   }
 
   // ── Private ──

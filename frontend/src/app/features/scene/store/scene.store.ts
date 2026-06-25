@@ -1,4 +1,4 @@
-import { Injectable, inject, Signal } from '@angular/core';
+import { Injectable, inject, Signal, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { BehaviorSubject, concat, merge, Observable, of, Subject } from 'rxjs';
 import { auditTime, catchError, distinctUntilChanged, map, scan, switchMap } from 'rxjs/operators';
@@ -281,6 +281,15 @@ export class SceneStore {
   readonly state: Signal<SceneState> = toSignal(this.state$, {
     initialValue: INITIAL_STATE,
   });
+
+  /** Factor de escala visual para el cuerpo del robot (links + primitivas). */
+  private readonly renderScaleSignal = signal(1.0);
+  readonly renderScale: Signal<number> = this.renderScaleSignal.asReadonly();
+
+  /** Setear factor de escala visual del robot. Clamped a [0.01, 100]. */
+  setRenderScale(s: number): void {
+    this.renderScaleSignal.set(Math.max(0.01, Math.min(s, 100)));
+  }
 
   /** Push new joint angles into the pipeline. */
   setJointAngles(q: number[]): void {
