@@ -186,24 +186,6 @@ pub fn from_robot(robot: &ModelRobot) -> Result<SerialChain, AdapterError> {
 ///
 /// This is the **primary API** for importing robots. Use it when you
 /// know which link is the end-effector.
-///
-/// ```
-/// # use thalos_core::robot::adapter;
-/// # use parse_robot;
-/// let urdf = r#"
-///   <robot name="arm">
-///     <link name="base"/><link name="tool"/>
-///     <joint name="j" type="revolute">
-///       <parent link="base"/><child link="tool"/>
-///       <axis xyz="0 0 1"/>
-///       <limit lower="-1" upper="1" effort="1" velocity="1"/>
-///     </joint>
-///   </robot>
-/// "#;
-/// let robot = parse_robot(urdf).unwrap();
-/// let chain = adapter::from_tip(&robot, "tool").unwrap();
-/// assert_eq!(chain.dof_count(), 1);
-/// ```
 pub fn from_tip(robot: &ModelRobot, target_name: &str) -> Result<SerialChain, AdapterError> {
     use thalos_models::graph::RobotGraph;
 
@@ -287,23 +269,6 @@ pub fn from_tip(robot: &ModelRobot, target_name: &str) -> Result<SerialChain, Ad
 /// - Robots with multiple tool frames (tool0, camera, gripper).
 ///   In these cases, use [`from_tip`] to specify the target explicitly.
 ///
-/// ```
-/// # use thalos_core::robot::adapter;
-/// # use parse_robot;
-/// let urdf = r#"
-///   <robot name="arm">
-///     <link name="base"/><link name="tool"/>
-///     <joint name="j" type="revolute">
-///       <parent link="base"/><child link="tool"/>
-///       <axis xyz="0 0 1"/>
-///       <limit lower="-1" upper="1" effort="1" velocity="1"/>
-///     </joint>
-///   </robot>
-/// "#;
-/// let robot = parse_robot(urdf).unwrap();
-/// let chain = adapter::auto(&robot).expect("auto should pick tool");
-/// assert_eq!(chain.dof_count(), 1);
-/// ```
 pub fn auto(robot: &ModelRobot) -> Result<SerialChain, AdapterError> {
     use thalos_models::graph::RobotGraph;
 

@@ -48,8 +48,8 @@ impl ScaraVisualBuilder {
             link2_pose.transform().translation.z,
         ];
 
-        // 1. Base column — cilindro desde world hasta la base (FK-driven)
-        let base_height = (t_base[1] - 0.0).abs();
+        // ADR-0001: Z is vertical. Base height comes from Z component.
+        let base_height = (t_base[2] - 0.0).abs();
         if base_height > 1e-6 {
             scene.primitives.push(
                 cylinder_between("base_column", [0.0, 0.0, 0.0], t_base, 0.08),

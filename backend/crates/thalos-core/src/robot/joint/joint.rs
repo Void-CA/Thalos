@@ -67,7 +67,7 @@ impl JointType {
         match self {
             JointType::Revolute(j) => j.axis,
             JointType::Prismatic(j) => j.direction,
-            JointType::Fixed(_) => UnitVector3::y_axis(),
+            JointType::Fixed(_) => UnitVector3::z_axis(),
         }
     }
 

@@ -43,4 +43,20 @@ impl Transform3D {
             rotation,
         }
     }
+
+    pub fn apply(&self, point: Vector3) -> Vector3 {
+        self.rotation.rotate_vector(point) + self.translation
+    }
+}
+
+
+impl std::fmt::Display for Transform3D {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Traslation:(\n  {}],\n  {}\n)", 
+            self.translation,
+            self.rotation
+        )
+    }
 }

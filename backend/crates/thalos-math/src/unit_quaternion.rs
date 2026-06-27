@@ -109,6 +109,11 @@ impl Mul for UnitQuaternion {
     }
 }
 
+impl std::fmt::Display for UnitQuaternion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        return write!(f, "{:}", self.q);
+    }
+}
 #[cfg(test)]
 mod unit_quaternion_tests {
     use super::*;

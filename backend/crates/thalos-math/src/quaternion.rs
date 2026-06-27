@@ -124,6 +124,12 @@ impl Sub for Quaternion {
     }
 }
 
+impl std::fmt::Display for Quaternion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        return write!(f, "({:.4}, {:.4}i, {:.4}j, {:.4}k)", self.w, self.x, self.y, self.z);
+    }
+}
+
 #[cfg(test)]
 mod quaternion_algebra_tests {
     use super::*;

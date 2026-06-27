@@ -73,6 +73,8 @@ impl Quaternion {
     }
 }
 
+
+
 #[cfg(test)]
 mod quaternion_algebra_tests {
     use super::*;
