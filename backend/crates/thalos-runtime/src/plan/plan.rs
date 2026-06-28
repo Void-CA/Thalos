@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 
 use thalos_core::prelude::Trajectory;
+use thalos_planning::motion::program::{CompiledPlan, PlannedSegment};
 
 use super::motion_type::MotionType;
 use super::state::PlanState;
@@ -11,6 +12,8 @@ pub struct ActiveMotionPlan {
     pub state: PlanState,
     pub trajectory: Trajectory,
     pub motion_type: MotionType,
+    /// Per-segment metadata when this plan came from a multi-segment program.
+    pub segments: Option<Vec<PlannedSegment>>,
     pub created_at: DateTime<Utc>,
     pub started_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
@@ -29,9 +32,27 @@ impl ActiveMotionPlan {
             state: PlanState::Completed,
             trajectory,
             motion_type,
+            segments: None,
             created_at: now,
             started_at: Some(now),
             completed_at: Some(now),
+        }
+    }
+
+    pub fn from_compiled_plan(
+        plan_id: impl Into<String>,
+        compiled: CompiledPlan,
+    ) -> Self {
+        let segments = Some(compiled.segments.clone());
+        Self {
+            plan_id: plan_id.into(),
+            state: PlanState::Created,
+            trajectory: compiled.merged_trajectory,
+            motion_type: MotionType::Program,
+            segments,
+            created_at: Utc::now(),
+            started_at: None,
+            completed_at: None,
         }
     }
 
@@ -45,6 +66,7 @@ impl ActiveMotionPlan {
             state: PlanState::Created,
             trajectory,
             motion_type,
+            segments: None,
             created_at: Utc::now(),
             started_at: None,
             completed_at: None,

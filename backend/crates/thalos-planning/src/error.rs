@@ -39,6 +39,35 @@ impl From<&str> for PlanningError {
     }
 }
 
+/// Compilation of a multi-segment motion program failed.
+///
+/// Wraps the underlying `PlanningError` with the 0-based index of the
+/// segment that failed. The compiler guarantees atomicity — no partial
+/// `CompiledPlan` is produced.
+#[derive(Error, Debug, Clone)]
+#[error("segment {} failed: {source}", .segment_index + 1)]
+pub struct CompileError {
+    /// 0-based index of the segment that caused the failure.
+    pub segment_index: usize,
+
+    /// The underlying planning error.
+    #[source]
+    pub source: PlanningError,
+}
+
+impl CompileError {
+    /// 1-based index for user-facing messages ("segment 3").
+    pub fn segment_1based(&self) -> usize {
+        self.segment_index + 1
+    }
+}
+
+impl From<CompileError> for PlanningError {
+    fn from(e: CompileError) -> Self {
+        e.source
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum IkFailureReason {
     MaxIterationsReached,

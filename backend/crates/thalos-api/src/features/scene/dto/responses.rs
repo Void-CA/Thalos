@@ -123,9 +123,23 @@ pub struct ActivePlanDto {
     pub motion_type: String,
     pub trajectory_progress: Option<f64>,
     pub visualization: Option<TrajectoryVisualizationDto>,
+    /// Per-segment metadata for multi-segment programs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub segments: Option<Vec<SegmentInfoDto>>,
     pub created_at: DateTime<Utc>,
     pub started_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
+}
+
+/// Segment metadata for multi-segment motion programs.
+#[derive(Debug, Serialize)]
+pub struct SegmentInfoDto {
+    pub segment_index: usize,
+    pub motion_type: String,
+    pub waypoint_start: usize,
+    pub waypoint_end: usize,
+    pub time_start: f64,
+    pub time_end: f64,
 }
 
 /// Trajectory visualisation — the data contract for the frontend's 3D renderer.

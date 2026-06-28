@@ -5,7 +5,8 @@ use thalos_visual::{
 };
 
 use crate::features::scene::dto::{
-    ActivePlanDto, TrajectoryVisualizationDto, VisualWaypointDto, WaypointTypeDto,
+    ActivePlanDto, SegmentInfoDto, TrajectoryVisualizationDto, VisualWaypointDto,
+    WaypointTypeDto,
 };
 
 impl From<&thalos_runtime::ActiveMotionPlan> for ActivePlanDto {
@@ -16,9 +17,33 @@ impl From<&thalos_runtime::ActiveMotionPlan> for ActivePlanDto {
             motion_type: match plan.motion_type {
                 thalos_runtime::MotionType::MoveJ => "movej".into(),
                 thalos_runtime::MotionType::MoveL => "movel".into(),
+                thalos_runtime::MotionType::Program => "program".into(),
             },
             trajectory_progress: Some(plan.progress()),
-            visualization: None, // filled separately via build_visualization
+            visualization: None,
+            segments: plan.segments.as_ref().map(|segs| {
+                segs.iter()
+                    .enumerate()
+                    .map(|(i, seg)| {
+                        let motion_type = match &seg.source {
+                            thalos_planning::motion::segment::MotionSegment::MoveJ { .. } => {
+                                "movej"
+                            }
+                            thalos_planning::motion::segment::MotionSegment::MoveL { .. } => {
+                                "movel"
+                            }
+                        };
+                        SegmentInfoDto {
+                            segment_index: i,
+                            motion_type: motion_type.into(),
+                            waypoint_start: seg.waypoint_range.start,
+                            waypoint_end: seg.waypoint_range.end,
+                            time_start: seg.time_range.start,
+                            time_end: seg.time_range.end,
+                        }
+                    })
+                    .collect()
+            }),
             created_at: plan.created_at,
             started_at: plan.started_at,
             completed_at: plan.completed_at,
@@ -37,6 +62,7 @@ impl ActivePlanDto {
         let motion_type = match plan.motion_type {
             thalos_runtime::MotionType::MoveJ => VisualMotionType::MoveJ,
             thalos_runtime::MotionType::MoveL => VisualMotionType::MoveL,
+            thalos_runtime::MotionType::Program => VisualMotionType::MoveJ, // segments colored by frontend
         };
 
         let ee = *chain.end_effector();

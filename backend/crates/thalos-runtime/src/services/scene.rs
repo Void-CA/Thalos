@@ -9,6 +9,7 @@ use thalos_core::{
     robot::serial_chain::SerialChain,
     spatial::frame::FrameId,
 };
+use thalos_planning::motion::program::CompiledPlan;
 
 use crate::backends::RobotBackend;
 use crate::commands::handler::ExecutableCommand;
@@ -87,6 +88,14 @@ impl SceneService {
         let result = solver.solve(&q0, goal);
 
         Ok((result.q.clone(), result))
+    }
+
+    /// Execute a compiled motion program — activates it in the runtime
+    /// without going through the command dispatch.
+    pub fn execute_program(&self, compiled: CompiledPlan) -> Result<RuntimeSnapshot, RuntimeError> {
+        let mut runtime = self.runtime.write().unwrap();
+        runtime.activate_compiled_plan(compiled);
+        self.snapshot_with_ik(None)
     }
 
     /// Build a snapshot, injecting optional IK metadata.

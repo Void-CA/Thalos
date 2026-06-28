@@ -4,6 +4,7 @@ use thalos_core::{kinematics::{
 }, prelude::Trajectory};
 use thalos_core::spatial::frame::FrameId;
 use thalos_models::Robot;
+use thalos_planning::motion::program::CompiledPlan;
 
 pub use thalos_core::prelude::ActiveRobot;
 use crate::snapshots::scene::JointMeta;
@@ -55,6 +56,21 @@ impl SceneRuntime {
     pub fn set_created_plan(&mut self, trajectory: impl Into<Trajectory>, motion_type: MotionType) {
         let tid = self.next_plan_id();
         self.active_plan = Some(ActiveMotionPlan::created(tid, trajectory.into(), motion_type));
+    }
+
+    /// Activate a compiled multi-segment program in the runtime.
+    ///
+    /// Sets the robot joints to the final position of the merged trajectory
+    /// and stores the plan with per-segment metadata for visualisation.
+    pub fn activate_compiled_plan(&mut self, compiled: CompiledPlan) {
+        let tid = self.next_plan_id();
+
+        // Set joints to the last waypoint of the merged trajectory
+        if let Some(last) = compiled.merged_trajectory.waypoints().last() {
+            self.active_robot.joints = last.joints().to_vec();
+        }
+
+        self.active_plan = Some(ActiveMotionPlan::from_compiled_plan(tid, compiled));
     }
 
     pub fn clear_plan(&mut self) {

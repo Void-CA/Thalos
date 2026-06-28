@@ -9,7 +9,21 @@ use axum::{
 use serde_json::{json, Value};
 use thalos_models::urdf::parser::parse_robot;
 
-use thalos_core::{models::RobotModel, robot::adapter};
+use thalos_core::{
+    kinematics::{
+        forward::ForwardKinematics,
+        inverse::DampedLeastSquaresSolver,
+    },
+    models::RobotModel,
+    robot::{adapter, state::RobotState},
+};
+use thalos_planning::{
+    error::CompileError,
+    motion::{
+        compiler::{DefaultPlannerDispatcher, PlanCompiler},
+        planner::PlanningContext,
+    },
+};
 use thalos_runtime::{snapshots::scene::JointMeta, Command};
 use thalos_visual::{
     map_visuals, SceneBuilder, SceneDiff, SceneValidator, ScaraVisualBuilder, VisualScene,
@@ -153,6 +167,65 @@ pub async fn move_to_pose(
     let cmd = payload.into_command(default_ee);
 
     let snapshot = state.services.scene.execute(cmd)?;
+    Ok(Json(to_api_response(&snapshot)))
+}
+
+
+// ─── Motion program ──────────────────────────────────────────────────────
+
+const IK_MAX_ITERS: usize = 500;
+const IK_TOLERANCE: f64 = 1e-6;
+const IK_LAMBDA: f64 = 0.1;
+
+/// Compile and execute a multi-segment motion program.
+///
+/// Accepts an ordered list of movement commands, plans each segment
+/// sequentially, concatenates the trajectories, and activates the
+/// resulting plan in the runtime.
+pub async fn execute_plan(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<MotionPlanRequest>,
+) -> ApiResult<RuntimeStateResponse> {
+    let snapshot = state.services.scene.snapshot()?;
+    let default_ee = *snapshot.chain.end_effector();
+
+    // Build the motion program from the request
+    let program = payload.into_program(default_ee);
+
+    if program.segments.is_empty() {
+        // Nothing to plan — return current state
+        return Ok(Json(to_api_response(&snapshot)));
+    }
+
+    // Create an IK solver and planning context from the runtime state
+    let fk = ForwardKinematics::new(snapshot.chain.clone());
+    let solver = DampedLeastSquaresSolver::new(
+        fk,
+        default_ee,
+        IK_MAX_ITERS,
+        IK_TOLERANCE,
+        IK_LAMBDA,
+    );
+    let robot_state = RobotState::new(snapshot.joints.clone());
+    let ctx = PlanningContext {
+        robot: &snapshot.chain,
+        current_state: &robot_state,
+        ik_solver: &solver,
+    };
+
+    // Compile
+    let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
+    let compiled = compiler
+        .compile(&program, &ctx)
+        .map_err(|err: CompileError| {
+            ApiError::Validation {
+                message: err.to_string(),
+                code: format!("segment_{}_failed", err.segment_index),
+            }
+        })?;
+
+    // Activate
+    let snapshot = state.services.scene.execute_program(compiled)?;
     Ok(Json(to_api_response(&snapshot)))
 }
 
