@@ -1,7 +1,7 @@
 use crate::collision::CollisionGeometry;
 use crate::math::geometry::rigid::Transform3D;
 
-pub type LinkId = u32;
+pub use thalos_models::LinkId;
 
 #[derive(Debug, Clone)]
 pub struct Link {

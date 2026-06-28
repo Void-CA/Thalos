@@ -3,8 +3,10 @@ use thalos_core::{kinematics::{
     inverse::{DampedLeastSquaresSolver, IKGoal, IKResult, IKSolver},
 }, prelude::Trajectory};
 use thalos_core::spatial::frame::FrameId;
+use thalos_models::Robot;
 
 pub use thalos_core::prelude::ActiveRobot;
+use crate::snapshots::scene::JointMeta;
 
 use crate::plan::{ActiveMotionPlan, MotionType};
 
@@ -14,14 +16,21 @@ const IK_LAMBDA: f64 = 0.1;
 
 pub struct SceneRuntime {
     pub active_robot: ActiveRobot,
+    pub robot_name: String,
+    /// Original URDF model — `None` for built-in robots, `Some` for imports.
+    pub robot_source: Option<Robot>,
+    pub joints_meta: Vec<JointMeta>,
     pub active_plan: Option<ActiveMotionPlan>,
     next_plan_id: u64,
 }
 
 impl SceneRuntime {
-    pub fn new(active_robot: ActiveRobot) -> Self {
+    pub fn new(active_robot: ActiveRobot, robot_name: String) -> Self {
         Self {
             active_robot,
+            robot_name,
+            robot_source: None,
+            joints_meta: Vec::new(),
             active_plan: None,
             next_plan_id: 0,
         }

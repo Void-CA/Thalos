@@ -33,6 +33,13 @@ export class SceneApiService {
     );
   }
 
+  loadRobotFromUrdf(urdfSource: string): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/scene/robot/from-urdf`,
+      { urdf_source: urdfSource },
+    );
+  }
+
   moveToPosition(
     target: [number, number, number],
     frame_id?: number,

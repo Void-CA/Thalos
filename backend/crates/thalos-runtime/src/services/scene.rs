@@ -32,8 +32,10 @@ pub struct SceneService {
 impl SceneService {
     pub fn new(backend: Box<dyn RobotBackend + Send + Sync>, model: RobotModel) -> Self {
         let chain = RobotRegistry::create_default(model);
-        let active_robot = ActiveRobot::new(model, chain, vec![0.0; model.metadata().dof]);
-        let runtime = SceneRuntime::new(active_robot);
+        let dof = model.metadata().dof;
+        let active_robot = ActiveRobot::new(model, chain, vec![0.0; dof]);
+        let robot_name = model.metadata().display_name.to_string();
+        let runtime = SceneRuntime::new(active_robot, robot_name);
 
         Self {
             runtime: RwLock::new(runtime),
@@ -55,6 +57,9 @@ impl SceneService {
         let ik_result = None;
         Ok(RuntimeSnapshot {
             robot: runtime.active_robot.model,
+            robot_source: runtime.robot_source.clone(),
+            robot_name: runtime.robot_name.clone(),
+            joints_meta: runtime.joints_meta.clone(),
             joints: runtime.active_robot.joints.clone(),
             chain: runtime.active_robot.chain.clone(),
             fk_result,
@@ -91,6 +96,9 @@ impl SceneService {
 
         Ok(RuntimeSnapshot {
             robot: runtime.active_robot.model,
+            robot_source: runtime.robot_source.clone(),
+            robot_name: runtime.robot_name.clone(),
+            joints_meta: runtime.joints_meta.clone(),
             joints: runtime.active_robot.joints.clone(),
             chain: runtime.active_robot.chain.clone(),
             fk_result,

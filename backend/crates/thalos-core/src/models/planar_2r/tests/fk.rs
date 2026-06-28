@@ -1,6 +1,41 @@
 use crate::prelude::*;
 use crate::models::planar_2r::Planar2RSpec;
 
+// ─── ADR-0001 Z-up regression tests ──────────────────────────
+
+#[test]
+fn zero_config_ee_in_z_up() {
+    // ADR-0001: Z is vertical. Planar 2R operates in XY plane.
+    // At q=[0,0] with l1=l2=1: ee = (2, 0, 0) — Z is 0, arm in XY.
+    let robot = Planar2RSpec::ideal().build();
+    let fk = ForwardKinematics::new(robot);
+    let result = fk.evaluate(&[0.0, 0.0]);
+    let ee = result.ee_pose().unwrap();
+    let t = &ee.transform().translation;
+
+    assert!(
+        (t.x - 2.0).abs() < EPS && t.y.abs() < EPS && t.z.abs() < EPS,
+        "Planar 2R Z-up regression: expected (2, 0, 0), got ({}, {}, {})",
+        t.x, t.y, t.z
+    );
+}
+
+#[test]
+fn first_joint_90_in_z_up() {
+    // Rz(π/2) rotates +X to +Y: ee at (0, 2, 0), Z stays 0.
+    let robot = Planar2RSpec::ideal().build();
+    let fk = ForwardKinematics::new(robot);
+    let result = fk.evaluate(&[PI / 2.0, 0.0]);
+    let t = result.ee_pose().unwrap().transform().translation;
+
+    assert!(
+        t.x.abs() < EPS && (t.y - 2.0).abs() < EPS && t.z.abs() < EPS,
+        "Planar 2R Rz(90°): expected (0, 2, 0), got ({}, {}, {})",
+        t.x, t.y, t.z
+    );
+}
+
+// ─── Existing tests ──────────────────────────────────────────
 
 #[test]
     fn returns_two_poses() {

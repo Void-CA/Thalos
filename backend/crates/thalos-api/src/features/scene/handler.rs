@@ -2,14 +2,19 @@ use std::sync::Arc;
 
 use axum::{
     extract::State,
+    http::StatusCode,
+    response::IntoResponse,
     Json,
 };
+use serde_json::{json, Value};
+use thalos_models::urdf::parser::parse_robot;
 
-use thalos_core::models::RobotModel;
-use thalos_runtime::Command;
+use thalos_core::{models::RobotModel, robot::adapter};
+use thalos_runtime::{snapshots::scene::JointMeta, Command};
 use thalos_visual::{
-    SceneBuilder, SceneDiff, SceneValidator, ScaraVisualBuilder, VisualScene,
+    map_visuals, SceneBuilder, SceneDiff, SceneValidator, ScaraVisualBuilder, VisualScene,
 };
+use thalos_visual::validator::SceneError;
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
@@ -19,15 +24,28 @@ use crate::features::scene::dto::*;
 
 /// Build a VisualScene from a RuntimeSnapshot.
 pub(crate) fn build_visual_scene(snapshot: &thalos_runtime::RuntimeSnapshot) -> VisualScene {
-    let robot = snapshot.robot;
     let fk = &snapshot.fk_result;
     let chain = &snapshot.chain;
 
-    match robot {
-        RobotModel::Scara => ScaraVisualBuilder::build(fk, chain),
-        _ => {
-            let builder = SceneBuilder::new(chain);
-            builder.from_fk(fk)
+    if let Some(robot) = &snapshot.robot_source {
+        let elements = map_visuals(robot, chain);
+        let visual_count: usize = robot.links.values().map(|l| l.visual.len()).sum();
+        tracing::info!(
+            robot = %robot.name,
+            links = robot.links.len(),
+            visuals = visual_count,
+            mapped = elements.len(),
+            "URDF visual pipeline — primitives from source model",
+        );
+        let builder = SceneBuilder::new(chain);
+        builder.with_visual_elements(fk, &elements)
+    } else {
+        match snapshot.robot {
+            RobotModel::Scara => ScaraVisualBuilder::build(fk, chain),
+            _ => {
+                let builder = SceneBuilder::new(chain);
+                builder.from_fk(fk)
+            }
         }
     }
 }
@@ -64,6 +82,52 @@ pub async fn load_robot(
     Json(payload): Json<LoadRobotRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
     let cmd = payload.into_command()?;
+    let snapshot = state.services.scene.execute(cmd)?;
+    Ok(Json(to_api_response(&snapshot)))
+}
+
+pub async fn load_robot_from_urdf(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<LoadUrdfRobotRequest>,
+) -> ApiResult<RuntimeStateResponse> {
+    let robot = parse_robot(&payload.urdf_source).map_err(|e| {
+        ApiError::Validation {
+            message: format!("Invalid URDF: {e}"),
+            code: "invalid_urdf".into(),
+        }
+    })?;
+
+    let name = robot.name.clone();
+    let chain = adapter::auto(&robot).map_err(|e| {
+        ApiError::Validation {
+            message: format!("Cannot build chain: {e}"),
+            code: "urdf_chain_error".into(),
+        }
+    })?;
+
+    // Build joint metadata from parsed URDF joints.
+    // Fixed joints are filtered out — they don't consume a slot in the
+    // runtime joints array and the frontend should not show sliders for them.
+    let joints_meta: Vec<JointMeta> = robot
+        .bfs_joints()
+        .unwrap_or_default()
+        .iter()
+        .filter(|j| !j.kind.is_fixed())
+        .map(|j| JointMeta {
+            name: j.name.clone(),
+            kind: j.kind.to_string(),
+            min: j.limits.map(|l| l.min),
+            max: j.limits.map(|l| l.max),
+        })
+        .collect();
+
+    let cmd = Command::LoadUrdfRobot {
+        name,
+        joints_meta,
+        chain,
+        robot,
+    };
+
     let snapshot = state.services.scene.execute(cmd)?;
     Ok(Json(to_api_response(&snapshot)))
 }
@@ -137,22 +201,43 @@ pub async fn execute_ik(
     Ok(Json(to_api_response(&snapshot)))
 }
 
+fn scene_error_to_response(err: &SceneError) -> (StatusCode, Json<Value>) {
+    let (code, extra) = match err {
+        SceneError::MissingWorld => ("MISSING_WORLD", json!({})),
+        SceneError::MissingFrame(id) => ("MISSING_FRAME", json!({ "frame": id })),
+        SceneError::DuplicateId { id } => ("DUPLICATE_ID", json!({ "frame": id })),
+        SceneError::BrokenTopology { frame: _ } => ("BROKEN_TOPOLOGY", json!({})),
+        SceneError::NonFiniteValue { frame } => ("NON_FINITE_VALUE", json!({ "frame": frame })),
+        SceneError::InvalidQuaternion { frame, norm } => {
+            ("INVALID_QUATERNION", json!({ "frame": frame, "norm": norm }))
+        }
+        SceneError::OrphanLink { index } => ("ORPHAN_LINK", json!({ "index": index })),
+        SceneError::TwistsMismatch { expected, found } => {
+            ("TWISTS_MISMATCH", json!({ "expected": expected, "found": found }))
+        }
+    };
+
+    let mut body = json!({
+        "error": err.to_string(),
+        "code": code,
+    });
+    if let Some(obj) = extra.as_object() {
+        body.as_object_mut().unwrap().extend(obj.clone());
+    }
+
+    (StatusCode::UNPROCESSABLE_ENTITY, Json(body))
+}
+
 pub async fn validate(
     _state: State<Arc<AppState>>,
     Json(payload): Json<ValidateRequest>,
-) -> ApiResult<ValidateResponse> {
+) -> impl IntoResponse {
     let scene: VisualScene = payload.scene.into();
     let validator = SceneValidator::default();
 
     match validator.validate(&scene) {
-        Ok(_) => Ok(Json(ValidateResponse {
-            valid: true,
-            error: None,
-        })),
-        Err(e) => Ok(Json(ValidateResponse {
-            valid: false,
-            error: Some(e.to_string()),
-        })),
+        Ok(_) => (StatusCode::OK, Json(json!({ "valid": true }))).into_response(),
+        Err(e) => scene_error_to_response(&e).into_response(),
     }
 }
 

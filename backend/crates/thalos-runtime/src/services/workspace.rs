@@ -8,6 +8,7 @@ use thalos_core::analysis::workspace::{
 };
 use thalos_core::math::geometry::vectors::Vector3;
 use thalos_core::models::{RobotModel, RobotRegistry};
+use thalos_core::robot::serial_chain::SerialChain;
 
 use crate::error::RuntimeError;
 
@@ -24,10 +25,22 @@ impl WorkspaceService {
         }
 
         let chain = RobotRegistry::create_default(model);
+        Self::sample_from_chain(&chain, config)
+    }
+
+    /// Sample workspace using an already-built chain (e.g. from the active robot).
+    pub fn sample_from_chain(
+        chain: &SerialChain,
+        config: WorkspaceConfig,
+    ) -> Result<Arc<Workspace>, RuntimeError> {
+        if config.samples == 0 {
+            return Err(RuntimeError::Workspace(WorkspaceError::InvalidSampleCount(0)));
+        }
+
         let mut rng = StdRng::seed_from_u64(config.seed);
 
         let ws = WorkspaceSampler
-            .sample(&chain, config, &mut rng)
+            .sample(chain, config, &mut rng)
             .map_err(RuntimeError::Workspace)?;
 
         Ok(Arc::new(ws))

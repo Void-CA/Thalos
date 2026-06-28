@@ -286,3 +286,57 @@ impl From<Reachability> for ReachabilityDto {
         }
     }
 }
+
+// ─── Active-robot endpoints ─────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct ActiveSampleRequest {
+    #[serde(default = "default_samples")]
+    pub samples: usize,
+    #[serde(default)]
+    pub seed: u64,
+    #[serde(default = "default_tolerance")]
+    pub tolerance: f64,
+    #[serde(default)]
+    pub include_samples: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ActiveSingularityRequest {
+    #[serde(default = "default_samples")]
+    pub samples: usize,
+    #[serde(default)]
+    pub seed: u64,
+    #[serde(default = "default_tolerance")]
+    pub tolerance: f64,
+    #[serde(default = "default_near_singular_threshold")]
+    pub near_singular_condition_threshold: f64,
+    #[serde(default)]
+    pub include_samples: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ActiveAnalysisRequest {
+    #[serde(default = "default_samples")]
+    pub samples: usize,
+    #[serde(default)]
+    pub seed: u64,
+    #[serde(default = "default_tolerance")]
+    pub tolerance: f64,
+    #[serde(default = "default_near_singular_threshold")]
+    pub near_singular_condition_threshold: f64,
+    #[serde(default)]
+    pub include_samples: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ActiveAnalysisResponse {
+    pub workspace: WorkspaceMetricsDto,
+    pub bounds: BoundingBoxDto,
+    pub singularity: SingularityMetricsDto,
+    pub manipulability: ManipulabilityMetricsDto,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub singularity_samples: Option<Vec<SingularitySampleDto>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub manipulability_samples: Option<Vec<ManipulabilitySampleDto>>,
+}

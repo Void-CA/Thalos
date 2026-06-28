@@ -62,6 +62,8 @@ export interface VisualPrimitiveDto {
   translation: [number, number, number];
   rotation: [number, number, number, number];
   geometry: PrimitiveGeometryDto;
+  /** RGBA (0..1 each). Absent when URDF specified no material color. */
+  color?: [number, number, number, number];
 }
 
 export type PrimitiveGeometryDto =

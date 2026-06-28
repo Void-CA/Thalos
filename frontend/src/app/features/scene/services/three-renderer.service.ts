@@ -50,6 +50,9 @@ export class ThreeRendererService {
   private readonly scratchVec = new THREE.Vector3();
   private readonly scratchQuat = new THREE.Quaternion();
   private readonly scratchDir = new THREE.Vector3();
+  // CylinderGeometry is Y-aligned — this is a mesh adapter reference, NOT a
+  // coordinate system setting. Three.js CylinderGeometry stays Y-aligned while
+  // canonical Thalos cylinders are Z-aligned (mesh adapter, per ADR-0001).
   private readonly linkUp = new THREE.Vector3(0, 1, 0);
 
   // ── Material cache (per-color dedup) ──
@@ -65,7 +68,8 @@ export class ThreeRendererService {
     this.scene.background = new THREE.Color(0x1a1a1a);
 
     this.camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 100);
-    this.camera.position.set(0, 0, 3);
+    this.camera.up.set(0, 0, 1);
+    this.camera.position.set(2, -3, 2);
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(window.devicePixelRatio);
@@ -80,8 +84,10 @@ export class ThreeRendererService {
     sun.position.set(2, 5, 3);
     this.scene.add(sun);
 
-    // Reference grid (XZ plane — robot lives in XY)
-    this.scene.add(new THREE.GridHelper(4, 10, 0x666666, 0x444444));
+    // Reference grid (XY plane — Z-up horizontal ground)
+    const grid = new THREE.GridHelper(4, 10, 0x666666, 0x444444);
+    grid.rotation.x = Math.PI / 2;  // default XZ → XY for Z-up
+    this.scene.add(grid);
 
     // Content container
     this.contentGroup = new THREE.Group();
@@ -247,7 +253,7 @@ export class ThreeRendererService {
       incoming.add(p.id);
       let slot = this.primitiveSlots.get(p.id);
 
-      const color = this.colorFor(p.id);
+      const color = p.color ? this.rgbaToColor(p.color) : this.colorFor(p.id);
 
       if (!slot) {
         const geo = this.buildPrimitiveGeometry(p.geometry);
@@ -278,6 +284,12 @@ export class ThreeRendererService {
     }
   }
 
+  /** Convert RGBA (0..1) from URDF to a hex number usable by Three.js. */
+  private rgbaToColor([r, g, b, _a]: [number, number, number, number]): number {
+    return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
+  }
+
+  /** Fallback colour when the backend didn't provide one. */
   private colorFor(id: string): number {
     if (id.includes('column')) return 0x888888;
     if (id.includes('link_1')) return 0x3399ff;
@@ -388,12 +400,11 @@ export class ThreeRendererService {
     );
     grp.add(sphere);
 
-    // Ring orbit
+    // Ring orbit — RingGeometry defaults to XY plane (horizontal in Z-up)
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(0.06, 0.08, 32),
       new THREE.MeshBasicMaterial({ color: 0xff6600, side: THREE.DoubleSide, transparent: true, opacity: 0.4 }),
     );
-    ring.rotation.x = Math.PI / 2;
     grp.add(ring);
 
     // Small local axes
@@ -546,6 +557,65 @@ export class ThreeRendererService {
     this.renderer = null;
     this.controls = null;
     this.contentGroup = null;
+  }
+
+  /**
+   * Frame the robot in the viewport by positioning the camera and orbit
+   * target so the union of all links and primitives fills ~80 % of the view.
+   */
+  fitToView(data: SceneData): void {
+    const camera = this.camera;
+    const controls = this.controls;
+    if (!camera || !controls) return;
+
+    const box = new THREE.Box3();
+
+    // Expand with link endpoints
+    for (const link of data.links) {
+      box.expandByPoint(new THREE.Vector3(link.start[0], link.start[1], link.start[2]));
+      box.expandByPoint(new THREE.Vector3(link.end[0], link.end[1], link.end[2]));
+    }
+
+    // Expand with primitive positions + geometry extents
+    const tmp = new THREE.Vector3();
+    for (const p of data.primitives) {
+      const t = p.translation;
+      const center = new THREE.Vector3(t[0], t[1], t[2]);
+      const g = p.geometry;
+      const half = (() => {
+        switch (g.type) {
+          case 'box': return Math.max(g.width, g.height, g.depth) / 2;
+          case 'sphere': return g.radius;
+          case 'cylinder': return Math.max(g.radius * 2, g.height) / 2;
+        }
+      })();
+      box.expandByPoint(center);
+      tmp.copy(center).addScalar(half);
+      box.expandByPoint(tmp);
+      tmp.copy(center).addScalar(-half);
+      box.expandByPoint(tmp);
+    }
+
+    if (box.isEmpty()) return;
+
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z, 0.01);
+
+    const vFov = camera.fov * Math.PI / 180;
+    const dist = (maxDim / 2) / Math.tan(vFov / 2) * 1.4;
+
+    const dir = new THREE.Vector3().subVectors(camera.position, controls.target);
+    const len = dir.length();
+    if (len > 1e-10) {
+      dir.normalize();
+      camera.position.copy(center).add(dir.multiplyScalar(dist));
+    } else {
+      camera.position.set(center.x, center.y, center.z + dist);
+    }
+
+    controls.target.copy(center);
+    controls.update();
   }
 
   // ── Private ──

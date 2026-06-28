@@ -2,6 +2,9 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import {
+  ActiveAnalysisRequest, ActiveAnalysisResponse,
+  ActiveSampleRequest,
+  BoundingBoxDto,
   ManipulabilityRequest, ManipulabilityResponse,
   WorkspaceDto, ReachabilityDto, SampleRequest, ReachabilityRequest,
   SingularityRequest, SingularityResponse,
@@ -27,5 +30,32 @@ export class WorkspaceApiService {
 
   analyzeManipulability(req: ManipulabilityRequest): Observable<ManipulabilityResponse> {
     return this.http.post<ManipulabilityResponse>(`${this.baseUrl}/workspace/manipulability`, req);
+  }
+
+  // ── Active-robot endpoints ──
+
+  /** Sample workspace for the currently loaded robot. */
+  sampleActive(req: ActiveSampleRequest): Observable<WorkspaceDto> {
+    return this.http.post<WorkspaceDto>(`${this.baseUrl}/workspace/sample/active`, req);
+  }
+
+  /** Get workspace bounds for the currently loaded robot. */
+  boundsActive(req: ActiveSampleRequest): Observable<BoundingBoxDto> {
+    return this.http.post<BoundingBoxDto>(`${this.baseUrl}/workspace/bounds/active`, req);
+  }
+
+  /** Full analysis (workspace + singularity + manipulability) for active robot. */
+  analyzeActive(req: ActiveAnalysisRequest): Observable<ActiveAnalysisResponse> {
+    return this.http.post<ActiveAnalysisResponse>(`${this.baseUrl}/workspace/analyze/active`, req);
+  }
+
+  /** Singularity analysis for the currently loaded robot. */
+  analyzeSingularityActive(req: ActiveSampleRequest & { near_singular_condition_threshold?: number; include_samples?: boolean }): Observable<SingularityResponse> {
+    return this.http.post<SingularityResponse>(`${this.baseUrl}/workspace/singularity/active`, req);
+  }
+
+  /** Manipulability analysis for the currently loaded robot. */
+  analyzeManipulabilityActive(req: ActiveSampleRequest & { include_samples?: boolean }): Observable<ManipulabilityResponse> {
+    return this.http.post<ManipulabilityResponse>(`${this.baseUrl}/workspace/manipulability/active`, req);
   }
 }

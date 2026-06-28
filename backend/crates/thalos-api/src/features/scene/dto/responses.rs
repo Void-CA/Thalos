@@ -73,6 +73,9 @@ pub struct VisualPrimitiveDto {
     pub translation: [f64; 3],
     pub rotation: [f64; 4],
     pub geometry: PrimitiveGeometryDto,
+    /// RGBA color from URDF `<material>`, omitted when unspecified.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<[f64; 4]>,
 }
 
 // ── Runtime response ──

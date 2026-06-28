@@ -207,7 +207,7 @@ fn scara_default_workspace_has_reachable_center() {
     let mut rng = StdRng::seed_from_u64(0);
     let chain: SerialChain = RobotRegistry::create_default(RobotModel::Scara);
     let config = WorkspaceConfig {
-        samples: 500,
+        samples: 5000,
         seed: 0,
         tolerance: 1e-3,
     };
@@ -215,11 +215,14 @@ fn scara_default_workspace_has_reachable_center() {
         .sample(&chain, config, &mut rng)
         .unwrap();
 
-    let center = Vector3::new(0.0, 0.0, 0.0);
-    let result = ws.is_reachable(&center, 0.5).unwrap();
+    // SCARA canonical: a1=1.0, a2=0.8, base_height=0.5, joint_2 limited to ±150°.
+    // Minimum XY reachable is ~0.504 (arm can't fully fold), so (0.7, 0, 0.5) is
+    // clearly within the workspace.
+    let center = Vector3::new(0.7, 0.0, 0.5);
+    let result = ws.is_reachable(&center, 0.1).unwrap();
     assert!(
         matches!(result, Reachability::Reachable),
-        "Scara center should be reachable within 0.5m tol: {:?}",
+        "Scara center at (0.7, 0, 0.5) should be reachable within 0.1m tol: {:?}",
         result,
     );
 }

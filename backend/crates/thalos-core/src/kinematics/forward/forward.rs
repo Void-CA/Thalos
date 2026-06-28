@@ -22,6 +22,15 @@ impl ForwardKinematics {
     }
 
     pub fn evaluate(&self, q: &[f64]) -> FKResult {
+        assert_eq!(
+            q.len(),
+            self.chain.dof_count(),
+            "ForwardKinematics::evaluate: q has {} elements but chain has {} DOF ({} segments, {} with dof>0)",
+            q.len(),
+            self.chain.dof_count(),
+            self.chain.segments.len(),
+            self.chain.segments.iter().filter(|s| s.joint.dof() > 0).count(),
+        );
         let mut t = Transform3D::identity();
 
         let mut poses = HashMap::new();

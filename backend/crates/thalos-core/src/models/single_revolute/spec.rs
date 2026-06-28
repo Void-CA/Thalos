@@ -20,7 +20,7 @@ impl SingleRevoluteSpec {
         Self {
             l: 1.0,
             joint_limits: [
-                JointLimits { min: -PI, max: PI },
+                JointLimits::new(-PI, PI),
             ],
         }
     }

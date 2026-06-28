@@ -192,4 +192,51 @@ fn detect_known_planar_2r_singularity() {
 
     assert_eq!(state, SingularityState::Singular);
 }
+
+#[test]
+fn analyze_icebot_urdf_pipeline() {
+    // Load the icebot URDF and verify the full pipeline
+    // (FK → workspace sampling → singularity analysis) does not panic.
+    let src = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../docs/robot/icebot.urdf"
+    ));
+    let robot = thalos_models::urdf::parser::parse_robot(src)
+        .expect("icebot URDF should parse");
+    let chain = crate::robot::adapter::auto(&robot)
+        .expect("icebot should produce a valid chain");
+
+    // Verify the chain structure
+    assert_eq!(chain.segments.len(), 4, "icebot has 4 joints");
+    assert_eq!(chain.dof_count(), 4, "icebot has 4 DOF (3 rev + 1 prism)");
+
+    // FK with zero config
+    let fk = ForwardKinematics::new(chain.clone());
+    let q = vec![0.0; chain.dof_count()];
+    let fk_result = fk.evaluate(&q);
+    assert!(fk_result.ee_position().is_some(), "FK should produce an EE position");
+
+    // Workspace sampling
+    let config = WorkspaceConfig { samples: 50, seed: 42, tolerance: 0.001 };
+    let mut rng = StdRng::seed_from_u64(config.seed);
+    let ws = WorkspaceSampler
+        .sample(&chain, config, &mut rng)
+        .expect("workspace sampling should succeed");
+    assert_eq!(ws.samples().len(), 50);
+
+    // Verify all q vectors have correct length
+    for s in ws.samples() {
+        assert_eq!(s.q.len(), 4, "each sample q should have 4 elements (DOF)");
+    }
+
+    // Singularity analysis
+    let jac = GeometricJacobian::new(
+        ForwardKinematics::new(chain.clone()),
+        chain.end_effector.clone(),
+    );
+    let singularity_config = SingularityConfig::default();
+    let analysis = SingularityAnalyzer::analyze(&ws, &jac, &singularity_config);
+    assert_eq!(analysis.samples.len(), 50);
+    assert_eq!(analysis.metrics.total_samples, 50);
+}
 }

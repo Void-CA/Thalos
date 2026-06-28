@@ -5,6 +5,8 @@
 //! robot's joint limits (D6: sequential, no parallelism). The RNG is
 //! injected so determinism (R1) is testable.
 
+use std::f64::consts::PI;
+
 use rand::{Rng, SeedableRng};
 
 use crate::robot::joint::JointLimits;
@@ -68,5 +70,11 @@ impl WorkspaceSampler {
 
 
 fn uniform_within<R: Rng>(rng: &mut R, limits: JointLimits) -> f64 {
+    if !limits.enabled {
+        // Joint has no mechanical bounds (e.g. URDF continuous without
+        // an explicit <limit>). Sample one full rotation for workspace
+        // visualization purposes.
+        return -PI + rand::Rng::r#gen::<f64>(rng) * (2.0 * PI);
+    }
     limits.min + rand::Rng::r#gen::<f64>(rng) * (limits.max - limits.min)
 }

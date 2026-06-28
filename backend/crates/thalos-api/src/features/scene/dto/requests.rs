@@ -100,6 +100,12 @@ pub struct ExecuteIKRequest {
     pub joint_angles: Vec<f64>,
 }
 
+/// Import a robot from raw URDF source.
+#[derive(Debug, Deserialize)]
+pub struct LoadUrdfRobotRequest {
+    pub urdf_source: String,
+}
+
 fn default_epsilon() -> f64 {
     1e-6
 }

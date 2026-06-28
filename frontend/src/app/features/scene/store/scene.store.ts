@@ -101,6 +101,9 @@ export class SceneStore {
   /** Input stream: load a different robot model into the scene. */
   private readonly loadRobotSubject = new Subject<string>();
 
+  /** Input stream: import a robot from a URDF source string. */
+  private readonly loadUrdfSubject = new Subject<string>();
+
   /** Input stream: IK commands (moveToPosition / moveToPose). */
   private readonly ikSubject = new Subject<IkCommand>();
 
@@ -215,6 +218,19 @@ export class SceneStore {
     this.applySnapshotSubject.pipe(
       map(toSceneEvent),
     ),
+
+    // Pipeline 8: URDF import → loadRobotFromUrdf API
+    this.loadUrdfSubject.pipe(
+      switchMap(source => concat(
+        of({ type: 'loading' as const }),
+        this.api.loadRobotFromUrdf(source).pipe(
+          map(toSceneEvent),
+          catchError(err =>
+            of({ type: 'error' as const, message: err.message ?? 'URDF import failed' }),
+          ),
+        ),
+      )),
+    ),
   ).pipe(
     scan((state, event): SceneState => {
       switch (event.type) {
@@ -274,6 +290,11 @@ export class SceneStore {
   /** Load a different robot into the scene. */
   loadRobot(id: string): void {
     this.loadRobotSubject.next(id);
+  }
+
+  /** Import a robot from a raw URDF source string. */
+  loadRobotFromUrdf(urdfSource: string): void {
+    this.loadUrdfSubject.next(urdfSource);
   }
 
   /** Send an IK command (move-to-position or move-to-pose, mutates runtime). */

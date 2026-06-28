@@ -1,6 +1,10 @@
 use thalos_core::{
     kinematics::{forward::result::FKResult, jacobian::Jacobian},
-    math::geometry::{rigid::Transform3D, vectors::Vector3},
+    math::geometry::{
+        rigid::Transform3D,
+        rotations::UnitQuaternion,
+        vectors::{UnitVector3, Vector3},
+    },
     robot::serial_chain::SerialChain,
     spatial::frame::FrameId,
 };
@@ -68,7 +72,7 @@ pub fn cylinder_between(
     let midpoint = [(from[0] + to[0]) / 2.0, (from[1] + to[1]) / 2.0, (from[2] + to[2]) / 2.0];
     let rotation = align_y_to([dx / height, dy / height, dz / height]);
 
-    VisualPrimitive { id: id.into(), translation: midpoint, rotation, geometry: PrimitiveGeometry::Cylinder { radius, height } }
+    VisualPrimitive { id: id.into(), translation: midpoint, rotation, geometry: PrimitiveGeometry::Cylinder { radius, height }, color: None }
 }
 
 // ── SceneBuilder ──
@@ -142,6 +146,51 @@ impl SceneBuilder {
             twists: Vec::new(),
             primitives: Vec::new(),
         }
+    }
+
+    /// Extend a scene with visual elements resolved to world space.
+    ///
+    /// Each element's `frame_id` is looked up in the FK result, then
+    /// its local `origin` is composed to produce the final world
+    /// translation and rotation.
+    pub fn with_visual_elements(&self, fk: &FKResult, elements: &[VisualElement]) -> VisualScene {
+        let mut scene = self.from_fk(fk);
+
+        for element in elements {
+            // FK no computa pose para el root link (base_link) porque el
+            // primer segmento usa FrameId::World como parent. En ese caso
+            // caemos a World (identity), que es la pose correcta del root.
+            let pose = fk
+                .pose(&element.frame_id)
+                .or_else(|| fk.pose(&FrameId::World));
+            let Some(pose) = pose else {
+                continue;
+            };
+            let world = pose.transform().compose(&element.origin);
+
+            // Cylinder correction: URDF defines cylinder axis as Z,
+            // Three.js CylinderGeometry defaults to Y.
+            // Post-multiply by +90° around X to map Z_urdf → Y_threejs.
+            let world = if matches!(element.geometry, PrimitiveGeometry::Cylinder { .. }) {
+                let correction = Transform3D::from_rotation(UnitQuaternion::from_axis_angle(
+                    UnitVector3::x_axis(),
+                    std::f64::consts::FRAC_PI_2,
+                ));
+                world.compose(&correction)
+            } else {
+                world
+            };
+
+            scene.primitives.push(VisualPrimitive {
+                id: element.id.clone(),
+                translation: self.normalize_tx(&world),
+                rotation: self.normalize_rot(&world),
+                geometry: element.geometry.clone(),
+                color: element.color,
+            });
+        }
+
+        scene
     }
 
     pub fn from_fk_with_jacobian(&self, fk: &FKResult, jacobian: &Jacobian) -> VisualScene {

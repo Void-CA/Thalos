@@ -82,6 +82,7 @@ impl From<VisualPrimitive> for VisualPrimitiveDto {
             translation: p.translation,
             rotation: p.rotation,
             geometry: p.geometry.into(),
+            color: p.color,
         }
     }
 }
@@ -193,6 +194,7 @@ impl From<VisualPrimitiveDto> for VisualPrimitive {
             translation: p.translation,
             rotation: p.rotation,
             geometry: p.geometry.into(),
+            color: p.color,
         }
     }
 }
