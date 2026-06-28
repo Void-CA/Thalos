@@ -1,186 +1,234 @@
-import { Component, computed, inject, signal, ViewChild } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SceneApiService } from '../scene/services/scene-api.service';
 import { SceneStore } from '../scene/store/scene.store';
-import { JointEditor } from '../../shared/components/joint-editor/joint-editor';
+import type { MotionPlanRequest, MotionSegmentDto } from '../scene/scene-api.types';
 
-type MotionKind = 'movej' | 'movel';
+type SegmentKind = 'movej' | 'movel';
+
+interface SegmentModel {
+  kind: SegmentKind;
+  expanded: boolean;
+  // MoveJ
+  joints: number[];
+  // MoveL
+  txStr: string;
+  tyStr: string;
+  tzStr: string;
+  rotationFormat: 'euler' | 'quaternion';
+  yawStr: string;
+  pitchStr: string;
+  rollStr: string;
+  qwStr: string;
+  qxStr: string;
+  qyStr: string;
+  qzStr: string;
+  frameIdStr: string;
+  // Common
+  velocityStr: string;
+}
+
+const SEGMENT_COLORS = [
+  '#3b82f6', // blue
+  '#22c55e', // green
+  '#f59e0b', // amber
+  '#ef4444', // red
+  '#8b5cf6', // violet
+  '#ec4899', // pink
+  '#14b8a6', // teal
+  '#f97316', // orange
+];
+
+function createSegment(kind: SegmentKind, dof: number): SegmentModel {
+  return {
+    kind,
+    expanded: true,
+    joints: new Array(dof).fill(0),
+    txStr: '0.3',
+    tyStr: '0',
+    tzStr: '0',
+    rotationFormat: 'euler',
+    yawStr: '0',
+    pitchStr: '0',
+    rollStr: '0',
+    qwStr: '1',
+    qxStr: '0',
+    qyStr: '0',
+    qzStr: '0',
+    frameIdStr: '',
+    velocityStr: '',
+  };
+}
 
 @Component({
   selector: 'planning-panel',
   standalone: true,
-  imports: [FormsModule, JointEditor],
+  imports: [FormsModule],
   template: `
     <div class="planning-panel">
-      <!-- Motion type selector -->
-      <div class="planning-panel__tabs">
-        @for (kind of motionKinds; track kind) {
-          <button
-            class="planning-panel__tab"
-            [class.active]="motionKind() === kind"
-            (click)="motionKind.set(kind)"
-          >
-            {{ kind === 'movej' ? 'MoveJ' : 'MoveL' }}
-          </button>
-        }
-      </div>
-
-      <!-- ── MoveJ: JointEditor + actions ── -->
-      @if (motionKind() === 'movej') {
-        @if (dof() > 0) {
-          <div class="planning-panel__section">
-            <span class="planning-panel__section-label">
-              Joint Targets ({{ dof() }})
-            </span>
-
-            <joint-editor #editor />
-          </div>
-
-          <!-- Velocity -->
-          <label class="planning-panel__field">
-            <span class="planning-panel__label">Velocity (optional)</span>
-            <input
-              class="planning-panel__input"
-              type="number"
-              step="0.1"
-              min="0.01"
-              [(ngModel)]="velocityStr"
-              placeholder="default"
-            />
-          </label>
-
-          <!-- Actions -->
-          <div class="planning-panel__actions">
-            <button class="planning-panel__reset" (click)="editor.reset()">
-              Reset
-            </button>
-            <button
-              class="planning-panel__submit"
-              (click)="executeMoveJ()"
-              [disabled]="loading()"
-            >
-              {{ loading() ? 'Executing…' : 'Execute MoveJ' }}
-            </button>
-          </div>
-
-          <!-- Advanced: raw CSV input for power users -->
-          <details class="planning-panel__advanced">
-            <summary class="planning-panel__advanced-summary">Raw Input</summary>
-            <div class="planning-panel__advanced-body">
-              <label class="planning-panel__field">
-                <span class="planning-panel__label">Comma-separated joints</span>
-                <input
-                  class="planning-panel__input"
-                  type="text"
-                  [(ngModel)]="rawInput"
-                  placeholder="e.g. 1.0, 0.5, -0.3"
-                />
-              </label>
-              <button
-                class="planning-panel__apply-raw"
-                (click)="applyRawInput()"
-                [disabled]="!rawInput.trim()"
-              >
-                Apply Raw
-              </button>
-            </div>
-          </details>
-        } @else {
-          <div class="planning-panel__empty">
-            <p>No robot loaded.</p>
-            <p class="planning-panel__empty-hint">
-              Select a robot from the catalog to start planning.
-            </p>
-          </div>
-        }
-      }
-
-      <!-- ── MoveL form (IK-style card inputs) ── -->
-      @if (motionKind() === 'movel') {
-        <section class="planning-panel__card">
-          <h4 class="planning-panel__card-label">Target</h4>
-
-          <!-- Translation coord grid -->
-          <div class="planning-panel__coord-grid">
-            <label>X
-              <input type="number" step="0.01" [(ngModel)]="txStr" />
-            </label>
-            <label>Y
-              <input type="number" step="0.01" [(ngModel)]="tyStr" />
-            </label>
-            <label>Z
-              <input type="number" step="0.01" [(ngModel)]="tzStr" />
-            </label>
-          </div>
-
-          <!-- Rotation with format toggle -->
-          <div class="planning-panel__rotation">
-            <div class="segmented" role="radiogroup" aria-label="Rotation format">
-              <button
-                type="button"
-                role="radio"
-                class="segmented__btn"
-                [class.is-active]="moveLRotFormat() === 'euler'"
-                (click)="moveLRotFormat.set('euler')"
-              >Euler</button>
-              <button
-                type="button"
-                role="radio"
-                class="segmented__btn"
-                [class.is-active]="moveLRotFormat() === 'quaternion'"
-                (click)="moveLRotFormat.set('quaternion')"
-              >Quaternion</button>
-            </div>
-
-            @if (moveLRotFormat() === 'euler') {
-              <div class="planning-panel__coord-grid">
-                <label>Yaw °
-                  <input type="number" step="1" [(ngModel)]="moveLYawStr" />
-                </label>
-                <label>Pitch °
-                  <input type="number" step="1" [(ngModel)]="moveLPitchStr" />
-                </label>
-                <label>Roll °
-                  <input type="number" step="1" [(ngModel)]="moveLRollStr" />
-                </label>
-              </div>
-            } @else {
-              <div class="planning-panel__coord-grid planning-panel__coord-grid--quat">
-                <label>W
-                  <input type="number" step="0.01" [(ngModel)]="moveLQwStr" />
-                </label>
-                <label>X
-                  <input type="number" step="0.01" [(ngModel)]="moveLQxStr" />
-                </label>
-                <label>Y
-                  <input type="number" step="0.01" [(ngModel)]="moveLQyStr" />
-                </label>
-                <label>Z
-                  <input type="number" step="0.01" [(ngModel)]="moveLQzStr" />
-                </label>
-              </div>
-            }
-          </div>
-
-          <!-- Options -->
-          <label class="planning-panel__field">
-            <span class="planning-panel__label">Frame ID (optional)</span>
-            <input class="planning-panel__input" type="number" step="1" min="0" [(ngModel)]="frameIdStr" placeholder="0" />
-          </label>
-          <label class="planning-panel__field">
-            <span class="planning-panel__label">Velocity (optional)</span>
-            <input class="planning-panel__input" type="number" step="0.1" min="0.01" [(ngModel)]="velocityStr" placeholder="default" />
-          </label>
-        </section>
-
-        <div class="planning-panel__actions">
-          <button class="planning-panel__submit" (click)="executeMoveL()" [disabled]="loading()">
-            {{ loading() ? 'Executing…' : 'Execute MoveL' }}
-          </button>
+      <!-- ── Empty state ── -->
+      @if (segments().length === 0) {
+        <div class="planning-panel__empty">
+          <p>No segments. Add a motion command to build a program.</p>
         </div>
       }
 
-      <!-- Error display -->
+      <!-- ── Segment list ── -->
+      @for (seg of segments(); track $index; let i = $index) {
+        <div class="planning-panel__segment" [class.is-expanded]="seg.expanded">
+          <!-- Header -->
+          <div class="planning-panel__seg-header" (click)="toggleSegment(i)">
+            <span class="planning-panel__seg-dot" [style.background]="segmentColor(i)"></span>
+            <span class="planning-panel__seg-title">
+              Segment {{ i + 1 }} — {{ seg.kind === 'movej' ? 'MoveJ' : 'MoveL' }}
+            </span>
+            <span class="planning-panel__seg-chevron">{{ seg.expanded ? '▼' : '▶' }}</span>
+            <button class="planning-panel__seg-remove" (click)="removeSegment($event, i)" title="Remove segment">&times;</button>
+          </div>
+
+          <!-- Body -->
+          @if (seg.expanded) {
+            <div class="planning-panel__seg-body">
+              @if (seg.kind === 'movej') {
+                <!-- ── MoveJ controls ── -->
+                @if (jointNames().length > 0) {
+                  <div class="planning-panel__joint-grid">
+                    @for (name of jointNames(); track $index; let ji = $index) {
+                      <label>
+                        <span class="planning-panel__joint-label">{{ name }}</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          class="planning-panel__num-input"
+                          [ngModel]="seg.joints[ji]"
+                          (ngModelChange)="updateJoint(i, ji, $event)"
+                        />
+                      </label>
+                    }
+                  </div>
+                }
+                <label class="planning-panel__field">
+                  <span class="planning-panel__field-label">Velocity (optional)</span>
+                  <input
+                    class="planning-panel__num-input"
+                    type="number"
+                    step="0.1"
+                    min="0.01"
+                    [ngModel]="seg.velocityStr"
+                    (ngModelChange)="updateField(i, 'velocityStr', $event)"
+                    placeholder="default"
+                  />
+                </label>
+              } @else {
+                <!-- ── MoveL controls ── -->
+                <div class="planning-panel__coord-grid">
+                  <label>X
+                    <input type="number" step="0.01" class="planning-panel__num-input"
+                      [ngModel]="seg.txStr" (ngModelChange)="updateField(i, 'txStr', $event)" />
+                  </label>
+                  <label>Y
+                    <input type="number" step="0.01" class="planning-panel__num-input"
+                      [ngModel]="seg.tyStr" (ngModelChange)="updateField(i, 'tyStr', $event)" />
+                  </label>
+                  <label>Z
+                    <input type="number" step="0.01" class="planning-panel__num-input"
+                      [ngModel]="seg.tzStr" (ngModelChange)="updateField(i, 'tzStr', $event)" />
+                  </label>
+                </div>
+
+                <!-- Rotation format -->
+                <div class="segmented" role="radiogroup" aria-label="Rotation format">
+                  <button
+                    type="button"
+                    role="radio"
+                    class="segmented__btn"
+                    [class.is-active]="seg.rotationFormat === 'euler'"
+                    (click)="updateField(i, 'rotationFormat', 'euler')"
+                  >Euler</button>
+                  <button
+                    type="button"
+                    role="radio"
+                    class="segmented__btn"
+                    [class.is-active]="seg.rotationFormat === 'quaternion'"
+                    (click)="updateField(i, 'rotationFormat', 'quaternion')"
+                  >Quaternion</button>
+                </div>
+
+                @if (seg.rotationFormat === 'euler') {
+                  <div class="planning-panel__coord-grid">
+                    <label>Yaw °
+                      <input type="number" step="1" class="planning-panel__num-input"
+                        [ngModel]="seg.yawStr" (ngModelChange)="updateField(i, 'yawStr', $event)" />
+                    </label>
+                    <label>Pitch °
+                      <input type="number" step="1" class="planning-panel__num-input"
+                        [ngModel]="seg.pitchStr" (ngModelChange)="updateField(i, 'pitchStr', $event)" />
+                    </label>
+                    <label>Roll °
+                      <input type="number" step="1" class="planning-panel__num-input"
+                        [ngModel]="seg.rollStr" (ngModelChange)="updateField(i, 'rollStr', $event)" />
+                    </label>
+                  </div>
+                } @else {
+                  <div class="planning-panel__coord-grid planning-panel__coord-grid--quat">
+                    <label>W
+                      <input type="number" step="0.01" class="planning-panel__num-input"
+                        [ngModel]="seg.qwStr" (ngModelChange)="updateField(i, 'qwStr', $event)" />
+                    </label>
+                    <label>X
+                      <input type="number" step="0.01" class="planning-panel__num-input"
+                        [ngModel]="seg.qxStr" (ngModelChange)="updateField(i, 'qxStr', $event)" />
+                    </label>
+                    <label>Y
+                      <input type="number" step="0.01" class="planning-panel__num-input"
+                        [ngModel]="seg.qyStr" (ngModelChange)="updateField(i, 'qyStr', $event)" />
+                    </label>
+                    <label>Z
+                      <input type="number" step="0.01" class="planning-panel__num-input"
+                        [ngModel]="seg.qzStr" (ngModelChange)="updateField(i, 'qzStr', $event)" />
+                    </label>
+                  </div>
+                }
+
+                <label class="planning-panel__field">
+                  <span class="planning-panel__field-label">Frame ID (optional)</span>
+                  <input type="number" step="1" min="0" class="planning-panel__num-input"
+                    [ngModel]="seg.frameIdStr" (ngModelChange)="updateField(i, 'frameIdStr', $event)" placeholder="0" />
+                </label>
+
+                <label class="planning-panel__field">
+                  <span class="planning-panel__field-label">Velocity (optional)</span>
+                  <input type="number" step="0.1" min="0.01" class="planning-panel__num-input"
+                    [ngModel]="seg.velocityStr" (ngModelChange)="updateField(i, 'velocityStr', $event)" placeholder="default" />
+                </label>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      <!-- ── Add segment buttons ── -->
+      <div class="planning-panel__add-row">
+        <button class="planning-panel__add-btn" (click)="addSegment('movej')">
+          + MoveJ
+        </button>
+        <button class="planning-panel__add-btn" (click)="addSegment('movel')">
+          + MoveL
+        </button>
+      </div>
+
+      <!-- ── Actions ── -->
+      <div class="planning-panel__actions">
+        <button
+          class="planning-panel__submit"
+          (click)="executePlan()"
+          [disabled]="loading() || segments().length === 0"
+        >
+          {{ loading() ? 'Executing…' : 'Execute Program' }}
+        </button>
+      </div>
+
+      <!-- ── Error ── -->
       @if (error()) {
         <div class="planning-panel__error">{{ error() }}</div>
       }
@@ -192,33 +240,61 @@ export class PlanningPanel {
   private readonly api = inject(SceneApiService);
   private readonly store = inject(SceneStore);
 
-  @ViewChild('editor') private readonly editor!: JointEditor;
-
-  protected readonly motionKind = signal<MotionKind>('movej');
-  protected readonly motionKinds: MotionKind[] = ['movej', 'movel'];
+  protected readonly segments = signal<SegmentModel[]>([]);
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
 
-  /** DOF del robot cargado (para @if en template). */
-  protected readonly dof = computed(
-    () => this.store.state()?.runtime?.robot.joints.length ?? 0,
-  );
+  protected readonly jointNames = computed(() => {
+    const r = this.store.state()?.runtime;
+    return r?.robot.joints.map((j, i) => j.name || `J${i + 1}`) ?? [];
+  });
 
-  // ── Raw input ──
-
-  protected rawInput = '';
-
-  protected applyRawInput(): void {
-    const parts = this.rawInput.split(',').map(s => parseFloat(s.trim()));
-    if (parts.some(isNaN) || parts.length === 0) return;
-    const n = this.dof();
-    const adjusted = Array.from({ length: n }, (_, i) => parts[i] ?? 0);
-    this.editor.setValues(adjusted);
+  private get dof(): number {
+    return this.store.state()?.runtime?.robot.dof ?? 0;
   }
 
-  // ── Velocity (shared MoveJ / MoveL) ──
+  // ── Segment management ──
 
-  protected velocityStr = '';
+  protected addSegment(kind: SegmentKind): void {
+    this.segments.update(arr => [...arr, createSegment(kind, this.dof)]);
+  }
+
+  protected removeSegment(event: MouseEvent, index: number): void {
+    event.stopPropagation();
+    this.segments.update(arr => arr.filter((_, i) => i !== index));
+  }
+
+  protected toggleSegment(index: number): void {
+    this.segments.update(arr => {
+      const next = [...arr];
+      next[index] = { ...next[index], expanded: !next[index].expanded };
+      return next;
+    });
+  }
+
+  protected updateField(i: number, field: keyof SegmentModel, value: any): void {
+    this.segments.update(arr => {
+      const next = [...arr];
+      (next[i] as any)[field] = value;
+      return next;
+    });
+  }
+
+  protected updateJoint(segIndex: number, jointIndex: number, value: number): void {
+    this.segments.update(arr => {
+      const next = [...arr];
+      const joints = [...next[segIndex].joints];
+      joints[jointIndex] = value;
+      next[segIndex] = { ...next[segIndex], joints };
+      return next;
+    });
+  }
+
+  protected segmentColor(index: number): string {
+    return SEGMENT_COLORS[index % SEGMENT_COLORS.length];
+  }
+
+  // ── Parsing helpers ──
 
   private parseFloatOpt(s: string): number | undefined {
     const v = parseFloat(s);
@@ -230,82 +306,62 @@ export class PlanningPanel {
     return isFinite(v) ? v : undefined;
   }
 
-  // ── Execution ──
+  // ── Build the API request ──
 
-  protected executeMoveJ(): void {
-    const parts = this.editor?.values();
-    if (!parts || parts.length === 0) return;
+  private buildPlanRequest(): MotionPlanRequest {
+    const segments: MotionSegmentDto[] = [];
 
-    this.error.set(null);
-    this.loading.set(true);
+    for (const seg of this.segments()) {
+      if (seg.kind === 'movej') {
+        segments.push({ type: 'movej', target: seg.joints });
+      } else {
+        const translation: [number, number, number] = [
+          this.parseFloatOpt(seg.txStr) ?? 0,
+          this.parseFloatOpt(seg.tyStr) ?? 0,
+          this.parseFloatOpt(seg.tzStr) ?? 0,
+        ];
+        const rotation = seg.rotationFormat === 'euler'
+          ? {
+              kind: 'Ypr' as const,
+              value: {
+                yaw:   (this.parseFloatOpt(seg.yawStr) ?? 0) * Math.PI / 180,
+                pitch: (this.parseFloatOpt(seg.pitchStr) ?? 0) * Math.PI / 180,
+                roll:  (this.parseFloatOpt(seg.rollStr) ?? 0) * Math.PI / 180,
+              },
+            }
+          : {
+              kind: 'Quaternion' as const,
+              value: {
+                w: this.parseFloatOpt(seg.qwStr) ?? 1,
+                x: this.parseFloatOpt(seg.qxStr) ?? 0,
+                y: this.parseFloatOpt(seg.qyStr) ?? 0,
+                z: this.parseFloatOpt(seg.qzStr) ?? 0,
+              },
+            };
+        segments.push({ type: 'movel', target: { translation, rotation } });
+      }
+    }
 
-    this.api.moveJ(parts, this.parseFloatOpt(this.velocityStr)).subscribe({
-      next: res => {
-        this.store.applySnapshot(res);
-        this.editor.reset();
-        this.loading.set(false);
-      },
-      error: (err: Error) => {
-        this.error.set(err.message ?? 'MoveJ failed');
-        this.loading.set(false);
-      },
-    });
+    return { segments };
   }
 
-  // ── MoveL ──
+  // ── Execution ──
 
-  protected readonly moveLRotFormat = signal<'euler' | 'quaternion'>('euler');
-  protected moveLYawStr = '0';
-  protected moveLPitchStr = '0';
-  protected moveLRollStr = '0';
-  protected moveLQwStr = '1';
-  protected moveLQxStr = '0';
-  protected moveLQyStr = '0';
-  protected moveLQzStr = '0';
-  protected txStr = '0.3';
-  protected tyStr = '0';
-  protected tzStr = '0';
-  protected frameIdStr = '';
+  protected executePlan(): void {
+    if (this.segments().length === 0) return;
 
-  protected executeMoveL(): void {
-    const tx = this.parseFloatOpt(this.txStr) ?? 0;
-    const ty = this.parseFloatOpt(this.tyStr) ?? 0;
-    const tz = this.parseFloatOpt(this.tzStr) ?? 0;
-    const translation: [number, number, number] = [tx, ty, tz];
-
-    const rotation = this.moveLRotFormat() === 'euler'
-      ? {
-          kind: 'Ypr' as const,
-          value: {
-            yaw:   (this.parseFloatOpt(this.moveLYawStr) ?? 0) * Math.PI / 180,
-            pitch: (this.parseFloatOpt(this.moveLPitchStr) ?? 0) * Math.PI / 180,
-            roll:  (this.parseFloatOpt(this.moveLRollStr) ?? 0) * Math.PI / 180,
-          },
-        }
-      : {
-          kind: 'Quaternion' as const,
-          value: {
-            w: this.parseFloatOpt(this.moveLQwStr) ?? 1,
-            x: this.parseFloatOpt(this.moveLQxStr) ?? 0,
-            y: this.parseFloatOpt(this.moveLQyStr) ?? 0,
-            z: this.parseFloatOpt(this.moveLQzStr) ?? 0,
-          },
-        };
+    const request = this.buildPlanRequest();
 
     this.error.set(null);
     this.loading.set(true);
 
-    this.api.moveL(
-      { translation, rotation },
-      this.parseIntOpt(this.frameIdStr),
-      this.parseFloatOpt(this.velocityStr),
-    ).subscribe({
+    this.api.executePlan(request).subscribe({
       next: res => {
         this.store.applySnapshot(res);
         this.loading.set(false);
       },
       error: (err: Error) => {
-        this.error.set(err.message ?? 'MoveL failed');
+        this.error.set(err.message ?? 'Plan execution failed');
         this.loading.set(false);
       },
     });

@@ -1,7 +1,19 @@
 import { Injectable, NgZone, inject } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { DEFAULT_FRAME_STYLE, SceneData, SceneFrame, SceneLink, ScenePrimitive, VisualWaypoint } from '../scene.types';
+import { DEFAULT_FRAME_STYLE, SceneData, SceneFrame, SceneLink, ScenePrimitive, SegmentInfo, VisualWaypoint } from '../scene.types';
+
+/** Palette for multi-segment trajectories — color assigned by segment index. */
+const SEGMENT_PALETTE = [
+  0x3b82f6, // blue
+  0x22c55e, // green
+  0xf59e0b, // amber
+  0xef4444, // red
+  0x8b5cf6, // violet
+  0xec4899, // pink
+  0x14b8a6, // teal
+  0xf97316, // orange
+];
 
 interface FrameSlot {
   group: THREE.Group;
@@ -18,7 +30,7 @@ interface PrimitiveSlot {
 
 interface TrajectorySlot {
   group: THREE.Group;
-  line: THREE.Line;
+  lines: THREE.Line[];
   markers: THREE.Mesh[];
 }
 
@@ -449,7 +461,11 @@ export class ThreeRendererService {
   // ── Trajectory rendering ──
 
   /** Render or update the trajectory path + waypoint markers. */
-  syncTrajectory(waypoints: VisualWaypoint[], motionType?: string): void {
+  syncTrajectory(
+    waypoints: VisualWaypoint[],
+    motionType?: string,
+    segments?: SegmentInfo[],
+  ): void {
     if (!this.contentGroup) return;
 
     // Dispose previous trajectory slot if any
@@ -458,45 +474,73 @@ export class ThreeRendererService {
     if (waypoints.length < 2) return;
 
     const group = new THREE.Group();
-
-    // ── Path line — color indicates motion type ──
-    const pts = waypoints.map(wp => new THREE.Vector3(wp.position[0], wp.position[1], wp.position[2]));
-    const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
-    const lineColor = motionType === 'movel' ? 0x33ccff : 0xff8800;
-    const lineMat = new THREE.LineBasicMaterial({ color: lineColor});
-    const line = new THREE.Line(lineGeo, lineMat);
-    group.add(line);
-
-    // ── Waypoint markers ──
+    const lines: THREE.Line[] = [];
     const markers: THREE.Mesh[] = [];
     const markerGeo = new THREE.SphereGeometry(0.005, 12, 12);
+    const pts = waypoints.map(wp => new THREE.Vector3(wp.position[0], wp.position[1], wp.position[2]));
+
+    if (segments && segments.length > 0) {
+      // ── Multi-segment: color each segment by palette index ──
+      for (let s = 0; s < segments.length; s++) {
+        const seg = segments[s];
+        const color = SEGMENT_PALETTE[s % SEGMENT_PALETTE.length];
+
+        // Per-segment path line
+        const segPts = pts.slice(seg.waypointStart, seg.waypointEnd);
+        if (segPts.length >= 2) {
+          const lineGeo = new THREE.BufferGeometry().setFromPoints(segPts);
+          const lineMat = new THREE.LineBasicMaterial({ color });
+          const line = new THREE.Line(lineGeo, lineMat);
+          group.add(line);
+          lines.push(line);
+        }
+
+        // Per-segment markers
+        for (let i = seg.waypointStart; i < seg.waypointEnd; i++) {
+          const wp = waypoints[i];
+          const mat = new THREE.MeshStandardMaterial({ color });
+          const mesh = new THREE.Mesh(markerGeo.clone(), mat);
+          mesh.position.set(wp.position[0], wp.position[1], wp.position[2]);
+          mesh.quaternion.set(wp.orientation[1], wp.orientation[2], wp.orientation[3], wp.orientation[0]);
+          group.add(mesh);
+          markers.push(mesh);
+        }
+      }
+    } else {
+      // ── Single motion: color by motion type ──
+      const lineColor = motionType === 'movel' ? 0x33ccff : 0xff8800;
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+      const lineMat = new THREE.LineBasicMaterial({ color: lineColor });
+      const line = new THREE.Line(lineGeo, lineMat);
+      group.add(line);
+      lines.push(line);
 
       for (let i = 0; i < waypoints.length; i++) {
-      const wp = waypoints[i];
-      let color: number;
-      switch (wp.waypointType) {
-        case 'Start':
-          color = 0x44cc44; // green
-          break;
-        case 'Goal':
-          color = 0xcc4444; // red
-          break;
-        default:
-          color = 0xcccccc; // grey (Via)
-          break;
-      }
+        const wp = waypoints[i];
+        let color: number;
+        switch (wp.waypointType) {
+          case 'Start':
+            color = 0x44cc44;
+            break;
+          case 'Goal':
+            color = 0xcc4444;
+            break;
+          default:
+            color = 0xcccccc;
+            break;
+        }
 
-      const mat = new THREE.MeshStandardMaterial({ color });
-      const mesh = new THREE.Mesh(markerGeo.clone(), mat);
-      mesh.position.set(wp.position[0], wp.position[1], wp.position[2]);
-      // Orient marker to waypoint orientation for visual cues
-      mesh.quaternion.set(wp.orientation[1], wp.orientation[2], wp.orientation[3], wp.orientation[0]);
-      group.add(mesh);
-      markers.push(mesh);
+        const mat = new THREE.MeshStandardMaterial({ color });
+        const mesh = new THREE.Mesh(markerGeo.clone(), mat);
+        mesh.position.set(wp.position[0], wp.position[1], wp.position[2]);
+        mesh.quaternion.set(wp.orientation[1], wp.orientation[2], wp.orientation[3], wp.orientation[0]);
+        group.add(mesh);
+        markers.push(mesh);
+      }
     }
 
     this.contentGroup.add(group);
-    this.trajectorySlot = { group, line, markers };
+    this.trajectorySlot = { group, lines, markers };
   }
 
   /** Remove the trajectory overlay from the scene. */
@@ -508,8 +552,10 @@ export class ThreeRendererService {
   }
 
   private disposeTrajectory(slot: TrajectorySlot): void {
-    slot.line.geometry.dispose();
-    (slot.line.material as THREE.Material).dispose();
+    for (const line of slot.lines) {
+      line.geometry.dispose();
+      (line.material as THREE.Material).dispose();
+    }
     for (const m of slot.markers) {
       m.geometry.dispose();
       (m.material as THREE.Material).dispose();

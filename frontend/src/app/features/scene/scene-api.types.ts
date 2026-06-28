@@ -96,9 +96,19 @@ export interface ActivePlanDto {
   motion_type: string;
   trajectory_progress: number | null;
   visualization: TrajectoryVisualizationDto | null;
+  segments?: SegmentInfoDto[] | null;
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
+}
+
+export interface SegmentInfoDto {
+  segment_index: number;
+  motion_type: string;
+  waypoint_start: number;
+  waypoint_end: number;
+  time_start: number;
+  time_end: number;
 }
 
 export interface TrajectoryVisualizationDto {
@@ -165,3 +175,13 @@ export interface SolveIKResponse {
 export interface ExecuteIKRequest {
   joint_angles: number[];
 }
+
+// ── Motion plan request types ──
+
+export interface MotionPlanRequest {
+  segments: MotionSegmentDto[];
+}
+
+export type MotionSegmentDto =
+  | { type: 'movej'; target: number[] }
+  | { type: 'movel'; target: PoseTargetDto };

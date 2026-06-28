@@ -4,75 +4,114 @@
 .planning-panel {
   @include panel.container;
 
-  &__tabs {
-    display: flex;
+  // ── Segment card ──
+
+  &__segment {
     border: 1px solid $border-subtle;
     border-radius: $radius-sm;
+    margin-bottom: 0.4rem;
     overflow: hidden;
-    margin-bottom: 0.75rem;
+    transition: border-color $transition-fast;
+
+    &.is-expanded {
+      border-color: $border-default;
+    }
   }
 
-  &__tab {
-    flex: 1;
-    background: transparent;
-    border: none;
-    color: $text-secondary;
-    font-size: 0.75rem;
-    font-weight: 600;
+  &__seg-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
     padding: 0.35rem 0.5rem;
     cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    transition: background $transition-fast, color $transition-fast;
+    user-select: none;
+    transition: background $transition-fast;
 
     &:hover {
       background: $bg-card;
     }
-
-    &.active {
-      background: $accent;
-      color: #fff;
-    }
-
-    &:not(:last-child) {
-      border-right: 1px solid $border-subtle;
-    }
   }
 
-  // ── Section (MoveJ header) ──
-
-  &__section {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
+  &__seg-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
   }
 
-  &__section-label {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: $text-secondary;
+  &__seg-title {
+    flex: 1;
+    font-size: 0.72rem;
     font-weight: 600;
-    margin-bottom: 0.15rem;
+    color: $text-primary;
+    letter-spacing: 0.02em;
   }
 
-  // ── Card input (MoveL target card) ──
+  &__seg-chevron {
+    font-size: 0.6rem;
+    color: $text-muted;
+  }
 
-  &__card {
-    @include panel.card-input;
+  &__seg-remove {
+    background: transparent;
+    border: none;
+    color: $text-muted;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 0.15rem;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: color $transition-fast, background $transition-fast;
+
+    &:hover {
+      color: #cc4444;
+      background: rgba(204, 68, 68, 0.1);
+    }
+  }
+
+  &__seg-body {
+    padding: 0.4rem 0.5rem 0.5rem;
+    border-top: 1px solid $border-subtle;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.45rem;
   }
 
-  &__card-label {
-    @include panel.section-label;
+  // ── Joint grid (MoveJ) ──
+
+  &__joint-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    gap: 0.3rem;
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
   }
+
+  &__joint-label {
+    font-size: 0.65rem;
+    color: $text-secondary;
+    font-family: $font-mono;
+    text-transform: uppercase;
+  }
+
+  // ── Reusable number input ──
+
+  &__num-input {
+    width: 100%;
+    box-sizing: border-box;
+    @include panel.number-input;
+  }
+
+  // ── Coord grid (MoveL) ──
 
   &__coord-grid {
     @include panel.coord-grid;
 
-    input[type='number'] {
+    input {
       @include panel.number-input;
       width: 100%;
       box-sizing: border-box;
@@ -83,15 +122,7 @@
     }
   }
 
-  // ── Rotation section ──
-
-  &__rotation {
-    margin-top: 0.25rem;
-    padding-top: 0.5rem;
-    border-top: 1px dashed $border-subtle;
-  }
-
-  // ── Segmented control (replicated from IK panel) ──
+  // ── Segmented control ──
 
   .segmented {
     display: flex;
@@ -100,7 +131,6 @@
     border-radius: $radius-sm;
     padding: 2px;
     gap: 2px;
-    margin-bottom: 0.5rem;
 
     &__btn {
       flex: 1;
@@ -126,7 +156,7 @@
     }
   }
 
-  // ── Fields (velocity, frame ID) ──
+  // ── Fields ──
 
   &__field {
     display: flex;
@@ -134,7 +164,7 @@
     gap: 0.2rem;
   }
 
-  &__label {
+  &__field-label {
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -142,68 +172,38 @@
     font-weight: 600;
   }
 
-  &__input {
-    @include panel.number-input;
-    width: 100%;
-    box-sizing: border-box;
+  // ── Add row ──
+
+  &__add-row {
+    display: flex;
+    gap: 0.3rem;
+    margin-top: 0.25rem;
+  }
+
+  &__add-btn {
+    @include panel.action-base;
+    flex: 1;
+    font-size: 0.72rem;
+    padding: 0.3rem;
+    background: transparent;
+    border-color: $border-default;
+    color: $text-secondary;
+
+    &:hover {
+      background: $bg-card;
+      color: $text-primary;
+    }
   }
 
   // ── Actions ──
 
   &__actions {
-    display: flex;
-    gap: 0.4rem;
-    margin-top: 0.25rem;
-  }
-
-  &__reset {
-    @include panel.action-base;
-    flex: 0 0 auto;
-    background: transparent;
-    border-color: $border-default;
-    color: $text-muted;
-    font-size: 0.7rem;
+    margin-top: 0.4rem;
   }
 
   &__submit {
     @include panel.action-base;
-    flex: 1;
-  }
-
-  // ── Advanced (raw input collapsible) ──
-
-  &__advanced {
-    border: 1px solid $border-subtle;
-    border-radius: $radius-sm;
-    margin-top: 0.25rem;
-  }
-
-  &__advanced-summary {
-    font-size: 0.68rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: $text-muted;
-    padding: 0.35rem 0.5rem;
-    cursor: pointer;
-    user-select: none;
-
-    &::-webkit-details-marker {
-      display: none;
-    }
-  }
-
-  &__advanced-body {
-    padding: 0 0.5rem 0.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-  }
-
-  &__apply-raw {
-    @include panel.action-base;
-    font-size: 0.7rem;
-    padding: 0.3rem;
-    align-self: flex-end;
+    width: 100%;
   }
 
   // ── Empty state ──
@@ -219,12 +219,6 @@
     }
   }
 
-  &__empty-hint {
-    font-size: 0.68rem !important;
-    opacity: 0.5;
-    margin-top: 0.4rem !important;
-  }
-
   // ── Error ──
 
   &__error {
@@ -234,5 +228,6 @@
     border: 1px solid #cc444444;
     border-radius: $radius-sm;
     background: #cc444411;
+    margin-top: 0.4rem;
   }
 }

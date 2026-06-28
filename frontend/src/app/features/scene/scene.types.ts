@@ -133,9 +133,19 @@ export interface ActivePlan {
   motionType: string;
   trajectoryProgress: number | null;
   visualization: TrajectoryVisualization | null;
+  segments?: SegmentInfo[] | null;
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
+}
+
+export interface SegmentInfo {
+  segmentIndex: number;
+  motionType: string;
+  waypointStart: number;
+  waypointEnd: number;
+  timeStart: number;
+  timeEnd: number;
 }
 
 export interface TrajectoryVisualization {

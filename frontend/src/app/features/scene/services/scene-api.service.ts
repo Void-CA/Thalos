@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { RuntimeStateResponse, SolveIKResponse, MoveToPositionRequest, MoveToPoseRequest, ExecuteIKRequest } from '../scene-api.types';
+import { RuntimeStateResponse, SolveIKResponse, MoveToPositionRequest, MoveToPoseRequest, ExecuteIKRequest, MotionPlanRequest } from '../scene-api.types';
 import { API_BASE_URL } from '../../../shared/api/api-config';
 
 @Injectable({ providedIn: 'root' })
@@ -106,6 +106,15 @@ export class SceneApiService {
     return this.http.post<RuntimeStateResponse>(
       `${this.baseUrl}/motion/movel`,
       { target, ...(frame_id !== undefined ? { frame_id } : {}), ...(velocity !== undefined ? { velocity } : {}) },
+    );
+  }
+
+  // ── Motion plan (multi-segment program) ──
+
+  executePlan(request: MotionPlanRequest): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/scene/motion/plan`,
+      request,
     );
   }
 }

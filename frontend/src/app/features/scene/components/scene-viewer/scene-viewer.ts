@@ -59,10 +59,11 @@ export class SceneViewer implements AfterViewInit {
       } else {
         this.renderer.clearTarget();
       }
-      // Trajectory overlay — waypoints + motion type from the active plan
+      // Trajectory overlay — waypoints + motion type + optional segment info
       const vis = state.activePlan?.visualization;
+      const segs = state.activePlan?.segments;
       if (vis && vis.waypoints.length > 0) {
-        this.renderer.syncTrajectory(vis.waypoints, vis.motionType);
+        this.renderer.syncTrajectory(vis.waypoints, vis.motionType, segs ?? undefined);
       } else {
         this.renderer.clearTrajectory();
       }
