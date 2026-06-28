@@ -93,8 +93,10 @@ impl SceneService {
     /// Execute a compiled motion program — activates it in the runtime
     /// without going through the command dispatch.
     pub fn execute_program(&self, compiled: CompiledPlan) -> Result<RuntimeSnapshot, RuntimeError> {
-        let mut runtime = self.runtime.write().unwrap();
-        runtime.activate_compiled_plan(compiled);
+        {
+            let mut runtime = self.runtime.write().unwrap();
+            runtime.activate_compiled_plan(compiled);
+        } // Write lock released before snapshot
         self.snapshot_with_ik(None)
     }
 
