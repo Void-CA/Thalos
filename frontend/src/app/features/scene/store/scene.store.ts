@@ -5,15 +5,16 @@ import { auditTime, catchError, distinctUntilChanged, map, scan, switchMap } fro
 import { SceneApiService } from '../services/scene-api.service';
 import { toSceneData, toActivePlan } from '../adapters/dto-to-model';
 import type { RuntimeDelta, RuntimeStateResponse, SolveIKResponse } from '../scene-api.types';
-import type { ActivePlan, ExecutionInfo, IkCommand, IkResult, IkTarget, RuntimeInfo, SceneData, SceneLink, SceneState, SceneUiState } from '../scene.types';
+import type { ActivePlan, ExecutionInfo, IkCommand, IkResult, IkTarget, ObjectTransform, RuntimeInfo, SceneData, SceneState, SceneUiState } from '../scene.types';
 
 type SceneEvent =
   | { type: 'loading' }
   | { type: 'scene'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null; activePlan: ActivePlan | null }
+  | { type: 'fk-update'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null }
   | { type: 'ik-executed'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null; activePlan: ActivePlan | null }
   | { type: 'solve'; joints: number[]; ikResult: IkResult }
   | { type: 'target'; target: IkTarget | null }
-  | { type: 'runtime-delta'; joints: number[]; liveLinks: SceneLink[]; execution: ExecutionInfo }
+  | { type: 'runtime-delta'; joints: number[]; transforms: ObjectTransform[]; execution: ExecutionInfo }
   | { type: 'error'; message: string };
 
 const INITIAL_UI: SceneUiState = {
@@ -24,7 +25,7 @@ const INITIAL_UI: SceneUiState = {
 const INITIAL_STATE: SceneState = {
   data: null,
   runtime: null,
-  liveLinks: [],
+  liveTransforms: [],
   execution: null,
   ikResult: null,
   solvedQ: null,
@@ -55,6 +56,28 @@ function toSceneEvent(res: RuntimeStateResponse): SceneEvent {
     },
     ikResult,
     activePlan: toActivePlan(res.active_plan),
+  };
+}
+
+/** Map the FK response — same as scene but WITHOUT activePlan (FK never changes the plan). */
+function toFkEvent(res: RuntimeStateResponse): SceneEvent {
+  const ikResult: IkResult | null = res.ik_result
+    ? {
+        status: res.ik_result.status,
+        iterations: res.ik_result.iterations,
+        finalError: res.ik_result.final_error,
+      }
+    : null;
+
+  return {
+    type: 'fk-update',
+    data: toSceneData(res.scene),
+    runtime: {
+      robot: res.robot,
+      joints: res.joints,
+      generatedAt: res.generated_at,
+    },
+    ikResult,
   };
 }
 
@@ -96,16 +119,10 @@ function toSolveEvent(res: SolveIKResponse): SceneEvent {
 
 /** Map a RuntimeDelta (API) into a 'runtime-delta' event. */
 function toRuntimeDeltaEvent(delta: RuntimeDelta): SceneEvent {
-  const liveLinks: SceneLink[] = delta.link_transforms.map(lt => ({
-    id: String(lt.id),
-    start: lt.start,
-    end: lt.end,
-  }));
-
   return {
     type: 'runtime-delta',
     joints: delta.joints,
-    liveLinks,
+    transforms: delta.transforms,
     execution: {
       status: delta.execution.status,
       progress: delta.execution.progress,
@@ -156,7 +173,7 @@ export class SceneStore {
       switchMap(q => concat(
         of({ type: 'loading' as const }),
         this.api.setJoints(q).pipe(
-          map(toSceneEvent),
+          map(toFkEvent),
           catchError(err =>
             of({ type: 'error' as const, message: err.message ?? 'FK failed' }),
           ),
@@ -267,11 +284,23 @@ export class SceneStore {
       switch (event.type) {
         case 'loading':
           return { ...state, ui: { ...state.ui, loading: true, error: null } };
+        case 'fk-update':
+          return {
+            data: event.data,
+            runtime: event.runtime,
+            liveTransforms: [],
+            execution: null,
+            ikResult: event.ikResult,
+            solvedQ: null,
+            ikTarget: state.ikTarget,
+            activePlan: state.activePlan, // FK never changes the plan
+            ui: { loading: false, error: null },
+          };
         case 'scene':
           return {
             data: event.data,
             runtime: event.runtime,
-            liveLinks: [],
+            liveTransforms: [],
             execution: null,
             ikResult: event.ikResult,
             solvedQ: null,
@@ -283,7 +312,7 @@ export class SceneStore {
           return {
             data: event.data,
             runtime: event.runtime,
-            liveLinks: [],
+            liveTransforms: [],
             execution: null,
             ikResult: event.ikResult,
             solvedQ: event.runtime.joints,
@@ -298,7 +327,7 @@ export class SceneStore {
             runtime: state.runtime
               ? { ...state.runtime, joints: event.joints }
               : null,
-            liveLinks: event.liveLinks,
+            liveTransforms: event.transforms,
             execution: event.execution,
           };
         case 'solve':

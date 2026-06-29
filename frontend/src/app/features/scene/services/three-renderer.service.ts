@@ -1,7 +1,7 @@
 import { Injectable, NgZone, inject } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { DEFAULT_FRAME_STYLE, SceneData, SceneFrame, SceneLink, ScenePrimitive, SegmentInfo, VisualWaypoint } from '../scene.types';
+import { DEFAULT_FRAME_STYLE, ObjectTransform, SceneData, SceneFrame, SceneLink, ScenePrimitive, SegmentInfo, VisualWaypoint } from '../scene.types';
 
 /** Palette for multi-segment trajectories — color assigned by segment index. */
 const SEGMENT_PALETTE = [
@@ -57,6 +57,17 @@ export class ThreeRendererService {
   private frameSlots = new Map<string, FrameSlot>();
   private linkSlots = new Map<string, LinkSlot>();
   private primitiveSlots = new Map<string, PrimitiveSlot>();
+
+  /**
+   * Registro genérico de Object3D indexados por ID.
+   *
+   * Durante `syncTransforms`, cada `TransformUpdate` busca su Object3D aquí
+   * y actualiza position/quaternion/scale sin importar si es un frame, un
+   * link o una primitive.
+   *
+   * Los objetos se registran durante `applyScene` y se eliminan al disponerlos.
+   */
+  private readonly objectRegistry = new Map<string, THREE.Object3D>();
 
   // ── Reusable scratch objects (avoid allocations in hot path) ──
   private readonly scratchVec = new THREE.Vector3();
@@ -156,6 +167,7 @@ export class ThreeRendererService {
         slot = { group: this.buildFrame(frame) };
         this.frameSlots.set(frame.id, slot);
         this.contentGroup!.add(slot.group);
+        this.objectRegistry.set(frame.id, slot.group);
       }
       // Update transform only — no geometry churn
       const g = slot.group;
@@ -174,6 +186,7 @@ export class ThreeRendererService {
       if (!incoming.has(id)) {
         this.contentGroup!.remove(slot.group);
         this.disposeGroup(slot.group);
+        this.objectRegistry.delete(id);
         this.frameSlots.delete(id);
       }
     }
@@ -198,38 +211,20 @@ export class ThreeRendererService {
   }
 
   /**
-   * Actualización incremental de posiciones de links desde RuntimeDelta.
+   * Actualización genérica de transforms desde RuntimeDelta.
    *
-   * A diferencia de `syncLinks` (que reconcilia el conjunto completo),
-   * este método actualiza solo las posiciones de links existentes.
-   * No crea ni destruye slots — eso ya ocurrió en `applyScene`.
+   * Cada `TransformUpdate` contiene un `id` que corresponde a un Object3D
+   * registrado durante `applyScene`. El método simplemente aplica
+   * position + quaternion + scale — sin importar si el objeto es un frame,
+   * un link o una primitive.
    */
-  syncLinkTransforms(links: SceneLink[]): void {
-    for (const link of links) {
-      const slot = this.linkSlots.get(link.id);
-      if (!slot) continue;
-
-      this.scratchDir.set(
-        link.end[0] - link.start[0],
-        link.end[1] - link.start[1],
-        link.end[2] - link.start[2],
-      );
-      const len = this.scratchDir.length();
-      if (len < 1e-10) {
-        slot.mesh.visible = false;
-        continue;
-      }
-      slot.mesh.visible = true;
-
-      const mesh = slot.mesh;
-      mesh.position.set(
-        (link.start[0] + link.end[0]) * 0.5,
-        (link.start[1] + link.end[1]) * 0.5,
-        (link.start[2] + link.end[2]) * 0.5,
-      );
-      this.scratchVec.copy(this.scratchDir).normalize();
-      mesh.quaternion.setFromUnitVectors(this.linkUp, this.scratchVec);
-      mesh.scale.set(1, len, 1);
+  syncTransforms(transforms: ObjectTransform[]): void {
+    for (const tx of transforms) {
+      const obj = this.objectRegistry.get(tx.id);
+      if (!obj) continue;
+      obj.position.set(tx.translation[0], tx.translation[1], tx.translation[2]);
+      obj.quaternion.set(tx.rotation[1], tx.rotation[2], tx.rotation[3], tx.rotation[0]);
+      obj.scale.set(tx.scale[0], tx.scale[1], tx.scale[2]);
     }
   }
 
@@ -263,6 +258,7 @@ export class ThreeRendererService {
         slot = { mesh, baseLen: 1 };
         this.linkSlots.set(key, slot);
         this.contentGroup!.add(mesh);
+        this.objectRegistry.set(key, mesh);
       }
 
       const mesh = slot.mesh;
@@ -289,6 +285,7 @@ export class ThreeRendererService {
         this.contentGroup!.remove(slot.mesh);
         slot.mesh.geometry.dispose();
         (slot.mesh.material as THREE.Material).dispose();
+        this.objectRegistry.delete(key);
         this.linkSlots.delete(key);
       }
     }
@@ -310,6 +307,7 @@ export class ThreeRendererService {
         slot = { mesh };
         this.primitiveSlots.set(p.id, slot);
         this.contentGroup!.add(mesh);
+        this.objectRegistry.set(p.id, mesh);
       }
 
       slot.mesh.position.set(p.translation[0], p.translation[1], p.translation[2]);
@@ -327,6 +325,7 @@ export class ThreeRendererService {
       if (!incoming.has(id)) {
         this.contentGroup!.remove(slot.mesh);
         slot.mesh.geometry.dispose();
+        this.objectRegistry.delete(id);
         this.primitiveSlots.delete(id);
       }
     }

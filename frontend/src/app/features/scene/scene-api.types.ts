@@ -128,17 +128,19 @@ export interface VisualWaypointDto {
 
 // ── Runtime delta DTOs ──
 
+/// Actualización de pose de un objeto del scene graph en un tick.
+export interface TransformUpdate {
+  id: string;
+  translation: [number, number, number];
+  rotation: [number, number, number, number];
+  scale: [number, number, number];
+}
+
 /// Estado dinámico del motor: solo lo que cambia en cada tick.
 export interface RuntimeDelta {
   joints: number[];
-  link_transforms: LinkTransformDto[];
+  transforms: TransformUpdate[];
   execution: ExecutionDto;
-}
-
-export interface LinkTransformDto {
-  id: number;
-  start: [number, number, number];
-  end: [number, number, number];
 }
 
 export interface ExecutionDto {

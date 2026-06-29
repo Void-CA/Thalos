@@ -194,6 +194,19 @@ pub struct ChangedFrameDto {
 
 // ── Runtime delta DTOs ──
 
+/// Actualización de pose de un objeto del scene graph en un tick.
+///
+/// Genérica: el `id` puede referirse a un frame, un link o cualquier otro
+/// elemento visual registrado en el renderer. El backend no necesita saber
+/// qué tipo de objeto es — solo su nueva pose.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TransformUpdate {
+    pub id: String,
+    pub translation: [f64; 3],
+    pub rotation: [f64; 4],
+    pub scale: [f64; 3],
+}
+
 /// Estado dinámico del motor: solo lo que cambia en cada tick.
 ///
 /// A diferencia de `RuntimeStateResponse`, no incluye escena, primitivas,
@@ -201,20 +214,11 @@ pub struct ChangedFrameDto {
 /// inmutable durante la ejecución y se obtiene via `GET /scene`.
 #[derive(Debug, Serialize)]
 pub struct RuntimeDelta {
+    /// Current joint angles (usado por el FK panel).
     pub joints: Vec<f64>,
-    pub link_transforms: Vec<LinkTransformDto>,
+    /// Transformaciones de objetos del scene graph (frames + links).
+    pub transforms: Vec<TransformUpdate>,
     pub execution: ExecutionDto,
-}
-
-/// Transformación de un link en el espacio mundo (posición start/end).
-///
-/// Semánticamente equivalente a `VisualLinkDto` pero representa estado
-/// dinámico (cambia en cada tick) en vez de geometría estática.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct LinkTransformDto {
-    pub id: u32,
-    pub start: [f64; 3],
-    pub end: [f64; 3],
 }
 
 /// Estado de la sesión de ejecución en un instante dado.

@@ -124,12 +124,20 @@ export interface ExecutionInfo {
   elapsedSecs: number;
 }
 
+/** Pose actualizada de un objeto del scene graph durante runtime. */
+export interface ObjectTransform {
+  id: string;
+  translation: [number, number, number];
+  rotation: [number, number, number, number];
+  scale: [number, number, number];
+}
+
 /** Estado completo del store — runtime snapshot + datos de escena + IK + plan activo + estado de UI. */
 export interface SceneState {
   data: SceneData | null;
   runtime: RuntimeInfo | null;
-  /// Link transforms actualizados por RuntimeDelta (renderizado incremental).
-  liveLinks: SceneLink[];
+  /// Transformaciones actualizadas por RuntimeDelta (renderizado incremental).
+  liveTransforms: ObjectTransform[];
   /// Estado de ejecución actualizado por RuntimeDelta.
   execution: ExecutionInfo | null;
   ikResult: IkResult | null;

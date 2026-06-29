@@ -13,7 +13,7 @@ import { rotationDtoToQuaternion } from '../../utils/rotation';
  *   1. Escena (data) — solo cuando cambia la geometría
  *   2. Trayectoria (activePlan) — solo al compilar/preview
  *   3. Gizmo (ikTarget) — actualización local
- *   4. Links (liveLinks) — cada tick, solo posiciones
+ *   4. Transforms (liveTransforms) — cada tick, frames + links
  *
  * Componente PURO de renderizado: no monta paneles de control.
  * El panel IK vive en el sidebar de la app (ver app.html).
@@ -49,10 +49,24 @@ export class SceneViewer implements AfterViewInit {
   /** True when the scene has renderable robot data. */
   protected readonly hasData = computed(() => this.store.state().data !== null);
 
+  /**
+   * Computeds que aíslan propiedades específicas del state.
+   *
+   * Angular `effect()` trackea a nivel de señal: si `state` emite un nuevo objeto,
+   * todos los effects que lean `state()` se re-ejecutan, aunque la propiedad
+   * concreta que les interesa tenga la misma referencia.
+   *
+   * `computed()` en cambio cachea su valor de retorno y solo notifica a dependientes
+   * cuando éste cambia por referencia. Esto evita que effects como `syncTrajectory`
+   * corran en cada tick de ejecución o en cada movimiento de FK.
+   */
+  private readonly sceneData = computed(() => this.store.state().data);
+  private readonly activePlan = computed(() => this.store.state().activePlan);
+
   constructor() {
     // Effect 1: scene geometry — solo cuando cambia la escena (load, IK, URDF import)
     effect(() => {
-      const data = this.store.state().data;
+      const data = this.sceneData();
       if (data) {
         this.renderer.applyScene(data);
         this.sceneApplied = true;
@@ -61,7 +75,7 @@ export class SceneViewer implements AfterViewInit {
 
     // Effect 2: trajectory overlay — solo al compilar/preview (NUNCA en tick)
     effect(() => {
-      const plan = this.store.state().activePlan;
+      const plan = this.activePlan();
       const vis = plan?.visualization;
       const segs = plan?.segments;
       if (vis && vis.waypoints.length > 0) {
@@ -84,11 +98,11 @@ export class SceneViewer implements AfterViewInit {
       }
     });
 
-    // Effect 4: runtime delta — solo posiciones de links (cada tick)
+    // Effect 4: runtime delta — transforms de frames + links (cada tick)
     effect(() => {
-      const links = this.store.state().liveLinks;
-      if (this.sceneApplied && links.length > 0) {
-        this.renderer.syncLinkTransforms(links);
+      const transforms = this.store.state().liveTransforms;
+      if (this.sceneApplied && transforms.length > 0) {
+        this.renderer.syncTransforms(transforms);
       }
     });
 
