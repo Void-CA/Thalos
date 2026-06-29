@@ -22,7 +22,7 @@ const MODE_ICONS: Record<AppMode, string> = {
             [class.top-bar__tab--active]="store.mode() === m"
             (click)="store.setMode(m)"
           >
-            <ng-icon class="top-bar__icon" [name]="MODE_ICONS[m]" size="20  " />
+            <ng-icon class="top-bar__icon" [name]="MODE_ICONS[m]" size="20" />
             <span>{{ m }}</span>
           </button>
         }
