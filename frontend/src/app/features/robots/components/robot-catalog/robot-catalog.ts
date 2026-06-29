@@ -4,16 +4,13 @@ import { RobotStore } from '../../store/robot.store';
 import { SceneStore } from '../../../scene/store/scene.store';
 
 /**
- * Panel de catálogo de robots.
+ * Panel de catálogo de robots — con accordions colapsables.
  *
- * Responsabilidades (orquestador):
- *  1. Cargar la lista via RobotStore
- *  2. Renderizar cards
- *  3. Click → RobotStore.select(id) + SceneStore.loadRobot(id)
- *  4. Importar robots desde archivos URDF
+ * Dos secciones:
+ *   - Canonical Models (open) — lista de robots del catálogo
+ *   - Import URDF (closed) — file picker para URDF
  *
- * NO acopla RobotStore con SceneStore.
- * Sin subscribe ni zone.js — puros signals.
+ * Usa el mismo patrón <details class="accordion"> que las tools del panel derecho.
  */
 @Component({
   selector: 'robot-catalog',
@@ -21,41 +18,51 @@ import { SceneStore } from '../../../scene/store/scene.store';
   imports: [RobotCard],
   template: `
     <div class="catalog">
-      <h3 class="title">Robots</h3>
-
-      @if (loading()) {
-        <p class="status">Loading…</p>
-      } @else if (error(); as err) {
-        <p class="status error">{{ err }}</p>
-      } @else {
-        <div class="list">
-          @for (robot of robots(); track robot.id) {
-            <robot-card
-              [robot]="robot"
-              [selected]="robot.id === selectedId()"
-              (select)="onSelect($event)"
-            />
+      <details class="accordion" open>
+        <summary class="accordion__header">
+          <span class="accordion__title">Canonical Models</span>
+          <span class="accordion__chevron"></span>
+        </summary>
+        <div class="accordion__body">
+          @if (loading()) {
+            <p class="catalog__status">Loading…</p>
+          } @else if (error(); as err) {
+            <p class="catalog__status catalog__status--error">{{ err }}</p>
+          } @else {
+            <div class="catalog__list">
+              @for (robot of robots(); track robot.id) {
+                <robot-card
+                  [robot]="robot"
+                  [selected]="robot.id === selectedId()"
+                  (select)="onSelect($event)"
+                />
+              }
+            </div>
           }
         </div>
-      }
+      </details>
 
-      <hr class="divider" />
-
-      <h3 class="title">Import URDF</h3>
-      <input
-        #fileInput
-        type="file"
-        accept=".urdf,.xml"
-        hidden
-        (change)="onFileSelected(fileInput.files)"
-      />
-      <button class="urdf-btn" (click)="fileInput.click()">
-        Choose file…
-      </button>
-
-      @if (urdfFileName(); as name) {
-        <p class="file-name">{{ name }}</p>
-      }
+      <details class="accordion">
+        <summary class="accordion__header">
+          <span class="accordion__title">Import URDF</span>
+          <span class="accordion__chevron"></span>
+        </summary>
+        <div class="accordion__body">
+          <input
+            #fileInput
+            type="file"
+            accept=".urdf,.xml"
+            hidden
+            (change)="onFileSelected(fileInput.files)"
+          />
+          <button class="catalog__urdf-btn" (click)="fileInput.click()">
+            Choose file…
+          </button>
+          @if (urdfFileName(); as name) {
+            <p class="catalog__file-name">{{ name }}</p>
+          }
+        </div>
+      </details>
     </div>
   `,
   styleUrl: './robot-catalog.scss',
@@ -64,7 +71,6 @@ export class RobotCatalog implements OnInit {
   private readonly robotStore = inject(RobotStore);
   private readonly sceneStore = inject(SceneStore);
 
-  // Señales del store expuestas al template
   protected readonly robots = this.robotStore.robots;
   protected readonly selectedId = this.robotStore.selectedId;
   protected readonly loading = this.robotStore.loading;
@@ -90,8 +96,6 @@ export class RobotCatalog implements OnInit {
     const reader = new FileReader();
     reader.onload = () => {
       const source = reader.result as string;
-      // Al importar URDF el catálogo canónico ya no tiene un robot
-      // "seleccionado" — limpiar para evitar el falso positivo visual.
       this.robotStore.select(null);
       this.sceneStore.loadRobotFromUrdf(source);
     };

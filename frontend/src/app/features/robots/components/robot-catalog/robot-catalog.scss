@@ -6,58 +6,97 @@
   gap: 0.5rem;
 }
 
-.title {
-  margin: 0;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  opacity: 0.6;
-}
-
-.list {
+.catalog__list {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
-.status {
+.catalog__status {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   opacity: 0.5;
 
-  &.error {
+  &--error {
     color: $danger;
     opacity: 1;
   }
 }
 
-.divider {
-  border: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  margin: 0.75rem 0;
-}
-
-.urdf-btn {
+.catalog__urdf-btn {
+  width: 100%;
   background: rgba(255, 255, 255, 0.06);
   border: 1px dashed rgba(255, 255, 255, 0.2);
   color: inherit;
-  font-size: 0.8rem;
-  padding: 0.5rem;
-  border-radius: 4px;
+  font-size: 0.75rem;
+  padding: 0.4rem;
+  border-radius: $radius-sm;
   cursor: pointer;
   text-align: center;
-  transition: background 0.15s;
+  transition: background $transition-fast;
 
   &:hover {
     background: rgba(255, 255, 255, 0.12);
   }
 }
 
-.file-name {
-  margin: 0;
-  font-size: 0.75rem;
+.catalog__file-name {
+  margin: 0.25rem 0 0;
+  font-size: 0.7rem;
   opacity: 0.5;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+// ── Accordion (mismo patrón que app.scss) ──
+
+.accordion {
+  background: $bg-surface;
+  border: 1px solid $border-subtle;
+  border-radius: $radius-md;
+  overflow: hidden;
+
+  &__header {
+    list-style: none;
+    cursor: pointer;
+    padding: 0.5rem 0.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: $text-secondary;
+    user-select: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+  }
+
+  &__title {
+    font-weight: 600;
+  }
+
+  &__chevron {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-right: 2px solid $text-muted;
+    border-bottom: 2px solid $text-muted;
+    transform: rotate(45deg);
+    transition: transform $transition-fast ease;
+  }
+
+  &[open] > &__header {
+    border-bottom: 1px solid $border-subtle;
+  }
+
+  &[open] > &__header > &__chevron {
+    transform: rotate(-135deg);
+  }
+
+  &__body {
+    padding: 0.5rem 0.6rem 0.6rem;
+  }
 }
