@@ -32,6 +32,7 @@ use thalos_visual::validator::SceneError;
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
+use crate::features::scene::dto::mappers::delta::to_delta_response;
 use crate::features::scene::dto::mappers::runtime::build_plan_dto;
 use crate::features::scene::dto::requests::TickRequest;
 use crate::features::scene::dto::*;
@@ -280,15 +281,18 @@ pub async fn reset_execution(
 /// Advance execution by `dt` seconds.
 ///
 /// Called periodically by the frontend during active execution.
-/// Returns the full runtime state so the UI can update the robot pose
-/// and execution progress in a single round-trip.
+/// Devuelve solo `RuntimeDelta` — joint angles, link transforms y estado
+/// de ejecución — sin la escena completa ni la trayectoria planificada.
+///
+/// La escena (frames, primitives, metadata del robot, trayectoria) es
+/// inmutable durante la ejecución y se obtiene via `GET /scene`.
 pub async fn tick_execution(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<TickRequest>,
-) -> ApiResult<RuntimeStateResponse> {
-    let dt = payload.dt.max(0.001); // minimum 1ms to avoid division by zero
-    let snapshot = state.services.scene.tick_execution(dt)?;
-    Ok(Json(to_api_response(&snapshot)))
+) -> ApiResult<RuntimeDelta> {
+    let dt = payload.dt.max(0.001);
+    let delta = state.services.scene.tick_execution_delta(dt)?;
+    Ok(Json(to_delta_response(&delta)))
 }
 
 

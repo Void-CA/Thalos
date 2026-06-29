@@ -191,3 +191,57 @@ pub struct ChangedFrameDto {
     pub translation_delta: f64,
     pub rotation_angle_deg: f64,
 }
+
+// ── Runtime delta DTOs ──
+
+/// Estado dinámico del motor: solo lo que cambia en cada tick.
+///
+/// A diferencia de `RuntimeStateResponse`, no incluye escena, primitivas,
+/// frames, metadata del robot ni trayectoria planificada — todo eso es
+/// inmutable durante la ejecución y se obtiene via `GET /scene`.
+#[derive(Debug, Serialize)]
+pub struct RuntimeDelta {
+    pub joints: Vec<f64>,
+    pub link_transforms: Vec<LinkTransformDto>,
+    pub execution: ExecutionDto,
+}
+
+/// Transformación de un link en el espacio mundo (posición start/end).
+///
+/// Semánticamente equivalente a `VisualLinkDto` pero representa estado
+/// dinámico (cambia en cada tick) en vez de geometría estática.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LinkTransformDto {
+    pub id: u32,
+    pub start: [f64; 3],
+    pub end: [f64; 3],
+}
+
+/// Estado de la sesión de ejecución en un instante dado.
+#[derive(Debug, Serialize)]
+pub struct ExecutionDto {
+    pub status: ExecutionStatusDto,
+    pub progress: f64,
+    pub elapsed_secs: f64,
+}
+
+/// Status de la sesión — tipado hasta el borde de la API.
+///
+/// Serialeable a JSON como string, deserialeable desde el frontend.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ExecutionStatusDto {
+    #[serde(rename = "Created")]
+    Ready,
+    #[serde(rename = "Active")]
+    Running,
+    #[serde(rename = "Paused")]
+    Paused,
+    #[serde(rename = "Completed")]
+    Completed,
+    #[serde(rename = "Cancelled")]
+    Cancelled,
+    #[serde(rename = "Failed")]
+    Failed,
+    #[serde(rename = "Idle")]
+    Idle,
+}
