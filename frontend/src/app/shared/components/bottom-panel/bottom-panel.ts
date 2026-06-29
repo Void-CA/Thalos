@@ -60,66 +60,60 @@ const SEGMENT_COLORS = [
             @if (a.hasResults) {
               <div class="analysis">
                 @if (a.ik) {
-                  <section class="analysis__section">
-                    <h4 class="analysis__label">IK Result</h4>
+                  <div class="analysis__card">
+                    <h4 class="analysis__card-title">IK Result</h4>
+                    <span class="analysis__badge"
+                      [class.analysis__badge--ok]="a.ik.status === 'Converged'"
+                      [class.analysis__badge--warn]="a.ik.status === 'MaxIterations'"
+                    >{{ a.ik.status }}</span>
                     <table class="analysis__table">
-                      <tr>
-                        <td class="analysis__cell-label">Status</td>
-                        <td>
-                          <span class="analysis__badge"
-                            [class.analysis__badge--ok]="a.ik.status === 'Converged'"
-                            [class.analysis__badge--warn]="a.ik.status === 'MaxIterations'"
-                          >{{ a.ik.status }}</span>
-                        </td>
-                      </tr>
-                      <tr><td class="analysis__cell-label">Iterations</td><td>{{ a.ik.iterations }}</td></tr>
-                      <tr><td class="analysis__cell-label">Final Error</td><td>{{ a.ik.finalError.toFixed(4) }}</td></tr>
+                      <tr><td>Iterations</td><td>{{ a.ik.iterations }}</td></tr>
+                      <tr><td>Error</td><td>{{ a.ik.finalError.toFixed(4) }}</td></tr>
                     </table>
                     @if (a.solvedQ) {
                       <div class="analysis__chips">
                         @for (v of a.solvedQ; track $index) {
-                          <span class="analysis__chip">q{{ $index + 1 }}: {{ v.toFixed(4) }}</span>
+                          <span class="analysis__chip">q{{ $index + 1 }}: {{ v.toFixed(3) }}</span>
                         }
                       </div>
                     }
-                  </section>
+                  </div>
                 }
 
                 @if (a.workspace) {
-                  <section class="analysis__section">
-                    <h4 class="analysis__label">Workspace</h4>
+                  <div class="analysis__card">
+                    <h4 class="analysis__card-title">Workspace</h4>
                     <table class="analysis__table">
-                      <tr><td class="analysis__cell-label">Samples</td><td>{{ a.workspace.metrics.sampleCount }}</td></tr>
-                      <tr><td class="analysis__cell-label">Max Reach</td><td>{{ a.workspace.metrics.maxReach.toFixed(4) }} m</td></tr>
-                      <tr><td class="analysis__cell-label">Min Reach</td><td>{{ a.workspace.metrics.minReach.toFixed(4) }} m</td></tr>
-                      <tr><td class="analysis__cell-label">Bounding Vol</td><td>{{ a.workspace.metrics.boundingVolume.toFixed(4) }} m³</td></tr>
+                      <tr><td>Samples</td><td>{{ a.workspace.metrics.sampleCount }}</td></tr>
+                      <tr><td>Max Reach</td><td>{{ a.workspace.metrics.maxReach.toFixed(3) }} m</td></tr>
+                      <tr><td>Min Reach</td><td>{{ a.workspace.metrics.minReach.toFixed(3) }} m</td></tr>
+                      <tr><td>Volume</td><td>{{ a.workspace.metrics.boundingVolume.toFixed(3) }} m³</td></tr>
                     </table>
-                  </section>
+                  </div>
                 }
 
                 @if (a.singularity) {
-                  <section class="analysis__section">
-                    <h4 class="analysis__label">Singularity</h4>
+                  <div class="analysis__card">
+                    <h4 class="analysis__card-title">Singularity</h4>
                     <table class="analysis__table">
-                      <tr><td class="analysis__cell-label">Normal</td><td class="analysis__state-normal">{{ a.singularity.metrics.normalCount }}</td></tr>
-                      <tr><td class="analysis__cell-label">Near Singular</td><td class="analysis__state-near">{{ a.singularity.metrics.nearSingularCount }}</td></tr>
-                      <tr><td class="analysis__cell-label">Singular</td><td class="analysis__state-singular">{{ a.singularity.metrics.singularCount }}</td></tr>
-                      <tr><td class="analysis__cell-label">Avg Condition #</td><td>{{ a.singularity.metrics.avgConditionNumber.toFixed(2) }}</td></tr>
+                      <tr><td class="analysis__state-normal">Normal</td><td>{{ a.singularity.metrics.normalCount }}</td></tr>
+                      <tr><td class="analysis__state-near">Near</td><td>{{ a.singularity.metrics.nearSingularCount }}</td></tr>
+                      <tr><td class="analysis__state-singular">Singular</td><td>{{ a.singularity.metrics.singularCount }}</td></tr>
+                      <tr><td>Condition #</td><td>{{ a.singularity.metrics.avgConditionNumber.toFixed(1) }}</td></tr>
                     </table>
-                  </section>
+                  </div>
                 }
 
                 @if (a.manipulability) {
-                  <section class="analysis__section">
-                    <h4 class="analysis__label">Manipulability</h4>
+                  <div class="analysis__card">
+                    <h4 class="analysis__card-title">Manipulability</h4>
                     <table class="analysis__table">
-                      <tr><td class="analysis__cell-label">Samples</td><td>{{ a.manipulability.metrics.totalSamples }}</td></tr>
-                      <tr><td class="analysis__cell-label">Avg Yoshikawa</td><td>{{ a.manipulability.metrics.avgYoshikawa.toFixed(4) }}</td></tr>
-                      <tr><td class="analysis__cell-label">Min Yoshikawa</td><td>{{ a.manipulability.metrics.minYoshikawa.toFixed(4) }}</td></tr>
-                      <tr><td class="analysis__cell-label">Max Yoshikawa</td><td>{{ a.manipulability.metrics.maxYoshikawa.toFixed(4) }}</td></tr>
-                      <tr><td class="analysis__cell-label">Avg Isotropy</td><td>{{ a.manipulability.metrics.avgIsotropy.toFixed(4) }}</td></tr>
+                      <tr><td>Avg Yoshikawa</td><td>{{ a.manipulability.metrics.avgYoshikawa.toFixed(4) }}</td></tr>
+                      <tr><td>Min</td><td>{{ a.manipulability.metrics.minYoshikawa.toFixed(4) }}</td></tr>
+                      <tr><td>Max</td><td>{{ a.manipulability.metrics.maxYoshikawa.toFixed(4) }}</td></tr>
+                      <tr><td>Avg Isotropy</td><td>{{ a.manipulability.metrics.avgIsotropy.toFixed(4) }}</td></tr>
                     </table>
-                  </section>
+                  </div>
                 }
               </div>
             } @else {
