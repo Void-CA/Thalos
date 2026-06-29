@@ -125,7 +125,7 @@ export class StatusBar {
   protected readonly robotInfo = computed(() => {
     const rt = this.scene.state()?.runtime;
     if (!rt?.robot) return 'No robot';
-    return `${rt.robot.name} · ${rt.robot.dof}DOF`;
+    return `${rt.robot.display_name} · ${rt.robot.dof}DOF`;
   });
 
   /** Effective execution state — merges PlanState + SessionStatus. */
