@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal, NgTemplateOutlet } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { SceneStore } from '../../../features/scene/store/scene.store';
 import { LayoutStore } from '../../store/layout.store';
 
@@ -27,11 +27,9 @@ const SEGMENT_COLORS = [
 @Component({
   selector: 'bottom-panel',
   standalone: true,
-  imports: [NgTemplateOutlet],
   template: `
     <div class="bottom-panel" [class.bottom-panel--collapsed]="layout.bottomCollapsed()">
       @if (!layout.bottomCollapsed()) {
-        <!-- ── Tab bar ── -->
         <div class="bottom-panel__tabs">
           @for (t of tabs; track t.id) {
             <button
@@ -45,7 +43,6 @@ const SEGMENT_COLORS = [
 
           <span class="bottom-panel__spacer"></span>
 
-          <!-- Collapse -->
           <button
             class="bottom-panel__collapse"
             (click)="layout.toggleBottom()"
@@ -53,16 +50,99 @@ const SEGMENT_COLORS = [
           >▼</button>
         </div>
 
-        <!-- ── Tab content ── -->
         <div class="bottom-panel__content">
-          @switch (activeTab()) {
-            @case ('snapshot') { <ng-container *ngTemplateOutlet="snapshotTmpl" /> }
-            @case ('timeline') { <ng-container *ngTemplateOutlet="timelineTmpl" /> }
-            @case ('log')      { <ng-container *ngTemplateOutlet="logTmpl" /> }
+          @if (activeTab() === 'snapshot') {
+            <pre class="bottom-panel__json">{{ snapshotJson() }}</pre>
+          }
+
+          @if (activeTab() === 'timeline') {
+            @let plan = tlPlan();
+            @if (!plan) {
+              <p class="bottom-panel__empty">No active plan. Compile a program in Planning mode to see timeline.</p>
+            } @else {
+              <div class="tl">
+                <div class="tl__header">
+                  <span class="tl__badge" [style.--badge-color]="plan.badgeColor">{{ plan.stateLabel }}</span>
+                  <span class="tl__id">{{ plan.planId }}</span>
+                  <span class="tl__type">{{ plan.motionType }}</span>
+                </div>
+
+                @if (plan.segments.length > 0) {
+                  <div class="tl__segments">
+                    @for (seg of plan.segments; track seg.index) {
+                      <div
+                        class="tl__segment"
+                        [style.width.%]="seg.pct"
+                        [style.background]="seg.color"
+                        [title]="seg.label"
+                      >
+                        <span class="tl__segment-label">{{ seg.label }}</span>
+                      </div>
+                    }
+                  </div>
+                }
+
+                <div class="tl__progress">
+                  <div class="tl__progress-track">
+                    <div
+                      class="tl__progress-fill"
+                      [style.width.%]="plan.progressPct"
+                      [style.background]="plan.fillColor"
+                    ></div>
+                    @if (plan.progressPct > 0 && plan.progressPct < 100) {
+                      <div class="tl__marker" [style.left.%]="plan.progressPct"></div>
+                    }
+                  </div>
+                  <span class="tl__pct">{{ plan.progressPct }}%</span>
+                </div>
+
+                <div class="tl__times">
+                  <span class="tl__time">Elapsed: {{ plan.elapsed }}</span>
+                  @if (plan.duration) {
+                    <span class="tl__time">Total: {{ plan.duration }}</span>
+                  }
+                </div>
+
+                @if (plan.waypointCount > 0) {
+                  <div class="tl__wpts">
+                    @for (wp of plan.wpPositions; track $index) {
+                      <span
+                        class="tl__wpt"
+                        [style.left.%]="wp.pct"
+                        [title]="wp.label"
+                        [class.tl__wpt--start]="wp.type === 'Start'"
+                        [class.tl__wpt--goal]="wp.type === 'Goal'"
+                        [class.tl__wpt--via]="wp.type === 'Via'"
+                      ></span>
+                    }
+                  </div>
+                }
+
+                @if (plan.isLive) {
+                  <span class="tl__live">● LIVE</span>
+                }
+              </div>
+            }
+          }
+
+          @if (activeTab() === 'log') {
+            @let entries = logEntries();
+            @if (entries.length === 0) {
+              <p class="bottom-panel__empty">No log entries.</p>
+            } @else {
+              <div class="log">
+                @for (entry of entries; track entry.time) {
+                  <div class="log__entry" [class.log__entry--error]="entry.level === 'error'">
+                    <span class="log__time">{{ entry.time }}</span>
+                    <span class="log__level">{{ entry.level }}</span>
+                    <span class="log__msg">{{ entry.msg }}</span>
+                  </div>
+                }
+              </div>
+            }
           }
         </div>
       } @else {
-        <!-- Collapsed stub — just a thin bar with expand button -->
         <div class="bottom-panel__stub">
           <button
             class="bottom-panel__expand"
@@ -72,106 +152,6 @@ const SEGMENT_COLORS = [
         </div>
       }
     </div>
-
-    <!-- ── Snapshot template ── -->
-    <ng-template #snapshotTmpl>
-      <pre class="bottom-panel__json">{{ snapshotJson() }}</pre>
-    </ng-template>
-
-    <!-- ── Timeline template ── -->
-    <ng-template #timelineTmpl>
-      @let plan = tlPlan();
-      @if (!plan) {
-        <p class="bottom-panel__empty">No active plan. Compile a program in Planning mode to see timeline.</p>
-      } @else {
-        <div class="tl">
-          <!-- Plan identity -->
-          <div class="tl__header">
-            <span class="tl__badge" [style.--badge-color]="plan.badgeColor">{{ plan.stateLabel }}</span>
-            <span class="tl__id">{{ plan.planId }}</span>
-            <span class="tl__type">{{ plan.motionType }}</span>
-          </div>
-
-          <!-- Segments bar (multi-colored when segments present) -->
-          @if (plan.segments.length > 0) {
-            <div class="tl__segments">
-              @for (seg of plan.segments; track seg.index) {
-                <div
-                  class="tl__segment"
-                  [style.width.%]="seg.pct"
-                  [style.background]="seg.color"
-                  [title]="seg.label"
-                >
-                  <span class="tl__segment-label">{{ seg.label }}</span>
-                </div>
-              }
-            </div>
-          }
-
-          <!-- Main progress bar -->
-          <div class="tl__progress">
-            <div class="tl__progress-track">
-              <div
-                class="tl__progress-fill"
-                [style.width.%]="plan.progressPct"
-                [style.background]="plan.fillColor"
-              ></div>
-              @if (plan.progressPct > 0 && plan.progressPct < 100) {
-                <div class="tl__marker" [style.left.%]="plan.progressPct"></div>
-              }
-            </div>
-            <span class="tl__pct">{{ plan.progressPct }}%</span>
-          </div>
-
-          <!-- Timing info -->
-          <div class="tl__times">
-            <span class="tl__time">Elapsed: {{ plan.elapsed }}</span>
-            @if (plan.duration) {
-              <span class="tl__time">Total: {{ plan.duration }}</span>
-            }
-          </div>
-
-          <!-- Waypoints strip -->
-          @if (plan.waypointCount > 0) {
-            <div class="tl__wpts">
-              @for (wp of plan.wpPositions; track $index) {
-                <span
-                  class="tl__wpt"
-                  [style.left.%]="wp.pct"
-                  [title]="wp.label"
-                  [class.tl__wpt--start]="wp.type === 'Start'"
-                  [class.tl__wpt--goal]="wp.type === 'Goal'"
-                  [class.tl__wpt--via]="wp.type === 'Via'"
-                ></span>
-              }
-            </div>
-          }
-
-          <!-- LIVE indicator -->
-          @if (plan.isLive) {
-            <span class="tl__live">● LIVE</span>
-          }
-        </div>
-      }
-    </ng-template>
-
-    <!-- ── Log template ── -->
-    <ng-template #logTmpl>
-      @let entries = logEntries();
-      @if (entries.length === 0) {
-        <p class="bottom-panel__empty">No log entries.</p>
-      } @else {
-        <div class="log">
-          @for (entry of entries; track entry.time) {
-            <div class="log__entry" [class.log__entry--error]="entry.level === 'error'">
-              <span class="log__time">{{ entry.time }}</span>
-              <span class="log__level">{{ entry.level }}</span>
-              <span class="log__msg">{{ entry.msg }}</span>
-            </div>
-          }
-        </div>
-      }
-    </ng-template>
   `,
   styleUrl: './bottom-panel.scss',
 })
@@ -258,7 +238,7 @@ export class BottomPanel {
       ? waypoints[waypoints.length - 1].timestamp
       : null;
 
-    const wpPositions = waypoints.map((wp, _i) => ({
+    const wpPositions = waypoints.map((wp) => ({
       pct: duration && duration > 0 ? Math.round((wp.timestamp / duration) * 100) : 0,
       label: `${wp.waypointType} @ ${wp.timestamp.toFixed(2)}s`,
       type: wp.waypointType,
