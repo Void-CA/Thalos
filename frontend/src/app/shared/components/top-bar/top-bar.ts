@@ -7,20 +7,17 @@ import type { AppMode } from '../../types/app-mode';
   standalone: true,
   template: `
     <header class="top-bar">
-      <div class="top-bar__mode-group">
-        <span class="top-bar__label">Mode</span>
-        <div class="top-bar__mode-selector">
-          @for (m of modes; track m) {
-            <button
-              class="top-bar__mode-btn"
-              [class.active]="store.mode() === m"
-              (click)="store.setMode(m)"
-            >
-              {{ m }}
-            </button>
-          }
-        </div>
-      </div>
+      <nav class="top-bar__tabs">
+        @for (m of modes; track m) {
+          <button
+            class="top-bar__tab"
+            [class.top-bar__tab--active]="store.mode() === m"
+            (click)="store.setMode(m)"
+          >
+            {{ m }}
+          </button>
+        }
+      </nav>
 
       <div class="top-bar__spacer"></div>
     </header>

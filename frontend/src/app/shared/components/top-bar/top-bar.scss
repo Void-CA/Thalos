@@ -5,81 +5,61 @@
   align-items: center;
   height: 40px;
   padding: 0 1rem;
-  background: $bg-surface;
-  border-bottom: 1px solid $border-subtle;
+  background: #151515;
+  border-bottom: 1px solid $border-default;
   gap: 1rem;
 
-  &__mode-group {
+  &__tabs {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    height: 100%;
+    gap: 0;
+    margin-inline: auto;
   }
 
-  &__label {
-    font-size: 0.7rem;
+  &__tab {
+    position: relative;
+    background: none;
+    border: none;
+    color: $text-muted;
+    font-family: $font-ui;
+    font-size: 0.78rem;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: $text-muted;
-    font-weight: 600;
-  }
-
-  &__mode-selector {
-    display: flex;
-    border: 1px solid $border-subtle;
-    border-radius: $radius-sm;
-    overflow: hidden;
-  }
-
-  &__mode-btn {
-    background: transparent;
-    border: none;
-    color: $text-secondary;
-    font-size: 0.75rem;
-    font-weight: 500;
-    padding: 0.25rem 0.65rem;
+    padding: 0 1.25rem;
     cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    transition: background $transition-fast, color $transition-fast;
+    opacity: 0.55;
+    transition: opacity $transition-fast, color $transition-fast;
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0.75rem;
+      right: 0.75rem;
+      height: 2px;
+      background: transparent;
+      border-radius: 1px 1px 0 0;
+      transition: background $transition-fast;
+    }
 
     &:hover {
-      background: $bg-card;
+      opacity: 0.85;
+      color: $text-primary;
     }
 
-    &.active {
-      background: $accent;
-      color: #fff;
-    }
+    &--active {
+      opacity: 1;
+      color: $text-primary;
+      font-weight: 600;
 
-    &:not(:last-child) {
-      border-right: 1px solid $border-subtle;
+      &::after {
+        background: $accent;
+      }
     }
   }
 
   &__spacer {
     flex: 1;
-  }
-
-  &__status {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-
-  &__dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-
-    &--online {
-      background: #44cc44;
-    }
-  }
-
-  &__status-text {
-    font-size: 0.7rem;
-    color: $text-muted;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
   }
 }
