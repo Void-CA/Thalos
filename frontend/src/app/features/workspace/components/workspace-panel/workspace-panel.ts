@@ -65,52 +65,6 @@ import { WorkspaceStore } from '../../store/workspace.store';
         </label>
       </section>
 
-      <!-- ── WORKSPACE METRICS ── -->
-      @if (store.data(); as data) {
-        <section class="workspace-panel__outputs">
-          <h4 class="workspace-panel__label">Workspace Metrics</h4>
-          <table class="metrics-table">
-            <tr><td>Samples</td><td>{{ data.metrics.sampleCount }}</td></tr>
-            <tr><td>Max Reach</td><td>{{ data.metrics.maxReach.toFixed(4) }} m</td></tr>
-            <tr><td>Min Reach</td><td>{{ data.metrics.minReach.toFixed(4) }} m</td></tr>
-            <tr><td>Bounding Volume</td><td>{{ data.metrics.boundingVolume.toFixed(4) }} m&sup3;</td></tr>
-            <tr>
-              <td>Centroid</td>
-              <td>({{ data.metrics.centroid[0].toFixed(3) }},
-                  {{ data.metrics.centroid[1].toFixed(3) }},
-                  {{ data.metrics.centroid[2].toFixed(3) }})</td>
-            </tr>
-          </table>
-        </section>
-      }
-
-      <!-- ── SINGULARITY METRICS ── -->
-      @if (store.singularity(); as s) {
-        <section class="workspace-panel__outputs">
-          <h4 class="workspace-panel__label singularity-title">Singularity Metrics</h4>
-          <table class="metrics-table">
-            <tr><td>Normal</td><td class="state-normal">{{ s.metrics.normalCount }}</td></tr>
-            <tr><td>Near Singular</td><td class="state-near">{{ s.metrics.nearSingularCount }}</td></tr>
-            <tr><td>Singular</td><td class="state-singular">{{ s.metrics.singularCount }}</td></tr>
-            <tr><td>Avg Condition #</td><td>{{ s.metrics.avgConditionNumber.toFixed(2) }}</td></tr>
-          </table>
-        </section>
-      }
-
-      <!-- ── MANIPULABILITY METRICS ── -->
-      @if (store.manipulability(); as m) {
-        <section class="workspace-panel__outputs">
-          <h4 class="workspace-panel__label singularity-title">Manipulability Metrics</h4>
-          <table class="metrics-table">
-            <tr><td>Samples</td><td>{{ m.metrics.totalSamples }}</td></tr>
-            <tr><td>Avg Yoshikawa</td><td>{{ m.metrics.avgYoshikawa.toFixed(4) }}</td></tr>
-            <tr><td>Min Yoshikawa</td><td>{{ m.metrics.minYoshikawa.toFixed(4) }}</td></tr>
-            <tr><td>Max Yoshikawa</td><td>{{ m.metrics.maxYoshikawa.toFixed(4) }}</td></tr>
-            <tr><td>Avg Isotropy</td><td>{{ m.metrics.avgIsotropy.toFixed(4) }}</td></tr>
-          </table>
-        </section>
-      }
-
       <!-- ── ERROR ── -->
       @if (store.error(); as err) {
         <div class="error-msg">{{ err }}</div>

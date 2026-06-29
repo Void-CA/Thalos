@@ -1,6 +1,6 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { SceneStore } from '../../store/scene.store';
-import { IkTarget, IkResult } from '../../scene.types';
+import type { IkTarget } from '../../scene.types';
 import type { RotationDto } from '../../scene-api.types';
 
 /**
@@ -138,35 +138,7 @@ import type { RotationDto } from '../../scene-api.types';
         <button type="button" class="action action--execute" (click)="onExecute()">Execute</button>
       </section>
 
-      <!-- ── OUTPUTS ── -->
-      <section class="ik-panel__outputs" aria-labelledby="ik-outputs-label">
-        <h4 id="ik-outputs-label" class="ik-panel__label">Results</h4>
-
-        @if (solvedQ(); as q) {
-          <div class="solved-q">
-            <span class="solved-q__label">Solved joints</span>
-            <div class="solved-q__chips">
-              @for (v of q; track $index) {
-                <span class="q-value">q{{ $index + 1 }}: {{ v.toFixed(4) }}</span>
-              }
-            </div>
-          </div>
-        } @else {
-          <p class="solved-q__empty">No solution yet</p>
-        }
-
-        @if (result(); as r) {
-          <div
-            class="feedback"
-            [class.feedback--ok]="r.status === 'Converged'"
-            [class.feedback--warn]="r.status === 'MaxIterations'"
-          >
-            <span class="feedback__status">{{ r.status }}</span>
-            <span class="feedback__detail">iters: {{ r.iterations }}</span>
-            <span class="feedback__detail">final error: {{ r.finalError.toFixed(2) }}</span>
-          </div>
-        }
-      </section>
+      <!-- ── OUTPUTS (removed — results moved to bottom panel Analysis tab) ── -->
     </div>
   `,
   styleUrl: './ik-target-panel.scss',
@@ -197,11 +169,6 @@ export class IkTargetPanel {
   protected readonly qx = signal(0);
   protected readonly qy = signal(0);
   protected readonly qz = signal(0);
-
-  // ── Store-derived ──
-
-  protected readonly result = computed<IkResult | null>(() => this.store.state().ikResult);
-  protected readonly solvedQ = computed<number[] | null>(() => this.store.state().solvedQ);
 
   // ── Build target from form ──
 

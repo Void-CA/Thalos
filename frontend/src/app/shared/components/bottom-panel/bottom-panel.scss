@@ -117,6 +117,78 @@
     font-size: 0.7rem;
   }
 
+  // ── Analysis tab ──
+
+  .analysis {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+
+    &__section {
+      border: 1px solid $border-subtle;
+      border-radius: $radius-md;
+      padding: 0.5rem 0.65rem;
+    }
+
+    &__label {
+      margin: 0 0 0.35rem;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      opacity: 0.6;
+      font-weight: 600;
+    }
+
+    &__table {
+      border-collapse: collapse;
+      font-size: 0.68rem;
+
+      td {
+        padding: 0.1rem 0.4rem 0.1rem 0;
+      }
+    }
+
+    &__cell-label {
+      opacity: 0.5;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    &__badge {
+      display: inline-block;
+      padding: 0.08rem 0.35rem;
+      border-radius: $radius-sm;
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: #555;
+      color: #111;
+
+      &--ok { background: #44cc44; }
+      &--warn { background: #ffaa33; }
+    }
+
+    &__state-normal { color: #44cc44; }
+    &__state-near { color: #ffaa33; }
+    &__state-singular { color: #cc4444; }
+
+    &__chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      margin-top: 0.35rem;
+    }
+
+    &__chip {
+      font-size: 0.65rem;
+      background: $bg-elevated;
+      padding: 0.1rem 0.35rem;
+      border-radius: $radius-sm;
+      opacity: 0.8;
+    }
+  }
+
   // ── Timeline ──
 
   .tl {

@@ -1,16 +1,17 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { SceneStore } from '../../../features/scene/store/scene.store';
+import { WorkspaceStore } from '../../../features/workspace/store/workspace.store';
 import { LayoutStore } from '../../store/layout.store';
 
-type TabId = 'snapshot' | 'timeline' | 'log';
+type TabId = 'snapshot' | 'analysis' | 'timeline' | 'log';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'snapshot', label: 'Snapshot' },
+  { id: 'analysis', label: 'Analysis' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'log', label: 'Log' },
 ];
 
-/** Segment color palette (matches planning-panel colors). */
 const SEGMENT_COLORS = [
   '#3b82f6', '#22c55e', '#f59e0b', '#ef4444',
   '#8b5cf6', '#ec4899', '#14b8a6', '#f97316',
@@ -20,9 +21,10 @@ const SEGMENT_COLORS = [
  * Bottom panel — system observability in tabs.
  *
  * Tabs:
- *   - Snapshot: runtime state summary (replaces the raw JSON dump).
- *   - Timeline: execution progress visualization.
- *   - Log: error messages and system log.
+ *   - Snapshot: raw runtime JSON.
+ *   - Analysis: structured IK + workspace results.
+ *   - Timeline: execution progress.
+ *   - Log: error messages.
  */
 @Component({
   selector: 'bottom-panel',
@@ -40,9 +42,7 @@ const SEGMENT_COLORS = [
               {{ t.label }}
             </button>
           }
-
           <span class="bottom-panel__spacer"></span>
-
           <button
             class="bottom-panel__collapse"
             (click)="layout.toggleBottom()"
@@ -53,6 +53,78 @@ const SEGMENT_COLORS = [
         <div class="bottom-panel__content">
           @if (activeTab() === 'snapshot') {
             <pre class="bottom-panel__json">{{ snapshotJson() }}</pre>
+          }
+
+          @if (activeTab() === 'analysis') {
+            @let a = analysis();
+            @if (a.hasResults) {
+              <div class="analysis">
+                @if (a.ik) {
+                  <section class="analysis__section">
+                    <h4 class="analysis__label">IK Result</h4>
+                    <table class="analysis__table">
+                      <tr>
+                        <td class="analysis__cell-label">Status</td>
+                        <td>
+                          <span class="analysis__badge"
+                            [class.analysis__badge--ok]="a.ik.status === 'Converged'"
+                            [class.analysis__badge--warn]="a.ik.status === 'MaxIterations'"
+                          >{{ a.ik.status }}</span>
+                        </td>
+                      </tr>
+                      <tr><td class="analysis__cell-label">Iterations</td><td>{{ a.ik.iterations }}</td></tr>
+                      <tr><td class="analysis__cell-label">Final Error</td><td>{{ a.ik.finalError.toFixed(4) }}</td></tr>
+                    </table>
+                    @if (a.solvedQ) {
+                      <div class="analysis__chips">
+                        @for (v of a.solvedQ; track $index) {
+                          <span class="analysis__chip">q{{ $index + 1 }}: {{ v.toFixed(4) }}</span>
+                        }
+                      </div>
+                    }
+                  </section>
+                }
+
+                @if (a.workspace) {
+                  <section class="analysis__section">
+                    <h4 class="analysis__label">Workspace</h4>
+                    <table class="analysis__table">
+                      <tr><td class="analysis__cell-label">Samples</td><td>{{ a.workspace.metrics.sampleCount }}</td></tr>
+                      <tr><td class="analysis__cell-label">Max Reach</td><td>{{ a.workspace.metrics.maxReach.toFixed(4) }} m</td></tr>
+                      <tr><td class="analysis__cell-label">Min Reach</td><td>{{ a.workspace.metrics.minReach.toFixed(4) }} m</td></tr>
+                      <tr><td class="analysis__cell-label">Bounding Vol</td><td>{{ a.workspace.metrics.boundingVolume.toFixed(4) }} m³</td></tr>
+                    </table>
+                  </section>
+                }
+
+                @if (a.singularity) {
+                  <section class="analysis__section">
+                    <h4 class="analysis__label">Singularity</h4>
+                    <table class="analysis__table">
+                      <tr><td class="analysis__cell-label">Normal</td><td class="analysis__state-normal">{{ a.singularity.metrics.normalCount }}</td></tr>
+                      <tr><td class="analysis__cell-label">Near Singular</td><td class="analysis__state-near">{{ a.singularity.metrics.nearSingularCount }}</td></tr>
+                      <tr><td class="analysis__cell-label">Singular</td><td class="analysis__state-singular">{{ a.singularity.metrics.singularCount }}</td></tr>
+                      <tr><td class="analysis__cell-label">Avg Condition #</td><td>{{ a.singularity.metrics.avgConditionNumber.toFixed(2) }}</td></tr>
+                    </table>
+                  </section>
+                }
+
+                @if (a.manipulability) {
+                  <section class="analysis__section">
+                    <h4 class="analysis__label">Manipulability</h4>
+                    <table class="analysis__table">
+                      <tr><td class="analysis__cell-label">Samples</td><td>{{ a.manipulability.metrics.totalSamples }}</td></tr>
+                      <tr><td class="analysis__cell-label">Avg Yoshikawa</td><td>{{ a.manipulability.metrics.avgYoshikawa.toFixed(4) }}</td></tr>
+                      <tr><td class="analysis__cell-label">Min Yoshikawa</td><td>{{ a.manipulability.metrics.minYoshikawa.toFixed(4) }}</td></tr>
+                      <tr><td class="analysis__cell-label">Max Yoshikawa</td><td>{{ a.manipulability.metrics.maxYoshikawa.toFixed(4) }}</td></tr>
+                      <tr><td class="analysis__cell-label">Avg Isotropy</td><td>{{ a.manipulability.metrics.avgIsotropy.toFixed(4) }}</td></tr>
+                    </table>
+                  </section>
+                }
+              </div>
+            } @else {
+              <p class="bottom-panel__empty">No analysis results. Run FK/IK or workspace analysis from the right panel.</p>
+            }
           }
 
           @if (activeTab() === 'timeline') {
@@ -66,61 +138,39 @@ const SEGMENT_COLORS = [
                   <span class="tl__id">{{ plan.planId }}</span>
                   <span class="tl__type">{{ plan.motionType }}</span>
                 </div>
-
                 @if (plan.segments.length > 0) {
                   <div class="tl__segments">
                     @for (seg of plan.segments; track seg.index) {
-                      <div
-                        class="tl__segment"
-                        [style.width.%]="seg.pct"
-                        [style.background]="seg.color"
-                        [title]="seg.label"
-                      >
+                      <div class="tl__segment" [style.width.%]="seg.pct" [style.background]="seg.color" [title]="seg.label">
                         <span class="tl__segment-label">{{ seg.label }}</span>
                       </div>
                     }
                   </div>
                 }
-
                 <div class="tl__progress">
                   <div class="tl__progress-track">
-                    <div
-                      class="tl__progress-fill"
-                      [style.width.%]="plan.progressPct"
-                      [style.background]="plan.fillColor"
-                    ></div>
+                    <div class="tl__progress-fill" [style.width.%]="plan.progressPct" [style.background]="plan.fillColor"></div>
                     @if (plan.progressPct > 0 && plan.progressPct < 100) {
                       <div class="tl__marker" [style.left.%]="plan.progressPct"></div>
                     }
                   </div>
                   <span class="tl__pct">{{ plan.progressPct }}%</span>
                 </div>
-
                 <div class="tl__times">
                   <span class="tl__time">Elapsed: {{ plan.elapsed }}</span>
-                  @if (plan.duration) {
-                    <span class="tl__time">Total: {{ plan.duration }}</span>
-                  }
+                  @if (plan.duration) { <span class="tl__time">Total: {{ plan.duration }}</span> }
                 </div>
-
                 @if (plan.waypointCount > 0) {
                   <div class="tl__wpts">
                     @for (wp of plan.wpPositions; track $index) {
-                      <span
-                        class="tl__wpt"
-                        [style.left.%]="wp.pct"
-                        [title]="wp.label"
+                      <span class="tl__wpt" [style.left.%]="wp.pct" [title]="wp.label"
                         [class.tl__wpt--start]="wp.type === 'Start'"
                         [class.tl__wpt--goal]="wp.type === 'Goal'"
-                        [class.tl__wpt--via]="wp.type === 'Via'"
-                      ></span>
+                        [class.tl__wpt--via]="wp.type === 'Via'"></span>
                     }
                   </div>
                 }
-
-                @if (plan.isLive) {
-                  <span class="tl__live">● LIVE</span>
-                }
+                @if (plan.isLive) { <span class="tl__live">● LIVE</span> }
               </div>
             }
           }
@@ -144,11 +194,7 @@ const SEGMENT_COLORS = [
         </div>
       } @else {
         <div class="bottom-panel__stub">
-          <button
-            class="bottom-panel__expand"
-            (click)="layout.toggleBottom()"
-            title="Expand panel"
-          >▲</button>
+          <button class="bottom-panel__expand" (click)="layout.toggleBottom()" title="Expand panel">▲</button>
         </div>
       }
     </div>
@@ -157,6 +203,7 @@ const SEGMENT_COLORS = [
 })
 export class BottomPanel {
   protected readonly scene = inject(SceneStore);
+  protected readonly ws = inject(WorkspaceStore);
   protected readonly layout = inject(LayoutStore);
 
   protected readonly activeTab = signal<TabId>('snapshot');
@@ -183,17 +230,35 @@ export class BottomPanel {
             }
           : null,
         execution: exe
-          ? {
-              status: exe.status,
-              progress: exe.progress,
-              elapsedSecs: exe.elapsedSecs,
-            }
+          ? { status: exe.status, progress: exe.progress, elapsedSecs: exe.elapsedSecs }
           : null,
         generatedAt: state.runtime.generatedAt,
       },
       null,
       2,
     );
+  });
+
+  // ── Analysis ──
+
+  protected readonly analysis = computed(() => {
+    const scene = this.scene.state();
+    const ik = scene.ikResult;
+    const solvedQ = scene.solvedQ;
+    const wsData = this.ws.data();
+    const singularity = this.ws.singularity();
+    const manipulability = this.ws.manipulability();
+
+    const hasResults = !!(ik || wsData || singularity || manipulability);
+
+    return {
+      hasResults,
+      ik,
+      solvedQ,
+      workspace: wsData,
+      singularity,
+      manipulability,
+    };
   });
 
   // ── Timeline ──
@@ -209,21 +274,12 @@ export class BottomPanel {
     const progressPct = Math.round(progress * 100);
 
     const badgeColorMap: Record<string, string> = {
-      Created: '#ffaa33',
-      Active: '#33ccff',
-      Paused: '#ffaa33',
-      Completed: '#44cc44',
-      Cancelled: '#cc4444',
-      Failed: '#cc4444',
+      Created: '#ffaa33', Active: '#33ccff', Paused: '#ffaa33',
+      Completed: '#44cc44', Cancelled: '#cc4444', Failed: '#cc4444',
     };
-
     const fillColorMap: Record<string, string> = {
-      Created: '#ffaa33',
-      Active: '#33ccff',
-      Paused: '#ffaa33',
-      Completed: '#44cc44',
-      Cancelled: '#666',
-      Failed: '#cc4444',
+      Created: '#ffaa33', Active: '#33ccff', Paused: '#ffaa33',
+      Completed: '#44cc44', Cancelled: '#666', Failed: '#cc4444',
     };
 
     const segments = plan.segments?.map((seg, i) => ({
@@ -234,10 +290,7 @@ export class BottomPanel {
     })) ?? [];
 
     const waypoints = plan.visualization?.waypoints ?? [];
-    const duration = waypoints.length > 0
-      ? waypoints[waypoints.length - 1].timestamp
-      : null;
-
+    const duration = waypoints.length > 0 ? waypoints[waypoints.length - 1].timestamp : null;
     const wpPositions = waypoints.map((wp) => ({
       pct: duration && duration > 0 ? Math.round((wp.timestamp / duration) * 100) : 0,
       label: `${wp.waypointType} @ ${wp.timestamp.toFixed(2)}s`,
@@ -245,16 +298,11 @@ export class BottomPanel {
     }));
 
     return {
-      planId: plan.planId,
-      stateLabel: effectiveState,
+      planId: plan.planId, stateLabel: effectiveState,
       badgeColor: badgeColorMap[effectiveState] ?? '#888',
       fillColor: fillColorMap[effectiveState] ?? '#888',
-      motionType: plan.motionType,
-      progress,
-      progressPct,
-      segments,
-      waypointCount: waypoints.length,
-      wpPositions,
+      motionType: plan.motionType, progress, progressPct,
+      segments, waypointCount: waypoints.length, wpPositions,
       elapsed: exe?.elapsedSecs != null ? `${exe.elapsedSecs.toFixed(1)}s` : '—',
       duration: duration != null ? `${duration.toFixed(1)}s` : null,
       isLive: effectiveState === 'Active',
@@ -266,15 +314,9 @@ export class BottomPanel {
   protected readonly logEntries = computed(() => {
     const entries: Array<{ time: string; level: string; msg: string }> = [];
     const state = this.scene.state();
-
     if (state?.ui?.error) {
-      entries.push({
-        time: new Date().toLocaleTimeString(),
-        level: 'error',
-        msg: state.ui.error,
-      });
+      entries.push({ time: new Date().toLocaleTimeString(), level: 'error', msg: state.ui.error });
     }
-
     return entries;
   });
 }
