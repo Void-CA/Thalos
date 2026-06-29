@@ -33,6 +33,7 @@ use thalos_visual::validator::SceneError;
 use crate::app::prelude::*;
 use crate::app::state::AppState;
 use crate::features::scene::dto::mappers::runtime::build_plan_dto;
+use crate::features::scene::dto::requests::TickRequest;
 use crate::features::scene::dto::*;
 
 
@@ -177,12 +178,13 @@ const IK_MAX_ITERS: usize = 500;
 const IK_TOLERANCE: f64 = 1e-6;
 const IK_LAMBDA: f64 = 0.1;
 
-/// Compile and execute a multi-segment motion program.
+/// Preview a multi-segment motion program.
 ///
-/// Accepts an ordered list of movement commands, plans each segment
-/// sequentially, concatenates the trajectories, and activates the
-/// resulting plan in the runtime.
-pub async fn execute_plan(
+/// Compiles the program, stores the result for visualisation, and returns
+/// the updated runtime state. The robot does NOT move — this is strictly
+/// a "compile + preview" operation. Execution requires a subsequent
+/// call to `start_execution`.
+pub async fn preview_plan(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<MotionPlanRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
@@ -224,8 +226,68 @@ pub async fn execute_plan(
             }
         })?;
 
-    // Activate
-    let snapshot = state.services.scene.execute_program(compiled)?;
+    // Schedule the plan (no execution)
+    let snapshot = state.services.scene.schedule_program(compiled)?;
+    Ok(Json(to_api_response(&snapshot)))
+}
+
+
+// ─── Execution control ────────────────────────────────────────────────────
+
+/// Start execution of the scheduled motion plan.
+pub async fn start_execution(
+    State(state): State<Arc<AppState>>,
+) -> ApiResult<RuntimeStateResponse> {
+    let snapshot = state.services.scene.start_execution()?;
+    Ok(Json(to_api_response(&snapshot)))
+}
+
+/// Pause execution.
+pub async fn pause_execution(
+    State(state): State<Arc<AppState>>,
+) -> ApiResult<RuntimeStateResponse> {
+    let snapshot = state.services.scene.pause_execution()?;
+    Ok(Json(to_api_response(&snapshot)))
+}
+
+/// Resume a paused execution.
+pub async fn resume_execution(
+    State(state): State<Arc<AppState>>,
+) -> ApiResult<RuntimeStateResponse> {
+    let snapshot = state.services.scene.resume_execution()?;
+    Ok(Json(to_api_response(&snapshot)))
+}
+
+/// Cancel execution.
+pub async fn cancel_execution(
+    State(state): State<Arc<AppState>>,
+) -> ApiResult<RuntimeStateResponse> {
+    let snapshot = state.services.scene.cancel_execution()?;
+    Ok(Json(to_api_response(&snapshot)))
+}
+
+/// Reset the execution session (back to Ready state for re-run).
+pub async fn reset_execution(
+    State(state): State<Arc<AppState>>,
+) -> ApiResult<RuntimeStateResponse> {
+    let snapshot = state.services.scene.reset_execution()?;
+    Ok(Json(to_api_response(&snapshot)))
+}
+
+
+// ─── Execution tick ───────────────────────────────────────────────────────
+
+/// Advance execution by `dt` seconds.
+///
+/// Called periodically by the frontend during active execution.
+/// Returns the full runtime state so the UI can update the robot pose
+/// and execution progress in a single round-trip.
+pub async fn tick_execution(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<TickRequest>,
+) -> ApiResult<RuntimeStateResponse> {
+    let dt = payload.dt.max(0.001); // minimum 1ms to avoid division by zero
+    let snapshot = state.services.scene.tick_execution(dt)?;
     Ok(Json(to_api_response(&snapshot)))
 }
 

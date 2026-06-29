@@ -61,9 +61,37 @@ impl RuntimeStateResponse {
 }
 
 /// Build an `ActivePlanDto` with trajectory visualization from a snapshot.
+///
+/// Derives the plan state from the execution session when available,
+/// falling back to the plan's own state for single-shot commands (MoveJ/MoveL).
 pub fn build_plan_dto(
     snapshot: &thalos_runtime::RuntimeSnapshot,
 ) -> Option<ActivePlanDto> {
     let plan = snapshot.active_plan.as_ref()?;
-    Some(ActivePlanDto::with_visualization(plan, &snapshot.chain))
+    let mut dto = ActivePlanDto::with_visualization(plan, &snapshot.chain);
+
+    // If there's an execution session, override the plan state with the
+    // session's status so the frontend sees the correct execution state.
+    if let Some(ref exe) = snapshot.execution {
+        dto.state = match exe.status {
+            thalos_runtime::SessionStatus::Ready => "Created".into(),
+            thalos_runtime::SessionStatus::Running => "Active".into(),
+            thalos_runtime::SessionStatus::Paused => "Paused".into(),
+            thalos_runtime::SessionStatus::Completed => "Completed".into(),
+            thalos_runtime::SessionStatus::Cancelled => "Cancelled".into(),
+            thalos_runtime::SessionStatus::Failed => "Failed".into(),
+        };
+        // Override progress from the session
+        let duration = snapshot
+            .active_plan
+            .as_ref()
+            .map(|p| p.trajectory.duration())
+            .unwrap_or(0.0);
+        dto.trajectory_progress = Some(exe.progress(duration));
+        // Override timestamps
+        dto.started_at = exe.started_at;
+        dto.completed_at = exe.completed_at;
+    }
+
+    Some(dto)
 }

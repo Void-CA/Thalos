@@ -180,6 +180,15 @@ pub struct LoadUrdfRobotRequest {
     pub urdf_source: String,
 }
 
+// ── Execution tick request ──
+
+/// Request to advance execution by `dt` seconds.
+#[derive(Debug, Deserialize)]
+pub struct TickRequest {
+    pub dt: f64,
+}
+
+
 fn default_epsilon() -> f64 {
     1e-6
 }

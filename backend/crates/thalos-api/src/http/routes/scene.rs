@@ -22,8 +22,18 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/scene/move-to-position", post(handler::move_to_position))
         .route("/scene/move-to-pose", post(handler::move_to_pose))
 
-        // Motion program (multi-segment)
-        .route("/scene/motion/plan", post(handler::execute_plan))
+        // Motion program — preview (compile only, no execution)
+        .route("/scene/motion/plan", post(handler::preview_plan))
+
+        // Execution control
+        .route("/scene/motion/start", post(handler::start_execution))
+        .route("/scene/motion/pause", post(handler::pause_execution))
+        .route("/scene/motion/resume", post(handler::resume_execution))
+        .route("/scene/motion/cancel", post(handler::cancel_execution))
+        .route("/scene/motion/reset", post(handler::reset_execution))
+
+        // Execution tick (polling-based advance)
+        .route("/scene/motion/tick", post(handler::tick_execution))
 
         // IK solve (no mutation) + execute
         .route("/scene/solve-ik-position", post(handler::solve_ik_position))
