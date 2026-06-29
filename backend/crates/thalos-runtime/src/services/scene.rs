@@ -15,7 +15,7 @@ use crate::backends::RobotBackend;
 use crate::commands::handler::ExecutableCommand;
 use crate::commands::Command;
 use crate::error::RuntimeError;
-use crate::snapshots::RuntimeSnapshot;
+use crate::snapshots::{RuntimeSnapshot, TickDelta};
 use crate::state::robot::{ActiveRobot, SceneRuntime};
 
 
@@ -161,6 +161,31 @@ impl SceneService {
             runtime.advance_trajectory(dt);
         }
         self.snapshot_with_ik(None)
+    }
+
+    /// Advance execution y devuelve solo el delta (ligero).
+    ///
+    /// A diferencia de `tick_execution`, no construye el snapshot completo.
+    /// Esto permite al frontend recibir únicamente lo que cambia en cada tick.
+    pub fn tick_execution_delta(&self, dt: f64) -> Result<TickDelta, RuntimeError> {
+        let mut runtime = self.runtime.write().unwrap();
+        runtime.advance_trajectory(dt);
+
+        let plan_duration = runtime
+            .active_plan
+            .as_ref()
+            .map(|p| p.trajectory.duration())
+            .unwrap_or(0.0);
+
+        let fk_result = Self::compute_fk(&runtime.active_robot.chain, &runtime.active_robot.joints);
+
+        Ok(TickDelta {
+            joints: runtime.active_robot.joints.clone(),
+            chain: runtime.active_robot.chain.clone(),
+            fk_result,
+            execution: runtime.execution.clone(),
+            plan_duration,
+        })
     }
 
     /// Build a snapshot, injecting optional IK metadata.

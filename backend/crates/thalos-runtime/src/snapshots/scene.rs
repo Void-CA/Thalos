@@ -61,3 +61,21 @@ impl RuntimeSnapshot {
         self.active_plan.as_ref().map(|p| p.progress())
     }
 }
+
+/// Lightweight tick result: solo lo que cambia durante ejecución.
+///
+/// A diferencia de `RuntimeSnapshot`, no incluye robot model, joint metadata,
+/// plan details, ni timestamps. Solo lo necesario para actualizar el frontend
+/// en cada tick.
+pub struct TickDelta {
+    /// Current joint angles.
+    pub joints: Vec<f64>,
+    /// The kinematic chain (needed to build link transforms from FK).
+    pub chain: SerialChain,
+    /// FK result computed from current joints.
+    pub fk_result: FKResult,
+    /// Execution session, if any.
+    pub execution: Option<ExecutionSession>,
+    /// Total trajectory duration in seconds (for progress computation).
+    pub plan_duration: f64,
+}
