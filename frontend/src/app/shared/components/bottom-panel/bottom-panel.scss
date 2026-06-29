@@ -130,7 +130,8 @@
 
     &__card {
       flex: 0 0 200px;
-      border: 1px solid $border-subtle;
+      background: $bg-card;
+      border: 1px solid $border-default;
       border-radius: $radius-md;
       padding: 0.45rem 0.55rem;
       display: flex;
@@ -143,7 +144,7 @@
       font-size: 0.65rem;
       text-transform: uppercase;
       letter-spacing: 0.06em;
-      opacity: 0.55;
+      color: $text-secondary;
       font-weight: 600;
     }
 
@@ -172,14 +173,18 @@
       }
 
       td:first-child {
-        opacity: 0.5;
+        opacity: 0.75;
         white-space: nowrap;
+      }
+
+      td + td {
+        color: $text-primary;
       }
     }
 
-    &__state-normal { color: #44cc44; }
-    &__state-near { color: #ffaa33; }
-    &__state-singular { color: #cc4444; }
+    &__state-normal { color: #44cc44; font-weight: 600; }
+    &__state-near { color: #ffaa33; font-weight: 600; }
+    &__state-singular { color: #cc4444; font-weight: 600; }
 
     &__chips {
       display: flex;
