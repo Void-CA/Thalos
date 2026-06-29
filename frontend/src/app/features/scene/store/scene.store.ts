@@ -4,8 +4,8 @@ import { BehaviorSubject, concat, merge, Observable, of, Subject } from 'rxjs';
 import { auditTime, catchError, distinctUntilChanged, map, scan, switchMap } from 'rxjs/operators';
 import { SceneApiService } from '../services/scene-api.service';
 import { toSceneData, toActivePlan } from '../adapters/dto-to-model';
-import type { RuntimeStateResponse, SolveIKResponse } from '../scene-api.types';
-import type { ActivePlan, IkCommand, IkResult, IkTarget, RuntimeInfo, SceneData, SceneState, SceneUiState } from '../scene.types';
+import type { RuntimeDelta, RuntimeStateResponse, SolveIKResponse } from '../scene-api.types';
+import type { ActivePlan, ExecutionInfo, IkCommand, IkResult, IkTarget, RuntimeInfo, SceneData, SceneLink, SceneState, SceneUiState } from '../scene.types';
 
 type SceneEvent =
   | { type: 'loading' }
@@ -13,6 +13,7 @@ type SceneEvent =
   | { type: 'ik-executed'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null; activePlan: ActivePlan | null }
   | { type: 'solve'; joints: number[]; ikResult: IkResult }
   | { type: 'target'; target: IkTarget | null }
+  | { type: 'runtime-delta'; joints: number[]; liveLinks: SceneLink[]; execution: ExecutionInfo }
   | { type: 'error'; message: string };
 
 const INITIAL_UI: SceneUiState = {
@@ -23,6 +24,8 @@ const INITIAL_UI: SceneUiState = {
 const INITIAL_STATE: SceneState = {
   data: null,
   runtime: null,
+  liveLinks: [],
+  execution: null,
   ikResult: null,
   solvedQ: null,
   ikTarget: null,
@@ -91,6 +94,26 @@ function toSolveEvent(res: SolveIKResponse): SceneEvent {
   };
 }
 
+/** Map a RuntimeDelta (API) into a 'runtime-delta' event. */
+function toRuntimeDeltaEvent(delta: RuntimeDelta): SceneEvent {
+  const liveLinks: SceneLink[] = delta.link_transforms.map(lt => ({
+    id: String(lt.id),
+    start: lt.start,
+    end: lt.end,
+  }));
+
+  return {
+    type: 'runtime-delta',
+    joints: delta.joints,
+    liveLinks,
+    execution: {
+      status: delta.execution.status,
+      progress: delta.execution.progress,
+      elapsedSecs: delta.execution.elapsed_secs,
+    },
+  };
+}
+
 @Injectable({ providedIn: 'root' })
 export class SceneStore {
   private readonly api = inject(SceneApiService);
@@ -118,6 +141,9 @@ export class SceneStore {
 
   /** Input stream: external state snapshots (MoveJ/MoveL results, etc.). */
   private readonly applySnapshotSubject = new Subject<RuntimeStateResponse>();
+
+  /** Input stream: runtime delta updates (execution tick). */
+  private readonly applyDeltaSubject = new Subject<RuntimeDelta>();
 
   /** Single source of truth: latest scene data + UI state. */
   readonly state$: Observable<SceneState> = merge(
@@ -219,7 +245,12 @@ export class SceneStore {
       map(toSceneEvent),
     ),
 
-    // Pipeline 8: URDF import → loadRobotFromUrdf API
+    // Pipeline 8: runtime delta updates (execution tick)
+    this.applyDeltaSubject.pipe(
+      map(toRuntimeDeltaEvent),
+    ),
+
+    // Pipeline 9: URDF import → loadRobotFromUrdf API
     this.loadUrdfSubject.pipe(
       switchMap(source => concat(
         of({ type: 'loading' as const }),
@@ -240,6 +271,8 @@ export class SceneStore {
           return {
             data: event.data,
             runtime: event.runtime,
+            liveLinks: [],
+            execution: null,
             ikResult: event.ikResult,
             solvedQ: null,
             ikTarget: state.ikTarget,
@@ -250,11 +283,23 @@ export class SceneStore {
           return {
             data: event.data,
             runtime: event.runtime,
+            liveLinks: [],
+            execution: null,
             ikResult: event.ikResult,
             solvedQ: event.runtime.joints,
             ikTarget: state.ikTarget,
             activePlan: event.activePlan,
             ui: { loading: false, error: null },
+          };
+        case 'runtime-delta':
+          return {
+            ...state,
+            data: state.data, // same ref — no scene rebuild
+            runtime: state.runtime
+              ? { ...state.runtime, joints: event.joints }
+              : null,
+            liveLinks: event.liveLinks,
+            execution: event.execution,
           };
         case 'solve':
           return {
@@ -320,5 +365,10 @@ export class SceneStore {
   /** Inject a full runtime state snapshot into the store (from MoveJ/MoveL, etc.). */
   applySnapshot(res: RuntimeStateResponse): void {
     this.applySnapshotSubject.next(res);
+  }
+
+  /** Inject a runtime delta (from execution tick). */
+  applyRuntimeDelta(delta: RuntimeDelta): void {
+    this.applyDeltaSubject.next(delta);
   }
 }

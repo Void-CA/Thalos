@@ -197,6 +197,42 @@ export class ThreeRendererService {
     return g;
   }
 
+  /**
+   * Actualización incremental de posiciones de links desde RuntimeDelta.
+   *
+   * A diferencia de `syncLinks` (que reconcilia el conjunto completo),
+   * este método actualiza solo las posiciones de links existentes.
+   * No crea ni destruye slots — eso ya ocurrió en `applyScene`.
+   */
+  syncLinkTransforms(links: SceneLink[]): void {
+    for (const link of links) {
+      const slot = this.linkSlots.get(link.id);
+      if (!slot) continue;
+
+      this.scratchDir.set(
+        link.end[0] - link.start[0],
+        link.end[1] - link.start[1],
+        link.end[2] - link.start[2],
+      );
+      const len = this.scratchDir.length();
+      if (len < 1e-10) {
+        slot.mesh.visible = false;
+        continue;
+      }
+      slot.mesh.visible = true;
+
+      const mesh = slot.mesh;
+      mesh.position.set(
+        (link.start[0] + link.end[0]) * 0.5,
+        (link.start[1] + link.end[1]) * 0.5,
+        (link.start[2] + link.end[2]) * 0.5,
+      );
+      this.scratchVec.copy(this.scratchDir).normalize();
+      mesh.quaternion.setFromUnitVectors(this.linkUp, this.scratchVec);
+      mesh.scale.set(1, len, 1);
+    }
+  }
+
   private syncLinks(links: SceneLink[]): void {
     // Tracks links actually present in the scene (visible cylinders). A link
     // with zero length is skipped and does NOT count as live — its previous

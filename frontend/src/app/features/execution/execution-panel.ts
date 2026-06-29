@@ -282,18 +282,21 @@ export class ExecutionPanel implements OnDestroy {
 
   protected readonly planInfo = computed(() => {
     const plan = this.store.state().activePlan;
+    const exe = this.store.state().execution;
     if (!plan) return null;
 
-    const stateLabel = plan.state;
-    const stateColor = STATE_COLORS[plan.state] ?? '#888';
-    const progress = plan.trajectoryProgress ?? 0;
+    // Execution status from delta overrides plan state when active
+    const effectiveState = exe?.status ?? plan.state;
+    const stateLabel = effectiveState;
+    const stateColor = STATE_COLORS[effectiveState] ?? '#888';
+    const progress = exe?.progress ?? plan.trajectoryProgress ?? 0;
 
-    const canStart = plan.state === 'Created';
-    const canPause = plan.state === 'Active';
-    const canResume = plan.state === 'Paused';
-    const canCancel = plan.state === 'Active' || plan.state === 'Paused';
-    const canReset = plan.state === 'Completed' || plan.state === 'Cancelled' || plan.state === 'Failed' || plan.state === 'Created';
-    const isLive = plan.state === 'Active';
+    const canStart = plan.state === 'Created' && (!exe || exe.status === 'Idle');
+    const canPause = exe?.status === 'Active';
+    const canResume = exe?.status === 'Paused';
+    const canCancel = exe?.status === 'Active' || exe?.status === 'Paused';
+    const canReset = exe?.status === 'Completed' || exe?.status === 'Cancelled' || exe?.status === 'Failed' || (!exe && plan.state === 'Created');
+    const isLive = exe?.status === 'Active';
 
     return {
       planId: plan.planId,
@@ -367,15 +370,17 @@ export class ExecutionPanel implements OnDestroy {
   }
 
   private onTick(): void {
-    // Re-check state — if not running anymore, stop ticking
-    const state = this.store.state().activePlan?.state;
-    if (state !== 'Active') {
+    const exe = this.store.state().execution;
+    const plan = this.store.state().activePlan;
+    // Fall back to plan.state before first delta arrives
+    const status = exe?.status ?? plan?.state;
+    if (status !== 'Active') {
       this.stopTickLoop();
       return;
     }
 
     this.api.tickExecution(TICK_DT).subscribe({
-      next: res => this.store.applySnapshot(res),
+      next: res => this.store.applyRuntimeDelta(res),
       // On error: stop ticking silently (connection issue, etc.)
       error: () => this.stopTickLoop(),
     });

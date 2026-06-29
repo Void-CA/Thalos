@@ -114,10 +114,24 @@ export interface SceneUiState {
   error: string | null;
 }
 
+// ── Execution types (desde RuntimeDelta) ──
+
+export type ExecutionStatus = 'Created' | 'Active' | 'Paused' | 'Completed' | 'Cancelled' | 'Failed' | 'Idle';
+
+export interface ExecutionInfo {
+  status: ExecutionStatus;
+  progress: number;
+  elapsedSecs: number;
+}
+
 /** Estado completo del store — runtime snapshot + datos de escena + IK + plan activo + estado de UI. */
 export interface SceneState {
   data: SceneData | null;
   runtime: RuntimeInfo | null;
+  /// Link transforms actualizados por RuntimeDelta (renderizado incremental).
+  liveLinks: SceneLink[];
+  /// Estado de ejecución actualizado por RuntimeDelta.
+  execution: ExecutionInfo | null;
   ikResult: IkResult | null;
   solvedQ: number[] | null;
   ikTarget: IkTarget | null;

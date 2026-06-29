@@ -9,6 +9,11 @@ import { rotationDtoToQuaternion } from '../../utils/rotation';
  * Contenedor Three.js que renderiza la escena robótica + gizmo IK.
  *
  * Reacciona al SceneStore.state via effect() — sin subscriptions manuales.
+ * Los effects están separados por responsabilidad:
+ *   1. Escena (data) — solo cuando cambia la geometría
+ *   2. Trayectoria (activePlan) — solo al compilar/preview
+ *   3. Gizmo (ikTarget) — actualización local
+ *   4. Links (liveLinks) — cada tick, solo posiciones
  *
  * Componente PURO de renderizado: no monta paneles de control.
  * El panel IK vive en el sidebar de la app (ver app.html).
@@ -39,33 +44,51 @@ export class SceneViewer implements AfterViewInit {
   private readonly renderer = inject(ThreeRendererService);
   private readonly overlay = inject(WorkspaceOverlayService);
 
+  private sceneApplied = false;
+
   /** True when the scene has renderable robot data. */
   protected readonly hasData = computed(() => this.store.state().data !== null);
 
   constructor() {
-    // Sync robot scene + IK gizmo + trajectory overlay
+    // Effect 1: scene geometry — solo cuando cambia la escena (load, IK, URDF import)
     effect(() => {
-      const state = this.store.state();
-      if (state.data) {
-        this.renderer.applyScene(state.data);
+      const data = this.store.state().data;
+      if (data) {
+        this.renderer.applyScene(data);
+        this.sceneApplied = true;
       }
-      // IK gizmo — rotation is in wire format (RotationDto), Three.js wants
-      // a quaternion tuple. Convert at the boundary, not in the renderer.
-      if (state.ikTarget) {
-        const quat = state.ikTarget.rotation
-          ? rotationDtoToQuaternion(state.ikTarget.rotation)
-          : undefined;
-        this.renderer.setTarget(state.ikTarget.translation, quat);
-      } else {
-        this.renderer.clearTarget();
-      }
-      // Trajectory overlay — waypoints + motion type + optional segment info
-      const vis = state.activePlan?.visualization;
-      const segs = state.activePlan?.segments;
+    });
+
+    // Effect 2: trajectory overlay — solo al compilar/preview (NUNCA en tick)
+    effect(() => {
+      const plan = this.store.state().activePlan;
+      const vis = plan?.visualization;
+      const segs = plan?.segments;
       if (vis && vis.waypoints.length > 0) {
         this.renderer.syncTrajectory(vis.waypoints, vis.motionType, segs ?? undefined);
       } else {
         this.renderer.clearTrajectory();
+      }
+    });
+
+    // Effect 3: IK gizmo — actualización local del target
+    effect(() => {
+      const target = this.store.state().ikTarget;
+      if (target) {
+        const quat = target.rotation
+          ? rotationDtoToQuaternion(target.rotation)
+          : undefined;
+        this.renderer.setTarget(target.translation, quat);
+      } else {
+        this.renderer.clearTarget();
+      }
+    });
+
+    // Effect 4: runtime delta — solo posiciones de links (cada tick)
+    effect(() => {
+      const links = this.store.state().liveLinks;
+      if (this.sceneApplied && links.length > 0) {
+        this.renderer.syncLinkTransforms(links);
       }
     });
 
@@ -78,9 +101,7 @@ export class SceneViewer implements AfterViewInit {
 
   ngAfterViewInit(): void {
     this.renderer.init(this.canvasRef.nativeElement);
-
     this.renderer.registerOverlay(this.overlay);
-
     this.syncPointCloudOverlay();
   }
 

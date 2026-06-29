@@ -126,6 +126,29 @@ export interface VisualWaypointDto {
   waypoint_type: WaypointTypeDto;
 }
 
+// ── Runtime delta DTOs ──
+
+/// Estado dinámico del motor: solo lo que cambia en cada tick.
+export interface RuntimeDelta {
+  joints: number[];
+  link_transforms: LinkTransformDto[];
+  execution: ExecutionDto;
+}
+
+export interface LinkTransformDto {
+  id: number;
+  start: [number, number, number];
+  end: [number, number, number];
+}
+
+export interface ExecutionDto {
+  status: ExecutionStatusDto;
+  progress: number;
+  elapsed_secs: number;
+}
+
+export type ExecutionStatusDto = 'Created' | 'Active' | 'Paused' | 'Completed' | 'Cancelled' | 'Failed' | 'Idle';
+
 export interface ValidateResponse {
   valid: boolean;
   error: string | null;

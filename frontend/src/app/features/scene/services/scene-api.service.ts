@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { RuntimeStateResponse, SolveIKResponse, MoveToPositionRequest, MoveToPoseRequest, ExecuteIKRequest, MotionPlanRequest } from '../scene-api.types';
+import { RuntimeDelta, RuntimeStateResponse, SolveIKResponse, MoveToPositionRequest, MoveToPoseRequest, ExecuteIKRequest, MotionPlanRequest } from '../scene-api.types';
 import { API_BASE_URL } from '../../../shared/api/api-config';
 
 @Injectable({ providedIn: 'root' })
@@ -158,9 +158,9 @@ export class SceneApiService {
 
   // ── Execution tick ──
 
-  /** Advance execution by `dt` seconds. */
-  tickExecution(dt: number): Observable<RuntimeStateResponse> {
-    return this.http.post<RuntimeStateResponse>(
+  /** Advance execution by `dt` seconds. Returns solo el delta (ligero). */
+  tickExecution(dt: number): Observable<RuntimeDelta> {
+    return this.http.post<RuntimeDelta>(
       `${this.baseUrl}/scene/motion/tick`,
       { dt },
     );

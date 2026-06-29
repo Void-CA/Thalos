@@ -20,6 +20,7 @@ export class BottomPanel {
   protected readonly snapshotJson = computed(() => {
     const state = this.scene.state();
     if (!state.runtime) return '(no scene loaded)';
+    const exe = state.execution;
     return JSON.stringify(
       {
         robot: state.runtime.robot,
@@ -32,6 +33,13 @@ export class BottomPanel {
               motionType: state.activePlan.motionType,
               progress: state.activePlan.trajectoryProgress,
               waypoints: state.activePlan.visualization?.waypoints.length ?? 0,
+            }
+          : null,
+        execution: exe
+          ? {
+              status: exe.status,
+              progress: exe.progress,
+              elapsedSecs: exe.elapsedSecs,
             }
           : null,
         generatedAt: state.runtime.generatedAt,
