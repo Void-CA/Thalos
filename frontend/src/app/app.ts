@@ -1,5 +1,6 @@
 import { Component, computed, inject } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
+import { NgIcon } from '@ng-icons/core';
 import { SceneViewer } from './features/scene/components/scene-viewer/scene-viewer';
 import { RobotCatalog } from './features/robots/components/robot-catalog/robot-catalog';
 import { TopBar } from './shared/components/top-bar/top-bar';
@@ -36,6 +37,7 @@ import type { ToolSchema } from './shared/types/tool-schema';
   standalone: true,
   imports: [
     NgComponentOutlet,
+    NgIcon,
     SceneViewer,
     RobotCatalog,
     TopBar,

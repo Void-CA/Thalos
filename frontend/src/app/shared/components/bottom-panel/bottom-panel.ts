@@ -1,15 +1,16 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { NgIcon } from '@ng-icons/core';
 import { SceneStore } from '../../../features/scene/store/scene.store';
 import { WorkspaceStore } from '../../../features/workspace/store/workspace.store';
 import { LayoutStore } from '../../store/layout.store';
 
 type TabId = 'snapshot' | 'analysis' | 'timeline' | 'log';
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: 'snapshot', label: 'Snapshot' },
-  { id: 'analysis', label: 'Analysis' },
-  { id: 'timeline', label: 'Timeline' },
-  { id: 'log', label: 'Log' },
+const TABS: { id: TabId; label: string; icon: string }[] = [
+  { id: 'snapshot', label: 'Snapshot', icon: 'heroCamera' },
+  { id: 'analysis', label: 'Analysis', icon: 'heroChartBar' },
+  { id: 'timeline', label: 'Timeline', icon: 'heroClock' },
+  { id: 'log', label: 'Log', icon: 'heroDocumentText' },
 ];
 
 const SEGMENT_COLORS = [
@@ -29,6 +30,7 @@ const SEGMENT_COLORS = [
 @Component({
   selector: 'bottom-panel',
   standalone: true,
+  imports: [NgIcon],
   template: `
     <div class="bottom-panel" [class.bottom-panel--collapsed]="layout.bottomCollapsed()">
       @if (!layout.bottomCollapsed()) {
@@ -39,6 +41,7 @@ const SEGMENT_COLORS = [
               [class.bottom-panel__tab--active]="activeTab() === t.id"
               (click)="activeTab.set(t.id)"
             >
+              <ng-icon [name]="t.icon" size="16" />
               {{ t.label }}
             </button>
           }

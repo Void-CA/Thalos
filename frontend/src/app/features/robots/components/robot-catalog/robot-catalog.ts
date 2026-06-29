@@ -1,4 +1,5 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
+import { NgIcon } from '@ng-icons/core';
 import { RobotCard } from '../robot-card/robot-card';
 import { RobotStore } from '../../store/robot.store';
 import { SceneStore } from '../../../scene/store/scene.store';
@@ -15,11 +16,12 @@ import { SceneStore } from '../../../scene/store/scene.store';
 @Component({
   selector: 'robot-catalog',
   standalone: true,
-  imports: [RobotCard],
+  imports: [NgIcon, RobotCard],
   template: `
     <div class="catalog">
       <details class="accordion" open>
         <summary class="accordion__header">
+          <ng-icon name="heroRectangleGroup" size="18" />
           <span class="accordion__title">Canonical Models</span>
           <span class="accordion__chevron"></span>
         </summary>
@@ -44,6 +46,7 @@ import { SceneStore } from '../../../scene/store/scene.store';
 
       <details class="accordion">
         <summary class="accordion__header">
+          <ng-icon name="heroArrowUpOnSquare" size="18" />
           <span class="accordion__title">Import URDF</span>
           <span class="accordion__chevron"></span>
         </summary>
