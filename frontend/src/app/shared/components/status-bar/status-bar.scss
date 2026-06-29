@@ -1,0 +1,79 @@
+$bg-surface: #1e1e1e;
+$border-subtle: #333;
+$text-muted: #ddd;
+$text-secondary: #ccc;
+$bg-card: #252525;
+$bg-elevated: #333;
+$radius-sm: 3px;
+$radius-md: 6px;
+$transition-fast: 0.15s;
+$danger: #ff6644;
+
+:host {
+  display: block;
+  flex-shrink: 0;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 0.75rem;
+  background: #181818;
+  border-top: 1px solid $border-subtle;
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 0.65rem;
+  gap: 0.35rem;
+  user-select: none;
+
+  &__group {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  &__spacer {
+    flex: 1;
+  }
+
+  &__item {
+    color: #999;
+    white-space: nowrap;
+
+    &--backend {
+      color: #44cc44;
+      font-weight: 700;
+    }
+
+    &--exec {
+      font-weight: 600;
+
+      &.status-bar__item--running {
+        color: #33ccff;
+      }
+      &.status-bar__item--paused {
+        color: #ffaa33;
+      }
+      &.status-bar__item--failed {
+        color: #cc4444;
+      }
+      &.status-bar__item--done {
+        color: #44cc44;
+      }
+    }
+
+    &--error {
+      color: #cc4444;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    &--time {
+      opacity: 0.5;
+    }
+  }
+
+  &__sep {
+    color: #444;
+  }
+}

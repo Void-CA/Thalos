@@ -1,6 +1,5 @@
 import {
   Component,
-  computed,
   inject,
   input,
   signal,
@@ -18,6 +17,7 @@ type PanelId = 'left' | 'right' | 'bottom';
 @Component({
   selector: 'app-splitter',
   standalone: true,
+  styleUrl: './splitter.scss',
   template: `
     <div
       class="splitter"
@@ -31,55 +31,6 @@ type PanelId = 'left' | 'right' | 'bottom';
         <div class="splitter__grip-dot"></div>
       </div>
     </div>
-  `,
-  styles: `
-    :host {
-      flex-shrink: 0;
-      z-index: 10;
-    }
-
-    .splitter {
-      position: relative;
-      background: transparent;
-      transition: background 0.15s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-
-      &:hover,
-      &--dragging {
-        background: #3399ff33;
-      }
-
-      &--vertical {
-        width: 6px;
-        cursor: col-resize;
-      }
-
-      &--horizontal {
-        height: 6px;
-        cursor: row-resize;
-      }
-
-      &__grip {
-        display: flex;
-        flex-direction: column;
-        gap: 3px;
-        pointer-events: none;
-        opacity: 0.4;
-      }
-
-      &--horizontal &__grip {
-        flex-direction: row;
-      }
-
-      &__grip-dot {
-        width: 2px;
-        height: 2px;
-        border-radius: 50%;
-        background: #666;
-      }
-    }
   `,
 })
 export class Splitter {
