@@ -1,34 +1,317 @@
 @use 'variables' as *;
 
 .bottom-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   background: $bg-surface;
-  border-top: 1px solid $border-subtle;
-  padding: 0.5rem 1rem;
-  max-height: 200px;
-  overflow-y: auto;
-  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
-  font-size: 0.7rem;
 
-  &__section {
-    &[open] > &__header {
-      margin-bottom: 0.5rem;
+  &--collapsed {
+    height: 100%;
+  }
+
+  // ── Tab bar ──
+
+  &__tabs {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    height: 28px;
+    padding: 0 0.5rem;
+    border-bottom: 1px solid $border-subtle;
+    gap: 0.25rem;
+  }
+
+  &__tab {
+    background: none;
+    border: none;
+    color: $text-muted;
+    font-family: $font-ui;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    border-radius: $radius-sm $radius-sm 0 0;
+    transition: background $transition-fast, color $transition-fast;
+    opacity: 0.6;
+
+    &:hover {
+      background: $bg-card;
+      opacity: 0.85;
+    }
+
+    &--active {
+      color: $text-secondary;
+      opacity: 1;
+      background: $bg-card;
     }
   }
 
-  &__header {
+  &__spacer {
+    flex: 1;
+  }
+
+  &__collapse {
+    background: none;
+    border: none;
+    color: $text-muted;
+    font-size: 0.6rem;
     cursor: pointer;
+    padding: 0.2rem 0.35rem;
+    opacity: 0.5;
+    transition: opacity $transition-fast;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+
+  // ── Collapsed stub ──
+
+  &__stub {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+  }
+
+  &__expand {
+    background: none;
+    border: none;
+    color: $text-muted;
+    font-size: 0.6rem;
+    cursor: pointer;
+    opacity: 0.4;
+    transition: opacity $transition-fast;
+    padding: 0;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+
+  // ── Content area ──
+
+  &__content {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    padding: 0.5rem 0.75rem;
+    font-family: $font-mono;
     font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: $text-secondary;
-    font-weight: 600;
-    user-select: none;
+    color: $text-muted;
   }
 
   &__json {
     margin: 0;
-    color: $text-muted;
     line-height: 1.5;
     white-space: pre-wrap;
+    color: $text-muted;
+  }
+
+  &__empty {
+    margin: 1rem 0;
+    text-align: center;
+    opacity: 0.45;
+    font-size: 0.7rem;
+  }
+
+  // ── Timeline ──
+
+  .tl {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+
+    &__header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    &__badge {
+      display: inline-block;
+      padding: 0.1rem 0.35rem;
+      border-radius: $radius-sm;
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: var(--badge-color, #666);
+      color: #111;
+    }
+
+    &__id {
+      font-size: 0.7rem;
+      opacity: 0.6;
+    }
+
+    &__type {
+      font-size: 0.65rem;
+      opacity: 0.45;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    // ── Segments bar ──
+
+    &__segments {
+      display: flex;
+      height: 18px;
+      border-radius: $radius-sm;
+      overflow: hidden;
+      border: 1px solid $border-subtle;
+    }
+
+    &__segment {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.55rem;
+      color: #fff;
+      font-weight: 600;
+      transition: width 0.3s ease;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    &__segment-label {
+      padding: 0 0.25rem;
+    }
+
+    // ── Main progress bar ──
+
+    &__progress {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    &__progress-track {
+      flex: 1;
+      position: relative;
+      height: 8px;
+      background: $bg-elevated;
+      border-radius: 4px;
+      overflow: visible;
+    }
+
+    &__progress-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    &__marker {
+      position: absolute;
+      top: -3px;
+      width: 3px;
+      height: 14px;
+      background: #fff;
+      border-radius: 1px;
+      transition: left 0.3s ease;
+    }
+
+    &__pct {
+      font-size: 0.75rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      min-width: 3.5ch;
+    }
+
+    // ── Times ──
+
+    &__times {
+      display: flex;
+      gap: 1rem;
+    }
+
+    &__time {
+      font-size: 0.65rem;
+      opacity: 0.55;
+    }
+
+    // ── Waypoints strip ──
+
+    &__wpts {
+      position: relative;
+      height: 6px;
+      background: $bg-elevated;
+      border-radius: 3px;
+      margin: 0.15rem 0;
+    }
+
+    &__wpt {
+      position: absolute;
+      top: -1px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      transform: translateX(-50%);
+      border: 1.5px solid $bg-surface;
+
+      &--start {
+        background: #44cc44;
+      }
+      &--goal {
+        background: #cc4444;
+      }
+      &--via {
+        background: #ffaa33;
+      }
+    }
+
+    // ── LIVE indicator ──
+
+    &__live {
+      font-size: 0.6rem;
+      color: #44cc44;
+      animation: tl-pulse 1s ease-in-out infinite;
+      text-align: center;
+    }
+
+    @keyframes tl-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+  }
+
+  // ── Log ──
+
+  .log {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+
+    &__entry {
+      display: flex;
+      gap: 0.5rem;
+      font-size: 0.68rem;
+      line-height: 1.5;
+
+      &--error {
+        color: $danger;
+        background: rgba(255, 68, 68, 0.06);
+        border-radius: $radius-sm;
+        padding: 0.1rem 0.25rem;
+      }
+    }
+
+    &__time {
+      opacity: 0.4;
+      flex-shrink: 0;
+    }
+
+    &__level {
+      text-transform: uppercase;
+      font-weight: 700;
+      flex-shrink: 0;
+      width: 5ch;
+    }
+
+    &__msg {
+      flex: 1;
+    }
   }
 }

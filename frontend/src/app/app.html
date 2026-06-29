@@ -4,33 +4,74 @@
 
   <!-- ── Main content area ── -->
   <div class="layout__body">
-    <!-- LEFT — always visible: robot catalog -->
-    <aside class="layout__left">
-      <robot-catalog />
+    <!-- LEFT — always visible: robot catalog --->
+    <aside
+      class="layout__panel layout__panel--left"
+      [class.layout__panel--collapsed]="layout.leftCollapsed()"
+      [style.width.px]="layout.effectiveLeftWidth()"
+    >
+      @if (!layout.leftCollapsed()) {
+        <div class="layout__panel-header">
+          <span class="layout__panel-title">Robots</span>
+          <button class="layout__collapse-btn" (click)="layout.toggleLeft()" title="Collapse panel">◀</button>
+        </div>
+        <div class="layout__panel-body">
+          <robot-catalog />
+        </div>
+      } @else {
+        <button class="layout__expand-btn" (click)="layout.toggleLeft()" title="Expand panel">▶</button>
+      }
     </aside>
+
+    <app-splitter direction="vertical" panel="left" />
 
     <!-- CENTER — pure Three.js renderer -->
     <scene-viewer class="layout__center" />
 
+    <app-splitter direction="vertical" panel="right" />
+
     <!-- RIGHT — schema-driven tool context per mode -->
-    <aside class="layout__right">
-      @for (tool of currentTools(); track tool.id) {
-        <details class="accordion" [open]="tool.defaultOpen">
-          <summary class="accordion__header">
-            <span class="accordion__title">{{ tool.label }}</span>
-            <span class="accordion__chevron"></span>
-          </summary>
-          <div class="accordion__body">
-            <ng-container *ngComponentOutlet="tool.component" />
-          </div>
-        </details>
-      }
-      @if (currentTools().length === 0) {
-        <p class="layout__placeholder">No tools available for this mode</p>
+    <aside
+      class="layout__panel layout__panel--right"
+      [class.layout__panel--collapsed]="layout.rightCollapsed()"
+      [style.width.px]="layout.effectiveRightWidth()"
+    >
+      @if (!layout.rightCollapsed()) {
+        <div class="layout__panel-header">
+          <button class="layout__collapse-btn" (click)="layout.toggleRight()" title="Collapse panel">▶</button>
+          <span class="layout__panel-title">Tools</span>
+        </div>
+        <div class="layout__panel-body">
+          @for (tool of currentTools(); track tool.id) {
+            <details class="accordion" [open]="tool.defaultOpen">
+              <summary class="accordion__header">
+                <span class="accordion__title">{{ tool.label }}</span>
+                <span class="accordion__chevron"></span>
+              </summary>
+              <div class="accordion__body">
+                <ng-container *ngComponentOutlet="tool.component" />
+              </div>
+            </details>
+          }
+          @if (currentTools().length === 0) {
+            <p class="layout__placeholder">No tools available for this mode</p>
+          }
+        </div>
+      } @else {
+        <button class="layout__expand-btn" (click)="layout.toggleRight()" title="Expand panel">◀</button>
       }
     </aside>
   </div>
 
-  <!-- ── Bottom: system observability ── -->
-  <bottom-panel class="layout__bottom" />
+  <!-- Bottom splitter + panel -->
+  <app-splitter direction="horizontal" panel="bottom" />
+
+  <!-- ── Bottom: system observability (tabs) ── -->
+  <bottom-panel
+    class="layout__bottom"
+    [style.height.px]="layout.effectiveBottomHeight()"
+  />
+
+  <!-- ── Status bar: pulse line ── -->
+  <status-bar />
 </div>
