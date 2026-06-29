@@ -60,16 +60,11 @@ impl SceneRuntime {
 
     /// Activate a compiled multi-segment program in the runtime.
     ///
-    /// Sets the robot joints to the final position of the merged trajectory
-    /// and stores the plan with per-segment metadata for visualisation.
+    /// Stores the plan with per-segment metadata for visualisation.
+    /// The robot joints are NOT modified — the plan is in `Created` state
+    /// and has not been executed yet.
     pub fn activate_compiled_plan(&mut self, compiled: CompiledPlan) {
         let tid = self.next_plan_id();
-
-        // Set joints to the last waypoint of the merged trajectory
-        if let Some(last) = compiled.merged_trajectory.waypoints().last() {
-            self.active_robot.joints = last.joints().to_vec();
-        }
-
         self.active_plan = Some(ActiveMotionPlan::from_compiled_plan(tid, compiled));
     }
 

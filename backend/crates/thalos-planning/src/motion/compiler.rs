@@ -332,6 +332,23 @@ mod tests {
         assert_eq!(seg1.time_range.start, seg0.time_range.end);
     }
 
+    #[test]
+    fn compile_two_movej_first_waypoint_matches_start_state() {
+        let h = TestHarness::new();
+        let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
+        let program = MotionProgram::new(vec![
+            MotionSegment::MoveJ { target: vec![1.0, 0.5], max_velocity: None, max_acceleration: None },
+            MotionSegment::MoveJ { target: vec![0.0, 1.0], max_velocity: None, max_acceleration: None },
+        ]);
+
+        let plan = compiler.compile(&program, &h.ctx()).expect("compile failed");
+
+        let wps = plan.merged_trajectory.waypoints();
+        // First waypoint must be the start position [0, 0], NOT the final target
+        assert_eq!(wps[0].joints(), &[0.0, 0.0],
+            "first waypoint must match start position, got {:?}", wps[0].joints());
+    }
+
     /// A dispatcher that always fails with `InvalidGoal`.
     struct FailingDispatcher;
 
