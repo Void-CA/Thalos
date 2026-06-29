@@ -3,6 +3,7 @@
 pub enum PlanState {
     Created,
     Active,
+    Paused,
     Completed,
     Cancelled,
     Failed,

@@ -10,7 +10,7 @@ use thalos_core::{
 };
 use thalos_models::Robot;
 
-use crate::plan::ActiveMotionPlan;
+use crate::plan::{ActiveMotionPlan, ExecutionSession};
 
 /// Lightweight joint metadata for URDF-imported robots.
 ///
@@ -33,9 +33,6 @@ pub struct RuntimeSnapshot {
     /// The active robot model (built-in enum — keep for backward compat).
     pub robot: RobotModel,
     /// Full URDF model when the robot was imported; `None` for built-in robots.
-    ///
-    /// Preserving the source avoids re-parsing and enables visual / collision
-    /// pipelines to consume the original geometry without coupling to URDF.
     pub robot_source: Option<Robot>,
     /// Human-readable robot name (from built-in metadata or URDF).
     pub robot_name: String,
@@ -49,8 +46,11 @@ pub struct RuntimeSnapshot {
     pub fk_result: FKResult,
     /// Solver metadata when this snapshot was produced by an IK command.
     pub ik_result: Option<IKResult>,
-    /// Active motion plan, if any.
+    /// Active motion plan, if any (plan data + derived state).
     pub active_plan: Option<ActiveMotionPlan>,
+    /// Execution session, if execution has been started.
+    /// `None` before Start or after Reset/Cancel.
+    pub execution: Option<ExecutionSession>,
     /// When this snapshot was taken.
     pub generated_at: DateTime<Utc>,
 }

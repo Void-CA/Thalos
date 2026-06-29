@@ -8,7 +8,7 @@ pub mod error;
 
 pub use commands::dispatch::Command;
 pub use error::RuntimeError;
-pub use plan::{ActiveMotionPlan, MotionType, PlanState};
+pub use plan::{ActiveMotionPlan, ExecutionSession, MotionType, PlanState, SessionStatus};
 pub use services::scene::SceneService;
 pub use services::singularity::SingularityService;
 pub use services::workspace::WorkspaceService;

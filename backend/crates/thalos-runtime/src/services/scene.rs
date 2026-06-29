@@ -66,6 +66,7 @@ impl SceneService {
             fk_result,
             ik_result,
             active_plan: runtime.active_plan.clone(),
+            execution: runtime.execution.clone(),
             generated_at: chrono::Utc::now(),
         })
     }
@@ -90,13 +91,75 @@ impl SceneService {
         Ok((result.q.clone(), result))
     }
 
-    /// Execute a compiled motion program — activates it in the runtime
-    /// without going through the command dispatch.
-    pub fn execute_program(&self, compiled: CompiledPlan) -> Result<RuntimeSnapshot, RuntimeError> {
+    // ── Multi-segment program (Preview) ──
+
+    /// Compile and store a motion program for preview.
+    ///
+    /// This does NOT start execution — the plan is stored and visualised,
+    /// and the robot stays at its current position.
+    pub fn schedule_program(&self, compiled: CompiledPlan) -> Result<RuntimeSnapshot, RuntimeError> {
         {
             let mut runtime = self.runtime.write().unwrap();
-            runtime.activate_compiled_plan(compiled);
-        } // Write lock released before snapshot
+            runtime.schedule_plan(compiled);
+        }
+        self.snapshot_with_ik(None)
+    }
+
+    // ── Execution control ──
+
+    /// Start execution of the scheduled plan.
+    pub fn start_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        {
+            let mut runtime = self.runtime.write().unwrap();
+            runtime.start_execution();
+        }
+        self.snapshot_with_ik(None)
+    }
+
+    /// Pause execution.
+    pub fn pause_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        {
+            let mut runtime = self.runtime.write().unwrap();
+            runtime.pause_execution();
+        }
+        self.snapshot_with_ik(None)
+    }
+
+    /// Resume a paused execution.
+    pub fn resume_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        {
+            let mut runtime = self.runtime.write().unwrap();
+            runtime.resume_execution();
+        }
+        self.snapshot_with_ik(None)
+    }
+
+    /// Cancel execution.
+    pub fn cancel_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        {
+            let mut runtime = self.runtime.write().unwrap();
+            runtime.cancel_execution();
+        }
+        self.snapshot_with_ik(None)
+    }
+
+    /// Reset the execution session for re-run.
+    pub fn reset_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        {
+            let mut runtime = self.runtime.write().unwrap();
+            runtime.reset_execution();
+        }
+        self.snapshot_with_ik(None)
+    }
+
+    // ── Tick ──
+
+    /// Advance execution by `dt` seconds and return the updated snapshot.
+    pub fn tick_execution(&self, dt: f64) -> Result<RuntimeSnapshot, RuntimeError> {
+        {
+            let mut runtime = self.runtime.write().unwrap();
+            runtime.advance_trajectory(dt);
+        }
         self.snapshot_with_ik(None)
     }
 
@@ -115,6 +178,7 @@ impl SceneService {
             fk_result,
             ik_result,
             active_plan: runtime.active_plan.clone(),
+            execution: runtime.execution.clone(),
             generated_at: chrono::Utc::now(),
         })
     }

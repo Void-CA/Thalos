@@ -97,7 +97,7 @@ impl ActiveMotionPlan {
         match self.state {
             PlanState::Completed | PlanState::Cancelled | PlanState::Failed => 1.0,
             PlanState::Created => 0.0,
-            PlanState::Active => {
+            PlanState::Active | PlanState::Paused => {
                 let duration = self.trajectory.duration();
                 if duration <= 0.0 {
                     return 1.0;
