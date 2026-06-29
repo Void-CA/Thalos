@@ -1,13 +1,4 @@
-$bg-surface: #1e1e1e;
-$border-subtle: #333;
-$text-muted: #ddd;
-$text-secondary: #ccc;
-$bg-card: #252525;
-$bg-elevated: #333;
-$radius-sm: 3px;
-$radius-md: 6px;
-$transition-fast: 0.15s;
-$danger: #ff6644;
+@use 'variables' as *;
 
 :host {
   display: block;
