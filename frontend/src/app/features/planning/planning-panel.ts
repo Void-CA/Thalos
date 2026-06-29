@@ -221,10 +221,10 @@ function createSegment(kind: SegmentKind, dof: number): SegmentModel {
       <div class="planning-panel__actions">
         <button
           class="planning-panel__submit"
-          (click)="executePlan()"
+          (click)="previewPlan()"
           [disabled]="loading() || segments().length === 0"
         >
-          {{ loading() ? 'Executing…' : 'Execute Program' }}
+          {{ loading() ? 'Compiling…' : 'Preview' }}
         </button>
       </div>
 
@@ -345,9 +345,9 @@ export class PlanningPanel {
     return { segments };
   }
 
-  // ── Execution ──
+  // ── Preview ──
 
-  protected executePlan(): void {
+  protected previewPlan(): void {
     if (this.segments().length === 0) return;
 
     const request = this.buildPlanRequest();
@@ -355,13 +355,13 @@ export class PlanningPanel {
     this.error.set(null);
     this.loading.set(true);
 
-    this.api.executePlan(request).subscribe({
+    this.api.previewPlan(request).subscribe({
       next: res => {
         this.store.applySnapshot(res);
         this.loading.set(false);
       },
       error: (err: Error) => {
-        this.error.set(err.message ?? 'Plan execution failed');
+        this.error.set(err.message ?? 'Plan compilation failed');
         this.loading.set(false);
       },
     });

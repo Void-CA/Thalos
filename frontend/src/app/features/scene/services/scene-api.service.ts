@@ -111,10 +111,58 @@ export class SceneApiService {
 
   // ── Motion plan (multi-segment program) ──
 
-  executePlan(request: MotionPlanRequest): Observable<RuntimeStateResponse> {
+  /** Compile and preview a motion program (no execution). */
+  previewPlan(request: MotionPlanRequest): Observable<RuntimeStateResponse> {
     return this.http.post<RuntimeStateResponse>(
       `${this.baseUrl}/scene/motion/plan`,
       request,
+    );
+  }
+
+  // ── Execution control ──
+
+  startExecution(): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/scene/motion/start`,
+      {},
+    );
+  }
+
+  pauseExecution(): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/scene/motion/pause`,
+      {},
+    );
+  }
+
+  resumeExecution(): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/scene/motion/resume`,
+      {},
+    );
+  }
+
+  cancelExecution(): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/scene/motion/cancel`,
+      {},
+    );
+  }
+
+  resetExecution(): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/scene/motion/reset`,
+      {},
+    );
+  }
+
+  // ── Execution tick ──
+
+  /** Advance execution by `dt` seconds. */
+  tickExecution(dt: number): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/scene/motion/tick`,
+      { dt },
     );
   }
 }

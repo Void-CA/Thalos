@@ -1,13 +1,23 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, OnDestroy, signal } from '@angular/core';
 import { SceneStore } from '../scene/store/scene.store';
+import { SceneApiService } from '../scene/services/scene-api.service';
 
 const STATE_COLORS: Record<string, string> = {
   Created: '#ffaa33',
   Active: '#33ccff',
+  Paused: '#ffaa33',
   Completed: '#44cc44',
   Cancelled: '#cc4444',
   Failed: '#cc4444',
 };
+
+/** How often the frontend polls the execution tick endpoint (ms). */
+const TICK_INTERVAL_MS = 50;
+
+/** Seconds to advance per tick (must match TICK_INTERVAL_MS / 1000). */
+const TICK_DT = TICK_INTERVAL_MS / 1000;
+
+type ExecutionAction = 'start' | 'pause' | 'resume' | 'cancel' | 'reset';
 
 @Component({
   selector: 'execution-panel',
@@ -73,10 +83,44 @@ const STATE_COLORS: Record<string, string> = {
             </div>
           }
         </div>
+
+        <!-- ── Execution controls ── -->
+        <div class="execution-controls">
+          @if (plan.canStart) {
+            <button class="ctrl-btn ctrl-btn--start" (click)="doAction('start')" [disabled]="loading()">
+              {{ loading() ? '…' : '▶ Start' }}
+            </button>
+          }
+          @if (plan.canPause) {
+            <button class="ctrl-btn ctrl-btn--pause" (click)="doAction('pause')" [disabled]="loading()">
+              {{ loading() ? '…' : '⏸ Pause' }}
+            </button>
+          }
+          @if (plan.canResume) {
+            <button class="ctrl-btn ctrl-btn--resume" (click)="doAction('resume')" [disabled]="loading()">
+              {{ loading() ? '…' : '▶ Resume' }}
+            </button>
+          }
+          @if (plan.canCancel) {
+            <button class="ctrl-btn ctrl-btn--stop" (click)="doAction('cancel')" [disabled]="loading()">
+              {{ loading() ? '…' : '⏹ Stop' }}
+            </button>
+          }
+          @if (plan.canReset) {
+            <button class="ctrl-btn ctrl-btn--reset" (click)="doAction('reset')" [disabled]="loading()">
+              {{ loading() ? '…' : '↺ Reset' }}
+            </button>
+          }
+        </div>
+
+        <!-- ── Live indicator ── -->
+        @if (plan.isLive) {
+          <span class="live-indicator">● LIVE</span>
+        }
       } @else {
         <p class="empty-state">No active plan</p>
         <p class="empty-state__hint">
-          Execute a motion in <strong>Planning</strong> mode to see plan details here.
+          Compile a program in <strong>Planning</strong> mode to see plan details here.
         </p>
       }
     </div>
@@ -175,10 +219,66 @@ const STATE_COLORS: Record<string, string> = {
       margin: 0;
       line-height: 1.4;
     }
+
+    .execution-controls {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      border-top: 1px solid #333;
+      padding-top: 0.5rem;
+    }
+
+    .ctrl-btn {
+      font-family: monospace;
+      font-size: 0.72rem;
+      padding: 0.3rem 0.6rem;
+      border-radius: 3px;
+      border: 1px solid #555;
+      background: #222;
+      color: #ddd;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .ctrl-btn:hover:not(:disabled) {
+      background: #333;
+    }
+
+    .ctrl-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    .ctrl-btn--start { border-color: #44cc44; color: #44cc44; }
+    .ctrl-btn--start:hover:not(:disabled) { background: #1a3a1a; }
+    .ctrl-btn--pause { border-color: #ffaa33; color: #ffaa33; }
+    .ctrl-btn--pause:hover:not(:disabled) { background: #3a2a1a; }
+    .ctrl-btn--resume { border-color: #33ccff; color: #33ccff; }
+    .ctrl-btn--resume:hover:not(:disabled) { background: #1a2a3a; }
+    .ctrl-btn--stop { border-color: #cc4444; color: #cc4444; }
+    .ctrl-btn--stop:hover:not(:disabled) { background: #3a1a1a; }
+    .ctrl-btn--reset { border-color: #888; color: #888; }
+    .ctrl-btn--reset:hover:not(:disabled) { background: #2a2a2a; }
+
+    .live-indicator {
+      font-size: 0.65rem;
+      color: #44cc44;
+      animation: pulse 1s ease-in-out infinite;
+      text-align: center;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
   `,
 })
-export class ExecutionPanel {
+export class ExecutionPanel implements OnDestroy {
   private readonly store = inject(SceneStore);
+  private readonly api = inject(SceneApiService);
+
+  protected readonly loading = signal(false);
+  private tickTimer: ReturnType<typeof setInterval> | null = null;
 
   protected readonly planInfo = computed(() => {
     const plan = this.store.state().activePlan;
@@ -187,6 +287,13 @@ export class ExecutionPanel {
     const stateLabel = plan.state;
     const stateColor = STATE_COLORS[plan.state] ?? '#888';
     const progress = plan.trajectoryProgress ?? 0;
+
+    const canStart = plan.state === 'Created';
+    const canPause = plan.state === 'Active';
+    const canResume = plan.state === 'Paused';
+    const canCancel = plan.state === 'Active' || plan.state === 'Paused';
+    const canReset = plan.state === 'Completed' || plan.state === 'Cancelled' || plan.state === 'Failed' || plan.state === 'Created';
+    const isLive = plan.state === 'Active';
 
     return {
       planId: plan.planId,
@@ -199,6 +306,78 @@ export class ExecutionPanel {
       createdAt: plan.createdAt ? new Date(plan.createdAt).toLocaleTimeString() : null,
       startedAt: plan.startedAt ? new Date(plan.startedAt).toLocaleTimeString() : null,
       completedAt: plan.completedAt ? new Date(plan.completedAt).toLocaleTimeString() : null,
+      canStart,
+      canPause,
+      canResume,
+      canCancel,
+      canReset,
+      isLive,
     };
   });
+
+  ngOnDestroy(): void {
+    this.stopTickLoop();
+  }
+
+  protected doAction(action: ExecutionAction): void {
+    this.loading.set(true);
+
+    const request$ = (() => {
+      switch (action) {
+        case 'start':  return this.api.startExecution();
+        case 'pause':  return this.api.pauseExecution();
+        case 'resume': return this.api.resumeExecution();
+        case 'cancel': return this.api.cancelExecution();
+        case 'reset':  return this.api.resetExecution();
+      }
+    })();
+
+    request$.subscribe({
+      next: res => {
+        this.store.applySnapshot(res);
+        this.loading.set(false);
+
+        // Start / resume → begin ticking
+        if (action === 'start' || action === 'resume') {
+          this.startTickLoop();
+        }
+        // Pause / cancel / reset → stop ticking
+        if (action === 'pause' || action === 'cancel' || action === 'reset') {
+          this.stopTickLoop();
+        }
+      },
+      error: () => {
+        this.loading.set(false);
+      },
+    });
+  }
+
+  // ── Tick loop ──
+
+  private startTickLoop(): void {
+    this.stopTickLoop(); // avoid duplicates
+    this.tickTimer = setInterval(() => this.onTick(), TICK_INTERVAL_MS);
+  }
+
+  private stopTickLoop(): void {
+    if (this.tickTimer !== null) {
+      clearInterval(this.tickTimer);
+      this.tickTimer = null;
+    }
+  }
+
+  private onTick(): void {
+    // Re-check state — if not running anymore, stop ticking
+    const state = this.store.state().activePlan?.state;
+    if (state !== 'Active') {
+      this.stopTickLoop();
+      return;
+    }
+
+    this.api.tickExecution(TICK_DT).subscribe({
+      next: res => this.store.applySnapshot(res),
+      // On error: stop ticking silently (connection issue, etc.)
+      error: () => this.stopTickLoop(),
+    });
+  }
 }
