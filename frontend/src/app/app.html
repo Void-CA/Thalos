@@ -1,10 +1,8 @@
 <div class="layout">
-  <!-- ── Top Bar: mode + system status ── -->
   <top-bar class="layout__top" />
 
-  <!-- ── Main content area ── -->
   <div class="layout__body">
-    <!-- LEFT — always visible: robot catalog --->
+    <!-- LEFT panel -->
     <aside
       class="layout__panel layout__panel--left"
       [class.layout__panel--collapsed]="layout.leftCollapsed()"
@@ -12,12 +10,36 @@
     >
       @if (!layout.leftCollapsed()) {
         <div class="layout__panel-header">
-          <ng-icon name="heroCpuChip" size="18" />
+          <ng-icon name="heroCpuChip" size="12" />
           <span class="layout__panel-title">Robots</span>
           <button class="layout__collapse-btn" (click)="layout.toggleLeft()" title="Collapse panel">◀</button>
         </div>
         <div class="layout__panel-body">
           <robot-catalog />
+
+          <!-- Active robot identity + joints -->
+          @let robot = activeRobot();
+          @if (robot) {
+            <div class="active-robot">
+              <div class="active-robot__header">
+                <span class="active-robot__name">{{ robot.name }}</span>
+                <span class="active-robot__dof">{{ robot.dof }} DOF</span>
+              </div>
+
+              <div class="active-robot__joints">
+                @for (j of jointLabels(); track $index) {
+                  <span class="active-robot__joint">
+                    <span class="active-robot__joint-name">{{ j.label }}</span>
+                    <span class="active-robot__joint-val">{{ j.value.toFixed(4) }}</span>
+                  </span>
+                }
+              </div>
+            </div>
+          } @else {
+            <div class="active-robot active-robot--empty">
+              <p class="active-robot__hint">No robot loaded</p>
+            </div>
+          }
         </div>
       } @else {
         <button class="layout__expand-btn" (click)="layout.toggleLeft()" title="Expand panel">▶</button>
@@ -26,12 +48,12 @@
 
     <app-splitter direction="vertical" panel="left" />
 
-    <!-- CENTER — pure Three.js renderer -->
+    <!-- CENTER — scene viewer -->
     <scene-viewer class="layout__center" />
 
     <app-splitter direction="vertical" panel="right" />
 
-    <!-- RIGHT — schema-driven tool context per mode -->
+    <!-- RIGHT panel -->
     <aside
       class="layout__panel layout__panel--right"
       [class.layout__panel--collapsed]="layout.rightCollapsed()"
@@ -40,23 +62,27 @@
       @if (!layout.rightCollapsed()) {
         <div class="layout__panel-header">
           <button class="layout__collapse-btn" (click)="layout.toggleRight()" title="Collapse panel">▶</button>
-          <ng-icon name="heroWrenchScrewdriver" size="18" />
+          <ng-icon name="heroWrenchScrewdriver" size="12" />
           <span class="layout__panel-title">Tools</span>
         </div>
         <div class="layout__panel-body">
-          @for (tool of currentTools(); track tool.id) {
-            <details class="accordion" [open]="tool.defaultOpen">
-              <summary class="accordion__header">
-                <span class="accordion__title">{{ tool.label }}</span>
-                <span class="accordion__chevron"></span>
-              </summary>
-              <div class="accordion__body">
-                <ng-container *ngComponentOutlet="tool.component" />
-              </div>
-            </details>
-          }
-          @if (currentTools().length === 0) {
-            <p class="layout__placeholder">No tools available for this mode</p>
+          @if (!activeRobot()) {
+            <p class="layout__placeholder">Load a robot to use tools</p>
+          } @else {
+            @for (tool of currentTools(); track tool.id) {
+              <details class="accordion" [open]="tool.defaultOpen">
+                <summary class="accordion__header">
+                  <span class="accordion__title">{{ tool.label }}</span>
+                  <span class="accordion__chevron"></span>
+                </summary>
+                <div class="accordion__body">
+                  <ng-container *ngComponentOutlet="tool.component" />
+                </div>
+              </details>
+            }
+            @if (currentTools().length === 0) {
+              <p class="layout__placeholder">No tools available for this mode</p>
+            }
           }
         </div>
       } @else {
@@ -65,15 +91,12 @@
     </aside>
   </div>
 
-  <!-- Bottom splitter + panel -->
   <app-splitter direction="horizontal" panel="bottom" />
 
-  <!-- ── Bottom: system observability (tabs) ── -->
   <bottom-panel
     class="layout__bottom"
     [style.height.px]="layout.effectiveBottomHeight()"
   />
 
-  <!-- ── Status bar: pulse line ── -->
   <status-bar />
 </div>

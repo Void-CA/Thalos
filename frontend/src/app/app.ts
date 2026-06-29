@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, effect, inject } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
 import { NgIcon } from '@ng-icons/core';
 import { SceneViewer } from './features/scene/components/scene-viewer/scene-viewer';
@@ -9,28 +9,13 @@ import { Splitter } from './shared/components/splitter/splitter';
 import { StatusBar } from './shared/components/status-bar/status-bar';
 import { ModeStore } from './shared/store/mode.store';
 import { LayoutStore } from './shared/store/layout.store';
+import { SceneStore } from './features/scene/store/scene.store';
+import { LogStore } from './shared/store/log.store';
 import { UI_MODE_REGISTRY } from './shared/types/ui-mode-registry';
 import type { ToolSchema } from './shared/types/tool-schema';
 
 /**
  * Layout shell — compone las 6 zonas del layout redimensionable.
- *
- * ┌─────────────────────────────────────────────────────┐
- * │  Top Bar — mode + system status                     │
- * ├──────┬──────────┬──────────────────┬──────────┬──────┤
- * │ LEFT │  split   │     CENTER       │  split   │RIGHT │
- * │robot │          │   3D Renderer    │          │Tools │
- * │catalog│         │   (Three.js)     │          │ctx   │
- * ├──────┴──────────┴──────────────────┴──────────┴──────┤
- * │ split (horizontal)                                    │
- * ├──────────────────────────────────────────────────────┤
- * │  Bottom Panel — tabs [Snapshot][Timeline][Log]        │
- * ├──────────────────────────────────────────────────────┤
- * │  Status Bar — Sim · Robot · Exec · ⚠ · 14:32         │
- * └──────────────────────────────────────────────────────┘
- *
- * Right panel es schema-driven via UI_MODE_REGISTRY.
- * Layout persiste tamaño/colapso en localStorage.
  */
 @Component({
   selector: 'app-root',
@@ -51,8 +36,42 @@ import type { ToolSchema } from './shared/types/tool-schema';
 export class App {
   protected readonly modeStore = inject(ModeStore);
   protected readonly layout = inject(LayoutStore);
+  protected readonly scene = inject(SceneStore);
+  private readonly log = inject(LogStore);
+
+  /** Watch for errors in SceneStore and push to LogStore */
+  private readonly errorWatcher = effect(() => {
+    const error = this.scene.state().ui?.error;
+    if (error) {
+      this.log.error(error);
+    }
+  });
 
   protected readonly currentTools = computed<readonly ToolSchema[]>(
     () => UI_MODE_REGISTRY[this.modeStore.mode()],
   );
+
+  // ── Active robot info (for left panel) ──
+
+  protected readonly activeRobot = computed(() => {
+    const state = this.scene.state();
+    const rt = state?.runtime;
+    if (!rt?.robot) return null;
+
+    return {
+      name: rt.robot.display_name,
+      dof: rt.robot.dof,
+      joints: rt.robot.joints,
+      values: rt.joints,
+    };
+  });
+
+  protected readonly jointLabels = computed(() => {
+    const robot = this.activeRobot();
+    if (!robot) return [];
+    return robot.joints.map((j, i) => ({
+      label: j.name,
+      value: robot.values[i] ?? 0,
+    }));
+  });
 }

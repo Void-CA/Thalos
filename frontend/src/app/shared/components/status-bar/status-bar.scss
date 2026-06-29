@@ -67,4 +67,27 @@
   &__sep {
     color: #444;
   }
+
+  &__ctrl {
+    background: none;
+    border: none;
+    font-size: 0.7rem;
+    padding: 0 0.15rem;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity $transition-fast;
+    line-height: 1;
+
+    &:hover {
+      opacity: 1;
+    }
+
+    &--stop {
+      color: #cc4444;
+    }
+
+    &--resume {
+      color: #44cc44;
+    }
+  }
 }

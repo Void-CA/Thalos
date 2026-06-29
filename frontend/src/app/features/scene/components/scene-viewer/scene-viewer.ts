@@ -1,4 +1,5 @@
 import { AfterViewInit, Component, computed, effect, ElementRef, inject, ViewChild } from '@angular/core';
+import { NgIcon } from '@ng-icons/core';
 import { SceneStore } from '../../store/scene.store';
 import { ThreeRendererService } from '../../services/three-renderer.service';
 import { WorkspaceOverlayService } from '../../services/workspace-overlay.service';
@@ -21,10 +22,20 @@ import { rotationDtoToQuaternion } from '../../utils/rotation';
 @Component({
   selector: 'scene-viewer',
   standalone: true,
+  imports: [NgIcon],
   template: `
     <canvas #canvas></canvas>
 
-    <!-- Viewport toolbar -->
+    @if (!hasData()) {
+      <div class="viewport-empty">
+        <div class="viewport-empty__content">
+          <ng-icon name="heroCpuChip" size="32" />
+          <p class="viewport-empty__title">No robot loaded</p>
+          <p class="viewport-empty__hint">Select a robot from the catalog or import a URDF file</p>
+        </div>
+      </div>
+    }
+
     <div class="viewport-toolbar">
       <button
         class="toolbar-btn"

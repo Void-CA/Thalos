@@ -143,6 +143,76 @@
   }
 }
 
+// ── Active robot section (left panel) ──
+
+.active-robot {
+  margin-top: 0.75rem;
+  background: $bg-card;
+  border: 1px solid $border-subtle;
+  border-radius: $radius-md;
+  padding: 0.5rem 0.6rem;
+
+  &--empty {
+    padding: 0.4rem 0.6rem;
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.35rem;
+  }
+
+  &__name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  &__dof {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: $text-muted;
+    background: $bg-elevated;
+    padding: 0.08rem 0.3rem;
+    border-radius: $radius-sm;
+  }
+
+  &__hint {
+    margin: 0;
+    font-size: 0.7rem;
+    opacity: 0.45;
+    text-align: center;
+  }
+
+  &__joints {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem;
+  }
+
+  &__joint {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 0.6rem;
+    background: $bg-elevated;
+    padding: 0.08rem 0.3rem;
+    border-radius: $radius-sm;
+  }
+
+  &__joint-name {
+    opacity: 0.5;
+  }
+
+  &__joint-val {
+    color: $text-secondary;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
 // ── Accordion (native <details>) ──
 
 .accordion {

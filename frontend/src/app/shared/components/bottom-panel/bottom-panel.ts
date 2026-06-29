@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { NgIcon } from '@ng-icons/core';
 import { SceneStore } from '../../../features/scene/store/scene.store';
 import { WorkspaceStore } from '../../../features/workspace/store/workspace.store';
+import { LogStore } from '../../store/log.store';
 import { LayoutStore } from '../../store/layout.store';
 
 type TabId = 'snapshot' | 'analysis' | 'timeline' | 'log';
@@ -201,6 +202,7 @@ const SEGMENT_COLORS = [
 export class BottomPanel {
   protected readonly scene = inject(SceneStore);
   protected readonly ws = inject(WorkspaceStore);
+  protected readonly log = inject(LogStore);
   protected readonly layout = inject(LayoutStore);
 
   protected readonly activeTab = signal<TabId>('snapshot');
@@ -308,12 +310,5 @@ export class BottomPanel {
 
   // ── Log ──
 
-  protected readonly logEntries = computed(() => {
-    const entries: Array<{ time: string; level: string; msg: string }> = [];
-    const state = this.scene.state();
-    if (state?.ui?.error) {
-      entries.push({ time: new Date().toLocaleTimeString(), level: 'error', msg: state.ui.error });
-    }
-    return entries;
-  });
+  protected readonly logEntries = computed(() => this.log.entries());
 }

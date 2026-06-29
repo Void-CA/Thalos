@@ -1,8 +1,11 @@
 import { Component, computed, inject } from '@angular/core';
 import { SceneStore } from '../../../features/scene/store/scene.store';
+import { SceneApiService } from '../../../features/scene/services/scene-api.service';
 
 /**
  * Pulse line at the very bottom — always visible, never collapsible.
+ *
+ * Shows system status + execution controls when active.
  */
 @Component({
   selector: 'status-bar',
@@ -18,6 +21,7 @@ import { SceneStore } from '../../../features/scene/store/scene.store';
         <span class="status-bar__item">{{ robot }}</span>
         <span class="status-bar__sep">·</span>
 
+        <!-- Execution state -->
         <span
           class="status-bar__item status-bar__item--exec"
           [class.status-bar__item--running]="execState() === 'Active'"
@@ -27,6 +31,20 @@ import { SceneStore } from '../../../features/scene/store/scene.store';
         >
           {{ execLabel() }}
         </span>
+
+        <!-- Execution controls (always visible when active) -->
+        @if (execState() === 'Active' || execState() === 'Paused') {
+          <span class="status-bar__sep">·</span>
+
+          @if (execState() === 'Active') {
+            <button class="status-bar__ctrl" (click)="onPause()" title="Pause">⏸</button>
+            <button class="status-bar__ctrl status-bar__ctrl--stop" (click)="onStop()" title="Stop">⏹</button>
+          }
+          @if (execState() === 'Paused') {
+            <button class="status-bar__ctrl status-bar__ctrl--resume" (click)="onResume()" title="Resume">▶</button>
+            <button class="status-bar__ctrl status-bar__ctrl--stop" (click)="onStop()" title="Stop">⏹</button>
+          }
+        }
 
         @if (hasError()) {
           <span class="status-bar__sep">·</span>
@@ -46,6 +64,7 @@ import { SceneStore } from '../../../features/scene/store/scene.store';
 })
 export class StatusBar {
   private readonly scene = inject(SceneStore);
+  private readonly api = inject(SceneApiService);
 
   protected readonly robotInfo = computed(() => {
     const rt = this.scene.state()?.runtime;
@@ -56,8 +75,7 @@ export class StatusBar {
   protected readonly execState = computed(() => {
     const state = this.scene.state();
     const exe = state?.execution;
-    const plan = state?.activePlan;
-    return (exe?.status ?? plan?.state) || '—';
+    return exe?.status || '—';
   });
 
   protected readonly execLabel = computed(() => {
@@ -87,4 +105,24 @@ export class StatusBar {
       return '';
     }
   });
+
+  // ── Execution actions ──
+
+  protected onPause(): void {
+    this.api.pauseExecution().subscribe({
+      next: res => this.scene.applySnapshot(res),
+    });
+  }
+
+  protected onResume(): void {
+    this.api.resumeExecution().subscribe({
+      next: res => this.scene.applySnapshot(res),
+    });
+  }
+
+  protected onStop(): void {
+    this.api.cancelExecution().subscribe({
+      next: res => this.scene.applySnapshot(res),
+    });
+  }
 }
