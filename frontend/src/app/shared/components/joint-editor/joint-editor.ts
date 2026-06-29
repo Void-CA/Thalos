@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, output, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { SceneStore } from '../../../features/scene/store/scene.store';
 
 export interface JointEntry {
@@ -132,6 +132,18 @@ export interface JointEntry {
 export class JointEditor {
   private readonly store = inject(SceneStore);
 
+  /**
+   * Valores iniciales opcionales.
+   *
+   * Cuando se proporcionan (ej: planning), el componente los usa como estado
+   * inicial y NO se sincroniza desde runtime.joints. El padre recibe cambios
+   * via `valueChange`.
+   *
+   * Cuando NO se proporcionan (ej: FK), el componente se auto-inicializa
+   * desde runtime.joints y se re-sincroniza si cambia el DOF del robot.
+   */
+  readonly initialValues = input<number[] | undefined>(undefined);
+
   // ── Fuente de verdad ──
   readonly values = signal<number[]>([]);
 
@@ -155,8 +167,21 @@ export class JointEditor {
   // ── Track de DOF para resetear cuando cambia el robot ──
   private readonly prevDof = signal(0);
 
+  private externallyInitialized = false;
+
   constructor() {
     effect(() => {
+      const init = this.initialValues();
+      if (init && !this.externallyInitialized) {
+        // Externally controlled (planning): set once, no auto-sync
+        this.externallyInitialized = true;
+        this.values.set(init);
+        return;
+      }
+
+      // FK mode: auto-init from runtime.joints, re-sync on DOF change
+      if (this.externallyInitialized) return;
+
       const r = this.store.state()?.runtime;
       if (r) {
         // Use `dof` (actuated joints) instead of `joints.length`

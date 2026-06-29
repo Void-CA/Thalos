@@ -1,5 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { JointEditor } from '../../shared/components/joint-editor/joint-editor';
+import { PoseInputs, PoseInputsValue } from '../../shared/components/pose-inputs/pose-inputs';
 import { SceneApiService } from '../scene/services/scene-api.service';
 import { SceneStore } from '../scene/store/scene.store';
 import type { MotionPlanRequest, MotionSegmentDto } from '../scene/scene-api.types';
@@ -63,7 +65,7 @@ function createSegment(kind: SegmentKind, dof: number): SegmentModel {
 @Component({
   selector: 'planning-panel',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, JointEditor, PoseInputs],
   template: `
     <div class="planning-panel">
       <!-- ── Empty state ── -->
@@ -90,23 +92,10 @@ function createSegment(kind: SegmentKind, dof: number): SegmentModel {
           @if (seg.expanded) {
             <div class="planning-panel__seg-body">
               @if (seg.kind === 'movej') {
-                <!-- ── MoveJ controls ── -->
-                @if (jointNames().length > 0) {
-                  <div class="planning-panel__joint-grid">
-                    @for (name of jointNames(); track $index; let ji = $index) {
-                      <label>
-                        <span class="planning-panel__joint-label">{{ name }}</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          class="planning-panel__num-input"
-                          [ngModel]="seg.joints[ji]"
-                          (ngModelChange)="updateJoint(i, ji, $event)"
-                        />
-                      </label>
-                    }
-                  </div>
-                }
+                <joint-editor
+                  [initialValues]="seg.joints"
+                  (valueChange)="updateSegmentJoints(i, $event)"
+                />
                 <label class="planning-panel__field">
                   <span class="planning-panel__field-label">Velocity (optional)</span>
                   <input
@@ -120,82 +109,11 @@ function createSegment(kind: SegmentKind, dof: number): SegmentModel {
                   />
                 </label>
               } @else {
-                <!-- ── MoveL controls ── -->
-                <div class="planning-panel__coord-grid">
-                  <label>X
-                    <input type="number" step="0.01" class="planning-panel__num-input"
-                      [ngModel]="seg.txStr" (ngModelChange)="updateField(i, 'txStr', $event)" />
-                  </label>
-                  <label>Y
-                    <input type="number" step="0.01" class="planning-panel__num-input"
-                      [ngModel]="seg.tyStr" (ngModelChange)="updateField(i, 'tyStr', $event)" />
-                  </label>
-                  <label>Z
-                    <input type="number" step="0.01" class="planning-panel__num-input"
-                      [ngModel]="seg.tzStr" (ngModelChange)="updateField(i, 'tzStr', $event)" />
-                  </label>
-                </div>
-
-                <!-- Rotation format -->
-                <div class="segmented" role="radiogroup" aria-label="Rotation format">
-                  <button
-                    type="button"
-                    role="radio"
-                    class="segmented__btn"
-                    [class.is-active]="seg.rotationFormat === 'euler'"
-                    (click)="updateField(i, 'rotationFormat', 'euler')"
-                  >Euler</button>
-                  <button
-                    type="button"
-                    role="radio"
-                    class="segmented__btn"
-                    [class.is-active]="seg.rotationFormat === 'quaternion'"
-                    (click)="updateField(i, 'rotationFormat', 'quaternion')"
-                  >Quaternion</button>
-                </div>
-
-                @if (seg.rotationFormat === 'euler') {
-                  <div class="planning-panel__coord-grid">
-                    <label>Yaw °
-                      <input type="number" step="1" class="planning-panel__num-input"
-                        [ngModel]="seg.yawStr" (ngModelChange)="updateField(i, 'yawStr', $event)" />
-                    </label>
-                    <label>Pitch °
-                      <input type="number" step="1" class="planning-panel__num-input"
-                        [ngModel]="seg.pitchStr" (ngModelChange)="updateField(i, 'pitchStr', $event)" />
-                    </label>
-                    <label>Roll °
-                      <input type="number" step="1" class="planning-panel__num-input"
-                        [ngModel]="seg.rollStr" (ngModelChange)="updateField(i, 'rollStr', $event)" />
-                    </label>
-                  </div>
-                } @else {
-                  <div class="planning-panel__coord-grid planning-panel__coord-grid--quat">
-                    <label>W
-                      <input type="number" step="0.01" class="planning-panel__num-input"
-                        [ngModel]="seg.qwStr" (ngModelChange)="updateField(i, 'qwStr', $event)" />
-                    </label>
-                    <label>X
-                      <input type="number" step="0.01" class="planning-panel__num-input"
-                        [ngModel]="seg.qxStr" (ngModelChange)="updateField(i, 'qxStr', $event)" />
-                    </label>
-                    <label>Y
-                      <input type="number" step="0.01" class="planning-panel__num-input"
-                        [ngModel]="seg.qyStr" (ngModelChange)="updateField(i, 'qyStr', $event)" />
-                    </label>
-                    <label>Z
-                      <input type="number" step="0.01" class="planning-panel__num-input"
-                        [ngModel]="seg.qzStr" (ngModelChange)="updateField(i, 'qzStr', $event)" />
-                    </label>
-                  </div>
-                }
-
-                <label class="planning-panel__field">
-                  <span class="planning-panel__field-label">Frame ID (optional)</span>
-                  <input type="number" step="1" min="0" class="planning-panel__num-input"
-                    [ngModel]="seg.frameIdStr" (ngModelChange)="updateField(i, 'frameIdStr', $event)" placeholder="0" />
-                </label>
-
+                <pose-inputs
+                  [value]="segmentToPoseValue(seg)"
+                  [showTypeSelector]="false"
+                  (valueChange)="updateSegmentPose(i, $event)"
+                />
                 <label class="planning-panel__field">
                   <span class="planning-panel__field-label">Velocity (optional)</span>
                   <input type="number" step="0.1" min="0.01" class="planning-panel__num-input"
@@ -244,11 +162,6 @@ export class PlanningPanel {
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
 
-  protected readonly jointNames = computed(() => {
-    const r = this.store.state()?.runtime;
-    return r?.robot.joints.map((j, i) => j.name || `J${i + 1}`) ?? [];
-  });
-
   private get dof(): number {
     return this.store.state()?.runtime?.robot.dof ?? 0;
   }
@@ -280,14 +193,58 @@ export class PlanningPanel {
     });
   }
 
-  protected updateJoint(segIndex: number, jointIndex: number, value: number): void {
+  /** Called by JointEditor when user changes any joint value in a MoveJ segment. */
+  protected updateSegmentJoints(segIndex: number, joints: number[]): void {
     this.segments.update(arr => {
       const next = [...arr];
-      const joints = [...next[segIndex].joints];
-      joints[jointIndex] = value;
       next[segIndex] = { ...next[segIndex], joints };
       return next;
     });
+  }
+
+  /** Called by PoseInputs when user changes any input in a MoveL segment. */
+  protected updateSegmentPose(i: number, v: PoseInputsValue): void {
+    this.segments.update(arr => {
+      const next = [...arr];
+      next[i] = {
+        ...next[i],
+        txStr: String(v.translation[0]),
+        tyStr: String(v.translation[1]),
+        tzStr: String(v.translation[2]),
+        rotationFormat: v.rotationFormat,
+        yawStr: String(v.yprDeg[0]),
+        pitchStr: String(v.yprDeg[1]),
+        rollStr: String(v.yprDeg[2]),
+        qwStr: String(v.quaternion[0]),
+        qxStr: String(v.quaternion[1]),
+        qyStr: String(v.quaternion[2]),
+        qzStr: String(v.quaternion[3]),
+      };
+      return next;
+    });
+  }
+
+  /** Convert a SegmentModel's pose fields to PoseInputsValue for initial display. */
+  protected segmentToPoseValue(seg: SegmentModel): PoseInputsValue {
+    return {
+      translation: [
+        parseFloat(seg.txStr) || 0,
+        parseFloat(seg.tyStr) || 0,
+        parseFloat(seg.tzStr) || 0,
+      ],
+      rotationFormat: seg.rotationFormat,
+      yprDeg: [
+        parseFloat(seg.yawStr) || 0,
+        parseFloat(seg.pitchStr) || 0,
+        parseFloat(seg.rollStr) || 0,
+      ],
+      quaternion: [
+        parseFloat(seg.qwStr) || 1,
+        parseFloat(seg.qxStr) || 0,
+        parseFloat(seg.qyStr) || 0,
+        parseFloat(seg.qzStr) || 0,
+      ],
+    };
   }
 
   protected segmentColor(index: number): string {
