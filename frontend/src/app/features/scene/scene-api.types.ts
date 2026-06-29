@@ -59,6 +59,10 @@ export interface VisualTwistDto {
 
 export interface VisualPrimitiveDto {
   id: string;
+  /// ID visual del frame padre. El frontend cuelga la primitive como hija
+  /// de este frame en el scene graph.
+  frame_id: string;
+  /// Transformación LOCAL (relativa al frame padre).
   translation: [number, number, number];
   rotation: [number, number, number, number];
   geometry: PrimitiveGeometryDto;

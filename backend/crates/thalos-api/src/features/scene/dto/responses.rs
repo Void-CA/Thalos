@@ -70,6 +70,10 @@ pub enum PrimitiveGeometryDto {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct VisualPrimitiveDto {
     pub id: String,
+    /// ID visual del frame padre. El frontend cuelga la primitive como hija
+    /// de este frame en el scene graph.
+    pub frame_id: String,
+    /// Transformación LOCAL (relativa al frame padre).
     pub translation: [f64; 3],
     pub rotation: [f64; 4],
     pub geometry: PrimitiveGeometryDto,

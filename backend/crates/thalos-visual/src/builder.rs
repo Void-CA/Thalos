@@ -56,6 +56,7 @@ pub fn align_y_to(direction: [f64; 3]) -> [f64; 4] {
 /// orientación alineada con la dirección del segmento.
 pub fn cylinder_between(
     id: impl Into<String>,
+    frame_id: impl Into<String>,
     from: [f64; 3],
     to: [f64; 3],
     radius: f64,
@@ -66,13 +67,20 @@ pub fn cylinder_between(
     let height = (dx * dx + dy * dy + dz * dz).sqrt();
 
     if height < 1e-10 {
-        return VisualPrimitive::cylinder(id, radius, 0.0);
+        return VisualPrimitive::cylinder(id, frame_id);
     }
 
     let midpoint = [(from[0] + to[0]) / 2.0, (from[1] + to[1]) / 2.0, (from[2] + to[2]) / 2.0];
     let rotation = align_y_to([dx / height, dy / height, dz / height]);
 
-    VisualPrimitive { id: id.into(), translation: midpoint, rotation, geometry: PrimitiveGeometry::Cylinder { radius, height }, color: None }
+    VisualPrimitive {
+        id: id.into(),
+        frame_id: frame_id.into(),
+        translation: midpoint,
+        rotation,
+        geometry: PrimitiveGeometry::Cylinder { radius, height },
+        color: None,
+    }
 }
 
 // ── SceneBuilder ──
@@ -148,43 +156,38 @@ impl SceneBuilder {
         }
     }
 
-    /// Extend a scene with visual elements resolved to world space.
+    /// Extend a scene with visual elements as children of their link frames.
     ///
-    /// Each element's `frame_id` is looked up in the FK result, then
-    /// its local `origin` is composed to produce the final world
-    /// translation and rotation.
+    /// Cada elemento se emite con su `frame_id` y transformación LOCAL
+    /// (relativa al frame padre). El frontend las cuelga como hijas del
+    /// `THREE.Group` del frame, de modo que mover el frame mueve la primitive.
+    ///
+    /// La corrección de cilindros (Z_urdf → Y_threejs) se aplica a la
+    /// transformación local ANTES de emitir, no a la transformación mundo.
     pub fn with_visual_elements(&self, fk: &FKResult, elements: &[VisualElement]) -> VisualScene {
         let mut scene = self.from_fk(fk);
 
         for element in elements {
-            // FK no computa pose para el root link (base_link) porque el
-            // primer segmento usa FrameId::World como parent. En ese caso
-            // caemos a World (identity), que es la pose correcta del root.
-            let pose = fk
-                .pose(&element.frame_id)
-                .or_else(|| fk.pose(&FrameId::World));
-            let Some(pose) = pose else {
-                continue;
-            };
-            let world = pose.transform().compose(&element.origin);
+            let frame_visual_id = self.resolve_visual_id(&element.frame_id);
 
-            // Cylinder correction: URDF defines cylinder axis as Z,
-            // Three.js CylinderGeometry defaults to Y.
-            // Post-multiply by +90° around X to map Z_urdf → Y_threejs.
-            let world = if matches!(element.geometry, PrimitiveGeometry::Cylinder { .. }) {
+            let local = if matches!(element.geometry, PrimitiveGeometry::Cylinder { .. }) {
+                // Cylinder correction: URDF defines cylinder axis as Z,
+                // Three.js CylinderGeometry defaults to Y.
+                // Post-multiply by +90° around X to map Z_urdf → Y_threejs.
                 let correction = Transform3D::from_rotation(UnitQuaternion::from_axis_angle(
                     UnitVector3::x_axis(),
                     std::f64::consts::FRAC_PI_2,
                 ));
-                world.compose(&correction)
+                element.origin.compose(&correction)
             } else {
-                world
+                element.origin.clone()
             };
 
             scene.primitives.push(VisualPrimitive {
                 id: element.id.clone(),
-                translation: self.normalize_tx(&world),
-                rotation: self.normalize_rot(&world),
+                frame_id: frame_visual_id,
+                translation: self.normalize_tx(&local),
+                rotation: self.normalize_rot(&local),
                 geometry: element.geometry.clone(),
                 color: element.color,
             });

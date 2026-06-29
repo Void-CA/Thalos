@@ -24,6 +24,10 @@ pub enum PrimitiveGeometry {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct VisualPrimitive {
     pub id: VisualId,
+    /// ID visual del frame padre. La primitive es hija de este frame en el
+    /// scene graph del frontend — mover el frame mueve la primitive.
+    pub frame_id: VisualId,
+    /// Transformación LOCAL (relativa al frame padre).
     pub translation: [f64; 3],
     pub rotation: [f64; 4],
     pub geometry: PrimitiveGeometry,
@@ -33,32 +37,35 @@ pub struct VisualPrimitive {
 }
 
 impl VisualPrimitive {
-    pub fn cylinder(id: impl Into<VisualId>, radius: f64, height: f64) -> Self {
+    pub fn cylinder(id: impl Into<VisualId>, frame_id: impl Into<VisualId>) -> Self {
         Self {
             id: id.into(),
+            frame_id: frame_id.into(),
             translation: [0.0; 3],
             rotation: [1.0, 0.0, 0.0, 0.0],
-            geometry: PrimitiveGeometry::Cylinder { radius, height },
+            geometry: PrimitiveGeometry::Cylinder { radius: 0.01, height: 0.01 },
             color: None,
         }
     }
 
-    pub fn sphere(id: impl Into<VisualId>, radius: f64) -> Self {
+    pub fn sphere(id: impl Into<VisualId>, frame_id: impl Into<VisualId>) -> Self {
         Self {
             id: id.into(),
+            frame_id: frame_id.into(),
             translation: [0.0; 3],
             rotation: [1.0, 0.0, 0.0, 0.0],
-            geometry: PrimitiveGeometry::Sphere { radius },
+            geometry: PrimitiveGeometry::Sphere { radius: 0.01 },
             color: None,
         }
     }
 
-    pub fn box_shape(id: impl Into<VisualId>, width: f64, height: f64, depth: f64) -> Self {
+    pub fn box_shape(id: impl Into<VisualId>, frame_id: impl Into<VisualId>) -> Self {
         Self {
             id: id.into(),
+            frame_id: frame_id.into(),
             translation: [0.0; 3],
             rotation: [1.0, 0.0, 0.0, 0.0],
-            geometry: PrimitiveGeometry::Box { width, height, depth },
+            geometry: PrimitiveGeometry::Box { width: 0.01, height: 0.01, depth: 0.01 },
             color: None,
         }
     }

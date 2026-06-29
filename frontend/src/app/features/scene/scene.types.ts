@@ -63,6 +63,7 @@ export interface SceneTwist {
 
 export interface ScenePrimitive {
   id: string;
+  frameId: string;
   translation: [number, number, number];
   rotation: [number, number, number, number];
   geometry: PrimitiveGeometry;

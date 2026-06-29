@@ -300,18 +300,27 @@ export class ThreeRendererService {
 
       const color = p.color ? this.rgbaToColor(p.color) : this.colorFor(p.id);
 
+      // Resolve parent: frame group if known, else contentGroup.
+      // Guard: applyScene already checked this.contentGroup before calling syncPrimitives.
+      const fallback = this.contentGroup!; // non-null: guarded by applyScene
+      const parentGroup = this.frameSlots.get(p.frameId)?.group ?? fallback;
+
       if (!slot) {
         const geo = this.buildPrimitiveGeometry(p.geometry);
         if (!geo) continue;
         const mesh = new THREE.Mesh(geo, this.getMaterial(color));
         slot = { mesh };
         this.primitiveSlots.set(p.id, slot);
-        this.contentGroup!.add(mesh);
+        parentGroup.add(mesh);
         this.objectRegistry.set(p.id, mesh);
+      } else if (slot.mesh.parent !== parentGroup) {
+        // Reparent if frame changed (rare — robot swap)
+        slot.mesh.parent?.remove(slot.mesh);
+        parentGroup.add(slot.mesh);
       }
 
+      // Local position/rotation relative to parent frame (or world)
       slot.mesh.position.set(p.translation[0], p.translation[1], p.translation[2]);
-      // Rust quaternion [w, x, y, z] → Three.js (x, y, z, w)
       slot.mesh.quaternion.set(
         p.rotation[1],
         p.rotation[2],
@@ -323,7 +332,7 @@ export class ThreeRendererService {
     // Dispose removed primitives
     for (const [id, slot] of this.primitiveSlots) {
       if (!incoming.has(id)) {
-        this.contentGroup!.remove(slot.mesh);
+        slot.mesh.parent?.remove(slot.mesh);
         slot.mesh.geometry.dispose();
         this.objectRegistry.delete(id);
         this.primitiveSlots.delete(id);

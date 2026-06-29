@@ -61,6 +61,7 @@ function toTwist(dto: VisualSceneDto['twists'][number]): SceneTwist {
 function toPrimitive(dto: VisualSceneDto['primitives'][number]): ScenePrimitive {
   return {
     id: dto.id,
+    frameId: dto.frame_id,
     translation: dto.translation,
     rotation: dto.rotation,
     geometry: toGeometry(dto.geometry),
