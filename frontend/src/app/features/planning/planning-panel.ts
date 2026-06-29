@@ -1,66 +1,16 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { JointEditor } from '../../shared/components/joint-editor/joint-editor';
 import { PoseInputs, PoseInputsValue } from '../../shared/components/pose-inputs/pose-inputs';
+import { PlanningStore, SegmentKind, SegmentModel } from '../../shared/store/planning.store';
 import { SceneApiService } from '../scene/services/scene-api.service';
 import { SceneStore } from '../scene/store/scene.store';
 import type { MotionPlanRequest, MotionSegmentDto } from '../scene/scene-api.types';
 
-type SegmentKind = 'movej' | 'movel';
-
-interface SegmentModel {
-  kind: SegmentKind;
-  expanded: boolean;
-  // MoveJ
-  joints: number[];
-  // MoveL
-  txStr: string;
-  tyStr: string;
-  tzStr: string;
-  rotationFormat: 'euler' | 'quaternion';
-  yawStr: string;
-  pitchStr: string;
-  rollStr: string;
-  qwStr: string;
-  qxStr: string;
-  qyStr: string;
-  qzStr: string;
-  frameIdStr: string;
-  // Common
-  velocityStr: string;
-}
-
 const SEGMENT_COLORS = [
-  '#3b82f6', // blue
-  '#22c55e', // green
-  '#f59e0b', // amber
-  '#ef4444', // red
-  '#8b5cf6', // violet
-  '#ec4899', // pink
-  '#14b8a6', // teal
-  '#f97316', // orange
+  '#3b82f6', '#22c55e', '#f59e0b', '#ef4444',
+  '#8b5cf6', '#ec4899', '#14b8a6', '#f97316',
 ];
-
-function createSegment(kind: SegmentKind, dof: number): SegmentModel {
-  return {
-    kind,
-    expanded: true,
-    joints: new Array(dof).fill(0),
-    txStr: '0.3',
-    tyStr: '0',
-    tzStr: '0',
-    rotationFormat: 'euler',
-    yawStr: '0',
-    pitchStr: '0',
-    rollStr: '0',
-    qwStr: '1',
-    qxStr: '0',
-    qyStr: '0',
-    qzStr: '0',
-    frameIdStr: '',
-    velocityStr: '',
-  };
-}
 
 @Component({
   selector: 'planning-panel',
@@ -68,18 +18,15 @@ function createSegment(kind: SegmentKind, dof: number): SegmentModel {
   imports: [FormsModule, JointEditor, PoseInputs],
   template: `
     <div class="planning-panel">
-      <!-- ── Empty state ── -->
-      @if (segments().length === 0) {
+      @if (planning.segments().length === 0) {
         <div class="planning-panel__empty">
           <p>No segments. Add a motion command to build a program.</p>
         </div>
       }
 
-      <!-- ── Segment list ── -->
-      @for (seg of segments(); track $index; let i = $index) {
+      @for (seg of planning.segments(); track $index; let i = $index) {
         <div class="planning-panel__segment" [class.is-expanded]="seg.expanded">
-          <!-- Header -->
-          <div class="planning-panel__seg-header" (click)="toggleSegment(i)">
+          <div class="planning-panel__seg-header" (click)="planning.toggleSegment(i)">
             <span class="planning-panel__seg-dot" [style.background]="segmentColor(i)"></span>
             <span class="planning-panel__seg-title">
               Segment {{ i + 1 }} — {{ seg.kind === 'movej' ? 'MoveJ' : 'MoveL' }}
@@ -88,23 +35,20 @@ function createSegment(kind: SegmentKind, dof: number): SegmentModel {
             <button class="planning-panel__seg-remove" (click)="removeSegment($event, i)" title="Remove segment">&times;</button>
           </div>
 
-          <!-- Body -->
           @if (seg.expanded) {
             <div class="planning-panel__seg-body">
               @if (seg.kind === 'movej') {
                 <joint-editor
                   [initialValues]="seg.joints"
-                  (valueChange)="updateSegmentJoints(i, $event)"
+                  (valueChange)="planning.updateSegmentJoints(i, $event)"
                 />
                 <label class="planning-panel__field">
                   <span class="planning-panel__field-label">Velocity (optional)</span>
                   <input
                     class="planning-panel__num-input"
-                    type="number"
-                    step="0.1"
-                    min="0.01"
+                    type="number" step="0.1" min="0.01"
                     [ngModel]="seg.velocityStr"
-                    (ngModelChange)="updateField(i, 'velocityStr', $event)"
+                    (ngModelChange)="planning.updateField(i, 'velocityStr', $event)"
                     placeholder="default"
                   />
                 </label>
@@ -112,12 +56,13 @@ function createSegment(kind: SegmentKind, dof: number): SegmentModel {
                 <pose-inputs
                   [value]="segmentToPoseValue(seg)"
                   [showTypeSelector]="false"
-                  (valueChange)="updateSegmentPose(i, $event)"
+                  (valueChange)="onPoseChange(i, $event)"
                 />
                 <label class="planning-panel__field">
                   <span class="planning-panel__field-label">Velocity (optional)</span>
                   <input type="number" step="0.1" min="0.01" class="planning-panel__num-input"
-                    [ngModel]="seg.velocityStr" (ngModelChange)="updateField(i, 'velocityStr', $event)" placeholder="default" />
+                    [ngModel]="seg.velocityStr"
+                    (ngModelChange)="planning.updateField(i, 'velocityStr', $event)" placeholder="default" />
                 </label>
               }
             </div>
@@ -125,28 +70,21 @@ function createSegment(kind: SegmentKind, dof: number): SegmentModel {
         </div>
       }
 
-      <!-- ── Add segment buttons ── -->
       <div class="planning-panel__add-row">
-        <button class="planning-panel__add-btn" (click)="addSegment('movej')">
-          + MoveJ
-        </button>
-        <button class="planning-panel__add-btn" (click)="addSegment('movel')">
-          + MoveL
-        </button>
+        <button class="planning-panel__add-btn" (click)="addSegment('movej')">+ MoveJ</button>
+        <button class="planning-panel__add-btn" (click)="addSegment('movel')">+ MoveL</button>
       </div>
 
-      <!-- ── Actions ── -->
       <div class="planning-panel__actions">
         <button
           class="planning-panel__submit"
           (click)="previewPlan()"
-          [disabled]="loading() || segments().length === 0"
+          [disabled]="loading() || planning.segments().length === 0"
         >
           {{ loading() ? 'Compiling…' : 'Preview' }}
         </button>
       </div>
 
-      <!-- ── Error ── -->
       @if (error()) {
         <div class="planning-panel__error">{{ error() }}</div>
       }
@@ -155,111 +93,63 @@ function createSegment(kind: SegmentKind, dof: number): SegmentModel {
   styleUrl: './planning-panel.scss',
 })
 export class PlanningPanel {
+  protected readonly planning = inject(PlanningStore);
   private readonly api = inject(SceneApiService);
-  private readonly store = inject(SceneStore);
+  private readonly scene = inject(SceneStore);
 
-  protected readonly segments = signal<SegmentModel[]>([]);
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
 
   private get dof(): number {
-    return this.store.state()?.runtime?.robot.dof ?? 0;
+    return this.scene.state()?.runtime?.robot.dof ?? 0;
   }
 
-  // ── Segment management ──
+  // ── Segment management delegates to store ──
 
   protected addSegment(kind: SegmentKind): void {
-    this.segments.update(arr => [...arr, createSegment(kind, this.dof)]);
+    this.planning.addSegment(kind, this.dof);
   }
 
   protected removeSegment(event: MouseEvent, index: number): void {
     event.stopPropagation();
-    this.segments.update(arr => arr.filter((_, i) => i !== index));
+    this.planning.removeSegment(index);
   }
 
-  protected toggleSegment(index: number): void {
-    this.segments.update(arr => {
-      const next = [...arr];
-      next[index] = { ...next[index], expanded: !next[index].expanded };
-      return next;
-    });
-  }
-
-  protected updateField(i: number, field: keyof SegmentModel, value: any): void {
-    this.segments.update(arr => {
-      const next = [...arr];
-      (next[i] as any)[field] = value;
-      return next;
-    });
-  }
-
-  /** Called by JointEditor when user changes any joint value in a MoveJ segment. */
-  protected updateSegmentJoints(segIndex: number, joints: number[]): void {
-    this.segments.update(arr => {
-      const next = [...arr];
-      next[segIndex] = { ...next[segIndex], joints };
-      return next;
-    });
-  }
-
-  /** Called by PoseInputs when user changes any input in a MoveL segment. */
-  protected updateSegmentPose(i: number, v: PoseInputsValue): void {
-    this.segments.update(arr => {
-      const next = [...arr];
-      next[i] = {
-        ...next[i],
-        txStr: String(v.translation[0]),
-        tyStr: String(v.translation[1]),
-        tzStr: String(v.translation[2]),
-        rotationFormat: v.rotationFormat,
-        yawStr: String(v.yprDeg[0]),
-        pitchStr: String(v.yprDeg[1]),
-        rollStr: String(v.yprDeg[2]),
-        qwStr: String(v.quaternion[0]),
-        qxStr: String(v.quaternion[1]),
-        qyStr: String(v.quaternion[2]),
-        qzStr: String(v.quaternion[3]),
-      };
-      return next;
-    });
-  }
-
-  /** Convert a SegmentModel's pose fields to PoseInputsValue for initial display. */
-  protected segmentToPoseValue(seg: SegmentModel): PoseInputsValue {
-    return {
-      translation: [
-        parseFloat(seg.txStr) || 0,
-        parseFloat(seg.tyStr) || 0,
-        parseFloat(seg.tzStr) || 0,
-      ],
-      rotationFormat: seg.rotationFormat,
-      yprDeg: [
-        parseFloat(seg.yawStr) || 0,
-        parseFloat(seg.pitchStr) || 0,
-        parseFloat(seg.rollStr) || 0,
-      ],
-      quaternion: [
-        parseFloat(seg.qwStr) || 1,
-        parseFloat(seg.qxStr) || 0,
-        parseFloat(seg.qyStr) || 0,
-        parseFloat(seg.qzStr) || 0,
-      ],
-    };
+  protected onPoseChange(i: number, v: PoseInputsValue): void {
+    this.planning.updateSegmentPose(i, v);
   }
 
   protected segmentColor(index: number): string {
     return SEGMENT_COLORS[index % SEGMENT_COLORS.length];
   }
 
-  // ── Parsing helpers ──
+  // ── Helpers ──
+
+  protected segmentToPoseValue(seg: SegmentModel): PoseInputsValue {
+    const s = seg as any;
+    return {
+      translation: [
+        parseFloat(s.txStr) || 0,
+        parseFloat(s.tyStr) || 0,
+        parseFloat(s.tzStr) || 0,
+      ],
+      rotationFormat: s.rotationFormat,
+      yprDeg: [
+        parseFloat(s.yawStr) || 0,
+        parseFloat(s.pitchStr) || 0,
+        parseFloat(s.rollStr) || 0,
+      ],
+      quaternion: [
+        parseFloat(s.qwStr) || 1,
+        parseFloat(s.qxStr) || 0,
+        parseFloat(s.qyStr) || 0,
+        parseFloat(s.qzStr) || 0,
+      ],
+    };
+  }
 
   private parseFloatOpt(s: string): number | undefined {
     const v = parseFloat(s);
-    return isFinite(v) ? v : undefined;
-  }
-
-  private parseIntOpt(s: string): number | undefined {
-    const v = parseInt(s, 10);
     return isFinite(v) ? v : undefined;
   }
 
@@ -268,7 +158,7 @@ export class PlanningPanel {
   private buildPlanRequest(): MotionPlanRequest {
     const segments: MotionSegmentDto[] = [];
 
-    for (const seg of this.segments()) {
+    for (const seg of this.planning.segments()) {
       if (seg.kind === 'movej') {
         segments.push({ type: 'movej', target: seg.joints });
       } else {
@@ -305,7 +195,7 @@ export class PlanningPanel {
   // ── Preview ──
 
   protected previewPlan(): void {
-    if (this.segments().length === 0) return;
+    if (this.planning.segments().length === 0) return;
 
     const request = this.buildPlanRequest();
 
@@ -314,7 +204,7 @@ export class PlanningPanel {
 
     this.api.previewPlan(request).subscribe({
       next: res => {
-        this.store.applySnapshot(res);
+        this.scene.applySnapshot(res);
         this.loading.set(false);
       },
       error: (err: Error) => {
