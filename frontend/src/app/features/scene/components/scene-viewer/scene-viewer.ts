@@ -3,7 +3,7 @@ import { SceneStore } from '../../store/scene.store';
 import { ThreeRendererService } from '../../services/three-renderer.service';
 import { TrajectoryOverlayService } from '../../renderer/trajectory-overlay.service';
 import { IkTargetOverlayService } from '../../renderer/ik-target-overlay.service';
-import { WorkspaceOverlayService } from '../../services/workspace-overlay.service';
+import { PointCloudOverlayService } from '../../renderer/point-cloud-overlay.service';
 import { WorkspaceStore } from '../../../workspace/store/workspace.store';
 import { rotationDtoToQuaternion } from '../../utils/rotation';
 
@@ -44,7 +44,7 @@ export class SceneViewer implements AfterViewInit {
   private readonly store = inject(SceneStore);
   private readonly workspace = inject(WorkspaceStore);
   private readonly renderer = inject(ThreeRendererService);
-  private readonly overlay = inject(WorkspaceOverlayService);
+  private readonly pointCloud = inject(PointCloudOverlayService);
   private readonly trajectoryOverlay = inject(TrajectoryOverlayService);
   private readonly ikTargetOverlay = inject(IkTargetOverlayService);
 
@@ -119,7 +119,7 @@ export class SceneViewer implements AfterViewInit {
 
   ngAfterViewInit(): void {
     this.renderer.init(this.canvasRef.nativeElement);
-    this.renderer.registerOverlay(this.overlay);
+    this.renderer.registerOverlay(this.pointCloud);
     this.renderer.registerOverlay(this.trajectoryOverlay);
     this.renderer.registerOverlay(this.ikTargetOverlay);
     this.syncPointCloudOverlay();
@@ -140,13 +140,13 @@ export class SceneViewer implements AfterViewInit {
     const show = this.workspace.showPointCloud();
 
     if (manip && show) {
-      this.overlay.setGradientPointCloud(manip.points);
+      this.pointCloud.setGradientPointCloud(manip.points);
     } else if (singularity && show) {
-      this.overlay.setColoredPointCloud(singularity.points);
+      this.pointCloud.setColoredPointCloud(singularity.points);
     } else if (cloud && show) {
-      this.overlay.setPointCloud(cloud);
+      this.pointCloud.setPointCloud(cloud);
     } else {
-      this.overlay.clear();
+      this.pointCloud.clear();
     }
   }
 }

@@ -119,6 +119,7 @@ describe('dto-to-model', () => {
         primitives: [
           {
             id: 'cyl-1',
+            frame_id: '',
             translation: [0, 0, 0] as [number, number, number],
             rotation: [0, 0, 0, 1] as [number, number, number, number],
             geometry: { Cylinder: { radius: 0.5, height: 2.0 } },
@@ -143,6 +144,7 @@ describe('dto-to-model', () => {
         primitives: [
           {
             id: 'sphere-1',
+            frame_id: '',
             translation: [1, 2, 3] as [number, number, number],
             rotation: [0, 0, 0, 1] as [number, number, number, number],
             geometry: { Sphere: { radius: 0.3 } },
@@ -166,6 +168,7 @@ describe('dto-to-model', () => {
         primitives: [
           {
             id: 'box-1',
+            frame_id: '',
             translation: [0, 0, 0] as [number, number, number],
             rotation: [0, 0, 0, 1] as [number, number, number, number],
             geometry: { Box: { width: 1, height: 2, depth: 3 } },
@@ -243,16 +246,14 @@ describe('dto-to-model', () => {
               orientation: [0, 0, 0, 1],
               joints: [0, 0],
               timestamp: 0,
-              is_start: true,
-              is_end: false,
+              waypoint_type: 'Start',
             },
             {
               position: [1, 1, 1],
               orientation: [0, 0, 0, 1],
               joints: [1, 1],
               timestamp: 1,
-              is_start: false,
-              is_end: true,
+              waypoint_type: 'Goal',
             },
           ],
           motion_type: 'movel',
@@ -265,8 +266,8 @@ describe('dto-to-model', () => {
       const result = toActivePlan(dto);
       expect(result!.visualization).not.toBeNull();
       expect(result!.visualization!.waypoints).toHaveLength(2);
-      expect(result!.visualization!.waypoints[0].isStart).toBe(true);
-      expect(result!.visualization!.waypoints[1].isEnd).toBe(true);
+      expect(result!.visualization!.waypoints[0].waypointType).toBe('Start');
+      expect(result!.visualization!.waypoints[1].waypointType).toBe('Goal');
       expect(result!.visualization!.motionType).toBe('movel');
     });
   });
