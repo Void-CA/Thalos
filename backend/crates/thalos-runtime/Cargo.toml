@@ -10,6 +10,6 @@ thalos-planning = { path = "../thalos-planning" }
 thiserror = "2"
 chrono = "0.4"
 rand = "0.8"
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["sync", "rt", "macros"] }
 async-trait = "0.1"
 arc-swap = "1"

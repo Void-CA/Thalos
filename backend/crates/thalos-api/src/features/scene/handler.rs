@@ -6,6 +6,7 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+
 use serde_json::{json, Value};
 use thalos_models::urdf::parser::parse_robot;
 
@@ -185,50 +186,38 @@ const IK_LAMBDA: f64 = 0.1;
 /// the updated runtime state. The robot does NOT move — this is strictly
 /// a "compile + preview" operation. Execution requires a subsequent
 /// call to `start_execution`.
-#[axum::debug_handler]
 pub async fn preview_plan(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<MotionPlanRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
-    let snapshot = state.services.scene.snapshot().await?;
-    let default_ee = *snapshot.chain.end_effector();
+    // Phase 1 — read snapshot, build program, compile (all sync except the snapshot read)
+    let compiled = {
+        let snapshot = state.services.scene.snapshot().await?;
+        let default_ee = *snapshot.chain.end_effector();
+        let program = payload.into_program(default_ee);
 
-    // Build the motion program from the request
-    let program = payload.into_program(default_ee);
+        if program.segments.is_empty() {
+            return Ok(Json(to_api_response(&snapshot)));
+        }
 
-    if program.segments.is_empty() {
-        // Nothing to plan — return current state
-        return Ok(Json(to_api_response(&snapshot)));
-    }
-
-    // Create an IK solver and planning context from the runtime state
-    let fk = ForwardKinematics::new(snapshot.chain.clone());
-    let solver = DampedLeastSquaresSolver::new(
-        fk,
-        default_ee,
-        IK_MAX_ITERS,
-        IK_TOLERANCE,
-        IK_LAMBDA,
-    );
-    let robot_state = RobotState::new(snapshot.joints.clone());
-    let ctx = PlanningContext {
-        robot: &snapshot.chain,
-        current_state: &robot_state,
-        ik_solver: &solver,
-    };
-
-    // Compile
-    let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
-    let compiled = compiler
-        .compile(&program, &ctx)
-        .map_err(|err: CompileError| {
-            ApiError::Validation {
+        let fk = ForwardKinematics::new(snapshot.chain.clone());
+        let solver = DampedLeastSquaresSolver::new(fk, default_ee, IK_MAX_ITERS, IK_TOLERANCE, IK_LAMBDA);
+        let robot_state = RobotState::new(snapshot.joints.clone());
+        let ctx = PlanningContext {
+            robot: &snapshot.chain,
+            current_state: &robot_state,
+            ik_solver: &solver,
+        };
+        let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
+        compiler.compile(&program, &ctx)
+            .map_err(|err: CompileError| ApiError::Validation {
                 message: err.to_string(),
                 code: format!("segment_{}_failed", err.segment_index),
-            }
-        })?;
+            })?
+    };
+    // snapshot, fk, solver, ctx, robot_state, program dropped here
 
-    // Schedule the plan (no execution)
+    // Phase 2 — schedule (async), clean scope
     let snapshot = state.services.scene.schedule_program(compiled).await?;
     Ok(Json(to_api_response(&snapshot)))
 }

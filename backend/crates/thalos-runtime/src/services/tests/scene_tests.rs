@@ -1,9 +1,17 @@
 
+use std::sync::Arc;
+
+use tokio::sync::RwLock;
+
 use crate::{
-    backends::InternalBackend,
+    backends::{
+        controller::simulation::SimulationController,
+        manager::BackendManager,
+        InternalBackend,
+    },
     commands::kinematics::KinematicsCommand,
     commands::motion::MotionCommands,
-    Command, RuntimeSnapshot, SceneService,
+    Command, RobotController, RuntimeSnapshot, SceneService,
 };
 use thalos_core::{
     math::geometry::{
@@ -18,9 +26,15 @@ use thalos_core::{
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
-/// Create a SceneService with the given model and default backend.
-fn make_service(model: RobotModel) -> SceneService {
-    SceneService::new(Box::new(InternalBackend), model)
+/// Create a SceneService with the given model and a BackendManager (simulation).
+async fn make_service(model: RobotModel) -> (SceneService, Arc<BackendManager>) {
+    let controller = Arc::new(RwLock::new(
+        SimulationController::new(model.metadata().dof),
+    )) as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let manager = Arc::new(BackendManager::new());
+    manager.set_active(controller).await.unwrap();
+    let svc = SceneService::new(Box::new(InternalBackend), manager.clone(), model);
+    (svc, manager)
 }
 
 /// Resolve the end effector frame from a snapshot's chain.
@@ -46,12 +60,12 @@ fn assert_ee_at(snapshot: &RuntimeSnapshot, target: Vector3, tol: f64) {
 
 // ─── SetJoints ────────────────────────────────────────────────────
 
-#[test]
-fn set_joints_updates_state_and_fk() {
-    let svc = make_service(RobotModel::Scara);
+#[tokio::test]
+async fn set_joints_updates_state_and_fk() {
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
     let joints = vec![0.5, -0.3, 0.1, 0.0];
 
-    let snap = svc.execute(Command::SetJoints(joints.clone())).unwrap();
+    let snap = svc.execute(Command::SetJoints(joints.clone())).await.unwrap();
 
     assert_eq!(snap.joints, joints);
     assert_eq!(snap.robot, RobotModel::Scara);
@@ -67,13 +81,13 @@ fn set_joints_updates_state_and_fk() {
 
 // ─── LoadRobot ────────────────────────────────────────────────────
 
-#[test]
-fn load_robot_changes_model_and_resets_joints() {
-    let svc = make_service(RobotModel::Scara);
+#[tokio::test]
+async fn load_robot_changes_model_and_resets_joints() {
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
     // Set some joints first
-    svc.execute(Command::SetJoints(vec![1.0, 2.0, 3.0, 4.0])).unwrap();
+    svc.execute(Command::SetJoints(vec![1.0, 2.0, 3.0, 4.0])).await.unwrap();
 
-    let snap = svc.execute(Command::LoadRobot(RobotModel::Planar3R)).unwrap();
+    let snap = svc.execute(Command::LoadRobot(RobotModel::Planar3R)).await.unwrap();
 
     assert_eq!(snap.robot, RobotModel::Planar3R);
     assert_eq!(snap.joints.len(), 3, "Planar3R has 3 DOF");
@@ -81,12 +95,12 @@ fn load_robot_changes_model_and_resets_joints() {
     assert!(snap.joints.iter().all(|&j| j == 0.0));
 }
 
-#[test]
-fn load_robot_twice_produces_independent_snapshots() {
-    let svc = make_service(RobotModel::Scara);
+#[tokio::test]
+async fn load_robot_twice_produces_independent_snapshots() {
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
 
-    let snap1 = svc.execute(Command::LoadRobot(RobotModel::Planar2R)).unwrap();
-    let snap2 = svc.execute(Command::LoadRobot(RobotModel::Scara)).unwrap();
+    let snap1 = svc.execute(Command::LoadRobot(RobotModel::Planar2R)).await.unwrap();
+    let snap2 = svc.execute(Command::LoadRobot(RobotModel::Scara)).await.unwrap();
 
     assert_eq!(snap1.robot, RobotModel::Planar2R);
     assert_eq!(snap2.robot, RobotModel::Scara);
@@ -94,9 +108,9 @@ fn load_robot_twice_produces_independent_snapshots() {
     assert_eq!(snap2.joints.len(), 4);
 }
 
-#[test]
-fn load_robot_clears_active_plan() {
-    let svc = make_service(RobotModel::Planar2R);
+#[tokio::test]
+async fn load_robot_clears_active_plan() {
+    let (svc, _mgr) = make_service(RobotModel::Planar2R).await;
 
     // Create a plan for Planar2R
     let snap = svc
@@ -106,14 +120,14 @@ fn load_robot_clears_active_plan() {
             max_acceleration: None,
             time_step: None,
         }))
-        .unwrap();
+        .await.unwrap();
     assert!(
         snap.active_plan.is_some(),
         "plan must exist after PlanAndMoveJ",
     );
 
     // Load a different robot — plan must be cleared
-    let snap = svc.execute(Command::LoadRobot(RobotModel::Scara)).unwrap();
+    let snap = svc.execute(Command::LoadRobot(RobotModel::Scara)).await.unwrap();
     assert!(
         snap.active_plan.is_none(),
         "active_plan must be None after LoadRobot",
@@ -128,26 +142,26 @@ fn load_robot_clears_active_plan() {
 
 /// Single execution of MoveToPosition on a SCARA: the solver should
 /// bring the end effector within tolerance of the target.
-#[test]
-fn move_to_position_converges_scara() {
-    let svc = make_service(RobotModel::Scara);
-    let snap0 = svc.snapshot().unwrap();
+#[tokio::test]
+async fn move_to_position_converges_scara() {
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
+    let snap0 = svc.snapshot().await.unwrap();
     let ee = ee(&snap0);
     let target = Vector3::new(0.3, 0.3, 0.0); // well within SCARA workspace
 
     let snap = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
         frame: ee,
         target,
-    })).unwrap();
+    })).await.unwrap();
 
     assert_ee_at(&snap, target, 0.01);
 }
 
 /// Sequential MoveToPosition commands: each should converge from the
 /// previous configuration.
-#[test]
-fn move_to_position_sequential() {
-    let svc = make_service(RobotModel::Scara);
+#[tokio::test]
+async fn move_to_position_sequential() {
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
 
     let targets = [
         Vector3::new(0.3, 0.3, 0.0),
@@ -155,10 +169,10 @@ fn move_to_position_sequential() {
         Vector3::new(0.0, 0.0, 0.0),
     ];
 
-    let mut snap = svc.snapshot().unwrap();
+    let mut snap = svc.snapshot().await.unwrap();
     for &target in &targets {
         let ee = ee(&snap);
-        snap = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition { frame: ee, target })).unwrap();
+        snap = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition { frame: ee, target })).await.unwrap();
         assert_ee_at(&snap, target, 0.01);
     }
 }
@@ -167,10 +181,10 @@ fn move_to_position_sequential() {
 /// The child frame "link_2" should move to the target.
 /// NOTE: target includes a Y component to avoid the X-axis singularity
 /// at full extension (q=[0,…,0]).
-#[test]
-fn move_to_position_custom_frame() {
-    let svc = make_service(RobotModel::Scara);
-    let snap = svc.snapshot().unwrap();
+#[tokio::test]
+async fn move_to_position_custom_frame() {
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
+    let snap = svc.snapshot().await.unwrap();
 
     // SCARA creates frames in order: link_1 (id 0), link_2 (id 1), …
     let link2 = FrameId::Id(1);
@@ -184,7 +198,7 @@ fn move_to_position_custom_frame() {
     let snap = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
         frame: link2,
         target,
-    })).unwrap();
+    })).await.unwrap();
 
     let final_pos = snap.fk_result.pose(&link2)
         .unwrap()
@@ -199,10 +213,10 @@ fn move_to_position_custom_frame() {
 
 /// Reachable target close to the initial configuration with a Y offset
 /// to avoid the X-axis singularity (full extension at q=[0,0,0,0]).
-#[test]
-fn move_to_position_nearby() {
-    let svc = make_service(RobotModel::Scara);
-    let snap0 = svc.snapshot().unwrap();
+#[tokio::test]
+async fn move_to_position_nearby() {
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
+    let snap0 = svc.snapshot().await.unwrap();
     let ee = ee(&snap0);
 
     // Target with Y component: evita singularidad de extensión total
@@ -211,7 +225,7 @@ fn move_to_position_nearby() {
     let snap = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
         frame: ee,
         target,
-    })).unwrap();
+    })).await.unwrap();
 
     assert_ee_at(&snap, target, 0.01);
 }
@@ -222,10 +236,10 @@ fn move_to_position_nearby() {
 /// MoveToPose with identity rotation (same as initial SCARA orientation).
 /// Since the orientation is already matched, the solver primarily works
 /// on position error, but exercises the full 6-DOF IK path.
-#[test]
-fn move_to_pose_converges_with_identity_rotation() {
-    let svc = make_service(RobotModel::Scara);
-    let snap0 = svc.snapshot().unwrap();
+#[tokio::test]
+async fn move_to_pose_converges_with_identity_rotation() {
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
+    let snap0 = svc.snapshot().await.unwrap();
     let ee_frame = ee(&snap0);
 
     let target_pos = Vector3::new(0.3, 0.3, 0.0);
@@ -242,7 +256,7 @@ fn move_to_pose_converges_with_identity_rotation() {
     let snap = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPose {
         frame: ee_frame,
         target: target_pose,
-    })).unwrap();
+    })).await.unwrap();
 
     assert_ee_at(&snap, target_pos, 0.01);
 }
@@ -250,10 +264,10 @@ fn move_to_pose_converges_with_identity_rotation() {
 /// MoveToPose converges when both position and orientation targets
 /// can be satisfied (using a planar 3R arm, targeting identity rot +
 /// a reachable position).
-#[test]
-fn move_to_pose_3r_converges() {
-    let svc = make_service(RobotModel::Planar3R);
-    let snap0 = svc.snapshot().unwrap();
+#[tokio::test]
+async fn move_to_pose_3r_converges() {
+    let (svc, _mgr) = make_service(RobotModel::Planar3R).await;
+    let snap0 = svc.snapshot().await.unwrap();
     let ee_frame = ee(&snap0);
 
     let target_pos = Vector3::new(0.8, 0.5, 0.0);
@@ -270,7 +284,7 @@ fn move_to_pose_3r_converges() {
     let snap = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPose {
         frame: ee_frame,
         target: target_pose,
-    })).unwrap();
+    })).await.unwrap();
 
     assert_ee_at(&snap, target_pos, 0.01);
 }
@@ -278,10 +292,10 @@ fn move_to_pose_3r_converges() {
 
 // ─── Snapshot consistency ─────────────────────────────────────────
 
-#[test]
-fn snapshot_after_ik_differs_from_initial() {
-    let svc = make_service(RobotModel::Scara);
-    let snap0 = svc.snapshot().unwrap();
+#[tokio::test]
+async fn snapshot_after_ik_differs_from_initial() {
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
+    let snap0 = svc.snapshot().await.unwrap();
     let ee_frame = ee(&snap0);
     let initial_joints = snap0.joints.clone();
 
@@ -289,7 +303,7 @@ fn snapshot_after_ik_differs_from_initial() {
     let snap1 = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
         frame: ee_frame,
         target,
-    })).unwrap();
+    })).await.unwrap();
 
     // Joints must have changed
     assert_ne!(snap1.joints, initial_joints);
@@ -298,10 +312,10 @@ fn snapshot_after_ik_differs_from_initial() {
 }
 
 /// After an IK command, the snapshot carries solver metadata.
-#[test]
-fn move_to_position_includes_ik_result() {
-    let svc = make_service(RobotModel::Scara);
-    let snap0 = svc.snapshot().unwrap();
+#[tokio::test]
+async fn move_to_position_includes_ik_result() {
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
+    let snap0 = svc.snapshot().await.unwrap();
     let ee_frame = ee(&snap0);
 
     // Non-IK snapshot → ik_result is None
@@ -311,7 +325,7 @@ fn move_to_position_includes_ik_result() {
     let snap1 = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
         frame: ee_frame,
         target,
-    })).unwrap();
+    })).await.unwrap();
 
     let ik = snap1.ik_result.as_ref()
         .expect("IK command snapshot must have ik_result");
@@ -321,12 +335,12 @@ fn move_to_position_includes_ik_result() {
 }
 
 /// Multiple snapshots without mutations must return consistent joints.
-#[test]
-fn snapshot_is_deterministic() {
-    let svc = make_service(RobotModel::Scara);
+#[tokio::test]
+async fn snapshot_is_deterministic() {
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
 
-    let snap1 = svc.snapshot().unwrap();
-    let snap2 = svc.snapshot().unwrap();
+    let snap1 = svc.snapshot().await.unwrap();
+    let snap2 = svc.snapshot().await.unwrap();
 
     assert_eq!(snap1.joints, snap2.joints);
 }
@@ -334,22 +348,22 @@ fn snapshot_is_deterministic() {
 
 // ─── SolveIK (no mutation) ────────────────────────────────────────
 
-#[test]
-fn solve_ik_returns_joints_without_mutating_state() {
-    let svc = make_service(RobotModel::Scara);
-    let snap0 = svc.snapshot().unwrap();
+#[tokio::test]
+async fn solve_ik_returns_joints_without_mutating_state() {
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
+    let snap0 = svc.snapshot().await.unwrap();
     let ee_frame = ee(&snap0);
     let initial_joints = snap0.joints.clone();
 
     let target = Vector3::new(0.3, 0.3, 0.0);
-    let (solved_joints, ik) = svc.solve_ik(ee_frame, IKGoal::Position(target)).unwrap();
+    let (solved_joints, ik) = svc.solve_ik(ee_frame, IKGoal::Position(target)).await.unwrap();
 
     // Must return solved joints distinct from initial
     assert_ne!(solved_joints, initial_joints, "solve_ik must propose new joints");
     assert!(ik.status.is_converged(), "IK must converge");
 
     // State must NOT have changed
-    let snap1 = svc.snapshot().unwrap();
+    let snap1 = svc.snapshot().await.unwrap();
     assert_eq!(
         snap1.joints, initial_joints,
         "solve_ik must NOT mutate runtime state",
@@ -359,10 +373,10 @@ fn solve_ik_returns_joints_without_mutating_state() {
 
 // ─── Edge cases ───────────────────────────────────────────────────
 
-#[test]
-fn move_to_position_unreachable_still_produces_valid_fk() {
-    let svc = make_service(RobotModel::Scara);
-    let snap0 = svc.snapshot().unwrap();
+#[tokio::test]
+async fn move_to_position_unreachable_still_produces_valid_fk() {
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
+    let snap0 = svc.snapshot().await.unwrap();
     let ee_frame = ee(&snap0);
 
     // Target far outside SCARA workspace
@@ -371,7 +385,7 @@ fn move_to_position_unreachable_still_produces_valid_fk() {
     let snap = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
         frame: ee_frame,
         target,
-    })).unwrap();
+    })).await.unwrap();
 
     // Even if IK fails to converge, the snapshot must have valid FK
     let pose = snap.fk_result.pose(&ee_frame)
@@ -387,10 +401,10 @@ fn move_to_position_unreachable_still_produces_valid_fk() {
 
 // ─── PlanAndMoveJ (joint-space trajectory) ─────────────────────────
 
-#[test]
-fn plan_and_movej_stores_trajectory_in_snapshot() {
-    let svc = make_service(RobotModel::Planar2R);
-    let initial = svc.snapshot().unwrap();
+#[tokio::test]
+async fn plan_and_movej_stores_trajectory_in_snapshot() {
+    let (svc, _mgr) = make_service(RobotModel::Planar2R).await;
+    let initial = svc.snapshot().await.unwrap();
     assert!(
         initial.active_plan.is_none(),
         "initial snapshot must not have active_plan",
@@ -403,7 +417,7 @@ fn plan_and_movej_stores_trajectory_in_snapshot() {
             max_acceleration: None,
             time_step: None,
         }))
-        .unwrap();
+        .await.unwrap();
 
     let plan = snap
         .active_plan
@@ -425,9 +439,9 @@ fn plan_and_movej_stores_trajectory_in_snapshot() {
     );
 }
 
-#[test]
-fn plan_and_movej_reaches_target_position() {
-    let svc = make_service(RobotModel::Planar2R);
+#[tokio::test]
+async fn plan_and_movej_reaches_target_position() {
+    let (svc, _mgr) = make_service(RobotModel::Planar2R).await;
     let target = vec![1.5, -0.8];
 
     let snap = svc
@@ -437,15 +451,15 @@ fn plan_and_movej_reaches_target_position() {
             max_acceleration: None,
             time_step: None,
         }))
-        .unwrap();
+        .await.unwrap();
 
     assert_eq!(snap.joints, target, "joints must match the target after PlanAndMoveJ");
 }
 
-#[test]
-fn plan_and_movej_trajectory_starts_at_initial_position() {
-    let svc = make_service(RobotModel::Planar2R);
-    let initial = svc.snapshot().unwrap().joints;
+#[tokio::test]
+async fn plan_and_movej_trajectory_starts_at_initial_position() {
+    let (svc, _mgr) = make_service(RobotModel::Planar2R).await;
+    let initial = svc.snapshot().await.unwrap().joints;
 
     let snap = svc
         .execute(Command::Motion(MotionCommands::PlanAndMoveJ {
@@ -454,7 +468,7 @@ fn plan_and_movej_trajectory_starts_at_initial_position() {
             max_acceleration: None,
             time_step: None,
         }))
-        .unwrap();
+        .await.unwrap();
 
     let plan = snap.active_plan.as_ref().unwrap();
     let first_waypoint = &plan.trajectory.waypoints()[0];
@@ -466,9 +480,9 @@ fn plan_and_movej_trajectory_starts_at_initial_position() {
     );
 }
 
-#[test]
-fn plan_and_movej_with_velocity_param() {
-    let svc = make_service(RobotModel::Planar2R);
+#[tokio::test]
+async fn plan_and_movej_with_velocity_param() {
+    let (svc, _mgr) = make_service(RobotModel::Planar2R).await;
 
     let snap = svc
         .execute(Command::Motion(MotionCommands::PlanAndMoveJ {
@@ -477,7 +491,7 @@ fn plan_and_movej_with_velocity_param() {
             max_acceleration: Some(1.0),
             time_step: None,
         }))
-        .unwrap();
+        .await.unwrap();
 
     assert_eq!(snap.joints, vec![0.5, -0.3]);
     assert!(snap.active_plan.is_some());
@@ -486,10 +500,10 @@ fn plan_and_movej_with_velocity_param() {
 
 // ─── PlanAndMoveL (cartesian → joint-space trajectory) ─────────────
 
-#[test]
-fn plan_and_movel_stores_trajectory_in_snapshot() {
-    let svc = make_service(RobotModel::Planar2R);
-    let snap0 = svc.snapshot().unwrap();
+#[tokio::test]
+async fn plan_and_movel_stores_trajectory_in_snapshot() {
+    let (svc, _mgr) = make_service(RobotModel::Planar2R).await;
+    let snap0 = svc.snapshot().await.unwrap();
     let ee = *snap0.chain.end_effector();
 
     let target_pos = Vector3::new(0.3, 0.4, 0.0);
@@ -511,7 +525,7 @@ fn plan_and_movel_stores_trajectory_in_snapshot() {
             time_step: None,
             cartesian_step: None,
         }))
-        .unwrap();
+        .await.unwrap();
 
     let plan = snap
         .active_plan
@@ -530,11 +544,11 @@ fn plan_and_movel_stores_trajectory_in_snapshot() {
     }
 }
 
-#[test]
-fn snapshot_includes_trajectory_after_plan_command() {
-    let svc = make_service(RobotModel::Planar2R);
+#[tokio::test]
+async fn snapshot_includes_trajectory_after_plan_command() {
+    let (svc, _mgr) = make_service(RobotModel::Planar2R).await;
 
-    let snap1 = svc.snapshot().unwrap();
+    let snap1 = svc.snapshot().await.unwrap();
     assert!(snap1.active_plan.is_none());
 
     svc.execute(Command::Motion(MotionCommands::PlanAndMoveJ {
@@ -543,16 +557,16 @@ fn snapshot_includes_trajectory_after_plan_command() {
         max_acceleration: None,
         time_step: None,
     }))
-    .unwrap();
+    .await.unwrap();
 
-    let snap2 = svc.snapshot().unwrap();
+    let snap2 = svc.snapshot().await.unwrap();
     assert!(
         snap2.active_plan.is_some(),
         "snapshot() must include active_plan after planning command",
     );
 
     // Trajectory persists in subsequent snapshots until replaced
-    let snap3 = svc.snapshot().unwrap();
+    let snap3 = svc.snapshot().await.unwrap();
     assert!(
         snap3.active_plan.is_some(),
         "plan must persist across snapshots",

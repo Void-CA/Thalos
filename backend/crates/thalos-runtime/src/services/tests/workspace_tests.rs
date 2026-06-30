@@ -1,14 +1,20 @@
 use std::sync::Arc;
 
+use tokio::sync::RwLock;
+
 use thalos_core::analysis::workspace::{
     Workspace, WorkspaceConfig, WorkspaceError,
 };
 use thalos_core::math::geometry::vectors::Vector3;
 use thalos_core::models::RobotModel;
 
-use crate::backends::InternalBackend;
+use crate::backends::{
+    controller::simulation::SimulationController,
+    manager::BackendManager,
+    InternalBackend,
+};
 use crate::error::RuntimeError;
-use crate::services::scene::SceneService;
+use crate::{RobotController, SceneService};
 use crate::services::workspace::WorkspaceService;
 
 // ─── 4.2: sample returns Arc<Workspace> ────────────────────────────────
@@ -98,10 +104,15 @@ fn same_seed_produces_identical_workspaces() {
 
 // ─── 4.4: sample does NOT mutate SceneService state ─────────────────────
 
-#[test]
-fn sample_does_not_mutate_scene_service_state() {
-    let scene = SceneService::new(Box::new(InternalBackend), RobotModel::Scara);
-    let snap_before = scene.snapshot().unwrap();
+#[tokio::test]
+async fn sample_does_not_mutate_scene_service_state() {
+    let controller = Arc::new(RwLock::new(
+        SimulationController::new(RobotModel::Scara.metadata().dof),
+    )) as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let manager = Arc::new(BackendManager::new());
+    manager.set_active(controller).await.unwrap();
+    let scene = SceneService::new(Box::new(InternalBackend), manager, RobotModel::Scara);
+    let snap_before = scene.snapshot().await.unwrap();
 
     let _ws = WorkspaceService::sample(
         RobotModel::Scara,
@@ -109,7 +120,7 @@ fn sample_does_not_mutate_scene_service_state() {
     )
     .unwrap();
 
-    let snap_after = scene.snapshot().unwrap();
+    let snap_after = scene.snapshot().await.unwrap();
 
     // Joints must be identical
     assert_eq!(snap_before.joints, snap_after.joints);
