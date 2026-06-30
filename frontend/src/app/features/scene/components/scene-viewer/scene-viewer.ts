@@ -5,17 +5,20 @@ import { TrajectoryOverlayService } from '../../renderer/trajectory-overlay.serv
 import { IkTargetOverlayService } from '../../renderer/ik-target-overlay.service';
 import { PointCloudOverlayService } from '../../renderer/point-cloud-overlay.service';
 import { WorkspaceStore } from '../../../workspace/store/workspace.store';
+import { ModeStore } from '../../../shared/store/mode.store';
 import { rotationDtoToQuaternion } from '../../utils/rotation';
 
 /**
- * Contenedor Three.js que renderiza la escena robótica + gizmo IK.
+ * Contenedor Three.js que renderiza la escena robótica con overlays
+ * contextuales según el modo activo (ModeStore).
  *
  * Reacciona al SceneStore.state via effect() — sin subscriptions manuales.
  * Los effects están separados por responsabilidad:
  *   1. Escena (data) — solo cuando cambia la geometría
- *   2. Trayectoria (activePlan) — solo al compilar/preview
- *   3. Gizmo (ikTarget) — actualización local
+ *   2. Trayectoria (activePlan) — solo en planning / execution
+ *   3. Gizmo IK (ikTarget) — solo en analysis / planning
  *   4. Transforms (liveTransforms) — cada tick, frames + links
+ *   5. Point cloud (workspace) — solo en analysis
  *
  * Componente PURO de renderizado: no monta paneles de control.
  * El panel IK vive en el sidebar de la app (ver app.html).
@@ -43,6 +46,7 @@ export class SceneViewer implements AfterViewInit {
 
   private readonly store = inject(SceneStore);
   private readonly workspace = inject(WorkspaceStore);
+  private readonly modeStore = inject(ModeStore);
   private readonly renderer = inject(ThreeRendererService);
   private readonly pointCloud = inject(PointCloudOverlayService);
   private readonly trajectoryOverlay = inject(TrajectoryOverlayService);
@@ -77,22 +81,24 @@ export class SceneViewer implements AfterViewInit {
       }
     });
 
-    // Effect 2: trajectory overlay — solo al compilar/preview (NUNCA en tick)
+    // Effect 2: trajectory overlay — solo en planning / execution
     effect(() => {
       const plan = this.activePlan();
+      const mode = this.modeStore.mode();
       const vis = plan?.visualization;
       const segs = plan?.segments;
-      if (vis && vis.waypoints.length > 0) {
+      if ((mode === 'planning' || mode === 'execution') && vis && vis.waypoints.length > 0) {
         this.trajectoryOverlay.syncTrajectory(vis.waypoints, vis.motionType, segs ?? undefined);
       } else {
         this.trajectoryOverlay.clearTrajectory();
       }
     });
 
-    // Effect 3: IK gizmo — actualización local del target
+    // Effect 3: IK gizmo — solo en analysis / planning
     effect(() => {
       const target = this.store.state().ikTarget;
-      if (target) {
+      const mode = this.modeStore.mode();
+      if ((mode === 'analysis' || mode === 'planning') && target) {
         const quat = target.rotation
           ? rotationDtoToQuaternion(target.rotation)
           : undefined;
@@ -110,10 +116,14 @@ export class SceneViewer implements AfterViewInit {
       }
     });
 
-    // Sync point cloud overlay from workspace analysis.
+    // Effect 5: point cloud overlay — solo en analysis.
     // Priority: manipulability (gradient) > singularity (state colors) > monochrome.
     effect(() => {
-      this.syncPointCloudOverlay();
+      if (this.modeStore.mode() === 'analysis') {
+        this.syncPointCloudOverlay();
+      } else {
+        this.pointCloud.clear();
+      }
     });
   }
 
