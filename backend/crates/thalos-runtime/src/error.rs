@@ -5,6 +5,33 @@ use thalos_core::models::RobotModelError;
 
 use thalos_planning::error::PlanningError;
 
+/// Errors specific to the RobotController trait.
+#[derive(Error, Debug)]
+pub enum ControllerError {
+    #[error("controller is already connected")]
+    AlreadyConnected,
+
+    #[error("controller is not connected")]
+    NotConnected,
+
+    #[error("this capability is not supported by the current controller")]
+    UnsupportedCapability,
+
+    #[error("operation timed out")]
+    Timeout,
+}
+
+impl ControllerError {
+    pub fn error_code(&self) -> &'static str {
+        match self {
+            ControllerError::AlreadyConnected => "already_connected",
+            ControllerError::NotConnected => "not_connected",
+            ControllerError::UnsupportedCapability => "unsupported_capability",
+            ControllerError::Timeout => "timeout",
+        }
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum RuntimeError {
     #[error("robot model error: {0}")]

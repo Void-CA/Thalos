@@ -1,4 +1,5 @@
 mod internal;
+pub mod controller;
 
 pub use internal::InternalBackend;
 
