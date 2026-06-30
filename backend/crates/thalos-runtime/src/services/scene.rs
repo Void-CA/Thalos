@@ -1,4 +1,6 @@
-use std::sync::RwLock;
+use std::sync::Arc;
+
+use tokio::sync::RwLock;
 
 use thalos_core::{
     kinematics::{
@@ -11,6 +13,7 @@ use thalos_core::{
 };
 use thalos_planning::motion::program::CompiledPlan;
 
+use crate::backends::manager::BackendManager;
 use crate::backends::RobotBackend;
 use crate::commands::handler::ExecutableCommand;
 use crate::commands::Command;
@@ -18,20 +21,22 @@ use crate::error::RuntimeError;
 use crate::snapshots::{RuntimeSnapshot, TickDelta};
 use crate::state::robot::{ActiveRobot, SceneRuntime};
 
-
-/// Default IK solver configuration.
 const IK_MAX_ITERS: usize = 500;
 const IK_TOLERANCE: f64 = 1e-6;
 const IK_LAMBDA: f64 = 0.1;
 
-
 pub struct SceneService {
     runtime: RwLock<SceneRuntime>,
     backend: Box<dyn RobotBackend + Send + Sync>,
+    manager: Arc<BackendManager>,
 }
 
 impl SceneService {
-    pub fn new(backend: Box<dyn RobotBackend + Send + Sync>, model: RobotModel) -> Self {
+    pub fn new(
+        backend: Box<dyn RobotBackend + Send + Sync>,
+        manager: Arc<BackendManager>,
+        model: RobotModel,
+    ) -> Self {
         let chain = RobotRegistry::create_default(model);
         let dof = model.metadata().dof;
         let active_robot = ActiveRobot::new(model, chain, vec![0.0; dof]);
@@ -41,6 +46,7 @@ impl SceneService {
         Self {
             runtime: RwLock::new(runtime),
             backend,
+            manager,
         }
     }
 
@@ -49,14 +55,13 @@ impl SceneService {
         fk.evaluate(joints)
     }
 
-    /// Returns a snapshot of the current runtime state with FK result.
-    pub fn snapshot(&self) -> Result<RuntimeSnapshot, RuntimeError> {
-        let runtime = self.runtime.read().unwrap();
-
+    fn build_snapshot(
+        runtime: &SceneRuntime,
+        ik_result: Option<IKResult>,
+    ) -> RuntimeSnapshot {
         let fk_result = Self::compute_fk(&runtime.active_robot.chain, &runtime.active_robot.joints);
 
-        let ik_result = None;
-        Ok(RuntimeSnapshot {
+        RuntimeSnapshot {
             robot: runtime.active_robot.model,
             robot_source: runtime.robot_source.clone(),
             robot_name: runtime.robot_name.clone(),
@@ -66,145 +71,153 @@ impl SceneService {
             fk_result,
             ik_result,
             active_plan: runtime.active_plan.clone(),
-            execution: runtime.execution.clone(),
+            execution: None,
             generated_at: chrono::Utc::now(),
-        })
+        }
     }
 
-    pub fn execute(&self, cmd: Command) -> Result<RuntimeSnapshot, RuntimeError> {
-        let ik_result = cmd.execute(&mut *self.runtime.write().unwrap())?;
-        self.snapshot_with_ik(ik_result)
+    /// Read-only snapshot (no IK metadata).
+    pub async fn snapshot(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        let runtime = self.runtime.read().await;
+        Ok(Self::build_snapshot(&runtime, None))
     }
 
-    pub fn solve_ik(
+    /// Execute a command (IK motion, FK set joints, etc.).
+    pub async fn execute(&self, cmd: Command) -> Result<RuntimeSnapshot, RuntimeError> {
+        let ik_result = {
+            let mut runtime = self.runtime.write().await;
+            cmd.execute(&mut *runtime)?
+        };
+        let runtime = self.runtime.read().await;
+        Ok(Self::build_snapshot(&runtime, ik_result))
+    }
+
+    pub async fn solve_ik(
         &self,
         frame: FrameId,
         goal: IKGoal,
     ) -> Result<(Vec<f64>, IKResult), RuntimeError> {
-        let runtime = self.runtime.read().unwrap();
+        let runtime = self.runtime.read().await;
         let fk = ForwardKinematics::new(runtime.active_robot.chain.clone());
         let solver = DampedLeastSquaresSolver::new(fk, frame, IK_MAX_ITERS, IK_TOLERANCE, IK_LAMBDA);
-
         let q0 = runtime.active_robot.joints.clone();
         let result = solver.solve(&q0, goal);
-
         Ok((result.q.clone(), result))
     }
 
-    // ── Multi-segment program (Preview) ──
+    // ── Program management ──
 
     /// Compile and store a motion program for preview.
-    ///
-    /// This does NOT start execution — the plan is stored and visualised,
-    /// and the robot stays at its current position.
-    pub fn schedule_program(&self, compiled: CompiledPlan) -> Result<RuntimeSnapshot, RuntimeError> {
+    pub async fn schedule_program(&self, compiled: CompiledPlan) -> Result<RuntimeSnapshot, RuntimeError> {
         {
-            let mut runtime = self.runtime.write().unwrap();
+            let mut runtime = self.runtime.write().await;
             runtime.schedule_plan(compiled);
         }
-        self.snapshot_with_ik(None)
+        let runtime = self.runtime.read().await;
+        Ok(Self::build_snapshot(&runtime, None))
     }
 
-    // ── Execution control ──
+    // ── Execution control (delegates to controller via BackendManager) ──
 
-    /// Start execution of the scheduled plan.
-    pub fn start_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
-        {
-            let mut runtime = self.runtime.write().unwrap();
-            runtime.start_execution();
+    /// Extract waypoints from the active plan's trajectory.
+    fn trajectory_to_waypoints(runtime: &SceneRuntime) -> (Vec<Vec<f64>>, f64) {
+        if let Some(ref plan) = runtime.scheduled_plan {
+            let traj = &plan.merged_trajectory;
+            let wps: Vec<Vec<f64>> = traj.waypoints().iter().map(|w| w.joints().to_vec()).collect();
+            return (wps, traj.duration());
         }
-        self.snapshot_with_ik(None)
+        if let Some(ref plan) = runtime.active_plan {
+            let traj = &plan.trajectory;
+            let wps: Vec<Vec<f64>> = traj.waypoints().iter().map(|w| w.joints().to_vec()).collect();
+            return (wps, traj.duration());
+        }
+        (Vec::new(), 0.0)
     }
 
-    /// Pause execution.
-    pub fn pause_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
-        {
-            let mut runtime = self.runtime.write().unwrap();
-            runtime.pause_execution();
+    pub async fn start_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        if let Some(ctrl) = self.manager.get_controller().await {
+            let (waypoints, duration) = {
+                let runtime = self.runtime.read().await;
+                Self::trajectory_to_waypoints(&runtime)
+            };
+            if !waypoints.is_empty() && duration > 0.0 {
+                let mut c = ctrl.write().await;
+                c.execute(waypoints, duration).await?;
+            }
         }
-        self.snapshot_with_ik(None)
+        let runtime = self.runtime.read().await;
+        Ok(Self::build_snapshot(&runtime, None))
     }
 
-    /// Resume a paused execution.
-    pub fn resume_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
-        {
-            let mut runtime = self.runtime.write().unwrap();
-            runtime.resume_execution();
+    pub async fn pause_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        if let Some(ctrl) = self.manager.get_controller().await {
+            let mut c = ctrl.write().await;
+            c.pause().await?;
         }
-        self.snapshot_with_ik(None)
+        let runtime = self.runtime.read().await;
+        Ok(Self::build_snapshot(&runtime, None))
     }
 
-    /// Cancel execution.
-    pub fn cancel_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
-        {
-            let mut runtime = self.runtime.write().unwrap();
-            runtime.cancel_execution();
+    pub async fn resume_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        if let Some(ctrl) = self.manager.get_controller().await {
+            let mut c = ctrl.write().await;
+            c.resume().await?;
         }
-        self.snapshot_with_ik(None)
+        let runtime = self.runtime.read().await;
+        Ok(Self::build_snapshot(&runtime, None))
     }
 
-    /// Reset the execution session for re-run.
-    pub fn reset_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
-        {
-            let mut runtime = self.runtime.write().unwrap();
-            runtime.reset_execution();
+    pub async fn cancel_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        if let Some(ctrl) = self.manager.get_controller().await {
+            let mut c = ctrl.write().await;
+            c.stop().await?;
         }
-        self.snapshot_with_ik(None)
+        let runtime = self.runtime.read().await;
+        Ok(Self::build_snapshot(&runtime, None))
     }
 
     // ── Tick ──
 
-    /// Advance execution by `dt` seconds and return the updated snapshot.
-    pub fn tick_execution(&self, dt: f64) -> Result<RuntimeSnapshot, RuntimeError> {
-        {
-            let mut runtime = self.runtime.write().unwrap();
-            runtime.advance_trajectory(dt);
+    /// Advance execution by `dt` seconds via the controller, then build
+    /// a TickDelta from the resulting RobotState.
+    pub async fn tick_execution_delta(&self, dt: f64) -> Result<TickDelta, RuntimeError> {
+        // 1. Advance simulation time via the controller trait
+        if let Some(ctrl) = self.manager.get_controller().await {
+            let ctrl_guard = ctrl.read().await;
+            let _ = ctrl_guard.advance(dt).await; // non-fatal for real backends
         }
-        self.snapshot_with_ik(None)
-    }
 
-    /// Advance execution y devuelve solo el delta (ligero).
-    ///
-    /// A diferencia de `tick_execution`, no construye el snapshot completo.
-    /// Esto permite al frontend recibir únicamente lo que cambia en cada tick.
-    pub fn tick_execution_delta(&self, dt: f64) -> Result<TickDelta, RuntimeError> {
-        let mut runtime = self.runtime.write().unwrap();
-        runtime.advance_trajectory(dt);
+        // 2. Read state back & update runtime joints
+        if let Some(ctrl) = self.manager.get_controller().await {
+            let state = ctrl.read().await.robot_state().await;
+            let mut runtime = self.runtime.write().await;
+            runtime.set_joints_from_state(&state.joints.positions);
 
-        let plan_duration = runtime
-            .active_plan
-            .as_ref()
-            .map(|p| p.trajectory.duration())
-            .unwrap_or(0.0);
+            let plan_duration = runtime
+                .active_plan
+                .as_ref()
+                .map(|p| p.trajectory.duration())
+                .unwrap_or(0.0);
 
+            let fk_result = Self::compute_fk(&runtime.active_robot.chain, &runtime.active_robot.joints);
+
+            return Ok(TickDelta::from_robot_state(
+                &state,
+                runtime.active_robot.chain.clone(),
+                fk_result,
+                plan_duration,
+            ));
+        }
+
+        // Fallback: no controller — read-only snapshot
+        let runtime = self.runtime.read().await;
         let fk_result = Self::compute_fk(&runtime.active_robot.chain, &runtime.active_robot.joints);
-
         Ok(TickDelta {
             joints: runtime.active_robot.joints.clone(),
             chain: runtime.active_robot.chain.clone(),
             fk_result,
-            execution: runtime.execution.clone(),
-            plan_duration,
-        })
-    }
-
-    /// Build a snapshot, injecting optional IK metadata.
-    fn snapshot_with_ik(&self, ik_result: Option<IKResult>) -> Result<RuntimeSnapshot, RuntimeError> {
-        let runtime = self.runtime.read().unwrap();
-        let fk_result = Self::compute_fk(&runtime.active_robot.chain, &runtime.active_robot.joints);
-
-        Ok(RuntimeSnapshot {
-            robot: runtime.active_robot.model,
-            robot_source: runtime.robot_source.clone(),
-            robot_name: runtime.robot_name.clone(),
-            joints_meta: runtime.joints_meta.clone(),
-            joints: runtime.active_robot.joints.clone(),
-            chain: runtime.active_robot.chain.clone(),
-            fk_result,
-            ik_result,
-            active_plan: runtime.active_plan.clone(),
-            execution: runtime.execution.clone(),
-            generated_at: chrono::Utc::now(),
+            execution: None,
+            plan_duration: 0.0,
         })
     }
 }

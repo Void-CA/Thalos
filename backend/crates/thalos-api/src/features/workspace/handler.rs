@@ -154,7 +154,7 @@ pub async fn sample_active(
     State(state): State<Arc<AppState>>,
     Json(req): Json<ActiveSampleRequest>,
 ) -> ApiResult<WorkspaceDto> {
-    let snapshot = state.services.scene.snapshot()?;
+    let snapshot = state.services.scene.snapshot().await?;
 
     let config = WorkspaceConfig {
         samples: req.samples,
@@ -185,7 +185,7 @@ pub async fn bounds_active(
     State(state): State<Arc<AppState>>,
     Json(req): Json<ActiveSampleRequest>,
 ) -> ApiResult<BoundingBoxDto> {
-    let snapshot = state.services.scene.snapshot()?;
+    let snapshot = state.services.scene.snapshot().await?;
 
     let config = WorkspaceConfig {
         samples: req.samples,
@@ -206,7 +206,7 @@ pub async fn analyze_active(
     State(state): State<Arc<AppState>>,
     Json(req): Json<ActiveAnalysisRequest>,
 ) -> ApiResult<ActiveAnalysisResponse> {
-    let snapshot = state.services.scene.snapshot()?;
+    let snapshot = state.services.scene.snapshot().await?;
 
     let config = WorkspaceConfig {
         samples: req.samples,
@@ -257,7 +257,7 @@ pub async fn singularity_active(
     State(state): State<Arc<AppState>>,
     Json(req): Json<ActiveSingularityRequest>,
 ) -> ApiResult<SingularityResponse> {
-    let snapshot = state.services.scene.snapshot()?;
+    let snapshot = state.services.scene.snapshot().await?;
 
     let config = WorkspaceConfig {
         samples: req.samples,
@@ -291,7 +291,7 @@ pub async fn manipulability_active(
     State(state): State<Arc<AppState>>,
     Json(req): Json<ActiveSampleRequest>,
 ) -> ApiResult<ManipulabilityResponse> {
-    let snapshot = state.services.scene.snapshot()?;
+    let snapshot = state.services.scene.snapshot().await?;
 
     let config = WorkspaceConfig {
         samples: req.samples,

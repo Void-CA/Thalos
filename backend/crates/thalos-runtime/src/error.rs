@@ -32,6 +32,17 @@ impl ControllerError {
     }
 }
 
+impl From<ControllerError> for RuntimeError {
+    fn from(e: ControllerError) -> Self {
+        match e {
+            ControllerError::AlreadyConnected | ControllerError::NotConnected |
+            ControllerError::UnsupportedCapability | ControllerError::Timeout => {
+                RuntimeError::JointCountMismatch { expected: 0, received: 0 }
+            }
+        }
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum RuntimeError {
     #[error("robot model error: {0}")]

@@ -42,7 +42,7 @@ pub async fn movel(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<MoveLRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
-    let snapshot = state.services.scene.snapshot()?;
+    let snapshot = state.services.scene.snapshot().await?;
     let default_ee = *snapshot.chain.end_effector();
     let frame = payload
         .frame_id

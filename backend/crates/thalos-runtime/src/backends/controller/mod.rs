@@ -95,6 +95,14 @@ pub trait RobotController: Send + Sync {
         Err(ControllerError::UnsupportedCapability)
     }
 
+    /// Advance simulation time by `dt` seconds.
+    ///
+    /// Simulation backends implement this to interpolate along the trajectory.
+    /// Real hardware backends return `Err(UnsupportedCapability)` — time is real.
+    async fn advance(&self, _dt: f64) -> Result<(), ControllerError> {
+        Err(ControllerError::UnsupportedCapability)
+    }
+
     /// Live state of the robot, as an `Arc` for cheap sharing.
     async fn robot_state(&self) -> Arc<RobotState>;
 

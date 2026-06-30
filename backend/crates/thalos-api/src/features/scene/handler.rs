@@ -77,7 +77,7 @@ pub(crate) fn to_api_response(snapshot: &thalos_runtime::RuntimeSnapshot) -> Run
 pub async fn get_scene(
     State(state): State<Arc<AppState>>,
 ) -> ApiResult<RuntimeStateResponse> {
-    let snapshot = state.services.scene.snapshot()?;
+    let snapshot = state.services.scene.snapshot().await?;
     Ok(Json(to_api_response(&snapshot)))
 }
 
@@ -98,7 +98,7 @@ pub async fn load_robot(
     Json(payload): Json<LoadRobotRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
     let cmd = payload.into_command()?;
-    let snapshot = state.services.scene.execute(cmd)?;
+    let snapshot = state.services.scene.execute(cmd).await?;
     Ok(Json(to_api_response(&snapshot)))
 }
 
@@ -144,7 +144,7 @@ pub async fn load_robot_from_urdf(
         robot,
     };
 
-    let snapshot = state.services.scene.execute(cmd)?;
+    let snapshot = state.services.scene.execute(cmd).await?;
     Ok(Json(to_api_response(&snapshot)))
 }
 
@@ -152,11 +152,11 @@ pub async fn move_to_position(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<MoveToPositionRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
-    let snapshot = state.services.scene.snapshot()?;
+    let snapshot = state.services.scene.snapshot().await?;
     let default_ee = *snapshot.chain.end_effector();
     let cmd = payload.into_command(default_ee);
 
-    let snapshot = state.services.scene.execute(cmd)?;
+    let snapshot = state.services.scene.execute(cmd).await?;
     Ok(Json(to_api_response(&snapshot)))
 }
 
@@ -164,11 +164,11 @@ pub async fn move_to_pose(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<MoveToPoseRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
-    let snapshot = state.services.scene.snapshot()?;
+    let snapshot = state.services.scene.snapshot().await?;
     let default_ee = *snapshot.chain.end_effector();
     let cmd = payload.into_command(default_ee);
 
-    let snapshot = state.services.scene.execute(cmd)?;
+    let snapshot = state.services.scene.execute(cmd).await?;
     Ok(Json(to_api_response(&snapshot)))
 }
 
@@ -189,7 +189,7 @@ pub async fn preview_plan(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<MotionPlanRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
-    let snapshot = state.services.scene.snapshot()?;
+    let snapshot = state.services.scene.snapshot().await?;
     let default_ee = *snapshot.chain.end_effector();
 
     // Build the motion program from the request
@@ -228,7 +228,7 @@ pub async fn preview_plan(
         })?;
 
     // Schedule the plan (no execution)
-    let snapshot = state.services.scene.schedule_program(compiled)?;
+    let snapshot = state.services.scene.schedule_program(compiled).await?;
     Ok(Json(to_api_response(&snapshot)))
 }
 
@@ -239,7 +239,7 @@ pub async fn preview_plan(
 pub async fn start_execution(
     State(state): State<Arc<AppState>>,
 ) -> ApiResult<RuntimeStateResponse> {
-    let snapshot = state.services.scene.start_execution()?;
+    let snapshot = state.services.scene.start_execution().await?;
     Ok(Json(to_api_response(&snapshot)))
 }
 
@@ -247,7 +247,7 @@ pub async fn start_execution(
 pub async fn pause_execution(
     State(state): State<Arc<AppState>>,
 ) -> ApiResult<RuntimeStateResponse> {
-    let snapshot = state.services.scene.pause_execution()?;
+    let snapshot = state.services.scene.pause_execution().await?;
     Ok(Json(to_api_response(&snapshot)))
 }
 
@@ -255,7 +255,7 @@ pub async fn pause_execution(
 pub async fn resume_execution(
     State(state): State<Arc<AppState>>,
 ) -> ApiResult<RuntimeStateResponse> {
-    let snapshot = state.services.scene.resume_execution()?;
+    let snapshot = state.services.scene.resume_execution().await?;
     Ok(Json(to_api_response(&snapshot)))
 }
 
@@ -263,7 +263,7 @@ pub async fn resume_execution(
 pub async fn cancel_execution(
     State(state): State<Arc<AppState>>,
 ) -> ApiResult<RuntimeStateResponse> {
-    let snapshot = state.services.scene.cancel_execution()?;
+    let snapshot = state.services.scene.cancel_execution().await?;
     Ok(Json(to_api_response(&snapshot)))
 }
 
@@ -271,7 +271,7 @@ pub async fn cancel_execution(
 pub async fn reset_execution(
     State(state): State<Arc<AppState>>,
 ) -> ApiResult<RuntimeStateResponse> {
-    let snapshot = state.services.scene.reset_execution()?;
+    let snapshot = state.services.scene.reset_execution().await?;
     Ok(Json(to_api_response(&snapshot)))
 }
 
@@ -291,7 +291,7 @@ pub async fn tick_execution(
     Json(payload): Json<TickRequest>,
 ) -> ApiResult<RuntimeDelta> {
     let dt = payload.dt.max(0.001);
-    let delta = state.services.scene.tick_execution_delta(dt)?;
+    let delta = state.services.scene.tick_execution_delta(dt).await?;
     Ok(Json(to_delta_response(&delta)))
 }
 
@@ -302,11 +302,11 @@ pub async fn solve_ik_position(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<MoveToPositionRequest>,
 ) -> ApiResult<SolveIKResponse> {
-    let snapshot = state.services.scene.snapshot()?;
+    let snapshot = state.services.scene.snapshot().await?;
     let default_ee = *snapshot.chain.end_effector();
     let (frame, goal) = payload.to_ik_goal(default_ee);
 
-    let (joints, ik) = state.services.scene.solve_ik(frame, goal)?;
+    let (joints, ik) = state.services.scene.solve_ik(frame, goal).await?;
     Ok(Json(SolveIKResponse {
         joints,
         ik_result: ik.into(),
@@ -317,11 +317,11 @@ pub async fn solve_ik_pose(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<MoveToPoseRequest>,
 ) -> ApiResult<SolveIKResponse> {
-    let snapshot = state.services.scene.snapshot()?;
+    let snapshot = state.services.scene.snapshot().await?;
     let default_ee = *snapshot.chain.end_effector();
     let (frame, goal) = payload.to_ik_goal(default_ee);
 
-    let (joints, ik) = state.services.scene.solve_ik(frame, goal)?;
+    let (joints, ik) = state.services.scene.solve_ik(frame, goal).await?;
     Ok(Json(SolveIKResponse {
         joints,
         ik_result: ik.into(),

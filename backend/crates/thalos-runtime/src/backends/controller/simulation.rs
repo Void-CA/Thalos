@@ -42,7 +42,7 @@ impl SimulationController {
 
     /// Advance the simulation by `dt` seconds, interpolating joint angles
     /// and updating the internal `RobotState`.
-    pub async fn advance(&self, dt: f64) {
+    pub async fn advance_inner(&self, dt: f64) {
         let waypoints = self.waypoints.read().await;
         let duration = *self.duration.read().await;
         let mut execution = self.execution.write().await;
@@ -177,6 +177,11 @@ impl RobotController for SimulationController {
             s.motion.mode = MotionMode::Moving;
             Arc::new(s)
         });
+        Ok(())
+    }
+
+    async fn advance(&self, dt: f64) -> Result<(), ControllerError> {
+        self.advance_inner(dt).await;
         Ok(())
     }
 
