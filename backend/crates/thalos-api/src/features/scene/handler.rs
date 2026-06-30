@@ -185,6 +185,7 @@ const IK_LAMBDA: f64 = 0.1;
 /// the updated runtime state. The robot does NOT move — this is strictly
 /// a "compile + preview" operation. Execution requires a subsequent
 /// call to `start_execution`.
+#[axum::debug_handler]
 pub async fn preview_plan(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<MotionPlanRequest>,
