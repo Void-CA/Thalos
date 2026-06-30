@@ -180,12 +180,6 @@ impl Default for Diagnostics {
     }
 }
 
-// ── Increment revision helper (internal) ──
-
-pub(crate) fn next_revision(state: &RobotState) -> Revision {
-    state.revision + 1
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

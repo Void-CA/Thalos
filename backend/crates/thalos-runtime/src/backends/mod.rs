@@ -1,7 +1,9 @@
 mod internal;
 pub mod controller;
+pub mod manager;
 
 pub use internal::InternalBackend;
+pub use manager::BackendManager;
 
 use thalos_core::models::RobotModel;
 
