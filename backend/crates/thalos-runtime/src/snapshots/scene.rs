@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use chrono::{DateTime, Utc};
 
 use thalos_core::{
@@ -10,12 +12,10 @@ use thalos_core::{
 };
 use thalos_models::Robot;
 
-use crate::plan::{ActiveMotionPlan, ExecutionSession};
+use crate::plan::{ActiveMotionPlan, ExecutionSession, SessionStatus};
+use crate::state::robot_state::RobotState;
 
 /// Lightweight joint metadata for URDF-imported robots.
-///
-/// Mirrors core's `JointInfo` but uses owned strings so it can represent
-/// dynamically-imported robots from URDF source.
 #[derive(Debug, Clone)]
 pub struct JointMeta {
     pub name: String,
@@ -26,56 +26,98 @@ pub struct JointMeta {
 
 /// Immutable snapshot of the runtime state at a point in time.
 ///
-/// Contains only domain state — no visual representation.
-/// Visual scene construction is the responsibility of the API layer.
-/// When produced by an IK command, `ik_result` carries the solver metadata.
+/// Field types remain unchanged for API backward compatibility.
+/// The `from_robot_state` constructor is the new construction path;
+/// direct field construction is still supported for tests.
 pub struct RuntimeSnapshot {
-    /// The active robot model (built-in enum — keep for backward compat).
     pub robot: RobotModel,
-    /// Full URDF model when the robot was imported; `None` for built-in robots.
     pub robot_source: Option<Robot>,
-    /// Human-readable robot name (from built-in metadata or URDF).
     pub robot_name: String,
-    /// Joint metadata — empty for built-in robots; populated for URDF imports.
     pub joints_meta: Vec<JointMeta>,
-    /// Current joint angles.
     pub joints: Vec<f64>,
-    /// The kinematic chain of the active robot.
     pub chain: SerialChain,
-    /// The forward kinematics result computed from the current joints.
     pub fk_result: FKResult,
-    /// Solver metadata when this snapshot was produced by an IK command.
     pub ik_result: Option<IKResult>,
-    /// Active motion plan, if any (plan data + derived state).
     pub active_plan: Option<ActiveMotionPlan>,
-    /// Execution session, if execution has been started.
-    /// `None` before Start or after Reset/Cancel.
     pub execution: Option<ExecutionSession>,
-    /// When this snapshot was taken.
     pub generated_at: DateTime<Utc>,
 }
 
 impl RuntimeSnapshot {
-    /// Progress of the active plan's trajectory as a fraction 0.0–1.0.
+    /// Build a snapshot from a RobotState + runtime context.
+    ///
+    /// ExecutionSession is derived from RobotState.execution for backward compat.
+    pub fn from_robot_state(
+        state: &Arc<RobotState>,
+        robot: RobotModel,
+        robot_source: Option<Robot>,
+        robot_name: String,
+        joints_meta: Vec<JointMeta>,
+        chain: SerialChain,
+        fk_result: FKResult,
+        active_plan: Option<ActiveMotionPlan>,
+    ) -> Self {
+        let execution = session_from_robot_state(state);
+        Self {
+            robot,
+            robot_source,
+            robot_name,
+            joints_meta,
+            joints: state.joints.positions.clone(),
+            chain,
+            fk_result,
+            ik_result: None,
+            active_plan,
+            execution,
+            generated_at: Utc::now(),
+        }
+    }
+
     pub fn trajectory_progress(&self) -> Option<f64> {
         self.active_plan.as_ref().map(|p| p.progress())
     }
 }
 
-/// Lightweight tick result: solo lo que cambia durante ejecución.
+/// Lightweight tick result — derived from RobotState.
 ///
-/// A diferencia de `RuntimeSnapshot`, no incluye robot model, joint metadata,
-/// plan details, ni timestamps. Solo lo necesario para actualizar el frontend
-/// en cada tick.
+/// Field types remain unchanged for API backward compatibility.
+/// The `from_robot_state` constructor is the new construction path.
 pub struct TickDelta {
-    /// Current joint angles.
     pub joints: Vec<f64>,
-    /// The kinematic chain (needed to build link transforms from FK).
     pub chain: SerialChain,
-    /// FK result computed from current joints.
     pub fk_result: FKResult,
-    /// Execution session, if any.
     pub execution: Option<ExecutionSession>,
-    /// Total trajectory duration in seconds (for progress computation).
     pub plan_duration: f64,
+}
+
+impl TickDelta {
+    pub fn from_robot_state(
+        state: &Arc<RobotState>,
+        chain: SerialChain,
+        fk_result: FKResult,
+        plan_duration: f64,
+    ) -> Self {
+        let execution = session_from_robot_state(state);
+        Self {
+            joints: state.joints.positions.clone(),
+            chain,
+            fk_result,
+            execution,
+            plan_duration,
+        }
+    }
+}
+
+/// Derive an ExecutionSession from RobotState.execution info.
+fn session_from_robot_state(state: &Arc<RobotState>) -> Option<ExecutionSession> {
+    let progress = state.execution.progress;
+    let status = match state.motion.mode {
+        _ if state.motion.mode.is_idle() && progress >= 1.0 => SessionStatus::Completed,
+        _ if state.motion.mode.is_moving() => SessionStatus::Running,
+        _ if state.motion.mode.is_paused() => SessionStatus::Paused,
+        _ if state.motion.mode.is_stopping() => SessionStatus::Cancelled,
+        _ if state.motion.mode.is_estop() => SessionStatus::Failed,
+        _ => SessionStatus::Ready,
+    };
+    Some(ExecutionSession::derived(status, progress))
 }
