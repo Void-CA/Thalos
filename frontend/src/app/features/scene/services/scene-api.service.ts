@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { RuntimeStateResponse, SolveIKResponse, MoveToPositionRequest, MoveToPoseRequest, ExecuteIKRequest } from '../scene-api.types';
+import { RuntimeDelta, RuntimeStateResponse, SolveIKResponse, MoveToPositionRequest, MoveToPoseRequest, ExecuteIKRequest, MotionPlanRequest } from '../scene-api.types';
 import { API_BASE_URL } from '../../../shared/api/api-config';
 
 @Injectable({ providedIn: 'root' })
@@ -30,6 +30,13 @@ export class SceneApiService {
       {
         robot_id: robotId,
       }
+    );
+  }
+
+  loadRobotFromUrdf(urdfSource: string): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/scene/robot/from-urdf`,
+      { urdf_source: urdfSource },
     );
   }
 
@@ -99,6 +106,63 @@ export class SceneApiService {
     return this.http.post<RuntimeStateResponse>(
       `${this.baseUrl}/motion/movel`,
       { target, ...(frame_id !== undefined ? { frame_id } : {}), ...(velocity !== undefined ? { velocity } : {}) },
+    );
+  }
+
+  // ── Motion plan (multi-segment program) ──
+
+  /** Compile and preview a motion program (no execution). */
+  previewPlan(request: MotionPlanRequest): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/scene/motion/plan`,
+      request,
+    );
+  }
+
+  // ── Execution control ──
+
+  startExecution(): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/scene/motion/start`,
+      {},
+    );
+  }
+
+  pauseExecution(): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/scene/motion/pause`,
+      {},
+    );
+  }
+
+  resumeExecution(): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/scene/motion/resume`,
+      {},
+    );
+  }
+
+  cancelExecution(): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/scene/motion/cancel`,
+      {},
+    );
+  }
+
+  resetExecution(): Observable<RuntimeStateResponse> {
+    return this.http.post<RuntimeStateResponse>(
+      `${this.baseUrl}/scene/motion/reset`,
+      {},
+    );
+  }
+
+  // ── Execution tick ──
+
+  /** Advance execution by `dt` seconds. Returns solo el delta (ligero). */
+  tickExecution(dt: number): Observable<RuntimeDelta> {
+    return this.http.post<RuntimeDelta>(
+      `${this.baseUrl}/scene/motion/tick`,
+      { dt },
     );
   }
 }

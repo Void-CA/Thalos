@@ -23,6 +23,7 @@ pub fn create_spherical_polar_rrp(
     let link1 = Link {
         id: 0,
         transform: Transform3D::from_translation(Vector3::new(0.0, 0.0, l1)),
+        collision_geometry: None,
     };
     builder.add_segment(Segment {
         parent: FrameId::World,
@@ -38,6 +39,7 @@ pub fn create_spherical_polar_rrp(
     let link2 = Link {
         id: 1,
         transform: Transform3D::identity(),
+        collision_geometry: None,
     };
     builder.add_segment(Segment {
         parent: link_1_frame,
@@ -53,6 +55,7 @@ pub fn create_spherical_polar_rrp(
     let link3 = Link {
         id: 2,
         transform: Transform3D::identity(),
+        collision_geometry: None,
     };
     builder.add_segment(Segment {
         parent: link_2_frame,

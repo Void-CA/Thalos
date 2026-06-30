@@ -1,7 +1,19 @@
 import { Injectable, NgZone, inject } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { DEFAULT_FRAME_STYLE, SceneData, SceneFrame, SceneLink, ScenePrimitive, VisualWaypoint } from '../scene.types';
+import { DEFAULT_FRAME_STYLE, ObjectTransform, SceneData, SceneFrame, SceneLink, ScenePrimitive, SegmentInfo, VisualWaypoint } from '../scene.types';
+
+/** Palette for multi-segment trajectories — color assigned by segment index. */
+const SEGMENT_PALETTE = [
+  0x3b82f6, // blue
+  0x22c55e, // green
+  0xf59e0b, // amber
+  0xef4444, // red
+  0x8b5cf6, // violet
+  0xec4899, // pink
+  0x14b8a6, // teal
+  0xf97316, // orange
+];
 
 interface FrameSlot {
   group: THREE.Group;
@@ -18,7 +30,7 @@ interface PrimitiveSlot {
 
 interface TrajectorySlot {
   group: THREE.Group;
-  line: THREE.Line;
+  lines: THREE.Line[];
   markers: THREE.Mesh[];
 }
 
@@ -46,10 +58,24 @@ export class ThreeRendererService {
   private linkSlots = new Map<string, LinkSlot>();
   private primitiveSlots = new Map<string, PrimitiveSlot>();
 
+  /**
+   * Registro genérico de Object3D indexados por ID.
+   *
+   * Durante `syncTransforms`, cada `TransformUpdate` busca su Object3D aquí
+   * y actualiza position/quaternion/scale sin importar si es un frame, un
+   * link o una primitive.
+   *
+   * Los objetos se registran durante `applyScene` y se eliminan al disponerlos.
+   */
+  private readonly objectRegistry = new Map<string, THREE.Object3D>();
+
   // ── Reusable scratch objects (avoid allocations in hot path) ──
   private readonly scratchVec = new THREE.Vector3();
   private readonly scratchQuat = new THREE.Quaternion();
   private readonly scratchDir = new THREE.Vector3();
+  // CylinderGeometry is Y-aligned — this is a mesh adapter reference, NOT a
+  // coordinate system setting. Three.js CylinderGeometry stays Y-aligned while
+  // canonical Thalos cylinders are Z-aligned (mesh adapter, per ADR-0001).
   private readonly linkUp = new THREE.Vector3(0, 1, 0);
 
   // ── Material cache (per-color dedup) ──
@@ -65,7 +91,8 @@ export class ThreeRendererService {
     this.scene.background = new THREE.Color(0x1a1a1a);
 
     this.camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 100);
-    this.camera.position.set(0, 0, 3);
+    this.camera.up.set(0, 0, 1);
+    this.camera.position.set(2, -3, 2);
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(window.devicePixelRatio);
@@ -80,8 +107,10 @@ export class ThreeRendererService {
     sun.position.set(2, 5, 3);
     this.scene.add(sun);
 
-    // Reference grid (XZ plane — robot lives in XY)
-    this.scene.add(new THREE.GridHelper(4, 10, 0x666666, 0x444444));
+    // Reference grid (XY plane — Z-up horizontal ground)
+    const grid = new THREE.GridHelper(4, 10, 0x666666, 0x444444);
+    grid.rotation.x = Math.PI / 2;  // default XZ → XY for Z-up
+    this.scene.add(grid);
 
     // Content container
     this.contentGroup = new THREE.Group();
@@ -138,6 +167,7 @@ export class ThreeRendererService {
         slot = { group: this.buildFrame(frame) };
         this.frameSlots.set(frame.id, slot);
         this.contentGroup!.add(slot.group);
+        this.objectRegistry.set(frame.id, slot.group);
       }
       // Update transform only — no geometry churn
       const g = slot.group;
@@ -156,6 +186,7 @@ export class ThreeRendererService {
       if (!incoming.has(id)) {
         this.contentGroup!.remove(slot.group);
         this.disposeGroup(slot.group);
+        this.objectRegistry.delete(id);
         this.frameSlots.delete(id);
       }
     }
@@ -177,6 +208,24 @@ export class ThreeRendererService {
     this.makeAxisArrow(g, style.axisLength, style.axisRadius, style.colorZ, new THREE.Vector3(0, 0, 1));
 
     return g;
+  }
+
+  /**
+   * Actualización genérica de transforms desde RuntimeDelta.
+   *
+   * Cada `TransformUpdate` contiene un `id` que corresponde a un Object3D
+   * registrado durante `applyScene`. El método simplemente aplica
+   * position + quaternion + scale — sin importar si el objeto es un frame,
+   * un link o una primitive.
+   */
+  syncTransforms(transforms: ObjectTransform[]): void {
+    for (const tx of transforms) {
+      const obj = this.objectRegistry.get(tx.id);
+      if (!obj) continue;
+      obj.position.set(tx.translation[0], tx.translation[1], tx.translation[2]);
+      obj.quaternion.set(tx.rotation[1], tx.rotation[2], tx.rotation[3], tx.rotation[0]);
+      obj.scale.set(tx.scale[0], tx.scale[1], tx.scale[2]);
+    }
   }
 
   private syncLinks(links: SceneLink[]): void {
@@ -209,6 +258,7 @@ export class ThreeRendererService {
         slot = { mesh, baseLen: 1 };
         this.linkSlots.set(key, slot);
         this.contentGroup!.add(mesh);
+        this.objectRegistry.set(key, mesh);
       }
 
       const mesh = slot.mesh;
@@ -235,6 +285,7 @@ export class ThreeRendererService {
         this.contentGroup!.remove(slot.mesh);
         slot.mesh.geometry.dispose();
         (slot.mesh.material as THREE.Material).dispose();
+        this.objectRegistry.delete(key);
         this.linkSlots.delete(key);
       }
     }
@@ -247,7 +298,12 @@ export class ThreeRendererService {
       incoming.add(p.id);
       let slot = this.primitiveSlots.get(p.id);
 
-      const color = this.colorFor(p.id);
+      const color = p.color ? this.rgbaToColor(p.color) : this.colorFor(p.id);
+
+      // Resolve parent: frame group if known, else contentGroup.
+      // Guard: applyScene already checked this.contentGroup before calling syncPrimitives.
+      const fallback = this.contentGroup!; // non-null: guarded by applyScene
+      const parentGroup = this.frameSlots.get(p.frameId)?.group ?? fallback;
 
       if (!slot) {
         const geo = this.buildPrimitiveGeometry(p.geometry);
@@ -255,11 +311,16 @@ export class ThreeRendererService {
         const mesh = new THREE.Mesh(geo, this.getMaterial(color));
         slot = { mesh };
         this.primitiveSlots.set(p.id, slot);
-        this.contentGroup!.add(mesh);
+        parentGroup.add(mesh);
+        this.objectRegistry.set(p.id, mesh);
+      } else if (slot.mesh.parent !== parentGroup) {
+        // Reparent if frame changed (rare — robot swap)
+        slot.mesh.parent?.remove(slot.mesh);
+        parentGroup.add(slot.mesh);
       }
 
+      // Local position/rotation relative to parent frame (or world)
       slot.mesh.position.set(p.translation[0], p.translation[1], p.translation[2]);
-      // Rust quaternion [w, x, y, z] → Three.js (x, y, z, w)
       slot.mesh.quaternion.set(
         p.rotation[1],
         p.rotation[2],
@@ -271,13 +332,20 @@ export class ThreeRendererService {
     // Dispose removed primitives
     for (const [id, slot] of this.primitiveSlots) {
       if (!incoming.has(id)) {
-        this.contentGroup!.remove(slot.mesh);
+        slot.mesh.parent?.remove(slot.mesh);
         slot.mesh.geometry.dispose();
+        this.objectRegistry.delete(id);
         this.primitiveSlots.delete(id);
       }
     }
   }
 
+  /** Convert RGBA (0..1) from URDF to a hex number usable by Three.js. */
+  private rgbaToColor([r, g, b, _a]: [number, number, number, number]): number {
+    return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
+  }
+
+  /** Fallback colour when the backend didn't provide one. */
   private colorFor(id: string): number {
     if (id.includes('column')) return 0x888888;
     if (id.includes('link_1')) return 0x3399ff;
@@ -388,12 +456,11 @@ export class ThreeRendererService {
     );
     grp.add(sphere);
 
-    // Ring orbit
+    // Ring orbit — RingGeometry defaults to XY plane (horizontal in Z-up)
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(0.06, 0.08, 32),
       new THREE.MeshBasicMaterial({ color: 0xff6600, side: THREE.DoubleSide, transparent: true, opacity: 0.4 }),
     );
-    ring.rotation.x = Math.PI / 2;
     grp.add(ring);
 
     // Small local axes
@@ -438,7 +505,11 @@ export class ThreeRendererService {
   // ── Trajectory rendering ──
 
   /** Render or update the trajectory path + waypoint markers. */
-  syncTrajectory(waypoints: VisualWaypoint[]): void {
+  syncTrajectory(
+    waypoints: VisualWaypoint[],
+    motionType?: string,
+    segments?: SegmentInfo[],
+  ): void {
     if (!this.contentGroup) return;
 
     // Dispose previous trajectory slot if any
@@ -447,40 +518,73 @@ export class ThreeRendererService {
     if (waypoints.length < 2) return;
 
     const group = new THREE.Group();
-
-    // ── Path line ──
-    const pts = waypoints.map(wp => new THREE.Vector3(wp.position[0], wp.position[1], wp.position[2]));
-    const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
-    const lineMat = new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 2 });
-    const line = new THREE.Line(lineGeo, lineMat);
-    group.add(line);
-
-    // ── Waypoint markers ──
+    const lines: THREE.Line[] = [];
     const markers: THREE.Mesh[] = [];
-    const markerGeo = new THREE.SphereGeometry(0.025, 12, 12);
+    const markerGeo = new THREE.SphereGeometry(0.005, 12, 12);
+    const pts = waypoints.map(wp => new THREE.Vector3(wp.position[0], wp.position[1], wp.position[2]));
 
-    for (let i = 0; i < waypoints.length; i++) {
-      const wp = waypoints[i];
-      let color: number;
-      if (wp.isStart) {
-        color = 0x44cc44; // green
-      } else if (wp.isEnd) {
-        color = 0xcc4444; // red
-      } else {
-        color = 0xcccccc; // grey
+    if (segments && segments.length > 0) {
+      // ── Multi-segment: color each segment by palette index ──
+      for (let s = 0; s < segments.length; s++) {
+        const seg = segments[s];
+        const color = SEGMENT_PALETTE[s % SEGMENT_PALETTE.length];
+
+        // Per-segment path line
+        const segPts = pts.slice(seg.waypointStart, seg.waypointEnd);
+        if (segPts.length >= 2) {
+          const lineGeo = new THREE.BufferGeometry().setFromPoints(segPts);
+          const lineMat = new THREE.LineBasicMaterial({ color });
+          const line = new THREE.Line(lineGeo, lineMat);
+          group.add(line);
+          lines.push(line);
+        }
+
+        // Per-segment markers
+        for (let i = seg.waypointStart; i < seg.waypointEnd; i++) {
+          const wp = waypoints[i];
+          const mat = new THREE.MeshStandardMaterial({ color });
+          const mesh = new THREE.Mesh(markerGeo.clone(), mat);
+          mesh.position.set(wp.position[0], wp.position[1], wp.position[2]);
+          mesh.quaternion.set(wp.orientation[1], wp.orientation[2], wp.orientation[3], wp.orientation[0]);
+          group.add(mesh);
+          markers.push(mesh);
+        }
       }
+    } else {
+      // ── Single motion: color by motion type ──
+      const lineColor = motionType === 'movel' ? 0x33ccff : 0xff8800;
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+      const lineMat = new THREE.LineBasicMaterial({ color: lineColor });
+      const line = new THREE.Line(lineGeo, lineMat);
+      group.add(line);
+      lines.push(line);
 
-      const mat = new THREE.MeshStandardMaterial({ color });
-      const mesh = new THREE.Mesh(markerGeo.clone(), mat);
-      mesh.position.set(wp.position[0], wp.position[1], wp.position[2]);
-      // Orient marker to waypoint orientation for visual cues
-      mesh.quaternion.set(wp.orientation[1], wp.orientation[2], wp.orientation[3], wp.orientation[0]);
-      group.add(mesh);
-      markers.push(mesh);
+      for (let i = 0; i < waypoints.length; i++) {
+        const wp = waypoints[i];
+        let color: number;
+        switch (wp.waypointType) {
+          case 'Start':
+            color = 0x44cc44;
+            break;
+          case 'Goal':
+            color = 0xcc4444;
+            break;
+          default:
+            color = 0xcccccc;
+            break;
+        }
+
+        const mat = new THREE.MeshStandardMaterial({ color });
+        const mesh = new THREE.Mesh(markerGeo.clone(), mat);
+        mesh.position.set(wp.position[0], wp.position[1], wp.position[2]);
+        mesh.quaternion.set(wp.orientation[1], wp.orientation[2], wp.orientation[3], wp.orientation[0]);
+        group.add(mesh);
+        markers.push(mesh);
+      }
     }
 
     this.contentGroup.add(group);
-    this.trajectorySlot = { group, line, markers };
+    this.trajectorySlot = { group, lines, markers };
   }
 
   /** Remove the trajectory overlay from the scene. */
@@ -492,8 +596,10 @@ export class ThreeRendererService {
   }
 
   private disposeTrajectory(slot: TrajectorySlot): void {
-    slot.line.geometry.dispose();
-    (slot.line.material as THREE.Material).dispose();
+    for (const line of slot.lines) {
+      line.geometry.dispose();
+      (line.material as THREE.Material).dispose();
+    }
     for (const m of slot.markers) {
       m.geometry.dispose();
       (m.material as THREE.Material).dispose();
@@ -541,6 +647,65 @@ export class ThreeRendererService {
     this.renderer = null;
     this.controls = null;
     this.contentGroup = null;
+  }
+
+  /**
+   * Frame the robot in the viewport by positioning the camera and orbit
+   * target so the union of all links and primitives fills ~80 % of the view.
+   */
+  fitToView(data: SceneData): void {
+    const camera = this.camera;
+    const controls = this.controls;
+    if (!camera || !controls) return;
+
+    const box = new THREE.Box3();
+
+    // Expand with link endpoints
+    for (const link of data.links) {
+      box.expandByPoint(new THREE.Vector3(link.start[0], link.start[1], link.start[2]));
+      box.expandByPoint(new THREE.Vector3(link.end[0], link.end[1], link.end[2]));
+    }
+
+    // Expand with primitive positions + geometry extents
+    const tmp = new THREE.Vector3();
+    for (const p of data.primitives) {
+      const t = p.translation;
+      const center = new THREE.Vector3(t[0], t[1], t[2]);
+      const g = p.geometry;
+      const half = (() => {
+        switch (g.type) {
+          case 'box': return Math.max(g.width, g.height, g.depth) / 2;
+          case 'sphere': return g.radius;
+          case 'cylinder': return Math.max(g.radius * 2, g.height) / 2;
+        }
+      })();
+      box.expandByPoint(center);
+      tmp.copy(center).addScalar(half);
+      box.expandByPoint(tmp);
+      tmp.copy(center).addScalar(-half);
+      box.expandByPoint(tmp);
+    }
+
+    if (box.isEmpty()) return;
+
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z, 0.01);
+
+    const vFov = camera.fov * Math.PI / 180;
+    const dist = (maxDim / 2) / Math.tan(vFov / 2) * 1.4;
+
+    const dir = new THREE.Vector3().subVectors(camera.position, controls.target);
+    const len = dir.length();
+    if (len > 1e-10) {
+      dir.normalize();
+      camera.position.copy(center).add(dir.multiplyScalar(dist));
+    } else {
+      camera.position.set(center.x, center.y, center.z + dist);
+    }
+
+    controls.target.copy(center);
+    controls.update();
   }
 
   // ── Private ──

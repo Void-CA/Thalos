@@ -9,12 +9,13 @@ use thalos_core::{
     robot::serial_chain::SerialChain,
     spatial::frame::FrameId,
 };
+use thalos_planning::motion::program::CompiledPlan;
 
 use crate::backends::RobotBackend;
 use crate::commands::handler::ExecutableCommand;
 use crate::commands::Command;
 use crate::error::RuntimeError;
-use crate::snapshots::RuntimeSnapshot;
+use crate::snapshots::{RuntimeSnapshot, TickDelta};
 use crate::state::robot::{ActiveRobot, SceneRuntime};
 
 
@@ -32,8 +33,10 @@ pub struct SceneService {
 impl SceneService {
     pub fn new(backend: Box<dyn RobotBackend + Send + Sync>, model: RobotModel) -> Self {
         let chain = RobotRegistry::create_default(model);
-        let active_robot = ActiveRobot::new(model, chain, vec![0.0; model.metadata().dof]);
-        let runtime = SceneRuntime::new(active_robot);
+        let dof = model.metadata().dof;
+        let active_robot = ActiveRobot::new(model, chain, vec![0.0; dof]);
+        let robot_name = model.metadata().display_name.to_string();
+        let runtime = SceneRuntime::new(active_robot, robot_name);
 
         Self {
             runtime: RwLock::new(runtime),
@@ -55,11 +58,15 @@ impl SceneService {
         let ik_result = None;
         Ok(RuntimeSnapshot {
             robot: runtime.active_robot.model,
+            robot_source: runtime.robot_source.clone(),
+            robot_name: runtime.robot_name.clone(),
+            joints_meta: runtime.joints_meta.clone(),
             joints: runtime.active_robot.joints.clone(),
             chain: runtime.active_robot.chain.clone(),
             fk_result,
             ik_result,
             active_plan: runtime.active_plan.clone(),
+            execution: runtime.execution.clone(),
             generated_at: chrono::Utc::now(),
         })
     }
@@ -84,6 +91,103 @@ impl SceneService {
         Ok((result.q.clone(), result))
     }
 
+    // ── Multi-segment program (Preview) ──
+
+    /// Compile and store a motion program for preview.
+    ///
+    /// This does NOT start execution — the plan is stored and visualised,
+    /// and the robot stays at its current position.
+    pub fn schedule_program(&self, compiled: CompiledPlan) -> Result<RuntimeSnapshot, RuntimeError> {
+        {
+            let mut runtime = self.runtime.write().unwrap();
+            runtime.schedule_plan(compiled);
+        }
+        self.snapshot_with_ik(None)
+    }
+
+    // ── Execution control ──
+
+    /// Start execution of the scheduled plan.
+    pub fn start_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        {
+            let mut runtime = self.runtime.write().unwrap();
+            runtime.start_execution();
+        }
+        self.snapshot_with_ik(None)
+    }
+
+    /// Pause execution.
+    pub fn pause_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        {
+            let mut runtime = self.runtime.write().unwrap();
+            runtime.pause_execution();
+        }
+        self.snapshot_with_ik(None)
+    }
+
+    /// Resume a paused execution.
+    pub fn resume_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        {
+            let mut runtime = self.runtime.write().unwrap();
+            runtime.resume_execution();
+        }
+        self.snapshot_with_ik(None)
+    }
+
+    /// Cancel execution.
+    pub fn cancel_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        {
+            let mut runtime = self.runtime.write().unwrap();
+            runtime.cancel_execution();
+        }
+        self.snapshot_with_ik(None)
+    }
+
+    /// Reset the execution session for re-run.
+    pub fn reset_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        {
+            let mut runtime = self.runtime.write().unwrap();
+            runtime.reset_execution();
+        }
+        self.snapshot_with_ik(None)
+    }
+
+    // ── Tick ──
+
+    /// Advance execution by `dt` seconds and return the updated snapshot.
+    pub fn tick_execution(&self, dt: f64) -> Result<RuntimeSnapshot, RuntimeError> {
+        {
+            let mut runtime = self.runtime.write().unwrap();
+            runtime.advance_trajectory(dt);
+        }
+        self.snapshot_with_ik(None)
+    }
+
+    /// Advance execution y devuelve solo el delta (ligero).
+    ///
+    /// A diferencia de `tick_execution`, no construye el snapshot completo.
+    /// Esto permite al frontend recibir únicamente lo que cambia en cada tick.
+    pub fn tick_execution_delta(&self, dt: f64) -> Result<TickDelta, RuntimeError> {
+        let mut runtime = self.runtime.write().unwrap();
+        runtime.advance_trajectory(dt);
+
+        let plan_duration = runtime
+            .active_plan
+            .as_ref()
+            .map(|p| p.trajectory.duration())
+            .unwrap_or(0.0);
+
+        let fk_result = Self::compute_fk(&runtime.active_robot.chain, &runtime.active_robot.joints);
+
+        Ok(TickDelta {
+            joints: runtime.active_robot.joints.clone(),
+            chain: runtime.active_robot.chain.clone(),
+            fk_result,
+            execution: runtime.execution.clone(),
+            plan_duration,
+        })
+    }
+
     /// Build a snapshot, injecting optional IK metadata.
     fn snapshot_with_ik(&self, ik_result: Option<IKResult>) -> Result<RuntimeSnapshot, RuntimeError> {
         let runtime = self.runtime.read().unwrap();
@@ -91,11 +195,15 @@ impl SceneService {
 
         Ok(RuntimeSnapshot {
             robot: runtime.active_robot.model,
+            robot_source: runtime.robot_source.clone(),
+            robot_name: runtime.robot_name.clone(),
+            joints_meta: runtime.joints_meta.clone(),
             joints: runtime.active_robot.joints.clone(),
             chain: runtime.active_robot.chain.clone(),
             fk_result,
             ik_result,
             active_plan: runtime.active_plan.clone(),
+            execution: runtime.execution.clone(),
             generated_at: chrono::Utc::now(),
         })
     }

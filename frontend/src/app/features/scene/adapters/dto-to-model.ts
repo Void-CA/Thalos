@@ -1,7 +1,7 @@
 // ── Adapter: VisualSceneDto (API contract) → SceneData (runtime state) ──
 
-import type { ActivePlanDto, TrajectoryVisualizationDto, VisualSceneDto, PrimitiveGeometryDto, FrameStyleDto, VisualWaypointDto } from '../scene-api.types';
-import type { ActivePlan, SceneData, SceneFrame, SceneFrameStyle, SceneJointAxis, SceneLink, ScenePrimitive, SceneTwist, TrajectoryVisualization, VisualWaypoint } from '../scene.types';
+import type { ActivePlanDto, SegmentInfoDto, TrajectoryVisualizationDto, VisualSceneDto, PrimitiveGeometryDto, FrameStyleDto, VisualWaypointDto } from '../scene-api.types';
+import type { ActivePlan, SceneData, SceneFrame, SceneFrameStyle, SceneJointAxis, SceneLink, ScenePrimitive, SceneTwist, SegmentInfo, TrajectoryVisualization, VisualWaypoint } from '../scene.types';
 
 export function toSceneData(dto: VisualSceneDto): SceneData {
   return {
@@ -61,9 +61,11 @@ function toTwist(dto: VisualSceneDto['twists'][number]): SceneTwist {
 function toPrimitive(dto: VisualSceneDto['primitives'][number]): ScenePrimitive {
   return {
     id: dto.id,
+    frameId: dto.frame_id,
     translation: dto.translation,
     rotation: dto.rotation,
     geometry: toGeometry(dto.geometry),
+    color: dto.color ?? null,
   };
 }
 
@@ -88,9 +90,21 @@ export function toActivePlan(dto: ActivePlanDto | null): ActivePlan | null {
     motionType: dto.motion_type,
     trajectoryProgress: dto.trajectory_progress,
     visualization: dto.visualization ? toTrajectoryVisualization(dto.visualization) : null,
+    segments: dto.segments?.map(toSegmentInfo) ?? null,
     createdAt: dto.created_at,
     startedAt: dto.started_at,
     completedAt: dto.completed_at,
+  };
+}
+
+function toSegmentInfo(dto: SegmentInfoDto): SegmentInfo {
+  return {
+    segmentIndex: dto.segment_index,
+    motionType: dto.motion_type,
+    waypointStart: dto.waypoint_start,
+    waypointEnd: dto.waypoint_end,
+    timeStart: dto.time_start,
+    timeEnd: dto.time_end,
   };
 }
 
@@ -107,7 +121,6 @@ function toVisualWaypoint(dto: VisualWaypointDto): VisualWaypoint {
     orientation: dto.orientation,
     joints: dto.joints,
     timestamp: dto.timestamp,
-    isStart: dto.is_start,
-    isEnd: dto.is_end,
+    waypointType: dto.waypoint_type,
   };
 }

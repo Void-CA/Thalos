@@ -3,6 +3,8 @@ pub mod diff;
 
 use serde::{Deserialize, Serialize};
 use thalos_core::robot::joint::JointId;
+use thalos_core::math::geometry::rigid::Transform3D;
+use thalos_core::spatial::frame::FrameId;
 
 pub use precision::VisualPrecision;
 pub use diff::{SceneDiff, ChangedFrame};
@@ -22,36 +24,49 @@ pub enum PrimitiveGeometry {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct VisualPrimitive {
     pub id: VisualId,
+    /// ID visual del frame padre. La primitive es hija de este frame en el
+    /// scene graph del frontend — mover el frame mueve la primitive.
+    pub frame_id: VisualId,
+    /// Transformación LOCAL (relativa al frame padre).
     pub translation: [f64; 3],
     pub rotation: [f64; 4],
     pub geometry: PrimitiveGeometry,
+    /// RGBA color from URDF `<material>`, or `None` if unspecified.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<[f64; 4]>,
 }
 
 impl VisualPrimitive {
-    pub fn cylinder(id: impl Into<VisualId>, radius: f64, height: f64) -> Self {
+    pub fn cylinder(id: impl Into<VisualId>, frame_id: impl Into<VisualId>) -> Self {
         Self {
             id: id.into(),
+            frame_id: frame_id.into(),
             translation: [0.0; 3],
             rotation: [1.0, 0.0, 0.0, 0.0],
-            geometry: PrimitiveGeometry::Cylinder { radius, height },
+            geometry: PrimitiveGeometry::Cylinder { radius: 0.01, height: 0.01 },
+            color: None,
         }
     }
 
-    pub fn sphere(id: impl Into<VisualId>, radius: f64) -> Self {
+    pub fn sphere(id: impl Into<VisualId>, frame_id: impl Into<VisualId>) -> Self {
         Self {
             id: id.into(),
+            frame_id: frame_id.into(),
             translation: [0.0; 3],
             rotation: [1.0, 0.0, 0.0, 0.0],
-            geometry: PrimitiveGeometry::Sphere { radius },
+            geometry: PrimitiveGeometry::Sphere { radius: 0.01 },
+            color: None,
         }
     }
 
-    pub fn box_shape(id: impl Into<VisualId>, width: f64, height: f64, depth: f64) -> Self {
+    pub fn box_shape(id: impl Into<VisualId>, frame_id: impl Into<VisualId>) -> Self {
         Self {
             id: id.into(),
+            frame_id: frame_id.into(),
             translation: [0.0; 3],
             rotation: [1.0, 0.0, 0.0, 0.0],
-            geometry: PrimitiveGeometry::Box { width, height, depth },
+            geometry: PrimitiveGeometry::Box { width: 0.01, height: 0.01, depth: 0.01 },
+            color: None,
         }
     }
 
@@ -64,6 +79,34 @@ impl VisualPrimitive {
         self.rotation = rotation;
         self
     }
+
+    pub fn with_color(mut self, color: [f64; 4]) -> Self {
+        self.color = Some(color);
+        self
+    }
+}
+
+/// A visual element extracted from a robot model, before world-space
+/// resolution.
+///
+/// Carries a `frame_id` (link frame) and a local `origin` so the
+/// `SceneBuilder` can resolve the world transform via FK:
+///
+/// ```text
+/// world_pose = fk.pose(frame_id) * origin
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct VisualElement {
+    pub id: VisualId,
+    /// Frame of the link this visual belongs to (resolved once during
+    /// mapping so that per-frame rendering doesn't need name lookups).
+    pub frame_id: FrameId,
+    /// Local origin of the visual element relative to the link frame.
+    pub origin: Transform3D,
+    /// Primitive geometry (Sphere, Cylinder, Box).
+    pub geometry: PrimitiveGeometry,
+    /// RGBA color from URDF `<material>`, or `None` if unspecified.
+    pub color: Option<[f64; 4]>,
 }
 
 // ── Escena visual ──────────────────────────────────────────────────────

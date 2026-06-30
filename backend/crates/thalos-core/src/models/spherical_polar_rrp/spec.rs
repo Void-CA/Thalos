@@ -23,9 +23,9 @@ impl SphericalPolarRRPSpec {
         Self {
             l1: 0.0,
             joint_limits: [
-                JointLimits { min: -PI, max: PI },
-                JointLimits { min: -PI_2, max: PI_2 },
-                JointLimits { min: -1.0, max: 1.0 },
+                JointLimits::new(-PI, PI),
+                JointLimits::new(-PI_2, PI_2),
+                JointLimits::new(-1.0, 1.0),
             ],
         }
     }

@@ -44,5 +44,11 @@ pub use crate::analysis::manipulability::{
     ManipulabilityMetrics,
 };
 
+pub use crate::collision::{
+    CollisionBody, CollisionBodyBuilder, CollisionChecker, CollisionGeometry,
+    CollisionMatrix, CollisionPair, CollisionResult, CollisionType,
+    EntityId, Box3D, Sphere, Cylinder,
+};
+
 pub use crate::trajectory::{Trajectory, TrajectoryPoint};
 

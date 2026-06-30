@@ -3,8 +3,8 @@ use crate::robot::joint::{JointInfo, JointKind, JointLimits};
 
 /// Spec de un manipulador 3DOF estilo PUMA-base (columna vertical).
 ///
-/// Convención Y-up: joint 1 (yaw, eje Y vertical), joint 2 (hombro, eje Z
-/// profundidad), joint 3 (codo, eje Z, paralelo a joint 2). Los links se
+/// ADR-0001 (Z-up): joint 1 (yaw, eje Z vertical), joint 2 (hombro, eje Y
+/// horizontal), joint 3 (codo, eje Y, paralelo a joint 2). Los links se
 /// extienden en +X local.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Manipulator3DOFSpec {
@@ -26,9 +26,9 @@ impl Manipulator3DOFSpec {
             l2: 1.0,
             l3: 1.0,
             joint_limits: [
-                JointLimits { min: -PI, max: PI },
-                JointLimits { min: -PI, max: PI },
-                JointLimits { min: -PI, max: PI },
+                JointLimits::new(-PI, PI),
+                JointLimits::new(-PI, PI),
+                JointLimits::new(-PI, PI),
             ],
         }
     }
@@ -38,7 +38,7 @@ impl Manipulator3DOFSpec {
         super::factory::create_manipulator_3dof(self.l1, self.l2, self.l3, jl1, jl2, jl3)
     }
 
-    /// Y-Z-Z: joint 1 en Y (vertical), joints 2 y 3 en Z (profundidad).
+    /// Z-Y-Y: joint 1 en Z (vertical), joints 2 y 3 en Y (horizontal pitch).
     pub const fn joints(&self) -> [JointInfo; 3] {
         let [j1, j2, j3] = self.joint_limits;
         [

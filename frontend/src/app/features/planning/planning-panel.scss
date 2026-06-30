@@ -4,46 +4,159 @@
 .planning-panel {
   @include panel.container;
 
-  &__tabs {
-    display: flex;
+  // ── Segment card ──
+
+  &__segment {
     border: 1px solid $border-subtle;
     border-radius: $radius-sm;
+    margin-bottom: 0.4rem;
     overflow: hidden;
-    margin-bottom: 0.75rem;
+    transition: border-color $transition-fast;
+
+    &.is-expanded {
+      border-color: $border-default;
+    }
   }
 
-  &__tab {
-    flex: 1;
-    background: transparent;
-    border: none;
-    color: $text-secondary;
-    font-size: 0.75rem;
-    font-weight: 600;
+  &__seg-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
     padding: 0.35rem 0.5rem;
     cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    transition: background $transition-fast, color $transition-fast;
+    user-select: none;
+    transition: background $transition-fast;
 
     &:hover {
       background: $bg-card;
     }
+  }
 
-    &.active {
-      background: $accent;
-      color: #fff;
-    }
+  &__seg-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
 
-    &:not(:last-child) {
-      border-right: 1px solid $border-subtle;
+  &__seg-title {
+    flex: 1;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: $text-primary;
+    letter-spacing: 0.02em;
+  }
+
+  &__seg-chevron {
+    font-size: 0.6rem;
+    color: $text-muted;
+  }
+
+  &__seg-remove {
+    background: transparent;
+    border: none;
+    color: $text-muted;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 0.15rem;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: color $transition-fast, background $transition-fast;
+
+    &:hover {
+      color: #cc4444;
+      background: rgba(204, 68, 68, 0.1);
     }
   }
 
-  &__form {
+  &__seg-body {
+    padding: 0.4rem 0.5rem 0.5rem;
+    border-top: 1px solid $border-subtle;
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 0.45rem;
   }
+
+  // ── Joint grid (MoveJ) ──
+
+  &__joint-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    gap: 0.3rem;
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+  }
+
+  &__joint-label {
+    font-size: 0.65rem;
+    color: $text-secondary;
+    font-family: $font-mono;
+    text-transform: uppercase;
+  }
+
+  // ── Reusable number input ──
+
+  &__num-input {
+    width: 100%;
+    box-sizing: border-box;
+    @include panel.number-input;
+  }
+
+  // ── Coord grid (MoveL) ──
+
+  &__coord-grid {
+    @include panel.coord-grid;
+
+    input {
+      @include panel.number-input;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    &--quat {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  // ── Segmented control ──
+
+  .segmented {
+    display: flex;
+    background: $bg-input;
+    border: 1px solid $border-default;
+    border-radius: $radius-sm;
+    padding: 2px;
+    gap: 2px;
+
+    &__btn {
+      flex: 1;
+      padding: 0.25rem 0.4rem;
+      font-family: $font-mono;
+      font-size: 0.75rem;
+      cursor: pointer;
+      background: transparent;
+      border: none;
+      color: $text-muted;
+      border-radius: 2px;
+      transition: background $transition-fast, color $transition-fast;
+
+      &:hover:not(.is-active) {
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      &.is-active {
+        background: $accent;
+        color: #fff;
+        font-weight: 600;
+      }
+    }
+  }
+
+  // ── Fields ──
 
   &__field {
     display: flex;
@@ -51,7 +164,7 @@
     gap: 0.2rem;
   }
 
-  &__label {
+  &__field-label {
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -59,54 +172,54 @@
     font-weight: 600;
   }
 
-  &__label--inline {
-    font-size: 0.65rem;
-    color: $text-muted;
-    margin-right: 0.3rem;
-  }
+  // ── Add row ──
 
-  &__input {
-    @include panel.number-input;
-    width: 100%;
-    box-sizing: border-box;
-  }
-
-  &__input--inline {
-    @include panel.number-input;
-    width: 60px;
-  }
-
-  &__fieldset {
-    border: 1px solid $border-subtle;
-    border-radius: $radius-sm;
-    padding: 0.5rem;
-  }
-
-  &__legend {
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: $text-muted;
-    padding: 0 0.3rem;
-  }
-
-  &__row {
+  &__add-row {
     display: flex;
-    gap: 0.4rem;
-    flex-wrap: wrap;
-    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.25rem;
+  }
 
-    label {
-      display: flex;
-      align-items: center;
-      gap: 0.2rem;
+  &__add-btn {
+    @include panel.action-base;
+    flex: 1;
+    font-size: 0.72rem;
+    padding: 0.3rem;
+    background: transparent;
+    border-color: $border-default;
+    color: $text-secondary;
+
+    &:hover {
+      background: $bg-card;
+      color: $text-primary;
     }
+  }
+
+  // ── Actions ──
+
+  &__actions {
+    margin-top: 0.4rem;
   }
 
   &__submit {
     @include panel.action-base;
-    margin-top: 0.25rem;
+    width: 100%;
   }
+
+  // ── Empty state ──
+
+  &__empty {
+    text-align: center;
+    padding: 1.5rem 0.5rem;
+
+    p {
+      margin: 0;
+      font-size: 0.75rem;
+      color: $text-primary;
+    }
+  }
+
+  // ── Error ──
 
   &__error {
     font-size: 0.7rem;
@@ -115,5 +228,6 @@
     border: 1px solid #cc444444;
     border-radius: $radius-sm;
     background: #cc444411;
+    margin-top: 0.4rem;
   }
 }

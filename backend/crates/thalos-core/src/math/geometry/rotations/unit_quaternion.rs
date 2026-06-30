@@ -9,27 +9,13 @@ use crate::math::{
     traits::products::Cross,
 };
 
-/// Cuaternión unitario — invariante: el `Quaternion` interno tiene norma ≈ 1.
-///
-/// A diferencia de [`Quaternion`] (modelo algebraico puro), `UnitQuaternion`
-/// representa una **rotación** en SO(3). Su construcción garantiza la invariante.
-///
-/// # Garantías
-/// - `norm(self.inner()) ≈ 1.0` dentro de [`EPS`](crate::math::constants::EPS).
-/// - No hay normalizaciones ocultas: si la entrada no cumple la invariante, `new()`
-///   retorna un error explícito.
-/// - La composición vía `Mul` construye directamente el producto de Hamilton,
-///   que matemáticamente preserva la norma unitaria.
+
 #[derive(Debug, Clone, Copy)]
 pub struct UnitQuaternion {
     q: Quaternion,
 }
 
 impl UnitQuaternion {
-    /// Construye validando que `q` sea unitario.
-    ///
-    /// # Errors
-    /// Retorna [`MathError::QuaternionNotUnit`] si `q` no cumple [`Quaternion::is_unit()`].
     pub fn new(q: Quaternion) -> Result<Self, MathError> {
         if !q.is_unit() {
             return Err(MathError::QuaternionNotUnit {
@@ -39,31 +25,31 @@ impl UnitQuaternion {
         Ok(Self { q })
     }
 
-    /// Construye sin validación. Solo usarlo cuando se GARANTIZA que `q` es unitario.
+
     pub fn from_quaternion_unchecked(q: Quaternion) -> Self {
         Self { q }
     }
 
-    /// Referencia al cuaternión interno.
+
     pub fn inner(&self) -> &Quaternion {
         &self.q
     }
 
-    /// Consume el `UnitQuaternion` y devuelve el `Quaternion` interno.
+
     pub fn into_inner(self) -> Quaternion {
         self.q
     }
 
-    /// Cuaternión unitario identidad: rotación nula.
-    ///
-    /// Infalible: (1,0,0,0) tiene norma exactamente 1.
+
+
+
     pub fn identity() -> Self {
         Self { q: Quaternion::identity() }
     }
 
-    /// Construye desde un eje normalizado y un ángulo (radianes).
-    ///
-    /// La construcción matemática garantiza norma = 1, sin normalización oculta.
+
+
+
     pub fn from_axis_angle(axis: UnitVector3, angle: f64) -> Self {
         let half = angle * 0.5;
         let s = half.sin();
@@ -78,13 +64,13 @@ impl UnitQuaternion {
         }
     }
 
-    /// Aplica la rotación a un vector `v` en ℝ³.
-    ///
-    /// Usa la fórmula vectorial de Rodrigues:
-    ///
-    ///   v' = v + 2w(v_q × v) + 2(v_q × (v_q × v))
-    ///
-    /// donde `v_q = (x, y, z)` es la parte vectorial del cuaternión.
+
+
+
+
+
+
+
     pub fn rotate_vector(&self, v: Vector3) -> Vector3 {
         let q_vec = Vector3::new(self.q.x, self.q.y, self.q.z);
         let uv = q_vec.cross(v);
@@ -93,11 +79,11 @@ impl UnitQuaternion {
         v + (uv * (2.0 * self.q.w)) + (uuv * 2.0)
     }
 
-    /// Ángulos Euler en orden ZYX: (roll, pitch, yaw).
-    ///
-    /// - roll: rotación alrededor de X
-    /// - pitch: rotación alrededor de Y (con protección para gimbal lock)
-    /// - yaw: rotación alrededor de Z
+
+
+
+
+
     pub fn to_euler(&self) -> (f64, f64, f64) {
         let q = self.q;
 
@@ -122,9 +108,9 @@ impl UnitQuaternion {
         (roll, pitch, yaw)
     }
 
-    /// Construye desde ángulos Euler (orden ZYX: roll, pitch, yaw en radianes).
-    ///
-    /// La construcción matemática garantiza norma = 1, sin normalización oculta.
+
+
+
     pub fn from_euler(roll: f64, pitch: f64, yaw: f64) -> Self {
         let cy = (yaw * 0.5).cos();
         let sy = (yaw * 0.5).sin();
@@ -144,23 +130,15 @@ impl UnitQuaternion {
         }
     }
 
-    /// Inverso multiplicativo.
-    ///
-    /// Para un cuaternión unitario, el inverso es SU CONJUGADO.
-    /// Operación infalible — no depende de la norma (garantizada = 1).
+
+
+
+
     pub fn inverse(&self) -> Self {
         Self { q: self.q.conjugate() }
     }
 }
 
-/// Composición de rotaciones.
-///
-/// El producto de Hamilton de dos cuaterniones unitarios ES matemáticamente
-/// unitario (||q1·q2|| = ||q1||·||q2|| = 1). Por eso construimos directamente
-/// sin re-normalizar.
-///
-/// Si después de muchas composiciones acumulás deriva de punto flotante,
-/// extraé el inner con `into_inner()`, normalizalo, y reconstruí con `new()`.
 impl Mul for UnitQuaternion {
     type Output = Self;
 

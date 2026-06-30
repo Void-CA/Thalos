@@ -8,8 +8,21 @@ use thalos_core::{
     models::RobotModel,
     robot::serial_chain::SerialChain,
 };
+use thalos_models::Robot;
 
-use crate::plan::ActiveMotionPlan;
+use crate::plan::{ActiveMotionPlan, ExecutionSession};
+
+/// Lightweight joint metadata for URDF-imported robots.
+///
+/// Mirrors core's `JointInfo` but uses owned strings so it can represent
+/// dynamically-imported robots from URDF source.
+#[derive(Debug, Clone)]
+pub struct JointMeta {
+    pub name: String,
+    pub kind: String,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+}
 
 /// Immutable snapshot of the runtime state at a point in time.
 ///
@@ -17,8 +30,14 @@ use crate::plan::ActiveMotionPlan;
 /// Visual scene construction is the responsibility of the API layer.
 /// When produced by an IK command, `ik_result` carries the solver metadata.
 pub struct RuntimeSnapshot {
-    /// The active robot model.
+    /// The active robot model (built-in enum — keep for backward compat).
     pub robot: RobotModel,
+    /// Full URDF model when the robot was imported; `None` for built-in robots.
+    pub robot_source: Option<Robot>,
+    /// Human-readable robot name (from built-in metadata or URDF).
+    pub robot_name: String,
+    /// Joint metadata — empty for built-in robots; populated for URDF imports.
+    pub joints_meta: Vec<JointMeta>,
     /// Current joint angles.
     pub joints: Vec<f64>,
     /// The kinematic chain of the active robot.
@@ -27,8 +46,11 @@ pub struct RuntimeSnapshot {
     pub fk_result: FKResult,
     /// Solver metadata when this snapshot was produced by an IK command.
     pub ik_result: Option<IKResult>,
-    /// Active motion plan, if any.
+    /// Active motion plan, if any (plan data + derived state).
     pub active_plan: Option<ActiveMotionPlan>,
+    /// Execution session, if execution has been started.
+    /// `None` before Start or after Reset/Cancel.
+    pub execution: Option<ExecutionSession>,
     /// When this snapshot was taken.
     pub generated_at: DateTime<Utc>,
 }
@@ -38,4 +60,22 @@ impl RuntimeSnapshot {
     pub fn trajectory_progress(&self) -> Option<f64> {
         self.active_plan.as_ref().map(|p| p.progress())
     }
+}
+
+/// Lightweight tick result: solo lo que cambia durante ejecución.
+///
+/// A diferencia de `RuntimeSnapshot`, no incluye robot model, joint metadata,
+/// plan details, ni timestamps. Solo lo necesario para actualizar el frontend
+/// en cada tick.
+pub struct TickDelta {
+    /// Current joint angles.
+    pub joints: Vec<f64>,
+    /// The kinematic chain (needed to build link transforms from FK).
+    pub chain: SerialChain,
+    /// FK result computed from current joints.
+    pub fk_result: FKResult,
+    /// Execution session, if any.
+    pub execution: Option<ExecutionSession>,
+    /// Total trajectory duration in seconds (for progress computation).
+    pub plan_duration: f64,
 }

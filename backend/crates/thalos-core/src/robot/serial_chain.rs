@@ -21,4 +21,14 @@ impl SerialChain {
     pub fn end_effector_frame(&self) -> Option<&Frame> {
         self.frames.get(&self.end_effector)
     }
+
+    /// Number of actuated degrees of freedom (non-fixed joints).
+    pub fn dof_count(&self) -> usize {
+        self.segments.iter().filter(|s| s.joint.dof() > 0).count()
+    }
+
+    /// Number of segments in the chain (includes fixed joints).
+    pub fn segment_count(&self) -> usize {
+        self.segments.len()
+    }
 }

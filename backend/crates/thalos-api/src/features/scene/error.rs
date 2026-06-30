@@ -19,6 +19,12 @@ impl From<RuntimeError> for ApiError {
                 message: e.to_string(),
                 code: code.into(),
             },
+            RuntimeError::JointCountMismatch { expected, received } => ApiError::Validation {
+                message: format!(
+                    "joint count mismatch: expected {expected}, got {received}"
+                ),
+                code: code.into(),
+            },
         }
     }
 }

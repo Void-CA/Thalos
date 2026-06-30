@@ -40,4 +40,14 @@ impl FrameRegistry {
         id
     }
 
+    /// Find the `FrameId` for a registered frame by name.
+    ///
+    /// Returns `None` when no frame with that name exists.
+    pub fn resolve_by_name(&self, name: &str) -> Option<FrameId> {
+        self.frames
+            .iter()
+            .find(|(_, f)| f.name() == name)
+            .map(|(id, _)| *id)
+    }
+
 }

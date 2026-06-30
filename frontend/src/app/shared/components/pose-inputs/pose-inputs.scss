@@ -1,0 +1,94 @@
+@use '../../../../styles/variables' as *;
+@use '../../styles/panel' as panel;
+
+// ── Coord grid ──
+
+.coord-grid {
+  @include panel.coord-grid;
+
+  &--quaternion {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+input[type='number'] {
+  @include panel.number-input;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+// ── Rotation section ──
+
+.rotation {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed $border-subtle;
+}
+
+// ── Segmented control ──
+
+.segmented {
+  display: flex;
+  background: $bg-input;
+  border: 1px solid $border-default;
+  border-radius: $radius-sm;
+  padding: 2px;
+  gap: 2px;
+  margin-bottom: 0.5rem;
+
+  &__btn {
+    flex: 1;
+    padding: 0.25rem 0.4rem;
+    font-family: $font-mono;
+    font-size: 0.75rem;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    color: $text-muted;
+    border-radius: 2px;
+    transition: background $transition-fast, color $transition-fast;
+
+    &:hover:not(.is-active) {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    &.is-active {
+      background: $accent;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    &:focus-visible {
+      outline: 1px solid $accent;
+      outline-offset: 1px;
+    }
+  }
+
+  &--small .segmented__btn {
+    padding: 0.18rem 0.3rem;
+    font-size: 0.7rem;
+  }
+}
+
+// ── Field (Frame ID, velocity) ──
+
+.pose-inputs__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.4rem;
+
+  span {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: $text-secondary;
+    font-weight: 600;
+  }
+
+  input {
+    @include panel.number-input;
+    width: 100%;
+    box-sizing: border-box;
+  }
+}

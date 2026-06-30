@@ -70,9 +70,16 @@ pub enum PrimitiveGeometryDto {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct VisualPrimitiveDto {
     pub id: String,
+    /// ID visual del frame padre. El frontend cuelga la primitive como hija
+    /// de este frame en el scene graph.
+    pub frame_id: String,
+    /// Transformación LOCAL (relativa al frame padre).
     pub translation: [f64; 3],
     pub rotation: [f64; 4],
     pub geometry: PrimitiveGeometryDto,
+    /// RGBA color from URDF `<material>`, omitted when unspecified.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<[f64; 4]>,
 }
 
 // ── Runtime response ──
@@ -120,9 +127,23 @@ pub struct ActivePlanDto {
     pub motion_type: String,
     pub trajectory_progress: Option<f64>,
     pub visualization: Option<TrajectoryVisualizationDto>,
+    /// Per-segment metadata for multi-segment programs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub segments: Option<Vec<SegmentInfoDto>>,
     pub created_at: DateTime<Utc>,
     pub started_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
+}
+
+/// Segment metadata for multi-segment motion programs.
+#[derive(Debug, Serialize)]
+pub struct SegmentInfoDto {
+    pub segment_index: usize,
+    pub motion_type: String,
+    pub waypoint_start: usize,
+    pub waypoint_end: usize,
+    pub time_start: f64,
+    pub time_end: f64,
 }
 
 /// Trajectory visualisation — the data contract for the frontend's 3D renderer.
@@ -132,6 +153,14 @@ pub struct TrajectoryVisualizationDto {
     pub motion_type: String,
 }
 
+/// Semantic role of a waypoint — frontend uses this to pick colours.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum WaypointTypeDto {
+    Start,
+    Goal,
+    Via,
+}
+
 /// A single waypoint in 3D space for the frontend to render.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct VisualWaypointDto {
@@ -139,8 +168,7 @@ pub struct VisualWaypointDto {
     pub orientation: [f64; 4],
     pub joints: Vec<f64>,
     pub timestamp: f64,
-    pub is_start: bool,
-    pub is_end: bool,
+    pub waypoint_type: WaypointTypeDto,
 }
 
 // ── Validate response ──
@@ -166,4 +194,62 @@ pub struct ChangedFrameDto {
     pub id: String,
     pub translation_delta: f64,
     pub rotation_angle_deg: f64,
+}
+
+// ── Runtime delta DTOs ──
+
+/// Actualización de pose de un objeto del scene graph en un tick.
+///
+/// Genérica: el `id` puede referirse a un frame, un link o cualquier otro
+/// elemento visual registrado en el renderer. El backend no necesita saber
+/// qué tipo de objeto es — solo su nueva pose.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TransformUpdate {
+    pub id: String,
+    pub translation: [f64; 3],
+    pub rotation: [f64; 4],
+    pub scale: [f64; 3],
+}
+
+/// Estado dinámico del motor: solo lo que cambia en cada tick.
+///
+/// A diferencia de `RuntimeStateResponse`, no incluye escena, primitivas,
+/// frames, metadata del robot ni trayectoria planificada — todo eso es
+/// inmutable durante la ejecución y se obtiene via `GET /scene`.
+#[derive(Debug, Serialize)]
+pub struct RuntimeDelta {
+    /// Current joint angles (usado por el FK panel).
+    pub joints: Vec<f64>,
+    /// Transformaciones de objetos del scene graph (frames + links).
+    pub transforms: Vec<TransformUpdate>,
+    pub execution: ExecutionDto,
+}
+
+/// Estado de la sesión de ejecución en un instante dado.
+#[derive(Debug, Serialize)]
+pub struct ExecutionDto {
+    pub status: ExecutionStatusDto,
+    pub progress: f64,
+    pub elapsed_secs: f64,
+}
+
+/// Status de la sesión — tipado hasta el borde de la API.
+///
+/// Serialeable a JSON como string, deserialeable desde el frontend.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ExecutionStatusDto {
+    #[serde(rename = "Created")]
+    Ready,
+    #[serde(rename = "Active")]
+    Running,
+    #[serde(rename = "Paused")]
+    Paused,
+    #[serde(rename = "Completed")]
+    Completed,
+    #[serde(rename = "Cancelled")]
+    Cancelled,
+    #[serde(rename = "Failed")]
+    Failed,
+    #[serde(rename = "Idle")]
+    Idle,
 }

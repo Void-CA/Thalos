@@ -1,7 +1,6 @@
 use crate::kinematics::forward::ForwardKinematics;
 use crate::kinematics::jacobian::{GeometricJacobian, JacobianSolver};
-use crate::math::algebra::DynamicMatrix;
-use crate::math::algebra::vector::DynamicVector;
+use crate::math::algebra::{DynamicMatrix, vector::{DynamicVector, vector_to_dynamic}};
 use crate::robot::joint::{JointKind, JointLimits};
 use crate::spatial::frame::FrameId;
 use crate::kinematics::inverse::{
@@ -94,7 +93,7 @@ impl IKSolver for DampedLeastSquaresSolver {
                     let error = *target_pos - p;
                     let mag = error.magnitude();
                     let j_lin = jacobian.linear().clone_owned();
-                    (DynamicVector::from(error), j_lin, mag)
+                    (vector_to_dynamic(error), j_lin, mag)
                 }
                 IKGoal::Pose(target_pose) => {
                     let error = compute_pose_error(ee_pose, target_pose);
@@ -144,9 +143,11 @@ impl IKSolver for DampedLeastSquaresSolver {
             // Fixed no debería llegar acá (filtrado por dof() > 0)
             for i in 0..n_joints {
                 q[i] = match joint_kinds[i] {
-                    JointKind::Revolute => joint_limits[i].wrap(q[i]),
+                    JointKind::Revolute | JointKind::Continuous => joint_limits[i].wrap(q[i]),
                     JointKind::Prismatic => joint_limits[i].clamp(q[i]),
-                    JointKind::Fixed => unreachable!("Fixed joints are filtered out"),
+                    JointKind::Fixed | JointKind::Floating | JointKind::Planar => {
+                        unreachable!("Non-1-DOF joints are filtered out")
+                    }
                 };
             }
         }

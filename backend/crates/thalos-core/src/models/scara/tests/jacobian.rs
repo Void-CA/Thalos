@@ -99,84 +99,62 @@ fn at_zero_configuration() {
     let q = [0.0, 0.0, 0.0, 0.0];
     let j = jacobian.evaluate(&q);
     
-    // En configuración cero (brazos extendidos en X, Z=0, muñeca sin rotar):
-    // L1=1, L2=1, posición final en (2, 0, 0)
-    //
-    // Juntas revolutas (1 y 2): afectan XY igual que planar 2R
-    // ∂x/∂θ1 = -2, ∂x/∂θ2 = -1
-    // ∂y/∂θ1 = 0,  ∂y/∂θ2 = 0
-    //
-    // Junta prismática (3): solo afecta Z
-    // Y-up: revolutos en Y → ∂z/∂q, prismático en Y → ∂y/∂d3
-    //
-    // Junta muñeca (4): NO afecta posición (solo orientación)
-    // ∂x/∂θ4 = 0, ∂y/∂θ4 = 0, ∂z/∂θ4 = 0
+    // Z-up: brazo en XY, Z=vertical, ee at (2, 0, 0)
+    // Revolutas son eje Z → J_v = ẑ × (p - r) genera velocidad en XY
+    //   θ1: J_v0 = (0,0,1) × (2,0,0) = (0, 2, 0) → dy/dθ1 = 2
+    //   θ2: J_v1 = (0,0,1) × (1,0,0) = (0, 1, 0) → dy/dθ2 = 1
+    //   d3 (prismática Z): J_v2 = (0,0,1) → dz/dd3 = 1
+    //   θ4 (muñeca en ee): J_v3 = (0,0,1) × (0,0,0) = 0
     
-    // Revolute joints (XZ plane)
     let dx_dq1 = j.linear()[(0, 0)];
+    let dy_dq1 = j.linear()[(1, 0)];
     let dx_dq2 = j.linear()[(0, 1)];
-    let dz_dq1 = j.linear()[(2, 0)];
-    let dz_dq2 = j.linear()[(2, 1)];
+    let dy_dq2 = j.linear()[(1, 1)];
     
     assert!(
         dx_dq1.abs() < 1e-6,
         "dx/dθ1 should be 0 at zero config, got {}",
         dx_dq1
     );
-
+    assert!(
+        (dy_dq1 - 2.0).abs() < 1e-4,
+        "dy/dθ1 should be 2.0 at zero config, got {}",
+        dy_dq1
+    );
     assert!(
         dx_dq2.abs() < 1e-6,
         "dx/dθ2 should be 0 at zero config, got {}",
         dx_dq2
     );
-
     assert!(
-        (dz_dq1 + 2.0).abs() < 1e-4,
-        "dz/dθ1 should be -2.0 at zero config, got {}",
-        dz_dq1
-    );
-
-    assert!(
-        (dz_dq2 + 1.0).abs() < 1e-4,
-        "dz/dθ2 should be -1.0 at zero config, got {}",
-        dz_dq2
+        (dy_dq2 - 1.0).abs() < 1e-4,
+        "dy/dθ2 should be 1.0 at zero config, got {}",
+        dy_dq2
     );
     
-    // Prismatic joint (Y axis — vertical)
-    let dy_dd3 = j.linear()[(1, 2)];
+    // Prismatic joint (Z axis — vertical)
+    let dz_dd3 = j.linear()[(2, 2)];
     assert!(
-        (dy_dd3 - 1.0).abs() < 1e-4,
-        "dy/dd3 should be 1.0 at zero config, got {}",
-        dy_dd3
+        (dz_dd3 - 1.0).abs() < 1e-4,
+        "dz/dd3 should be 1.0 at zero config, got {}",
+        dz_dd3
     );
     
     // Wrist joint (should not affect position)
-    let dx_dq4 = j.linear()[(0, 3)];
-    let dy_dq4 = j.linear()[(1, 3)];
-    let dz_dq4 = j.linear()[(2, 3)];
-    
-    assert!(
-        dx_dq4.abs() < 1e-6,
-        "dx/dθ4 should be 0 (wrist rotation doesn't affect position), got {}",
-        dx_dq4
-    );
-    assert!(
-        dy_dq4.abs() < 1e-6,
-        "dy/dθ4 should be 0 (wrist rotation doesn't affect position), got {}",
-        dy_dq4
-    );
-    assert!(
-        dz_dq4.abs() < 1e-6,
-        "dz/dθ4 should be 0, got {}",
-        dz_dq4
-    );
+    for col in 0..3 {
+        assert!(
+            j.linear()[(col, 3)].abs() < 1e-6,
+            "Joint 3 (wrist) should not affect position at zero config, col={}",
+            col
+        );
+    }
 }
 
 #[test]
-fn prismatic_joint_only_affects_y() {
+fn prismatic_joint_only_affects_z() {
     let (jacobian, _, _) = setup_scara_robot();
     
-    // Y-up: prismática en Y (vertical), solo afecta Y
+    // Z-up: prismática en Z (vertical), solo afecta Z
     let test_configs = [
         [0.0, 0.0, 0.0, 0.0],
         [PI/4.0, 0.0, 0.5, 0.0],
@@ -192,12 +170,12 @@ fn prismatic_joint_only_affects_y() {
             q
         );
         assert!(
-            j.linear()[(2, 2)].abs() < 1e-6,
-            "Prismatic joint should not affect Z at q={:?}",
+            j.linear()[(1, 2)].abs() < 1e-6,
+            "Prismatic joint should not affect Y at q={:?}",
             q
         );
         assert!(
-            (j.linear()[(1, 2)] - 1.0).abs() < 1e-4,
+            (j.linear()[(2, 2)] - 1.0).abs() < 1e-4,
             "Prismatic dy/dd3 should be 1.0 at q={:?}, got {}",
             q, j.linear()[(1, 2)]
         );
@@ -343,41 +321,41 @@ fn approximates_velocity_correctly() {
 fn determinant_indicates_singularity() {
     let (jacobian, _, _) = setup_scara_robot();
     
-    // Y-up: revolutos en Y → singularidades en XZ cuando:
+    // Z-up: revolutos en Z → singularidades en XY:
     // 1) Brazos completamente extendidos (θ2 = 0)
     // 2) Brazos completamente plegados (θ2 = ±π)
     
-    // Configuración singular en XZ: brazos extendidos
+    // Configuración singular: brazos extendidos
     let q_singular = [0.0, 0.0, 0.0, 0.0];
     let j_singular = jacobian.evaluate(&q_singular);
     
-    // Submatriz 2×2 de revolutos (cols 0,1; filas X/Z: 0,2)
-    let det_singular_xz = j_singular.linear()[(0, 0)] * j_singular.linear()[(2, 1)] 
-                            - j_singular.linear()[(0, 1)] * j_singular.linear()[(2, 0)];
+    // Submatriz 2×2 de revolutos (cols 0,1; filas X/Y: 0,1)
+    let det_singular_xy = j_singular.linear()[(0, 0)] * j_singular.linear()[(1, 1)] 
+                            - j_singular.linear()[(0, 1)] * j_singular.linear()[(1, 0)];
     
-    // Configuración no singular en XZ
+    // Configuración no singular
     let q_normal = [PI / 3.0, PI / 4.0, 0.0, 0.0];
     let j_normal = jacobian.evaluate(&q_normal);
-    let det_normal_xz = j_normal.linear()[(0, 0)] * j_normal.linear()[(2, 1)] 
-                        - j_normal.linear()[(0, 1)] * j_normal.linear()[(2, 0)];
+    let det_normal_xy = j_normal.linear()[(0, 0)] * j_normal.linear()[(1, 1)] 
+                        - j_normal.linear()[(0, 1)] * j_normal.linear()[(1, 0)];
     
     // El determinante debería ser significativamente menor en singularidad
     assert!(
-        det_singular_xz.abs() < det_normal_xz.abs() * 0.1,
-        "XZ determinant near singularity ({}) should be much smaller than normal ({})",
-        det_singular_xz, det_normal_xz
+        det_singular_xy.abs() < det_normal_xy.abs() * 0.1,
+        "XY determinant near singularity ({}) should be much smaller than normal ({})",
+        det_singular_xy, det_normal_xy
     );
     
     // Otra singularidad: brazos plegados (θ2 = π)
     let q_folded = [0.0, PI, 0.0, 0.0];
     let j_folded = jacobian.evaluate(&q_folded);
-    let det_folded_xz = j_folded.linear()[(0, 0)] * j_folded.linear()[(2, 1)] 
-                        - j_folded.linear()[(0, 1)] * j_folded.linear()[(2, 0)];
+    let det_folded_xy = j_folded.linear()[(0, 0)] * j_folded.linear()[(1, 1)] 
+                        - j_folded.linear()[(0, 1)] * j_folded.linear()[(1, 0)];
     
     assert!(
-        det_folded_xz.abs() < 1e-4,
-        "XZ determinant at folded config should be near zero, got {}",
-        det_folded_xz
+        det_folded_xy.abs() < 1e-4,
+        "XY determinant at folded config should be near zero, got {}",
+        det_folded_xy
     );
 }
 
@@ -519,20 +497,20 @@ fn independent_xy_and_z_motions() {
     let q = [PI / 4.0, PI / 6.0, 0.3, PI / 3.0];
     let j = jacobian.evaluate(&q);
     
-    // Y-up: revolutos en Y → no afectan Y
+    // Z-up: revolutos en Z → no afectan Z
     for joint_idx in [0, 1, 3] {
-        let dy_dq = j.linear()[(1, joint_idx)];
+        let dz_dq = j.linear()[(2, joint_idx)];
         assert!(
-            dy_dq.abs() < 1e-6,
-            "Revolute joint {} should not affect Y, got {}",
-            joint_idx, dy_dq
+            dz_dq.abs() < 1e-6,
+            "Revolute joint {} should not affect Z, got {}",
+            joint_idx, dz_dq
         );
     }
     
-    // Prismática (2) solo afecta Y (vertical)
+    // Prismática (2) solo afecta Z (vertical)
     let dx_dd3 = j.linear()[(0, 2)];
-    let dz_dd3 = j.linear()[(2, 2)];
     let dy_dd3 = j.linear()[(1, 2)];
+    let dz_dd3 = j.linear()[(2, 2)];
     
     assert!(
         dx_dd3.abs() < 1e-6,
@@ -540,13 +518,13 @@ fn independent_xy_and_z_motions() {
         dx_dd3
     );
     assert!(
-        dz_dd3.abs() < 1e-6,
-        "Prismatic joint should not affect Z, got {}",
-        dz_dd3
+        dy_dd3.abs() < 1e-6,
+        "Prismatic joint should not affect Y, got {}",
+        dy_dd3
     );
     assert!(
-        (dy_dd3 - 1.0).abs() < 1e-4,
-        "Prismatic joint should give unit Y velocity, got {}",
-        dy_dd3
+        (dz_dd3 - 1.0).abs() < 1e-4,
+        "Prismatic joint should give unit Z velocity, got {}",
+        dz_dd3
     );
 }

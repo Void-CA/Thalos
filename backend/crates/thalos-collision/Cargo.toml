@@ -1,0 +1,7 @@
+[package]
+name = "thalos-collision"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+thalos_core = { path = "../thalos-core" }

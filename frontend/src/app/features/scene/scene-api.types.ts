@@ -59,9 +59,15 @@ export interface VisualTwistDto {
 
 export interface VisualPrimitiveDto {
   id: string;
+  /// ID visual del frame padre. El frontend cuelga la primitive como hija
+  /// de este frame en el scene graph.
+  frame_id: string;
+  /// Transformación LOCAL (relativa al frame padre).
   translation: [number, number, number];
   rotation: [number, number, number, number];
   geometry: PrimitiveGeometryDto;
+  /** RGBA (0..1 each). Absent when URDF specified no material color. */
+  color?: [number, number, number, number];
 }
 
 export type PrimitiveGeometryDto =
@@ -94,9 +100,19 @@ export interface ActivePlanDto {
   motion_type: string;
   trajectory_progress: number | null;
   visualization: TrajectoryVisualizationDto | null;
+  segments?: SegmentInfoDto[] | null;
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
+}
+
+export interface SegmentInfoDto {
+  segment_index: number;
+  motion_type: string;
+  waypoint_start: number;
+  waypoint_end: number;
+  time_start: number;
+  time_end: number;
 }
 
 export interface TrajectoryVisualizationDto {
@@ -104,14 +120,40 @@ export interface TrajectoryVisualizationDto {
   motion_type: string;
 }
 
+export type WaypointTypeDto = 'Start' | 'Goal' | 'Via';
+
 export interface VisualWaypointDto {
   position: [number, number, number];
   orientation: [number, number, number, number];
   joints: number[];
   timestamp: number;
-  is_start: boolean;
-  is_end: boolean;
+  waypoint_type: WaypointTypeDto;
 }
+
+// ── Runtime delta DTOs ──
+
+/// Actualización de pose de un objeto del scene graph en un tick.
+export interface TransformUpdate {
+  id: string;
+  translation: [number, number, number];
+  rotation: [number, number, number, number];
+  scale: [number, number, number];
+}
+
+/// Estado dinámico del motor: solo lo que cambia en cada tick.
+export interface RuntimeDelta {
+  joints: number[];
+  transforms: TransformUpdate[];
+  execution: ExecutionDto;
+}
+
+export interface ExecutionDto {
+  status: ExecutionStatusDto;
+  progress: number;
+  elapsed_secs: number;
+}
+
+export type ExecutionStatusDto = 'Created' | 'Active' | 'Paused' | 'Completed' | 'Cancelled' | 'Failed' | 'Idle';
 
 export interface ValidateResponse {
   valid: boolean;
@@ -162,3 +204,13 @@ export interface SolveIKResponse {
 export interface ExecuteIKRequest {
   joint_angles: number[];
 }
+
+// ── Motion plan request types ──
+
+export interface MotionPlanRequest {
+  segments: MotionSegmentDto[];
+}
+
+export type MotionSegmentDto =
+  | { type: 'movej'; target: number[] }
+  | { type: 'movel'; target: PoseTargetDto };

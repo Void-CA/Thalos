@@ -1,14 +1,7 @@
 use nalgebra::DVector;
-use crate::math::geometry::vectors::Vector3;
-
 pub type DynamicVector = DVector<f64>;
 
-impl From<Vector3> for DynamicVector {
-    fn from(v: Vector3) -> Self {
-        DynamicVector::from_vec(vec![
-            v.x,
-            v.y,
-            v.z,
-        ])
-    }
+/// Convert a 3D vector into a 3-element dynamic vector.
+pub fn vector_to_dynamic(v: crate::math::geometry::vectors::Vector3) -> DynamicVector {
+    DynamicVector::from_vec(vec![v.x, v.y, v.z])
 }

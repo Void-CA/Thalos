@@ -24,11 +24,47 @@ pub enum PlanningError {
 
     #[error("Goal unreachable: {reason}")]
     UnreachableGoal { reason: String },
+
+    /// Se detectó una colisión durante la planificación o validación
+    /// de una trayectoria.
+    #[error("Collision detected between {:?} and {:?}", involved.0, involved.1)]
+    CollisionDetected {
+        involved: (thalos_core::collision::EntityId, thalos_core::collision::EntityId),
+    },
 }
 
 impl From<&str> for PlanningError {
     fn from(msg: &str) -> Self {
         PlanningError::InvalidGoal(msg.to_string())
+    }
+}
+
+/// Compilation of a multi-segment motion program failed.
+///
+/// Wraps the underlying `PlanningError` with the 0-based index of the
+/// segment that failed. The compiler guarantees atomicity — no partial
+/// `CompiledPlan` is produced.
+#[derive(Error, Debug, Clone)]
+#[error("segment {} failed: {source}", .segment_index + 1)]
+pub struct CompileError {
+    /// 0-based index of the segment that caused the failure.
+    pub segment_index: usize,
+
+    /// The underlying planning error.
+    #[source]
+    pub source: PlanningError,
+}
+
+impl CompileError {
+    /// 1-based index for user-facing messages ("segment 3").
+    pub fn segment_1based(&self) -> usize {
+        self.segment_index + 1
+    }
+}
+
+impl From<CompileError> for PlanningError {
+    fn from(e: CompileError) -> Self {
+        e.source
     }
 }
 

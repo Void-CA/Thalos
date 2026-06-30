@@ -30,10 +30,10 @@ impl ScaraSpec {
             a1: 1.0,
             a2: 1.0,
             joint_limits: [
-                JointLimits { min: -PI, max: PI },
-                JointLimits { min: -PI, max: PI },
-                JointLimits { min: -1.0, max: 1.0 },
-                JointLimits { min: -PI, max: PI },
+                JointLimits::new(-PI, PI),
+                JointLimits::new(-PI, PI),
+                JointLimits::new(-1.0, 1.0),
+                JointLimits::new(-PI, PI),
             ],
         }
     }
@@ -45,10 +45,10 @@ impl ScaraSpec {
             a1: 1.0,
             a2: 0.8,
             joint_limits: [
-                JointLimits { min: -140.0_f64.to_radians(), max: 140.0_f64.to_radians() },
-                JointLimits { min: -150.0_f64.to_radians(), max: 150.0_f64.to_radians() },
-                JointLimits { min: -0.5, max: 0.0 },
-                JointLimits { min: -2.0 * PI, max: 2.0 * PI },
+                JointLimits::new(-140.0_f64.to_radians(), 140.0_f64.to_radians()),
+                JointLimits::new(-150.0_f64.to_radians(), 150.0_f64.to_radians()),
+                JointLimits::new(-0.5, 0.0),
+                JointLimits::new(-2.0 * PI, 2.0 * PI),
             ],
         }
     }

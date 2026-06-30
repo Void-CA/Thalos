@@ -1,19 +1,6 @@
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum JointKind {
-    Revolute,
-    Prismatic,
-    Fixed,
-}
+//! Re-exports from `thalos_models::joint` for backward compatibility.
+//!
+//! These types have moved to the canonical model crate. They are
+//! re-exported here so existing joint code does not break.
 
-impl std::fmt::Display for JointKind {
-    fn fmt(
-        &self,
-        f: &mut std::fmt::Formatter<'_>,
-    ) -> std::fmt::Result {
-        match self {
-            JointKind::Revolute => write!(f, "revolute"),
-            JointKind::Prismatic => write!(f, "prismatic"),
-            JointKind::Fixed => write!(f, "fixed"),
-        }
-    }
-}
+pub use thalos_models::JointKind;

@@ -79,9 +79,11 @@ impl From<VisualPrimitive> for VisualPrimitiveDto {
     fn from(p: VisualPrimitive) -> Self {
         Self {
             id: p.id,
+            frame_id: p.frame_id,
             translation: p.translation,
             rotation: p.rotation,
             geometry: p.geometry.into(),
+            color: p.color,
         }
     }
 }
@@ -190,9 +192,11 @@ impl From<VisualPrimitiveDto> for VisualPrimitive {
     fn from(p: VisualPrimitiveDto) -> Self {
         Self {
             id: p.id,
+            frame_id: p.frame_id,
             translation: p.translation,
             rotation: p.rotation,
             geometry: p.geometry.into(),
+            color: p.color,
         }
     }
 }

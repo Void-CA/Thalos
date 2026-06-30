@@ -1,6 +1,26 @@
 use crate::prelude::*;
 use crate::models::single_revolute::SingleRevoluteSpec;
 
+// ─── ADR-0001 Z-up regression tests ──────────────────────────
+
+#[test]
+fn zero_config_ee_in_z_up() {
+    // ADR-0001: Z is vertical. Single revolute spins around Z.
+    // At q=0 with l=1: ee = (1, 0, 0) — arm in XY, Z=0.
+    let robot = SingleRevoluteSpec::ideal().build();
+    let fk = ForwardKinematics::new(robot);
+    let result = fk.evaluate(&[0.0]);
+    let t = result.ee_pose().unwrap().transform().translation;
+
+    assert!(
+        (t.x - 1.0).abs() < EPS && t.y.abs() < EPS && t.z.abs() < EPS,
+        "Single revolute Z-up regression: expected (1, 0, 0), got ({}, {}, {})",
+        t.x, t.y, t.z
+    );
+}
+
+// ─── Existing tests ──────────────────────────────────────────
+
 fn setup() -> (SerialChain, ForwardKinematics) {
     let robot = SingleRevoluteSpec::ideal().build();
     let fk = ForwardKinematics::new(robot.clone());

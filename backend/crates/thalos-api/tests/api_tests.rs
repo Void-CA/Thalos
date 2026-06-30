@@ -137,7 +137,8 @@ async fn validate_invalid_scene() {
         "frames": [],
         "links": [],
         "joint_axes": [],
-        "twists": []
+        "twists": [],
+        "primitives": []
     });
 
     let (status, body) = get_json(
@@ -230,7 +231,8 @@ async fn error_code_missing_world() {
             "frames": [],
             "links": [],
             "joint_axes": [],
-            "twists": []
+            "twists": [],
+            "primitives": []
         }})),
     )
     .await;
@@ -254,7 +256,8 @@ async fn error_code_duplicate_id() {
             ],
             "links": [],
             "joint_axes": [],
-            "twists": []
+            "twists": [],
+            "primitives": []
         }})),
     )
     .await;
@@ -278,7 +281,8 @@ async fn error_code_missing_frame() {
             ],
             "links": [],
             "joint_axes": [],
-            "twists": []
+            "twists": [],
+            "primitives": []
         }})),
     )
     .await;
@@ -302,7 +306,8 @@ async fn error_code_non_finite_value() {
             ],
             "links": [],
             "joint_axes": [],
-            "twists": []
+            "twists": [],
+            "primitives": []
         }})),
     )
     .await;
@@ -325,7 +330,8 @@ async fn error_code_invalid_quaternion() {
             ],
             "links": [],
             "joint_axes": [],
-            "twists": []
+            "twists": [],
+            "primitives": []
         }})),
     )
     .await;
@@ -351,7 +357,8 @@ async fn error_code_broken_topology() {
             ],
             "links": [],
             "joint_axes": [],
-            "twists": []
+            "twists": [],
+            "primitives": []
         }})),
     )
     .await;
@@ -373,11 +380,12 @@ async fn error_code_orphan_link() {
                 {"id": "link_1", "parent": "world", "translation": [1,0,0], "rotation": [1,0,0,0]}
             ],
             "links": [
-                {"start": [0,0,0], "end": [1,0,0]},
-                {"start": [5,0,0], "end": [10,0,0]}
+                {"id": 0, "start": [0,0,0], "end": [1,0,0]},
+                {"id": 1, "start": [5,0,0], "end": [10,0,0]}
             ],
             "joint_axes": [],
-            "twists": []
+            "twists": [],
+            "primitives": []
         }})),
     )
     .await;
@@ -479,7 +487,7 @@ async fn list_robots_returns_all_with_joints() {
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
     let robots = body.as_array().expect("response must be an array");
-    assert_eq!(robots.len(), 4, "should have 4 robots");
+    assert_eq!(robots.len(), 8, "should have 8 robots");
 
     for robot in robots {
         let joints = robot["joints"].as_array().expect("each robot must have joints array");
@@ -591,15 +599,15 @@ async fn workspace_reachability_inside_returns_reachable() {
         http::Method::POST,
         "/api/v1/workspace/reachability",
         Some(json!({
-            "point": { "x": 0.0, "y": 0.0, "z": 0.0 },
-            "tolerance": 0.5,
+                    "point": { "x": 0.7, "y": 0.0, "z": 0.5 },
+            "tolerance": 0.1,
         })),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
 
-    assert_eq!(body["reachable"], true, "Scara center should be reachable");
+    assert_eq!(body["reachable"], true, "Scara test point (0.7, 0, 0.5) should be reachable");
     assert_eq!(body["nearest_distance"], 0.0);
 }
 
@@ -868,4 +876,116 @@ async fn movej_trajectory_persists_across_scene_snapshots() {
     let body = body.expect("response must be valid JSON");
     assert_eq!(body["joints"], json!([0.7, -0.4]));
     assert_eq!(body["robot"]["dof"], 2);
+}
+
+// ─── Motion program execution (#31) ───────────────────────────────
+
+#[tokio::test]
+async fn execute_plan_with_two_segments_returns_correct_segment_ranges() {
+    let app = test_app();
+
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/motion/plan",
+        Some(json!({
+            "segments": [
+                {
+                    "type": "movej",
+                    "target": [1.0, 0.5],
+                },
+                {
+                    "type": "movej",
+                    "target": [0.0, 1.0],
+                },
+            ],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+
+    let plan = body["active_plan"].as_object()
+        .expect("active_plan must be present");
+
+    // ── Plan metadata ──
+    assert_eq!(plan["state"], "Created");
+    assert_eq!(plan["motion_type"], "program");
+
+    // ── Segments ──
+    let segments = plan["segments"].as_array()
+        .expect("segments must be an array");
+    assert_eq!(segments.len(), 2, "expected 2 segments, got {}", segments.len());
+
+    // Each segment must have valid numeric waypoint ranges
+    for (i, seg) in segments.iter().enumerate() {
+        let ws = seg["waypoint_start"].as_u64().expect("waypoint_start must be u64");
+        let we = seg["waypoint_end"].as_u64().expect("waypoint_end must be u64");
+        let ts = seg["time_start"].as_f64().expect("time_start must be f64");
+        let te = seg["time_end"].as_f64().expect("time_end must be f64");
+
+        assert!(we > ws, "segment {i}: waypoint_end ({we}) must be > waypoint_start ({ws})");
+        assert!(te >= ts, "segment {i}: time_end ({te}) must be >= time_start ({ts})");
+        assert_eq!(seg["segment_index"], i, "segment {i}: index mismatch");
+        assert_eq!(seg["motion_type"], "movej", "segment {i}: motion_type");
+    }
+
+    // Segment 1 waypoint_start must equal segment 0 waypoint_end (contiguous)
+    let seg0 = &segments[0];
+    let seg1 = &segments[1];
+    assert_eq!(
+        seg1["waypoint_start"], seg0["waypoint_end"],
+        "segment 1 must start where segment 0 ends"
+    );
+    assert_eq!(
+        seg1["time_start"], seg0["time_end"],
+        "segment 1 time must start where segment 0 time ends"
+    );
+
+    // ── Visualization ──
+    let vis = plan["visualization"].as_object()
+        .expect("visualization must be present");
+    let waypoints = vis["waypoints"].as_array()
+        .expect("waypoints must be an array");
+
+    // Total waypoint count = segment 0 end (which equals segment 1 end)
+    let total_vis_wps = waypoints.len();
+    let last_seg_end = seg1["waypoint_end"].as_u64().unwrap() as usize;
+    assert_eq!(
+        total_vis_wps, last_seg_end,
+        "waypoint count ({total_vis_wps}) must match last segment waypoint_end ({last_seg_end})"
+    );
+
+    // Waypoints must have positions
+    for (i, wp) in waypoints.iter().enumerate() {
+        let pos = wp["position"].as_array().expect("waypoint must have position array");
+        assert!(pos.len() >= 2, "waypoint {i}: position must have at least 2 elements");
+    }
+
+    // Verify end effector position changes between waypoints (different segments)
+    let first_wp_pos = &waypoints[0]["position"];
+    let mid_wp_idx = seg0["waypoint_end"].as_u64().unwrap() as usize;
+    let mid_wp_pos = &waypoints[mid_wp_idx.saturating_sub(1)]["position"];
+    let last_wp_pos = &waypoints[total_vis_wps - 1]["position"];
+    assert_ne!(
+        first_wp_pos, last_wp_pos,
+        "first and last waypoint must differ in position"
+    );
+    assert_ne!(
+        first_wp_pos, mid_wp_pos,
+        "first and mid-last waypoint of seg0 must differ"
+    );
+
+    // ── Joints must NOT change (plan is Created, not executed) ──
+    assert_eq!(
+        body["joints"], json!([0.0, 0.0]),
+        "robot joints must remain at initial position when plan is Created (not executed)"
+    );
+
+    // Verify the first waypoint's joints are at START position, not the final target
+    let first_joints = &waypoints[0]["joints"];
+    assert_eq!(
+        first_joints, &json!([0.0, 0.0]),
+        "first visualization waypoint must match start position, got {:?}", first_joints
+    );
 }

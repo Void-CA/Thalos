@@ -10,6 +10,8 @@ use thalos_core::{
     models::{RobotModel, RobotModelError},
     spatial::{frame::FrameId, pose::Pose},
 };
+use thalos_planning::motion::program::MotionProgram;
+use thalos_planning::motion::segment::MotionSegment;
 use thalos_runtime::commands::kinematics::KinematicsCommand;
 use thalos_runtime::Command;
 
@@ -99,6 +101,93 @@ pub enum RotationDto {
 pub struct ExecuteIKRequest {
     pub joint_angles: Vec<f64>,
 }
+
+// ── Motion program request ──
+
+/// A single segment in a motion program request.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+pub enum MotionSegmentDto {
+    #[serde(rename = "movej")]
+    MoveJ {
+        target: Vec<f64>,
+        #[serde(default)]
+        max_velocity: Option<f64>,
+        #[serde(default)]
+        max_acceleration: Option<f64>,
+    },
+    #[serde(rename = "movel")]
+    MoveL {
+        #[serde(default)]
+        frame_id: Option<u64>,
+        target: PoseTargetDto,
+        #[serde(default)]
+        max_velocity: Option<f64>,
+    },
+}
+
+/// A request to compile and execute a multi-segment motion program.
+#[derive(Debug, Deserialize)]
+pub struct MotionPlanRequest {
+    pub segments: Vec<MotionSegmentDto>,
+}
+
+impl MotionPlanRequest {
+    /// Convert into a domain `MotionProgram`, resolving frame references
+    /// against the given default end-effector frame.
+    pub fn into_program(self, default_ee: FrameId) -> MotionProgram {
+        let segments = self
+            .segments
+            .into_iter()
+            .map(|s| s.into_segment(default_ee))
+            .collect();
+        MotionProgram::new(segments)
+    }
+}
+
+impl MotionSegmentDto {
+    fn into_segment(self, default_ee: FrameId) -> MotionSegment {
+        match self {
+            MotionSegmentDto::MoveJ {
+                target,
+                max_velocity,
+                max_acceleration,
+            } => MotionSegment::MoveJ {
+                target,
+                max_velocity,
+                max_acceleration,
+            },
+            MotionSegmentDto::MoveL {
+                frame_id,
+                target,
+                max_velocity,
+            } => {
+                let frame = frame_id.map_or(default_ee, FrameId::Id);
+                let pose = target.to_pose(frame);
+                MotionSegment::MoveL {
+                    frame,
+                    target_pose: pose,
+                    max_velocity,
+                }
+            }
+        }
+    }
+}
+
+/// Import a robot from raw URDF source.
+#[derive(Debug, Deserialize)]
+pub struct LoadUrdfRobotRequest {
+    pub urdf_source: String,
+}
+
+// ── Execution tick request ──
+
+/// Request to advance execution by `dt` seconds.
+#[derive(Debug, Deserialize)]
+pub struct TickRequest {
+    pub dt: f64,
+}
+
 
 fn default_epsilon() -> f64 {
     1e-6

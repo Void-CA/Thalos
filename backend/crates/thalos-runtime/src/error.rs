@@ -15,6 +15,9 @@ pub enum RuntimeError {
 
     #[error("planning error: {0}")]
     Planning(#[from] PlanningError),
+
+    #[error("joint count mismatch: expected {expected}, received {received}")]
+    JointCountMismatch { expected: usize, received: usize },
 }
 
 impl RuntimeError {
@@ -40,7 +43,9 @@ impl RuntimeError {
                 PlanningError::JointLimitViolation { .. } => "joint_limit_violation",
                 PlanningError::InvalidGoal(_) => "invalid_goal",
                 PlanningError::UnreachableGoal { .. } => "unreachable_goal",
-            },
+                PlanningError::CollisionDetected { .. } => "collision_detected",
+            }
+            RuntimeError::JointCountMismatch { expected, received } => "joint_count_mismatch",
         }
     }
 }

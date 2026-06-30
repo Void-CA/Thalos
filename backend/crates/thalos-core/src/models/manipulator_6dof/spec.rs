@@ -26,12 +26,12 @@ impl Manipulator6DOFSpec {
         Self {
             l1: 1.0, l2: 1.0, l3: 1.0, l4: 1.0, l5: 1.0, l6: 1.0,
             joint_limits: [
-                JointLimits { min: -PI, max: PI },
-                JointLimits { min: -PI, max: PI },
-                JointLimits { min: -PI, max: PI },
-                JointLimits { min: -PI, max: PI },
-                JointLimits { min: -PI, max: PI },
-                JointLimits { min: -PI, max: PI },
+                JointLimits::new(-PI, PI),
+                JointLimits::new(-PI, PI),
+                JointLimits::new(-PI, PI),
+                JointLimits::new(-PI, PI),
+                JointLimits::new(-PI, PI),
+                JointLimits::new(-PI, PI),
             ],
         }
     }

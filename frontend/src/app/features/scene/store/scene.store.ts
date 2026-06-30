@@ -4,15 +4,17 @@ import { BehaviorSubject, concat, merge, Observable, of, Subject } from 'rxjs';
 import { auditTime, catchError, distinctUntilChanged, map, scan, switchMap } from 'rxjs/operators';
 import { SceneApiService } from '../services/scene-api.service';
 import { toSceneData, toActivePlan } from '../adapters/dto-to-model';
-import type { RuntimeStateResponse, SolveIKResponse } from '../scene-api.types';
-import type { ActivePlan, IkCommand, IkResult, IkTarget, RuntimeInfo, SceneData, SceneState, SceneUiState } from '../scene.types';
+import type { RuntimeDelta, RuntimeStateResponse, SolveIKResponse } from '../scene-api.types';
+import type { ActivePlan, ExecutionInfo, IkCommand, IkResult, IkTarget, ObjectTransform, RuntimeInfo, SceneData, SceneState, SceneUiState } from '../scene.types';
 
 type SceneEvent =
   | { type: 'loading' }
   | { type: 'scene'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null; activePlan: ActivePlan | null }
+  | { type: 'fk-update'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null }
   | { type: 'ik-executed'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null; activePlan: ActivePlan | null }
   | { type: 'solve'; joints: number[]; ikResult: IkResult }
   | { type: 'target'; target: IkTarget | null }
+  | { type: 'runtime-delta'; joints: number[]; transforms: ObjectTransform[]; execution: ExecutionInfo }
   | { type: 'error'; message: string };
 
 const INITIAL_UI: SceneUiState = {
@@ -23,6 +25,8 @@ const INITIAL_UI: SceneUiState = {
 const INITIAL_STATE: SceneState = {
   data: null,
   runtime: null,
+  liveTransforms: [],
+  execution: null,
   ikResult: null,
   solvedQ: null,
   ikTarget: null,
@@ -52,6 +56,28 @@ function toSceneEvent(res: RuntimeStateResponse): SceneEvent {
     },
     ikResult,
     activePlan: toActivePlan(res.active_plan),
+  };
+}
+
+/** Map the FK response — same as scene but WITHOUT activePlan (FK never changes the plan). */
+function toFkEvent(res: RuntimeStateResponse): SceneEvent {
+  const ikResult: IkResult | null = res.ik_result
+    ? {
+        status: res.ik_result.status,
+        iterations: res.ik_result.iterations,
+        finalError: res.ik_result.final_error,
+      }
+    : null;
+
+  return {
+    type: 'fk-update',
+    data: toSceneData(res.scene),
+    runtime: {
+      robot: res.robot,
+      joints: res.joints,
+      generatedAt: res.generated_at,
+    },
+    ikResult,
   };
 }
 
@@ -91,6 +117,20 @@ function toSolveEvent(res: SolveIKResponse): SceneEvent {
   };
 }
 
+/** Map a RuntimeDelta (API) into a 'runtime-delta' event. */
+function toRuntimeDeltaEvent(delta: RuntimeDelta): SceneEvent {
+  return {
+    type: 'runtime-delta',
+    joints: delta.joints,
+    transforms: delta.transforms,
+    execution: {
+      status: delta.execution.status,
+      progress: delta.execution.progress,
+      elapsedSecs: delta.execution.elapsed_secs,
+    },
+  };
+}
+
 @Injectable({ providedIn: 'root' })
 export class SceneStore {
   private readonly api = inject(SceneApiService);
@@ -100,6 +140,9 @@ export class SceneStore {
 
   /** Input stream: load a different robot model into the scene. */
   private readonly loadRobotSubject = new Subject<string>();
+
+  /** Input stream: import a robot from a URDF source string. */
+  private readonly loadUrdfSubject = new Subject<string>();
 
   /** Input stream: IK commands (moveToPosition / moveToPose). */
   private readonly ikSubject = new Subject<IkCommand>();
@@ -116,6 +159,9 @@ export class SceneStore {
   /** Input stream: external state snapshots (MoveJ/MoveL results, etc.). */
   private readonly applySnapshotSubject = new Subject<RuntimeStateResponse>();
 
+  /** Input stream: runtime delta updates (execution tick). */
+  private readonly applyDeltaSubject = new Subject<RuntimeDelta>();
+
   /** Single source of truth: latest scene data + UI state. */
   readonly state$: Observable<SceneState> = merge(
     // Pipeline 1: joint angle changes → setJoints API
@@ -127,7 +173,7 @@ export class SceneStore {
       switchMap(q => concat(
         of({ type: 'loading' as const }),
         this.api.setJoints(q).pipe(
-          map(toSceneEvent),
+          map(toFkEvent),
           catchError(err =>
             of({ type: 'error' as const, message: err.message ?? 'FK failed' }),
           ),
@@ -215,15 +261,47 @@ export class SceneStore {
     this.applySnapshotSubject.pipe(
       map(toSceneEvent),
     ),
+
+    // Pipeline 8: runtime delta updates (execution tick)
+    this.applyDeltaSubject.pipe(
+      map(toRuntimeDeltaEvent),
+    ),
+
+    // Pipeline 9: URDF import → loadRobotFromUrdf API
+    this.loadUrdfSubject.pipe(
+      switchMap(source => concat(
+        of({ type: 'loading' as const }),
+        this.api.loadRobotFromUrdf(source).pipe(
+          map(toSceneEvent),
+          catchError(err =>
+            of({ type: 'error' as const, message: err.message ?? 'URDF import failed' }),
+          ),
+        ),
+      )),
+    ),
   ).pipe(
     scan((state, event): SceneState => {
       switch (event.type) {
         case 'loading':
           return { ...state, ui: { ...state.ui, loading: true, error: null } };
+        case 'fk-update':
+          return {
+            data: event.data,
+            runtime: event.runtime,
+            liveTransforms: [],
+            execution: null,
+            ikResult: event.ikResult,
+            solvedQ: null,
+            ikTarget: state.ikTarget,
+            activePlan: state.activePlan, // FK never changes the plan
+            ui: { loading: false, error: null },
+          };
         case 'scene':
           return {
             data: event.data,
             runtime: event.runtime,
+            liveTransforms: [],
+            execution: null,
             ikResult: event.ikResult,
             solvedQ: null,
             ikTarget: state.ikTarget,
@@ -234,11 +312,23 @@ export class SceneStore {
           return {
             data: event.data,
             runtime: event.runtime,
+            liveTransforms: [],
+            execution: null,
             ikResult: event.ikResult,
             solvedQ: event.runtime.joints,
             ikTarget: state.ikTarget,
             activePlan: event.activePlan,
             ui: { loading: false, error: null },
+          };
+        case 'runtime-delta':
+          return {
+            ...state,
+            data: state.data, // same ref — no scene rebuild
+            runtime: state.runtime
+              ? { ...state.runtime, joints: event.joints }
+              : null,
+            liveTransforms: event.transforms,
+            execution: event.execution,
           };
         case 'solve':
           return {
@@ -276,6 +366,11 @@ export class SceneStore {
     this.loadRobotSubject.next(id);
   }
 
+  /** Import a robot from a raw URDF source string. */
+  loadRobotFromUrdf(urdfSource: string): void {
+    this.loadUrdfSubject.next(urdfSource);
+  }
+
   /** Send an IK command (move-to-position or move-to-pose, mutates runtime). */
   moveToTarget(cmd: IkCommand): void {
     this.ikSubject.next(cmd);
@@ -299,5 +394,10 @@ export class SceneStore {
   /** Inject a full runtime state snapshot into the store (from MoveJ/MoveL, etc.). */
   applySnapshot(res: RuntimeStateResponse): void {
     this.applySnapshotSubject.next(res);
+  }
+
+  /** Inject a runtime delta (from execution tick). */
+  applyRuntimeDelta(delta: RuntimeDelta): void {
+    this.applyDeltaSubject.next(delta);
   }
 }

@@ -10,6 +10,7 @@ pub fn create_single_revolute(l: f64, limits_j1: JointLimits) -> SerialChain {
     let link1 = Link {
         id: 0,
         transform: Transform3D::from_translation(Vector3::new(l, 0.0, 0.0)),
+        collision_geometry: None,
     };
     builder.add_segment(Segment {
         parent: FrameId::World,

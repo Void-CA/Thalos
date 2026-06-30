@@ -1,20 +1,15 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
+import { NgComponentOutlet } from '@angular/common';
 import { SceneViewer } from './features/scene/components/scene-viewer/scene-viewer';
-import { JointControl } from './features/scene/components/joint-control/joint-control';
-import { IkTargetPanel } from './features/scene/components/ik-target-panel/ik-target-panel';
 import { RobotCatalog } from './features/robots/components/robot-catalog/robot-catalog';
-import { WorkspacePanel } from './features/workspace/components/workspace-panel/workspace-panel';
 import { TopBar } from './shared/components/top-bar/top-bar';
 import { BottomPanel } from './shared/components/bottom-panel/bottom-panel';
-import { PlanningPanel } from './features/planning/planning-panel';
 import { ModeStore } from './shared/store/mode.store';
+import { UI_MODE_REGISTRY } from './shared/types/ui-mode-registry';
+import type { ToolSchema } from './shared/types/tool-schema';
 
 /**
- * Layout shell — solo compone UI.
- *
- * - No llama API
- * - No maneja Three.js
- * - No contiene lógica de estado
+ * Layout shell — compone las 5 zonas del "control panel".
  *
  * ┌────────────────────────────────────────────┐
  * │  Top Bar — mode + system status            │
@@ -25,23 +20,25 @@ import { ModeStore } from './shared/store/mode.store';
  * ├──────┴─────────────────────┴───────────────┤
  * │  Bottom Panel — System Observability       │
  * └────────────────────────────────────────────┘
+ *
+ * Panel derecho NO hardcodea tools — consume `UI_MODE_REGISTRY`.
  */
 @Component({
   selector: 'app-root',
   standalone: true,
   imports: [
+    NgComponentOutlet,
     SceneViewer,
-    JointControl,
-    IkTargetPanel,
     RobotCatalog,
-    WorkspacePanel,
     TopBar,
     BottomPanel,
-    PlanningPanel,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
 export class App {
   protected readonly modeStore = inject(ModeStore);
+  protected readonly currentTools = computed<readonly ToolSchema[]>(
+    () => UI_MODE_REGISTRY[this.modeStore.mode()],
+  );
 }

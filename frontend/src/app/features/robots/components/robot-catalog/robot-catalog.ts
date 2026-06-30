@@ -1,4 +1,4 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { RobotCard } from '../robot-card/robot-card';
 import { RobotStore } from '../../store/robot.store';
 import { SceneStore } from '../../../scene/store/scene.store';
@@ -10,6 +10,7 @@ import { SceneStore } from '../../../scene/store/scene.store';
  *  1. Cargar la lista via RobotStore
  *  2. Renderizar cards
  *  3. Click → RobotStore.select(id) + SceneStore.loadRobot(id)
+ *  4. Importar robots desde archivos URDF
  *
  * NO acopla RobotStore con SceneStore.
  * Sin subscribe ni zone.js — puros signals.
@@ -37,6 +38,24 @@ import { SceneStore } from '../../../scene/store/scene.store';
           }
         </div>
       }
+
+      <hr class="divider" />
+
+      <h3 class="title">Import URDF</h3>
+      <input
+        #fileInput
+        type="file"
+        accept=".urdf,.xml"
+        hidden
+        (change)="onFileSelected(fileInput.files)"
+      />
+      <button class="urdf-btn" (click)="fileInput.click()">
+        Choose file…
+      </button>
+
+      @if (urdfFileName(); as name) {
+        <p class="file-name">{{ name }}</p>
+      }
     </div>
   `,
   styleUrl: './robot-catalog.scss',
@@ -51,6 +70,8 @@ export class RobotCatalog implements OnInit {
   protected readonly loading = this.robotStore.loading;
   protected readonly error = this.robotStore.error;
 
+  protected readonly urdfFileName = signal<string | null>(null);
+
   ngOnInit(): void {
     this.robotStore.loadRobots();
   }
@@ -58,5 +79,22 @@ export class RobotCatalog implements OnInit {
   protected onSelect(id: string): void {
     this.robotStore.select(id);
     this.sceneStore.loadRobot(id);
+  }
+
+  protected onFileSelected(files: FileList | null): void {
+    const file = files?.item(0);
+    if (!file) return;
+
+    this.urdfFileName.set(file.name);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const source = reader.result as string;
+      // Al importar URDF el catálogo canónico ya no tiene un robot
+      // "seleccionado" — limpiar para evitar el falso positivo visual.
+      this.robotStore.select(null);
+      this.sceneStore.loadRobotFromUrdf(source);
+    };
+    reader.readAsText(file);
   }
 }
