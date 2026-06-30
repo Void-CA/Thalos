@@ -176,6 +176,22 @@ impl SceneService {
         Ok(Self::build_snapshot(&runtime, None))
     }
 
+    pub async fn reset_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        // Reset the controller and plan for re-execution
+        if let Some(ctrl) = self.manager.get_controller().await {
+            let (waypoints, duration) = {
+                let runtime = self.runtime.read().await;
+                Self::trajectory_to_waypoints(&runtime)
+            };
+            if !waypoints.is_empty() && duration > 0.0 {
+                let mut c = ctrl.write().await;
+                c.execute(waypoints, duration).await?;
+            }
+        }
+        let runtime = self.runtime.read().await;
+        Ok(Self::build_snapshot(&runtime, None))
+    }
+
     // ── Tick ──
 
     /// Advance execution by `dt` seconds via the controller, then build

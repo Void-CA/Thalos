@@ -88,7 +88,7 @@ pub async fn set_joints(
     let snapshot = state
         .services
         .scene
-        .execute(Command::SetJoints(payload.joint_angles))?;
+        .execute(Command::SetJoints(payload.joint_angles)).await?;
 
     Ok(Json(to_api_response(&snapshot)))
 }
@@ -336,7 +336,7 @@ pub async fn execute_ik(
     let snapshot = state
         .services
         .scene
-        .execute(Command::SetJoints(payload.joint_angles))?;
+        .execute(Command::SetJoints(payload.joint_angles)).await?;
     Ok(Json(to_api_response(&snapshot)))
 }
 

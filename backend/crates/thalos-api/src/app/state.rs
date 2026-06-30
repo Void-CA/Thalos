@@ -1,13 +1,23 @@
 use std::sync::Arc;
 
+use tokio::sync::RwLock;
+
 use thalos_core::models::RobotModel;
-use thalos_runtime::{backends::InternalBackend, SceneService};
+use thalos_runtime::{
+    backends::{
+        controller::simulation::SimulationController,
+        manager::BackendManager,
+        InternalBackend,
+    },
+    RobotController, SceneService,
+};
 
 use crate::features::robots::service::RobotService;
 
 pub struct Services {
     pub scene: SceneService,
     pub robots: RobotService,
+    pub manager: Arc<BackendManager>,
 }
 
 pub struct AppState {
@@ -18,14 +28,26 @@ pub type SharedState = Arc<AppState>;
 
 pub fn new_default_state() -> SharedState {
     let backend = Box::new(InternalBackend);
-    let scene = SceneService::new(backend, RobotModel::Planar2R);
 
+    let controller = Arc::new(RwLock::new(
+        SimulationController::new(RobotModel::Planar2R.metadata().dof),
+    )) as Arc<RwLock<dyn RobotController + Send + Sync>>;
+
+    let manager = Arc::new(BackendManager::new());
+    // Register the simulation controller — use tokio::runtime::Handle
+    // to block_on in a sync context (this is called during startup).
+    tokio::runtime::Handle::current()
+        .block_on(manager.set_active(controller))
+        .expect("Failed to register simulation controller");
+
+    let scene = SceneService::new(backend, manager.clone(), RobotModel::Planar2R);
     let robots = RobotService;
 
     Arc::new(AppState {
         services: Arc::new(Services {
             scene,
             robots,
+            manager,
         }),
     })
 }

@@ -28,7 +28,7 @@ pub async fn movej(
             max_velocity: payload.velocity,
             max_acceleration: payload.acceleration,
             time_step: None,
-        }))?;
+        })).await?;
 
     Ok(Json(to_api_response(&snapshot)))
 }
@@ -58,7 +58,7 @@ pub async fn movel(
             time_step: None,
             cartesian_step: None,
         },
-    ))?;
+    )).await?;
 
     Ok(Json(to_api_response(&snapshot)))
 }
