@@ -188,6 +188,9 @@ export class ThreeRendererService {
   applyScene(scene: SceneData): void {
     if (!this.contentGroup) return;
 
+    // Clear material cache on robot swap — geometries with old colors are gone.
+    this.matCache.clear();
+
     this.syncFrames(scene.frames);
     this.syncLinks(scene.links);
     this.syncPrimitives(scene.primitives);

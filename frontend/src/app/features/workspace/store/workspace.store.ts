@@ -1,4 +1,5 @@
 import { Injectable, inject, Signal, signal, computed } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import { WorkspaceApiService } from '../services/workspace-api.service';
 import type { ActiveAnalysisResponse, ManipulabilityResponse, SingularityResponse, WorkspaceDto } from '../workspace-api.types';
 import type {
@@ -122,6 +123,26 @@ export class WorkspaceStore {
   /** Derived: true when workspace has been sampled. */
   readonly hasData: Signal<boolean> = computed(() => this.dataSignal() !== null);
 
+  // ── Helpers ──
+
+  /**
+   * Wrap an async operation with loading state and error handling.
+   * Returns `null` on failure (error is set via errorSignal).
+   * The caller handles pre/post cleanup (clearing related signals).
+   */
+  private async withLoading<T>(fn: () => Promise<T>, errorLabel: string): Promise<T | null> {
+    this.loadingSignal.set(true);
+    this.errorSignal.set(null);
+    try {
+      return await fn();
+    } catch (err: unknown) {
+      this.errorSignal.set(err instanceof Error ? err.message : errorLabel);
+      return null;
+    } finally {
+      this.loadingSignal.set(false);
+    }
+  }
+
   // ── Actions ──
 
   /** Toggle point cloud visibility in the 3D viewer. */
@@ -131,164 +152,109 @@ export class WorkspaceStore {
 
   /** Sample a workspace for the given robot and config. */
   async sample(robotId: string, samples: number, seed: number, tolerance: number): Promise<void> {
-    this.loadingSignal.set(true);
-    this.errorSignal.set(null);
     this.reachabilitySignal.set(null);
     this.pointCloudSignal.set(null);
     this.showPointCloudSignal.set(false);
 
-    try {
-      const dto = await this.api.sample({
-        robot_id: robotId,
-        samples,
-        seed,
-        tolerance,
-        include_samples: true,
-      }).toPromise();
+    const dto = await this.withLoading(() => firstValueFrom(this.api.sample({
+      robot_id: robotId,
+      samples,
+      seed,
+      tolerance,
+      include_samples: true,
+    })), 'Sampling failed');
+    if (!dto) return;
 
-      if (!dto) throw new Error('Empty response');
+    this.dataSignal.set({
+      metrics: toMetrics(dto.metrics),
+      bounds: toBounds(dto.bounds),
+    });
 
-      this.dataSignal.set({
-        metrics: toMetrics(dto.metrics),
-        bounds: toBounds(dto.bounds),
-      });
-
-      // Extract point cloud from samples
-      if (dto.samples && dto.samples.length > 0) {
-        this.pointCloudSignal.set(
-          dto.samples.map(s => [s.position.x, s.position.y, s.position.z] as [number, number, number]),
-        );
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Sampling failed';
-      this.errorSignal.set(msg);
-    } finally {
-      this.loadingSignal.set(false);
+    if (dto.samples && dto.samples.length > 0) {
+      this.pointCloudSignal.set(
+        dto.samples.map(s => [s.position.x, s.position.y, s.position.z] as [number, number, number]),
+      );
     }
   }
 
   /** Check reachability of a point against the current workspace. */
   async checkReachability(point: [number, number, number], tolerance: number): Promise<void> {
-    this.loadingSignal.set(true);
-    this.errorSignal.set(null);
+    const dto = await this.withLoading(() => firstValueFrom(this.api.checkReachability({
+      point: { x: point[0], y: point[1], z: point[2] },
+      tolerance,
+    })), 'Reachability check failed');
+    if (!dto) return;
 
-    try {
-      const dto = await this.api.checkReachability({
-        point: { x: point[0], y: point[1], z: point[2] },
-        tolerance,
-      }).toPromise();
-
-      if (!dto) throw new Error('Empty response');
-
-      this.reachabilitySignal.set({
-        reachable: dto.reachable,
-        nearestDistance: dto.nearest_distance,
-      });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Reachability check failed';
-      this.errorSignal.set(msg);
-    } finally {
-      this.loadingSignal.set(false);
-    }
+    this.reachabilitySignal.set({
+      reachable: dto.reachable,
+      nearestDistance: dto.nearest_distance,
+    });
   }
 
   /** Run manipulability analysis. Updates point cloud with green→red gradient. */
   async analyzeManipulability(robotId: string, samples: number, seed: number, tolerance: number): Promise<void> {
-    this.loadingSignal.set(true);
-    this.errorSignal.set(null);
+    const dto = await this.withLoading(() => firstValueFrom(this.api.analyzeManipulability({
+      robot_id: robotId,
+      samples,
+      seed,
+      tolerance,
+      include_samples: true,
+    })), 'Manipulability analysis failed');
+    if (!dto) return;
 
-    try {
-      const dto = await this.api.analyzeManipulability({
-        robot_id: robotId,
-        samples,
-        seed,
-        tolerance,
-        include_samples: true,
-      }).toPromise();
+    const data = toManipulabilityData(dto);
+    this.manipulabilitySignal.set(data);
 
-      if (!dto) throw new Error('Empty response');
-
-      const data = toManipulabilityData(dto);
-      this.manipulabilitySignal.set(data);
-
-      if (data.points.length > 0) {
-        this.pointCloudSignal.set(data.points.map(p => p.position));
-      }
-      this.showPointCloudSignal.set(true);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Manipulability analysis failed';
-      this.errorSignal.set(msg);
-    } finally {
-      this.loadingSignal.set(false);
+    if (data.points.length > 0) {
+      this.pointCloudSignal.set(data.points.map(p => p.position));
     }
+    this.showPointCloudSignal.set(true);
   }
 
   /** Run singularity analysis on the current workspace data. */
   async analyzeSingularity(robotId: string, samples: number, seed: number, tolerance: number, threshold: number): Promise<void> {
-    this.loadingSignal.set(true);
-    this.errorSignal.set(null);
+    const dto = await this.withLoading(() => firstValueFrom(this.api.analyzeSingularity({
+      robot_id: robotId,
+      samples,
+      seed,
+      tolerance,
+      near_singular_condition_threshold: threshold,
+      include_samples: true,
+    })), 'Singularity analysis failed');
+    if (!dto) return;
 
-    try {
-      const dto = await this.api.analyzeSingularity({
-        robot_id: robotId,
-        samples,
-        seed,
-        tolerance,
-        near_singular_condition_threshold: threshold,
-        include_samples: true,
-      }).toPromise();
+    const data = toSingularityData(dto);
+    this.singularitySignal.set(data);
 
-      if (!dto) throw new Error('Empty response');
-
-      const data = toSingularityData(dto);
-      this.singularitySignal.set(data);
-
-      // Replace point cloud with colored version
-      if (data.points.length > 0) {
-        this.pointCloudSignal.set(data.points.map(p => p.position));
-      }
-      this.showPointCloudSignal.set(true);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Singularity analysis failed';
-      this.errorSignal.set(msg);
-    } finally {
-      this.loadingSignal.set(false);
+    if (data.points.length > 0) {
+      this.pointCloudSignal.set(data.points.map(p => p.position));
     }
+    this.showPointCloudSignal.set(true);
   }
 
   /** Sample workspace for the currently loaded robot (no robot_id needed). */
   async sampleActive(samples: number, seed: number, tolerance: number): Promise<void> {
-    this.loadingSignal.set(true);
-    this.errorSignal.set(null);
     this.reachabilitySignal.set(null);
     this.pointCloudSignal.set(null);
     this.showPointCloudSignal.set(false);
 
-    try {
-      const dto = await this.api.sampleActive({
-        samples,
-        seed,
-        tolerance,
-        include_samples: true,
-      }).toPromise();
+    const dto = await this.withLoading(() => firstValueFrom(this.api.sampleActive({
+      samples,
+      seed,
+      tolerance,
+      include_samples: true,
+    })), 'Sampling failed');
+    if (!dto) return;
 
-      if (!dto) throw new Error('Empty response');
+    this.dataSignal.set({
+      metrics: toMetrics(dto.metrics),
+      bounds: toBounds(dto.bounds),
+    });
 
-      this.dataSignal.set({
-        metrics: toMetrics(dto.metrics),
-        bounds: toBounds(dto.bounds),
-      });
-
-      if (dto.samples && dto.samples.length > 0) {
-        this.pointCloudSignal.set(
-          dto.samples.map(s => [s.position.x, s.position.y, s.position.z] as [number, number, number]),
-        );
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Sampling failed';
-      this.errorSignal.set(msg);
-    } finally {
-      this.loadingSignal.set(false);
+    if (dto.samples && dto.samples.length > 0) {
+      this.pointCloudSignal.set(
+        dto.samples.map(s => [s.position.x, s.position.y, s.position.z] as [number, number, number]),
+      );
     }
   }
 
@@ -299,48 +265,31 @@ export class WorkspaceStore {
     tolerance: number,
     threshold: number,
   ): Promise<void> {
-    this.loadingSignal.set(true);
-    this.errorSignal.set(null);
+    const dto = await this.withLoading(() => firstValueFrom(this.api.analyzeActive({
+      samples,
+      seed,
+      tolerance,
+      near_singular_condition_threshold: threshold,
+      include_samples: true,
+    })), 'Analysis failed');
+    if (!dto) return;
 
-    try {
-      const dto = await this.api.analyzeActive({
-        samples,
-        seed,
-        tolerance,
-        near_singular_condition_threshold: threshold,
-        include_samples: true,
-      }).toPromise();
+    this.dataSignal.set({
+      metrics: toMetrics(dto.workspace),
+      bounds: toBounds(dto.bounds),
+    });
 
-      if (!dto) throw new Error('Empty response');
+    this.singularitySignal.set(toSingularityData({
+      metrics: dto.singularity,
+      samples: dto.singularity_samples,
+    }));
 
-      // Workspace
-      this.dataSignal.set({
-        metrics: toMetrics(dto.workspace),
-        bounds: toBounds(dto.bounds),
-      });
+    this.manipulabilitySignal.set(toManipulabilityData({
+      metrics: dto.manipulability,
+      samples: dto.manipulability_samples,
+    }));
 
-      // Singularity — includes colored point cloud (state colors)
-      this.singularitySignal.set(toSingularityData({
-        metrics: dto.singularity,
-        samples: dto.singularity_samples,
-      }));
-
-      // Manipulability — includes gradient point cloud (yoshikawa gradient)
-      // Takes priority over singularity in the viewer overlay (see scene-viewer.ts).
-      this.manipulabilitySignal.set(toManipulabilityData({
-        metrics: dto.manipulability,
-        samples: dto.manipulability_samples,
-      }));
-
-      // Enable the overlay — the scene viewer picks the right source
-      // based on priority: manipulability > singularity > monochrome.
-      this.showPointCloudSignal.set(true);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Analysis failed';
-      this.errorSignal.set(msg);
-    } finally {
-      this.loadingSignal.set(false);
-    }
+    this.showPointCloudSignal.set(true);
   }
 
   /** Singularity analysis on the active (URDF) robot. */
@@ -350,33 +299,20 @@ export class WorkspaceStore {
     tolerance: number,
     threshold: number,
   ): Promise<void> {
-    this.loadingSignal.set(true);
-    this.errorSignal.set(null);
-    // Clear manipulability so the viewer overlay shows singularity
     this.manipulabilitySignal.set(null);
 
-    try {
-      const dto = await this.api.analyzeSingularityActive({
-        samples,
-        seed,
-        tolerance,
-        near_singular_condition_threshold: threshold,
-        include_samples: true,
-      }).toPromise();
+    const dto = await this.withLoading(() => firstValueFrom(this.api.analyzeSingularityActive({
+      samples,
+      seed,
+      tolerance,
+      near_singular_condition_threshold: threshold,
+      include_samples: true,
+    })), 'Singularity analysis failed');
+    if (!dto) return;
 
-      if (!dto) throw new Error('Empty response');
-
-      this.singularitySignal.set(toSingularityData(dto));
-
-      // Show the colored point cloud
-      if (dto.samples && dto.samples.length > 0) {
-        this.showPointCloudSignal.set(true);
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Singularity analysis failed';
-      this.errorSignal.set(msg);
-    } finally {
-      this.loadingSignal.set(false);
+    this.singularitySignal.set(toSingularityData(dto));
+    if (dto.samples && dto.samples.length > 0) {
+      this.showPointCloudSignal.set(true);
     }
   }
 
@@ -386,32 +322,19 @@ export class WorkspaceStore {
     seed: number,
     tolerance: number,
   ): Promise<void> {
-    this.loadingSignal.set(true);
-    this.errorSignal.set(null);
-    // Clear singularity so the viewer overlay shows manipulability
     this.singularitySignal.set(null);
 
-    try {
-      const dto = await this.api.analyzeManipulabilityActive({
-        samples,
-        seed,
-        tolerance,
-        include_samples: true,
-      }).toPromise();
+    const dto = await this.withLoading(() => firstValueFrom(this.api.analyzeManipulabilityActive({
+      samples,
+      seed,
+      tolerance,
+      include_samples: true,
+    })), 'Manipulability analysis failed');
+    if (!dto) return;
 
-      if (!dto) throw new Error('Empty response');
-
-      this.manipulabilitySignal.set(toManipulabilityData(dto));
-
-      // Show the gradient point cloud
-      if (dto.samples && dto.samples.length > 0) {
-        this.showPointCloudSignal.set(true);
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Manipulability analysis failed';
-      this.errorSignal.set(msg);
-    } finally {
-      this.loadingSignal.set(false);
+    this.manipulabilitySignal.set(toManipulabilityData(dto));
+    if (dto.samples && dto.samples.length > 0) {
+      this.showPointCloudSignal.set(true);
     }
   }
 

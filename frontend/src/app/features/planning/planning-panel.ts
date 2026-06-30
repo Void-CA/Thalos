@@ -1,4 +1,5 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { JointEditor } from '../../shared/components/joint-editor/joint-editor';
 import { PoseInputs, PoseInputsValue } from '../../shared/components/pose-inputs/pose-inputs';
@@ -96,6 +97,7 @@ export class PlanningPanel {
   protected readonly planning = inject(PlanningStore);
   private readonly api = inject(SceneApiService);
   private readonly scene = inject(SceneStore);
+  private readonly destroyRef = inject(DestroyRef);
 
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -126,24 +128,23 @@ export class PlanningPanel {
   // ── Helpers ──
 
   protected segmentToPoseValue(seg: SegmentModel): PoseInputsValue {
-    const s = seg as any;
     return {
       translation: [
-        parseFloat(s.txStr) || 0,
-        parseFloat(s.tyStr) || 0,
-        parseFloat(s.tzStr) || 0,
+        parseFloat(seg.txStr) || 0,
+        parseFloat(seg.tyStr) || 0,
+        parseFloat(seg.tzStr) || 0,
       ],
-      rotationFormat: s.rotationFormat,
+      rotationFormat: seg.rotationFormat,
       yprDeg: [
-        parseFloat(s.yawStr) || 0,
-        parseFloat(s.pitchStr) || 0,
-        parseFloat(s.rollStr) || 0,
+        parseFloat(seg.yawStr) || 0,
+        parseFloat(seg.pitchStr) || 0,
+        parseFloat(seg.rollStr) || 0,
       ],
       quaternion: [
-        parseFloat(s.qwStr) || 1,
-        parseFloat(s.qxStr) || 0,
-        parseFloat(s.qyStr) || 0,
-        parseFloat(s.qzStr) || 0,
+        parseFloat(seg.qwStr) || 1,
+        parseFloat(seg.qxStr) || 0,
+        parseFloat(seg.qyStr) || 0,
+        parseFloat(seg.qzStr) || 0,
       ],
     };
   }
@@ -202,7 +203,9 @@ export class PlanningPanel {
     this.error.set(null);
     this.loading.set(true);
 
-    this.api.previewPlan(request).subscribe({
+    this.api.previewPlan(request).pipe(
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe({
       next: res => {
         this.scene.applySnapshot(res);
         this.loading.set(false);

@@ -46,7 +46,7 @@ export class SceneApiService {
   ): Observable<RuntimeStateResponse> {
     return this.http.post<RuntimeStateResponse>(
       `${this.baseUrl}/scene/move-to-position`,
-      { target, frame_id } as MoveToPositionRequest,
+      { target, ...(frame_id !== undefined ? { frame_id } : {}) },
     );
   }
 
@@ -56,7 +56,7 @@ export class SceneApiService {
   ): Observable<RuntimeStateResponse> {
     return this.http.post<RuntimeStateResponse>(
       `${this.baseUrl}/scene/move-to-pose`,
-      { target, frame_id } as MoveToPoseRequest,
+      { target, ...(frame_id !== undefined ? { frame_id } : {}) },
     );
   }
 
@@ -66,7 +66,7 @@ export class SceneApiService {
   ): Observable<SolveIKResponse> {
     return this.http.post<SolveIKResponse>(
       `${this.baseUrl}/scene/solve-ik-position`,
-      { target, frame_id } as MoveToPositionRequest,
+      { target, ...(frame_id !== undefined ? { frame_id } : {}) },
     );
   }
 
@@ -76,7 +76,7 @@ export class SceneApiService {
   ): Observable<SolveIKResponse> {
     return this.http.post<SolveIKResponse>(
       `${this.baseUrl}/scene/solve-ik-pose`,
-      { target, frame_id } as MoveToPoseRequest,
+      { target, ...(frame_id !== undefined ? { frame_id } : {}) },
     );
   }
 
@@ -85,7 +85,7 @@ export class SceneApiService {
   ): Observable<RuntimeStateResponse> {
     return this.http.post<RuntimeStateResponse>(
       `${this.baseUrl}/scene/execute-ik`,
-      { joint_angles: jointAngles } as ExecuteIKRequest,
+      { joint_angles: jointAngles },
     );
   }
 

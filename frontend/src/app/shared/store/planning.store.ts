@@ -105,10 +105,10 @@ export class PlanningStore {
     });
   }
 
-  updateField(index: number, field: keyof SegmentModel, value: unknown): void {
+  updateField<K extends keyof SegmentModel>(index: number, field: K, value: SegmentModel[K]): void {
     this.segmentsSignal.update(arr => {
       const next = [...arr];
-      (next[index] as any)[field] = value;
+      next[index] = { ...next[index], [field]: value };
       return next;
     });
   }

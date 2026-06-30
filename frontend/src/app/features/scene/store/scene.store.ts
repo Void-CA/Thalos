@@ -4,7 +4,7 @@ import { BehaviorSubject, concat, merge, Observable, of, Subject } from 'rxjs';
 import { auditTime, catchError, distinctUntilChanged, map, scan, switchMap } from 'rxjs/operators';
 import { SceneApiService } from '../services/scene-api.service';
 import { toSceneData, toActivePlan } from '../adapters/dto-to-model';
-import type { RuntimeDelta, RuntimeStateResponse, SolveIKResponse } from '../scene-api.types';
+import type { RuntimeDelta, RuntimeStateResponse, SolveIKResponse, RotationDto } from '../scene-api.types';
 import type { ActivePlan, ExecutionInfo, IkCommand, IkResult, IkTarget, ObjectTransform, RuntimeInfo, SceneData, SceneState, SceneUiState } from '../scene.types';
 
 type SceneEvent =
@@ -118,6 +118,12 @@ function toSolveEvent(res: SolveIKResponse): SceneEvent {
 }
 
 /** Map a RuntimeDelta (API) into a 'runtime-delta' event. */
+
+/** Build a pose request from an IK target — safe narrowing of type === 'pose'. */
+function toPoseRequest(target: IkTarget): { translation: [number, number, number]; rotation: RotationDto } | null {
+  if (target.type !== 'pose' || !target.rotation) return null;
+  return { translation: target.translation, rotation: target.rotation };
+}
 function toRuntimeDeltaEvent(delta: RuntimeDelta): SceneEvent {
   return {
     type: 'runtime-delta',
@@ -165,6 +171,8 @@ export class SceneStore {
   /** Single source of truth: latest scene data + UI state. */
   readonly state$: Observable<SceneState> = merge(
     // Pipeline 1: joint angle changes → setJoints API
+    // distinctUntilChanged AFTER auditTime: only compares samples that
+    // actually survive the throttle, not every mousemove event.
     this.qSubject.pipe(
       auditTime(16),
       distinctUntilChanged((a, b) =>
@@ -197,15 +205,10 @@ export class SceneStore {
     // Pipeline 3: monolithic IK move (solve + execute in one API call)
     this.ikSubject.pipe(
       switchMap(cmd => {
-        const req = cmd.target.type === 'position'
-          ? this.api.moveToPosition(cmd.target.translation, undefined)
-          : this.api.moveToPose(
-              {
-                translation: cmd.target.translation,
-                rotation: cmd.target.rotation!,
-              },
-              undefined,
-            );
+        const poseReq = toPoseRequest(cmd.target);
+        const req = poseReq
+          ? this.api.moveToPose(poseReq, undefined)
+          : this.api.moveToPosition(cmd.target.translation, undefined);
         return concat(
           of({ type: 'loading' as const }),
           req.pipe(
@@ -221,12 +224,10 @@ export class SceneStore {
     // Pipeline 4: solve IK (no mutation — just returns q values)
     this.solveSubject.pipe(
       switchMap(({ target, frame_id }) => {
-        const req = target.type === 'position'
-          ? this.api.solveIkPosition(target.translation, frame_id)
-          : this.api.solveIkPose(
-              { translation: target.translation, rotation: target.rotation! },
-              frame_id,
-            );
+        const poseReq = toPoseRequest(target);
+        const req = poseReq
+          ? this.api.solveIkPose(poseReq, frame_id)
+          : this.api.solveIkPosition(target.translation, frame_id);
         return concat(
           of({ type: 'loading' as const }),
           req.pipe(
@@ -262,8 +263,10 @@ export class SceneStore {
       map(toSceneEvent),
     ),
 
-    // Pipeline 8: runtime delta updates (execution tick)
+    // Pipeline 8: runtime delta updates (execution tick).
+    // Throttled to ~60 FPS — no benefit in rendering invisible intermediate states.
     this.applyDeltaSubject.pipe(
+      auditTime(16),
       map(toRuntimeDeltaEvent),
     ),
 

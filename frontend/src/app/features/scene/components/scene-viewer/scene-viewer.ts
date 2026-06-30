@@ -73,6 +73,8 @@ export class SceneViewer implements AfterViewInit {
    */
   private readonly sceneData = computed(() => this.store.state().data);
   private readonly activePlan = computed(() => this.store.state().activePlan);
+  private readonly ikTarget = computed(() => this.store.state().ikTarget);
+  private readonly liveTransforms = computed(() => this.store.state().liveTransforms);
 
   constructor() {
     // Effect 1: scene geometry — solo cuando cambia la escena (load, IK, URDF import)
@@ -96,9 +98,9 @@ export class SceneViewer implements AfterViewInit {
       }
     });
 
-    // Effect 3: IK gizmo — actualización local del target
+    // Effect 3: IK gizmo — solo reacciona cuando cambia ikTarget (no todo el state)
     effect(() => {
-      const target = this.store.state().ikTarget;
+      const target = this.ikTarget();
       if (target) {
         const quat = target.rotation
           ? rotationDtoToQuaternion(target.rotation)
@@ -109,9 +111,9 @@ export class SceneViewer implements AfterViewInit {
       }
     });
 
-    // Effect 4: runtime delta — transforms de frames + links (cada tick)
+    // Effect 4: runtime delta — solo reacciona cuando cambia liveTransforms
     effect(() => {
-      const transforms = this.store.state().liveTransforms;
+      const transforms = this.liveTransforms();
       if (this.sceneApplied && transforms.length > 0) {
         this.renderer.syncTransforms(transforms);
       }

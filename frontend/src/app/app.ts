@@ -40,11 +40,16 @@ export class App {
   protected readonly scene = inject(SceneStore);
   private readonly log = inject(LogStore);
 
-  /** Watch for errors in SceneStore and push to LogStore */
+  /** Watch for errors in SceneStore and push to LogStore, deduplicated. */
+  private lastError: string | null = null;
+  private readonly errorSignal = computed(() => this.scene.state().ui?.error ?? null);
   private readonly errorWatcher = effect(() => {
-    const error = this.scene.state().ui?.error;
-    if (error) {
+    const error = this.errorSignal();
+    if (error && error !== this.lastError) {
+      this.lastError = error;
       this.log.error(error);
+    } else if (!error) {
+      this.lastError = null;
     }
   });
 
