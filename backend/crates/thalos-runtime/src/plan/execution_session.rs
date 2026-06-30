@@ -103,4 +103,23 @@ impl ExecutionSession {
         }
         (self.current_time / trajectory_duration).clamp(0.0, 1.0)
     }
+
+    /// Create a derived session from external state (status + progress).
+    /// Used by RuntimeSnapshot/TickDelta to represent controller state
+    /// in the legacy execution session format.
+    pub fn derived(status: SessionStatus, progress: f64) -> Self {
+        let current_time = if progress >= 1.0 && status.is_terminal() {
+            1.0
+        } else {
+            progress
+        };
+        Self {
+            plan_id: String::new(),
+            status,
+            current_time,
+            started_at: Some(Utc::now()),
+            paused_at: None,
+            completed_at: if status.is_terminal() { Some(Utc::now()) } else { None },
+        }
+    }
 }

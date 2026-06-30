@@ -13,7 +13,7 @@ use thalos_core::{
 use thalos_models::Robot;
 
 use crate::plan::{ActiveMotionPlan, ExecutionSession, SessionStatus};
-use crate::state::robot_state::RobotState;
+use crate::state::robot_state::{MotionMode, RobotState};
 
 /// Lightweight joint metadata for URDF-imported robots.
 #[derive(Debug, Clone)]
@@ -112,11 +112,11 @@ impl TickDelta {
 fn session_from_robot_state(state: &Arc<RobotState>) -> Option<ExecutionSession> {
     let progress = state.execution.progress;
     let status = match state.motion.mode {
-        _ if state.motion.mode.is_idle() && progress >= 1.0 => SessionStatus::Completed,
-        _ if state.motion.mode.is_moving() => SessionStatus::Running,
-        _ if state.motion.mode.is_paused() => SessionStatus::Paused,
-        _ if state.motion.mode.is_stopping() => SessionStatus::Cancelled,
-        _ if state.motion.mode.is_estop() => SessionStatus::Failed,
+        MotionMode::Idle if progress >= 1.0 => SessionStatus::Completed,
+        MotionMode::Moving => SessionStatus::Running,
+        MotionMode::Paused => SessionStatus::Paused,
+        MotionMode::Stopping => SessionStatus::Cancelled,
+        MotionMode::EStop => SessionStatus::Failed,
         _ => SessionStatus::Ready,
     };
     Some(ExecutionSession::derived(status, progress))
