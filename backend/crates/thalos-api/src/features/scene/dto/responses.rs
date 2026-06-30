@@ -15,7 +15,16 @@ pub struct VisualSceneDto {
     pub joint_axes: Vec<VisualJointAxisDto>,
     pub twists: Vec<VisualTwistDto>,
     pub primitives: Vec<VisualPrimitiveDto>,
+    /// Dimensión de referencia del robot (metros). El frontend la usa para
+    /// escalar grid, gizmos y la cámara Fit Robot.
+    ///
+    /// Default 1.0 para backward compat con backends que no emiten el campo.
+    #[serde(default = "default_ref_dim_dto")]
+    pub reference_dimension: f64,
 }
+
+/// 1 metro asumido cuando el backend no envía `reference_dimension`.
+fn default_ref_dim_dto() -> f64 { 1.0 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FrameStyleDto {

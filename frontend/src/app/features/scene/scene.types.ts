@@ -83,6 +83,8 @@ export interface SceneData {
   jointAxes: SceneJointAxis[];
   twists: SceneTwist[];
   primitives: ScenePrimitive[];
+  /** Dimensión de referencia del robot en metros — usada para grid, gizmos, fit. */
+  referenceDimension: number;
 }
 
 // ── IK types ──

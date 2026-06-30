@@ -88,6 +88,7 @@ pub fn cylinder_between(
 pub struct SceneBuilder {
     chain: SerialChain,
     precision: VisualPrecision,
+    frame_style: Option<FrameStyle>,
 }
 
 impl SceneBuilder {
@@ -95,6 +96,7 @@ impl SceneBuilder {
         Self {
             chain: chain.clone(),
             precision: VisualPrecision::default(),
+            frame_style: None,
         }
     }
 
@@ -103,10 +105,35 @@ impl SceneBuilder {
         self
     }
 
+    /// Override the automatic per-frame style (computed from FK extent).
+    ///
+    /// When `None` (default), `from_fk` computes the robot's spatial extent
+    /// from the FK result and creates a proportional `FrameStyle` via
+    /// [`FrameStyle::scaled_by`].
+    pub fn with_frame_style(mut self, style: FrameStyle) -> Self {
+        self.frame_style = Some(style);
+        self
+    }
+
     pub fn from_fk(&self, fk: &FKResult) -> VisualScene {
         let mut frames = Vec::new();
         let mut links = Vec::new();
         let mut joint_axes = Vec::new();
+
+        // 1. Compute reference dimension: max distance from origin to any frame
+        let mut max_dist = 0.0_f64;
+        for frame_id in fk.frames() {
+            if let Some(pose) = fk.pose(frame_id) {
+                let t = pose.translation();
+                let dist = (t.x * t.x + t.y * t.y + t.z * t.z).sqrt();
+                max_dist = max_dist.max(dist);
+            }
+        }
+        let ref_dim = max_dist.max(0.01);
+
+        // 2. Determine frame style: explicit override or auto-scaled
+        let style = self.frame_style.clone()
+            .unwrap_or_else(|| FrameStyle::scaled_by(ref_dim));
 
         let world_pose = fk.pose(&FrameId::World).expect("FKResult must contain world frame");
         frames.push(VisualFrame {
@@ -114,7 +141,7 @@ impl SceneBuilder {
             parent: None,
             translation: self.normalize_tx(world_pose.transform()),
             rotation: self.normalize_rot(world_pose.transform()),
-            style: None,
+            style: Some(style.clone()),
         });
 
         for segment in &self.chain.segments {
@@ -126,7 +153,7 @@ impl SceneBuilder {
                 parent: Some(self.resolve_visual_id(&segment.parent)),
                 translation: self.normalize_tx(child_pose.transform()),
                 rotation: self.normalize_rot(child_pose.transform()),
-                style: None,
+                style: Some(style.clone()),
             });
 
             // Fixed joints no tienen link ni axis visual (se dibujan como primitiva aparte)
@@ -153,6 +180,7 @@ impl SceneBuilder {
             joint_axes,
             twists: Vec::new(),
             primitives: Vec::new(),
+            reference_dimension: ref_dim,
         }
     }
 

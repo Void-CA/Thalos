@@ -109,6 +109,12 @@ pub struct VisualElement {
     pub color: Option<[f64; 4]>,
 }
 
+// ── Escala de referencia por defecto (1 m = robot "promedio") ──
+
+fn default_ref_dim() -> f64 {
+    1.0
+}
+
 // ── Escena visual ──────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -118,6 +124,15 @@ pub struct VisualScene {
     pub joint_axes: Vec<VisualJointAxis>,
     pub twists: Vec<VisualTwist>,
     pub primitives: Vec<VisualPrimitive>,
+    /// Dimensión de referencia del robot: la mayor distancia desde el origen
+    /// a cualquier frame en la configuración actual. El frontend la usa para
+    /// escalar grid, gizmos y la cámara Fit Robot.
+    ///
+    /// Serde default para backward compat: robots cargados con versiones
+    /// viejas del backend que no emiten este campo reciben 1.0 (comportamiento
+    /// original: `GridHelper(4,10)` y `DEFAULT_FRAME_STYLE`).
+    #[serde(default = "default_ref_dim")]
+    pub reference_dimension: f64,
 }
 
 impl Default for VisualScene {
@@ -128,6 +143,7 @@ impl Default for VisualScene {
             joint_axes: vec![],
             twists: vec![],
             primitives: vec![],
+            reference_dimension: default_ref_dim(),
         }
     }
 }
@@ -161,6 +177,26 @@ impl Default for FrameStyle {
             color_x: [1.0, 0.5, 0.0],   // naranja
             color_y: [0.0, 0.8, 0.0],   // verde
             color_z: [0.0, 0.5, 1.0],   // azul
+        }
+    }
+}
+
+impl FrameStyle {
+    /// Crea un `FrameStyle` escalado proporcionalmente al tamaño del robot.
+    ///
+    /// `max_dim` es la dimensión máxima del robot (distancia desde el origen
+    /// al frame más lejano). Los valores de `axis_length` y `axis_radius`
+    /// mantienen la misma proporción que los defaults (válidos para un robot
+    /// de ~1m de alcance):
+    ///
+    /// - `axis_length = max_dim × 0.18` (mín. 5 mm)
+    /// - `axis_radius = max_dim × 0.006` (mín. 0.5 mm)
+    pub fn scaled_by(max_dim: f64) -> Self {
+        let dim = max_dim.max(0.01);
+        Self {
+            axis_length: (dim * 0.18).max(0.005),
+            axis_radius: (dim * 0.006).max(0.0005),
+            ..Default::default()
         }
     }
 }

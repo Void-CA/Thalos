@@ -81,6 +81,8 @@ export interface VisualSceneDto {
   joint_axes: VisualJointAxisDto[];
   twists: VisualTwistDto[];
   primitives: VisualPrimitiveDto[];
+  /** Dimensión de referencia del robot (metros). */
+  reference_dimension?: number;
 }
 
 export interface RuntimeStateResponse {

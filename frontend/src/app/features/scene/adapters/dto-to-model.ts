@@ -10,6 +10,7 @@ export function toSceneData(dto: VisualSceneDto): SceneData {
     jointAxes: dto.joint_axes.map(toJointAxis),
     twists: dto.twists.map(toTwist),
     primitives: dto.primitives.map(toPrimitive),
+    referenceDimension: dto.reference_dimension ?? 1.0,
   };
 }
 

@@ -11,6 +11,7 @@ import { ModeStore } from './shared/store/mode.store';
 import { LayoutStore } from './shared/store/layout.store';
 import { SceneStore } from './features/scene/store/scene.store';
 import { LogStore } from './shared/store/log.store';
+import { PlanningStore } from './shared/store/planning.store';
 import { UI_MODE_REGISTRY } from './shared/types/ui-mode-registry';
 import type { ToolSchema } from './shared/types/tool-schema';
 
@@ -45,6 +46,18 @@ export class App {
     if (error) {
       this.log.error(error);
     }
+  });
+
+  /** Clear the motion program when switching robots */
+  private readonly planStore = inject(PlanningStore);
+  private lastRobotId: string | null = null;
+  private readonly robotWatcher = effect(() => {
+    const robotId = this.scene.state()?.runtime?.robot?.id ?? null;
+    if (this.lastRobotId !== null && robotId !== this.lastRobotId) {
+      this.planStore.clear();
+      this.log.info('Plan cleared — robot changed');
+    }
+    this.lastRobotId = robotId;
   });
 
   protected readonly currentTools = computed<readonly ToolSchema[]>(

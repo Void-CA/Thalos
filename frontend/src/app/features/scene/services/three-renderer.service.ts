@@ -49,6 +49,7 @@ export class ThreeRendererService {
   private contentGroup: THREE.Group | null = null;
   private targetGroup: THREE.Group | null = null;
   private compassGroup: THREE.Group | null = null;
+  private gridHelper: THREE.GridHelper | null = null;
   private frameId: number | null = null;
   private trajectorySlot: TrajectorySlot | null = null;
   private readonly overlays = new Set<SceneOverlay>();
@@ -108,9 +109,10 @@ export class ThreeRendererService {
     this.scene.add(sun);
 
     // Reference grid (XY plane — Z-up horizontal ground)
-    const grid = new THREE.GridHelper(4, 10, 0x666666, 0x444444);
-    grid.rotation.x = Math.PI / 2;  // default XZ → XY for Z-up
-    this.scene.add(grid);
+    // Size is updated dynamically from SceneData.referenceDimension via applyScene.
+    this.gridHelper = new THREE.GridHelper(4, 10, 0x666666, 0x444444);
+    this.gridHelper.rotation.x = Math.PI / 2;  // default XZ → XY for Z-up
+    this.scene.add(this.gridHelper);
 
     // Content container
     this.contentGroup = new THREE.Group();
@@ -155,6 +157,26 @@ export class ThreeRendererService {
     this.syncFrames(scene.frames);
     this.syncLinks(scene.links);
     this.syncPrimitives(scene.primitives);
+    this.updateGrid(scene.referenceDimension);
+  }
+
+  /**
+   * Scale the reference grid to suit the robot's size.
+   * Grid spans 4× the reference dimension, with 10×10 cells.
+   */
+  private updateGrid(refDim: number): void {
+    if (!this.gridHelper) return;
+    const size = Math.max(refDim * 4, 0.5);
+    const divs = 10;
+
+    // THREE.GridHelper has no setter for size/divisions — recreate.
+    this.scene!.remove(this.gridHelper);
+    this.gridHelper.geometry.dispose();
+    this.gridHelper.material.dispose();
+
+    this.gridHelper = new THREE.GridHelper(size, divs, 0x666666, 0x444444);
+    this.gridHelper.rotation.x = Math.PI / 2;
+    this.scene!.add(this.gridHelper);
   }
 
   private syncFrames(frames: SceneFrame[]): void {
@@ -631,6 +653,10 @@ export class ThreeRendererService {
       slot.mesh.geometry.dispose();
     }
     this.primitiveSlots.clear();
+
+    this.gridHelper?.geometry.dispose();
+    this.gridHelper?.material.dispose();
+    this.gridHelper = null;
 
     for (const mat of this.matCache.values()) {
       mat.dispose();

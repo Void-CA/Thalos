@@ -96,6 +96,7 @@ impl From<VisualScene> for VisualSceneDto {
             joint_axes: s.joint_axes.into_iter().map(Into::into).collect(),
             twists: s.twists.into_iter().map(Into::into).collect(),
             primitives: s.primitives.into_iter().map(Into::into).collect(),
+            reference_dimension: s.reference_dimension,
         }
     }
 }
@@ -209,6 +210,7 @@ impl From<VisualSceneDto> for VisualScene {
             joint_axes: s.joint_axes.into_iter().map(Into::into).collect(),
             twists: s.twists.into_iter().map(Into::into).collect(),
             primitives: s.primitives.into_iter().map(Into::into).collect(),
+            reference_dimension: s.reference_dimension,
         }
     }
 }
