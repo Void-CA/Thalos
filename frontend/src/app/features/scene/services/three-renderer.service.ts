@@ -26,7 +26,6 @@ export class ThreeRendererService {
   private renderer: THREE.WebGLRenderer | null = null;
   private controls: OrbitControls | null = null;
   private contentGroup: THREE.Group | null = null;
-  private targetGroup: THREE.Group | null = null;
   private compassGroup: THREE.Group | null = null;
   private frameId: number | null = null;
   private readonly overlays = new Set<SceneOverlay>();
@@ -93,12 +92,6 @@ export class ThreeRendererService {
     // Content container
     this.contentGroup = new THREE.Group();
     this.scene.add(this.contentGroup);
-
-    // IK target gizmo — hidden by default
-    this.targetGroup = new THREE.Group();
-    this.buildTargetGizmo(this.targetGroup);
-    this.targetGroup.visible = false;
-    this.scene.add(this.targetGroup);
 
     // ── Compass (child of camera — always visible) ──
     this.compassGroup = new THREE.Group();
@@ -423,61 +416,6 @@ export class ThreeRendererService {
     build([1.0, 0.5, 0.0], new THREE.Vector3(1, 0, 0));
     build([0.0, 0.8, 0.0], new THREE.Vector3(0, 1, 0));
     build([0.0, 0.5, 1.0], new THREE.Vector3(0, 0, 1));
-  }
-
-  /** Build the IK target gizmo (glowing sphere + ring + local axes). */
-  private buildTargetGizmo(grp: THREE.Group): void {
-    // Glowing sphere
-    const sphere = new THREE.Mesh(
-      new THREE.SphereGeometry(0.04, 16, 16),
-      new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.8 }),
-    );
-    grp.add(sphere);
-
-    // Ring orbit — RingGeometry defaults to XY plane (horizontal in Z-up)
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.06, 0.08, 32),
-      new THREE.MeshBasicMaterial({ color: 0xff6600, side: THREE.DoubleSide, transparent: true, opacity: 0.4 }),
-    );
-    grp.add(ring);
-
-    // Small local axes
-    const len = 0.06;
-    const r = 0.003;
-    const matX = new THREE.MeshBasicMaterial({ color: 0xff4400 });
-    const matY = new THREE.MeshBasicMaterial({ color: 0x44ff00 });
-    const matZ = new THREE.MeshBasicMaterial({ color: 0x0088ff });
-    const up = new THREE.Vector3(0, 1, 0);
-
-    const makeAxis = (mat: THREE.Material, dir: THREE.Vector3): void => {
-      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 6, 1), mat);
-      mesh.position.copy(dir.clone().multiplyScalar(len / 2));
-      mesh.quaternion.setFromUnitVectors(up, dir);
-      grp.add(mesh);
-    };
-
-    makeAxis(matX, new THREE.Vector3(1, 0, 0));
-    makeAxis(matY, new THREE.Vector3(0, 1, 0));
-    makeAxis(matZ, new THREE.Vector3(0, 0, 1));
-  }
-
-  /** Show the IK target gizmo at the given world position/orientation. */
-  setTarget(position: [number, number, number], quaternion?: [number, number, number, number]): void {
-    if (!this.targetGroup) return;
-    this.targetGroup.position.set(position[0], position[1], position[2]);
-    if (quaternion) {
-      this.targetGroup.quaternion.set(quaternion[1], quaternion[2], quaternion[3], quaternion[0]);
-    } else {
-      this.targetGroup.quaternion.identity();
-    }
-    this.targetGroup.visible = true;
-  }
-
-  /** Hide the IK target gizmo. */
-  clearTarget(): void {
-    if (this.targetGroup) {
-      this.targetGroup.visible = false;
-    }
   }
 
   dispose(): void {

@@ -2,6 +2,7 @@ import { AfterViewInit, Component, computed, effect, ElementRef, inject, ViewChi
 import { SceneStore } from '../../store/scene.store';
 import { ThreeRendererService } from '../../services/three-renderer.service';
 import { TrajectoryOverlayService } from '../../renderer/trajectory-overlay.service';
+import { IkTargetOverlayService } from '../../renderer/ik-target-overlay.service';
 import { WorkspaceOverlayService } from '../../services/workspace-overlay.service';
 import { WorkspaceStore } from '../../../workspace/store/workspace.store';
 import { rotationDtoToQuaternion } from '../../utils/rotation';
@@ -45,6 +46,7 @@ export class SceneViewer implements AfterViewInit {
   private readonly renderer = inject(ThreeRendererService);
   private readonly overlay = inject(WorkspaceOverlayService);
   private readonly trajectoryOverlay = inject(TrajectoryOverlayService);
+  private readonly ikTargetOverlay = inject(IkTargetOverlayService);
 
   private sceneApplied = false;
 
@@ -94,9 +96,9 @@ export class SceneViewer implements AfterViewInit {
         const quat = target.rotation
           ? rotationDtoToQuaternion(target.rotation)
           : undefined;
-        this.renderer.setTarget(target.translation, quat);
+        this.ikTargetOverlay.setTarget(target.translation, quat);
       } else {
-        this.renderer.clearTarget();
+        this.ikTargetOverlay.clearTarget();
       }
     });
 
@@ -119,6 +121,7 @@ export class SceneViewer implements AfterViewInit {
     this.renderer.init(this.canvasRef.nativeElement);
     this.renderer.registerOverlay(this.overlay);
     this.renderer.registerOverlay(this.trajectoryOverlay);
+    this.renderer.registerOverlay(this.ikTargetOverlay);
     this.syncPointCloudOverlay();
   }
 
