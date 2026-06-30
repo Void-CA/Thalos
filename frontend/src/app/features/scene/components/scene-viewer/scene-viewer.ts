@@ -128,6 +128,14 @@ export class SceneViewer implements AfterViewInit {
     this.renderer.init(this.canvasRef.nativeElement);
     this.renderer.registerOverlay(this.overlay);
     this.syncPointCloudOverlay();
+
+    // Wire IK target drag → store update
+    this.renderer.setOnTargetDrag((pos) => {
+      const prev = this.store.state().ikTarget;
+      if (prev) {
+        this.store.updateTarget({ ...prev, translation: pos });
+      }
+    });
   }
 
   /** Frame the robot in the viewport. */

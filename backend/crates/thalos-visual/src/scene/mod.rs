@@ -186,16 +186,16 @@ impl FrameStyle {
     ///
     /// `max_dim` es la dimensión máxima del robot (distancia desde el origen
     /// al frame más lejano). Los valores de `axis_length` y `axis_radius`
-    /// mantienen la misma proporción que los defaults (válidos para un robot
-    /// de ~1m de alcance):
+    /// se escalan al ~10 % del tamaño del robot, que es el estándar en tools
+    /// como Rviz:
     ///
-    /// - `axis_length = max_dim × 0.18` (mín. 5 mm)
-    /// - `axis_radius = max_dim × 0.006` (mín. 0.5 mm)
+    /// - `axis_length = max_dim × 0.10` (mín. 5 mm)
+    /// - `axis_radius = max_dim × 0.003` (mín. 0.5 mm)
     pub fn scaled_by(max_dim: f64) -> Self {
         let dim = max_dim.max(0.01);
         Self {
-            axis_length: (dim * 0.18).max(0.005),
-            axis_radius: (dim * 0.006).max(0.0005),
+            axis_length: (dim * 0.10).max(0.005),
+            axis_radius: (dim * 0.003).max(0.0005),
             ..Default::default()
         }
     }

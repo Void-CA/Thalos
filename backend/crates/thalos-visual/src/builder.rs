@@ -105,11 +105,14 @@ impl SceneBuilder {
         self
     }
 
-    /// Override the automatic per-frame style (computed from FK extent).
+    /// Override the automatic per-frame style (computed from kinematic extent).
     ///
-    /// When `None` (default), `from_fk` computes the robot's spatial extent
-    /// from the FK result and creates a proportional `FrameStyle` via
-    /// [`FrameStyle::scaled_by`].
+    /// When `None` (default), `from_fk` computes the robot's maximum kinematic
+    /// extent from the chain structure (sum of link translation norms) and
+    /// creates a proportional `FrameStyle` via [`FrameStyle::scaled_by`].
+    /// The extent is STABLE across FK config changes — computed once from the
+    /// chain topology, not from current FK pose, so the grid and gizmo sizes
+    /// don't jump on every joint angle change.
     pub fn with_frame_style(mut self, style: FrameStyle) -> Self {
         self.frame_style = Some(style);
         self
@@ -120,16 +123,19 @@ impl SceneBuilder {
         let mut links = Vec::new();
         let mut joint_axes = Vec::new();
 
-        // 1. Compute reference dimension: max distance from origin to any frame
-        let mut max_dist = 0.0_f64;
-        for frame_id in fk.frames() {
-            if let Some(pose) = fk.pose(frame_id) {
-                let t = pose.translation();
-                let dist = (t.x * t.x + t.y * t.y + t.z * t.z).sqrt();
-                max_dist = max_dist.max(dist);
-            }
-        }
-        let ref_dim = max_dist.max(0.01);
+        // 1. Compute reference dimension from chain structure (link translations).
+        //    This is the maximum possible reach when fully stretched — stable across
+        //    FK config changes, so the grid/gizmo sizes don't jump on FK movement.
+        let ref_dim = self
+            .chain
+            .segments
+            .iter()
+            .map(|s| {
+                let t = &s.link.transform.translation;
+                (t.x * t.x + t.y * t.y + t.z * t.z).sqrt()
+            })
+            .sum::<f64>()
+            .max(0.01);
 
         // 2. Determine frame style: explicit override or auto-scaled
         let style = self.frame_style.clone()

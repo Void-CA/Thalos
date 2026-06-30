@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, effect, inject, signal } from '@angular/core';
 import { SceneStore } from '../../store/scene.store';
 import type { IkTarget } from '../../scene.types';
 import type { RotationDto } from '../../scene-api.types';
@@ -169,6 +169,19 @@ export class IkTargetPanel {
   protected readonly qx = signal(0);
   protected readonly qy = signal(0);
   protected readonly qz = signal(0);
+
+  constructor() {
+    // Sync local state from the store when the IK target changes externally
+    // (e.g. via the draggable gizmo in the 3D viewport).
+    effect(() => {
+      const target = this.store.state().ikTarget;
+      if (target) {
+        this.x.set(target.translation[0]);
+        this.y.set(target.translation[1]);
+        this.z.set(target.translation[2]);
+      }
+    });
+  }
 
   // ── Build target from form ──
 

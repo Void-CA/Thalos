@@ -1,6 +1,7 @@
 import { Injectable, NgZone, inject } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { DEFAULT_FRAME_STYLE, ObjectTransform, SceneData, SceneFrame, SceneLink, ScenePrimitive, SegmentInfo, VisualWaypoint } from '../scene.types';
 
 /** Palette for multi-segment trajectories — color assigned by segment index. */
@@ -17,6 +18,9 @@ const SEGMENT_PALETTE = [
 
 interface FrameSlot {
   group: THREE.Group;
+  /** Stable key derived from frame.style fields — used to detect geometry
+   *  changes when the same frame ID gets a different style (e.g. robot swap). */
+  styleKey: string;
 }
 
 interface LinkSlot {
@@ -50,6 +54,17 @@ export class ThreeRendererService {
   private targetGroup: THREE.Group | null = null;
   private compassGroup: THREE.Group | null = null;
   private gridHelper: THREE.GridHelper | null = null;
+  /** Previous grid size — guard to avoid recreating the GridHelper on every FK tick. */
+  private lastGridSize = 0;
+  /** TransformControls for the IK target gizmo — enabled when target is visible. */
+  private transformControls: TransformControls | null = null;
+  /** True while the user is actively dragging the IK target gizmo. */
+  private isDraggingTarget = false;
+  /**
+   * Callback fired on every drag frame with the current target position.
+   * The consumer (scene-viewer) updates the store, which syncs the input panel.
+   */
+  private onTargetDrag: ((pos: [number, number, number]) => void) | null = null;
   private frameId: number | null = null;
   private trajectorySlot: TrajectorySlot | null = null;
   private readonly overlays = new Set<SceneOverlay>();
@@ -101,6 +116,25 @@ export class ThreeRendererService {
 
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
+
+    // IK target TransformControls — attached to targetGroup when visible.
+    // Size set to 0.45 (visible at typical camera distance). Updated dynamically
+    // in applyScene when referenceDimension is known.
+    this.transformControls = new TransformControls(this.camera, canvas);
+    this.transformControls.setMode('translate');
+    this.transformControls.setSize(0.45);
+    this.transformControls.addEventListener('dragging-changed', (event) => {
+      this.isDraggingTarget = event.value as boolean;
+      this.controls!.enabled = !event.value;
+    });
+    this.transformControls.addEventListener('change', () => {
+      if (this.isDraggingTarget && this.onTargetDrag && this.targetGroup) {
+        const p = this.targetGroup.position;
+        this.onTargetDrag([p.x, p.y, p.z]);
+      }
+    });
+    // NOTE: TransformControls is NOT added to the scene — it manages its own
+    // internal gizmo Object3D automatically when attach() is called.
 
     // Lights
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.5));
@@ -158,16 +192,24 @@ export class ThreeRendererService {
     this.syncLinks(scene.links);
     this.syncPrimitives(scene.primitives);
     this.updateGrid(scene.referenceDimension);
+    this.transformControls?.setSize(scene.referenceDimension * 0.45);
   }
 
   /**
    * Scale the reference grid to suit the robot's size.
    * Grid spans 4× the reference dimension, with 10×10 cells.
+   *
+   * Guard: only recreates when size changes by >5% (avoids flicker on FK tick
+   * when referenceDimension hasn't meaningfully changed).
    */
   private updateGrid(refDim: number): void {
     if (!this.gridHelper) return;
     const size = Math.max(refDim * 4, 0.5);
     const divs = 10;
+    // Avoid recreating the GridHelper on every FK tick (grid size is stable
+    // now that referenceDimension comes from chain extent, not FK config).
+    if (Math.abs(size - this.lastGridSize) < 0.01) return;
+    this.lastGridSize = size;
 
     // THREE.GridHelper has no setter for size/divisions — recreate.
     this.scene!.remove(this.gridHelper);
@@ -185,13 +227,30 @@ export class ThreeRendererService {
     for (const frame of frames) {
       incoming.add(frame.id);
       let slot = this.frameSlots.get(frame.id);
+      const newStyleKey = this.frameStyleKey(frame);
+
       if (!slot) {
-        slot = { group: this.buildFrame(frame) };
+        // New frame — build geometry from scratch
+        const built = this.buildFrame(frame);
+        slot = { group: built.group, styleKey: built.styleKey };
         this.frameSlots.set(frame.id, slot);
         this.contentGroup!.add(slot.group);
         this.objectRegistry.set(frame.id, slot.group);
+      } else if (slot.styleKey !== newStyleKey) {
+        // Style changed (e.g. robot swap with same frame IDs but different scale).
+        // Dispose old geometry and rebuild.
+        this.contentGroup!.remove(slot.group);
+        this.disposeGroup(slot.group);
+        this.objectRegistry.delete(frame.id);
+
+        const built = this.buildFrame(frame);
+        slot.group = built.group;
+        slot.styleKey = built.styleKey;
+        this.contentGroup!.add(slot.group);
+        this.objectRegistry.set(frame.id, slot.group);
       }
-      // Update transform only — no geometry churn
+
+      // Update transform only — no geometry churn when style is unchanged
       const g = slot.group;
       g.position.set(frame.translation[0], frame.translation[1], frame.translation[2]);
       // Rust: [w, x, y, z] → Three.js: (x, y, z, w)
@@ -214,7 +273,7 @@ export class ThreeRendererService {
     }
   }
 
-  private buildFrame(frame: SceneFrame): THREE.Group {
+  private buildFrame(frame: SceneFrame): { group: THREE.Group; styleKey: string } {
     const g = new THREE.Group();
     const style = frame.style ?? DEFAULT_FRAME_STYLE;
 
@@ -229,7 +288,16 @@ export class ThreeRendererService {
     this.makeAxisArrow(g, style.axisLength, style.axisRadius, style.colorY, new THREE.Vector3(0, 1, 0));
     this.makeAxisArrow(g, style.axisLength, style.axisRadius, style.colorZ, new THREE.Vector3(0, 0, 1));
 
-    return g;
+    const styleKey = frame.style
+      ? `${frame.style.axisLength}-${frame.style.axisRadius}-${frame.style.originRadius}`
+      : 'default';
+    return { group: g, styleKey };
+  }
+
+  private frameStyleKey(frame: SceneFrame): string {
+    return frame.style
+      ? `${frame.style.axisLength}-${frame.style.axisRadius}-${frame.style.originRadius}`
+      : 'default';
   }
 
   /**
@@ -471,54 +539,62 @@ export class ThreeRendererService {
 
   /** Build the IK target gizmo (glowing sphere + ring + local axes). */
   private buildTargetGizmo(grp: THREE.Group): void {
-    // Glowing sphere
-    const sphere = new THREE.Mesh(
-      new THREE.SphereGeometry(0.04, 16, 16),
-      new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.8 }),
-    );
-    grp.add(sphere);
-
-    // Ring orbit — RingGeometry defaults to XY plane (horizontal in Z-up)
+    // Outer ring — primary visual indicator
     const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.06, 0.08, 32),
-      new THREE.MeshBasicMaterial({ color: 0xff6600, side: THREE.DoubleSide, transparent: true, opacity: 0.4 }),
+      new THREE.RingGeometry(0.08, 0.10, 32),
+      new THREE.MeshBasicMaterial({ color: 0xff6600, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }),
     );
+    ring.renderOrder = 999;
     grp.add(ring);
 
-    // Small local axes
-    const len = 0.06;
-    const r = 0.003;
-    const matX = new THREE.MeshBasicMaterial({ color: 0xff4400 });
-    const matY = new THREE.MeshBasicMaterial({ color: 0x44ff00 });
-    const matZ = new THREE.MeshBasicMaterial({ color: 0x0088ff });
-    const up = new THREE.Vector3(0, 1, 0);
+    // Center dot — position reference
+    const dot = new THREE.Mesh(
+      new THREE.SphereGeometry(0.025, 12, 12),
+      new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.9 }),
+    );
+    dot.renderOrder = 999;
+    grp.add(dot);
 
-    const makeAxis = (mat: THREE.Material, dir: THREE.Vector3): void => {
-      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 6, 1), mat);
-      mesh.position.copy(dir.clone().multiplyScalar(len / 2));
-      mesh.quaternion.setFromUnitVectors(up, dir);
-      grp.add(mesh);
-    };
+    // Crosshair rings (XY and XZ planes) — makes orientation obvious
+    const wireR = 0.09;
+    const wireMat = new THREE.MeshBasicMaterial({ color: 0xff6600, wireframe: true, transparent: true, opacity: 0.25 });
+    const ringXY = new THREE.Mesh(new THREE.SphereGeometry(wireR, 16, 8), wireMat);
+    grp.add(ringXY);
+  }
 
-    makeAxis(matX, new THREE.Vector3(1, 0, 0));
-    makeAxis(matY, new THREE.Vector3(0, 1, 0));
-    makeAxis(matZ, new THREE.Vector3(0, 0, 1));
+  /** Register a callback for IK target drag events. */
+  setOnTargetDrag(callback: ((pos: [number, number, number]) => void) | null): void {
+    this.onTargetDrag = callback;
   }
 
   /** Show the IK target gizmo at the given world position/orientation. */
   setTarget(position: [number, number, number], quaternion?: [number, number, number, number]): void {
-    if (!this.targetGroup) return;
-    this.targetGroup.position.set(position[0], position[1], position[2]);
-    if (quaternion) {
-      this.targetGroup.quaternion.set(quaternion[1], quaternion[2], quaternion[3], quaternion[0]);
-    } else {
-      this.targetGroup.quaternion.identity();
+    if (!this.targetGroup || !this.transformControls) return;
+
+    // During an active drag, the user controls position directly via TransformControls.
+    // Skipping the position update here prevents fighting between store-driven updates
+    // and user-driven dragging.
+    if (!this.isDraggingTarget) {
+      this.targetGroup.position.set(position[0], position[1], position[2]);
+      if (quaternion) {
+        this.targetGroup.quaternion.set(quaternion[1], quaternion[2], quaternion[3], quaternion[0]);
+      } else {
+        this.targetGroup.quaternion.identity();
+      }
     }
-    this.targetGroup.visible = true;
+
+    // Only attach the TransformControls gizmo on first-show, NOT on every
+    // store-driven update (which fires during drag via onTargetDrag → setTarget).
+    // Calling attach() while already attached resets the gizmo and it disappears.
+    if (!this.targetGroup.visible) {
+      this.targetGroup.visible = true;
+      this.transformControls.attach(this.targetGroup);
+    }
   }
 
-  /** Hide the IK target gizmo. */
+  /** Hide the IK target gizmo and detach transform controls. */
   clearTarget(): void {
+    this.transformControls?.detach();
     if (this.targetGroup) {
       this.targetGroup.visible = false;
     }
@@ -634,6 +710,7 @@ export class ThreeRendererService {
       this.frameId = null;
     }
     window.removeEventListener('resize', this.onResize);
+    this.transformControls?.dispose();
     this.controls?.dispose();
     this.renderer?.dispose();
 
