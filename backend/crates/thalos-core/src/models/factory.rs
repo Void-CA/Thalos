@@ -153,14 +153,19 @@ impl RobotRegistry {
             (RobotModel::Manipulator3DOF, RobotSpec::Manipulator3DOF(s)) => Ok(s.build()),
             (RobotModel::CylindricalRPP, RobotSpec::CylindricalRPP(s)) => Ok(s.build()),
             (RobotModel::SphericalPolarRRP, RobotSpec::SphericalPolarRRP(s)) => Ok(s.build()),
-            // 6DOF factory todavía no implementado: caemos al mismatch.
+            (RobotModel::Manipulator6DOF, RobotSpec::Manipulator6DOF(s)) => Ok(s.build()),
             _ => Err(RobotModelError::ModelSpecMismatch { model, spec }),
         }
     }
 
     /// Construye un robot con parámetros por defecto para el modelo dado.
+    ///
+    /// # Panics
+    /// Si el modelo no tiene fábrica implementada o el spec no es válido.
+    /// Esto es intencional — `create_default` solo se usa con modelos
+    /// conocidos en tiempo de compilación; un panic aquí es un bug.
     pub fn create_default(model: RobotModel) -> SerialChain {
         let spec = model.default_spec();
-        Self::create(model, spec).unwrap()
+        Self::create(model, spec).expect("BUG: model default spec should always be valid")
     }
 }

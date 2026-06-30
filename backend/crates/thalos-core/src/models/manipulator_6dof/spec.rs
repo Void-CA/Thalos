@@ -36,7 +36,14 @@ impl Manipulator6DOFSpec {
         }
     }
 
-    // build() no implementado — factory vacío.
+    pub fn build(&self) -> crate::robot::serial_chain::SerialChain {
+        let [jl1, jl2, jl3, jl4, jl5, jl6] = self.joint_limits;
+        super::factory::create_manipulator_6dof(
+            self.l1, self.l2, self.l3, self.l4, self.l5, self.l6,
+            jl1, jl2, jl3, jl4, jl5, jl6,
+        )
+    }
+
     pub const fn joints(&self) -> [JointInfo; 6] {
         let [j1, j2, j3, j4, j5, j6] = self.joint_limits;
         [
