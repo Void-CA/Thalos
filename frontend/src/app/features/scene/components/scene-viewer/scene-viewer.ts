@@ -1,6 +1,7 @@
 import { AfterViewInit, Component, computed, effect, ElementRef, inject, ViewChild } from '@angular/core';
 import { SceneStore } from '../../store/scene.store';
 import { ThreeRendererService } from '../../services/three-renderer.service';
+import { TrajectoryOverlayService } from '../../renderer/trajectory-overlay.service';
 import { WorkspaceOverlayService } from '../../services/workspace-overlay.service';
 import { WorkspaceStore } from '../../../workspace/store/workspace.store';
 import { rotationDtoToQuaternion } from '../../utils/rotation';
@@ -43,6 +44,7 @@ export class SceneViewer implements AfterViewInit {
   private readonly workspace = inject(WorkspaceStore);
   private readonly renderer = inject(ThreeRendererService);
   private readonly overlay = inject(WorkspaceOverlayService);
+  private readonly trajectoryOverlay = inject(TrajectoryOverlayService);
 
   private sceneApplied = false;
 
@@ -79,9 +81,9 @@ export class SceneViewer implements AfterViewInit {
       const vis = plan?.visualization;
       const segs = plan?.segments;
       if (vis && vis.waypoints.length > 0) {
-        this.renderer.syncTrajectory(vis.waypoints, vis.motionType, segs ?? undefined);
+        this.trajectoryOverlay.syncTrajectory(vis.waypoints, vis.motionType, segs ?? undefined);
       } else {
-        this.renderer.clearTrajectory();
+        this.trajectoryOverlay.clearTrajectory();
       }
     });
 
@@ -116,6 +118,7 @@ export class SceneViewer implements AfterViewInit {
   ngAfterViewInit(): void {
     this.renderer.init(this.canvasRef.nativeElement);
     this.renderer.registerOverlay(this.overlay);
+    this.renderer.registerOverlay(this.trajectoryOverlay);
     this.syncPointCloudOverlay();
   }
 
