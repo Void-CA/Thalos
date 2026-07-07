@@ -11,7 +11,9 @@ const INITIAL_UI: WorkspaceUiState = { loading: false, error: null };
 const INITIAL_STATE: WorkspaceState = {
   data: null,
   pointCloud: null,
-  showPointCloud: false,
+  showBaseCloud: false,
+  showManipulability: false,
+  showSingularity: false,
   reachability: null,
   singularity: null,
   manipulability: null,
@@ -88,7 +90,9 @@ export class WorkspaceStore {
 
   private readonly dataSignal = signal<WorkspaceData | null>(null);
   private readonly pointCloudSignal = signal<[number, number, number][] | null>(null);
-  private readonly showPointCloudSignal = signal(false);
+  private readonly showBaseCloudSignal = signal(false);
+  private readonly showManipulabilitySignal = signal(false);
+  private readonly showSingularitySignal = signal(false);
   private readonly reachabilitySignal = signal<ReachabilityResult | null>(null);
   private readonly singularitySignal = signal<SingularityData | null>(null);
   private readonly manipulabilitySignal = signal<ManipulabilityData | null>(null);
@@ -101,8 +105,14 @@ export class WorkspaceStore {
   /** Sampled point cloud positions, if available. */
   readonly pointCloud: Signal<[number, number, number][] | null> = this.pointCloudSignal.asReadonly();
 
-  /** Whether the point cloud overlay is visible in the 3D viewer. */
-  readonly showPointCloud: Signal<boolean> = this.showPointCloudSignal.asReadonly();
+  /** Whether the base (monochrome) cloud layer is visible. */
+  readonly showBaseCloud: Signal<boolean> = this.showBaseCloudSignal.asReadonly();
+
+  /** Whether the manipulability (Yoshikawa gradient) layer is visible. */
+  readonly showManipulability: Signal<boolean> = this.showManipulabilitySignal.asReadonly();
+
+  /** Whether the singularity (state-colored) layer is visible. */
+  readonly showSingularity: Signal<boolean> = this.showSingularitySignal.asReadonly();
 
   /** Last reachability query result. */
   readonly reachability: Signal<ReachabilityResult | null> = this.reachabilitySignal.asReadonly();
@@ -124,9 +134,29 @@ export class WorkspaceStore {
 
   // ── Actions ──
 
-  /** Toggle point cloud visibility in the 3D viewer. */
+  /** Show/hide the base (monochrome) cloud layer. */
+  setShowBaseCloud(v: boolean): void {
+    this.showBaseCloudSignal.set(v);
+  }
+
+  /** Show/hide the manipulability (Yoshikawa gradient) layer. */
+  setShowManipulability(v: boolean): void {
+    this.showManipulabilitySignal.set(v);
+  }
+
+  /** Show/hide the singularity (state-colored) layer. */
+  setShowSingularity(v: boolean): void {
+    this.showSingularitySignal.set(v);
+  }
+
+  /**
+   * @deprecated Use individual layer setters instead.
+   * Sets all three visibility flags to the same value.
+   */
   setShowPointCloud(v: boolean): void {
-    this.showPointCloudSignal.set(v);
+    this.showBaseCloudSignal.set(v);
+    this.showManipulabilitySignal.set(v);
+    this.showSingularitySignal.set(v);
   }
 
   /** Sample a workspace for the given robot and config. */
@@ -134,8 +164,6 @@ export class WorkspaceStore {
     this.loadingSignal.set(true);
     this.errorSignal.set(null);
     this.reachabilitySignal.set(null);
-    this.pointCloudSignal.set(null);
-    this.showPointCloudSignal.set(false);
 
     try {
       const dto = await this.api.sample({
@@ -158,6 +186,7 @@ export class WorkspaceStore {
         this.pointCloudSignal.set(
           dto.samples.map(s => [s.position.x, s.position.y, s.position.z] as [number, number, number]),
         );
+        this.showBaseCloudSignal.set(true);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Sampling failed';
@@ -213,8 +242,8 @@ export class WorkspaceStore {
 
       if (data.points.length > 0) {
         this.pointCloudSignal.set(data.points.map(p => p.position));
+        this.showManipulabilitySignal.set(true);
       }
-      this.showPointCloudSignal.set(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Manipulability analysis failed';
       this.errorSignal.set(msg);
@@ -243,11 +272,10 @@ export class WorkspaceStore {
       const data = toSingularityData(dto);
       this.singularitySignal.set(data);
 
-      // Replace point cloud with colored version
       if (data.points.length > 0) {
         this.pointCloudSignal.set(data.points.map(p => p.position));
+        this.showSingularitySignal.set(true);
       }
-      this.showPointCloudSignal.set(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Singularity analysis failed';
       this.errorSignal.set(msg);
@@ -261,8 +289,6 @@ export class WorkspaceStore {
     this.loadingSignal.set(true);
     this.errorSignal.set(null);
     this.reachabilitySignal.set(null);
-    this.pointCloudSignal.set(null);
-    this.showPointCloudSignal.set(false);
 
     try {
       const dto = await this.api.sampleActive({
@@ -283,6 +309,7 @@ export class WorkspaceStore {
         this.pointCloudSignal.set(
           dto.samples.map(s => [s.position.x, s.position.y, s.position.z] as [number, number, number]),
         );
+        this.showBaseCloudSignal.set(true);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Sampling failed';
@@ -319,22 +346,31 @@ export class WorkspaceStore {
         bounds: toBounds(dto.bounds),
       });
 
-      // Singularity — includes colored point cloud (state colors)
-      this.singularitySignal.set(toSingularityData({
+      // Singularity — colored point cloud (state colors)
+      const singData = toSingularityData({
         metrics: dto.singularity,
         samples: dto.singularity_samples,
-      }));
+      });
+      this.singularitySignal.set(singData);
 
-      // Manipulability — includes gradient point cloud (yoshikawa gradient)
-      // Takes priority over singularity in the viewer overlay (see scene-viewer.ts).
-      this.manipulabilitySignal.set(toManipulabilityData({
+      // Manipulability — gradient point cloud (yoshikawa gradient)
+      const manipData = toManipulabilityData({
         metrics: dto.manipulability,
         samples: dto.manipulability_samples,
-      }));
+      });
+      this.manipulabilitySignal.set(manipData);
 
-      // Enable the overlay — the scene viewer picks the right source
-      // based on priority: manipulability > singularity > monochrome.
-      this.showPointCloudSignal.set(true);
+      // Base cloud positions from first available samples
+      if (singData.points.length > 0) {
+        this.pointCloudSignal.set(singData.points.map(p => p.position));
+      } else if (manipData.points.length > 0) {
+        this.pointCloudSignal.set(manipData.points.map(p => p.position));
+      }
+
+      // Enable all three independent layers
+      this.showBaseCloudSignal.set(true);
+      this.showManipulabilitySignal.set(true);
+      this.showSingularitySignal.set(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Analysis failed';
       this.errorSignal.set(msg);
@@ -352,8 +388,6 @@ export class WorkspaceStore {
   ): Promise<void> {
     this.loadingSignal.set(true);
     this.errorSignal.set(null);
-    // Clear manipulability so the viewer overlay shows singularity
-    this.manipulabilitySignal.set(null);
 
     try {
       const dto = await this.api.analyzeSingularityActive({
@@ -366,11 +400,12 @@ export class WorkspaceStore {
 
       if (!dto) throw new Error('Empty response');
 
-      this.singularitySignal.set(toSingularityData(dto));
+      const data = toSingularityData(dto);
+      this.singularitySignal.set(data);
 
-      // Show the colored point cloud
-      if (dto.samples && dto.samples.length > 0) {
-        this.showPointCloudSignal.set(true);
+      if (data.points.length > 0) {
+        this.pointCloudSignal.set(data.points.map(p => p.position));
+        this.showSingularitySignal.set(true);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Singularity analysis failed';
@@ -388,8 +423,6 @@ export class WorkspaceStore {
   ): Promise<void> {
     this.loadingSignal.set(true);
     this.errorSignal.set(null);
-    // Clear singularity so the viewer overlay shows manipulability
-    this.singularitySignal.set(null);
 
     try {
       const dto = await this.api.analyzeManipulabilityActive({
@@ -401,11 +434,12 @@ export class WorkspaceStore {
 
       if (!dto) throw new Error('Empty response');
 
-      this.manipulabilitySignal.set(toManipulabilityData(dto));
+      const data = toManipulabilityData(dto);
+      this.manipulabilitySignal.set(data);
 
-      // Show the gradient point cloud
-      if (dto.samples && dto.samples.length > 0) {
-        this.showPointCloudSignal.set(true);
+      if (data.points.length > 0) {
+        this.pointCloudSignal.set(data.points.map(p => p.position));
+        this.showManipulabilitySignal.set(true);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Manipulability analysis failed';
@@ -419,7 +453,9 @@ export class WorkspaceStore {
   reset(): void {
     this.dataSignal.set(null);
     this.pointCloudSignal.set(null);
-    this.showPointCloudSignal.set(false);
+    this.showBaseCloudSignal.set(false);
+    this.showManipulabilitySignal.set(false);
+    this.showSingularitySignal.set(false);
     this.reachabilitySignal.set(null);
     this.singularitySignal.set(null);
     this.manipulabilitySignal.set(null);

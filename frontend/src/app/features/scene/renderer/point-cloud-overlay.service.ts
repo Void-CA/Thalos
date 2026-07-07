@@ -3,17 +3,21 @@ import * as THREE from 'three';
 import { SceneOverlay } from './scene-overlay.interface';
 
 /**
- * Overlay que renderiza nubes de puntos sobre la escena robótica.
+ * Overlay que renderiza tres capas independientes de nubes de puntos
+ * sobre la escena robótica:
+ *  - Base cloud (monocromo naranja)
+ *  - Manipulabilidad (gradiente verde → rojo según Yoshikawa)
+ *  - Singularidad (colores por estado: normal / near_singular / singular)
  *
- * Soporta tres modos de visualización:
- * - Monocromo (naranja)
- * - Gradiente manipulabilidad (verde → amarillo → rojo)
- * - Color por estado de singularidad (normal / near_singular / singular)
+ * Cada capa tiene su propio mesh y visibilidad independiente,
+ * permitiendo mostrar varias capas simultáneamente.
  */
 @Injectable({ providedIn: 'root' })
 export class PointCloudOverlayService implements SceneOverlay {
   private group: THREE.Group | null = null;
-  private pointCloudMesh: THREE.Points | null = null;
+  private baseCloud: THREE.Points | null = null;
+  private manipCloud: THREE.Points | null = null;
+  private singularityCloud: THREE.Points | null = null;
 
   /** Attach this overlay to a Three.js scene. */
   attach(scene: THREE.Scene): void {
@@ -22,22 +26,14 @@ export class PointCloudOverlayService implements SceneOverlay {
     scene.add(this.group);
   }
 
-  // ── Point cloud methods ──
+  // ── Layer-specific setter methods ──
 
-  /** Monochrome point cloud (default orange). */
-  setPointCloud(positions: [number, number, number][]): void {
-    this.clearCloud();
+  /** Monochrome point cloud (default orange) — base workspace samples. */
+  setBaseCloud(positions: [number, number, number][]): void {
     if (!this.group) return;
+    this.clearMesh('base');
 
-    const geo = new THREE.BufferGeometry();
-    const vertices = new Float32Array(positions.length * 3);
-    for (let i = 0; i < positions.length; i++) {
-      vertices[i * 3]     = positions[i][0];
-      vertices[i * 3 + 1] = positions[i][1];
-      vertices[i * 3 + 2] = positions[i][2];
-    }
-    geo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-
+    const geo = this.buildPositionGeometry(positions);
     const mat = new THREE.PointsMaterial({
       color: 0xff8800,
       size: 0.015,
@@ -49,21 +45,20 @@ export class PointCloudOverlayService implements SceneOverlay {
       blending: THREE.AdditiveBlending,
     });
 
-    this.pointCloudMesh = new THREE.Points(geo, mat);
-    this.pointCloudMesh.frustumCulled = true;
-    this.group.add(this.pointCloudMesh);
-    this.group.visible = true;
+    this.baseCloud = new THREE.Points(geo, mat);
+    this.baseCloud.frustumCulled = true;
+    this.group.add(this.baseCloud);
   }
 
   /**
    * Gradient point cloud from a normalized value [0, 1].
    * Green (1.0) → Yellow (0.5) → Red (0.0).
    */
-  setGradientPointCloud(
+  setManipulabilityCloud(
     points: { position: [number, number, number]; normalized: number }[],
   ): void {
-    this.clearCloud();
     if (!this.group) return;
+    this.clearMesh('manip');
 
     const geo = new THREE.BufferGeometry();
     const vertices = new Float32Array(points.length * 3);
@@ -104,18 +99,17 @@ export class PointCloudOverlayService implements SceneOverlay {
       vertexColors: true,
     });
 
-    this.pointCloudMesh = new THREE.Points(geo, mat);
-    this.pointCloudMesh.frustumCulled = true;
-    this.group.add(this.pointCloudMesh);
-    this.group.visible = true;
+    this.manipCloud = new THREE.Points(geo, mat);
+    this.manipCloud.frustumCulled = true;
+    this.group.add(this.manipCloud);
   }
 
   /** Colored point cloud based on singularity state. */
-  setColoredPointCloud(
+  setSingularityCloud(
     points: { position: [number, number, number]; state: 'normal' | 'near_singular' | 'singular' }[],
   ): void {
-    this.clearCloud();
     if (!this.group) return;
+    this.clearMesh('singularity');
 
     const geo = new THREE.BufferGeometry();
     const vertices = new Float32Array(points.length * 3);
@@ -154,22 +148,59 @@ export class PointCloudOverlayService implements SceneOverlay {
       vertexColors: true,
     });
 
-    this.pointCloudMesh = new THREE.Points(geo, mat);
-    this.pointCloudMesh.frustumCulled = true;
-    this.group.add(this.pointCloudMesh);
-    this.group.visible = true;
+    this.singularityCloud = new THREE.Points(geo, mat);
+    this.singularityCloud.frustumCulled = true;
+    this.group.add(this.singularityCloud);
   }
 
-  /** Hide the current point cloud without disposing resources. */
+  // ── Visibility toggles (independent per layer) ──
+
+  /** Show / hide the base cloud mesh. */
+  showBase(visible: boolean): void {
+    if (this.baseCloud) this.baseCloud.visible = visible;
+  }
+
+  /** Show / hide the manipulability cloud mesh. */
+  showManipulability(visible: boolean): void {
+    if (this.manipCloud) this.manipCloud.visible = visible;
+  }
+
+  /** Show / hide the singularity cloud mesh. */
+  showSingularity(visible: boolean): void {
+    if (this.singularityCloud) this.singularityCloud.visible = visible;
+  }
+
+  // ── Group-level visibility ──
+
+  /** Hide all meshes without disposing resources. */
   hide(): void {
     if (this.group) {
       this.group.visible = false;
     }
   }
 
-  /** Clear the current point cloud and dispose GPU resources. */
+  // ── Clear methods (dispose GPU resources per layer) ──
+
+  /** Remove and dispose the base cloud mesh. */
+  clearBase(): void {
+    this.clearMesh('base');
+  }
+
+  /** Remove and dispose the manipulability cloud mesh. */
+  clearManipulability(): void {
+    this.clearMesh('manip');
+  }
+
+  /** Remove and dispose the singularity cloud mesh. */
+  clearSingularity(): void {
+    this.clearMesh('singularity');
+  }
+
+  /** Clear all meshes and hide. */
   clear(): void {
-    this.clearCloud();
+    this.clearMesh('base');
+    this.clearMesh('manip');
+    this.clearMesh('singularity');
     if (this.group) {
       this.group.visible = false;
     }
@@ -177,33 +208,68 @@ export class PointCloudOverlayService implements SceneOverlay {
 
   /** Full cleanup — dispose all resources owned by this overlay. */
   dispose(): void {
-    this.clearCloud();
+    this.clear();
     if (this.group) {
-      this.group.traverse(obj => {
-        if (obj instanceof THREE.Mesh) {
-          obj.geometry.dispose();
-          const mat = obj.material;
-          if (Array.isArray(mat)) {
-            mat.forEach(m => m.dispose());
-          } else {
-            mat.dispose();
-          }
-        }
-      });
-      const parent = this.group.parent;
-      parent?.remove(this.group);
+      this.group.parent?.remove(this.group);
     }
     this.group = null;
   }
 
-  // ── Private ──
+  // ── Backward-compatible aliases ──
 
-  private clearCloud(): void {
-    if (this.pointCloudMesh) {
-      this.group?.remove(this.pointCloudMesh);
-      this.pointCloudMesh.geometry.dispose();
-      (this.pointCloudMesh.material as THREE.Material).dispose();
-      this.pointCloudMesh = null;
+  /** @deprecated Use setBaseCloud() instead. */
+  setPointCloud(positions: [number, number, number][]): void {
+    this.setBaseCloud(positions);
+  }
+
+  /** @deprecated Use setManipulabilityCloud() instead. */
+  setGradientPointCloud(
+    points: { position: [number, number, number]; normalized: number }[],
+  ): void {
+    this.setManipulabilityCloud(points);
+  }
+
+  /** @deprecated Use setSingularityCloud() instead. */
+  setColoredPointCloud(
+    points: { position: [number, number, number]; state: 'normal' | 'near_singular' | 'singular' }[],
+  ): void {
+    this.setSingularityCloud(points);
+  }
+
+  // ── Private helpers ──
+
+  private buildPositionGeometry(positions: [number, number, number][]): THREE.BufferGeometry {
+    const geo = new THREE.BufferGeometry();
+    const vertices = new Float32Array(positions.length * 3);
+    for (let i = 0; i < positions.length; i++) {
+      vertices[i * 3]     = positions[i][0];
+      vertices[i * 3 + 1] = positions[i][1];
+      vertices[i * 3 + 2] = positions[i][2];
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    return geo;
+  }
+
+  private clearMesh(layer: 'base' | 'manip' | 'singularity'): void {
+    let mesh: THREE.Points | null = null;
+    switch (layer) {
+      case 'base':
+        mesh = this.baseCloud;
+        this.baseCloud = null;
+        break;
+      case 'manip':
+        mesh = this.manipCloud;
+        this.manipCloud = null;
+        break;
+      case 'singularity':
+        mesh = this.singularityCloud;
+        this.singularityCloud = null;
+        break;
+    }
+    if (mesh) {
+      this.group?.remove(mesh);
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
     }
   }
 }

@@ -5,7 +5,7 @@ import { TrajectoryOverlayService } from '../../renderer/trajectory-overlay.serv
 import { IkTargetOverlayService } from '../../renderer/ik-target-overlay.service';
 import { PointCloudOverlayService } from '../../renderer/point-cloud-overlay.service';
 import { WorkspaceStore } from '../../../workspace/store/workspace.store';
-import { ModeStore } from '../../../shared/store/mode.store';
+import { ModeStore } from '../../../../shared/store/mode.store';
 import { rotationDtoToQuaternion } from '../../utils/rotation';
 
 /**
@@ -116,14 +116,43 @@ export class SceneViewer implements AfterViewInit {
       }
     });
 
-    // Effect 5: point cloud overlay — solo en analysis.
-    // Priority: manipulability (gradient) > singularity (state colors) > monochrome.
+    // Effect 5: point cloud overlay layers — solo en analysis.
+    // Maneja tres capas independientes: base, manipulabilidad, singularidad.
     effect(() => {
-      if (this.modeStore.mode() === 'analysis') {
-        this.syncPointCloudOverlay();
-      } else {
+      if (this.modeStore.mode() !== 'analysis') {
         this.pointCloud.clear();
+        return;
       }
+
+      // Layer 1: Base cloud (monochrome orange)
+      const baseData = this.workspace.pointCloud();
+      const showBase = this.workspace.showBaseCloud();
+      if (baseData && showBase) {
+        this.pointCloud.setBaseCloud(baseData);
+      } else {
+        this.pointCloud.clearBase();
+      }
+      this.pointCloud.showBase(showBase && !!baseData);
+
+      // Layer 2: Manipulability (Yoshikawa gradient)
+      const manip = this.workspace.manipulability();
+      const showManip = this.workspace.showManipulability();
+      if (manip && showManip) {
+        this.pointCloud.setManipulabilityCloud(manip.points);
+      } else {
+        this.pointCloud.clearManipulability();
+      }
+      this.pointCloud.showManipulability(showManip && !!manip);
+
+      // Layer 3: Singularity (state colors)
+      const sing = this.workspace.singularity();
+      const showSing = this.workspace.showSingularity();
+      if (sing && showSing) {
+        this.pointCloud.setSingularityCloud(sing.points);
+      } else {
+        this.pointCloud.clearSingularity();
+      }
+      this.pointCloud.showSingularity(showSing && !!sing);
     });
   }
 
@@ -132,7 +161,6 @@ export class SceneViewer implements AfterViewInit {
     this.renderer.registerOverlay(this.pointCloud);
     this.renderer.registerOverlay(this.trajectoryOverlay);
     this.renderer.registerOverlay(this.ikTargetOverlay);
-    this.syncPointCloudOverlay();
   }
 
   /** Frame the robot in the viewport. */
@@ -143,20 +171,5 @@ export class SceneViewer implements AfterViewInit {
     }
   }
 
-  private syncPointCloudOverlay(): void {
-    const manip = this.workspace.manipulability();
-    const singularity = this.workspace.singularity();
-    const cloud = this.workspace.pointCloud();
-    const show = this.workspace.showPointCloud();
 
-    if (manip && show) {
-      this.pointCloud.setGradientPointCloud(manip.points);
-    } else if (singularity && show) {
-      this.pointCloud.setColoredPointCloud(singularity.points);
-    } else if (cloud && show) {
-      this.pointCloud.setPointCloud(cloud);
-    } else {
-      this.pointCloud.clear();
-    }
-  }
 }

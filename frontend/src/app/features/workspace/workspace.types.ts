@@ -74,7 +74,9 @@ export interface WorkspaceUiState {
 export interface WorkspaceState {
     data: WorkspaceData | null;
     pointCloud: [number, number, number][] | null;
-    showPointCloud: boolean;
+    showBaseCloud: boolean;
+    showManipulability: boolean;
+    showSingularity: boolean;
     reachability: ReachabilityResult | null;
     singularity: SingularityData | null;
     manipulability: ManipulabilityData | null;

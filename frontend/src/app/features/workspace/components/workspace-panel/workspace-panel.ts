@@ -54,16 +54,38 @@ import { WorkspaceStore } from '../../store/workspace.store';
         >
           {{ store.loading() ? 'Analyzing\u2026' : 'Manipulability' }}
         </button>
-
-        <label class="toggle">
-          <input
-            type="checkbox"
-            [checked]="store.showPointCloud()"
-            (change)="store.setShowPointCloud($any($event.target).checked)"
-          />
-          <span class="toggle__label">Show Point Cloud</span>
-        </label>
       </section>
+
+      <!-- ── LAYER VISIBILITY ── -->
+      @if (store.hasData()) {
+        <section class="workspace-panel__layers">
+          <h4 class="workspace-panel__label">Layer Visibility</h4>
+          <label class="toggle">
+            <input
+              type="checkbox"
+              [checked]="store.showBaseCloud()"
+              (change)="store.setShowBaseCloud($any($event.target).checked)"
+            />
+            <span class="toggle__label">Workspace Base</span>
+          </label>
+          <label class="toggle">
+            <input
+              type="checkbox"
+              [checked]="store.showManipulability()"
+              (change)="store.setShowManipulability($any($event.target).checked)"
+            />
+            <span class="toggle__label">Yoshikawa (Manipulabilidad)</span>
+          </label>
+          <label class="toggle">
+            <input
+              type="checkbox"
+              [checked]="store.showSingularity()"
+              (change)="store.setShowSingularity($any($event.target).checked)"
+            />
+            <span class="toggle__label">Singularidades</span>
+          </label>
+        </section>
+      }
 
       <!-- ── WORKSPACE METRICS ── -->
       @if (store.data(); as data) {
