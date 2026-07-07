@@ -1,5 +1,13 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { SceneStore } from '../scene/store/scene.store';
+import {
+  mockTorqueFromPosition,
+  mockCurrentFromTorque,
+  mockLatency,
+  mockJitter,
+  isSaturated,
+  TORQUE_SATURATION_THRESHOLD,
+} from './charts-signals.mock';
 
 // ── Constants ──
 
@@ -227,17 +235,13 @@ export class ChartsSignalsPanel {
           this.lastQ && dt > 0 ? (joints[i] - this.lastQ[i]) / dt : 0;
         this.pushSample(this.velHist, i, vel);
 
-        // Mock torque: structural wave + noise, clamped to >0
-        const t =
-          0.3 * Math.sin(joints[i] * 2 + now / 2000) +
-          0.1 * Math.sin(now / 500) +
-          (Math.random() - 0.5) * 0.15 +
-          0.15;
-        this.pushSample(this.trqHist, i, Math.max(0.01, t));
+        // Mock torque: structural wave + noise
+        const t = mockTorqueFromPosition(joints[i], now);
+        this.pushSample(this.trqHist, i, t);
 
         // Mock current: proportional to torque + noise
-        const c = t * 2.5 + (Math.random() - 0.5) * 0.3 + 0.2;
-        this.pushSample(this.curHist, i, Math.max(0.01, c));
+        const c = mockCurrentFromTorque(t);
+        this.pushSample(this.curHist, i, c);
       }
       this.lastQ = [...joints];
 
@@ -248,12 +252,12 @@ export class ChartsSignalsPanel {
       this.latestCurrent.set(cVals);
 
       // Mock network stats
-      this.latency.set(Math.round(5 + Math.random() * 15));
-      this.jitter.set(Math.round(1 + Math.random() * 4));
+      this.latency.set(mockLatency());
+      this.jitter.set(mockJitter());
 
-      // Saturation detection (torque > 0.85)
+      // Saturation detection
       this.saturatedJoints.set(
-        tVals.map((v, i) => (v > 0.85 ? i : -1)).filter(i => i >= 0),
+        tVals.map((v, i) => (isSaturated(v) ? i : -1)).filter(i => i >= 0),
       );
 
       // Schedule canvas redraw
