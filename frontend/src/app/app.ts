@@ -4,6 +4,7 @@ import { SceneViewer } from './features/scene/components/scene-viewer/scene-view
 import { RobotCatalog } from './features/robots/components/robot-catalog/robot-catalog';
 import { TopBar } from './shared/components/top-bar/top-bar';
 import { BottomPanel } from './shared/components/bottom-panel/bottom-panel';
+import { AiObservabilityPanel } from './shared/components/ai-observability-panel/ai-observability-panel';
 import { ModeStore } from './shared/store/mode.store';
 import { UI_MODE_REGISTRY } from './shared/types/ui-mode-registry';
 import type { ToolSchema } from './shared/types/tool-schema';
@@ -32,6 +33,7 @@ import type { ToolSchema } from './shared/types/tool-schema';
     RobotCatalog,
     TopBar,
     BottomPanel,
+    AiObservabilityPanel,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',

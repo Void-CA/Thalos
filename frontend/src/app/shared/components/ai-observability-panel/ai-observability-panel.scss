@@ -1,0 +1,194 @@
+@use 'variables' as *;
+
+.ai-obs-panel {
+  background: $bg-surface;
+  border-top: 1px solid $border-subtle;
+  padding: 0.5rem 1rem;
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 0.7rem;
+
+  &__section {
+    margin-bottom: 0.25rem;
+
+    &[open] > &__header {
+      margin-bottom: 0.35rem;
+    }
+  }
+
+  &__header {
+    cursor: pointer;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: $text-secondary;
+    font-weight: 600;
+    user-select: none;
+  }
+
+  // ── 2‑column grid ──
+  &__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  &__card {
+    h4 {
+      margin: 0 0 0.25rem;
+      font-size: 0.65rem;
+      color: $text-muted;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+  }
+
+  &__overall {
+    color: $accent;
+  }
+
+  // ── Progress bar row ──
+  &__bar-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 0.15rem;
+    line-height: 1.4;
+  }
+
+  &__label {
+    width: 4rem;
+    flex-shrink: 0;
+    color: $text-primary;
+    font-size: 0.65rem;
+  }
+
+  &__bar {
+    flex: 1;
+    height: 0.5rem;
+    background: $bg-elevated;
+    border-radius: $radius-sm;
+    overflow: hidden;
+  }
+
+  &__bar-fill {
+    height: 100%;
+    border-radius: $radius-sm;
+    transition: width 0.3s ease;
+
+    &--low {
+      background: #2a7a2a;
+    }
+
+    &--mid {
+      background: #c8a020;
+    }
+
+    &--high {
+      background: $danger;
+    }
+
+    &--confidence {
+      background: $accent;
+    }
+  }
+
+  &__value {
+    width: 2.8rem;
+    text-align: right;
+    color: $text-primary;
+    font-size: 0.65rem;
+    flex-shrink: 0;
+  }
+
+  &__trend {
+    width: 0.75rem;
+    text-align: center;
+    flex-shrink: 0;
+    font-size: 0.6rem;
+
+    &.trend--increasing {
+      color: $danger;
+    }
+
+    &.trend--decreasing {
+      color: #2a7a2a;
+    }
+
+    &.trend--stable {
+      color: $text-muted;
+    }
+  }
+
+  // ── Rules section ──
+  &__rule {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    padding: 0.15rem 0;
+    font-size: 0.65rem;
+    color: $text-primary;
+
+    &--inactive {
+      opacity: 0.45;
+    }
+  }
+
+  &__rule-icon {
+    width: 0.9rem;
+    flex-shrink: 0;
+    text-align: center;
+    font-weight: 700;
+
+    .ai-obs-panel__rule:not(&--inactive) & {
+      color: #2a7a2a;
+    }
+
+    .ai-obs-panel__rule--inactive & {
+      color: $text-muted;
+    }
+  }
+
+  &__rule-text {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__rule-timing {
+    color: $text-muted;
+    font-size: 0.6rem;
+    flex-shrink: 0;
+  }
+
+  // ── Decision history table ──
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.65rem;
+
+    th {
+      text-align: left;
+      padding: 0.2rem 0.4rem;
+      color: $text-muted;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid $border-subtle;
+    }
+
+    td {
+      padding: 0.15rem 0.4rem;
+      color: $text-primary;
+    }
+
+    tbody tr:nth-child(even) {
+      background: $bg-card;
+    }
+
+    tbody tr:hover {
+      background: $bg-elevated;
+    }
+  }
+}
