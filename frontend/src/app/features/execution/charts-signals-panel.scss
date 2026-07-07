@@ -1,0 +1,155 @@
+@use 'variables' as *;
+@use '../../shared/styles/panel' as panel;
+
+// ── Panel root ──
+
+.charts-signals-panel {
+  @include panel.container;
+}
+
+// ── Signal group ──
+
+.signal-group {
+  border-bottom: 1px solid $border-subtle;
+  padding-bottom: 0.4rem;
+
+  &:last-of-type {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  &__head {
+    @include panel.section-label;
+    margin-bottom: 0.3rem;
+  }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+}
+
+// ── Signal row (label · canvas/bar · value) ──
+
+.signal-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+
+  &__label {
+    width: 2.4ch;
+    font-weight: 600;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  &__value {
+    width: 4.2ch;
+    text-align: right;
+    font-size: 0.68rem;
+    opacity: 0.7;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+// ── Canvas sparkline ──
+
+.sparkline {
+  display: block;
+  width: 80px;
+  height: 30px;
+  border-radius: 2px;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+// ── Bar chart track ──
+
+.bar-track {
+  flex: 1;
+  height: 8px;
+  background: $bg-input;
+  border: 1px solid $border-subtle;
+  border-radius: $radius-sm;
+  overflow: hidden;
+  min-width: 60px;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.1s ease, background 0.15s ease;
+
+  &--current {
+    background: linear-gradient(90deg, #3399ff, #66bbff);
+  }
+}
+
+// ── Status footer ──
+
+.status-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding-top: 0.3rem;
+  font-size: 0.7rem;
+  opacity: 0.75;
+
+  &__item strong {
+    font-weight: 700;
+    color: $text-primary;
+  }
+
+  &__sep {
+    opacity: 0.3;
+  }
+}
+
+// ── Alert / saturation ──
+
+.alert {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: #cc4444;
+  background: rgba(204, 68, 68, 0.08);
+  border: 1px solid rgba(204, 68, 68, 0.25);
+  border-radius: $radius-sm;
+  padding: 0.35rem 0.5rem;
+
+  &__icon {
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+
+  strong {
+    font-weight: 700;
+  }
+}
+
+// ── Empty state ──
+
+.empty-state {
+  text-align: center;
+  padding: 1.5rem 0.5rem;
+
+  &__msg {
+    margin: 0 0 0.3rem;
+    font-size: 0.78rem;
+    opacity: 0.5;
+  }
+
+  &__hint {
+    margin: 0;
+    font-size: 0.7rem;
+    opacity: 0.35;
+    line-height: 1.4;
+  }
+}

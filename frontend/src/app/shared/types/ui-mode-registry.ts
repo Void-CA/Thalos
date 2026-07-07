@@ -6,6 +6,7 @@ import { IkTargetPanel } from '../../features/scene/components/ik-target-panel/i
 import { WorkspacePanel } from '../../features/workspace/components/workspace-panel/workspace-panel';
 import { PlanningPanel } from '../../features/planning/planning-panel';
 import { ExecutionPanel } from '../../features/execution/execution-panel';
+import { ChartsSignalsPanel } from '../../features/execution/charts-signals-panel';
 
 /**
  * Registry central de tools por modo.
@@ -29,5 +30,6 @@ export const UI_MODE_REGISTRY: Record<AppMode, readonly ToolSchema[]> = {
   ],
   execution: [
     { id: 'execution', label: 'Active Plan', component: ExecutionPanel, defaultOpen: true },
+    { id: 'charts', label: 'Charts & Signals', component: ChartsSignalsPanel, defaultOpen: false },
   ],
 } as const;
