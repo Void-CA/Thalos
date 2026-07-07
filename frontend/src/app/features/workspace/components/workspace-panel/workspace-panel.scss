@@ -51,39 +51,22 @@ input[type='number'] {
     color: #ffe;
   }
 
+  &--singularity.action--active {
+    background: #8a7a2a;
+    border-color: #eebb22;
+    box-shadow: inset 0 0 6px rgba(238, 187, 34, 0.3);
+  }
+
   &--manipulability {
     background: #1a4a3a;
     border-color: #1a4a3a;
     color: #efe;
   }
-}
 
-// ── Layer visibility section ──
-
-.workspace-panel__layers {
-  border-top: 1px solid #333;
-  padding-top: 0.5rem;
-  margin-top: 0.5rem;
-
-  .toggle {
-    margin-top: 0.2rem;
-  }
-}
-
-// ── Point cloud toggle ──
-
-.toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.72rem;
-  opacity: 0.8;
-  cursor: pointer;
-  user-select: none;
-
-  input[type='checkbox'] {
-    accent-color: $accent;
-    cursor: pointer;
+  &--manipulability.action--active {
+    background: #2a6a4a;
+    border-color: #33dd77;
+    box-shadow: inset 0 0 6px rgba(51, 221, 119, 0.3);
   }
 }
 

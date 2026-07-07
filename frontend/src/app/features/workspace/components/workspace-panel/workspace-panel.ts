@@ -39,53 +39,24 @@ import { WorkspaceStore } from '../../store/workspace.store';
 
         <button
           class="action action--singularity"
+          [class.action--active]="store.singularity() && store.showSingularity()"
           (click)="onAnalyzeSingularity()"
           [disabled]="store.loading() || disabledReason() !== null"
           [title]="disabledReason() ?? ''"
         >
-          {{ store.loading() ? 'Analyzing\u2026' : 'Singularity Analysis' }}
+          {{ singularityLabel() }}
         </button>
 
         <button
           class="action action--manipulability"
+          [class.action--active]="store.manipulability() && store.showManipulability()"
           (click)="onAnalyzeManipulability()"
           [disabled]="store.loading() || disabledReason() !== null"
           [title]="disabledReason() ?? ''"
         >
-          {{ store.loading() ? 'Analyzing\u2026' : 'Manipulability' }}
+          {{ manipulabilityLabel() }}
         </button>
       </section>
-
-      <!-- ── LAYER VISIBILITY ── -->
-      @if (store.hasData()) {
-        <section class="workspace-panel__layers">
-          <h4 class="workspace-panel__label">Layer Visibility</h4>
-          <label class="toggle">
-            <input
-              type="checkbox"
-              [checked]="store.showBaseCloud()"
-              (change)="store.setShowBaseCloud($any($event.target).checked)"
-            />
-            <span class="toggle__label">Workspace Base</span>
-          </label>
-          <label class="toggle">
-            <input
-              type="checkbox"
-              [checked]="store.showManipulability()"
-              (change)="store.setShowManipulability($any($event.target).checked)"
-            />
-            <span class="toggle__label">Yoshikawa (Manipulabilidad)</span>
-          </label>
-          <label class="toggle">
-            <input
-              type="checkbox"
-              [checked]="store.showSingularity()"
-              (change)="store.setShowSingularity($any($event.target).checked)"
-            />
-            <span class="toggle__label">Singularidades</span>
-          </label>
-        </section>
-      }
 
       <!-- ── WORKSPACE METRICS ── -->
       @if (store.data(); as data) {
@@ -174,6 +145,24 @@ export class WorkspacePanel {
     });
   }
 
+  /** Dynamic label for the singularity button: toggle when data exists. */
+  protected readonly singularityLabel = computed(() => {
+    if (this.store.loading()) return 'Analyzing\u2026';
+    if (this.store.singularity()) {
+      return this.store.showSingularity() ? 'Hide Singularities' : 'Show Singularities';
+    }
+    return 'Singularity Analysis';
+  });
+
+  /** Dynamic label for the manipulability button: toggle when data exists. */
+  protected readonly manipulabilityLabel = computed(() => {
+    if (this.store.loading()) return 'Analyzing\u2026';
+    if (this.store.manipulability()) {
+      return this.store.showManipulability() ? 'Hide Manipulability' : 'Show Manipulability';
+    }
+    return 'Manipulability';
+  });
+
   /** Use canonical path when a catalog robot is selected, active path otherwise. */
   onSample(): void {
     const id = this.robotId();
@@ -185,6 +174,11 @@ export class WorkspacePanel {
   }
 
   onAnalyzeSingularity(): void {
+    // Toggle visibility if data already exists
+    if (this.store.singularity()) {
+      this.store.setShowSingularity(!this.store.showSingularity());
+      return;
+    }
     const id = this.robotId();
     if (id) {
       this.store.analyzeSingularity(id, this.samples, this.seed, this.tolerance, this.nearSingularThreshold);
@@ -194,6 +188,11 @@ export class WorkspacePanel {
   }
 
   onAnalyzeManipulability(): void {
+    // Toggle visibility if data already exists
+    if (this.store.manipulability()) {
+      this.store.setShowManipulability(!this.store.showManipulability());
+      return;
+    }
     const id = this.robotId();
     if (id) {
       this.store.analyzeManipulability(id, this.samples, this.seed, this.tolerance);
