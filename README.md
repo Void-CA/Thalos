@@ -10,7 +10,7 @@ Plataforma modular para modelado, análisis y visualización de sistemas robóti
 | Visual | `thalos-visual` (scene graph desacoplado) |
 | Runtime | `thalos-runtime` (orquestación, commands, backends) |
 | API | `axum` 0.8 |
-| Frontend | Angular 19 + Three.js |
+| Frontend | Angular 21 + Three.js |
 
 ## Crates
 

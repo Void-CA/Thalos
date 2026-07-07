@@ -36,6 +36,7 @@ pub fn create_manipulator_6dof(
     let link1 = Link {
         id: 0,
         transform: Transform3D::from_translation(Vector3::new(0.0, 0.0, l1)),
+        collision_geometry : None,
     };
     builder.add_segment(Segment {
         parent: FrameId::World,
@@ -51,6 +52,7 @@ pub fn create_manipulator_6dof(
     let link2 = Link {
         id: 1,
         transform: Transform3D::from_translation(Vector3::new(l2, 0.0, 0.0)),
+        collision_geometry : None,
     };
     builder.add_segment(Segment {
         parent: f_link1,
@@ -66,6 +68,7 @@ pub fn create_manipulator_6dof(
     let link3 = Link {
         id: 2,
         transform: Transform3D::from_translation(Vector3::new(l3, 0.0, 0.0)),
+        collision_geometry : None,
     };
     builder.add_segment(Segment {
         parent: f_link2,
@@ -81,6 +84,7 @@ pub fn create_manipulator_6dof(
     let link4 = Link {
         id: 3,
         transform: Transform3D::from_translation(Vector3::new(l4, 0.0, 0.0)),
+        collision_geometry : None,
     };
     builder.add_segment(Segment {
         parent: f_link3,
@@ -96,6 +100,7 @@ pub fn create_manipulator_6dof(
     let link5 = Link {
         id: 4,
         transform: Transform3D::from_translation(Vector3::new(l5, 0.0, 0.0)),
+        collision_geometry : None,
     };
     builder.add_segment(Segment {
         parent: f_link4,
@@ -111,6 +116,7 @@ pub fn create_manipulator_6dof(
     let link6 = Link {
         id: 5,
         transform: Transform3D::from_translation(Vector3::new(l6, 0.0, 0.0)),
+        collision_geometry : None,
     };
     builder.add_segment(Segment {
         parent: f_link5,
