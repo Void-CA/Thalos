@@ -28,8 +28,8 @@ describe('SceneApiService', () => {
 
   const mockRuntimeResponse: RuntimeStateResponse = {
     robot: {
-      id: 'ur5e',
-      display_name: 'UR5e',
+      id: 'delta_robot',
+      display_name: 'Delta Robot',
       dof: 6,
       joints: [
         { name: 'shoulder_pan', kind: 'revolute', min: -6.283, max: 6.283 },
@@ -72,7 +72,7 @@ describe('SceneApiService', () => {
 
   describe('loadRobot()', () => {
     it('should POST to /scene/robot with robot_id body', () => {
-      const robotId = 'ur5e';
+      const robotId = 'delta_robot';
 
       let result: RuntimeStateResponse | undefined;
       service.loadRobot(robotId).subscribe(res => {

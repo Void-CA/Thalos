@@ -25,8 +25,8 @@ describe('SceneStore', () => {
 
   const mockRuntimeResponse: RuntimeStateResponse = {
     robot: {
-      id: 'ur5e',
-      display_name: 'UR5e',
+      id: 'delta_robot',
+      display_name: 'Delta Robot',
       dof: 6,
       joints: [
         { name: 'shoulder_pan', kind: 'revolute', min: -6.283, max: 6.283 },
@@ -146,7 +146,7 @@ describe('SceneStore', () => {
       const state = await statePromise;
       expect(mockApi.setJoints).toHaveBeenCalledWith([0.5, -0.2, 0.1, 0, 0, 0]);
       expect(state.runtime).not.toBeNull();
-      expect(state.runtime!.robot.id).toBe('ur5e');
+      expect(state.runtime!.robot.id).toBe('delta_robot');
       expect(state.runtime!.joints).toEqual([0.5, -0.2, 0.1, 0, 0, 0]);
       expect(state.data).not.toBeNull();
       expect(state.data!.frames).toHaveLength(1);
@@ -180,11 +180,11 @@ describe('SceneStore', () => {
         store.state$.pipe(filter((s: SceneState) => s.runtime !== null && !s.ui.loading)),
       );
 
-      store.loadRobot('ur5e');
+      store.loadRobot('delta_robot');
 
       const state = await statePromise;
-      expect(mockApi.loadRobot).toHaveBeenCalledWith('ur5e');
-      expect(state.runtime!.robot.id).toBe('ur5e');
+      expect(mockApi.loadRobot).toHaveBeenCalledWith('delta_robot');
+      expect(state.runtime!.robot.id).toBe('delta_robot');
       expect(state.ui.loading).toBe(false);
       expect(state.ui.error).toBeNull();
     });
@@ -216,7 +216,7 @@ describe('SceneStore', () => {
 
       const state = await statePromise;
       expect(state.runtime).not.toBeNull();
-      expect(state.runtime!.robot.id).toBe('ur5e');
+      expect(state.runtime!.robot.id).toBe('delta_robot');
       expect(state.data).not.toBeNull();
       expect(state.ui.loading).toBe(false);
       expect(state.ui.error).toBeNull();
@@ -237,7 +237,7 @@ describe('SceneStore', () => {
 
       // The signal should reflect the latest state
       expect(store.state().runtime).not.toBeNull();
-      expect(store.state().runtime!.robot.id).toBe('ur5e');
+      expect(store.state().runtime!.robot.id).toBe('delta_robot');
     });
   });
 });

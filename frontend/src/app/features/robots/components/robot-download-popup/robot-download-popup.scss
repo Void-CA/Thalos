@@ -1,0 +1,77 @@
+@use '../../../../../styles/variables' as *;
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  background: transparent;
+  cursor: default;
+}
+
+.popup {
+  position: absolute;
+  z-index: 10;
+  top: 100%;
+  right: 0;
+  margin-top: 0.35rem;
+  min-width: 11rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid $border-default;
+  border-radius: $radius-md;
+  background: $bg-overlay;
+  color: $text-primary;
+  font-size: 0.85rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.model-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: $radius-sm;
+  background: $bg-elevated;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.size {
+  font-size: 0.75rem;
+  opacity: 0.5;
+}
+
+.download-action {
+  background: $accent;
+  color: #fff;
+  border: none;
+  border-radius: $radius-sm;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-align: center;
+  transition: opacity $transition-fast;
+
+  &:hover {
+    opacity: 0.85;
+  }
+}
+
+.placeholder {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.6;
+  font-style: italic;
+}

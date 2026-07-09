@@ -14,8 +14,8 @@ describe('RobotStore', () => {
 
   const mockRobots: RobotMetadataDto[] = [
     {
-      id: 'ur5e',
-      display_name: 'UR5e',
+      id: 'delta_robot',
+      display_name: 'Delta Robot',
       dof: 6,
       joints: [
         { name: 'shoulder_pan', kind: 'revolute', min: -6.283, max: 6.283 },
@@ -27,8 +27,8 @@ describe('RobotStore', () => {
       ],
     },
     {
-      id: 'kr10',
-      display_name: 'KR 10 R1100',
+      id: 'cartesian_gantry',
+      display_name: 'Cartesian Gantry',
       dof: 6,
       joints: [
         { name: 'a1', kind: 'revolute', min: -3.141, max: 3.141 },
@@ -76,8 +76,8 @@ describe('RobotStore', () => {
       expect(store.loading()).toBe(false);
       expect(store.error()).toBeNull();
       expect(store.robots()).toHaveLength(2);
-      expect(store.robots()[0].id).toBe('ur5e');
-      expect(store.robots()[1].id).toBe('kr10');
+      expect(store.robots()[0].id).toBe('delta_robot');
+      expect(store.robots()[1].id).toBe('cartesian_gantry');
     });
 
     it('should set loading to true during API call', () => {
@@ -101,7 +101,7 @@ describe('RobotStore', () => {
       mockApi.getRobots.mockReturnValue(of([mockRobots[0]]));
       store.loadRobots();
       expect(store.robots()).toHaveLength(1);
-      expect(store.robots()[0].id).toBe('ur5e');
+      expect(store.robots()[0].id).toBe('delta_robot');
     });
 
     it('should set error on API failure and clear robots', () => {
@@ -121,8 +121,8 @@ describe('RobotStore', () => {
       // First load and select
       mockApi.getRobots.mockReturnValue(of(mockRobots));
       store.loadRobots();
-      store.select('ur5e');
-      expect(store.selectedId()).toBe('ur5e');
+      store.select('delta_robot');
+      expect(store.selectedId()).toBe('delta_robot');
 
       // Reload should clear selection
       mockApi.getRobots.mockReturnValue(of(mockRobots));
@@ -136,10 +136,10 @@ describe('RobotStore', () => {
       mockApi.getRobots.mockReturnValue(of(mockRobots));
       store.loadRobots();
 
-      store.select('ur5e');
-      expect(store.selectedId()).toBe('ur5e');
+      store.select('delta_robot');
+      expect(store.selectedId()).toBe('delta_robot');
       expect(store.selectedRobot()).not.toBeNull();
-      expect(store.selectedRobot()!.id).toBe('ur5e');
+      expect(store.selectedRobot()!.id).toBe('delta_robot');
     });
 
     it('should guard against selecting a nonexistent robot', () => {
@@ -154,8 +154,8 @@ describe('RobotStore', () => {
     it('should reject null to clear selection', () => {
       mockApi.getRobots.mockReturnValue(of(mockRobots));
       store.loadRobots();
-      store.select('ur5e');
-      expect(store.selectedId()).toBe('ur5e');
+      store.select('delta_robot');
+      expect(store.selectedId()).toBe('delta_robot');
 
       store.select(null);
       expect(store.selectedId()).toBeNull();
@@ -166,13 +166,13 @@ describe('RobotStore', () => {
       mockApi.getRobots.mockReturnValue(of(mockRobots));
       store.loadRobots();
 
-      store.select('kr10');
+      store.select('cartesian_gantry');
       expect(store.selectedRobot()).not.toBeNull();
-      expect(store.selectedRobot()!.id).toBe('kr10');
-      expect(store.selectedRobot()!.display_name).toBe('KR 10 R1100');
+      expect(store.selectedRobot()!.id).toBe('cartesian_gantry');
+      expect(store.selectedRobot()!.display_name).toBe('Cartesian Gantry');
 
-      store.select('ur5e');
-      expect(store.selectedRobot()!.id).toBe('ur5e');
+      store.select('delta_robot');
+      expect(store.selectedRobot()!.id).toBe('delta_robot');
     });
   });
 
@@ -182,7 +182,7 @@ describe('RobotStore', () => {
     });
 
     it('should return null when robots list is empty', () => {
-      store.select('ur5e');
+      store.select('delta_robot');
       expect(store.selectedRobot()).toBeNull();
     });
   });

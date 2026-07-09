@@ -57,7 +57,7 @@ describe('WorkspaceStore', () => {
     it('should start with default values', () => {
       expect(store.data()).toBeNull();
       expect(store.pointCloud()).toBeNull();
-      expect(store.showPointCloud()).toBe(false);
+      expect(store.showBaseCloud()).toBe(false);
       expect(store.reachability()).toBeNull();
       expect(store.singularity()).toBeNull();
       expect(store.manipulability()).toBeNull();
@@ -156,13 +156,13 @@ describe('WorkspaceStore', () => {
       await store.sample('robot-1', 100, 42, 0.01);
       store.setShowPointCloud(true);
       expect(store.hasData()).toBe(true);
-      expect(store.showPointCloud()).toBe(true);
+      expect(store.showBaseCloud()).toBe(true);
 
       store.reset();
 
       expect(store.data()).toBeNull();
       expect(store.pointCloud()).toBeNull();
-      expect(store.showPointCloud()).toBe(false);
+      expect(store.showBaseCloud()).toBe(false);
       expect(store.reachability()).toBeNull();
       expect(store.singularity()).toBeNull();
       expect(store.manipulability()).toBeNull();
@@ -174,11 +174,11 @@ describe('WorkspaceStore', () => {
 
   describe('setShowPointCloud()', () => {
     it('should toggle point cloud visibility', () => {
-      expect(store.showPointCloud()).toBe(false);
+      expect(store.showBaseCloud()).toBe(false);
       store.setShowPointCloud(true);
-      expect(store.showPointCloud()).toBe(true);
+      expect(store.showBaseCloud()).toBe(true);
       store.setShowPointCloud(false);
-      expect(store.showPointCloud()).toBe(false);
+      expect(store.showBaseCloud()).toBe(false);
     });
   });
 });

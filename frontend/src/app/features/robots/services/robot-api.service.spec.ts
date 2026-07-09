@@ -28,8 +28,8 @@ describe('RobotApiService', () => {
 
   const mockRobots: RobotMetadataDto[] = [
     {
-      id: 'ur5e',
-      display_name: 'UR5e',
+      id: 'delta_robot',
+      display_name: 'Delta Robot',
       dof: 6,
       joints: [
         { name: 'shoulder_pan', kind: 'revolute', min: -6.283, max: 6.283 },
@@ -41,8 +41,8 @@ describe('RobotApiService', () => {
       ],
     },
     {
-      id: 'kr10',
-      display_name: 'KR 10 R1100',
+      id: 'cartesian_gantry',
+      display_name: 'Cartesian Gantry',
       dof: 6,
       joints: [
         { name: 'a1', kind: 'revolute', min: -3.141, max: 3.141 },
@@ -68,8 +68,8 @@ describe('RobotApiService', () => {
       req.flush(mockRobots);
       expect(result).toEqual(mockRobots);
       expect(result).toHaveLength(2);
-      expect(result![0].id).toBe('ur5e');
-      expect(result![1].id).toBe('kr10');
+      expect(result![0].id).toBe('delta_robot');
+      expect(result![1].id).toBe('cartesian_gantry');
     });
 
     it('should return an empty array when no robots exist', () => {
@@ -86,32 +86,32 @@ describe('RobotApiService', () => {
 
   describe('getRobot(id)', () => {
     it('should GET /robots/:id with the correct URL parameter', () => {
-      const robotId = 'ur5e';
+      const robotId = 'delta_robot';
 
       let result: RobotMetadataDto | undefined;
       service.getRobot(robotId).subscribe(res => {
         result = res;
       });
 
-      const req = httpMock.expectOne('/api/robots/ur5e');
+      const req = httpMock.expectOne('/api/robots/delta_robot');
       expect(req.request.method).toBe('GET');
       req.flush(mockRobots[0]);
       expect(result).toEqual(mockRobots[0]);
-      expect(result!.id).toBe('ur5e');
+      expect(result!.id).toBe('delta_robot');
     });
 
     it('should handle different robot IDs correctly', () => {
-      const robotId = 'kr10';
+      const robotId = 'cartesian_gantry';
 
       let result: RobotMetadataDto | undefined;
       service.getRobot(robotId).subscribe(res => {
         result = res;
       });
 
-      const req = httpMock.expectOne('/api/robots/kr10');
+      const req = httpMock.expectOne('/api/robots/cartesian_gantry');
       expect(req.request.method).toBe('GET');
       req.flush(mockRobots[1]);
-      expect(result!.id).toBe('kr10');
+      expect(result!.id).toBe('cartesian_gantry');
     });
 
     it('should handle 404 when robot not found', () => {
@@ -124,6 +124,17 @@ describe('RobotApiService', () => {
 
       const req = httpMock.expectOne('/api/robots/nonexistent');
       req.flush('Not Found', { status: 404, statusText: 'Not Found' });
+    });
+  });
+
+  describe('downloadRobotUrdf()', () => {
+    it('should be a stub method with TODO comment', () => {
+      expect(service.downloadRobotUrdf).toBeDefined();
+      expect(service.downloadRobotUrdf.name).toBe('downloadRobotUrdf');
+      // Verify it throws the expected placeholder error
+      expect(() => service.downloadRobotUrdf('delta_robot')).toThrow(
+        'Not implemented — backend endpoint pending',
+      );
     });
   });
 });

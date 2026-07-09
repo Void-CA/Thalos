@@ -20,4 +20,10 @@ export class RobotApiService {
       `${this.baseUrl}/robots/${id}`
     );
   }
+
+  /** @TODO Wire to backend GET /robots/:id/urdf when endpoint exists */
+  downloadRobotUrdf(_id: string): Observable<Blob> {
+    // TODO: replace with this.http.get(`${this.baseUrl}/robots/${id}/urdf`, { responseType: 'blob' })
+    throw new Error('Not implemented — backend endpoint pending');
+  }
 }
