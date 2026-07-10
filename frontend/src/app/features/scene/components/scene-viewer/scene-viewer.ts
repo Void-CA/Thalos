@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, computed, effect, ElementRef, inject, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, computed, effect, ElementRef, inject, signal, ViewChild } from '@angular/core';
 import { SceneStore } from '../../store/scene.store';
 import { ThreeRendererService } from '../../services/three-renderer.service';
 import { TrajectoryOverlayService } from '../../renderer/trajectory-overlay.service';
@@ -27,7 +27,20 @@ import { rotationDtoToQuaternion } from '../../utils/rotation';
   selector: 'scene-viewer',
   standalone: true,
   template: `
-    <canvas #canvas></canvas>
+    <div
+      class="drop-zone"
+      (dragover)="onDragOver($event)"
+      (dragleave)="onDragLeave($event)"
+      (drop)="onDrop($event)"
+    >
+      <canvas #canvas></canvas>
+
+      @if (isDragOver()) {
+        <div class="drop-overlay">
+          <span class="drop-overlay-text">Drop Here</span>
+        </div>
+      }
+    </div>
 
     <!-- Viewport toolbar -->
     <div class="viewport-toolbar">
@@ -53,6 +66,9 @@ export class SceneViewer implements AfterViewInit {
   private readonly ikTargetOverlay = inject(IkTargetOverlayService);
 
   private sceneApplied = false;
+
+  /** Whether a file is being dragged over the drop zone. */
+  protected readonly isDragOver = signal(false);
 
   /** True when the scene has renderable robot data. */
   protected readonly hasData = computed(() => this.store.state().data !== null);
@@ -154,6 +170,7 @@ export class SceneViewer implements AfterViewInit {
       }
       this.pointCloud.showSingularity(showSing && !!sing);
     });
+
   }
 
   ngAfterViewInit(): void {
@@ -163,6 +180,24 @@ export class SceneViewer implements AfterViewInit {
     this.renderer.registerOverlay(this.ikTargetOverlay);
   }
 
+  /** Handle dragover: prevent default to allow drop, show overlay. */
+  protected onDragOver(event: DragEvent): void {
+    event.preventDefault();
+    this.isDragOver.set(true);
+  }
+
+  /** Handle dragleave: hide overlay when actually leaving the drop zone. */
+  protected onDragLeave(event: DragEvent): void {
+    if (!event.currentTarget || !(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node)) {
+      this.isDragOver.set(false);
+    }
+  }
+
+  /** Handle drop: placeholder — will be wired to import pipeline. */
+  protected onDrop(_event: DragEvent): void {
+    this.isDragOver.set(false);
+  }
+
   /** Frame the robot in the viewport. */
   protected onFitRobot(): void {
     const data = this.store.state().data;
@@ -170,6 +205,4 @@ export class SceneViewer implements AfterViewInit {
       this.renderer.fitToView(data);
     }
   }
-
-
 }
