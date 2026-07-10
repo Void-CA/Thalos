@@ -5,6 +5,8 @@ import { JointControl } from '../../features/scene/components/joint-control/join
 import { IkTargetPanel } from '../../features/scene/components/ik-target-panel/ik-target-panel';
 import { WorkspacePanel } from '../../features/workspace/components/workspace-panel/workspace-panel';
 import { PlanningPanel } from '../../features/planning/planning-panel';
+import { WaypointsPanel } from '../../features/planning/waypoints-panel';
+import { PlanManagementPanel } from '../../features/planning/plan-management-panel';
 import { ExecutionPanel } from '../../features/execution/execution-panel';
 import { ChartsSignalsPanel } from '../../features/execution/charts-signals-panel';
 
@@ -27,6 +29,8 @@ export const UI_MODE_REGISTRY: Record<AppMode, readonly ToolSchema[]> = {
   ],
   planning: [
     { id: 'planning', label: 'Motion Planning', component: PlanningPanel as Type<unknown>, defaultOpen: true },
+    { id: 'waypoints', label: 'Waypoints', component: WaypointsPanel as Type<unknown>, defaultOpen: false },
+    { id: 'plan-management', label: 'Plan Management', component: PlanManagementPanel as Type<unknown>, defaultOpen: false },
   ],
   execution: [
     { id: 'execution', label: 'Active Plan', component: ExecutionPanel, defaultOpen: true },
