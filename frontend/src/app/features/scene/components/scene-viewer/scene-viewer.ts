@@ -40,6 +40,18 @@ import { rotationDtoToQuaternion } from '../../utils/rotation';
           <span class="drop-overlay-text">Drop Here</span>
         </div>
       }
+
+      @if (store.state().ui.loading) {
+        <div class="spinner-overlay">
+          <div class="spinner"></div>
+        </div>
+      }
+
+      @if (dropError(); as err) {
+        <div class="drop-toast" (animationend)="dropError.set(null)">
+          {{ err }}
+        </div>
+      }
     </div>
 
     <!-- Viewport toolbar -->
@@ -57,7 +69,7 @@ import { rotationDtoToQuaternion } from '../../utils/rotation';
 export class SceneViewer implements AfterViewInit {
   @ViewChild('canvas') private readonly canvasRef!: ElementRef<HTMLCanvasElement>;
 
-  private readonly store = inject(SceneStore);
+  protected readonly store = inject(SceneStore);
   private readonly workspace = inject(WorkspaceStore);
   private readonly modeStore = inject(ModeStore);
   private readonly renderer = inject(ThreeRendererService);
@@ -67,8 +79,10 @@ export class SceneViewer implements AfterViewInit {
 
   private sceneApplied = false;
 
-  /** Whether a file is being dragged over the drop zone. */
+  /** Drag-and-drop state signals. */
   protected readonly isDragOver = signal(false);
+  protected readonly dropError = signal<string | null>(null);
+  private lastDropTs = 0;
 
   /** True when the scene has renderable robot data. */
   protected readonly hasData = computed(() => this.store.state().data !== null);
@@ -171,6 +185,14 @@ export class SceneViewer implements AfterViewInit {
       this.pointCloud.showSingularity(showSing && !!sing);
     });
 
+    // Effect 6: store error after drop — forward backend errors to drop toast
+    effect(() => {
+      const err = this.store.state().ui.error;
+      if (err && this.lastDropTs > 0 && Date.now() - this.lastDropTs < 10_000) {
+        this.dropError.set(err);
+        this.lastDropTs = 0; // consume once
+      }
+    });
   }
 
   ngAfterViewInit(): void {
@@ -180,22 +202,65 @@ export class SceneViewer implements AfterViewInit {
     this.renderer.registerOverlay(this.ikTargetOverlay);
   }
 
+  /** Validate file extension — only .urdf and .xml are accepted. */
+  private isUrdfFile(name: string): boolean {
+    const lower = name.toLowerCase();
+    return lower.endsWith('.urdf') || lower.endsWith('.xml');
+  }
+
   /** Handle dragover: prevent default to allow drop, show overlay. */
   protected onDragOver(event: DragEvent): void {
     event.preventDefault();
     this.isDragOver.set(true);
   }
 
-  /** Handle dragleave: hide overlay when actually leaving the drop zone. */
+  /** Handle dragleave: hide overlay. */
   protected onDragLeave(event: DragEvent): void {
+    // Only hide when actually leaving the drop zone (not entering a child)
     if (!event.currentTarget || !(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node)) {
       this.isDragOver.set(false);
     }
   }
 
-  /** Handle drop: placeholder — will be wired to import pipeline. */
-  protected onDrop(_event: DragEvent): void {
+  /** Handle drop: validate file, read content, call store pipeline. */
+  protected onDrop(event: DragEvent): void {
+    event.preventDefault();
     this.isDragOver.set(false);
+
+    const files = event.dataTransfer?.files;
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    // Find first .urdf or .xml file (R3: single file, first match only)
+    let targetFile: File | null = null;
+    for (let i = 0; i < files.length; i++) {
+      if (this.isUrdfFile(files[i].name)) {
+        targetFile = files[i];
+        break;
+      }
+    }
+
+    if (!targetFile) {
+      this.dropError.set('Only .urdf/.xml files accepted');
+      setTimeout(() => this.dropError.set(null), 4000);
+      return;
+    }
+
+    // Record drop timestamp for error correlation
+    this.lastDropTs = Date.now();
+
+    // Read file as text and call store pipeline
+    const reader = new FileReader();
+    reader.onload = () => {
+      const source = reader.result as string;
+      this.store.loadRobotFromUrdf(source);
+    };
+    reader.onerror = () => {
+      this.dropError.set('Failed to read file');
+      setTimeout(() => this.dropError.set(null), 4000);
+    };
+    reader.readAsText(targetFile);
   }
 
   /** Frame the robot in the viewport. */
@@ -206,3 +271,4 @@ export class SceneViewer implements AfterViewInit {
     }
   }
 }
+
