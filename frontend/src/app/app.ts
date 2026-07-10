@@ -5,6 +5,7 @@ import { RobotCatalog } from './features/robots/components/robot-catalog/robot-c
 import { TopBar } from './shared/components/top-bar/top-bar';
 import { BottomPanel } from './shared/components/bottom-panel/bottom-panel';
 import { AiObservabilityPanel } from './shared/components/ai-observability-panel/ai-observability-panel';
+import { NotificationHost } from './shared/components/notification-host/notification-host';
 import { ModeStore } from './shared/store/mode.store';
 import { UI_MODE_REGISTRY } from './shared/types/ui-mode-registry';
 import type { ToolSchema } from './shared/types/tool-schema';
@@ -34,6 +35,7 @@ import type { ToolSchema } from './shared/types/tool-schema';
     TopBar,
     BottomPanel,
     AiObservabilityPanel,
+    NotificationHost,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
