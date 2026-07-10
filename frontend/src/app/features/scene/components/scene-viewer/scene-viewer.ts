@@ -1,4 +1,5 @@
 import { AfterViewInit, Component, computed, effect, ElementRef, inject, signal, ViewChild } from '@angular/core';
+import * as THREE from 'three';
 import { SceneStore } from '../../store/scene.store';
 import { ThreeRendererService } from '../../services/three-renderer.service';
 import { TrajectoryOverlayService } from '../../renderer/trajectory-overlay.service';
@@ -6,6 +7,7 @@ import { IkTargetOverlayService } from '../../renderer/ik-target-overlay.service
 import { PointCloudOverlayService } from '../../renderer/point-cloud-overlay.service';
 import { WorkspaceStore } from '../../../workspace/store/workspace.store';
 import { ModeStore } from '../../../../shared/store/mode.store';
+import { PlanningStore } from '../../../planning/planning.store';
 import { rotationDtoToQuaternion } from '../../utils/rotation';
 
 /**
@@ -32,6 +34,8 @@ import { rotationDtoToQuaternion } from '../../utils/rotation';
       (dragover)="onDragOver($event)"
       (dragleave)="onDragLeave($event)"
       (drop)="onDrop($event)"
+      (pointerdown)="onPointerDown($event)"
+      (pointerup)="onPointerUp($event)"
     >
       <canvas #canvas></canvas>
 
@@ -76,6 +80,7 @@ export class SceneViewer implements AfterViewInit {
   private readonly pointCloud = inject(PointCloudOverlayService);
   private readonly trajectoryOverlay = inject(TrajectoryOverlayService);
   private readonly ikTargetOverlay = inject(IkTargetOverlayService);
+  private readonly planningStore = inject(PlanningStore);
 
   private sceneApplied = false;
 
@@ -86,6 +91,11 @@ export class SceneViewer implements AfterViewInit {
 
   /** True when the scene has renderable robot data. */
   protected readonly hasData = computed(() => this.store.state().data !== null);
+
+  // ── Waypoint interaction state ──
+
+  private pointerDownPos: { x: number; y: number } | null = null;
+  private isWaypointDrag = false;
 
   /**
    * Computeds que aíslan propiedades específicas del state.
@@ -193,6 +203,30 @@ export class SceneViewer implements AfterViewInit {
         this.lastDropTs = 0; // consume once
       }
     });
+
+    // Effect 7: sync planning waypoints with 3D scene
+    effect(() => {
+      const mode = this.modeStore.mode();
+      const waypoints = this.planningStore.waypoints();
+      const selectedId = this.planningStore.selectedWaypointId();
+
+      if (mode === 'planning' && waypoints.length > 0) {
+        this.trajectoryOverlay.syncWaypoints(waypoints, selectedId);
+        this.setupDragControls(waypoints);
+      } else {
+        this.trajectoryOverlay.clearWaypoints();
+        this.trajectoryOverlay.disableDragControls();
+      }
+    });
+
+    // Effect 8: highlight sync when selection changes (independent of waypoint rebuild)
+    effect(() => {
+      const mode = this.modeStore.mode();
+      const selectedId = this.planningStore.selectedWaypointId();
+      if (mode === 'planning') {
+        this.trajectoryOverlay.highlightWaypoint(selectedId);
+      }
+    });
   }
 
   ngAfterViewInit(): void {
@@ -261,6 +295,73 @@ export class SceneViewer implements AfterViewInit {
       setTimeout(() => this.dropError.set(null), 4000);
     };
     reader.readAsText(targetFile);
+  }
+
+  // ──────────────────────────────────────────────
+  // Waypoint 3D interaction
+  // ──────────────────────────────────────────────
+
+  /** Track pointer position on down to detect click vs drag. */
+  protected onPointerDown(event: PointerEvent): void {
+    this.pointerDownPos = { x: event.clientX, y: event.clientY };
+  }
+
+  /** On pointer up: detect click (no significant movement) and pick waypoint. */
+  protected onPointerUp(event: PointerEvent): void {
+    if (!this.pointerDownPos) return;
+    const dx = event.clientX - this.pointerDownPos.x;
+    const dy = event.clientY - this.pointerDownPos.y;
+    this.pointerDownPos = null;
+
+    // Ignore if this was a drag
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) return;
+    if (this.isWaypointDrag) return;
+
+    // Only pick waypoints in planning mode
+    if (this.modeStore.mode() !== 'planning') return;
+
+    const camera = this.renderer.getCamera();
+    const canvas = this.canvasRef.nativeElement;
+    if (!camera) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+
+    const id = this.trajectoryOverlay.pickWaypoint(raycaster);
+    if (id) {
+      this.planningStore.selectWaypoint(id);
+    }
+  }
+
+  /**
+   * Set up DragControls for waypoint spheres.
+   * Disables OrbitControls during drag to prevent interference.
+   */
+  private setupDragControls(waypoints: unknown[]): void {
+    if (waypoints.length === 0) return;
+
+    const camera = this.renderer.getCamera();
+    const canvas = this.canvasRef.nativeElement;
+    if (!camera) return;
+
+    this.trajectoryOverlay.enableDragControls(camera, canvas, {
+      onDragStart: () => {
+        this.isWaypointDrag = true;
+        this.renderer.setOrbitControlsEnabled(false);
+      },
+      onDrag: (id, position) => {
+        this.planningStore.updateWaypointPosition(id, position);
+      },
+      onDragEnd: (id, position) => {
+        this.planningStore.updateWaypointPosition(id, position);
+        this.isWaypointDrag = false;
+        this.renderer.setOrbitControlsEnabled(true);
+      },
+    });
   }
 
   /** Frame the robot in the viewport. */

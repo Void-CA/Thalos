@@ -60,6 +60,22 @@ export class ThreeRendererService {
 
   // ── Public API ──
 
+  /** Expose camera for DragControls and raycaster. */
+  getCamera(): THREE.PerspectiveCamera | null {
+    return this.camera;
+  }
+
+  getScene(): THREE.Scene | null {
+    return this.scene;
+  }
+
+  /** Expose orbit controls so DragControls can temporarily disable it. */
+  setOrbitControlsEnabled(enabled: boolean): void {
+    if (this.controls) {
+      this.controls.enabled = enabled;
+    }
+  }
+
   init(canvas: HTMLCanvasElement): void {
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;

@@ -1,34 +1,17 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { HttpErrorResponse } from '@angular/common/http';
 import { JointEditor } from '../../shared/components/joint-editor/joint-editor';
 import { PoseInputs, PoseInputsValue } from '../../shared/components/pose-inputs/pose-inputs';
 import { SceneApiService } from '../scene/services/scene-api.service';
 import { SceneStore } from '../scene/store/scene.store';
+import { PlanningStore } from './planning.store';
+import { PlanValidationService } from './services/plan-validation.service';
+import { NotificationService } from '../../shared/services/notification.service';
 import type { MotionPlanRequest, MotionSegmentDto } from '../scene/scene-api.types';
-
-type SegmentKind = 'movej' | 'movel';
-
-interface SegmentModel {
-  kind: SegmentKind;
-  expanded: boolean;
-  // MoveJ
-  joints: number[];
-  // MoveL
-  txStr: string;
-  tyStr: string;
-  tzStr: string;
-  rotationFormat: 'euler' | 'quaternion';
-  yawStr: string;
-  pitchStr: string;
-  rollStr: string;
-  qwStr: string;
-  qxStr: string;
-  qyStr: string;
-  qzStr: string;
-  frameIdStr: string;
-  // Common
-  velocityStr: string;
-}
+import type { VisualWaypointDto } from '../scene/scene-api.types';
+import type { WaypointModel, SegmentModel, SegmentKind } from './planning.types';
+import { createSegment } from './planning.types';
 
 const SEGMENT_COLORS = [
   '#3b82f6', // blue
@@ -41,27 +24,6 @@ const SEGMENT_COLORS = [
   '#f97316', // orange
 ];
 
-function createSegment(kind: SegmentKind, dof: number): SegmentModel {
-  return {
-    kind,
-    expanded: true,
-    joints: new Array(dof).fill(0),
-    txStr: '0.3',
-    tyStr: '0',
-    tzStr: '0',
-    rotationFormat: 'euler',
-    yawStr: '0',
-    pitchStr: '0',
-    rollStr: '0',
-    qwStr: '1',
-    qxStr: '0',
-    qyStr: '0',
-    qzStr: '0',
-    frameIdStr: '',
-    velocityStr: '',
-  };
-}
-
 @Component({
   selector: 'planning-panel',
   standalone: true,
@@ -69,14 +31,14 @@ function createSegment(kind: SegmentKind, dof: number): SegmentModel {
   template: `
     <div class="planning-panel">
       <!-- ── Empty state ── -->
-      @if (segments().length === 0) {
+      @if (planningStore.segments().length === 0) {
         <div class="planning-panel__empty">
           <p>No segments. Add a motion command to build a program.</p>
         </div>
       }
 
       <!-- ── Segment list ── -->
-      @for (seg of segments(); track $index; let i = $index) {
+      @for (seg of planningStore.segments(); track $index; let i = $index) {
         <div class="planning-panel__segment" [class.is-expanded]="seg.expanded">
           <!-- Header -->
           <div class="planning-panel__seg-header" (click)="toggleSegment(i)">
@@ -140,7 +102,7 @@ function createSegment(kind: SegmentKind, dof: number): SegmentModel {
         <button
           class="planning-panel__submit"
           (click)="previewPlan()"
-          [disabled]="loading() || segments().length === 0"
+          [disabled]="loading() || planningStore.segments().length === 0"
         >
           {{ loading() ? 'Compiling…' : 'Preview' }}
         </button>
@@ -157,8 +119,10 @@ function createSegment(kind: SegmentKind, dof: number): SegmentModel {
 export class PlanningPanel {
   private readonly api = inject(SceneApiService);
   private readonly store = inject(SceneStore);
+  protected readonly planningStore = inject(PlanningStore);
+  private readonly planValidation = inject(PlanValidationService);
+  private readonly notifications = inject(NotificationService);
 
-  protected readonly segments = signal<SegmentModel[]>([]);
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
 
@@ -169,16 +133,16 @@ export class PlanningPanel {
   // ── Segment management ──
 
   protected addSegment(kind: SegmentKind): void {
-    this.segments.update(arr => [...arr, createSegment(kind, this.dof)]);
+    this.planningStore.segments.update(arr => [...arr, createSegment(kind, this.dof)]);
   }
 
   protected removeSegment(event: MouseEvent, index: number): void {
     event.stopPropagation();
-    this.segments.update(arr => arr.filter((_, i) => i !== index));
+    this.planningStore.segments.update(arr => arr.filter((_, i) => i !== index));
   }
 
   protected toggleSegment(index: number): void {
-    this.segments.update(arr => {
+    this.planningStore.segments.update(arr => {
       const next = [...arr];
       next[index] = { ...next[index], expanded: !next[index].expanded };
       return next;
@@ -186,7 +150,7 @@ export class PlanningPanel {
   }
 
   protected updateField(i: number, field: keyof SegmentModel, value: any): void {
-    this.segments.update(arr => {
+    this.planningStore.segments.update(arr => {
       const next = [...arr];
       (next[i] as any)[field] = value;
       return next;
@@ -195,7 +159,7 @@ export class PlanningPanel {
 
   /** Called by JointEditor when user changes any joint value in a MoveJ segment. */
   protected updateSegmentJoints(segIndex: number, joints: number[]): void {
-    this.segments.update(arr => {
+    this.planningStore.segments.update(arr => {
       const next = [...arr];
       next[segIndex] = { ...next[segIndex], joints };
       return next;
@@ -204,7 +168,7 @@ export class PlanningPanel {
 
   /** Called by PoseInputs when user changes any input in a MoveL segment. */
   protected updateSegmentPose(i: number, v: PoseInputsValue): void {
-    this.segments.update(arr => {
+    this.planningStore.segments.update(arr => {
       const next = [...arr];
       next[i] = {
         ...next[i],
@@ -268,7 +232,7 @@ export class PlanningPanel {
   private buildPlanRequest(): MotionPlanRequest {
     const segments: MotionSegmentDto[] = [];
 
-    for (const seg of this.segments()) {
+    for (const seg of this.planningStore.segments()) {
       if (seg.kind === 'movej') {
         segments.push({ type: 'movej', target: seg.joints });
       } else {
@@ -305,22 +269,69 @@ export class PlanningPanel {
   // ── Preview ──
 
   protected previewPlan(): void {
-    if (this.segments().length === 0) return;
+    if (this.planningStore.segments().length === 0) return;
 
-    const request = this.buildPlanRequest();
+    // Pre-validate velocity before sending the request
+    const velocityError = this.planValidation.preValidateVelocity(this.planningStore.segments());
+    if (velocityError) {
+      this.planningStore.setSegmentError(velocityError);
+      this.error.set(velocityError.message);
+      return;
+    }
 
+    this.planningStore.clearErrors();
     this.error.set(null);
     this.loading.set(true);
 
+    const request = this.buildPlanRequest();
+
     this.api.previewPlan(request).subscribe({
       next: res => {
+        this.planningStore.clearErrors();
         this.store.applySnapshot(res);
         this.loading.set(false);
+
+        // Feed response waypoints into PlanningStore
+        const waypoints = res.active_plan?.visualization?.waypoints;
+        if (waypoints && waypoints.length > 0) {
+          this.planningStore.setWaypoints(this.mapWaypoints(waypoints));
+        }
       },
-      error: (err: Error) => {
-        this.error.set(err.message ?? 'Plan compilation failed');
+      error: (err: HttpErrorResponse) => {
         this.loading.set(false);
+
+        if (err.status === 422) {
+          const result = this.planValidation.parse(err);
+          if (result.segmentIndex !== undefined) {
+            this.planningStore.setSegmentError(result);
+          }
+          this.error.set(result.message);
+          this.notifications.error(result.message);
+        } else if (err.status === 0) {
+          const msg = 'Could not reach Thalos server. Is the backend running on port 3000?';
+          this.error.set(msg);
+          this.notifications.error(msg);
+        } else if (err.status === 504) {
+          const msg = 'Request timed out. Check your network connection and try again.';
+          this.error.set(msg);
+          this.notifications.error(msg);
+        } else {
+          const msg = err.message ?? 'Plan compilation failed';
+          this.error.set(msg);
+          // Global interceptor also catches this, but we show it inline too
+        }
       },
     });
+  }
+
+  /** Map API VisualWaypointDto[] to WaypointModel[] for the PlanningStore. */
+  private mapWaypoints(dtos: VisualWaypointDto[]): WaypointModel[] {
+    return dtos.map(dto => ({
+      id: crypto.randomUUID(),
+      position: dto.position,
+      orientation: dto.orientation,
+      joints: dto.joints,
+      type: dto.waypoint_type,
+    }));
   }
 }
