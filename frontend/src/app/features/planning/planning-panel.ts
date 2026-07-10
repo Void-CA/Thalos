@@ -5,7 +5,7 @@ import { JointEditor } from '../../shared/components/joint-editor/joint-editor';
 import { PoseInputs, PoseInputsValue } from '../../shared/components/pose-inputs/pose-inputs';
 import { SceneApiService } from '../scene/services/scene-api.service';
 import { SceneStore } from '../scene/store/scene.store';
-import { PlanningStore } from './planning.store';
+import { PlanningStore, segmentsToMotionRequest } from './planning.store';
 import { PlanValidationService } from './services/plan-validation.service';
 import { NotificationService } from '../../shared/services/notification.service';
 import type { MotionPlanRequest, MotionSegmentDto } from '../scene/scene-api.types';
@@ -215,55 +215,10 @@ export class PlanningPanel {
     return SEGMENT_COLORS[index % SEGMENT_COLORS.length];
   }
 
-  // ── Parsing helpers ──
-
-  private parseFloatOpt(s: string): number | undefined {
-    const v = parseFloat(s);
-    return isFinite(v) ? v : undefined;
-  }
-
-  private parseIntOpt(s: string): number | undefined {
-    const v = parseInt(s, 10);
-    return isFinite(v) ? v : undefined;
-  }
-
   // ── Build the API request ──
 
   private buildPlanRequest(): MotionPlanRequest {
-    const segments: MotionSegmentDto[] = [];
-
-    for (const seg of this.planningStore.segments()) {
-      if (seg.kind === 'movej') {
-        segments.push({ type: 'movej', target: seg.joints });
-      } else {
-        const translation: [number, number, number] = [
-          this.parseFloatOpt(seg.txStr) ?? 0,
-          this.parseFloatOpt(seg.tyStr) ?? 0,
-          this.parseFloatOpt(seg.tzStr) ?? 0,
-        ];
-        const rotation = seg.rotationFormat === 'euler'
-          ? {
-              kind: 'Ypr' as const,
-              value: {
-                yaw:   (this.parseFloatOpt(seg.yawStr) ?? 0) * Math.PI / 180,
-                pitch: (this.parseFloatOpt(seg.pitchStr) ?? 0) * Math.PI / 180,
-                roll:  (this.parseFloatOpt(seg.rollStr) ?? 0) * Math.PI / 180,
-              },
-            }
-          : {
-              kind: 'Quaternion' as const,
-              value: {
-                w: this.parseFloatOpt(seg.qwStr) ?? 1,
-                x: this.parseFloatOpt(seg.qxStr) ?? 0,
-                y: this.parseFloatOpt(seg.qyStr) ?? 0,
-                z: this.parseFloatOpt(seg.qzStr) ?? 0,
-              },
-            };
-        segments.push({ type: 'movel', target: { translation, rotation } });
-      }
-    }
-
-    return { segments };
+    return segmentsToMotionRequest(this.planningStore.segments());
   }
 
   // ── Preview ──

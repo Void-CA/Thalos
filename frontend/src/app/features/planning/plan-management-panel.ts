@@ -1,10 +1,14 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { PlanningStore } from './planning.store';
+import { PlanningStore, segmentsToMotionRequest } from './planning.store';
 import { ModeStore } from '../../shared/store/mode.store';
 import { SceneApiService } from '../scene/services/scene-api.service';
 import { SceneStore } from '../scene/store/scene.store';
-import type { MotionPlanRequest, MotionSegmentDto } from '../scene/scene-api.types';
+import { NotificationService } from '../../shared/services/notification.service';
+import { PlanValidationService } from './services/plan-validation.service';
+import { HttpErrorResponse } from '@angular/common/http';
+import type { MotionPlanRequest } from '../scene/scene-api.types';
+import type { SegmentModel } from './planning.types';
 
 type NotificationType = 'success' | 'error';
 
@@ -442,6 +446,8 @@ export class PlanManagementPanel {
   private readonly modeStore = inject(ModeStore);
   private readonly api = inject(SceneApiService);
   private readonly sceneStore = inject(SceneStore);
+  private readonly planValidation = inject(PlanValidationService);
+  private readonly notifications = inject(NotificationService);
 
   // ── UI state signals ──
 
@@ -642,9 +648,8 @@ export class PlanManagementPanel {
 
     this.reproduceLoading.set(true);
 
-    const request: MotionPlanRequest = {
-      segments: plan.segments as MotionSegmentDto[],
-    };
+    // Convierte SegmentModel[] (modelo UI) → MotionSegmentDto[] (formato API)
+    const request = segmentsToMotionRequest(plan.segments as SegmentModel[]);
 
     this.api.previewPlan(request).subscribe({
       next: (res) => {
@@ -652,10 +657,31 @@ export class PlanManagementPanel {
         this.modeStore.setMode('execution');
         this.reproduceLoading.set(false);
         this.showNotification('success', `Plan '${plan.name}' sent to execution`);
+        this.notifications.success(`Plan '${plan.name}' sent to execution`);
       },
-      error: () => {
+      error: (err: HttpErrorResponse) => {
         this.reproduceLoading.set(false);
-        this.showNotification('error', 'Failed to compile plan for execution');
+
+        if (err.status === 422) {
+          const result = this.planValidation.parse(err);
+          if (result.segmentIndex !== undefined) {
+            this.store.setSegmentError(result);
+          }
+          this.showNotification('error', result.message);
+          this.notifications.error(result.message);
+        } else if (err.status === 0) {
+          const msg = 'Could not reach Thalos server. Is the backend running on port 3000?';
+          this.showNotification('error', msg);
+          this.notifications.error(msg);
+        } else if (err.status === 504) {
+          const msg = 'Request timed out. Check your network connection and try again.';
+          this.showNotification('error', msg);
+          this.notifications.error(msg);
+        } else {
+          const msg = err.message ?? 'Failed to compile plan for execution';
+          this.showNotification('error', msg);
+          this.notifications.error(msg);
+        }
       },
     });
   }

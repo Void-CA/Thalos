@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import type { WaypointModel, PlanModel, SegmentError, WaypointType, SegmentModel } from './planning.types';
+import type { MotionPlanRequest, MotionSegmentDto } from '../scene/scene-api.types';
 
 // ── Persistence schema ──
 
@@ -279,4 +280,56 @@ export class PlanningStore {
       return null;
     }
   }
+}
+
+// ── Shared conversion ──
+
+/**
+ * Convierte SegmentModel[] (modelo UI) a MotionSegmentDto[] (formato API).
+ * Separada del store para que pueda usarse tanto en PlanningPanel como en
+ * PlanManagementPanel sin duplicar la lógica de conversión.
+ */
+export function segmentsToMotionRequest(segments: SegmentModel[]): MotionPlanRequest {
+  const result: MotionSegmentDto[] = [];
+  const pi = Math.PI;
+
+  for (const seg of segments) {
+    if (seg.kind === 'movej') {
+      result.push({ type: 'movej', target: seg.joints });
+    } else {
+      const tx = parseFloat(seg.txStr) || 0;
+      const ty = parseFloat(seg.tyStr) || 0;
+      const tz = parseFloat(seg.tzStr) || 0;
+
+      const rotation =
+        seg.rotationFormat === 'euler'
+          ? {
+              kind: 'Ypr' as const,
+              value: {
+                yaw:   ((parseFloat(seg.yawStr)   || 0) * pi) / 180,
+                pitch: ((parseFloat(seg.pitchStr) || 0) * pi) / 180,
+                roll:  ((parseFloat(seg.rollStr)  || 0) * pi) / 180,
+              },
+            }
+          : {
+              kind: 'Quaternion' as const,
+              value: {
+                w: parseFloat(seg.qwStr) || 1,
+                x: parseFloat(seg.qxStr) || 0,
+                y: parseFloat(seg.qyStr) || 0,
+                z: parseFloat(seg.qzStr) || 0,
+              },
+            };
+
+      result.push({
+        type: 'movel',
+        target: {
+          translation: [tx, ty, tz],
+          rotation,
+        },
+      });
+    }
+  }
+
+  return { segments: result };
 }
