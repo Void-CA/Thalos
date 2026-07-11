@@ -39,12 +39,13 @@
   font-size: 0.72rem;
 
   &__label {
-    width: 2.4ch;
+    min-width: 7ch;
     font-weight: 600;
     font-size: 0.65rem;
     text-transform: uppercase;
     text-align: right;
     flex-shrink: 0;
+    white-space: nowrap;
   }
 
   &__value {

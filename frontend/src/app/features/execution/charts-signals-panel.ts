@@ -72,7 +72,7 @@ const JOINT_COLORS = [
 
         <!-- ══ Torque bars ══ -->
         <div class="signal-group">
-          <div class="signal-group__head">Torque (Nm)</div>
+          <div class="signal-group__head">TORQUE (NM)</div>
           <div class="signal-group__body">
             @for (i of jointIndices(); track i) {
               <div class="signal-row">
@@ -92,7 +92,7 @@ const JOINT_COLORS = [
 
         <!-- ══ Current bars ══ -->
         <div class="signal-group">
-          <div class="signal-group__head">Current (A)</div>
+          <div class="signal-group__head">CURRENT (A)</div>
           <div class="signal-group__body">
             @for (i of jointIndices(); track i) {
               <div class="signal-row">
