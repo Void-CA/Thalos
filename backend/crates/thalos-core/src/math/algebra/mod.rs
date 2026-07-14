@@ -1,4 +1,3 @@
-pub mod matrix;
 pub mod vector;
 
-pub use matrix::DynamicMatrix;
+pub use thalos_math::{DynamicMatrix, DynamicVector};

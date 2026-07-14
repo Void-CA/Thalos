@@ -1,5 +1,5 @@
 use crate::kinematics::jacobian::{ManipulabilityReport, SingularityReport};
-use crate::math::geometry::vectors::Vector3;
+use thalos_math::Vector3;
 
 use super::metrics::ManipulabilityMetrics;
 
@@ -69,7 +69,6 @@ impl ManipulabilityAnalysis {
 mod tests {
     use super::*;
     use crate::kinematics::jacobian::SingularityReport;
-    use crate::math::geometry::vectors::Vector3;
 
     fn sample(yoshikawa: f64, isotropy: f64) -> ManipulabilitySample {
         ManipulabilitySample {

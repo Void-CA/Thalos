@@ -17,13 +17,12 @@ impl SingularityReport {
 
         // SVD del Jacobiano (3×n). Nos da exactamente min(3,n)
         // valores singulares.
-        let svd = j_lin.clone().svd(true, true);
-        let raw_sv = &svd.singular_values;
+        let raw_sv = j_lin.singular_values();
 
-        // La SVD devuelve max(3,n) valores. Tomamos solo los primeros
-        // min(3,n) que son los significativos.
         let n = j_lin.ncols();
         let m = j_lin.nrows();
+
+        // Tomamos los primeros min(m,n) valores singulares.
         let n_sv = m.min(n);
         let singular_values: Vec<f64> = raw_sv.iter().take(n_sv).copied().collect();
 

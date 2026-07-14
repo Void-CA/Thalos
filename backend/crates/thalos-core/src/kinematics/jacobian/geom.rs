@@ -6,7 +6,7 @@ use crate::kinematics::jacobian::{
 
 use crate::math::algebra::DynamicMatrix;
 
-use crate::math::traits::products::Cross;
+use thalos_math::Cross;
 use crate::robot::joint::JointKind;
 
 use crate::spatial::frame::FrameId;

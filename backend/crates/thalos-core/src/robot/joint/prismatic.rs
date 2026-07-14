@@ -1,7 +1,5 @@
-use crate::math::geometry::rigid::Transform3D;
 use crate::robot::joint::joint::{JointLimits, JointId};
-use crate::math::geometry::
-    vectors::UnitVector3;
+use thalos_math::{Transform3D, UnitVector3};
 
 #[derive(Debug, Clone)]
 pub struct PrismaticJoint {

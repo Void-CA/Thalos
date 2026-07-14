@@ -4,7 +4,7 @@
 //! R4 (NaN/negative/empty validation), R5 (performance budget 100k <50ms).
 
 use crate::analysis::workspace::{Reachability, Workspace, WorkspaceSample};
-use crate::math::geometry::vectors::Vector3;
+use thalos_math::Vector3;
 use crate::models::{RobotModel, RobotRegistry};
 use crate::prelude::{WorkspaceConfig, WorkspaceSampler};
 use crate::robot::serial_chain::SerialChain;

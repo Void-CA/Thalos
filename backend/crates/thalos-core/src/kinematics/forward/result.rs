@@ -1,9 +1,6 @@
+use crate::spatial::{frame::FrameId, pose::Pose};
 use std::collections::HashMap;
-use crate::math::geometry::vectors::Vector3;
-use crate::spatial::{
-    frame::FrameId, 
-    pose::Pose
-};
+use thalos_math::Vector3;
 
 #[derive(Debug, Clone)]
 pub struct FKResult {
@@ -13,7 +10,10 @@ pub struct FKResult {
 
 impl FKResult {
     pub fn new(poses: HashMap<FrameId, Pose>, end_effector: FrameId) -> Self {
-        Self { poses, end_effector }
+        Self {
+            poses,
+            end_effector,
+        }
     }
 
     pub fn pose(&self, frame: &FrameId) -> Option<&Pose> {
@@ -33,7 +33,6 @@ impl FKResult {
     }
 
     pub fn ee_position(&self) -> Option<Vector3> {
-        self.poses.get(&self.end_effector)
-            .map(|p| p.translation())
+        self.poses.get(&self.end_effector).map(|p| p.translation())
     }
 }

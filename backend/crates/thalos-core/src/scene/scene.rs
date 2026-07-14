@@ -55,7 +55,7 @@ impl Scene {
 mod tests {
     use super::*;
     use crate::models::factory::{RobotModel, RobotRegistry};
-    use crate::prelude::Transform3D;
+    use thalos_math::Transform3D;
     use std::sync::Arc;
 
     fn dummy_robot(id: u32, name: &str) -> RobotInstance {

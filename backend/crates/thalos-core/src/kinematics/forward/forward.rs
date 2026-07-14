@@ -1,8 +1,7 @@
 use std::collections::HashMap;
-
+use thalos_math::Transform3D;
 use crate::{
     kinematics::forward::result::FKResult, 
-    math::geometry::rigid::Transform3D, 
     robot::serial_chain::SerialChain, 
     spatial::{frame::FrameId, pose::Pose}
 };

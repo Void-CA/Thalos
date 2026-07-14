@@ -9,12 +9,11 @@ pub use crate::robot::{
     active_robot::ActiveRobot,
 };
 
-pub use crate::math::{
-    geometry::{
-        vectors::{UnitVector3, Vector3},
-        rigid::Transform3D
-    },
-
+pub use thalos_math::{
+    Vector3, UnitVector3,
+    Quaternion, UnitQuaternion, Transform3D,
+    DynamicMatrix, DynamicVector,
+    algebra::vector_to_dynamic,
     constants::{EPS, PI, PI_2}
 };
 

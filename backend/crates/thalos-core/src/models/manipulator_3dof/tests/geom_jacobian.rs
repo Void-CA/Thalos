@@ -168,7 +168,7 @@ fn propagates_velocities_via_geometric_jacobian() {
     let dt = 1e-5;
 
     let j = geo.evaluate(&q);
-    let v_pred = &j.linear * nalgebra::DVector::from_vec(q_dot.to_vec());
+    let v_pred = &j.linear * DynamicVector::from_vec(q_dot.to_vec());
 
     let q_next = [
         q[0] + q_dot[0] * dt,
@@ -202,7 +202,7 @@ fn angular_velocity_at_canonical_config() {
     let j = geo.evaluate(&[0.0, 0.0, 0.0]);
 
     let q_dot = [0.3, 0.2, 0.15];
-    let omega_pred = &j.angular * nalgebra::DVector::from_vec(q_dot.to_vec());
+    let omega_pred = &j.angular * DynamicVector::from_vec(q_dot.to_vec());
 
     let expected_x = 0.0;
     let expected_y = q_dot[1] + q_dot[2];

@@ -58,12 +58,12 @@ impl UnitQuaternion {
         let q = self.q;
 
         // Roll (X)
-        let sinr_cosp = 2.0 * (q.w * q.x + q.y * q.z);
-        let cosr_cosp = 1.0 - 2.0 * (q.x * q.x + q.y * q.y);
+        let sinr_cosp : f64 = 2.0 * (q.w * q.x + q.y * q.z);
+        let cosr_cosp :  f64 = 1.0 - 2.0 * (q.x * q.x + q.y * q.y);
         let roll = sinr_cosp.atan2(cosr_cosp);
 
         // Pitch (Y) — gimbal lock protection
-        let sinp = 2.0 * (q.w * q.y - q.z * q.x);
+        let sinp : f64 = 2.0 * (q.w * q.y - q.z * q.x);
         let pitch = if sinp.abs() >= 1.0 {
             sinp.signum() * std::f64::consts::FRAC_PI_2
         } else {
@@ -71,7 +71,7 @@ impl UnitQuaternion {
         };
 
         // Yaw (Z)
-        let siny_cosp = 2.0 * (q.w * q.z + q.x * q.y);
+        let siny_cosp : f64 = 2.0 * (q.w * q.z + q.x * q.y);
         let cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z);
         let yaw = siny_cosp.atan2(cosy_cosp);
 

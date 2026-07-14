@@ -1,4 +1,4 @@
-use crate::math::geometry::rigid::Transform3D;
+use thalos_math::Transform3D;
 use super::{CollisionGeometry, EntityId};
 
 #[derive(Debug, Clone)]

@@ -62,7 +62,7 @@ mod tests {
     use crate::analysis::workspace::{WorkspaceConfig, WorkspaceSampler};
     use crate::kinematics::jacobian::GeometricJacobian;
     use crate::kinematics::forward::ForwardKinematics;
-    use crate::math::geometry::vectors::Vector3;
+    use thalos_math::Vector3;
     use crate::robot::serial_chain::SerialChain;
 
     use rand::SeedableRng;
@@ -76,8 +76,8 @@ mod tests {
         use crate::robot::link::Link;
         use crate::robot::builder::SerialChainBuilder;
         use crate::spatial::frame::FrameId;
-        use crate::math::geometry::vectors::UnitVector3;
-        use crate::math::geometry::rigid::Transform3D;
+        use thalos_math::UnitVector3;
+        use thalos_math::Transform3D;
 
         let mut builder = SerialChainBuilder::new();
 

@@ -1,7 +1,5 @@
-use crate::{
-    math::geometry::{rotations::UnitQuaternion, rigid::Transform3D, vectors::UnitVector3}, 
-    robot::joint::joint::{JointId, JointLimits}};
-
+use crate::robot::joint::joint::{JointId, JointLimits};
+use thalos_math::{Transform3D, UnitVector3, UnitQuaternion};
 #[derive(Debug, Clone)]
 pub struct RevoluteJoint {
     pub id: JointId,

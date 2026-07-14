@@ -8,7 +8,7 @@
 //! - The position == FK(q) invariant (R2)
 
 use crate::analysis::workspace::{Workspace, WorkspaceConfig, WorkspaceSample};
-use crate::math::geometry::vectors::Vector3;
+use thalos_math::Vector3;
 use crate::models::RobotModel;
 
 // ─── from_samples: rejection ────────────────────────────────────────────

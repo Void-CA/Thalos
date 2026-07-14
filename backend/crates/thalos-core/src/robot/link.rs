@@ -1,5 +1,5 @@
 use crate::collision::CollisionGeometry;
-use crate::math::geometry::rigid::Transform3D;
+use thalos_math::Transform3D;
 
 pub use thalos_models::LinkId;
 

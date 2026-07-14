@@ -1,7 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use crate::math::geometry::rigid::Transform3D;
+use thalos_math::Transform3D;
 use crate::robot::serial_chain::SerialChain;
 
 /// Identificador único de una instancia de robot dentro de un Scene.

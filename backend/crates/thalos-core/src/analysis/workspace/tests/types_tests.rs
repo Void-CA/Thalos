@@ -7,7 +7,7 @@
 use crate::analysis::workspace::types::{
     BoundingBox, WorkspaceKey, WorkspaceMetrics, WorkspaceSample,
 };
-use crate::math::geometry::vectors::Vector3;
+use thalos_math::Vector3;
 use crate::models::RobotModel;
 
 // ─── WorkspaceSample ────────────────────────────────────────────────────

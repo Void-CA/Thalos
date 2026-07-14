@@ -43,9 +43,7 @@ mod tests {
     use crate::analysis::workspace::{WorkspaceConfig, WorkspaceSampler};
     use crate::kinematics::jacobian::GeometricJacobian;
     use crate::kinematics::forward::ForwardKinematics;
-    use crate::math::geometry::vectors::Vector3;
-    use crate::math::geometry::vectors::UnitVector3;
-    use crate::math::geometry::rigid::Transform3D;
+    use thalos_math::{Vector3, UnitVector3, Transform3D};
     use crate::robot::builder::SerialChainBuilder;
     use crate::robot::joint::*;
     use crate::robot::link::Link;

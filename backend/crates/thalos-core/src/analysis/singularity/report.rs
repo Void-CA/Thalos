@@ -1,46 +1,33 @@
 //! Per-sample singularity data and the aggregated workspace analysis.
 
 use crate::kinematics::jacobian::SingularityReport;
-use crate::math::geometry::vectors::Vector3;
+use thalos_math::Vector3;
 
 use super::config::SingularityConfig;
 use super::metrics::SingularityMetrics;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SingularityState {
-    /// Jacobian is well-conditioned (far from singular).
     Normal,
-    /// Condition number elevated — near a singularity.
     NearSingular,
-    /// Jacobian is rank-deficient (sigma_min ≈ 0 or cond = ∞).
     Singular,
 }
 
 
 #[derive(Debug, Clone)]
 pub struct SingularitySample {
-    /// Joint configuration.
     pub q: Vec<f64>,
-    /// End-effector position (FK(q)).
     pub position: Vector3,
-    /// Per-Jacobian singularity report (SVD, rank, cond, det(JᵀJ)).
     pub analysis: SingularityReport,
-    /// Classified state (Normal / NearSingular / Singular).
     pub state: SingularityState,
 }
-
-/// Aggregated result of analysing every sample in a [`Workspace`](crate::analysis::workspace::Workspace).
 #[derive(Debug, Clone)]
 pub struct SingularityAnalysis {
-    /// Per-sample results, in the same order as `workspace.samples()`.
     pub samples: Vec<SingularitySample>,
-    /// Summary metrics over all samples.
     pub metrics: SingularityMetrics,
 }
 
 // ─── Internal helpers ───────────────────────────────────────────────
-
-/// Classify a single Jacobian analysis into a state.
 fn classify(report: &SingularityReport, config: &SingularityConfig) -> SingularityState {
     // Singular: rank-deficient or infinite condition number
     if report.condition_number.is_infinite() || report.rank < 2 {
@@ -54,8 +41,6 @@ fn classify(report: &SingularityReport, config: &SingularityConfig) -> Singulari
 
     SingularityState::Normal
 }
-
-/// Build aggregated metrics from a slice of samples.
 fn aggregate(samples: &[SingularitySample]) -> SingularityMetrics {
     let total = samples.len();
     let mut singular = 0;
@@ -148,9 +133,8 @@ impl SingularityAnalysis {
 mod tests {
     use super::*;
     use crate::kinematics::jacobian::SingularityReport;
-    use crate::math::geometry::vectors::Vector3;
+    use thalos_math::Vector3;
 
-    /// Build a minimal SingularityReport that looks singular.
     fn singular_report() -> SingularityReport {
         SingularityReport {
             det_jtj: 0.0,
@@ -160,7 +144,6 @@ mod tests {
         }
     }
 
-    /// Build a minimal SingularityReport that looks healthy.
     fn healthy_report() -> SingularityReport {
         SingularityReport {
             det_jtj: 16.0,
@@ -170,7 +153,6 @@ mod tests {
         }
     }
 
-    /// Build a report with elevated condition number.
     fn near_singular_report() -> SingularityReport {
         SingularityReport {
             det_jtj: 0.01,

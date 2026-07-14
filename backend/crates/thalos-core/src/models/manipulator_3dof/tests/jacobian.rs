@@ -31,14 +31,14 @@ fn predicts_small_motion_for_each_joint() {
         let mut dq = vec![0.0, 0.0, 0.0];
         dq[joint_idx] = 1e-6;
 
-        let dx_pred = j.linear() * nalgebra::DVector::from_vec(dq.clone());
+        let dx_pred = j.linear() * DynamicVector::from_vec(dq.clone());
 
         let q2 = [q[0] + dq[0], q[1] + dq[1], q[2] + dq[2]];
 
         let p1 = fk.evaluate(&q).pose(&ee).unwrap().transform().translation;
         let p2 = fk.evaluate(&q2).pose(&ee).unwrap().transform().translation;
 
-        let dx_actual = nalgebra::DVector::from_vec(vec![p2.x - p1.x, p2.y - p1.y, p2.z - p1.z]);
+        let dx_actual = DynamicVector::from_vec(vec![p2.x - p1.x, p2.y - p1.y, p2.z - p1.z]);
         for axis in 0..3 {
             assert!(
                 (dx_pred[axis] - dx_actual[axis]).abs() < 1e-5,
@@ -57,7 +57,7 @@ fn velocity_matches_finite_difference() {
     let dt = 1e-5;
 
     let j = jacobian.evaluate(&q);
-    let v_pred = j.linear() * nalgebra::DVector::from_vec(q_dot.to_vec());
+    let v_pred = j.linear() * DynamicVector::from_vec(q_dot.to_vec());
 
     let q_next = [
         q[0] + q_dot[0] * dt,
@@ -156,9 +156,9 @@ fn linearity_holds() {
         a * v1[1] + b * v2[1],
         a * v1[2] + b * v2[2],
     ];
-    let jv_combined = j.linear() * nalgebra::DVector::from_vec(v_combined.to_vec());
-    let jv1 = j.linear() * nalgebra::DVector::from_vec(v1.to_vec());
-    let jv2 = j.linear() * nalgebra::DVector::from_vec(v2.to_vec());
+    let jv_combined = j.linear() * DynamicVector::from_vec(v_combined.to_vec());
+    let jv1 = j.linear() * DynamicVector::from_vec(v1.to_vec());
+    let jv2 = j.linear() * DynamicVector::from_vec(v2.to_vec());
     let jv_linear = a * jv1 + b * jv2;
 
     for axis in 0..3 {
@@ -184,7 +184,7 @@ fn reconstruction_from_motion_at_multiple_configs() {
 
     for (q, q_dot) in test_configs {
         let j = jacobian.evaluate(&q);
-        let v_pred = j.linear() * nalgebra::DVector::from_vec(q_dot.to_vec());
+        let v_pred = j.linear() * DynamicVector::from_vec(q_dot.to_vec());
 
         let q_next = [
             q[0] + q_dot[0] * dt,

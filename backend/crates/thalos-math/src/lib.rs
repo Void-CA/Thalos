@@ -1,19 +1,15 @@
-mod vector;
-mod unit_vector;
-mod quaternion;
-mod unit_quaternion;
+mod geometry;
 mod transform;
 mod matrix;
+pub mod algebra;
 pub mod dh;
 pub mod traits;
 pub mod error;
 pub mod constants;
 
-pub use vector::Vector3;
-pub use unit_vector::UnitVector3;
-pub use quaternion::Quaternion;
-pub use unit_quaternion::UnitQuaternion;
+pub use geometry::{Vector3, UnitVector3, Quaternion, UnitQuaternion};
 pub use transform::Transform3D;
 pub use matrix::Matrix4x4;
+pub use algebra::{DynamicMatrix, DynamicVector};
 pub use traits::{Cross, Dot};
 pub use error::MathError;

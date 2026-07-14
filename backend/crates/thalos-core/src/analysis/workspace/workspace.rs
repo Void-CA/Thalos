@@ -5,7 +5,7 @@
 //! `BoundingBox` and `WorkspaceMetrics` are computed in a single O(n) pass
 //! at construction time, then cached in the private fields for O(1) access.
 
-use crate::math::geometry::vectors::Vector3;
+use thalos_math::Vector3;
 
 use super::error::WorkspaceError;
 use super::reachability::Reachability;

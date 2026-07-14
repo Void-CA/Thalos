@@ -1,6 +1,5 @@
 use crate::math::algebra::vector::DynamicVector;
-use crate::math::geometry::rotations::UnitQuaternion;
-use crate::math::geometry::vectors::Vector3;
+use thalos_math::{UnitQuaternion, Vector3};
 use crate::spatial::pose::Pose;
 
 use super::result::IKResult;
