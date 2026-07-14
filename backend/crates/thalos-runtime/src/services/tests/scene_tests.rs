@@ -147,7 +147,8 @@ async fn move_to_position_converges_scara() {
     let (svc, _mgr) = make_service(RobotModel::Scara).await;
     let snap0 = svc.snapshot().await.unwrap();
     let ee = ee(&snap0);
-    let target = Vector3::new(0.3, 0.3, 0.0); // well within SCARA workspace
+    // Well within SCARA workspace: r_xy = sqrt(0.6²+0.5²) = 0.78 > r_min (0.50)
+    let target = Vector3::new(0.6, 0.5, 0.25);
 
     let snap = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
         frame: ee,
@@ -163,10 +164,11 @@ async fn move_to_position_converges_scara() {
 async fn move_to_position_sequential() {
     let (svc, _mgr) = make_service(RobotModel::Scara).await;
 
+    // All targets within canonical SCARA workspace (r_min ≈ 0.50, r_max ≈ 1.8)
     let targets = [
-        Vector3::new(0.3, 0.3, 0.0),
-        Vector3::new(-0.2, 0.5, 0.0),
-        Vector3::new(0.0, 0.0, 0.0),
+        Vector3::new(0.7, 0.5, 0.25),
+        Vector3::new(0.3, 0.8, 0.10),
+        Vector3::new(0.5, 0.6, 0.00),
     ];
 
     let mut snap = svc.snapshot().await.unwrap();
@@ -177,36 +179,34 @@ async fn move_to_position_sequential() {
     }
 }
 
-/// MoveToPosition with a custom frame (not the end effector).
-/// The child frame "link_2" should move to the target.
-/// NOTE: target includes a Y component to avoid the X-axis singularity
-/// at full extension (q=[0,…,0]).
+/// MoveToPosition with a frame that is not the chain's default end
+/// effector — verifies the IK solver correctly handles arbitrary frames.
 #[tokio::test]
 async fn move_to_position_custom_frame() {
     let (svc, _mgr) = make_service(RobotModel::Scara).await;
     let snap = svc.snapshot().await.unwrap();
 
-    // SCARA creates frames in order: link_1 (id 0), link_2 (id 1), …
-    let link2 = FrameId::Id(1);
-    let _link2_initial = snap.fk_result.pose(&link2)
-        .expect("link_2 frame must exist")
+    // Use prismatic_frame (id 3): the first frame whose Z is affected by q3
+    let target_frame = FrameId::Id(3);
+    let _initial = snap.fk_result.pose(&target_frame)
+        .expect("target frame must exist")
         .translation();
 
-    // Target bien dentro del workspace, lejos de singularidades
-    let target = Vector3::new(1.5, 0.5, 0.0);
+    // Target within canonical SCARA workspace
+    let target = Vector3::new(0.7, 0.5, 0.25);
 
     let snap = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
-        frame: link2,
+        frame: target_frame,
         target,
     })).await.unwrap();
 
-    let final_pos = snap.fk_result.pose(&link2)
+    let final_pos = snap.fk_result.pose(&target_frame)
         .unwrap()
         .translation();
     let error = (target - final_pos).magnitude();
     assert!(
         error < 0.01,
-        "link_2 position error: {:.4} (target {:.4?}, actual {:.4?})",
+        "frame position error: {:.4} (target {:.4?}, actual {:.4?})",
         error, target, final_pos,
     );
 }
@@ -219,8 +219,8 @@ async fn move_to_position_nearby() {
     let snap0 = svc.snapshot().await.unwrap();
     let ee = ee(&snap0);
 
-    // Target with Y component: evita singularidad de extensión total
-    let target = Vector3::new(0.3, 0.1, 0.0);
+    // Target cerca del EE inicial (1.8, 0, 0.5), bien dentro del workspace
+    let target = Vector3::new(1.5, 0.3, 0.4);
 
     let snap = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
         frame: ee,
@@ -242,7 +242,7 @@ async fn move_to_pose_converges_with_identity_rotation() {
     let snap0 = svc.snapshot().await.unwrap();
     let ee_frame = ee(&snap0);
 
-    let target_pos = Vector3::new(0.3, 0.3, 0.0);
+    let target_pos = Vector3::new(0.6, 0.5, 0.25);
     let identity_rot = UnitQuaternion::identity();
     let target_pose = Pose::new(
         FrameId::World,
@@ -270,7 +270,7 @@ async fn move_to_pose_3r_converges() {
     let snap0 = svc.snapshot().await.unwrap();
     let ee_frame = ee(&snap0);
 
-    let target_pos = Vector3::new(0.8, 0.5, 0.0);
+    let target_pos = Vector3::new(2.5, 0.5, 0.0);
     let identity_rot = UnitQuaternion::identity();
     let target_pose = Pose::new(
         FrameId::World,
@@ -321,7 +321,7 @@ async fn move_to_position_includes_ik_result() {
     // Non-IK snapshot → ik_result is None
     assert!(snap0.ik_result.is_none(), "snapshot() must not have ik_result");
 
-    let target = Vector3::new(0.3, 0.3, 0.0);
+    let target = Vector3::new(0.6, 0.5, 0.25);
     let snap1 = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
         frame: ee_frame,
         target,
@@ -355,7 +355,7 @@ async fn solve_ik_returns_joints_without_mutating_state() {
     let ee_frame = ee(&snap0);
     let initial_joints = snap0.joints.clone();
 
-    let target = Vector3::new(0.3, 0.3, 0.0);
+    let target = Vector3::new(0.6, 0.5, 0.25);
     let (solved_joints, ik) = svc.solve_ik(ee_frame, IKGoal::Position(target)).await.unwrap();
 
     // Must return solved joints distinct from initial

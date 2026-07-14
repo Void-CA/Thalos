@@ -8,8 +8,8 @@ use tower::ServiceExt;
 
 use thalos_api::{app_router, new_default_state};
 
-fn test_app() -> Router {
-    let state = new_default_state();
+async fn test_app() -> Router {
+    let state = new_default_state().await;
     app_router().with_state(state)
 }
 
@@ -44,7 +44,7 @@ async fn get_json(
 
 #[tokio::test]
 async fn get_scene_returns_wrapped_scene() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
@@ -62,7 +62,7 @@ async fn get_scene_returns_wrapped_scene() {
 
 #[tokio::test]
 async fn from_fk_returns_wrapped_scene() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(
         app,
         http::Method::POST,
@@ -84,7 +84,7 @@ async fn from_fk_returns_wrapped_scene() {
 
 #[tokio::test]
 async fn from_fk_rejects_nan() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(
         app,
         http::Method::POST,
@@ -98,7 +98,7 @@ async fn from_fk_rejects_nan() {
 
 #[tokio::test]
 async fn from_fk_rejects_missing_field() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, _body) = get_json(
         app,
         http::Method::POST,
@@ -113,7 +113,7 @@ async fn from_fk_rejects_missing_field() {
 
 #[tokio::test]
 async fn validate_valid_scene() {
-    let app = test_app();
+    let app = test_app().await;
     let (_, body) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
     let wrapped = body.expect("valid scene response");
     let scene = &wrapped["scene"];
@@ -132,7 +132,7 @@ async fn validate_valid_scene() {
 
 #[tokio::test]
 async fn validate_invalid_scene() {
-    let app = test_app();
+    let app = test_app().await;
     let invalid = json!({
         "frames": [],
         "links": [],
@@ -160,7 +160,7 @@ async fn validate_invalid_scene() {
 
 #[tokio::test]
 async fn diff_identical_scenes() {
-    let app = test_app();
+    let app = test_app().await;
     let (_, body) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
     let wrapped = body.expect("valid scene");
     let scene = &wrapped["scene"];
@@ -181,7 +181,7 @@ async fn diff_identical_scenes() {
 
 #[tokio::test]
 async fn diff_different_scenes() {
-    let app = test_app();
+    let app = test_app().await;
     let q0 = json!({"joint_angles": [0.0, 0.0]});
     let q1 = json!({"joint_angles": [1.5, 0.0]});
 
@@ -222,7 +222,7 @@ async fn diff_different_scenes() {
 
 #[tokio::test]
 async fn error_code_missing_world() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(
         app,
         http::Method::POST,
@@ -243,7 +243,7 @@ async fn error_code_missing_world() {
 
 #[tokio::test]
 async fn error_code_duplicate_id() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(
         app,
         http::Method::POST,
@@ -269,7 +269,7 @@ async fn error_code_duplicate_id() {
 
 #[tokio::test]
 async fn error_code_missing_frame() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(
         app,
         http::Method::POST,
@@ -294,7 +294,7 @@ async fn error_code_missing_frame() {
 
 #[tokio::test]
 async fn error_code_non_finite_value() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, _body) = get_json(
         app,
         http::Method::POST,
@@ -318,7 +318,7 @@ async fn error_code_non_finite_value() {
 
 #[tokio::test]
 async fn error_code_invalid_quaternion() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(
         app,
         http::Method::POST,
@@ -344,7 +344,7 @@ async fn error_code_invalid_quaternion() {
 
 #[tokio::test]
 async fn error_code_broken_topology() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(
         app,
         http::Method::POST,
@@ -369,7 +369,7 @@ async fn error_code_broken_topology() {
 
 #[tokio::test]
 async fn error_code_orphan_link() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(
         app,
         http::Method::POST,
@@ -397,7 +397,7 @@ async fn error_code_orphan_link() {
 
 #[tokio::test]
 async fn error_code_twists_mismatch() {
-    let app = test_app();
+    let app = test_app().await;
     // first get a valid scene
     let (_, body) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
     let wrapped = body.expect("valid scene");
@@ -427,7 +427,7 @@ async fn error_code_twists_mismatch() {
 
 #[tokio::test]
 async fn get_robot_scara_returns_joints() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(app, http::Method::GET, "/api/v1/robots/scara", None).await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
@@ -446,7 +446,7 @@ async fn get_robot_scara_returns_joints() {
 
 #[tokio::test]
 async fn get_robot_planar_2r_returns_joints() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(app, http::Method::GET, "/api/v1/robots/planar_2r", None).await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
@@ -458,7 +458,7 @@ async fn get_robot_planar_2r_returns_joints() {
 
 #[tokio::test]
 async fn get_robot_planar_3r_returns_joints() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(app, http::Method::GET, "/api/v1/robots/planar_3r", None).await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
@@ -470,7 +470,7 @@ async fn get_robot_planar_3r_returns_joints() {
 
 #[tokio::test]
 async fn get_robot_single_revolute_returns_joints() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(app, http::Method::GET, "/api/v1/robots/single_revolute", None).await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
@@ -482,7 +482,7 @@ async fn get_robot_single_revolute_returns_joints() {
 
 #[tokio::test]
 async fn list_robots_returns_all_with_joints() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(app, http::Method::GET, "/api/v1/robots", None).await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
@@ -498,7 +498,7 @@ async fn list_robots_returns_all_with_joints() {
 
 #[tokio::test]
 async fn scara_joint_kinds_include_prismatic() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(app, http::Method::GET, "/api/v1/robots/scara", None).await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
@@ -523,7 +523,7 @@ async fn scara_joint_kinds_include_prismatic() {
 
 #[tokio::test]
 async fn workspace_sample_scara_returns_metrics_and_bounds() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(
         app,
         http::Method::POST,
@@ -559,7 +559,7 @@ async fn workspace_sample_scara_returns_metrics_and_bounds() {
 
 #[tokio::test]
 async fn workspace_sample_include_samples_returns_samples() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(
         app,
         http::Method::POST,
@@ -593,7 +593,7 @@ async fn workspace_sample_include_samples_returns_samples() {
 
 #[tokio::test]
 async fn workspace_reachability_inside_returns_reachable() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(
         app,
         http::Method::POST,
@@ -615,8 +615,8 @@ async fn workspace_reachability_inside_returns_reachable() {
 
 #[tokio::test]
 async fn workspace_reachability_nan_point_returns_validation_error() {
-    let app = test_app();
-    let (status, body) = get_json(
+    let app = test_app().await;
+    let (status, _body) = get_json(
         app,
         http::Method::POST,
         "/api/v1/workspace/reachability",
@@ -639,7 +639,7 @@ async fn workspace_reachability_nan_point_returns_validation_error() {
 
 #[tokio::test]
 async fn workspace_sample_invalid_robot_returns_not_found() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(
         app,
         http::Method::POST,
@@ -663,7 +663,7 @@ async fn workspace_sample_invalid_robot_returns_not_found() {
 
 #[tokio::test]
 async fn movej_accepts_valid_request() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(
         app,
         http::Method::POST,
@@ -684,7 +684,7 @@ async fn movej_accepts_valid_request() {
 
 #[tokio::test]
 async fn movej_accepts_minimal_request() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(
         app,
         http::Method::POST,
@@ -704,7 +704,7 @@ async fn movej_accepts_minimal_request() {
 
 #[tokio::test]
 async fn movej_rejects_missing_target() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, _body) = get_json(
         app,
         http::Method::POST,
@@ -722,7 +722,7 @@ async fn movej_rejects_missing_target() {
 
 #[tokio::test]
 async fn movej_updates_runtime_joints() {
-    let app = test_app();
+    let app = test_app().await;
     // Execute MoveJ
     let (status, _) = get_json(
         app.clone(),
@@ -744,7 +744,7 @@ async fn movej_updates_runtime_joints() {
 
 #[tokio::test]
 async fn movel_accepts_valid_request() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(
         app,
         http::Method::POST,
@@ -769,7 +769,7 @@ async fn movel_accepts_valid_request() {
 
 #[tokio::test]
 async fn movel_accepts_with_frame_id() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(
         app,
         http::Method::POST,
@@ -796,7 +796,7 @@ async fn movel_accepts_with_frame_id() {
 
 #[tokio::test]
 async fn movel_rejects_missing_target() {
-    let app = test_app();
+    let app = test_app().await;
     let (status, _body) = get_json(
         app,
         http::Method::POST,
@@ -816,7 +816,7 @@ async fn movel_rejects_missing_target() {
 async fn movel_with_unreachable_target_still_returns_accepted() {
     // Even when IK fails to converge, the endpoint should still produce
     // a valid response — the runtime applies the best-effort result.
-    let app = test_app();
+    let app = test_app().await;
     let (status, body) = get_json(
         app,
         http::Method::POST,
@@ -850,7 +850,7 @@ async fn movel_with_unreachable_target_still_returns_accepted() {
 
 #[tokio::test]
 async fn movej_trajectory_persists_across_scene_snapshots() {
-    let app = test_app();
+    let app = test_app().await;
 
     // Execute MoveJ → stores trajectory in runtime
     let (status, _) = get_json(
@@ -882,7 +882,7 @@ async fn movej_trajectory_persists_across_scene_snapshots() {
 
 #[tokio::test]
 async fn execute_plan_with_two_segments_returns_correct_segment_ranges() {
-    let app = test_app();
+    let app = test_app().await;
 
     let (status, body) = get_json(
         app,

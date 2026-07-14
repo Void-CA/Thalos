@@ -55,7 +55,8 @@ fn query_returns_reachable_for_center() {
     )
     .unwrap();
 
-    let result = WorkspaceService::query(&ws, &Vector3::new(0.0, 0.0, 0.0), 0.5).unwrap();
+    // Point well within canonical SCARA workspace (r_min ≈ 0.50)
+    let result = WorkspaceService::query(&ws, &Vector3::new(0.7, 0.5, 0.25), 0.5).unwrap();
     assert!(matches!(result, thalos_core::analysis::workspace::Reachability::Reachable));
 }
 

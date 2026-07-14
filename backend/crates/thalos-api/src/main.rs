@@ -11,7 +11,7 @@ async fn main() {
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .init();
 
-    let app_state = new_default_state();
+    let app_state = new_default_state().await;
 
     let app = app_router()
         .layer(CorsLayer::permissive())

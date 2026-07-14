@@ -122,12 +122,13 @@ impl IKSolver for JacobianTransposeSolver {
             };
             q += dq;
 
-            // Aplicar límites articulares: wrap para revolutos, clamp para prismáticos
+            // Aplicar límites articulares: clamp para revolutes con rango finito,
+            // wrap para continuous (rotación infinita), clamp para prismáticos.
             // Fixed no debería llegar acá (filtrado por dof() > 0)
             for i in 0..n_joints {
                 q[i] = match joint_kinds[i] {
-                    JointKind::Revolute | JointKind::Continuous => joint_limits[i].wrap(q[i]),
-                    JointKind::Prismatic => joint_limits[i].clamp(q[i]),
+                    JointKind::Continuous => joint_limits[i].wrap(q[i]),
+                    JointKind::Revolute | JointKind::Prismatic => joint_limits[i].clamp(q[i]),
                     JointKind::Fixed | JointKind::Floating | JointKind::Planar => {
                         unreachable!("Non-1-DOF joints are filtered out")
                     }

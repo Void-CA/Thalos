@@ -54,7 +54,15 @@ impl JacobianSolver for GeometricJacobian {
 
         let mut col = 0;
 
-        for segment in robot.segments.iter() {
+        // Solo considerar segmentos hasta (e incluyendo) el que tiene como
+        // hijo al frame objetivo. Joints debajo del frame objetivo en la
+        // cadena cinemática NO afectan su Jacobiano.
+        let max_segments = robot.segments.iter()
+            .position(|s| s.child == self.end_effector)
+            .map(|i| i + 1)
+            .unwrap_or(0);
+
+        for segment in robot.segments.iter().take(max_segments) {
 
             // Fixed joint: no contribuye al Jacobiano
             if segment.joint.dof() == 0 {

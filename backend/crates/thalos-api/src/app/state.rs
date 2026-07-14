@@ -26,7 +26,7 @@ pub struct AppState {
 
 pub type SharedState = Arc<AppState>;
 
-pub fn new_default_state() -> SharedState {
+pub async fn new_default_state() -> SharedState {
     let backend = Box::new(InternalBackend);
 
     let controller = Arc::new(RwLock::new(
@@ -34,10 +34,9 @@ pub fn new_default_state() -> SharedState {
     )) as Arc<RwLock<dyn RobotController + Send + Sync>>;
 
     let manager = Arc::new(BackendManager::new());
-    // Register the simulation controller — use tokio::runtime::Handle
-    // to block_on in a sync context (this is called during startup).
-    tokio::runtime::Handle::current()
-        .block_on(manager.set_active(controller))
+    manager
+        .set_active(controller)
+        .await
         .expect("Failed to register simulation controller");
 
     let scene = SceneService::new(backend, manager.clone(), RobotModel::Planar2R);
