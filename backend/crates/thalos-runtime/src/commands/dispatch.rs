@@ -68,6 +68,7 @@ impl ExecutableCommand for Command {
                 runtime.robot_name = model.metadata().display_name.to_string();
                 runtime.joints_meta.clear();
                 runtime.active_plan = None;
+                runtime.active_tcp = None; // Clear TCP when changing robot
                 Ok(None)
             }
             Command::LoadUrdfRobot { name, joints_meta, chain, robot } => {
@@ -81,12 +82,13 @@ impl ExecutableCommand for Command {
                 runtime.joints_meta = joints_meta.clone();
                 runtime.robot_source = Some(robot.clone());
                 runtime.active_plan = None;
+                runtime.active_tcp = None; // Clear TCP when changing robot
                 Ok(None)
             }
             Command::Kinematics(cmd) => cmd.execute(runtime).map(Some),
             Command::Motion(cmd) => cmd.execute(runtime),
             Command::SelectToolFrame(tool_frame) => {
-                runtime.active_tcp = tool_frame.clone();
+                runtime.select_tool_frame(tool_frame.clone())?;
                 Ok(None)
             }
         }

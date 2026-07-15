@@ -9,6 +9,7 @@ use thalos_planning::motion::program::CompiledPlan;
 
 pub use thalos_core::prelude::ActiveRobot;
 use crate::snapshots::scene::JointMeta;
+use crate::error::RuntimeError;
 
 use crate::plan::{ActiveMotionPlan, MotionType};
 
@@ -106,5 +107,29 @@ impl SceneRuntime {
         let id = self.next_plan_id;
         self.next_plan_id += 1;
         format!("plan-{}", id)
+    }
+
+    // ── TCP selection ──
+
+    /// Select or clear the active Tool Center Point (TCP).
+    ///
+    /// If `tool_frame` is `Some`, validates that the frame exists in the robot chain.
+    /// If `tool_frame` is `None`, clears the TCP (falls back to flange).
+    ///
+    /// Returns an error if the frame does not exist in the chain.
+    pub fn select_tool_frame(&mut self, tool_frame: Option<ToolFrame>) -> Result<(), RuntimeError> {
+        if let Some(tcp) = &tool_frame {
+            // Validate that the frame exists in the chain
+            if self.active_robot.chain.frames.get(&tcp.base_frame).is_none() {
+                return Err(RuntimeError::ToolFrameNotFound {
+                    frame_id: match tcp.base_frame {
+                        FrameId::Id(id) => id,
+                        FrameId::World => 0,
+                    },
+                });
+            }
+        }
+        self.active_tcp = tool_frame;
+        Ok(())
     }
 }

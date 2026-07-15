@@ -633,13 +633,67 @@ async fn select_tool_frame_persists_across_multiple_commands() {
     svc.execute(Command::SetJoints(vec![0.5, -0.3, 0.1, 0.0])).await.unwrap();
     let snap = svc.snapshot().await.unwrap();
     assert!(snap.active_tcp.is_some(), "active_tcp should persist after SetJoints");
+}
 
+#[tokio::test]
+async fn select_tool_frame_clears_on_robot_change() {
+    use thalos_core::robot::tool_frame::ToolFrame;
+
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
+
+    // Set a TCP
+    let tcp = ToolFrame::identity(ee(&svc.snapshot().await.unwrap()));
+    svc.execute(Command::SelectToolFrame(Some(tcp))).await.unwrap();
+
+    let snap1 = svc.snapshot().await.unwrap();
+    assert!(snap1.active_tcp.is_some(), "active_tcp should be set");
+
+    // Load a different robot — TCP should be cleared
     svc.execute(Command::LoadRobot(RobotModel::Planar3R)).await.unwrap();
-    // LoadRobot resets the robot, but active_tcp is independent of the robot model
-    // It should still be set (though it may reference a frame that no longer exists)
     let snap2 = svc.snapshot().await.unwrap();
-    // Note: In a real implementation, we might want to clear active_tcp on LoadRobot
-    // For now, we just verify it persists
-    assert!(snap2.active_tcp.is_some(), "active_tcp should persist after LoadRobot");
+    assert!(snap2.active_tcp.is_none(), "active_tcp should be cleared after LoadRobot");
+
+    // Set TCP again and load URDF robot — TCP should be cleared again
+    let tcp2 = ToolFrame::identity(ee(&snap2));
+    svc.execute(Command::SelectToolFrame(Some(tcp2))).await.unwrap();
+    let snap3 = svc.snapshot().await.unwrap();
+    assert!(snap3.active_tcp.is_some(), "active_tcp should be set again");
+
+    let urdf = include_str!("../../../../thalos-models/tests/fixtures/scara.urdf");
+    svc.execute(Command::LoadUrdfRobot {
+        name: "urdf_scara".to_string(),
+        joints_meta: vec![],
+        chain: thalos_core::robot::adapter::from_urdf(urdf).unwrap(),
+        robot: thalos_models::urdf::parser::parse_robot(urdf).unwrap(),
+    }).await.unwrap();
+    let snap4 = svc.snapshot().await.unwrap();
+    assert!(snap4.active_tcp.is_none(), "active_tcp should be cleared after LoadUrdfRobot");
+}
+
+#[tokio::test]
+async fn select_tool_frame_rejects_invalid_frame() {
+    use thalos_core::robot::tool_frame::ToolFrame;
+    use thalos_core::spatial::frame::FrameId;
+
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
+
+    // Try to set a TCP with a non-existent frame ID
+    let invalid_tcp = ToolFrame::identity(FrameId::Id(99999));
+    let result = svc.execute(Command::SelectToolFrame(Some(invalid_tcp))).await;
+
+    assert!(result.is_err(), "SelectToolFrame should reject invalid frame ID");
+    
+    // Verify the error type
+    match result {
+        Err(crate::RuntimeError::ToolFrameNotFound { frame_id }) => {
+            assert_eq!(frame_id, 99999, "error should contain the invalid frame ID");
+        }
+        Err(other) => panic!("expected ToolFrameNotFound error, got {:?}", other),
+        Ok(_) => panic!("expected error, got Ok"),
+    }
+
+    // Verify TCP was not set
+    let snap = svc.snapshot().await.unwrap();
+    assert!(snap.active_tcp.is_none(), "active_tcp should remain None after invalid selection");
 }
 

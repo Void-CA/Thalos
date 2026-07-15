@@ -25,6 +25,12 @@ impl From<RuntimeError> for ApiError {
                 ),
                 code: code.into(),
             },
+            RuntimeError::ToolFrameNotFound { frame_id } => ApiError::Validation {
+                message: format!(
+                    "tool frame not found: frame {frame_id} does not exist in the robot chain"
+                ),
+                code: code.into(),
+            },
         }
     }
 }

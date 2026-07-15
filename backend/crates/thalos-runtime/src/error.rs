@@ -56,6 +56,9 @@ pub enum RuntimeError {
 
     #[error("joint count mismatch: expected {expected}, received {received}")]
     JointCountMismatch { expected: usize, received: usize },
+
+    #[error("tool frame not found: frame {frame_id} does not exist in the robot chain")]
+    ToolFrameNotFound { frame_id: u64 },
 }
 
 impl RuntimeError {
@@ -84,6 +87,7 @@ impl RuntimeError {
                 PlanningError::CollisionDetected { .. } => "collision_detected",
             }
             RuntimeError::JointCountMismatch { expected, received } => "joint_count_mismatch",
+            RuntimeError::ToolFrameNotFound { .. } => "tool_frame_not_found",
         }
     }
 }
