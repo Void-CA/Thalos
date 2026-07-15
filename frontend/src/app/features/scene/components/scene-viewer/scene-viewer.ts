@@ -75,6 +75,7 @@ export class SceneViewer implements AfterViewInit {
   private readonly activePlan = computed(() => this.store.state().activePlan);
   private readonly ikTarget = computed(() => this.store.state().ikTarget);
   private readonly liveTransforms = computed(() => this.store.state().liveTransforms);
+  private readonly activeTcp = computed(() => this.store.state().activeTcp);
 
   constructor() {
     // Effect 1: scene geometry — solo cuando cambia la escena (load, IK, URDF import)
@@ -116,6 +117,33 @@ export class SceneViewer implements AfterViewInit {
       const transforms = this.liveTransforms();
       if (this.sceneApplied && transforms.length > 0) {
         this.renderer.syncTransforms(transforms);
+      }
+    });
+
+    // Effect 5: TCP gizmo — reacciona cuando cambia activeTcp o liveTransforms
+    effect(() => {
+      const tcp = this.activeTcp();
+      const transforms = this.liveTransforms();
+      
+      if (!tcp) {
+        this.renderer.clearTcp();
+        return;
+      }
+
+      // Find the base frame in transforms
+      const frameId = String(tcp.baseFrameId);
+      const frameTransform = transforms.find(t => t.id === frameId);
+      
+      if (frameTransform) {
+        // Apply offset to the frame's position
+        const position: [number, number, number] = [
+          frameTransform.translation[0] + (tcp.offset?.[0] ?? 0),
+          frameTransform.translation[1] + (tcp.offset?.[1] ?? 0),
+          frameTransform.translation[2] + (tcp.offset?.[2] ?? 0),
+        ];
+        this.renderer.setTcp(position, frameTransform.rotation);
+      } else {
+        this.renderer.clearTcp();
       }
     });
 

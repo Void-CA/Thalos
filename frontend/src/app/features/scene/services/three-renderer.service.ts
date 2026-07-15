@@ -52,6 +52,7 @@ export class ThreeRendererService {
   private controls: OrbitControls | null = null;
   private contentGroup: THREE.Group | null = null;
   private targetGroup: THREE.Group | null = null;
+  private tcpGroup: THREE.Group | null = null;
   private compassGroup: THREE.Group | null = null;
   private gridHelper: THREE.GridHelper | null = null;
   /** Previous grid size — guard to avoid recreating the GridHelper on every FK tick. */
@@ -157,6 +158,12 @@ export class ThreeRendererService {
     this.buildTargetGizmo(this.targetGroup);
     this.targetGroup.visible = false;
     this.scene.add(this.targetGroup);
+
+    // TCP gizmo — hidden by default
+    this.tcpGroup = new THREE.Group();
+    this.buildTcpGizmo(this.tcpGroup);
+    this.tcpGroup.visible = false;
+    this.scene.add(this.tcpGroup);
 
     // ── Compass (child of camera — always visible) ──
     this.compassGroup = new THREE.Group();
@@ -565,6 +572,41 @@ export class ThreeRendererService {
     grp.add(ringXY);
   }
 
+  /** Build the TCP gizmo (smaller, distinct color from IK target). */
+  private buildTcpGizmo(grp: THREE.Group): void {
+    // Outer ring — cyan color to distinguish from IK target (orange)
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.06, 0.075, 32),
+      new THREE.MeshBasicMaterial({ color: 0x00ffff, side: THREE.DoubleSide, transparent: true, opacity: 0.6 }),
+    );
+    ring.renderOrder = 998;
+    grp.add(ring);
+
+    // Center dot — position reference
+    const dot = new THREE.Mesh(
+      new THREE.SphereGeometry(0.02, 12, 12),
+      new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.9 }),
+    );
+    dot.renderOrder = 998;
+    grp.add(dot);
+
+    // Small crosshair lines for orientation
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.4 });
+    const lineLen = 0.08;
+    
+    // X axis line
+    const xPts = [new THREE.Vector3(-lineLen, 0, 0), new THREE.Vector3(lineLen, 0, 0)];
+    grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(xPts), lineMat));
+    
+    // Y axis line
+    const yPts = [new THREE.Vector3(0, -lineLen, 0), new THREE.Vector3(0, lineLen, 0)];
+    grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(yPts), lineMat));
+    
+    // Z axis line
+    const zPts = [new THREE.Vector3(0, 0, -lineLen), new THREE.Vector3(0, 0, lineLen)];
+    grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(zPts), lineMat));
+  }
+
   /** Register a callback for IK target drag events. */
   setOnTargetDrag(callback: ((pos: [number, number, number]) => void) | null): void {
     this.onTargetDrag = callback;
@@ -600,6 +642,29 @@ export class ThreeRendererService {
     this.transformControls?.detach();
     if (this.targetGroup) {
       this.targetGroup.visible = false;
+    }
+  }
+
+  /** Show the TCP gizmo at the given world position/orientation. */
+  setTcp(position: [number, number, number], quaternion?: [number, number, number, number]): void {
+    if (!this.tcpGroup) return;
+
+    this.tcpGroup.position.set(position[0], position[1], position[2]);
+    if (quaternion) {
+      this.tcpGroup.quaternion.set(quaternion[1], quaternion[2], quaternion[3], quaternion[0]);
+    } else {
+      this.tcpGroup.quaternion.identity();
+    }
+
+    if (!this.tcpGroup.visible) {
+      this.tcpGroup.visible = true;
+    }
+  }
+
+  /** Hide the TCP gizmo. */
+  clearTcp(): void {
+    if (this.tcpGroup) {
+      this.tcpGroup.visible = false;
     }
   }
 
@@ -746,6 +811,11 @@ export class ThreeRendererService {
     if (this.trajectorySlot) {
       this.disposeTrajectory(this.trajectorySlot);
       this.trajectorySlot = null;
+    }
+
+    if (this.tcpGroup) {
+      this.disposeGroup(this.tcpGroup);
+      this.tcpGroup = null;
     }
 
     this.scene = null;
