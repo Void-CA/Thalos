@@ -91,7 +91,17 @@ export interface RuntimeStateResponse {
   scene: VisualSceneDto;
   ik_result: IkResultDto | null;
   active_plan: ActivePlanDto | null;
+  /** Active Tool Center Point (TCP) frame. Null if using flange. */
+  active_tcp?: ToolFrameDto | null;
   generated_at: string;
+}
+
+/** Active Tool Center Point (TCP) frame exposed by the API. */
+export interface ToolFrameDto {
+  /** The frame ID this TCP is attached to. */
+  base_frame_id: number;
+  /** Offset from the base frame. Null means identity (TCP coincides with base_frame). */
+  offset?: [number, number, number] | null;
 }
 
 // ── Active plan DTOs ──

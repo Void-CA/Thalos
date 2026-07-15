@@ -3,15 +3,15 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { BehaviorSubject, concat, merge, Observable, of, Subject } from 'rxjs';
 import { auditTime, catchError, distinctUntilChanged, map, scan, switchMap } from 'rxjs/operators';
 import { SceneApiService } from '../services/scene-api.service';
-import { toSceneData, toActivePlan } from '../adapters/dto-to-model';
+import { toSceneData, toActivePlan, toToolFrame } from '../adapters/dto-to-model';
 import type { RuntimeDelta, RuntimeStateResponse, SolveIKResponse, RotationDto } from '../scene-api.types';
-import type { ActivePlan, ExecutionInfo, IkCommand, IkResult, IkTarget, ObjectTransform, RuntimeInfo, SceneData, SceneState, SceneUiState } from '../scene.types';
+import type { ActivePlan, ExecutionInfo, IkCommand, IkResult, IkTarget, ObjectTransform, RuntimeInfo, SceneData, SceneState, SceneUiState, ToolFrame } from '../scene.types';
 
 type SceneEvent =
   | { type: 'loading' }
-  | { type: 'scene'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null; activePlan: ActivePlan | null }
-  | { type: 'fk-update'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null }
-  | { type: 'ik-executed'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null; activePlan: ActivePlan | null }
+  | { type: 'scene'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null; activePlan: ActivePlan | null; activeTcp: ToolFrame | null }
+  | { type: 'fk-update'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null; activeTcp: ToolFrame | null }
+  | { type: 'ik-executed'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null; activePlan: ActivePlan | null; activeTcp: ToolFrame | null }
   | { type: 'solve'; joints: number[]; ikResult: IkResult }
   | { type: 'target'; target: IkTarget | null }
   | { type: 'runtime-delta'; joints: number[]; transforms: ObjectTransform[]; execution: ExecutionInfo }
@@ -31,6 +31,7 @@ const INITIAL_STATE: SceneState = {
   solvedQ: null,
   ikTarget: null,
   activePlan: null,
+  activeTcp: null,
   ui: INITIAL_UI,
 };
 
@@ -56,6 +57,7 @@ function toSceneEvent(res: RuntimeStateResponse): SceneEvent {
     },
     ikResult,
     activePlan: toActivePlan(res.active_plan),
+    activeTcp: toToolFrame(res.active_tcp),
   };
 }
 
@@ -78,6 +80,7 @@ function toFkEvent(res: RuntimeStateResponse): SceneEvent {
       generatedAt: res.generated_at,
     },
     ikResult,
+    activeTcp: toToolFrame(res.active_tcp),
   };
 }
 
@@ -101,6 +104,7 @@ function toIkExecutedEvent(res: RuntimeStateResponse): SceneEvent {
     },
     ikResult,
     activePlan: toActivePlan(res.active_plan),
+    activeTcp: toToolFrame(res.active_tcp),
   };
 }
 
@@ -297,6 +301,7 @@ export class SceneStore {
             solvedQ: null,
             ikTarget: state.ikTarget,
             activePlan: state.activePlan, // FK never changes the plan
+            activeTcp: event.activeTcp,
             ui: { loading: false, error: null },
           };
         case 'scene':
@@ -309,6 +314,7 @@ export class SceneStore {
             solvedQ: null,
             ikTarget: state.ikTarget,
             activePlan: event.activePlan,
+            activeTcp: event.activeTcp,
             ui: { loading: false, error: null },
           };
         case 'ik-executed':
@@ -321,6 +327,7 @@ export class SceneStore {
             solvedQ: event.runtime.joints,
             ikTarget: state.ikTarget,
             activePlan: event.activePlan,
+            activeTcp: event.activeTcp,
             ui: { loading: false, error: null },
           };
         case 'runtime-delta':

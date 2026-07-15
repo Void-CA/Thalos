@@ -13,6 +13,14 @@ export interface RuntimeInfo {
   generatedAt: string;
 }
 
+/** Active Tool Center Point (TCP) frame — frontend model. */
+export interface ToolFrame {
+  /** The frame ID this TCP is attached to. */
+  baseFrameId: number;
+  /** Offset from the base frame. Null means identity (TCP coincides with base_frame). */
+  offset: [number, number, number] | null;
+}
+
 /** Modelo interno de frames renderizables. */
 export interface SceneFrameStyle {
   axisLength: number;
@@ -147,6 +155,8 @@ export interface SceneState {
   solvedQ: number[] | null;
   ikTarget: IkTarget | null;
   activePlan: ActivePlan | null;
+  /** Active Tool Center Point (TCP) frame. Null if using flange. */
+  activeTcp: ToolFrame | null;
   ui: SceneUiState;
 }
 

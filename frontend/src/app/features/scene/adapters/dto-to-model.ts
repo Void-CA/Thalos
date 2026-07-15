@@ -1,7 +1,7 @@
 // ── Adapter: VisualSceneDto (API contract) → SceneData (runtime state) ──
 
-import type { ActivePlanDto, SegmentInfoDto, TrajectoryVisualizationDto, VisualSceneDto, PrimitiveGeometryDto, FrameStyleDto, VisualWaypointDto } from '../scene-api.types';
-import type { ActivePlan, SceneData, SceneFrame, SceneFrameStyle, SceneJointAxis, SceneLink, ScenePrimitive, SceneTwist, SegmentInfo, TrajectoryVisualization, VisualWaypoint } from '../scene.types';
+import type { ActivePlanDto, SegmentInfoDto, TrajectoryVisualizationDto, VisualSceneDto, PrimitiveGeometryDto, FrameStyleDto, VisualWaypointDto, ToolFrameDto } from '../scene-api.types';
+import type { ActivePlan, SceneData, SceneFrame, SceneFrameStyle, SceneJointAxis, SceneLink, ScenePrimitive, SceneTwist, SegmentInfo, ToolFrame, TrajectoryVisualization, VisualWaypoint } from '../scene.types';
 
 export function toSceneData(dto: VisualSceneDto): SceneData {
   return {
@@ -123,5 +123,15 @@ function toVisualWaypoint(dto: VisualWaypointDto): VisualWaypoint {
     joints: dto.joints,
     timestamp: dto.timestamp,
     waypointType: dto.waypoint_type,
+  };
+}
+
+// ── ToolFrame adapters ──
+
+export function toToolFrame(dto: ToolFrameDto | null | undefined): ToolFrame | null {
+  if (!dto) return null;
+  return {
+    baseFrameId: dto.base_frame_id,
+    offset: dto.offset ?? null,
   };
 }
