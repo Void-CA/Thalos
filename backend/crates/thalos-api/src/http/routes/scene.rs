@@ -43,6 +43,9 @@ pub fn routes() -> Router<Arc<AppState>> {
         // FK → scene (same as set_joints but exposed as a separate endpoint)
         .route("/scene/from-fk", post(handler::set_joints))
 
+        // TCP selection
+        .route("/scene/tcp", post(handler::select_tool_frame))
+
         // Utilities
         .route("/scene/validate", post(handler::validate))
         .route("/scene/diff", post(handler::diff))

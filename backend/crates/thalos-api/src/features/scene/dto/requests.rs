@@ -188,6 +188,46 @@ pub struct TickRequest {
     pub dt: f64,
 }
 
+// ── TCP selection request ──
+
+/// Request to select or clear the active Tool Center Point (TCP).
+///
+/// When `frame_id` is `Some`, sets the TCP to that frame with an optional offset.
+/// When `frame_id` is `None`, clears the TCP (falls back to flange/end_effector).
+#[derive(Debug, Deserialize)]
+pub struct SelectToolFrameRequest {
+    /// The frame to use as TCP base. `None` clears the TCP.
+    #[serde(default)]
+    pub frame_id: Option<u64>,
+    /// Optional offset from the base frame. If `None`, uses identity transform.
+    /// Format: `[x, y, z]` translation in meters.
+    #[serde(default)]
+    pub offset: Option<[f64; 3]>,
+}
+
+impl SelectToolFrameRequest {
+    /// Convert into a Command to set or clear the active TCP.
+    pub fn into_command(&self) -> Command {
+        match self.frame_id {
+            Some(frame_id) => {
+                let base_frame = FrameId::Id(frame_id);
+                let transform = match self.offset {
+                    Some([x, y, z]) => {
+                        Transform3D::from_translation(Vector3::new(x, y, z))
+                    }
+                    None => Transform3D::identity(),
+                };
+                let tcp = thalos_core::robot::tool_frame::ToolFrame::with_offset(
+                    base_frame,
+                    transform,
+                );
+                Command::SelectToolFrame(Some(tcp))
+            }
+            None => Command::SelectToolFrame(None),
+        }
+    }
+}
+
 
 fn default_epsilon() -> f64 {
     1e-6

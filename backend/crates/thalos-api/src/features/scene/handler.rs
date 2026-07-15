@@ -382,3 +382,25 @@ pub async fn diff(
 
     Ok(Json(result.into()))
 }
+
+/// Select or clear the active Tool Center Point (TCP).
+///
+/// POST /api/v1/scene/tcp
+///
+/// When `frame_id` is provided, sets the TCP to that frame with an optional offset.
+/// When `frame_id` is `None`, clears the TCP (falls back to flange/end_effector).
+///
+/// The TCP affects all operational analyses:
+/// - Workspace sampling
+/// - Singularity analysis
+/// - Manipulability analysis
+/// - IK solving (default frame)
+/// - Motion planning (trajectory visualization)
+pub async fn select_tool_frame(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<SelectToolFrameRequest>,
+) -> ApiResult<RuntimeStateResponse> {
+    let cmd = payload.into_command();
+    let snapshot = state.services.scene.execute(cmd).await?;
+    Ok(Json(to_api_response(&snapshot)))
+}

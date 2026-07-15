@@ -15,12 +15,13 @@ use crate::math::geometry::rigid::Transform3D;
 /// use thalos_core::robot::tool_frame::ToolFrame;
 /// use thalos_core::spatial::frame::FrameId;
 /// use thalos_core::math::geometry::rigid::Transform3D;
+/// use thalos_core::math::geometry::vectors::Vector3;
 ///
 /// // TCP exactly at the tool0 frame
 /// let tcp = ToolFrame::identity(FrameId::new(42));
 ///
 /// // TCP with a 12cm offset below the flange
-/// let offset = Transform3D::from_translation(nalgebra::Vector3::new(0.0, 0.0, -0.12));
+/// let offset = Transform3D::from_translation(Vector3::new(0.0, 0.0, -0.12));
 /// let tcp = ToolFrame::with_offset(FrameId::new(42), offset);
 /// ```
 #[derive(Debug, Clone)]

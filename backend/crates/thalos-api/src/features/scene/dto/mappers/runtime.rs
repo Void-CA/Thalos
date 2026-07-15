@@ -2,7 +2,7 @@ use thalos_core::kinematics::inverse::result::IKResult;
 
 use crate::features::robots::dto::{JointMetadataDto, RobotMetadataDto};
 
-use super::super::{ActivePlanDto, IkResultDto, RuntimeStateResponse, VisualSceneDto};
+use super::super::{ActivePlanDto, IkResultDto, RuntimeStateResponse, ToolFrameDto, VisualSceneDto};
 
 impl From<IKResult> for IkResultDto {
     fn from(ik: IKResult) -> Self {
@@ -10,6 +10,27 @@ impl From<IKResult> for IkResultDto {
             status: format!("{:?}", ik.status),
             iterations: ik.iterations,
             final_error: ik.final_error,
+        }
+    }
+}
+
+impl From<&thalos_core::robot::tool_frame::ToolFrame> for ToolFrameDto {
+    fn from(tcp: &thalos_core::robot::tool_frame::ToolFrame) -> Self {
+        let base_frame_id = match tcp.base_frame {
+            thalos_core::spatial::frame::FrameId::Id(id) => id,
+            thalos_core::spatial::frame::FrameId::World => 0,
+        };
+
+        let offset = if tcp.has_offset() {
+            let t = &tcp.transform.translation;
+            Some([t.x, t.y, t.z])
+        } else {
+            None
+        };
+
+        ToolFrameDto {
+            base_frame_id,
+            offset,
         }
     }
 }
@@ -55,6 +76,7 @@ impl RuntimeStateResponse {
                 }
             }),
             active_plan,
+            active_tcp: snapshot.active_tcp.as_ref().map(ToolFrameDto::from),
             generated_at: snapshot.generated_at,
         }
     }

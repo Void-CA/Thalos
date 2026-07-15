@@ -989,3 +989,105 @@ async fn execute_plan_with_two_segments_returns_correct_segment_ranges() {
         "first visualization waypoint must match start position, got {:?}", first_joints
     );
 }
+
+// ── TCP selection tests ──
+
+#[tokio::test]
+async fn select_tool_frame_sets_active_tcp() {
+    let app = test_app().await;
+    
+    // Load Scara robot first
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/robot",
+        Some(json!({"robot_id": "scara"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    
+    // Get the end effector frame ID from the scene
+    let scene = &body.unwrap()["scene"];
+    let frames = scene["frames"].as_array().unwrap();
+    // Find the end effector frame (last frame in the chain)
+    let ee_frame = frames.last().unwrap();
+    let ee_frame_id = ee_frame["id"].as_str().unwrap();
+    
+    // Parse the frame ID as u64 (assuming it's numeric)
+    let frame_id: u64 = ee_frame_id.parse().unwrap_or(0);
+    
+    // Select the TCP with an offset
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/tcp",
+        Some(json!({
+            "frame_id": frame_id,
+            "offset": [0.0, 0.0, -0.12]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    
+    let body = body.expect("response must be valid JSON");
+    
+    // Verify active_tcp is set
+    let active_tcp = body["active_tcp"].as_object();
+    assert!(active_tcp.is_some(), "active_tcp should be set");
+    
+    let tcp = active_tcp.unwrap();
+    assert_eq!(tcp["base_frame_id"].as_u64().unwrap(), frame_id);
+    assert!(tcp["offset"].is_array(), "offset should be present");
+    
+    let offset = tcp["offset"].as_array().unwrap();
+    assert_eq!(offset.len(), 3);
+    assert!((offset[0].as_f64().unwrap() - 0.0).abs() < 1e-6);
+    assert!((offset[1].as_f64().unwrap() - 0.0).abs() < 1e-6);
+    assert!((offset[2].as_f64().unwrap() - (-0.12)).abs() < 1e-6);
+}
+
+#[tokio::test]
+async fn select_tool_frame_clears_tcp() {
+    let app = test_app().await;
+    
+    // Load Scara robot
+    let (status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/robot",
+        Some(json!({"robot_id": "scara"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    
+    // Set a TCP first
+    let (status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/tcp",
+        Some(json!({
+            "frame_id": 1,
+            "offset": [0.0, 0.0, -0.1]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    
+    // Clear the TCP
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/tcp",
+        Some(json!({
+            "frame_id": null
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    
+    let body = body.expect("response must be valid JSON");
+    
+    // Verify active_tcp is null/absent
+    assert!(body["active_tcp"].is_null(), 
+            "active_tcp should be cleared");
+}

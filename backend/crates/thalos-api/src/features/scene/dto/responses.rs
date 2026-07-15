@@ -123,7 +123,25 @@ pub struct RuntimeStateResponse {
     pub scene: VisualSceneDto,
     pub ik_result: Option<IkResultDto>,
     pub active_plan: Option<ActivePlanDto>,
+    /// Active Tool Center Point (TCP) frame.
+    ///
+    /// When `Some`, all analysis (workspace, singularity, manipulability)
+    /// and IK default to this TCP instead of the flange (end_effector).
+    /// When `None`, the flange is used as the default working frame.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_tcp: Option<ToolFrameDto>,
     pub generated_at: DateTime<Utc>,
+}
+
+/// Active Tool Center Point (TCP) frame exposed by the API.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ToolFrameDto {
+    /// The frame ID this TCP is attached to.
+    pub base_frame_id: u64,
+    /// Offset from the base frame. `None` means identity (TCP coincides with base_frame).
+    /// Format: `[x, y, z]` translation in meters.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub offset: Option<[f64; 3]>,
 }
 
 // ── Plan and trajectory visualisation DTOs ──
