@@ -72,6 +72,14 @@
     </inertial>
   </link>
 
+  <link name="tool0"/>
+
+  <joint name="tcp_joint" type="fixed">
+    <parent link="end_effector"/>
+    <child link="tool0"/>
+    <origin xyz="0 0 -0.12" rpy="0 0 0"/>
+  </joint>
+
   <joint name="axis_0" type="revolute">
     <parent link="base_link"/>
     <child link="link_1"/>
