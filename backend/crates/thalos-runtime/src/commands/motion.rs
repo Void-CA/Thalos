@@ -6,7 +6,7 @@ use thalos_core::{
         },
     },
     prelude::RobotState,
-    robot::serial_chain::SerialChain,
+    robot::{serial_chain::SerialChain, tool_frame::ToolFrame},
     spatial::frame::FrameId,
     spatial::pose::Pose,
 };
@@ -38,11 +38,13 @@ fn make_planning_ctx<'a>(
     chain: &'a SerialChain,
     state: &'a RobotState,
     ik_solver: &'a dyn IKSolver,
+    tcp: Option<&'a ToolFrame>,
 ) -> PlanningContext<'a> {
     PlanningContext {
         robot: chain,
         current_state: state,
         ik_solver,
+        tcp,
     }
 }
 
@@ -89,7 +91,7 @@ impl ExecutableCommand for MotionCommands {
                 let ee = *chain.end_effector();
                 let state = RobotState::new(runtime.active_robot.joints.clone());
                 let solver = make_ik_solver(&chain, ee);
-                let ctx = make_planning_ctx(&chain, &state, &solver);
+                let ctx = make_planning_ctx(&chain, &state, &solver, runtime.active_tcp.as_ref());
 
                 let resolver = GoalResolver::new(GoalResolverConfig {
                     policy: PlanningPolicy::default(),
@@ -135,7 +137,7 @@ impl ExecutableCommand for MotionCommands {
 
                 let target = ik.q.clone();
                 let state = RobotState::new(joints.clone());
-                let ctx = make_planning_ctx(&chain, &state, &solver);
+                let ctx = make_planning_ctx(&chain, &state, &solver, runtime.active_tcp.as_ref());
 
                 // Use joint-space planner to create a smooth trajectory to the
                 // IK-solved position. Not a true cartesian path, but guarantees

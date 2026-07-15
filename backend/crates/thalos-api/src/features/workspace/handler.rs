@@ -162,7 +162,11 @@ pub async fn sample_active(
         tolerance: req.tolerance,
     };
 
-    let ws = RuntimeWorkspaceService::sample_from_chain(&snapshot.chain, config)?;
+    let ws = RuntimeWorkspaceService::sample_from_chain_with_tcp(
+        &snapshot.chain,
+        config,
+        snapshot.active_tcp.as_ref(),
+    )?;
 
     let samples = if req.include_samples {
         Some(ws.samples().iter().map(WorkspaceSampleDto::from).collect())
@@ -193,7 +197,11 @@ pub async fn bounds_active(
         tolerance: req.tolerance,
     };
 
-    let ws = RuntimeWorkspaceService::sample_from_chain(&snapshot.chain, config)?;
+    let ws = RuntimeWorkspaceService::sample_from_chain_with_tcp(
+        &snapshot.chain,
+        config,
+        snapshot.active_tcp.as_ref(),
+    )?;
 
     Ok(Json(ws.bounds().clone().into()))
 }
@@ -219,14 +227,23 @@ pub async fn analyze_active(
     };
 
     // All three analyses share the same chain and config — sample once.
-    let ws = RuntimeWorkspaceService::sample_from_chain(&snapshot.chain, config)?;
-    let singularity = RuntimeSingularityService::analyze_from_chain(
+    let ws = RuntimeWorkspaceService::sample_from_chain_with_tcp(
+        &snapshot.chain,
+        config,
+        snapshot.active_tcp.as_ref(),
+    )?;
+    let singularity = RuntimeSingularityService::analyze_from_chain_with_tcp(
         &snapshot.chain,
         config,
         singularity_config,
+        snapshot.active_tcp.as_ref(),
     )?;
     let manipulability =
-        RuntimeManipulabilityService::analyze_from_chain(&snapshot.chain, config)?;
+        RuntimeManipulabilityService::analyze_from_chain_with_tcp(
+            &snapshot.chain,
+            config,
+            snapshot.active_tcp.as_ref(),
+        )?;
 
     let singularity_samples = if req.include_samples {
         Some(singularity.samples.iter().map(SingularitySampleDto::from).collect())
@@ -270,7 +287,12 @@ pub async fn singularity_active(
     };
 
     let analysis =
-        RuntimeSingularityService::analyze_from_chain(&snapshot.chain, config, singularity_config)?;
+        RuntimeSingularityService::analyze_from_chain_with_tcp(
+            &snapshot.chain,
+            config,
+            singularity_config,
+            snapshot.active_tcp.as_ref(),
+        )?;
 
     let samples = if req.include_samples {
         Some(analysis.samples.iter().map(SingularitySampleDto::from).collect())
@@ -300,7 +322,11 @@ pub async fn manipulability_active(
     };
 
     let analysis =
-        RuntimeManipulabilityService::analyze_from_chain(&snapshot.chain, config)?;
+        RuntimeManipulabilityService::analyze_from_chain_with_tcp(
+            &snapshot.chain,
+            config,
+            snapshot.active_tcp.as_ref(),
+        )?;
 
     let samples = if req.include_samples {
         Some(analysis.samples.iter().map(ManipulabilitySampleDto::from).collect())

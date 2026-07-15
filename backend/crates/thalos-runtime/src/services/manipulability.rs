@@ -11,6 +11,7 @@ use thalos_core::kinematics::forward::ForwardKinematics;
 use thalos_core::kinematics::jacobian::GeometricJacobian;
 use thalos_core::models::{RobotModel, RobotRegistry};
 use thalos_core::robot::serial_chain::SerialChain;
+use thalos_core::robot::tool_frame::ToolFrame;
 
 use crate::error::RuntimeError;
 
@@ -33,6 +34,18 @@ impl ManipulabilityService {
         chain: &SerialChain,
         config: WorkspaceConfig,
     ) -> Result<ManipulabilityAnalysis, RuntimeError> {
+        Self::analyze_from_chain_with_tcp(chain, config, None)
+    }
+
+    /// Analyze manipulability with an optional TCP frame.
+    ///
+    /// If `tcp` is `Some`, the Jacobian references the TCP position.
+    /// If `None`, references the flange (end effector).
+    pub fn analyze_from_chain_with_tcp(
+        chain: &SerialChain,
+        config: WorkspaceConfig,
+        tcp: Option<&ToolFrame>,
+    ) -> Result<ManipulabilityAnalysis, RuntimeError> {
         if config.samples == 0 {
             return Err(RuntimeError::Workspace(WorkspaceError::InvalidSampleCount(0)));
         }
@@ -40,11 +53,15 @@ impl ManipulabilityService {
         let mut rng = StdRng::seed_from_u64(config.seed);
 
         let ws = WorkspaceSampler
-            .sample(chain, config, &mut rng)
+            .sample_with_tcp(chain, config, tcp, &mut rng)
             .map_err(RuntimeError::Workspace)?;
 
         let fk = ForwardKinematics::new(chain.clone());
-        let jac = GeometricJacobian::new(fk, chain.end_effector.clone());
+        let jac = if let Some(tcp) = tcp {
+            GeometricJacobian::with_tcp(fk, tcp.clone())
+        } else {
+            GeometricJacobian::new(fk, chain.end_effector.clone())
+        };
 
         let analysis = ManipulabilityAnalyzer::analyze(&ws, &jac);
 

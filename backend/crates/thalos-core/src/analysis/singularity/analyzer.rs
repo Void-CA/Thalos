@@ -207,7 +207,8 @@ fn analyze_icebot_urdf_pipeline() {
         .expect("icebot should produce a valid chain");
 
     // Verify the chain structure
-    assert_eq!(chain.segments.len(), 4, "icebot has 4 joints");
+    // Icebot has 4 actuated joints + 1 fixed joint (tcp_joint for tool0 frame)
+    assert_eq!(chain.segments.len(), 5, "icebot has 5 segments (4 actuated + 1 fixed)");
     assert_eq!(chain.dof_count(), 4, "icebot has 4 DOF (3 rev + 1 prism)");
 
     // FK with zero config

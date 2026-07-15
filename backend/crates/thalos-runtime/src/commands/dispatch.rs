@@ -3,6 +3,7 @@ use thalos_core::{
     models::{RobotModel, RobotRegistry},
     prelude::ActiveRobot,
     robot::serial_chain::SerialChain,
+    robot::tool_frame::ToolFrame,
 };
 
 use thalos_models::Robot;
@@ -37,6 +38,11 @@ pub enum Command {
     },
     Kinematics(KinematicsCommand),
     Motion(MotionCommands),
+    /// Select or clear the active Tool Center Point (TCP) frame.
+    ///
+    /// When `Some(tool_frame)`, all analysis and IK default to this TCP.
+    /// When `None`, the flange (`chain.end_effector`) is used as the default.
+    SelectToolFrame(Option<ToolFrame>),
 }
 
 impl ExecutableCommand for Command {
@@ -79,6 +85,10 @@ impl ExecutableCommand for Command {
             }
             Command::Kinematics(cmd) => cmd.execute(runtime).map(Some),
             Command::Motion(cmd) => cmd.execute(runtime),
+            Command::SelectToolFrame(tool_frame) => {
+                runtime.active_tcp = tool_frame.clone();
+                Ok(None)
+            }
         }
     }
 }

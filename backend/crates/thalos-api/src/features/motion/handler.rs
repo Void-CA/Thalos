@@ -43,10 +43,10 @@ pub async fn movel(
     Json(payload): Json<MoveLRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
     let snapshot = state.services.scene.snapshot().await?;
-    let default_ee = *snapshot.chain.end_effector();
+    let default_frame = snapshot.resolve_default_frame();
     let frame = payload
         .frame_id
-        .map_or(default_ee, thalos_core::spatial::frame::FrameId::Id);
+        .map_or(default_frame, thalos_core::spatial::frame::FrameId::Id);
     let target_pose = payload.target.to_pose(frame);
 
     let snapshot = state.services.scene.execute(Command::Motion(

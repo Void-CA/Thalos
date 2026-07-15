@@ -68,7 +68,7 @@ pub fn build_plan_dto(
     snapshot: &thalos_runtime::RuntimeSnapshot,
 ) -> Option<ActivePlanDto> {
     let plan = snapshot.active_plan.as_ref()?;
-    let mut dto = ActivePlanDto::with_visualization(plan, &snapshot.chain);
+    let mut dto = ActivePlanDto::with_visualization(plan, &snapshot.chain, snapshot.active_tcp.as_ref());
 
     // If there's an execution session, override the plan state with the
     // session's status so the frontend sees the correct execution state.

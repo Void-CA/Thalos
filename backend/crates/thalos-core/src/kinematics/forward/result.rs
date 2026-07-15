@@ -1,4 +1,5 @@
 use crate::spatial::{frame::FrameId, pose::Pose};
+use crate::robot::tool_frame::ToolFrame;
 use std::collections::HashMap;
 use thalos_math::Vector3;
 
@@ -34,5 +35,19 @@ impl FKResult {
 
     pub fn ee_position(&self) -> Option<Vector3> {
         self.poses.get(&self.end_effector).map(|p| p.translation())
+    }
+
+    /// Resolve the TCP position given a ToolFrame.
+    ///
+    /// Returns `None` if the TCP's base frame is not present in the FK result.
+    pub fn tcp_position(&self, tcp: &ToolFrame) -> Option<Vector3> {
+        tcp.resolve_position(self)
+    }
+
+    /// Resolve the TCP pose given a ToolFrame.
+    ///
+    /// Returns `None` if the TCP's base frame is not present in the FK result.
+    pub fn tcp_pose(&self, tcp: &ToolFrame) -> Option<Pose> {
+        tcp.resolve_pose(self)
     }
 }

@@ -11,6 +11,7 @@ use rand::{Rng, SeedableRng};
 
 use crate::robot::joint::JointLimits;
 use crate::robot::serial_chain::SerialChain;
+use crate::robot::tool_frame::ToolFrame;
 
 use super::error::WorkspaceError;
 use super::types::WorkspaceSample;
@@ -23,12 +24,29 @@ impl WorkspaceSampler {
     /// Sample `config.samples` joint configurations uniformly within the
     /// joint limits, evaluate FK on each, and build a `Workspace`.
     ///
+    /// If `tcp` is `Some`, samples the TCP position. If `None`, samples
+    /// the flange (end effector) position for backward compatibility.
+    ///
     /// The RNG is injected by the caller so tests can fix the seed
     /// and assert determinism (R1).
     pub fn sample<R: Rng + SeedableRng>(
         &self,
         chain: &SerialChain,
         config: WorkspaceConfig,
+        rng: &mut R,
+    ) -> Result<Workspace, WorkspaceError> {
+        self.sample_with_tcp(chain, config, None, rng)
+    }
+
+    /// Sample with an optional TCP frame.
+    ///
+    /// If `tcp` is `Some`, samples the TCP position. If `None`, samples
+    /// the flange (end effector) position.
+    pub fn sample_with_tcp<R: Rng + SeedableRng>(
+        &self,
+        chain: &SerialChain,
+        config: WorkspaceConfig,
+        tcp: Option<&ToolFrame>,
         rng: &mut R,
     ) -> Result<Workspace, WorkspaceError> {
         if config.samples == 0 {
@@ -52,14 +70,19 @@ impl WorkspaceSampler {
                 q.push(q_i);
             }
 
-            // FK (R2: position == FK(q).ee_position()).
+            // FK (R2: position == FK(q).ee_position() or FK(q).tcp_position(tcp)).
             // We re-construct FK per sample so the caller's chain is
             // untouched (D14 immutability of input).
             let fk = crate::kinematics::forward::ForwardKinematics::new(chain.clone());
             let result = fk.evaluate(&q);
-            let position = result
-                .ee_position()
-                .ok_or_else(|| WorkspaceError::EmptyWorkspace)?; // unreachable for valid chains
+            
+            let position = if let Some(tcp) = tcp {
+                result.tcp_position(tcp)
+                    .ok_or_else(|| WorkspaceError::EmptyWorkspace)?
+            } else {
+                result.ee_position()
+                    .ok_or_else(|| WorkspaceError::EmptyWorkspace)?
+            };
 
             samples.push(WorkspaceSample { q, position });
         }

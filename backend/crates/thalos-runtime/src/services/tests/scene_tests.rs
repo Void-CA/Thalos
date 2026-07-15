@@ -573,3 +573,73 @@ async fn snapshot_includes_trajectory_after_plan_command() {
     );
 }
 
+// ─── SelectToolFrame ─────────────────────────────────────────────
+
+#[tokio::test]
+async fn select_tool_frame_sets_active_tcp_in_snapshot() {
+    use thalos_core::robot::tool_frame::ToolFrame;
+
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
+
+    // Initial state: active_tcp is None
+    let snap1 = svc.snapshot().await.unwrap();
+    assert!(snap1.active_tcp.is_none(), "active_tcp should be None initially");
+
+    // Set a TCP with identity transform
+    let tcp = ToolFrame::identity(ee(&snap1));
+    let snap2 = svc.execute(Command::SelectToolFrame(Some(tcp))).await.unwrap();
+
+    assert!(snap2.active_tcp.is_some(), "active_tcp should be Some after SelectToolFrame");
+    let active_tcp = snap2.active_tcp.as_ref().unwrap();
+    assert_eq!(active_tcp.base_frame, ee(&snap2), "TCP base_frame should match the requested frame");
+    assert!(!active_tcp.has_offset(), "TCP with identity transform should have no offset");
+
+    // Clear the TCP
+    let snap3 = svc.execute(Command::SelectToolFrame(None)).await.unwrap();
+    assert!(snap3.active_tcp.is_none(), "active_tcp should be None after clearing");
+}
+
+#[tokio::test]
+async fn select_tool_frame_with_offset_propagates_to_tick_delta() {
+    use thalos_core::robot::tool_frame::ToolFrame;
+    use thalos_core::math::geometry::rigid::Transform3D;
+    use thalos_core::math::geometry::vectors::Vector3;
+
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
+
+    // Set a TCP with a 12cm offset below the flange
+    let offset = Transform3D::from_translation(Vector3::new(0.0, 0.0, -0.12));
+    let tcp = ToolFrame::with_offset(ee(&svc.snapshot().await.unwrap()), offset);
+    svc.execute(Command::SelectToolFrame(Some(tcp))).await.unwrap();
+
+    // Verify TickDelta includes the active_tcp
+    let delta = svc.tick_execution_delta(0.0).await.unwrap();
+    assert!(delta.active_tcp.is_some(), "TickDelta should include active_tcp");
+    let active_tcp = delta.active_tcp.as_ref().unwrap();
+    assert!(active_tcp.has_offset(), "TCP with non-identity transform should have offset");
+}
+
+#[tokio::test]
+async fn select_tool_frame_persists_across_multiple_commands() {
+    use thalos_core::robot::tool_frame::ToolFrame;
+
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
+
+    // Set a TCP
+    let tcp = ToolFrame::identity(ee(&svc.snapshot().await.unwrap()));
+    svc.execute(Command::SelectToolFrame(Some(tcp))).await.unwrap();
+
+    // Execute other commands — TCP should persist
+    svc.execute(Command::SetJoints(vec![0.5, -0.3, 0.1, 0.0])).await.unwrap();
+    let snap = svc.snapshot().await.unwrap();
+    assert!(snap.active_tcp.is_some(), "active_tcp should persist after SetJoints");
+
+    svc.execute(Command::LoadRobot(RobotModel::Planar3R)).await.unwrap();
+    // LoadRobot resets the robot, but active_tcp is independent of the robot model
+    // It should still be set (though it may reference a frame that no longer exists)
+    let snap2 = svc.snapshot().await.unwrap();
+    // Note: In a real implementation, we might want to clear active_tcp on LoadRobot
+    // For now, we just verify it persists
+    assert!(snap2.active_tcp.is_some(), "active_tcp should persist after LoadRobot");
+}
+

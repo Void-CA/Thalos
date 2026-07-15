@@ -151,6 +151,7 @@ impl PlanCompiler {
                 robot: ctx.robot,
                 current_state: &segment_state,
                 ik_solver: ctx.ik_solver,
+                tcp: ctx.tcp,
             };
 
             let trajectory = self
@@ -233,6 +234,7 @@ mod tests {
                 robot: &self.chain,
                 current_state: &self.state,
                 ik_solver: &self.ik,
+                tcp: None,
             }
         }
     }

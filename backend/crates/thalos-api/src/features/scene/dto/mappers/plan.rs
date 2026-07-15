@@ -56,6 +56,7 @@ impl ActivePlanDto {
     pub fn with_visualization(
         plan: &thalos_runtime::ActiveMotionPlan,
         chain: &thalos_core::robot::serial_chain::SerialChain,
+        tcp: Option<&thalos_core::robot::tool_frame::ToolFrame>,
     ) -> Self {
         let mut dto: Self = plan.into();
 
@@ -65,11 +66,13 @@ impl ActivePlanDto {
             thalos_runtime::MotionType::Program => VisualMotionType::MoveJ, // segments colored by frontend
         };
 
-        let ee = *chain.end_effector();
+        let tracked_frame = tcp
+            .map(|t| t.base_frame.clone())
+            .unwrap_or_else(|| *chain.end_effector());
         let vis = thalos_visual::TrajectoryVisualBuilder::build(
             &plan.trajectory,
             chain,
-            ee,
+            tracked_frame,
             motion_type,
         );
 

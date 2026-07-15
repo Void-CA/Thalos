@@ -72,6 +72,7 @@ impl SceneService {
             ik_result,
             active_plan: runtime.active_plan.clone(),
             execution: None,
+            active_tcp: runtime.active_tcp.clone(),
             generated_at: chrono::Utc::now(),
         }
     }
@@ -222,6 +223,7 @@ impl SceneService {
                 runtime.active_robot.chain.clone(),
                 fk_result,
                 plan_duration,
+                runtime.active_tcp.clone(),
             ));
         }
 
@@ -234,6 +236,7 @@ impl SceneService {
             fk_result,
             execution: None,
             plan_duration: 0.0,
+            active_tcp: runtime.active_tcp.clone(),
         })
     }
 }

@@ -9,6 +9,8 @@ use thalos_core::{
     },
     models::RobotModel,
     robot::serial_chain::SerialChain,
+    robot::tool_frame::ToolFrame,
+    spatial::frame::FrameId,
 };
 use thalos_models::Robot;
 
@@ -40,6 +42,12 @@ pub struct RuntimeSnapshot {
     pub ik_result: Option<IKResult>,
     pub active_plan: Option<ActiveMotionPlan>,
     pub execution: Option<ExecutionSession>,
+    /// Active Tool Center Point (TCP) frame.
+    ///
+    /// When `Some`, all analysis (workspace, singularity, manipulability)
+    /// and IK default to this TCP instead of the flange (`chain.end_effector`).
+    /// When `None`, the flange is used as the default working frame.
+    pub active_tcp: Option<ToolFrame>,
     pub generated_at: DateTime<Utc>,
 }
 
@@ -56,6 +64,7 @@ impl RuntimeSnapshot {
         chain: SerialChain,
         fk_result: FKResult,
         active_plan: Option<ActiveMotionPlan>,
+        active_tcp: Option<ToolFrame>,
     ) -> Self {
         let execution = session_from_robot_state(state);
         Self {
@@ -69,12 +78,25 @@ impl RuntimeSnapshot {
             ik_result: None,
             active_plan,
             execution,
+            active_tcp,
             generated_at: Utc::now(),
         }
     }
 
     pub fn trajectory_progress(&self) -> Option<f64> {
         self.active_plan.as_ref().map(|p| p.progress())
+    }
+
+    /// Resolve the default frame for IK and motion commands.
+    ///
+    /// Returns the active TCP base_frame if set, otherwise the flange (end_effector).
+    /// This is the canonical source of truth for the "working frame" across all
+    /// analysis and motion operations.
+    pub fn resolve_default_frame(&self) -> FrameId {
+        self.active_tcp
+            .as_ref()
+            .map(|tcp| tcp.base_frame.clone())
+            .unwrap_or_else(|| *self.chain.end_effector())
     }
 }
 
@@ -88,6 +110,12 @@ pub struct TickDelta {
     pub fk_result: FKResult,
     pub execution: Option<ExecutionSession>,
     pub plan_duration: f64,
+    /// Active Tool Center Point (TCP) frame.
+    ///
+    /// When `Some`, all analysis (workspace, singularity, manipulability)
+    /// and IK default to this TCP instead of the flange (`chain.end_effector`).
+    /// When `None`, the flange is used as the default working frame.
+    pub active_tcp: Option<ToolFrame>,
 }
 
 impl TickDelta {
@@ -96,6 +124,7 @@ impl TickDelta {
         chain: SerialChain,
         fk_result: FKResult,
         plan_duration: f64,
+        active_tcp: Option<ToolFrame>,
     ) -> Self {
         let execution = session_from_robot_state(state);
         Self {
@@ -104,6 +133,7 @@ impl TickDelta {
             fk_result,
             execution,
             plan_duration,
+            active_tcp,
         }
     }
 }

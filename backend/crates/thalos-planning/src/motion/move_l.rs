@@ -156,6 +156,7 @@ mod tests {
             robot: &robot,
             current_state: &state,
             ik_solver: &ik,
+            tcp: None,
         };
 
         let planner = MoveLPlanner::default();

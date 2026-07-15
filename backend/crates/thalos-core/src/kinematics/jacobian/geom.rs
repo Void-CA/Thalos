@@ -10,22 +10,54 @@ use thalos_math::Cross;
 use crate::robot::joint::JointKind;
 
 use crate::spatial::frame::FrameId;
+use crate::robot::tool_frame::ToolFrame;
 
 pub struct GeometricJacobian {
     fk: ForwardKinematics,
     end_effector: FrameId,
+    tcp: Option<ToolFrame>,
 }
 
 impl GeometricJacobian {
 
+    /// Create a Jacobian that references a specific frame (with optional offset).
+    ///
+    /// This is the canonical constructor. Both `new()` and `with_tcp()` delegate to it.
+    ///
+    /// The `reference_frame` defines which frame's pose is used as the reference point
+    /// for the Jacobian calculation. If `tcp_offset` is provided, it is composed with
+    /// the frame's pose to compute the actual reference point.
+    fn build(
+        fk: ForwardKinematics,
+        reference_frame: FrameId,
+        tcp_offset: Option<ToolFrame>,
+    ) -> Self {
+        Self {
+            fk,
+            end_effector: reference_frame,
+            tcp: tcp_offset,
+        }
+    }
+
+    /// Create a Jacobian that references the end effector frame.
+    ///
+    /// This is equivalent to `with_tcp(fk, ToolFrame::identity(end_effector))`.
     pub fn new(
         fk: ForwardKinematics,
         end_effector: FrameId,
     ) -> Self {
-        Self {
-            fk,
-            end_effector,
-        }
+        Self::build(fk, end_effector.clone(), Some(ToolFrame::identity(end_effector)))
+    }
+
+    /// Create a Jacobian that references a TCP frame instead of the end effector.
+    ///
+    /// The TCP can have an offset from its base frame. The Jacobian will compute
+    /// the linear and angular velocity of the TCP point, not the base frame.
+    pub fn with_tcp(
+        fk: ForwardKinematics,
+        tcp: ToolFrame,
+    ) -> Self {
+        Self::build(fk, tcp.base_frame.clone(), Some(tcp))
     }
 }
 
@@ -45,12 +77,13 @@ impl JacobianSolver for GeometricJacobian {
 
         let mut angular = DynamicMatrix::zeros(3, n_dof);
 
-        // Pose global del end-effector
-        let ee_pose = result.pose(&self.end_effector)
-                                .expect("End effector pose not found");
-
-        let p_e =
-            ee_pose.transform().translation;
+        // Pose global del punto de referencia (end-effector o TCP con offset)
+        // self.tcp is always Some (new() creates identity, with_tcp() creates the actual TCP)
+        let tcp = self.tcp.as_ref().expect("TCP must be set");
+        let base_pose = result.pose(&tcp.base_frame)
+            .expect("TCP base frame pose not found");
+        let reference_pose = base_pose.transform().compose(&tcp.transform);
+        let p_e = reference_pose.translation;
 
         let mut col = 0;
 

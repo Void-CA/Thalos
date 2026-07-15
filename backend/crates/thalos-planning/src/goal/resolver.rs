@@ -161,8 +161,12 @@ impl GoalResolver {
         q: &[f64],
     ) -> Option<(SingularityReport, ManipulabilityReport)> {
         let fk = ForwardKinematics::new(ctx.robot.clone());
-        let ee = ctx.robot.end_effector().clone();
-        let jac_solver = GeometricJacobian::new(fk, ee);
+        let jac_solver = if let Some(tcp) = ctx.tcp {
+            GeometricJacobian::with_tcp(fk, tcp.clone())
+        } else {
+            let ee = ctx.robot.end_effector().clone();
+            GeometricJacobian::new(fk, ee)
+        };
         let jacobian = jac_solver.evaluate(q);
         let singularity = SingularityReport::analyze(&jacobian);
         let manipulability = ManipulabilityReport::compute(&singularity);

@@ -154,8 +154,8 @@ pub async fn move_to_position(
     Json(payload): Json<MoveToPositionRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
     let snapshot = state.services.scene.snapshot().await?;
-    let default_ee = *snapshot.chain.end_effector();
-    let cmd = payload.into_command(default_ee);
+    let default_frame = snapshot.resolve_default_frame();
+    let cmd = payload.into_command(default_frame);
 
     let snapshot = state.services.scene.execute(cmd).await?;
     Ok(Json(to_api_response(&snapshot)))
@@ -166,8 +166,8 @@ pub async fn move_to_pose(
     Json(payload): Json<MoveToPoseRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
     let snapshot = state.services.scene.snapshot().await?;
-    let default_ee = *snapshot.chain.end_effector();
-    let cmd = payload.into_command(default_ee);
+    let default_frame = snapshot.resolve_default_frame();
+    let cmd = payload.into_command(default_frame);
 
     let snapshot = state.services.scene.execute(cmd).await?;
     Ok(Json(to_api_response(&snapshot)))
@@ -193,20 +193,21 @@ pub async fn preview_plan(
     // Phase 1 — read snapshot, build program, compile (all sync except the snapshot read)
     let compiled = {
         let snapshot = state.services.scene.snapshot().await?;
-        let default_ee = *snapshot.chain.end_effector();
-        let program = payload.into_program(default_ee);
+        let default_frame = snapshot.resolve_default_frame();
+        let program = payload.into_program(default_frame);
 
         if program.segments.is_empty() {
             return Ok(Json(to_api_response(&snapshot)));
         }
 
         let fk = ForwardKinematics::new(snapshot.chain.clone());
-        let solver = DampedLeastSquaresSolver::new(fk, default_ee, IK_MAX_ITERS, IK_TOLERANCE, IK_LAMBDA);
+        let solver = DampedLeastSquaresSolver::new(fk, default_frame, IK_MAX_ITERS, IK_TOLERANCE, IK_LAMBDA);
         let robot_state = RobotState::new(snapshot.joints.clone());
         let ctx = PlanningContext {
             robot: &snapshot.chain,
             current_state: &robot_state,
             ik_solver: &solver,
+            tcp: snapshot.active_tcp.as_ref(),
         };
         let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
         compiler.compile(&program, &ctx)

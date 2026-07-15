@@ -145,3 +145,43 @@ fn sample_rejects_zero_samples() {
 
 // NOTE: NaN tolerance is validated by Workspace::is_reachable at query time,
 // not at sampling time. No test needed at service level for this.
+
+// ─── Workspace with TCP ─────────────────────────────────────────────────
+
+#[test]
+fn sample_with_tcp_uses_tcp_position() {
+    use thalos_core::robot::tool_frame::ToolFrame;
+    use thalos_core::robot::serial_chain::SerialChain;
+    use thalos_core::models::RobotRegistry;
+    use thalos_core::math::geometry::rigid::Transform3D;
+
+    let chain = RobotRegistry::create_default(RobotModel::Scara);
+    let config = WorkspaceConfig { samples: 50, seed: 0, tolerance: 1e-3 };
+
+    // Sample without TCP (flange)
+    let ws_flange = WorkspaceService::sample_from_chain(&chain, config).unwrap();
+
+    // Sample with TCP (12cm offset below flange)
+    let tcp = ToolFrame::with_offset(
+        *chain.end_effector(),
+        Transform3D::from_translation(Vector3::new(0.0, 0.0, -0.12)),
+    );
+    let ws_tcp = WorkspaceService::sample_from_chain_with_tcp(&chain, config, Some(&tcp)).unwrap();
+
+    // Both should have the same number of samples
+    assert_eq!(ws_flange.samples().len(), ws_tcp.samples().len());
+
+    // TCP workspace should be systematically lower in Z
+    // (all samples should have Z reduced by 0.12)
+    for (flange_sample, tcp_sample) in ws_flange.samples().iter().zip(ws_tcp.samples().iter()) {
+        let z_diff = flange_sample.position.z - tcp_sample.position.z;
+        assert!(
+            (z_diff - 0.12).abs() < 1e-6,
+            "Z difference should be 0.12, got {}",
+            z_diff
+        );
+        // X and Y should be identical (offset is only in Z)
+        assert!((flange_sample.position.x - tcp_sample.position.x).abs() < 1e-6);
+        assert!((flange_sample.position.y - tcp_sample.position.y).abs() < 1e-6);
+    }
+}

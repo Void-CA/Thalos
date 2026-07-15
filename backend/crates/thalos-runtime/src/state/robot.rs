@@ -3,6 +3,7 @@ use thalos_core::{kinematics::{
     inverse::{DampedLeastSquaresSolver, IKGoal, IKResult, IKSolver},
 }, prelude::Trajectory};
 use thalos_core::spatial::frame::FrameId;
+use thalos_core::robot::tool_frame::ToolFrame;
 use thalos_models::Robot;
 use thalos_planning::motion::program::CompiledPlan;
 
@@ -27,6 +28,13 @@ pub struct SceneRuntime {
     pub robot_source: Option<Robot>,
     pub joints_meta: Vec<JointMeta>,
 
+    /// Active Tool Center Point (TCP) frame.
+    ///
+    /// When `Some`, all analysis (workspace, singularity, manipulability)
+    /// and IK default to this TCP instead of the flange (`chain.end_effector`).
+    /// When `None`, the flange is used as the default working frame.
+    pub active_tcp: Option<ToolFrame>,
+
     /// The compiled plan ready for visualisation and execution.
     /// Set by Preview — immutable, carries trajectory + segments.
     pub scheduled_plan: Option<CompiledPlan>,
@@ -44,6 +52,7 @@ impl SceneRuntime {
             robot_name,
             robot_source: None,
             joints_meta: Vec::new(),
+            active_tcp: None,
             scheduled_plan: None,
             active_plan: None,
             next_plan_id: 0,

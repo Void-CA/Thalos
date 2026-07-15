@@ -88,6 +88,7 @@ mod tests {
             robot: &robot,
             current_state: &state,
             ik_solver: &ik,
+            tcp: None,
         };
         let planner = MoveJPlanner::default();
         let goal = ValidatedGoal {
@@ -108,6 +109,7 @@ mod tests {
             robot: &robot,
             current_state: &state,
             ik_solver: &ik,
+            tcp: None,
         };
         let planner = MoveJPlanner::default();
         let target = vec![1.5, -0.5];
