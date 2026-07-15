@@ -130,7 +130,7 @@ export class SceneViewer implements AfterViewInit {
         return;
       }
 
-      // Find the base frame in transforms
+      // Find the base frame: first in liveTransforms, then fallback to objectRegistry
       const frameId = String(tcp.baseFrameId);
       const frameTransform = transforms.find(t => t.id === frameId);
       
@@ -143,7 +143,18 @@ export class SceneViewer implements AfterViewInit {
         ];
         this.renderer.setTcp(position, frameTransform.rotation);
       } else {
-        this.renderer.clearTcp();
+        // Fallback: try to get position from the renderer's object registry
+        const registryPos = this.renderer.getFramePosition(frameId);
+        if (registryPos) {
+          const position: [number, number, number] = [
+            registryPos[0] + (tcp.offset?.[0] ?? 0),
+            registryPos[1] + (tcp.offset?.[1] ?? 0),
+            registryPos[2] + (tcp.offset?.[2] ?? 0),
+          ];
+          this.renderer.setTcp(position);
+        } else {
+          this.renderer.clearTcp();
+        }
       }
     });
 

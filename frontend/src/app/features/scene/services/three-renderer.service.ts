@@ -57,6 +57,8 @@ export class ThreeRendererService {
   private gridHelper: THREE.GridHelper | null = null;
   /** Previous grid size — guard to avoid recreating the GridHelper on every FK tick. */
   private lastGridSize = 0;
+  /** Reference dimension of the current robot — used for proportional sizing. */
+  private referenceDimension = 1.0;
   /** TransformControls for the IK target gizmo — enabled when target is visible. */
   private transformControls: TransformControls | null = null;
   /** True while the user is actively dragging the IK target gizmo. */
@@ -85,6 +87,9 @@ export class ThreeRendererService {
    * Los objetos se registran durante `applyScene` y se eliminan al disponerlos.
    */
   private readonly objectRegistry = new Map<string, THREE.Object3D>();
+
+  /** Última posición conocida del IK target durante arrastre — para evitar updates sin movimiento. */
+  private lastDragPosition: [number, number, number] | null = null;
 
   // ── Reusable scratch objects (avoid allocations in hot path) ──
   private readonly scratchVec = new THREE.Vector3();
@@ -128,9 +133,18 @@ export class ThreeRendererService {
       this.isDraggingTarget = event.value as boolean;
       this.controls!.enabled = !event.value;
     });
-    this.transformControls.addEventListener('change', () => {
-      if (this.isDraggingTarget && this.onTargetDrag && this.targetGroup) {
+    // objectChange solo se dispara cuando el objeto transformado CAMBIÓ realmente,
+    // a diferencia de 'change' que se dispara por cualquier interacción (hover, click).
+    // Esto evita el feedback loop: click → updateTarget → effect → setTarget → attach.
+    this.transformControls.addEventListener('objectChange', () => {
+      if (this.onTargetDrag && this.targetGroup && this.lastDragPosition) {
         const p = this.targetGroup.position;
+        const dx = p.x - this.lastDragPosition[0];
+        const dy = p.y - this.lastDragPosition[1];
+        const dz = p.z - this.lastDragPosition[2];
+        // Umbral para evitar updates con cambios sub-pixel
+        if (dx * dx + dy * dy + dz * dz < 1e-12) return;
+        this.lastDragPosition = [p.x, p.y, p.z];
         this.onTargetDrag([p.x, p.y, p.z]);
       }
     });
@@ -198,6 +212,7 @@ export class ThreeRendererService {
     // Clear material cache on robot swap — geometries with old colors are gone.
     this.matCache.clear();
 
+    this.referenceDimension = scene.referenceDimension;
     this.syncFrames(scene.frames);
     this.syncLinks(scene.links);
     this.syncPrimitives(scene.primitives);
@@ -351,9 +366,15 @@ export class ThreeRendererService {
       let slot = this.linkSlots.get(key);
       if (!slot) {
         // Build a unit cylinder along +Y; we'll scale Y to actual length.
+        // Radius scales with robot size for consistent visual proportion.
+        const radius = Math.max(this.referenceDimension * 0.015, 0.003);
         const mesh = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.018, 0.018, 1, 8, 1),
-          new THREE.MeshStandardMaterial({ color: 0x3399ff }),
+          new THREE.CylinderGeometry(radius, radius, 1, 8, 1),
+          new THREE.MeshStandardMaterial({
+            color: 0x3399ff,
+            transparent: true,
+            opacity: 0.35,
+          }),
         );
         slot = { mesh, baseLen: 1 };
         this.linkSlots.set(key, slot);
@@ -666,6 +687,20 @@ export class ThreeRendererService {
     if (this.tcpGroup) {
       this.tcpGroup.visible = false;
     }
+  }
+
+  /** Resolve a frame's world position from the object registry, or null if not found.
+   *
+   * Útil para componentes que necesitan la posición de un frame específico
+   * (ej. TCP) fuera del pipeline de liveTransforms (ej. durante inicialización).
+   */
+  getFramePosition(frameId: string): [number, number, number] | null {
+    const obj = this.objectRegistry.get(frameId);
+    if (!obj) return null;
+    // Get world position (accounting for parent transforms)
+    const worldPos = new THREE.Vector3();
+    obj.getWorldPosition(worldPos);
+    return [worldPos.x, worldPos.y, worldPos.z];
   }
 
   // ── Trajectory rendering ──
