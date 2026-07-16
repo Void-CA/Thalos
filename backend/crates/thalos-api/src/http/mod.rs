@@ -5,7 +5,7 @@ use std::sync::Arc;
 use axum::Router;
 
 use crate::app::state::AppState;
-use routes::{motion, robots, scene, workspace};
+use routes::{motion, plan, robots, scene, workspace};
 
 pub fn app_router() -> Router<Arc<AppState>> {
     Router::new().nest(
@@ -14,6 +14,7 @@ pub fn app_router() -> Router<Arc<AppState>> {
             .merge(scene::routes())
             .merge(robots::routes())
             .merge(workspace::routes())
-            .merge(motion::routes()),
+            .merge(motion::routes())
+            .merge(plan::routes()),
     )
 }

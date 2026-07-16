@@ -1297,6 +1297,7 @@ dependencies = [
 name = "thalos-planning"
 version = "0.1.0"
 dependencies = [
+ "thalos-collision",
  "thalos_core",
  "thiserror",
 ]
@@ -1356,6 +1357,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "rand",
+ "thalos-collision",
  "thalos-planning",
  "thalos_core",
  "thalos_models",
