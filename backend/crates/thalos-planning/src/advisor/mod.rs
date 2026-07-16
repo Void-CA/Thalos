@@ -1,11 +1,18 @@
-//! Generación de recomendaciones a partir del análisis de trayectorias.
+//! Generación de recomendaciones a partir de hallazgos.
 //!
-//! El [[`PlanAdvisor`]] toma un [`PlanAnalysis`] y produce sugerencias
-//! accionables para el usuario, clasificadas por tipo e impacto.
+//! El [`PlanAdvisor`] toma los [`Finding`](crate::finding::Finding) producidos por el
+//! [`TrajectoryAnalyzer`](crate::analysis::TrajectoryAnalyzer) y los transforma en
+//! [`Recommendation`] accionables.
+//!
+//! **Principio**: El Advisor NUNCA recalcula. Solo interpreta hallazgos.
+//! No vuelve a preguntar al Jacobiano, no vuelve a consultar colisiones.
+//! No llama a FK. No llama a SVD.
+//!
+//! Si necesita más datos, el Analyzer debe producirlos como Findings.
 
 use std::fmt;
 
-use crate::analysis::{PlanAnalysis, WaypointAnalysis};
+use crate::finding::{Finding, FindingKind, Severity};
 
 /// Tipo de recomendación.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -51,7 +58,7 @@ impl fmt::Display for Impact {
     }
 }
 
-/// Una recomendación generada por el Advisor.
+/// Una recomendación generada a partir de un hallazgo.
 #[derive(Debug, Clone)]
 pub struct Recommendation {
     pub kind: SuggestionKind,
@@ -60,290 +67,169 @@ pub struct Recommendation {
     pub waypoint: Option<usize>,
 }
 
-/// Generador de recomendaciones a partir del análisis de trayectorias.
+/// Generador de recomendaciones.
 ///
-/// Examina las métricas del análisis y produce sugerencias cuando
-/// detecta valores sub-óptimos o problemas.
-///
-/// # Ejemplo
-///
-/// ```ignore
-/// let advisor = PlanAdvisor::default();
-/// let suggestions = advisor.advise(&analysis);
-/// for s in &suggestions {
-///     println!("[{:?}] {} (impacto: {})", s.kind, s.message, s.impact);
-/// }
-/// ```
-pub struct PlanAdvisor {
-    /// Umbral de manipulabilidad mínima para generar warning.
-    pub manipulability_threshold: f64,
-    /// Umbral de distancia a obstáculos (metros) para generar warning.
-    pub collision_distance_threshold: f64,
-    /// Umbral de condition number para near-singular.
-    pub near_singular_threshold: f64,
-}
-
-impl Default for PlanAdvisor {
-    fn default() -> Self {
-        Self {
-            manipulability_threshold: 0.3,
-            collision_distance_threshold: 0.05,
-            near_singular_threshold: 100.0,
-        }
-    }
-}
+/// Toma `Vec<Finding>` y produce `Vec<Recommendation>`.
+/// No hace ningún cálculo — solo aplica reglas de transformación.
+pub struct PlanAdvisor;
 
 impl PlanAdvisor {
-    pub fn new(
-        manipulability_threshold: f64,
-        collision_distance_threshold: f64,
-        near_singular_threshold: f64,
-    ) -> Self {
-        Self {
-            manipulability_threshold,
-            collision_distance_threshold,
-            near_singular_threshold,
+    /// Transforma hallazgos en recomendaciones accionables.
+    ///
+    /// Cada finding puede producir 0, 1 o varias recomendaciones.
+    /// Las reglas son secuenciales y determinísticas.
+    pub fn advise(&self, findings: &[Finding]) -> Vec<Recommendation> {
+        let mut recommendations = Vec::new();
+
+        for finding in findings {
+            recommendations.extend(self.transform(finding));
         }
+
+        recommendations
     }
 
-    /// Genera recomendaciones basadas en el análisis de la trayectoria.
-    pub fn advise(&self, analysis: &PlanAnalysis) -> Vec<Recommendation> {
-        let mut suggestions = Vec::new();
-
-        suggestions.extend(self.assess_manipulability(analysis));
-        suggestions.extend(self.assess_singularities(analysis));
-        suggestions.extend(self.assess_collisions(analysis));
-        suggestions.extend(self.assess_constraints(analysis));
-
-        suggestions
-    }
-
-    fn assess_manipulability(&self, analysis: &PlanAnalysis) -> Vec<Recommendation> {
-        let mut suggestions = Vec::new();
-
-        if let Some(avg) = analysis.metrics.avg_manipulability {
-            if avg < self.manipulability_threshold {
-                suggestions.push(Recommendation {
-                    kind: SuggestionKind::Manipulability,
-                    message: format!(
-                        "Manipulabilidad promedio baja ({:.3}). Cambiar solución IK o ajustar configuración inicial.",
-                        avg,
-                    ),
-                    impact: Impact::High,
-                    waypoint: None,
-                });
-
-                // Find the worst waypoint
-                if let Some(worst) = analysis.waypoints.iter()
-                    .filter_map(|w| w.manipulability.as_ref().map(|m| (w.index, m.yoshikawa)))
-                    .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
-                {
-                    suggestions.push(Recommendation {
-                        kind: SuggestionKind::Waypoint,
+    fn transform(&self, finding: &Finding) -> Vec<Recommendation> {
+        match finding.kind {
+            FindingKind::LowManipulability => {
+                vec![
+                    Recommendation {
+                        kind: SuggestionKind::Manipulability,
                         message: format!(
-                            "Manipulabilidad mínima en waypoint {} ({:.3}). Agregar waypoint intermedio.",
-                            worst.0, worst.1,
+                            "Manipulabilidad baja ({:.3}). Cambiar solución IK puede mejorarla.",
+                            finding.value.unwrap_or(0.0),
                         ),
+                        impact: Impact::High,
+                        waypoint: finding.waypoint,
+                    },
+                    Recommendation {
+                        kind: SuggestionKind::Waypoint,
+                        message: "Agregar waypoint intermedio en zona de baja manipulabilidad.".to_string(),
                         impact: Impact::Medium,
-                        waypoint: Some(worst.0),
-                    });
-                }
+                        waypoint: finding.waypoint,
+                    },
+                ]
             }
-        }
 
-        suggestions
-    }
+            FindingKind::NearSingularity => {
+                vec![
+                    Recommendation {
+                        kind: SuggestionKind::Singularity,
+                        message: format!(
+                            "Cerca de singularidad (condition number: {:.1}). Reducir velocidad o ajustar configuración.",
+                            finding.value.unwrap_or(0.0),
+                        ),
+                        impact: Impact::High,
+                        waypoint: finding.waypoint,
+                    },
+                    Recommendation {
+                        kind: SuggestionKind::Velocity,
+                        message: "Reducir velocidad máxima evita problemas near-singular.".to_string(),
+                        impact: Impact::Medium,
+                        waypoint: finding.waypoint,
+                    },
+                ]
+            }
 
-    fn assess_singularities(&self, analysis: &PlanAnalysis) -> Vec<Recommendation> {
-        let mut suggestions = Vec::new();
-
-        if analysis.metrics.near_singular_count > 0 {
-            let near_wps: Vec<&WaypointAnalysis> = analysis.waypoints.iter()
-                .filter(|w| {
-                    w.singularity.as_ref()
-                        .map(|s| s.condition_number >= self.near_singular_threshold && s.condition_number < 1000.0)
-                        .unwrap_or(false)
-                })
-                .collect();
-
-            if let Some(wp) = near_wps.first() {
-                suggestions.push(Recommendation {
+            FindingKind::Singularity => {
+                vec![Recommendation {
                     kind: SuggestionKind::Singularity,
                     message: format!(
-                        "Singularidad cercana en waypoint {} (condition number: {:.1}). Reducir velocidad o ajustar configuración.",
-                        wp.index,
-                        wp.singularity.as_ref().map(|s| s.condition_number).unwrap_or(0.0),
+                        "Singularidad en waypoint {}. La trayectoria no es ejecutable en este punto.",
+                        finding.waypoint.map(|i| i.to_string()).unwrap_or_default(),
                     ),
                     impact: Impact::High,
-                    waypoint: Some(wp.index),
-                });
+                    waypoint: finding.waypoint,
+                }]
             }
-        }
 
-        if analysis.metrics.singular_count > 0 {
-            let sing_wps: Vec<&WaypointAnalysis> = analysis.waypoints.iter()
-                .filter(|w| {
-                    w.singularity.as_ref()
-                        .map(|s| s.condition_number >= 1000.0)
-                        .unwrap_or(false)
-                })
-                .collect();
-
-            if let Some(wp) = sing_wps.first() {
-                suggestions.push(Recommendation {
-                    kind: SuggestionKind::Singularity,
-                    message: format!(
-                        "Singularidad detectada en waypoint {} (condition number: {:.1}). La trayectoria no es ejecutable en este punto.",
-                        wp.index,
-                        wp.singularity.as_ref().map(|s| s.condition_number).unwrap_or(0.0),
-                    ),
-                    impact: Impact::High,
-                    waypoint: Some(wp.index),
-                });
-            }
-        }
-
-        suggestions
-    }
-
-    fn assess_collisions(&self, analysis: &PlanAnalysis) -> Vec<Recommendation> {
-        let mut suggestions = Vec::new();
-
-        if analysis.metrics.has_collisions {
-            suggestions.push(Recommendation {
-                kind: SuggestionKind::Collision,
-                message: format!(
-                    "Colisión detectada en waypoint {}. La trayectoria no es segura.",
-                    analysis.metrics.first_collision_waypoint
-                        .map(|i| i.to_string())
-                        .unwrap_or_else(|| "desconocido".to_string()),
-                ),
-                impact: Impact::High,
-                waypoint: analysis.metrics.first_collision_waypoint,
-            });
-        } else if let Some(min_dist) = analysis.metrics.min_collision_distance {
-            if min_dist < self.collision_distance_threshold {
-                suggestions.push(Recommendation {
+            FindingKind::Collision => {
+                vec![Recommendation {
                     kind: SuggestionKind::Collision,
                     message: format!(
-                        "Distancia mínima a obstáculo baja ({:.1} mm en waypoint {}). Reducir velocidad o agregar waypoint intermedio.",
-                        min_dist * 1000.0,
-                        analysis.metrics.min_collision_waypoint
-                            .map(|i| i.to_string())
-                            .unwrap_or_else(|| "?".to_string()),
+                        "Colisión detectada en waypoint {}. La trayectoria no es segura.",
+                        finding.waypoint.map(|i| i.to_string()).unwrap_or_default(),
+                    ),
+                    impact: Impact::High,
+                    waypoint: finding.waypoint,
+                }]
+            }
+
+            FindingKind::CollisionNear => {
+                vec![Recommendation {
+                    kind: SuggestionKind::Collision,
+                    message: format!(
+                        "Distancia a obstáculo baja ({:.1} mm). Reducir velocidad o agregar waypoint.",
+                        finding.value.unwrap_or(0.0) * 1000.0,
                     ),
                     impact: Impact::Medium,
-                    waypoint: analysis.metrics.min_collision_waypoint,
-                });
+                    waypoint: finding.waypoint,
+                }]
+            }
+
+            FindingKind::ConstraintViolation => {
+                vec![Recommendation {
+                    kind: SuggestionKind::Constraint,
+                    message: finding.message.clone(),
+                    impact: Impact::High,
+                    waypoint: finding.waypoint,
+                }]
+            }
+
+            FindingKind::IkSuggestion => {
+                vec![Recommendation {
+                    kind: SuggestionKind::IkSolution,
+                    message: finding.message.clone(),
+                    impact: Impact::Medium,
+                    waypoint: finding.waypoint,
+                }]
             }
         }
-
-        suggestions
-    }
-
-    fn assess_constraints(&self, analysis: &PlanAnalysis) -> Vec<Recommendation> {
-        let mut suggestions = Vec::new();
-
-        for violation in &analysis.constraint_violations {
-            suggestions.push(Recommendation {
-                kind: SuggestionKind::Constraint,
-                message: violation.message.clone(),
-                impact: Impact::High,
-                waypoint: Some(violation.waypoint),
-            });
-        }
-
-        suggestions
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analysis::{AnalysisMetrics, PlanAnalysis, WaypointAnalysis};
-    use thalos_core::kinematics::jacobian::manipulability::ManipulabilityReport;
+    use crate::finding::{Finding, FindingKind, Severity};
 
-    fn make_empty_analysis() -> PlanAnalysis {
-        PlanAnalysis {
-            waypoints: vec![],
-            metrics: AnalysisMetrics {
-                waypoint_count: 0,
-                trajectory_duration: 0.0,
-                avg_manipulability: None,
-                min_manipulability: None,
-                near_singular_count: 0,
-                singular_count: 0,
-                min_collision_distance: None,
-                min_collision_waypoint: None,
-                has_collisions: false,
-                first_collision_waypoint: None,
-            },
-            constraint_violations: vec![],
-        }
+    #[test]
+    fn no_recommendations_for_empty_findings() {
+        let advisor = PlanAdvisor;
+        let recs = advisor.advise(&[]);
+        assert!(recs.is_empty());
     }
 
     #[test]
-    fn no_suggestions_for_clean_plan() {
-        let analysis = make_empty_analysis();
-        let advisor = PlanAdvisor::default();
-        let suggestions = advisor.advise(&analysis);
-        assert!(suggestions.is_empty());
+    fn low_manipulability_produces_two_recommendations() {
+        let findings = vec![Finding {
+            kind: FindingKind::LowManipulability,
+            severity: Severity::Warning,
+            waypoint: Some(3),
+            message: "manipulabilidad baja".into(),
+            value: Some(0.15),
+            threshold: Some(0.3),
+        }];
+        let advisor = PlanAdvisor;
+        let recs = advisor.advise(&findings);
+        assert_eq!(recs.len(), 2);
+        assert!(recs.iter().any(|r| r.kind == SuggestionKind::Manipulability));
+        assert!(recs.iter().any(|r| r.kind == SuggestionKind::Waypoint));
     }
 
     #[test]
-    fn suggests_when_manipulability_low() {
-        let analysis = PlanAnalysis {
-            waypoints: vec![
-                WaypointAnalysis {
-                    index: 0,
-                    timestamp: 0.0,
-                    joints: vec![0.0, 0.0],
-                    singularity: None,
-                    manipulability: Some(ManipulabilityReport { yoshikawa: 0.2, isotropy: 0.1 }),
-                    min_collision_distance: None,
-                },
-            ],
-            metrics: AnalysisMetrics {
-                waypoint_count: 1,
-                trajectory_duration: 0.0,
-                avg_manipulability: Some(0.2),
-                min_manipulability: Some(0.2),
-                near_singular_count: 0,
-                singular_count: 0,
-                min_collision_distance: None,
-                min_collision_waypoint: None,
-                has_collisions: false,
-                first_collision_waypoint: None,
-            },
-            constraint_violations: vec![],
-        };
-
-        let advisor = PlanAdvisor::default();
-        let suggestions = advisor.advise(&analysis);
-        assert!(suggestions.iter().any(|s| s.kind == SuggestionKind::Manipulability));
-    }
-
-    #[test]
-    fn suggests_when_collision_too_close() {
-        let analysis = PlanAnalysis {
-            waypoints: vec![],
-            metrics: AnalysisMetrics {
-                waypoint_count: 0,
-                trajectory_duration: 0.0,
-                avg_manipulability: None,
-                min_manipulability: None,
-                near_singular_count: 0,
-                singular_count: 0,
-                min_collision_distance: Some(0.02),
-                min_collision_waypoint: Some(3),
-                has_collisions: false,
-                first_collision_waypoint: None,
-            },
-            constraint_violations: vec![],
-        };
-
-        let advisor = PlanAdvisor::default();
-        let suggestions = advisor.advise(&analysis);
-        assert!(suggestions.iter().any(|s| s.kind == SuggestionKind::Collision));
+    fn collision_finding_produces_one_recommendation() {
+        let findings = vec![Finding {
+            kind: FindingKind::Collision,
+            severity: Severity::Error,
+            waypoint: Some(5),
+            message: "colisión".into(),
+            value: Some(-0.01),
+            threshold: Some(0.0),
+        }];
+        let advisor = PlanAdvisor;
+        let recs = advisor.advise(&findings);
+        assert_eq!(recs.len(), 1);
+        assert_eq!(recs[0].kind, SuggestionKind::Collision);
+        assert_eq!(recs[0].impact, Impact::High);
     }
 }

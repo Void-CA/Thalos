@@ -2,6 +2,7 @@ pub mod analysis;
 pub mod advisor;
 pub mod collision;
 pub mod error;
+pub mod finding;
 pub mod goal;
 pub mod interpolate;
 pub mod motion;

@@ -7,7 +7,7 @@
 //! 4. Retorna el resultado
 
 use thalos_core::{
-    analysis::constraints::{Constraint, ConstraintEvaluator, DefaultConstraintEvaluator},
+    analysis::constraints::{Constraint, DefaultConstraintEvaluator},
     collision::CollisionMatrix,
     robot::{serial_chain::SerialChain, tool_frame::ToolFrame},
 };
@@ -15,6 +15,7 @@ use thalos_collision::NaiveCollisionChecker;
 use thalos_planning::{
     analysis::{PlanAnalysis, TrajectoryAnalyzer},
     advisor::{PlanAdvisor, Recommendation},
+    finding::Finding,
 };
 
 use crate::error::RuntimeError;
@@ -24,7 +25,9 @@ use crate::error::RuntimeError;
 pub struct PlanAnalysisResult {
     /// Análisis técnico por waypoint y métricas agregadas.
     pub analysis: PlanAnalysis,
-    /// Recomendaciones generadas por el Advisor.
+    /// Hallazgos objetivos.
+    pub findings: Vec<Finding>,
+    /// Recomendaciones generadas por el Advisor a partir de findings.
     pub recommendations: Vec<Recommendation>,
 }
 
@@ -65,11 +68,14 @@ impl PlanAnalysisService {
 
         let analysis = analyzer.analyze(trajectory)?;
 
-        let advisor = PlanAdvisor::default();
-        let recommendations = advisor.advise(&analysis);
+        // El Advisor solo interpreta findings, nunca recalcula
+        let advisor = PlanAdvisor;
+        let findings = analysis.findings.clone();
+        let recommendations = advisor.advise(&findings);
 
         Ok(PlanAnalysisResult {
             analysis,
+            findings,
             recommendations,
         })
     }

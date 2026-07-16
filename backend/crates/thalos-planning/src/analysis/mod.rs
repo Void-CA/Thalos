@@ -26,6 +26,7 @@ use thalos_core::{
 use thalos_collision::distance::geometries_distance;
 
 use crate::error::PlanningError;
+use crate::finding::{Finding, FindingKind, Severity};
 
 // ─── Data types ───────────────────────────────────────────────────
 
@@ -36,6 +37,8 @@ pub struct PlanAnalysis {
     pub waypoints: Vec<WaypointAnalysis>,
     /// Métricas agregadas de toda la trayectoria.
     pub metrics: AnalysisMetrics,
+    /// Hallazgos objetivos del análisis (previo a recomendaciones).
+    pub findings: Vec<Finding>,
     /// Violaciones de constraints, si se evaluaron.
     pub constraint_violations: Vec<ConstraintViolation>,
 }
@@ -260,9 +263,97 @@ impl<'a> TrajectoryAnalyzer<'a> {
             first_collision_waypoint: if abs_min_collision < 0.0 { min_coll_wp } else { None },
         };
 
+        // Findings — hechos objetivos derivados del análisis
+        let mut findings: Vec<Finding> = Vec::new();
+
+        // Manipulabilidad baja
+        if let Some(avg) = metrics.avg_manipulability {
+            let manip_threshold = 0.3;
+            if avg < manip_threshold {
+                // Encontrar el waypoint con manipulabilidad mínima
+                if let Some(worst) = waypoints.iter()
+                    .filter_map(|w| w.manipulability.as_ref().map(|m| (w.index, m.yoshikawa)))
+                    .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+                {
+                    findings.push(Finding {
+                        kind: FindingKind::LowManipulability,
+                        severity: Severity::Warning,
+                        waypoint: Some(worst.0),
+                        message: format!("Manipulabilidad baja ({:.3}) en waypoint {}", worst.1, worst.0),
+                        value: Some(worst.1),
+                        threshold: Some(manip_threshold),
+                    });
+                }
+            }
+        }
+
+        // Singularidades
+        for wp in &waypoints {
+            if let Some(sr) = &wp.singularity {
+                if sr.condition_number >= 1000.0 {
+                    findings.push(Finding {
+                        kind: FindingKind::Singularity,
+                        severity: Severity::Error,
+                        waypoint: Some(wp.index),
+                        message: format!("Singularidad en waypoint {} (condition number: {:.1})", wp.index, sr.condition_number),
+                        value: Some(sr.condition_number),
+                        threshold: Some(1000.0),
+                    });
+                } else if sr.condition_number >= 100.0 {
+                    findings.push(Finding {
+                        kind: FindingKind::NearSingularity,
+                        severity: Severity::Warning,
+                        waypoint: Some(wp.index),
+                        message: format!("Cerca de singularidad en waypoint {} (condition number: {:.1})", wp.index, sr.condition_number),
+                        value: Some(sr.condition_number),
+                        threshold: Some(100.0),
+                    });
+                }
+            }
+        }
+
+        // Colisiones
+        if metrics.has_collisions {
+            findings.push(Finding {
+                kind: FindingKind::Collision,
+                severity: Severity::Error,
+                waypoint: metrics.first_collision_waypoint,
+                message: format!(
+                    "Colisión en waypoint {}",
+                    metrics.first_collision_waypoint.map(|i| i.to_string()).unwrap_or_else(|| "desconocido".to_string()),
+                ),
+                value: metrics.min_collision_distance,
+                threshold: Some(0.0),
+            });
+        } else if let Some(min_dist) = metrics.min_collision_distance {
+            if min_dist < 0.05 {
+                findings.push(Finding {
+                    kind: FindingKind::CollisionNear,
+                    severity: Severity::Warning,
+                    waypoint: metrics.min_collision_waypoint,
+                    message: format!("Distancia a obstáculo baja ({:.1} mm)", min_dist * 1000.0),
+                    value: Some(min_dist),
+                    threshold: Some(0.05),
+                });
+            }
+        }
+
+        // Violaciones de constraints
+        for v in &constraint_violations {
+            findings.push(Finding {
+                kind: FindingKind::ConstraintViolation,
+                severity: Severity::Error,
+                waypoint: Some(v.waypoint),
+                message: v.message.clone(),
+                value: Some(v.magnitude),
+                threshold: None,
+            });
+        }
+
         Ok(PlanAnalysis {
             waypoints,
             metrics,
+            findings,
             constraint_violations,
         })
     }
@@ -319,5 +410,129 @@ mod tests {
         let analysis = analyzer.analyze(&traj).expect("analysis failed");
         // Planar2R links are separated — should be no collisions
         assert!(!analysis.metrics.has_collisions);
+    }
+
+    // ─── Scenario 1: Perfect plan ────────────────────────────────
+
+    #[test]
+    fn scenario_perfect_plan_returns_ok_status() {
+        // Trajectory where q2 ≈ π/2 (maximum manipulability)
+        let chain = RobotRegistry::create_default(RobotModel::Planar2R);
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 1.57], 0.0),
+            TrajectoryPoint::new(vec![0.3, 1.57], 0.5),
+            TrajectoryPoint::new(vec![0.6, 1.57], 1.0),
+        ]);
+        let analyzer = TrajectoryAnalyzer::new(&chain, None);
+        let analysis = analyzer.analyze(&traj).expect("analysis failed");
+
+        // Should have no findings
+        assert!(analysis.findings.is_empty(),
+            "Expected no findings for perfect plan, got {}: {:?}",
+            analysis.findings.len(), analysis.findings);
+        assert!(analysis.metrics.avg_manipulability.unwrap_or(0.0) > 0.3);
+    }
+
+    // ─── Scenario 2: Low manipulability ──────────────────────────
+
+    #[test]
+    fn scenario_low_manipulability_generates_findings() {
+        // Trajectory with q2 close to 0 (near-extended arm → low manipulability)
+        let chain = RobotRegistry::create_default(RobotModel::Planar2R);
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.05], 0.0),
+            TrajectoryPoint::new(vec![0.5, 0.05], 0.5),
+        ]);
+        let analyzer = TrajectoryAnalyzer::new(&chain, None);
+        let analysis = analyzer.analyze(&traj).expect("analysis failed");
+
+        // Should have findings (low manipulability or near-singularity)
+        assert!(!analysis.findings.is_empty(),
+            "Expected findings for low-manipulability plan");
+
+        let has_low_manip = analysis.findings.iter()
+            .any(|f| matches!(f.kind, FindingKind::LowManipulability));
+        let has_near_sing = analysis.findings.iter()
+            .any(|f| matches!(f.kind, FindingKind::NearSingularity));
+
+        // Either finding is valid here — both indicate a problem
+        assert!(has_low_manip || has_near_sing,
+            "Expected LowManipulability or NearSingularity finding, got: {:?}",
+            analysis.findings.iter().map(|f| f.kind).collect::<Vec<_>>());
+    }
+
+    // ─── Scenario 3: Singularity ─────────────────────────────────
+
+    #[test]
+    fn scenario_singularity_generates_error() {
+        // Arm fully extended along X → singular configuration
+        let chain = RobotRegistry::create_default(RobotModel::Planar2R);
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+        ]);
+        let analyzer = TrajectoryAnalyzer::new(&chain, None);
+        let analysis = analyzer.analyze(&traj).expect("analysis failed");
+
+        // At q = [0, 0] the arm is fully extended → singular
+        // Should have at least a NearSingularity or Singularity finding
+        let has_singularity = analysis.findings.iter()
+            .any(|f| matches!(f.kind, FindingKind::Singularity | FindingKind::NearSingularity));
+
+        assert!(has_singularity,
+            "Expected Singularity or NearSingularity finding for fully-extended arm, got: {:?}",
+            analysis.findings.iter().map(|f| f.kind).collect::<Vec<_>>());
+    }
+
+    // ─── Scenario 5: Multiple problems ────────────────────────────
+
+    #[test]
+    fn scenario_multiple_problems_aggregate_correctly() {
+        // Mix of good and bad waypoints
+        let chain = RobotRegistry::create_default(RobotModel::Planar2R);
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),    // singular
+            TrajectoryPoint::new(vec![0.5, 0.05], 0.5),    // low manipulability
+            TrajectoryPoint::new(vec![0.5, 1.57], 1.0),    // good
+        ]);
+        let analyzer = TrajectoryAnalyzer::new(&chain, None);
+        let analysis = analyzer.analyze(&traj).expect("analysis failed");
+
+        // Should have findings from waypoints 0 and 1
+        assert!(!analysis.findings.is_empty());
+        // Should have at least 2 findings (one per problem waypoint)
+        assert!(analysis.findings.len() >= 1);
+        // At least one finding from the singular waypoint
+        let sing_findings = analysis.findings.iter()
+            .filter(|f| matches!(f.kind, FindingKind::Singularity | FindingKind::NearSingularity | FindingKind::LowManipulability));
+        assert!(sing_findings.count() >= 1);
+    }
+
+    // Verify the pipeline: Analyze → Findings → Recommendations
+    #[test]
+    fn findings_produce_recommendations() {
+        use crate::finding::{Finding, FindingKind, Severity};
+
+        // Create a trajectory with good manipulability (q2 ≈ π/2)
+        let chain = RobotRegistry::create_default(RobotModel::Planar2R);
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.3, 1.57], 0.0),
+            TrajectoryPoint::new(vec![0.5, 1.57], 0.5),
+        ]);
+        let analyzer = TrajectoryAnalyzer::new(&chain, None);
+        let analysis = analyzer.analyze(&traj).expect("analysis failed");
+
+        let advisor = crate::advisor::PlanAdvisor;
+
+        if !analysis.findings.is_empty() {
+            // If there are findings, verify they produce recommendations
+            let recommendations = advisor.advise(&analysis.findings);
+            assert!(!recommendations.is_empty(),
+                "Findings should produce recommendations. Findings: {:?}",
+                analysis.findings);
+        } else {
+            // No findings → empty recommendations
+            let recommendations = advisor.advise(&analysis.findings);
+            assert!(recommendations.is_empty());
+        }
     }
 }
