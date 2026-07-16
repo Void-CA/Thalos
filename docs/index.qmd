@@ -26,7 +26,7 @@ fuertemente acoplados. Thalos nace con una premisa distinta:
 | Lenguaje      | Rust (edition 2024)                           |
 | Álgebra       | `nalgebra` + tipos propios (`Vector3`, `UnitQuaternion`, `Transform3D`) |
 | Backend HTTP  | `axum` 0.8                                    |
-| Frontend      | Angular 19 + Three.js (vía `three-renderer`)  |
+| Frontend      | Angular 21 + Three.js 0.184 (vía `three-renderer`) |
 | Visualización | Crate `thalos-visual` (scene graph desacoplado) |
 
 ## Convenciones del código

@@ -1,59 +1,60 @@
-# Frontend
+# Frontend — Thalos
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.2.7.
+Cliente Angular para la plataforma Thalos. Renderizado 3D con Three.js,
+estado reactivo con Signals + RxJS.
+
+## Stack
+
+- Angular 21
+- Three.js 0.184
+- RxJS 7.8
+- pnpm 10.x
+- TypeScript 5.9
 
 ## Development server
 
-To start a local development server, run:
-
 ```bash
+pnpm start
+# o
 ng serve
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+Navegar a `http://localhost:4200/`. La app recarga automáticamente al
+modificar archivos fuente.
 
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+## Build
 
 ```bash
-ng generate --help
+pnpm build
+# → dist/
 ```
 
-## Building
-
-To build the project run:
+## Tests
 
 ```bash
-ng build
+ng test        # Vitest
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+## Estructura
 
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
+```
+src/app/
+├── app.config.ts          # Providers
+├── app.component.ts       # Layout shell (5 zonas)
+├── features/
+│   ├── scene/             # Visualizador 3D, joint controls, store
+│   ├── robots/            # Catálogo de robots
+│   ├── planning/          # Planificación de movimiento
+│   ├── execution/         # Ejecución de trayectorias
+│   └── workspace/         # Workspace analysis
 ```
 
-## Running end-to-end tests
+## APIs
 
-For end-to-end (e2e) testing, run:
+El frontend se comunica con el backend via REST:
 
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+- `GET/POST /api/v1/scene/*` — estado de escena y comandos
+- `GET /api/v1/robots` — catálogo de robots
+- `POST /api/v1/motion/movej` — movimiento en joint space
+- `POST /api/v1/motion/movel` — movimiento en cartesian space
+- `POST /api/v1/workspace/*` — análisis de workspace

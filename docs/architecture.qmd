@@ -8,14 +8,17 @@ estructurado como está, y deben respetarse al extenderlo.
 
 ### Separación de responsabilidades
 
-Thalos separa **cinco dominios** que nunca deben acoplarse:
+Thalos separa **ocho dominios** que nunca deben acoplarse:
 
 | Dominio | Crate | Responsabilidad |
 |---------|-------|-----------------|
-| Matemático | `thalos-core::math` | Álgebra, geometría, rotaciones, transformaciones |
-| Robótico | `thalos-core::robot` + `kinematics` + `spatial` | Estructuras robóticas, cinemática, frames |
+| Matemático | `thalos-math` | Álgebra, geometría, rotaciones, transformaciones |
+| Robótico (core) | `thalos-core` | Estructuras robóticas, cinemática (FK/IK), frames, modelos |
+| Estructural | `thalos-models` | Estructura canónica de robot (URDF mirror) |
+| Colisiones | `thalos-collision` | Detección de colisiones (SAT, naive) |
+| Planificación | `thalos-planning` | Planificadores MoveJ/MoveL, trayectorias |
 | Visual | `thalos-visual` | Escenas, validación, diff, snapshots, primitivas |
-| Runtime | `thalos-runtime` | Orquestación, estado mutable, commands, backends |
+| Runtime | `thalos-runtime` | Orquestación, estado mutable, commands, backends, IK |
 | Comunicación | `thalos-api` | HTTP, DTOs, handlers, routing |
 
 La regla de oro:
@@ -28,16 +31,20 @@ La regla de oro:
 
 Cada crate es independiente y tiene un contrato claro:
 
-- `thalos-core` — **no depende de nada** fuera de `nalgebra` y `thiserror`
+- `thalos-math` — **no depende de nada** fuera de `nalgebra`
+- `thalos-core` — **depende de** `thalos-math`, `nalgebra` y `thiserror`
+- `thalos-models` — **depende de** `thalos-math`
+- `thalos-collision` — **depende de** `thalos-core`
+- `thalos-planning` — **depende de** `thalos-core`
 - `thalos-visual` — **solo depende de** `thalos-core` y `serde`
-- `thalos-runtime` — **depende de** `thalos-core` + `thalos-visual`, agrega
-  `thiserror` y `chrono`. **No sabe que existe HTTP.**
+- `thalos-runtime` — **depende de** `thalos-core` + `thalos-models` + `thalos-planning` + `thalos-visual`,
+  agrega `thiserror` y `chrono`. **No sabe que existe HTTP.**
 - `thalos-api` — **depende de** `thalos-core` + `thalos-visual` + `thalos-runtime`,
   agrega `axum` y `tokio`
 
 
-Esto significa que `thalos-core` puede compilarse y testearse **sin** `tokio`,
-`axum`, ni ningún sistema de visualización.
+Esto significa que `thalos-core` y `thalos-math` pueden compilarse y testearse
+**sin** `tokio`, `axum`, ni ningún sistema de visualización.
 
 ### Desacoplamiento matemático/visual
 
@@ -92,12 +99,15 @@ Violar una regla arquitectónica introduce deuda técnica estructural.
 
 | Regla | Descripción |
 |-------|-------------|
+| `thalos-math` no depende de nada robótico | No puede importar nada de `thalos-core`, `thalos-models`, etc. |
 | `thalos-core` no depende de visualización | No puede importar nada de `thalos-visual`. El core no sabe que existe una representación visual. |
 | `thalos-core` no depende de HTTP | No puede importar `axum`, `tokio`, ni ningún crate de infraestructura web. |
+| `thalos-models` no contiene algoritmos | Solo datos puros que mapean a URDF. Sin cinemática, sin runtime. |
+| `thalos-collision` y `thalos-planning` solo dependen del core | No importan runtime, visual ni API. |
 | `thalos-visual` consume estructuras del core | `SceneBuilder` importa `FKResult`, `SerialChain`, `Jacobian` — pero no modifica esas estructuras. La traducción es unidireccional. |
 | `thalos-runtime` no depende de HTTP | El runtime orquesta core + visual pero no sabe que existe `axum` ni `thalos-api`. |
 | `thalos-api` no contiene lógica de dominio | Los handlers delegan en `SceneService::execute()`. No hay cálculo cinemático ni manipulación de estructuras del core en los handlers. |
-| Sin dependencias circulares | `thalos-core` → `thalos-visual` → `thalos-runtime` → `thalos-api`. Nunca al revés. |
+| Sin dependencias circulares | `thalos-math` → `thalos-core` → `thalos-visual` → `thalos-runtime` → `thalos-api`. Nunca al revés. |
 | DTOs separados del dominio | Los tipos serializables de la API (`VisualSceneDto`, `RuntimeStateResponse`) son independientes de los tipos del core. `VisualScene` es una excepción controlada (es `Serialize` por diseño). El adapter `dto-to-model.ts` en el frontend traduce snake_case DTOs a camelCase internos. |
 
 > Violar estas reglas rompe el desacoplamiento y eventualmente convierte a
@@ -203,7 +213,7 @@ que un cambio en FK no rompió la escena esperada.
 digraph deps {
     rankdir=TB;
     splines=ortho;
-    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=12, margin="0.3,0.15"];
+    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=11, margin="0.3,0.15"];
 
     subgraph cluster_crates {
         label="Workspace Thalos";
@@ -211,15 +221,26 @@ digraph deps {
         penwidth=1;
         fontsize=13;
 
-        api     [label="thalos-api\naxum · tokio · serde"];
-        runtime [label="thalos-runtime\nchrono · thiserror", style="rounded,dashed", penwidth=2];
-        visual  [label="thalos-visual\nserde"];
-        core    [label="thalos-core\nnalgebra · thiserror"];
+        math    [label="thalos-math\nnalgebra"];
+        core    [label="thalos-core\nthalos-math · thiserror"];
+        models  [label="thalos-models\nthalos-math"];
+        coll    [label="thalos-collision\nthalos-core"];
+        plan    [label="thalos-planning\nthalos-core"];
+        visual  [label="thalos-visual\nthalos-core · serde"];
+        runtime [label="thalos-runtime\ncore · models · plan\nvisual · thiserror", style="rounded,dashed", penwidth=2];
+        api     [label="thalos-api\nruntime · axum · tokio"];
     }
 
-    visual -> core [label="depende de", fontsize=9];
-    runtime -> visual [label="depende de", fontsize=9];
-    api -> runtime  [label="depende de", fontsize=9];
+    core -> math;
+    models -> math;
+    coll -> core;
+    plan -> core;
+    visual -> core;
+    runtime -> visual;
+    runtime -> models;
+    runtime -> plan;
+    api -> runtime;
+
     edge [style=invis, weight=10];
     runtime -> visual;
 }
@@ -235,9 +256,9 @@ de concepto a implementación:
 | @sec-domain | Definiciones del dominio | Entender el vocabulario antes de ver código |
 | @sec-architecture | Filosofía arquitectónica | Entender por qué está estructurado así |
 | @sec-flow | Flujo interno del sistema | Ver cómo viajan los datos de punta a punta |
-| `thalos-core::math` | Vectores, cuaterniones, transforms | La base matemática de todo |
-| `thalos-core::robot` | Joints, links, segments, serial chain | Cómo se modela un robot |
-| `thalos-core::kinematics` | FK, jacobianos | Los algoritmos centrales |
+| `thalos-math` | Vectores, cuaterniones, transforms | La base matemática de todo |
+| `thalos-core::robot` | Joints, links, segments, serial chain, tool_frame | Cómo se modela un robot |
+| `thalos-core::kinematics` | FK, IK, jacobianos | Los algoritmos centrales |
 | `thalos-core::spatial` | Frames, poses, registries | El sistema de coordenadas |
 | `thalos-visual` | Scene builder, validator, diff, primitives, FrameStyle | Cómo se proyecta el dominio a visual |
 | `thalos-runtime` | SceneService, Command, RobotBackend | Cómo se orquesta el estado mutable |

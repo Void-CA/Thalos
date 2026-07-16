@@ -1,9 +1,33 @@
 # thalos-runtime
 
-**Pregunta que responde:** ¿Qué hace el robot? ¿Cómo se ejecutan comandos sobre el modelo?
+**Pregunta que responde:** ¿Qué hace el robot? ¿Cómo se ejecutan comandos
+sobre el modelo?
 
-Mantiene el estado mutable del robot (ángulos articulares, robot cargado) y ejecuta comandos (`SetJoints`, `LoadRobot`, `MoveToPosition`, `MoveToPose`). Es la capa que orquesta la cinemática: recibe un comando, lo resuelve contra el modelo de core, y devuelve un snapshot del resultado.
+Mantiene el estado mutable del robot (ángulos articulares, robot cargado,
+TCP activo, plan en ejecución) y ejecuta comandos. Es la capa que orquesta
+la cinemática: recibe un comando, lo resuelve contra el modelo de core, y
+devuelve un snapshot del resultado.
 
-Depende de `thalos-core` para los tipos de dominio y los solvers de IK.
+### Comandos (`Command` enum)
 
-**No debe contener:** HTTP, representaciones visuales, lógica de validación de escenas.
+| Comando | Descripción |
+|---------|-------------|
+| `SetJoints(Vec<f64>)` | Mutar ángulos articulares |
+| `LoadRobot(RobotModel)` | Cargar robot del catálogo |
+| `LoadUrdfRobot{name, chain, robot}` | Cargar robot desde URDF |
+| `Kinematics(MoveToPosition/Pose)` | Resolver IK y aplicar |
+| `Motion(MoveJ/PlanAndMoveJ/PlanAndMoveL)` | Planificar y ejecutar movimiento |
+| `SelectToolFrame(Option<ToolFrame>)` | Seleccionar/limpiar TCP |
+
+### Servicios
+
+- **SceneService** — orquestador principal, `execute(Command) → RuntimeSnapshot`
+- **WorkspaceService** — muestreo Monte Carlo, análisis de alcanzabilidad,
+  singularidad, manipulabilidad
+
+Depende de `thalos-core` para tipos de dominio y solvers de IK, de
+`thalos-planning` para planificadores de movimiento, y de `thalos-models`
+para estructura URDF.
+
+**No debe contener:** HTTP, representaciones visuales, lógica de validación
+de escenas.

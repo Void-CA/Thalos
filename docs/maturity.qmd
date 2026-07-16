@@ -8,42 +8,48 @@ colaboradores y adoptantes tempranos.
 
 | Área | Estado | Notas |
 |------|--------|-------|
-| `math::vectors` | $\blacksquare$ Estable | `Vector3`, `UnitVector3` |
-| `math::rotations::Quaternion` | $\blacksquare$ Estable | Álgebra completa |
-| `math::rotations::UnitQuaternion` | $\blacksquare$ Estable | SO(3) con invariante de norma |
-| `math::rotations::ops` | $\circ$ Experimental | Operaciones entre tipos, sin probar |
-| `math::rigid::Transform3D` | $\blacksquare$ Estable | API congelada, faltan tests directos |
-| `math::algebra::DynamicMatrix` | $\blacksquare$ Estable | Alias de `DMatrix` |
-| `math::traits` | $\circ$ Experimental | Traits `Cross`, `Dot` — pueden cambiar |
+| `thalos-math` | $\blacksquare$ Estable | `Vector3`, `Quaternion`, `Transform3D` — API congelada |
 | `robot::joint` | $\blacksquare$ Estable | `JointType`, `RevoluteJoint`, `PrismaticJoint` |
 | `robot::link` | $\blacksquare$ Estable | `Link` simple |
 | `robot::segment` | $\blacksquare$ Estable | `Segment` |
 | `robot::serial_chain` | $\blacksquare$ Estable | Estructura central del dominio |
 | `robot::builder` | $\blacksquare$ Estable | `SerialChainBuilder` con validación |
+| `robot::tool_frame` | $\blacksquare$ Estable | `ToolFrame` con offset, `resolve_pose()` |
 | `kinematics::forward` | $\blacksquare$ Estable | FK probado indirectamente vía snapshots |
 | `kinematics::jacobian::GeometricJacobian` | $\blacktriangle$ Desarrollo | Sin tests dedicados |
 | `kinematics::jacobian::NumericalJacobian` | $\blacktriangle$ Desarrollo | Sin tests dedicados |
+| `kinematics::inverse::DLS` | $\blacktriangle$ Desarrollo | Damped Least Squares — funcional, puede mejorar |
+| `kinematics::inverse::JT` | $\circ$ Experimental | Jacobian Transpose — implementación inicial |
 | `spatial::frame` | $\blacksquare$ Estable | `FrameId`, `Frame`, `FrameRegistry` |
 | `spatial::pose` | $\blacksquare$ Estable | `Pose` |
 | `spatial::frame::graph` | $\circ$ Experimental | Solo esqueleto declarado |
-| `models::factory` | $\blacksquare$ Estable | `RobotRegistry`, `RobotModel`, `RobotSpec` |
+| `models::factory` | $\blacksquare$ Estable | `RobotRegistry`, `RobotModel` (8 variantes), `RobotSpec` |
 | Modelos concretos | $\blacksquare$ Estable | Factory + tests FK por modelo |
-| `thalos-visual::scene` | $\blacktriangle$ Desarrollo | `VisualScene`, `VisualFrame`, primitives, `FrameStyle` — API estable pero puede crecer |
+| `thalos-models` | $\blacktriangle$ Desarrollo | URDF mirror, parser — estructura madura, parser en evolución |
+| `thalos-collision` | $\blacktriangle$ Desarrollo | `NaiveCollisionChecker`, SAT — funcional, sin benchmark |
+| `thalos-planning` | $\blacktriangle$ Desarrollo | `MoveJPlanner`, `GoalResolver`, `Trajectory` — MoveL es esqueleto |
+| `thalos-visual::scene` | $\blacksquare$ Estable | `VisualScene`, `VisualFrame`, primitives, `FrameStyle` |
 | `thalos-visual::builder` | $\blacktriangle$ Desarrollo | `SceneBuilder`, `ScaraVisualBuilder`, `cylinder_between` |
 | `thalos-visual::validator` | $\blacksquare$ Estable | 8 invariantes, tests con insta |
 | `thalos-visual::diff` | $\blacksquare$ Estable | `SceneDiff::between()` |
 | `thalos-visual::precision` | $\blacksquare$ Estable | `VisualPrecision` |
-| `thalos-runtime::scene` | $\blacktriangle$ Desarrollo | `SceneService`, `Command`, `RuntimeSnapshot` — estable pero crecerá |
+| `thalos-runtime::scene` | $\blacktriangle$ Desarrollo | `SceneService`, `Command`, `RuntimeSnapshot` |
+| `thalos-runtime::commands` | $\blacktriangle$ Desarrollo | SetJoints, LoadRobot, LoadUrdfRobot, Kinematics, Motion, SelectToolFrame |
+| `thalos-runtime::plan` | $\blacktriangle$ Desarrollo | `ActiveMotionPlan`, `ExecutionSession`, `PlanState` |
 | `thalos-runtime::backends` | $\circ$ Experimental | `RobotBackend` trait — puede necesitar más métodos |
-| `thalos-runtime::state` | $\circ$ Experimental | `SceneRuntime`, `ActiveRobot` — sujeto a cambios |
-| `thalos-api::handlers` | $\blacktriangle$ Desarrollo | Handlers REST escena + robots |
+| `thalos-runtime::state` | $\blacktriangle$ Desarrollo | `SceneRuntime` con TCP, plan, robot_source |
+| `thalos-api::scene` | $\blacktriangle$ Desarrollo | Handlers REST escena (~20 endpoints) |
+| `thalos-api::robots` | $\blacktriangle$ Desarrollo | Catálogo de robots |
+| `thalos-api::motion` | $\circ$ Experimental | Endpoints MoveJ/MoveL directos |
+| `thalos-api::workspace` | $\blacktriangle$ Desarrollo | Sample, reachability, singularity, manipulability (~9 endpoints) |
 | `thalos-api::dto` | $\blacktriangle$ Desarrollo | `RuntimeStateResponse`, `VisualSceneDto`, mirrors completos |
-| `thalos-api::routes` | $\circ$ Experimental | Routing puede cambiar / reorganizarse |
-| `thalos-api::robots` | $\circ$ Experimental | Catálogo de robots — feature nuevo |
 | Frontend: Scene feature | $\blacktriangle$ Desarrollo | Signals + RxJS, stable pero en evolución |
-| Frontend: Robots feature | $\circ$ Experimental | Catálogo + selección — feature nuevo |
-| Frontend: ThreeRenderer | $\blacktriangle$ Desarrollo | Primitives, FrameStyle, compass — puede sumar features |
-| Frontend: RobotCatalog | $\circ$ Experimental | UI de selección de robots, puede cambiar |
+| Frontend: Robots feature | $\blacktriangle$ Desarrollo | Catálogo + selección |
+| Frontend: Planning feature | $\circ$ Experimental | PlanningPanel con segmentos |
+| Frontend: Execution feature | $\blacktriangle$ Desarrollo | ExecutionPanel, estado, timeline |
+| Frontend: Workspace feature | $\circ$ Experimental | WorkspacePanel, WorkspaceRenderer |
+| Frontend: ThreeRenderer | $\blacksquare$ Estable | Primitives, FrameStyle, compass |
+| Frontend: RobotCatalog | $\blacktriangle$ Desarrollo | UI de selección de robots |
 
 **Estados**: 
 
@@ -59,6 +65,8 @@ colaboradores y adoptantes tempranos.
   conjugado, norma, normalización, producto de Hamilton, asociatividad
 - `math::rotations::unit_quaternion` — Invariante de norma, Euler ↔ quaternion
   roundtrip, `rotate_vector`, composición, inverso, `from_axis_angle`
+- `kinematics::inverse` — Tests DLS, JT, pose IK, benchmarks
+- `robot::tool_frame` — Tests de resolución de pose y posición
 
 ### `thalos-visual`
 
@@ -73,15 +81,29 @@ colaboradores y adoptantes tempranos.
 
 ### `thalos-runtime`
 
-- Sin tests dedicados aún (depende de validación de escena vía `thalos-visual`)
+- `scene_tests` — Tests de integración del orquestador
+- `tcp_integration_tests` — Tests de TCP/Flange en runtime
+
+### `thalos-planning`
+
+- `goal` — Tests de GoalResolver, validación de políticas
+- `motion` — Tests de MoveJPlanner
+
+### `thalos-collision`
+
+- `naive` — Tests de NaiveCollisionChecker
+- `intersect` — Tests SAT, esfera-caja
+
+### `thalos-math`
+
+- Tests de Vector3, Quaternion, UnitQuaternion, Transform3D
 
 ## Cobertura deseada
 
 - Tests directos para `Transform3D::compose()` y `Transform3D::identity()`
 - Tests para `RevoluteJoint::motion()` y `PrismaticJoint::motion()`
 - Tests para `SerialChainBuilder` (éxito y error)
-- Integración FK con modelos conocidos
 - Comparación `GeometricJacobian` vs `NumericalJacobian` (deberían coincidir
   dentro de tolerancia)
-- Snapshots por modelo robótico (Planar3R, SCARA, etc.)
+- Snapshots por modelo robótico (Manipulator3DOF, CylindricalRPP, etc.)
 - Tests de frontend con Angular Testing Library

@@ -285,13 +285,21 @@ pub enum RobotModel {
     Planar3R,
     SingleRevolute,
     Scara,
+    Manipulator3DOF,
+    Manipulator6DOF,
+    CylindricalRPP,
+    SphericalPolarRRP,
 }
 
 pub enum RobotSpec {
-    Planar2R { l1: f64, l2: f64 },
-    Planar3R { l1: f64, l2: f64, l3: f64 },
-    SingleRevolute { l1: f64 },
-    Scara { a1: f64, a2: f64, d1: f64, d2: f64 },
+    Planar2R(Planar2RSpec),
+    Planar3R(Planar3RSpec),
+    SingleRevolute(SingleRevoluteSpec),
+    Scara(ScaraSpec),
+    Manipulator3DOF(Manipulator3DOFSpec),
+    Manipulator6DOF(Manipulator6DOFSpec),
+    CylindricalRPP(CylindricalRPPSpec),
+    SphericalPolarRRP(SphericalPolarRRPSpec),
 }
 ```
 
@@ -301,6 +309,89 @@ construye la `SerialChain` correspondiente usando la fábrica adecuada.
 ```rust
 let robot = RobotRegistry::create(RobotModel::Planar2R, RobotSpec::Planar2R { l1: 1.0, l2: 1.0 })?;
 ```
+
+## Inverse Kinematics (IK)
+
+Thalos implementa dos solvers de cinemática inversa en `thalos-core::kinematics::inverse`:
+
+### Damped Least Squares (DLS)
+
+Solver iterativo basado en el jacobiano geodésico con damping. Robusto cerca de
+singularidades. Es el solver por defecto para `MoveToPosition` y `MoveToPose`.
+
+```rust
+pub struct DampedLeastSquaresSolver {
+    fk: ForwardKinematics,
+    frame: FrameId,
+    max_iters: usize,
+    tolerance: f64,
+    lambda: f64,       // damping factor
+}
+
+impl IKSolver for DampedLeastSquaresSolver {
+    fn solve(&self, q0: &[f64], goal: IKGoal) -> IKResult;
+}
+```
+
+### Jacobian Transpose (JT)
+
+Solver basado en la transpuesta del jacobiano. Menos preciso que DLS pero más
+rápido computacionalmente.
+
+### IKGoal
+
+```rust
+pub enum IKGoal {
+    Position(Vector3),
+    Pose(Pose),
+}
+```
+
+### IKResult
+
+```rust
+pub struct IKResult {
+    pub q: Vec<f64>,           // solución articular
+    pub final_error: f64,      // error residual
+    pub iterations: usize,     // iteraciones usadas
+    pub status: IKStatus,      // Converged, MaxIterationsReached, Singularity
+}
+```
+
+## Flange y TCP (Tool Center Point)
+
+Thalos separa el concepto de "end effector" en dos, siguiendo el estándar de la
+robótica industrial (ver ADR-0002):
+
+### Flange
+
+El último **frame mecánico** del robot (`chain.end_effector`). Es inmutable
+durante la vida del robot. Es el punto donde se monta la herramienta.
+
+### TCP activo
+
+Un frame opcional (`SceneRuntime::active_tcp: Option<ToolFrame>`) que representa
+la herramienta activa. Puede cambiar en runtime sin reconstruir la cadena
+cinemática.
+
+```rust
+pub struct ToolFrame {
+    pub base_frame: FrameId,     // Frame base (ej: flange, tool0)
+    pub transform: Transform3D,  // Offset desde base_frame
+}
+```
+
+### Invariantes del runtime
+
+1. Si `active_tcp` es `Some`, entonces `base_frame` existe en la cadena cinemática.
+2. Al cambiar de robot (`LoadRobot`, `LoadUrdfRobot`), `active_tcp` se limpia a `None`.
+3. La validación del frame ocurre en `SceneRuntime::select_tool_frame()`.
+
+### Impacto en el sistema
+
+Cuando `active_tcp` está presente, todos los análisis operacionales lo usan:
+workspace, jacobiano, singularidad, manipulabilidad, planning, IK.
+Cuando es `None`, se usa el flange (comportamiento anterior).
 
 ## Glosario rápido
 
@@ -317,5 +408,15 @@ let robot = RobotRegistry::create(RobotModel::Planar2R, RobotSpec::Planar2R { l1
 | **Model** | Configuración paramétrica de un robot concreto |
 | **FK** | Cálculo de poses dado un vector de configuración q |
 | **Jacobian** | Matriz que relaciona velocidades de joints con velocidades del end-effector |
+| **IK (Inverse Kinematics)** | Cálculo de configuración articular `q` para una pose deseada |
+| **DLS** | Damped Least Squares — solver IK robusto cerca de singularidades |
+| **TCP** | Tool Center Point — punto de trabajo de la herramienta activa |
+| **Flange** | Último frame mecánico del robot, donde se monta la herramienta |
+| **ToolFrame** | Estructura que define un TCP con base_frame + transform offset |
+| **MoveJ** | Movimiento en joint space con interpolación sincronizada |
+| **MoveL** | Movimiento en cartesian space (línea recta del end-effector) |
+| **Trajectory** | Secuencia de waypoints con metadatos de planificación |
+| **CollisionChecker** | Trait para detección de colisiones entre objetos 3D |
+| **Workspace** | Dataset inmutable de muestras Monte Carlo de posiciones alcanzables |
 | **VisualScene** | Proyección visual serializable del estado cinemático |
 | **SceneDiff** | Delta entre dos escenas visuales |

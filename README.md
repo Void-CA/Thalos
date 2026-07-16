@@ -7,18 +7,26 @@ Plataforma modular para modelado, análisis y visualización de sistemas robóti
 | Capa | Tecnología |
 |------|------------|
 | Core | Rust 2024, `nalgebra` |
-| Visual | `thalos-visual` (scene graph desacoplado) |
-| Runtime | `thalos-runtime` (orquestación, commands, backends) |
+| Matemática | `thalos-math` (vectores, cuaterniones, transforms propios) |
+| Colisiones | `thalos-collision` (SAT, esferas, cajas, naive O(n²)) |
+| Planificación | `thalos-planning` (planners MoveJ/MoveL, interpolación, trayectorias) |
+| Modelos robóticos | `thalos-models` (URDF mirror: Robot, Link, Joint, Geometry) |
+| Visual | `thalos-visual` (scene graph desacoplado, validación, diff) |
+| Runtime | `thalos-runtime` (orquestación, commands, backends, TCP, IK) |
 | API | `axum` 0.8 |
-| Frontend | Angular 19 + Three.js |
+| Frontend | Angular 21 + Three.js 0.184 |
 
 ## Crates
 
 ```
-thalos-core     → Matemática + robótica (sin dependencias externas pesadas)
-thalos-visual   → Representación visual, validación, primitivas 3D
-thalos-runtime  → Orquestación, estado mutable, commands
-thalos-api      → HTTP, DTOs, routing
+thalos-core      → Matemática + robótica (sin dependencias externas pesadas)
+thalos-math      → Tipos vectoriales puros (Vector3, Quaternion, Transform3D)
+thalos-models    → Estructura canónica de robot (URDF mirror)
+thalos-collision → Detección de colisiones, SAT, clasificación
+thalos-planning  → Planificadores de movimiento, trayectorias, interpolación
+thalos-visual    → Representación visual, validación, primitivas 3D, diff
+thalos-runtime   → Orquestación, estado mutable, commands, IK, TCP, ejecución
+thalos-api       → HTTP, DTOs, routing, workspace analysis
 ```
 
 ## Quick start
@@ -52,3 +60,5 @@ docs/
 ├── contributing.qmd   # Guía de contribución
 └── glossary.qmd       # Glosario de términos
 ```
+
+Decisiones arquitectónicas registradas (ADR) en [`docs/adr/`](docs/adr/).
