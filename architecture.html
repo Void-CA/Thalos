@@ -284,7 +284,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 data-number="3.1" class="anchored" data-anchor-id="principios-rectores"><span class="header-section-number">3.1</span> Principios rectores</h2>
 <section id="separación-de-responsabilidades" class="level3" data-number="3.1.1">
 <h3 data-number="3.1.1" class="anchored" data-anchor-id="separación-de-responsabilidades"><span class="header-section-number">3.1.1</span> Separación de responsabilidades</h3>
-<p>Thalos separa <strong>cinco dominios</strong> que nunca deben acoplarse:</p>
+<p>Thalos separa <strong>ocho dominios</strong> que nunca deben acoplarse:</p>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 27%">
@@ -301,25 +301,40 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tbody>
 <tr class="odd">
 <td>Matemático</td>
-<td><code>thalos-core::math</code></td>
+<td><code>thalos-math</code></td>
 <td>Álgebra, geometría, rotaciones, transformaciones</td>
 </tr>
 <tr class="even">
-<td>Robótico</td>
-<td><code>thalos-core::robot</code> + <code>kinematics</code> + <code>spatial</code></td>
-<td>Estructuras robóticas, cinemática, frames</td>
+<td>Robótico (core)</td>
+<td><code>thalos-core</code></td>
+<td>Estructuras robóticas, cinemática (FK/IK), frames, modelos</td>
 </tr>
 <tr class="odd">
+<td>Estructural</td>
+<td><code>thalos-models</code></td>
+<td>Estructura canónica de robot (URDF mirror)</td>
+</tr>
+<tr class="even">
+<td>Colisiones</td>
+<td><code>thalos-collision</code></td>
+<td>Detección de colisiones (SAT, naive)</td>
+</tr>
+<tr class="odd">
+<td>Planificación</td>
+<td><code>thalos-planning</code></td>
+<td>Planificadores MoveJ/MoveL, trayectorias</td>
+</tr>
+<tr class="even">
 <td>Visual</td>
 <td><code>thalos-visual</code></td>
 <td>Escenas, validación, diff, snapshots, primitivas</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Runtime</td>
 <td><code>thalos-runtime</code></td>
-<td>Orquestación, estado mutable, commands, backends</td>
+<td>Orquestación, estado mutable, commands, backends, IK</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Comunicación</td>
 <td><code>thalos-api</code></td>
 <td>HTTP, DTOs, handlers, routing</td>
@@ -335,12 +350,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h3 data-number="3.1.2" class="anchored" data-anchor-id="modularidad"><span class="header-section-number">3.1.2</span> Modularidad</h3>
 <p>Cada crate es independiente y tiene un contrato claro:</p>
 <ul>
-<li><code>thalos-core</code> — <strong>no depende de nada</strong> fuera de <code>nalgebra</code> y <code>thiserror</code></li>
+<li><code>thalos-math</code> — <strong>no depende de nada</strong> fuera de <code>nalgebra</code></li>
+<li><code>thalos-core</code> — <strong>depende de</strong> <code>thalos-math</code>, <code>nalgebra</code> y <code>thiserror</code></li>
+<li><code>thalos-models</code> — <strong>depende de</strong> <code>thalos-math</code></li>
+<li><code>thalos-collision</code> — <strong>depende de</strong> <code>thalos-core</code></li>
+<li><code>thalos-planning</code> — <strong>depende de</strong> <code>thalos-core</code></li>
 <li><code>thalos-visual</code> — <strong>solo depende de</strong> <code>thalos-core</code> y <code>serde</code></li>
-<li><code>thalos-runtime</code> — <strong>depende de</strong> <code>thalos-core</code> + <code>thalos-visual</code>, agrega <code>thiserror</code> y <code>chrono</code>. <strong>No sabe que existe HTTP.</strong></li>
+<li><code>thalos-runtime</code> — <strong>depende de</strong> <code>thalos-core</code> + <code>thalos-models</code> + <code>thalos-planning</code> + <code>thalos-visual</code>, agrega <code>thiserror</code> y <code>chrono</code>. <strong>No sabe que existe HTTP.</strong></li>
 <li><code>thalos-api</code> — <strong>depende de</strong> <code>thalos-core</code> + <code>thalos-visual</code> + <code>thalos-runtime</code>, agrega <code>axum</code> y <code>tokio</code></li>
 </ul>
-<p>Esto significa que <code>thalos-core</code> puede compilarse y testearse <strong>sin</strong> <code>tokio</code>, <code>axum</code>, ni ningún sistema de visualización.</p>
+<p>Esto significa que <code>thalos-core</code> y <code>thalos-math</code> pueden compilarse y testearse <strong>sin</strong> <code>tokio</code>, <code>axum</code>, ni ningún sistema de visualización.</p>
 </section>
 <section id="desacoplamiento-matemáticovisual" class="level3" data-number="3.1.3">
 <h3 data-number="3.1.3" class="anchored" data-anchor-id="desacoplamiento-matemáticovisual"><span class="header-section-number">3.1.3</span> Desacoplamiento matemático/visual</h3>
@@ -393,30 +412,42 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </thead>
 <tbody>
 <tr class="odd">
+<td><code>thalos-math</code> no depende de nada robótico</td>
+<td>No puede importar nada de <code>thalos-core</code>, <code>thalos-models</code>, etc.</td>
+</tr>
+<tr class="even">
 <td><code>thalos-core</code> no depende de visualización</td>
 <td>No puede importar nada de <code>thalos-visual</code>. El core no sabe que existe una representación visual.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>thalos-core</code> no depende de HTTP</td>
 <td>No puede importar <code>axum</code>, <code>tokio</code>, ni ningún crate de infraestructura web.</td>
 </tr>
+<tr class="even">
+<td><code>thalos-models</code> no contiene algoritmos</td>
+<td>Solo datos puros que mapean a URDF. Sin cinemática, sin runtime.</td>
+</tr>
 <tr class="odd">
+<td><code>thalos-collision</code> y <code>thalos-planning</code> solo dependen del core</td>
+<td>No importan runtime, visual ni API.</td>
+</tr>
+<tr class="even">
 <td><code>thalos-visual</code> consume estructuras del core</td>
 <td><code>SceneBuilder</code> importa <code>FKResult</code>, <code>SerialChain</code>, <code>Jacobian</code> — pero no modifica esas estructuras. La traducción es unidireccional.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>thalos-runtime</code> no depende de HTTP</td>
 <td>El runtime orquesta core + visual pero no sabe que existe <code>axum</code> ni <code>thalos-api</code>.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>thalos-api</code> no contiene lógica de dominio</td>
 <td>Los handlers delegan en <code>SceneService::execute()</code>. No hay cálculo cinemático ni manipulación de estructuras del core en los handlers.</td>
 </tr>
-<tr class="even">
-<td>Sin dependencias circulares</td>
-<td><code>thalos-core</code> → <code>thalos-visual</code> → <code>thalos-runtime</code> → <code>thalos-api</code>. Nunca al revés.</td>
-</tr>
 <tr class="odd">
+<td>Sin dependencias circulares</td>
+<td><code>thalos-math</code> → <code>thalos-core</code> → <code>thalos-visual</code> → <code>thalos-runtime</code> → <code>thalos-api</code>. Nunca al revés.</td>
+</tr>
+<tr class="even">
 <td>DTOs separados del dominio</td>
 <td>Los tipos serializables de la API (<code>VisualSceneDto</code>, <code>RuntimeStateResponse</code>) son independientes de los tipos del core. <code>VisualScene</code> es una excepción controlada (es <code>Serialize</code> por diseño). El adapter <code>dto-to-model.ts</code> en el frontend traduce snake_case DTOs a camelCase internos.</td>
 </tr>
@@ -510,64 +541,126 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-dep-map-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <div>
-<svg width="672" height="480" viewbox="0.00 0.00 184.00 407.20" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" style="; max-width: none; max-height: none">
-<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 403.2)">
+<svg width="672" height="480" viewbox="0.00 0.00 447.00 462.80" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" style="; max-width: none; max-height: none">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 458.8)">
 <title>deps</title>
-<polygon fill="white" stroke="transparent" points="-4,4 -4,-403.2 180,-403.2 180,4 -4,4"></polygon>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-458.8 443,-458.8 443,4 -4,4"></polygon>
 <g id="clust1" class="cluster">
 <title>cluster_crates</title>
-<polygon fill="none" stroke="black" stroke-dasharray="5,2" points="8,-8 8,-391.2 168,-391.2 168,-8 8,-8"></polygon>
-<text text-anchor="middle" x="88" y="-375.5" font-family="Times,serif" font-size="13.00">Workspace Thalos</text>
+<polygon fill="none" stroke="black" stroke-dasharray="5,2" points="8,-8 8,-446.8 431,-446.8 431,-8 8,-8"></polygon>
+<text text-anchor="middle" x="219.5" y="-431.1" font-family="Times,serif" font-size="13.00">Workspace Thalos</text>
 </g>
-<!-- api -->
+<!-- math -->
 <g id="node1" class="node">
-<title>api</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M148.15,-359.5C148.15,-359.5 27.85,-359.5 27.85,-359.5 21.85,-359.5 15.85,-353.5 15.85,-347.5 15.85,-347.5 15.85,-320.9 15.85,-320.9 15.85,-314.9 21.85,-308.9 27.85,-308.9 27.85,-308.9 148.15,-308.9 148.15,-308.9 154.15,-308.9 160.15,-314.9 160.15,-320.9 160.15,-320.9 160.15,-347.5 160.15,-347.5 160.15,-353.5 154.15,-359.5 148.15,-359.5"></path>
-<text text-anchor="middle" x="88" y="-337.8" font-family="sans-serif" font-size="12.00">thalos-api</text>
-<text text-anchor="middle" x="88" y="-323.4" font-family="sans-serif" font-size="12.00">axum · tokio · serde</text>
+<title>math</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M186.93,-64.6C186.93,-64.6 115.07,-64.6 115.07,-64.6 109.07,-64.6 103.07,-58.6 103.07,-52.6 103.07,-52.6 103.07,-27.8 103.07,-27.8 103.07,-21.8 109.07,-15.8 115.07,-15.8 115.07,-15.8 186.93,-15.8 186.93,-15.8 192.93,-15.8 198.93,-21.8 198.93,-27.8 198.93,-27.8 198.93,-52.6 198.93,-52.6 198.93,-58.6 192.93,-64.6 186.93,-64.6"></path>
+<text text-anchor="middle" x="151" y="-43.5" font-family="sans-serif" font-size="11.00">thalos-math</text>
+<text text-anchor="middle" x="151" y="-30.3" font-family="sans-serif" font-size="11.00">nalgebra</text>
 </g>
-<!-- runtime -->
+<!-- core -->
 <g id="node2" class="node">
-<title>runtime</title>
-<path fill="none" stroke="black" stroke-width="2" stroke-dasharray="5,2" d="M140.97,-261.9C140.97,-261.9 35.03,-261.9 35.03,-261.9 29.03,-261.9 23.03,-255.9 23.03,-249.9 23.03,-249.9 23.03,-223.3 23.03,-223.3 23.03,-217.3 29.03,-211.3 35.03,-211.3 35.03,-211.3 140.97,-211.3 140.97,-211.3 146.97,-211.3 152.97,-217.3 152.97,-223.3 152.97,-223.3 152.97,-249.9 152.97,-249.9 152.97,-255.9 146.97,-261.9 140.97,-261.9"></path>
-<text text-anchor="middle" x="88" y="-240.2" font-family="sans-serif" font-size="12.00">thalos-runtime</text>
-<text text-anchor="middle" x="88" y="-225.8" font-family="sans-serif" font-size="12.00">chrono · thiserror</text>
+<title>core</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M285.2,-149C285.2,-149 164.8,-149 164.8,-149 158.8,-149 152.8,-143 152.8,-137 152.8,-137 152.8,-112.2 152.8,-112.2 152.8,-106.2 158.8,-100.2 164.8,-100.2 164.8,-100.2 285.2,-100.2 285.2,-100.2 291.2,-100.2 297.2,-106.2 297.2,-112.2 297.2,-112.2 297.2,-137 297.2,-137 297.2,-143 291.2,-149 285.2,-149"></path>
+<text text-anchor="middle" x="225" y="-127.9" font-family="sans-serif" font-size="11.00">thalos-core</text>
+<text text-anchor="middle" x="225" y="-114.7" font-family="sans-serif" font-size="11.00">thalos-math · thiserror</text>
 </g>
-<!-- api&#45;&gt;runtime -->
+<!-- core&#45;&gt;math -->
+<g id="edge1" class="edge">
+<title>core-&gt;math</title>
+<path fill="none" stroke="black" d="M175.93,-100.19C175.93,-100.19 175.93,-74.56 175.93,-74.56"></path>
+<polygon fill="black" stroke="black" points="179.43,-74.56 175.93,-64.56 172.43,-74.56 179.43,-74.56"></polygon>
+</g>
+<!-- models -->
+<g id="node3" class="node">
+<title>models</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M118.71,-149C118.71,-149 37.29,-149 37.29,-149 31.29,-149 25.29,-143 25.29,-137 25.29,-137 25.29,-112.2 25.29,-112.2 25.29,-106.2 31.29,-100.2 37.29,-100.2 37.29,-100.2 118.71,-100.2 118.71,-100.2 124.71,-100.2 130.71,-106.2 130.71,-112.2 130.71,-112.2 130.71,-137 130.71,-137 130.71,-143 124.71,-149 118.71,-149"></path>
+<text text-anchor="middle" x="78" y="-127.9" font-family="sans-serif" font-size="11.00">thalos-models</text>
+<text text-anchor="middle" x="78" y="-114.7" font-family="sans-serif" font-size="11.00">thalos-math</text>
+</g>
+<!-- models&#45;&gt;math -->
+<g id="edge2" class="edge">
+<title>models-&gt;math</title>
+<path fill="none" stroke="black" d="M116.95,-100.19C116.95,-100.19 116.95,-74.56 116.95,-74.56"></path>
+<polygon fill="black" stroke="black" points="120.45,-74.56 116.95,-64.56 113.45,-74.56 120.45,-74.56"></polygon>
+</g>
+<!-- coll -->
+<g id="node4" class="node">
+<title>coll</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M410.83,-233.4C410.83,-233.4 323.17,-233.4 323.17,-233.4 317.17,-233.4 311.17,-227.4 311.17,-221.4 311.17,-221.4 311.17,-196.6 311.17,-196.6 311.17,-190.6 317.17,-184.6 323.17,-184.6 323.17,-184.6 410.83,-184.6 410.83,-184.6 416.83,-184.6 422.83,-190.6 422.83,-196.6 422.83,-196.6 422.83,-221.4 422.83,-221.4 422.83,-227.4 416.83,-233.4 410.83,-233.4"></path>
+<text text-anchor="middle" x="367" y="-212.3" font-family="sans-serif" font-size="11.00">thalos-collision</text>
+<text text-anchor="middle" x="367" y="-199.1" font-family="sans-serif" font-size="11.00">thalos-core</text>
+</g>
+<!-- coll&#45;&gt;core -->
 <g id="edge3" class="edge">
-<title>api-&gt;runtime</title>
-<path fill="none" stroke="black" d="M88,-308.81C88,-308.81 88,-272.2 88,-272.2"></path>
-<polygon fill="black" stroke="black" points="91.5,-272.2 88,-262.2 84.5,-272.2 91.5,-272.2"></polygon>
-<text text-anchor="middle" x="108.36" y="-282.7" font-family="Times,serif" font-size="9.00">depende de</text>
+<title>coll-&gt;core</title>
+<path fill="none" stroke="black" d="M367,-184.41C367,-159.31 367,-124 367,-124 367,-124 307.25,-124 307.25,-124"></path>
+<polygon fill="black" stroke="black" points="307.25,-120.5 297.25,-124 307.25,-127.5 307.25,-120.5"></polygon>
+</g>
+<!-- plan -->
+<g id="node5" class="node">
+<title>plan</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M136.43,-233.4C136.43,-233.4 47.57,-233.4 47.57,-233.4 41.57,-233.4 35.57,-227.4 35.57,-221.4 35.57,-221.4 35.57,-196.6 35.57,-196.6 35.57,-190.6 41.57,-184.6 47.57,-184.6 47.57,-184.6 136.43,-184.6 136.43,-184.6 142.43,-184.6 148.43,-190.6 148.43,-196.6 148.43,-196.6 148.43,-221.4 148.43,-221.4 148.43,-227.4 142.43,-233.4 136.43,-233.4"></path>
+<text text-anchor="middle" x="92" y="-212.3" font-family="sans-serif" font-size="11.00">thalos-planning</text>
+<text text-anchor="middle" x="92" y="-199.1" font-family="sans-serif" font-size="11.00">thalos-core</text>
+</g>
+<!-- plan&#45;&gt;core -->
+<g id="edge4" class="edge">
+<title>plan-&gt;core</title>
+<path fill="none" stroke="black" d="M139.54,-184.41C139.54,-159.31 139.54,-124 139.54,-124 139.54,-124 142.89,-124 142.89,-124"></path>
+<polygon fill="black" stroke="black" points="142.89,-127.5 152.89,-124 142.89,-120.5 142.89,-127.5"></polygon>
 </g>
 <!-- visual -->
-<g id="node3" class="node">
+<g id="node6" class="node">
 <title>visual</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M128.82,-164.3C128.82,-164.3 47.18,-164.3 47.18,-164.3 41.18,-164.3 35.18,-158.3 35.18,-152.3 35.18,-152.3 35.18,-125.7 35.18,-125.7 35.18,-119.7 41.18,-113.7 47.18,-113.7 47.18,-113.7 128.82,-113.7 128.82,-113.7 134.82,-113.7 140.82,-119.7 140.82,-125.7 140.82,-125.7 140.82,-152.3 140.82,-152.3 140.82,-158.3 134.82,-164.3 128.82,-164.3"></path>
-<text text-anchor="middle" x="88" y="-142.6" font-family="sans-serif" font-size="12.00">thalos-visual</text>
-<text text-anchor="middle" x="88" y="-128.2" font-family="sans-serif" font-size="12.00">serde</text>
-</g>
-<!-- runtime&#45;&gt;visual -->
-<g id="edge2" class="edge">
-<title>runtime-&gt;visual</title>
-<path fill="none" stroke="black" d="M70.45,-211.21C70.45,-211.21 70.45,-174.6 70.45,-174.6"></path>
-<polygon fill="black" stroke="black" points="73.95,-174.6 70.45,-164.6 66.95,-174.6 73.95,-174.6"></polygon>
-<text text-anchor="middle" x="61.36" y="-185.1" font-family="Times,serif" font-size="9.00">depende de</text>
-</g>
-<!-- runtime&#45;&gt;visual -->
-<!-- core -->
-<g id="node4" class="node">
-<title>core</title>
-<path fill="none" stroke="black" stroke-width="1.5" d="M144.96,-66.7C144.96,-66.7 31.04,-66.7 31.04,-66.7 25.04,-66.7 19.04,-60.7 19.04,-54.7 19.04,-54.7 19.04,-28.1 19.04,-28.1 19.04,-22.1 25.04,-16.1 31.04,-16.1 31.04,-16.1 144.96,-16.1 144.96,-16.1 150.96,-16.1 156.96,-22.1 156.96,-28.1 156.96,-28.1 156.96,-54.7 156.96,-54.7 156.96,-60.7 150.96,-66.7 144.96,-66.7"></path>
-<text text-anchor="middle" x="88" y="-45" font-family="sans-serif" font-size="12.00">thalos-core</text>
-<text text-anchor="middle" x="88" y="-30.6" font-family="sans-serif" font-size="12.00">nalgebra · thiserror</text>
+<path fill="none" stroke="black" stroke-width="1.5" d="M281.57,-233.4C281.57,-233.4 178.43,-233.4 178.43,-233.4 172.43,-233.4 166.43,-227.4 166.43,-221.4 166.43,-221.4 166.43,-196.6 166.43,-196.6 166.43,-190.6 172.43,-184.6 178.43,-184.6 178.43,-184.6 281.57,-184.6 281.57,-184.6 287.57,-184.6 293.57,-190.6 293.57,-196.6 293.57,-196.6 293.57,-221.4 293.57,-221.4 293.57,-227.4 287.57,-233.4 281.57,-233.4"></path>
+<text text-anchor="middle" x="230" y="-212.3" font-family="sans-serif" font-size="11.00">thalos-visual</text>
+<text text-anchor="middle" x="230" y="-199.1" font-family="sans-serif" font-size="11.00">thalos-core · serde</text>
 </g>
 <!-- visual&#45;&gt;core -->
-<g id="edge1" class="edge">
+<g id="edge5" class="edge">
 <title>visual-&gt;core</title>
-<path fill="none" stroke="black" d="M88,-113.61C88,-113.61 88,-77 88,-77"></path>
-<polygon fill="black" stroke="black" points="91.5,-77 88,-67 84.5,-77 91.5,-77"></polygon>
-<text text-anchor="middle" x="108.36" y="-87.5" font-family="Times,serif" font-size="9.00">depende de</text>
+<path fill="none" stroke="black" d="M230,-184.59C230,-184.59 230,-158.96 230,-158.96"></path>
+<polygon fill="black" stroke="black" points="233.5,-158.96 230,-148.96 226.5,-158.96 233.5,-158.96"></polygon>
+</g>
+<!-- runtime -->
+<g id="node7" class="node">
+<title>runtime</title>
+<path fill="none" stroke="black" stroke-width="2" stroke-dasharray="5,2" d="M285.64,-330.6C285.64,-330.6 174.36,-330.6 174.36,-330.6 168.36,-330.6 162.36,-324.6 162.36,-318.6 162.36,-318.6 162.36,-281.4 162.36,-281.4 162.36,-275.4 168.36,-269.4 174.36,-269.4 174.36,-269.4 285.64,-269.4 285.64,-269.4 291.64,-269.4 297.64,-275.4 297.64,-281.4 297.64,-281.4 297.64,-318.6 297.64,-318.6 297.64,-324.6 291.64,-330.6 285.64,-330.6"></path>
+<text text-anchor="middle" x="230" y="-309.9" font-family="sans-serif" font-size="11.00">thalos-runtime</text>
+<text text-anchor="middle" x="230" y="-296.7" font-family="sans-serif" font-size="11.00">core · models · plan</text>
+<text text-anchor="middle" x="230" y="-283.5" font-family="sans-serif" font-size="11.00">visual · thiserror</text>
+</g>
+<!-- runtime&#45;&gt;models -->
+<g id="edge7" class="edge">
+<title>runtime-&gt;models</title>
+<path fill="none" stroke="black" d="M162.17,-310C104.32,-310 30.46,-310 30.46,-310 30.46,-310 30.46,-158.84 30.46,-158.84"></path>
+<polygon fill="black" stroke="black" points="33.96,-158.84 30.46,-148.84 26.96,-158.84 33.96,-158.84"></polygon>
+</g>
+<!-- runtime&#45;&gt;plan -->
+<g id="edge8" class="edge">
+<title>runtime-&gt;plan</title>
+<path fill="none" stroke="black" d="M162.21,-289C127.31,-289 92,-289 92,-289 92,-289 92,-243.44 92,-243.44"></path>
+<polygon fill="black" stroke="black" points="95.5,-243.44 92,-233.44 88.5,-243.44 95.5,-243.44"></polygon>
+</g>
+<!-- runtime&#45;&gt;visual -->
+<g id="edge6" class="edge">
+<title>runtime-&gt;visual</title>
+<path fill="none" stroke="black" d="M208.82,-269.19C208.82,-269.19 208.82,-243.45 208.82,-243.45"></path>
+<polygon fill="black" stroke="black" points="212.32,-243.45 208.82,-233.45 205.32,-243.45 212.32,-243.45"></polygon>
+</g>
+<!-- runtime&#45;&gt;visual -->
+<!-- api -->
+<g id="node8" class="node">
+<title>api</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M291.76,-415.4C291.76,-415.4 168.24,-415.4 168.24,-415.4 162.24,-415.4 156.24,-409.4 156.24,-403.4 156.24,-403.4 156.24,-378.6 156.24,-378.6 156.24,-372.6 162.24,-366.6 168.24,-366.6 168.24,-366.6 291.76,-366.6 291.76,-366.6 297.76,-366.6 303.76,-372.6 303.76,-378.6 303.76,-378.6 303.76,-403.4 303.76,-403.4 303.76,-409.4 297.76,-415.4 291.76,-415.4"></path>
+<text text-anchor="middle" x="230" y="-394.3" font-family="sans-serif" font-size="11.00">thalos-api</text>
+<text text-anchor="middle" x="230" y="-381.1" font-family="sans-serif" font-size="11.00">runtime · axum · tokio</text>
+</g>
+<!-- api&#45;&gt;runtime -->
+<g id="edge9" class="edge">
+<title>api-&gt;runtime</title>
+<path fill="none" stroke="black" d="M230,-366.61C230,-366.61 230,-340.65 230,-340.65"></path>
+<polygon fill="black" stroke="black" points="233.5,-340.65 230,-330.65 226.5,-340.65 233.5,-340.65"></polygon>
 </g>
 </g>
 </svg>
@@ -614,18 +707,18 @@ Figure&nbsp;3.1: Mapa de dependencias del workspace
 <td>Ver cómo viajan los datos de punta a punta</td>
 </tr>
 <tr class="even">
-<td><code>thalos-core::math</code></td>
+<td><code>thalos-math</code></td>
 <td>Vectores, cuaterniones, transforms</td>
 <td>La base matemática de todo</td>
 </tr>
 <tr class="odd">
 <td><code>thalos-core::robot</code></td>
-<td>Joints, links, segments, serial chain</td>
+<td>Joints, links, segments, serial chain, tool_frame</td>
 <td>Cómo se modela un robot</td>
 </tr>
 <tr class="even">
 <td><code>thalos-core::kinematics</code></td>
-<td>FK, jacobianos</td>
+<td>FK, IK, jacobianos</td>
 <td>Los algoritmos centrales</td>
 </tr>
 <tr class="odd">

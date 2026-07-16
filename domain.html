@@ -247,7 +247,21 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#cómo-conecta-el-sistema-espacial-con-el-resto" id="toc-cómo-conecta-el-sistema-espacial-con-el-resto" class="nav-link" data-scroll-target="#cómo-conecta-el-sistema-espacial-con-el-resto"><span class="header-section-number">6.5.5</span> ¿Cómo conecta el sistema espacial con el resto?</a></li>
   </ul></li>
   <li><a href="#model" id="toc-model" class="nav-link" data-scroll-target="#model"><span class="header-section-number">6.6</span> Model</a></li>
-  <li><a href="#glosario-rápido" id="toc-glosario-rápido" class="nav-link" data-scroll-target="#glosario-rápido"><span class="header-section-number">6.7</span> Glosario rápido</a></li>
+  <li><a href="#inverse-kinematics-ik" id="toc-inverse-kinematics-ik" class="nav-link" data-scroll-target="#inverse-kinematics-ik"><span class="header-section-number">6.7</span> Inverse Kinematics (IK)</a>
+  <ul class="collapse">
+  <li><a href="#damped-least-squares-dls" id="toc-damped-least-squares-dls" class="nav-link" data-scroll-target="#damped-least-squares-dls"><span class="header-section-number">6.7.1</span> Damped Least Squares (DLS)</a></li>
+  <li><a href="#jacobian-transpose-jt" id="toc-jacobian-transpose-jt" class="nav-link" data-scroll-target="#jacobian-transpose-jt"><span class="header-section-number">6.7.2</span> Jacobian Transpose (JT)</a></li>
+  <li><a href="#ikgoal" id="toc-ikgoal" class="nav-link" data-scroll-target="#ikgoal"><span class="header-section-number">6.7.3</span> IKGoal</a></li>
+  <li><a href="#ikresult" id="toc-ikresult" class="nav-link" data-scroll-target="#ikresult"><span class="header-section-number">6.7.4</span> IKResult</a></li>
+  </ul></li>
+  <li><a href="#flange-y-tcp-tool-center-point" id="toc-flange-y-tcp-tool-center-point" class="nav-link" data-scroll-target="#flange-y-tcp-tool-center-point"><span class="header-section-number">6.8</span> Flange y TCP (Tool Center Point)</a>
+  <ul class="collapse">
+  <li><a href="#flange" id="toc-flange" class="nav-link" data-scroll-target="#flange"><span class="header-section-number">6.8.1</span> Flange</a></li>
+  <li><a href="#tcp-activo" id="toc-tcp-activo" class="nav-link" data-scroll-target="#tcp-activo"><span class="header-section-number">6.8.2</span> TCP activo</a></li>
+  <li><a href="#invariantes-del-runtime" id="toc-invariantes-del-runtime" class="nav-link" data-scroll-target="#invariantes-del-runtime"><span class="header-section-number">6.8.3</span> Invariantes del runtime</a></li>
+  <li><a href="#impacto-en-el-sistema" id="toc-impacto-en-el-sistema" class="nav-link" data-scroll-target="#impacto-en-el-sistema"><span class="header-section-number">6.8.4</span> Impacto en el sistema</a></li>
+  </ul></li>
+  <li><a href="#glosario-rápido" id="toc-glosario-rápido" class="nav-link" data-scroll-target="#glosario-rápido"><span class="header-section-number">6.9</span> Glosario rápido</a></li>
   </ul>
 </nav>
     </div>
@@ -608,19 +622,94 @@ Figure&nbsp;6.2: Pipeline espacial: FK, visualización y validación
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    Planar3R<span class="op">,</span></span>
 <span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    SingleRevolute<span class="op">,</span></span>
 <span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    Scara<span class="op">,</span></span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> RobotSpec <span class="op">{</span></span>
-<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>    Planar2R <span class="op">{</span> l1<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span> l2<span class="op">:</span> <span class="dt">f64</span> <span class="op">},</span></span>
-<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>    Planar3R <span class="op">{</span> l1<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span> l2<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span> l3<span class="op">:</span> <span class="dt">f64</span> <span class="op">},</span></span>
-<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>    SingleRevolute <span class="op">{</span> l1<span class="op">:</span> <span class="dt">f64</span> <span class="op">},</span></span>
-<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>    Scara <span class="op">{</span> a1<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span> a2<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span> d1<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span> d2<span class="op">:</span> <span class="dt">f64</span> <span class="op">},</span></span>
-<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    Manipulator3DOF<span class="op">,</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>    Manipulator6DOF<span class="op">,</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>    CylindricalRPP<span class="op">,</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>    SphericalPolarRRP<span class="op">,</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> RobotSpec <span class="op">{</span></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>    Planar2R(Planar2RSpec)<span class="op">,</span></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>    Planar3R(Planar3RSpec)<span class="op">,</span></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>    SingleRevolute(SingleRevoluteSpec)<span class="op">,</span></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>    Scara(ScaraSpec)<span class="op">,</span></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>    Manipulator3DOF(Manipulator3DOFSpec)<span class="op">,</span></span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>    Manipulator6DOF(Manipulator6DOFSpec)<span class="op">,</span></span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>    CylindricalRPP(CylindricalRPPSpec)<span class="op">,</span></span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>    SphericalPolarRRP(SphericalPolarRRPSpec)<span class="op">,</span></span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><code>RobotRegistry::create(model, spec)</code> valida que model y spec coincidan y construye la <code>SerialChain</code> correspondiente usando la fábrica adecuada.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> robot <span class="op">=</span> <span class="pp">RobotRegistry::</span>create(<span class="pp">RobotModel::</span>Planar2R<span class="op">,</span> <span class="pp">RobotSpec::</span>Planar2R <span class="op">{</span> l1<span class="op">:</span> <span class="dv">1.0</span><span class="op">,</span> l2<span class="op">:</span> <span class="dv">1.0</span> <span class="op">}</span>)<span class="op">?;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="glosario-rápido" class="level2" data-number="6.7">
-<h2 data-number="6.7" class="anchored" data-anchor-id="glosario-rápido"><span class="header-section-number">6.7</span> Glosario rápido</h2>
+<section id="inverse-kinematics-ik" class="level2" data-number="6.7">
+<h2 data-number="6.7" class="anchored" data-anchor-id="inverse-kinematics-ik"><span class="header-section-number">6.7</span> Inverse Kinematics (IK)</h2>
+<p>Thalos implementa dos solvers de cinemática inversa en <code>thalos-core::kinematics::inverse</code>:</p>
+<section id="damped-least-squares-dls" class="level3" data-number="6.7.1">
+<h3 data-number="6.7.1" class="anchored" data-anchor-id="damped-least-squares-dls"><span class="header-section-number">6.7.1</span> Damped Least Squares (DLS)</h3>
+<p>Solver iterativo basado en el jacobiano geodésico con damping. Robusto cerca de singularidades. Es el solver por defecto para <code>MoveToPosition</code> y <code>MoveToPose</code>.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> DampedLeastSquaresSolver <span class="op">{</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    fk<span class="op">:</span> ForwardKinematics<span class="op">,</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    frame<span class="op">:</span> FrameId<span class="op">,</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    max_iters<span class="op">:</span> <span class="dt">usize</span><span class="op">,</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    tolerance<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>    lambda<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span>       <span class="co">// damping factor</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="kw">impl</span> IKSolver <span class="cf">for</span> DampedLeastSquaresSolver <span class="op">{</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">fn</span> solve(<span class="op">&amp;</span><span class="kw">self</span><span class="op">,</span> q0<span class="op">:</span> <span class="op">&amp;</span>[<span class="dt">f64</span>]<span class="op">,</span> goal<span class="op">:</span> IKGoal) <span class="op">-&gt;</span> IKResult<span class="op">;</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="jacobian-transpose-jt" class="level3" data-number="6.7.2">
+<h3 data-number="6.7.2" class="anchored" data-anchor-id="jacobian-transpose-jt"><span class="header-section-number">6.7.2</span> Jacobian Transpose (JT)</h3>
+<p>Solver basado en la transpuesta del jacobiano. Menos preciso que DLS pero más rápido computacionalmente.</p>
+</section>
+<section id="ikgoal" class="level3" data-number="6.7.3">
+<h3 data-number="6.7.3" class="anchored" data-anchor-id="ikgoal"><span class="header-section-number">6.7.3</span> IKGoal</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> IKGoal <span class="op">{</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    Position(Vector3)<span class="op">,</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    Pose(Pose)<span class="op">,</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="ikresult" class="level3" data-number="6.7.4">
+<h3 data-number="6.7.4" class="anchored" data-anchor-id="ikresult"><span class="header-section-number">6.7.4</span> IKResult</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> IKResult <span class="op">{</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> q<span class="op">:</span> <span class="dt">Vec</span><span class="op">&lt;</span><span class="dt">f64</span><span class="op">&gt;,</span>           <span class="co">// solución articular</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> final_error<span class="op">:</span> <span class="dt">f64</span><span class="op">,</span>      <span class="co">// error residual</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> iterations<span class="op">:</span> <span class="dt">usize</span><span class="op">,</span>     <span class="co">// iteraciones usadas</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> status<span class="op">:</span> IKStatus<span class="op">,</span>      <span class="co">// Converged, MaxIterationsReached, Singularity</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+</section>
+<section id="flange-y-tcp-tool-center-point" class="level2" data-number="6.8">
+<h2 data-number="6.8" class="anchored" data-anchor-id="flange-y-tcp-tool-center-point"><span class="header-section-number">6.8</span> Flange y TCP (Tool Center Point)</h2>
+<p>Thalos separa el concepto de “end effector” en dos, siguiendo el estándar de la robótica industrial (ver ADR-0002):</p>
+<section id="flange" class="level3" data-number="6.8.1">
+<h3 data-number="6.8.1" class="anchored" data-anchor-id="flange"><span class="header-section-number">6.8.1</span> Flange</h3>
+<p>El último <strong>frame mecánico</strong> del robot (<code>chain.end_effector</code>). Es inmutable durante la vida del robot. Es el punto donde se monta la herramienta.</p>
+</section>
+<section id="tcp-activo" class="level3" data-number="6.8.2">
+<h3 data-number="6.8.2" class="anchored" data-anchor-id="tcp-activo"><span class="header-section-number">6.8.2</span> TCP activo</h3>
+<p>Un frame opcional (<code>SceneRuntime::active_tcp: Option&lt;ToolFrame&gt;</code>) que representa la herramienta activa. Puede cambiar en runtime sin reconstruir la cadena cinemática.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> ToolFrame <span class="op">{</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> base_frame<span class="op">:</span> FrameId<span class="op">,</span>     <span class="co">// Frame base (ej: flange, tool0)</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> transform<span class="op">:</span> Transform3D<span class="op">,</span>  <span class="co">// Offset desde base_frame</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="invariantes-del-runtime" class="level3" data-number="6.8.3">
+<h3 data-number="6.8.3" class="anchored" data-anchor-id="invariantes-del-runtime"><span class="header-section-number">6.8.3</span> Invariantes del runtime</h3>
+<ol type="1">
+<li>Si <code>active_tcp</code> es <code>Some</code>, entonces <code>base_frame</code> existe en la cadena cinemática.</li>
+<li>Al cambiar de robot (<code>LoadRobot</code>, <code>LoadUrdfRobot</code>), <code>active_tcp</code> se limpia a <code>None</code>.</li>
+<li>La validación del frame ocurre en <code>SceneRuntime::select_tool_frame()</code>.</li>
+</ol>
+</section>
+<section id="impacto-en-el-sistema" class="level3" data-number="6.8.4">
+<h3 data-number="6.8.4" class="anchored" data-anchor-id="impacto-en-el-sistema"><span class="header-section-number">6.8.4</span> Impacto en el sistema</h3>
+<p>Cuando <code>active_tcp</code> está presente, todos los análisis operacionales lo usan: workspace, jacobiano, singularidad, manipulabilidad, planning, IK. Cuando es <code>None</code>, se usa el flange (comportamiento anterior).</p>
+</section>
+</section>
+<section id="glosario-rápido" class="level2" data-number="6.9">
+<h2 data-number="6.9" class="anchored" data-anchor-id="glosario-rápido"><span class="header-section-number">6.9</span> Glosario rápido</h2>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 42%">
@@ -676,6 +765,46 @@ Figure&nbsp;6.2: Pipeline espacial: FK, visualización y validación
 <tr class="odd">
 <td><strong>Jacobian</strong></td>
 <td>Matriz que relaciona velocidades de joints con velocidades del end-effector</td>
+</tr>
+<tr class="even">
+<td><strong>IK (Inverse Kinematics)</strong></td>
+<td>Cálculo de configuración articular <code>q</code> para una pose deseada</td>
+</tr>
+<tr class="odd">
+<td><strong>DLS</strong></td>
+<td>Damped Least Squares — solver IK robusto cerca de singularidades</td>
+</tr>
+<tr class="even">
+<td><strong>TCP</strong></td>
+<td>Tool Center Point — punto de trabajo de la herramienta activa</td>
+</tr>
+<tr class="odd">
+<td><strong>Flange</strong></td>
+<td>Último frame mecánico del robot, donde se monta la herramienta</td>
+</tr>
+<tr class="even">
+<td><strong>ToolFrame</strong></td>
+<td>Estructura que define un TCP con base_frame + transform offset</td>
+</tr>
+<tr class="odd">
+<td><strong>MoveJ</strong></td>
+<td>Movimiento en joint space con interpolación sincronizada</td>
+</tr>
+<tr class="even">
+<td><strong>MoveL</strong></td>
+<td>Movimiento en cartesian space (línea recta del end-effector)</td>
+</tr>
+<tr class="odd">
+<td><strong>Trajectory</strong></td>
+<td>Secuencia de waypoints con metadatos de planificación</td>
+</tr>
+<tr class="even">
+<td><strong>CollisionChecker</strong></td>
+<td>Trait para detección de colisiones entre objetos 3D</td>
+</tr>
+<tr class="odd">
+<td><strong>Workspace</strong></td>
+<td>Dataset inmutable de muestras Monte Carlo de posiciones alcanzables</td>
 </tr>
 <tr class="even">
 <td><strong>VisualScene</strong></td>

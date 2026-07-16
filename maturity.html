@@ -230,6 +230,9 @@ window.Quarto = {
   <li><a href="#thalos-visual" id="toc-thalos-visual" class="nav-link" data-scroll-target="#thalos-visual"><span class="header-section-number">8.2.2</span> <code>thalos-visual</code></a></li>
   <li><a href="#thalos-api" id="toc-thalos-api" class="nav-link" data-scroll-target="#thalos-api"><span class="header-section-number">8.2.3</span> <code>thalos-api</code></a></li>
   <li><a href="#thalos-runtime" id="toc-thalos-runtime" class="nav-link" data-scroll-target="#thalos-runtime"><span class="header-section-number">8.2.4</span> <code>thalos-runtime</code></a></li>
+  <li><a href="#thalos-planning" id="toc-thalos-planning" class="nav-link" data-scroll-target="#thalos-planning"><span class="header-section-number">8.2.5</span> <code>thalos-planning</code></a></li>
+  <li><a href="#thalos-collision" id="toc-thalos-collision" class="nav-link" data-scroll-target="#thalos-collision"><span class="header-section-number">8.2.6</span> <code>thalos-collision</code></a></li>
+  <li><a href="#thalos-math" id="toc-thalos-math" class="nav-link" data-scroll-target="#thalos-math"><span class="header-section-number">8.2.7</span> <code>thalos-math</code></a></li>
   </ul></li>
   <li><a href="#cobertura-deseada" id="toc-cobertura-deseada" class="nav-link" data-scroll-target="#cobertura-deseada"><span class="header-section-number">8.3</span> Cobertura deseada</a></li>
   </ul>
@@ -275,39 +278,9 @@ window.Quarto = {
 </thead>
 <tbody>
 <tr class="odd">
-<td><code>math::vectors</code></td>
+<td><code>thalos-math</code></td>
 <td><span class="math inline">\(\blacksquare\)</span> Estable</td>
-<td><code>Vector3</code>, <code>UnitVector3</code></td>
-</tr>
-<tr class="even">
-<td><code>math::rotations::Quaternion</code></td>
-<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
-<td>Álgebra completa</td>
-</tr>
-<tr class="odd">
-<td><code>math::rotations::UnitQuaternion</code></td>
-<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
-<td>SO(3) con invariante de norma</td>
-</tr>
-<tr class="even">
-<td><code>math::rotations::ops</code></td>
-<td><span class="math inline">\(\circ\)</span> Experimental</td>
-<td>Operaciones entre tipos, sin probar</td>
-</tr>
-<tr class="odd">
-<td><code>math::rigid::Transform3D</code></td>
-<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
-<td>API congelada, faltan tests directos</td>
-</tr>
-<tr class="even">
-<td><code>math::algebra::DynamicMatrix</code></td>
-<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
-<td>Alias de <code>DMatrix</code></td>
-</tr>
-<tr class="odd">
-<td><code>math::traits</code></td>
-<td><span class="math inline">\(\circ\)</span> Experimental</td>
-<td>Traits <code>Cross</code>, <code>Dot</code> — pueden cambiar</td>
+<td><code>Vector3</code>, <code>Quaternion</code>, <code>Transform3D</code> — API congelada</td>
 </tr>
 <tr class="even">
 <td><code>robot::joint</code></td>
@@ -335,49 +308,79 @@ window.Quarto = {
 <td><code>SerialChainBuilder</code> con validación</td>
 </tr>
 <tr class="odd">
+<td><code>robot::tool_frame</code></td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
+<td><code>ToolFrame</code> con offset, <code>resolve_pose()</code></td>
+</tr>
+<tr class="even">
 <td><code>kinematics::forward</code></td>
 <td><span class="math inline">\(\blacksquare\)</span> Estable</td>
 <td>FK probado indirectamente vía snapshots</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>kinematics::jacobian::GeometricJacobian</code></td>
 <td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
 <td>Sin tests dedicados</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>kinematics::jacobian::NumericalJacobian</code></td>
 <td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
 <td>Sin tests dedicados</td>
 </tr>
+<tr class="odd">
+<td><code>kinematics::inverse::DLS</code></td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td>Damped Least Squares — funcional, puede mejorar</td>
+</tr>
 <tr class="even">
+<td><code>kinematics::inverse::JT</code></td>
+<td><span class="math inline">\(\circ\)</span> Experimental</td>
+<td>Jacobian Transpose — implementación inicial</td>
+</tr>
+<tr class="odd">
 <td><code>spatial::frame</code></td>
 <td><span class="math inline">\(\blacksquare\)</span> Estable</td>
 <td><code>FrameId</code>, <code>Frame</code>, <code>FrameRegistry</code></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>spatial::pose</code></td>
 <td><span class="math inline">\(\blacksquare\)</span> Estable</td>
 <td><code>Pose</code></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>spatial::frame::graph</code></td>
 <td><span class="math inline">\(\circ\)</span> Experimental</td>
 <td>Solo esqueleto declarado</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>models::factory</code></td>
 <td><span class="math inline">\(\blacksquare\)</span> Estable</td>
-<td><code>RobotRegistry</code>, <code>RobotModel</code>, <code>RobotSpec</code></td>
+<td><code>RobotRegistry</code>, <code>RobotModel</code> (8 variantes), <code>RobotSpec</code></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Modelos concretos</td>
 <td><span class="math inline">\(\blacksquare\)</span> Estable</td>
 <td>Factory + tests FK por modelo</td>
 </tr>
+<tr class="even">
+<td><code>thalos-models</code></td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td>URDF mirror, parser — estructura madura, parser en evolución</td>
+</tr>
+<tr class="odd">
+<td><code>thalos-collision</code></td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td><code>NaiveCollisionChecker</code>, SAT — funcional, sin benchmark</td>
+</tr>
+<tr class="even">
+<td><code>thalos-planning</code></td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td><code>MoveJPlanner</code>, <code>GoalResolver</code>, <code>Trajectory</code> — MoveL es esqueleto</td>
+</tr>
 <tr class="odd">
 <td><code>thalos-visual::scene</code></td>
-<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
-<td><code>VisualScene</code>, <code>VisualFrame</code>, primitives, <code>FrameStyle</code> — API estable pero puede crecer</td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
+<td><code>VisualScene</code>, <code>VisualFrame</code>, primitives, <code>FrameStyle</code></td>
 </tr>
 <tr class="even">
 <td><code>thalos-visual::builder</code></td>
@@ -402,7 +405,17 @@ window.Quarto = {
 <tr class="even">
 <td><code>thalos-runtime::scene</code></td>
 <td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
-<td><code>SceneService</code>, <code>Command</code>, <code>RuntimeSnapshot</code> — estable pero crecerá</td>
+<td><code>SceneService</code>, <code>Command</code>, <code>RuntimeSnapshot</code></td>
+</tr>
+<tr class="odd">
+<td><code>thalos-runtime::commands</code></td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td>SetJoints, LoadRobot, LoadUrdfRobot, Kinematics, Motion, SelectToolFrame</td>
+</tr>
+<tr class="even">
+<td><code>thalos-runtime::plan</code></td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td><code>ActiveMotionPlan</code>, <code>ExecutionSession</code>, <code>PlanState</code></td>
 </tr>
 <tr class="odd">
 <td><code>thalos-runtime::backends</code></td>
@@ -411,48 +424,68 @@ window.Quarto = {
 </tr>
 <tr class="even">
 <td><code>thalos-runtime::state</code></td>
-<td><span class="math inline">\(\circ\)</span> Experimental</td>
-<td><code>SceneRuntime</code>, <code>ActiveRobot</code> — sujeto a cambios</td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td><code>SceneRuntime</code> con TCP, plan, robot_source</td>
 </tr>
 <tr class="odd">
-<td><code>thalos-api::handlers</code></td>
+<td><code>thalos-api::scene</code></td>
 <td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
-<td>Handlers REST escena + robots</td>
+<td>Handlers REST escena (~20 endpoints)</td>
 </tr>
 <tr class="even">
+<td><code>thalos-api::robots</code></td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td>Catálogo de robots</td>
+</tr>
+<tr class="odd">
+<td><code>thalos-api::motion</code></td>
+<td><span class="math inline">\(\circ\)</span> Experimental</td>
+<td>Endpoints MoveJ/MoveL directos</td>
+</tr>
+<tr class="even">
+<td><code>thalos-api::workspace</code></td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td>Sample, reachability, singularity, manipulability (~9 endpoints)</td>
+</tr>
+<tr class="odd">
 <td><code>thalos-api::dto</code></td>
 <td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
 <td><code>RuntimeStateResponse</code>, <code>VisualSceneDto</code>, mirrors completos</td>
 </tr>
-<tr class="odd">
-<td><code>thalos-api::routes</code></td>
-<td><span class="math inline">\(\circ\)</span> Experimental</td>
-<td>Routing puede cambiar / reorganizarse</td>
-</tr>
 <tr class="even">
-<td><code>thalos-api::robots</code></td>
-<td><span class="math inline">\(\circ\)</span> Experimental</td>
-<td>Catálogo de robots — feature nuevo</td>
-</tr>
-<tr class="odd">
 <td>Frontend: Scene feature</td>
 <td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
 <td>Signals + RxJS, stable pero en evolución</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Frontend: Robots feature</td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td>Catálogo + selección</td>
+</tr>
+<tr class="even">
+<td>Frontend: Planning feature</td>
 <td><span class="math inline">\(\circ\)</span> Experimental</td>
-<td>Catálogo + selección — feature nuevo</td>
+<td>PlanningPanel con segmentos</td>
+</tr>
+<tr class="odd">
+<td>Frontend: Execution feature</td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td>ExecutionPanel, estado, timeline</td>
+</tr>
+<tr class="even">
+<td>Frontend: Workspace feature</td>
+<td><span class="math inline">\(\circ\)</span> Experimental</td>
+<td>WorkspacePanel, WorkspaceRenderer</td>
 </tr>
 <tr class="odd">
 <td>Frontend: ThreeRenderer</td>
-<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
-<td>Primitives, FrameStyle, compass — puede sumar features</td>
+<td><span class="math inline">\(\blacksquare\)</span> Estable</td>
+<td>Primitives, FrameStyle, compass</td>
 </tr>
 <tr class="even">
 <td>Frontend: RobotCatalog</td>
-<td><span class="math inline">\(\circ\)</span> Experimental</td>
-<td>UI de selección de robots, puede cambiar</td>
+<td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
+<td>UI de selección de robots</td>
 </tr>
 </tbody>
 </table>
@@ -470,6 +503,8 @@ window.Quarto = {
 <ul>
 <li><code>math::rotations::quaternion</code> — Álgebra de cuaterniones: identidad, inverso, conjugado, norma, normalización, producto de Hamilton, asociatividad</li>
 <li><code>math::rotations::unit_quaternion</code> — Invariante de norma, Euler ↔︎ quaternion roundtrip, <code>rotate_vector</code>, composición, inverso, <code>from_axis_angle</code></li>
+<li><code>kinematics::inverse</code> — Tests DLS, JT, pose IK, benchmarks</li>
+<li><code>robot::tool_frame</code> — Tests de resolución de pose y posición</li>
 </ul>
 </section>
 <section id="thalos-visual" class="level3" data-number="8.2.2">
@@ -489,7 +524,28 @@ window.Quarto = {
 <section id="thalos-runtime" class="level3" data-number="8.2.4">
 <h3 data-number="8.2.4" class="anchored" data-anchor-id="thalos-runtime"><span class="header-section-number">8.2.4</span> <code>thalos-runtime</code></h3>
 <ul>
-<li>Sin tests dedicados aún (depende de validación de escena vía <code>thalos-visual</code>)</li>
+<li><code>scene_tests</code> — Tests de integración del orquestador</li>
+<li><code>tcp_integration_tests</code> — Tests de TCP/Flange en runtime</li>
+</ul>
+</section>
+<section id="thalos-planning" class="level3" data-number="8.2.5">
+<h3 data-number="8.2.5" class="anchored" data-anchor-id="thalos-planning"><span class="header-section-number">8.2.5</span> <code>thalos-planning</code></h3>
+<ul>
+<li><code>goal</code> — Tests de GoalResolver, validación de políticas</li>
+<li><code>motion</code> — Tests de MoveJPlanner</li>
+</ul>
+</section>
+<section id="thalos-collision" class="level3" data-number="8.2.6">
+<h3 data-number="8.2.6" class="anchored" data-anchor-id="thalos-collision"><span class="header-section-number">8.2.6</span> <code>thalos-collision</code></h3>
+<ul>
+<li><code>naive</code> — Tests de NaiveCollisionChecker</li>
+<li><code>intersect</code> — Tests SAT, esfera-caja</li>
+</ul>
+</section>
+<section id="thalos-math" class="level3" data-number="8.2.7">
+<h3 data-number="8.2.7" class="anchored" data-anchor-id="thalos-math"><span class="header-section-number">8.2.7</span> <code>thalos-math</code></h3>
+<ul>
+<li>Tests de Vector3, Quaternion, UnitQuaternion, Transform3D</li>
 </ul>
 </section>
 </section>
@@ -499,9 +555,8 @@ window.Quarto = {
 <li>Tests directos para <code>Transform3D::compose()</code> y <code>Transform3D::identity()</code></li>
 <li>Tests para <code>RevoluteJoint::motion()</code> y <code>PrismaticJoint::motion()</code></li>
 <li>Tests para <code>SerialChainBuilder</code> (éxito y error)</li>
-<li>Integración FK con modelos conocidos</li>
 <li>Comparación <code>GeometricJacobian</code> vs <code>NumericalJacobian</code> (deberían coincidir dentro de tolerancia)</li>
-<li>Snapshots por modelo robótico (Planar3R, SCARA, etc.)</li>
+<li>Snapshots por modelo robótico (Manipulator3DOF, CylindricalRPP, etc.)</li>
 <li>Tests de frontend con Angular Testing Library</li>
 </ul>
 

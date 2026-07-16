@@ -235,25 +235,29 @@ ul.task-list li input[type="checkbox"] {
 <p>Esta distinción es importante porque el proyecto se mueve en un espacio entre varias categorías, y cada una tiene expectativas distintas.</p>
 <p><strong>Thalos NO es actualmente:</strong></p>
 <ul>
-<li>Un <strong>motor físico</strong> — no simula dinámica, colisiones, ni restricciones de contacto</li>
+<li>Un <strong>motor físico</strong> — no simula dinámica, restricciones de contacto, ni fuerzas de fricción</li>
 <li>Un <strong>simulador dinámico completo</strong> — no hay masas, inercias, pares, ni aceleraciones</li>
 <li>Un <strong>framework ROS</strong> — no publica en topics, no usa actionlib, no tiene nodelets</li>
 <li>Un <strong>renderer 3D</strong> — no genera gráficos por sí mismo; delega la visualización a Three.js vía <code>VisualScene</code></li>
 <li>Un <strong>controlador industrial</strong> — no ejecuta loops de control en tiempo real</li>
+<li>Un <strong>simulador de hardware</strong> — no emula controladores de brazos reales (ABB, UR, Fanuc)</li>
 </ul>
 <p><strong>Thalos SÍ es actualmente:</strong></p>
 <blockquote class="blockquote">
-<p>Un <strong>núcleo modular</strong> para <strong>representación, análisis cinemático y visualización estructural</strong> de <strong>robots seriales</strong>.</p>
+<p>Un <strong>núcleo modular</strong> para <strong>representación, análisis cinemático, planificación de movimiento, detección de colisiones y visualización estructural</strong> de <strong>robots seriales</strong>.</p>
 </blockquote>
 <p>Eso significa que Thalos provee:</p>
 <ul>
-<li>Las <strong>estructuras de datos</strong> para modelar un robot (joints, links, cadenas, frames)</li>
-<li>Los <strong>algoritmos</strong> para analizarlo (FK, jacobianos)</li>
-<li>Una <strong>representación visual serializable</strong> de ese análisis (<code>VisualScene</code>)</li>
+<li>Las <strong>estructuras de datos</strong> para modelar un robot (joints, links, cadenas, frames, herramientas)</li>
+<li>Los <strong>algoritmos</strong> para analizarlo (FK, IK, jacobianos, workspace sampling)</li>
+<li><strong>Planificación de movimiento</strong> (MoveJ, MoveL con interpolación)</li>
+<li><strong>Detección de colisiones</strong> (Naive O(n²), SAT, esfera-caja)</li>
+<li>Una <strong>representación visual serializable</strong> del análisis (<code>VisualScene</code>)</li>
 <li>Una <strong>capa de validación</strong> para garantizar consistencia (<code>SceneValidator</code>)</li>
+<li>Un <strong>sistema de frames con TCP</strong> (separación flange/herramienta)</li>
 <li>Una <strong>API HTTP</strong> para que sistemas externos consuman todo lo anterior</li>
 </ul>
-<p>Todo lo demás (física, control, planificación, hardware) son capas que pueden <strong>agregarse</strong> sobre esta base sin modificarla.</p>
+<p>Todo lo demás (física, control, hardware real, eventos push) son capas que pueden <strong>agregarse</strong> sobre esta base sin modificarla.</p>
 </section>
 <section id="objetivos-actuales" class="level2" data-number="2.3">
 <h2 data-number="2.3" class="anchored" data-anchor-id="objetivos-actuales"><span class="header-section-number">2.3</span> Objetivos actuales</h2>
@@ -261,10 +265,16 @@ ul.task-list li input[type="checkbox"] {
 <ul>
 <li><strong>Robots seriales</strong> (Serial Chains) — cadenas cinemáticas abiertas</li>
 <li><strong>Cinemática directa</strong> (<em>Forward Kinematics</em>) — dada una configuración de joints, calcular la pose de cada frame</li>
+<li><strong>Cinemática inversa</strong> (<em>Inverse Kinematics</em>) — solvers DLS y JT para posición y pose</li>
 <li><strong>Jacobianos</strong> — geométrico y numérico, para análisis de velocidades y singularidades</li>
+<li><strong>Planificación de movimiento</strong> — MoveJ (joint space), MoveL (cartesian space) con interpolación y rampas de velocidad</li>
+<li><strong>Detección de colisiones</strong> — Naive O(n²), SAT, intersección esfera-caja</li>
+<li><strong>Separación Flange/TCP</strong> — herramienta configurable en runtime</li>
+<li><strong>Análisis de workspace</strong> — muestreo Monte Carlo, alcanzabilidad, singularidad, manipulabilidad</li>
 <li><strong>Representación espacial</strong> — poses, frames, registros y grafos de referencia</li>
 <li><strong>Validación visual</strong> — construcción, validación y diferencia de escenas</li>
 <li><strong>Simulación estructural</strong> — snapshots visuales de configuraciones robóticas</li>
+<li><strong>Importación URDF</strong> — parser de descripciones robóticas estándar</li>
 </ul>
 </section>
 <section id="alcance-actual" class="level2" data-number="2.4">
@@ -362,10 +372,7 @@ Figure&nbsp;2.1: Pipeline completo de Thalos — del modelo matemático al front
 <li><strong>Mecanismos cerrados</strong> — cadenas cinemáticas que forman loops</li>
 <li><strong>Sistemas híbridos</strong> — combinaciones de series y paralelos</li>
 <li><strong>Árboles cinemáticos complejos</strong> — ramificaciones, múltiples end-effectors</li>
-<li><strong>Cinemática inversa</strong> (<em>Inverse Kinematics</em>)</li>
-<li><strong>Planificación de trayectorias</strong></li>
 <li><strong>Dinámica</strong> — masas, inercias, pares, aceleraciones</li>
-<li><strong>Detección de colisiones</strong></li>
 <li><strong>Integración con hardware real</strong></li>
 </ul>
 <p>Estas limitaciones son <strong>deliberadas</strong> en esta etapa. La arquitectura está diseñada para que cada una pueda agregarse sin reescribir el núcleo existente.</p>
@@ -374,9 +381,10 @@ Figure&nbsp;2.1: Pipeline completo de Thalos — del modelo matemático al front
 <h2 data-number="2.6" class="anchored" data-anchor-id="dirección-futura"><span class="header-section-number">2.6</span> Dirección futura</h2>
 <p>La arquitectura modular permite expansion hacia:</p>
 <ul>
-<li><strong>Planificación de trayectorias</strong> — interpolación en espacio de joints y espacio operacional</li>
-<li><strong>Cinemática inversa</strong> — solvers analíticos y numéricos</li>
+<li><strong>Eventos push</strong> — reemplazar el polling por SSE/WebSocket (Roadmap Fase 3)</li>
+<li><strong>SimulationController</strong> — ejecución de trayectorias sobre el modelo cinemático (Roadmap Fase 4)</li>
 <li><strong>Integración hardware</strong> — comunicación con brazos robóticos reales via ROS 2, EtherCAT, o APIs propietarias</li>
+<li><strong>Controladores industriales</strong> — traits Controller para ABB, UR, Fanuc</li>
 <li><strong>Traducción entre robots</strong> — mapping de configuraciones entre distintos modelos robóticos</li>
 <li><strong>Simulación avanzada</strong> — integración con motores físicos (rapier, physx)</li>
 <li><strong>Control robótico</strong> — generación de setpoints, loops de control</li>

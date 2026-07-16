@@ -196,11 +196,15 @@ ul.task-list li input[type="checkbox"] {
   <li><a href="#términos-generales" id="toc-términos-generales" class="nav-link active" data-scroll-target="#términos-generales"><span class="header-section-number">A.1</span> Términos generales</a></li>
   <li><a href="#términos-del-dominio" id="toc-términos-del-dominio" class="nav-link" data-scroll-target="#términos-del-dominio"><span class="header-section-number">A.2</span> Términos del dominio</a></li>
   <li><a href="#términos-del-workspace-cargo" id="toc-términos-del-workspace-cargo" class="nav-link" data-scroll-target="#términos-del-workspace-cargo"><span class="header-section-number">A.3</span> Términos del workspace (Cargo)</a></li>
-  <li><a href="#términos-del-workspace-analysis" id="toc-términos-del-workspace-analysis" class="nav-link" data-scroll-target="#términos-del-workspace-analysis"><span class="header-section-number">A.4</span> Términos del workspace analysis</a></li>
-  <li><a href="#términos-del-runtime" id="toc-términos-del-runtime" class="nav-link" data-scroll-target="#términos-del-runtime"><span class="header-section-number">A.5</span> Términos del runtime</a></li>
-  <li><a href="#términos-del-frontend" id="toc-términos-del-frontend" class="nav-link" data-scroll-target="#términos-del-frontend"><span class="header-section-number">A.6</span> Términos del frontend</a></li>
-  <li><a href="#términos-visuales" id="toc-términos-visuales" class="nav-link" data-scroll-target="#términos-visuales"><span class="header-section-number">A.7</span> Términos visuales</a></li>
-  <li><a href="#convenciones-de-código" id="toc-convenciones-de-código" class="nav-link" data-scroll-target="#convenciones-de-código"><span class="header-section-number">A.8</span> Convenciones de código</a></li>
+  <li><a href="#términos-de-ik-y-cinemática-inversa" id="toc-términos-de-ik-y-cinemática-inversa" class="nav-link" data-scroll-target="#términos-de-ik-y-cinemática-inversa"><span class="header-section-number">A.4</span> Términos de IK y cinemática inversa</a></li>
+  <li><a href="#términos-de-flange-y-tcp" id="toc-términos-de-flange-y-tcp" class="nav-link" data-scroll-target="#términos-de-flange-y-tcp"><span class="header-section-number">A.5</span> Términos de Flange y TCP</a></li>
+  <li><a href="#términos-de-colisiones" id="toc-términos-de-colisiones" class="nav-link" data-scroll-target="#términos-de-colisiones"><span class="header-section-number">A.6</span> Términos de colisiones</a></li>
+  <li><a href="#términos-de-planificación" id="toc-términos-de-planificación" class="nav-link" data-scroll-target="#términos-de-planificación"><span class="header-section-number">A.7</span> Términos de planificación</a></li>
+  <li><a href="#términos-del-workspace-analysis" id="toc-términos-del-workspace-analysis" class="nav-link" data-scroll-target="#términos-del-workspace-analysis"><span class="header-section-number">A.8</span> Términos del workspace analysis</a></li>
+  <li><a href="#términos-del-runtime" id="toc-términos-del-runtime" class="nav-link" data-scroll-target="#términos-del-runtime"><span class="header-section-number">A.9</span> Términos del runtime</a></li>
+  <li><a href="#términos-del-frontend" id="toc-términos-del-frontend" class="nav-link" data-scroll-target="#términos-del-frontend"><span class="header-section-number">A.10</span> Términos del frontend</a></li>
+  <li><a href="#términos-visuales" id="toc-términos-visuales" class="nav-link" data-scroll-target="#términos-visuales"><span class="header-section-number">A.11</span> Términos visuales</a></li>
+  <li><a href="#convenciones-de-código" id="toc-convenciones-de-código" class="nav-link" data-scroll-target="#convenciones-de-código"><span class="header-section-number">A.12</span> Convenciones de código</a></li>
   </ul>
 </nav>
     </div>
@@ -247,12 +251,39 @@ ul.task-list li input[type="checkbox"] {
 </section>
 <section id="términos-del-workspace-cargo" class="level2" data-number="A.3">
 <h2 data-number="A.3" class="anchored" data-anchor-id="términos-del-workspace-cargo"><span class="header-section-number">A.3</span> Términos del workspace (Cargo)</h2>
-<p><strong>Crate</strong> — Paquete de Rust. Thalos tiene 4: <code>thalos-core</code>, <code>thalos-visual</code>, <code>thalos-runtime</code>, <code>thalos-api</code>.</p>
+<p><strong>Crate</strong> — Paquete de Rust. Thalos tiene 8: <code>thalos-math</code>, <code>thalos-core</code>, <code>thalos-models</code>, <code>thalos-collision</code>, <code>thalos-planning</code>, <code>thalos-visual</code>, <code>thalos-runtime</code>, <code>thalos-api</code>.</p>
 <p><strong>Workspace</strong> — Conjunto de crates que comparten un <code>Cargo.lock</code> y configuración de build.</p>
-<p><strong>Feature</strong> — Módulo funcional dentro de <code>thalos-api</code> (<code>scene</code>, <code>robots</code>, y futuros: <code>planning</code>, <code>control</code>, etc.).</p>
+<p><strong>Feature</strong> — Módulo funcional dentro de <code>thalos-api</code> (<code>scene</code>, <code>robots</code>, <code>motion</code>, <code>workspace</code>).</p>
 </section>
-<section id="términos-del-workspace-analysis" class="level2" data-number="A.4">
-<h2 data-number="A.4" class="anchored" data-anchor-id="términos-del-workspace-analysis"><span class="header-section-number">A.4</span> Términos del workspace analysis</h2>
+<section id="términos-de-ik-y-cinemática-inversa" class="level2" data-number="A.4">
+<h2 data-number="A.4" class="anchored" data-anchor-id="términos-de-ik-y-cinemática-inversa"><span class="header-section-number">A.4</span> Términos de IK y cinemática inversa</h2>
+<p><strong>Inverse Kinematics (IK)</strong> — Dada una pose deseada del end-effector, calcular la configuración articular <code>q</code> que la produce. Thalos implementa DLS (Damped Least Squares) y JT (Jacobian Transpose).</p>
+<p><strong>IKGoal</strong> — Meta del solver de IK: <code>Position(Vector3)</code> o <code>Pose(Pose)</code>.</p>
+<p><strong>IKResult</strong> — Resultado del solver: <code>q</code> (solución articular), <code>final_error</code>, <code>iterations</code>, <code>status</code> (Converged, MaxIterationsReached, Singularity).</p>
+<p><strong>Damped Least Squares (DLS)</strong> — Solver IK robusto cerca de singularidades. Usa damping <code>λ</code> para estabilizar la pseudo-inversa del jacobiano.</p>
+<p><strong>Jacobian Transpose (JT)</strong> — Solver IK basado en <code>Jᵀ</code> en lugar de pseudo-inversa.</p>
+</section>
+<section id="términos-de-flange-y-tcp" class="level2" data-number="A.5">
+<h2 data-number="A.5" class="anchored" data-anchor-id="términos-de-flange-y-tcp"><span class="header-section-number">A.5</span> Términos de Flange y TCP</h2>
+<p><strong>Flange</strong> — Último frame mecánico del robot (<code>chain.end_effector</code>). Es el punto donde se monta la herramienta. Inmutable durante la vida del robot.</p>
+<p><strong>TCP (Tool Center Point)</strong> — Punto de trabajo de la herramienta activa. Definido como un offset desde un frame base (típicamente el flange). Puede cambiarse en runtime.</p>
+<p><strong>ToolFrame</strong> — Estructura que define un TCP: <code>base_frame</code> + <code>transform</code> (offset).</p>
+</section>
+<section id="términos-de-colisiones" class="level2" data-number="A.6">
+<h2 data-number="A.6" class="anchored" data-anchor-id="términos-de-colisiones"><span class="header-section-number">A.6</span> Términos de colisiones</h2>
+<p><strong>NaiveCollisionChecker</strong> — Detector O(n²) que compara todos los pares de objetos sin optimizaciones espaciales.</p>
+<p><strong>SAT (Separating Axis Theorem)</strong> — Algoritmo para detectar intersección entre cajas orientadas (OBB).</p>
+</section>
+<section id="términos-de-planificación" class="level2" data-number="A.7">
+<h2 data-number="A.7" class="anchored" data-anchor-id="términos-de-planificación"><span class="header-section-number">A.7</span> Términos de planificación</h2>
+<p><strong>MoveJ</strong> — Movimiento en joint space: interpolación sincronizada de todos los joints desde la configuración actual a la target.</p>
+<p><strong>MoveL</strong> — Movimiento en cartesian space: el end-effector sigue una línea recta desde la posición actual a la target.</p>
+<p><strong>MoveJPlanner</strong> — Planificador que genera trayectorias en joint space con rampas de velocidad y aceleración.</p>
+<p><strong>Trajectory</strong> — Secuencia de waypoints con metadatos (tipo de movimiento, timestamps). Produce <code>TrajectoryMetadata</code> con duración total y distancia.</p>
+<p><strong>GoalResolver</strong> — Valida que una meta sea alcanzable dado el estado actual y las políticas de planificación (límites articulares, strict_limits).</p>
+</section>
+<section id="términos-del-workspace-analysis" class="level2" data-number="A.8">
+<h2 data-number="A.8" class="anchored" data-anchor-id="términos-del-workspace-analysis"><span class="header-section-number">A.8</span> Términos del workspace analysis</h2>
 <p><strong>Workspace Analysis</strong> — Técnica para caracterizar el espacio de trabajo de un manipulador mediante muestreo Monte Carlo de configuraciones articulares.</p>
 <p><strong>Workspace</strong> — Dataset inmutable de muestras de configuraciones articulares con posiciones del end-effector, bounds y métricas derivadas.</p>
 <p><strong>WorkspaceSample</strong> — Unidad atómica del análisis: configuración articular <code>q</code> + posición 3D del end-effector.</p>
@@ -266,8 +297,8 @@ ul.task-list li input[type="checkbox"] {
 <p><strong>WorkspacePanel</strong> — Componente Angular con formulario de configuración, visualización de métricas y consulta de alcanzabilidad.</p>
 <p><strong>WorkspaceRenderer</strong> — Componente Angular/Three.js que renderiza el wireframe del AABB y la nube de puntos.</p>
 </section>
-<section id="términos-del-runtime" class="level2" data-number="A.5">
-<h2 data-number="A.5" class="anchored" data-anchor-id="términos-del-runtime"><span class="header-section-number">A.5</span> Términos del runtime</h2>
+<section id="términos-del-runtime" class="level2" data-number="A.9">
+<h2 data-number="A.9" class="anchored" data-anchor-id="términos-del-runtime"><span class="header-section-number">A.9</span> Términos del runtime</h2>
 <p><strong>SceneService</strong> — Orquestador central. Mantiene <code>SceneRuntime</code> (el estado mutable) y expone <code>snapshot()</code> y <code>execute(Command)</code>. Es el punto único de entrada para toda mutación del sistema.</p>
 <p><strong>Command</strong> — Enum que tipa las mutaciones del runtime: <code>SetJoints(Vec&lt;f64&gt;)</code> y <code>LoadRobot(String)</code>. Se ejecutan via <code>SceneService::execute()</code>.</p>
 <p><strong>RuntimeSnapshot</strong> — Estado puntual del sistema: robot activo, joints actuales, escena visual validada y timestamp. Es el valor de retorno unificado.</p>
@@ -275,24 +306,24 @@ ul.task-list li input[type="checkbox"] {
 <p><strong>ActiveRobot</strong> — Robot actualmente cargado: modelo, cadena cinemática (<code>SerialChain</code>) y ángulos articulares (<code>Vec&lt;f64&gt;</code>).</p>
 <p><strong>RobotBackend</strong> — Trait (strategy) para resolver modelos robóticos por ID. <code>InternalBackend</code> usa el catálogo built-in; implementaciones custom pueden integrar hardware, archivos de configuración o redes.</p>
 </section>
-<section id="términos-del-frontend" class="level2" data-number="A.6">
-<h2 data-number="A.6" class="anchored" data-anchor-id="términos-del-frontend"><span class="header-section-number">A.6</span> Términos del frontend</h2>
+<section id="términos-del-frontend" class="level2" data-number="A.10">
+<h2 data-number="A.10" class="anchored" data-anchor-id="términos-del-frontend"><span class="header-section-number">A.10</span> Términos del frontend</h2>
 <p><strong>SceneStore</strong> — Servicio Angular con estado reactivo. Usa dos pipelines RxJS paralelos (joints + load robot) mergados con <code>merge()</code> + <code>scan()</code>, expuestos como <code>Signal&lt;SceneState&gt;</code> vía <code>toSignal()</code>.</p>
 <p><strong>RobotStore</strong> — Store con signals puras para el catálogo de robots. Expone <code>robots</code>, <code>selectedId</code>, <code>loading</code> y <code>error</code> como <code>WritableSignal</code>.</p>
 <p><strong>ThreeRendererService</strong> — Servicio Angular que renderiza <code>SceneData</code> en Three.js. Maneja frames con <code>FrameStyle</code>, links cilíndricos, primitivas geométricas y brújula 3D.</p>
 <p><strong>RobotCatalog</strong> — Componente orquestador que lista robots del catálogo y al seleccionar uno dispara <code>RobotStore.select()</code> + <code>SceneStore.loadRobot()</code>.</p>
 <p><strong>dto-to-model</strong> — Adapter que traduce DTOs del API (snake_case) a tipos internos del frontend (camelCase). Incluye conversión de geometrías (<code>PrimitiveGeometryDto</code> → <code>ScenePrimitive</code>).</p>
 </section>
-<section id="términos-visuales" class="level2" data-number="A.7">
-<h2 data-number="A.7" class="anchored" data-anchor-id="términos-visuales"><span class="header-section-number">A.7</span> Términos visuales</h2>
+<section id="términos-visuales" class="level2" data-number="A.11">
+<h2 data-number="A.11" class="anchored" data-anchor-id="términos-visuales"><span class="header-section-number">A.11</span> Términos visuales</h2>
 <p><strong>VisualPrimitive</strong> — Elemento 3D con volumen (cilindro, esfera, caja) que complementa frames y links en la escena. Tiene <code>id</code>, <code>translation</code>, <code>rotation</code> y <code>geometry</code>. Ej: base column del SCARA, cuerpos de links.</p>
 <p><strong>FrameStyle</strong> — Configuración visual de un frame individual: longitud/radio de ejes, colores RGB, esfera de origen y etiquetas. Cada <code>VisualFrame</code> puede tener su propio <code>FrameStyle</code> o usar defaults del frontend.</p>
 <p><strong>ScaraVisualBuilder</strong> — Builder específico para el robot SCARA. Genera primitivas geométricas (base column, link bodies) además de los frames y links estándar. Es un ejemplo del patrón “builder por robot”.</p>
 <p><strong>cylinder_between</strong> — Helper que construye un <code>VisualPrimitive::Cylinder</code> entre dos puntos 3D, calculando altura (distancia), punto medio y rotación (para alinear el eje Y del cilindro con la dirección del segmento).</p>
 <p><strong>align_y_to</strong> — Helper que produce un quaternion que rota el eje Y canónico (0,1,0) para alinearse con una dirección arbitraria. Se usa internamente por <code>cylinder_between</code> y es exportado para uso en builders personalizados.</p>
 </section>
-<section id="convenciones-de-código" class="level2" data-number="A.8">
-<h2 data-number="A.8" class="anchored" data-anchor-id="convenciones-de-código"><span class="header-section-number">A.8</span> Convenciones de código</h2>
+<section id="convenciones-de-código" class="level2" data-number="A.12">
+<h2 data-number="A.12" class="anchored" data-anchor-id="convenciones-de-código"><span class="header-section-number">A.12</span> Convenciones de código</h2>
 <p><strong>Error explícito</strong> — Toda operación que pueda fallar retorna <code>Result</code>. No hay <code>unwrap()</code> ocultos, <code>expect()</code> silenciosos, ni fallbacks mágicos.</p>
 <p><strong>Invariante de construcción</strong> — Un tipo que representa un concepto con restricciones matemáticas valida esas restricciones en <code>new()</code>. <code>UnitQuaternion::new()</code> falla si la norma no es ≈ 1.</p>
 <p><strong>Normalización controlada</strong> — <code>VisualPrecision</code> expone explícitamente los parámetros de redondeo. Nada se normaliza “porque sí”.</p>
