@@ -5,6 +5,7 @@ import { JointControl } from '../../features/scene/components/joint-control/join
 import { IkTargetPanel } from '../../features/scene/components/ik-target-panel/ik-target-panel';
 import { TcpInfoPanel } from '../../features/scene/components/tcp-info-panel/tcp-info-panel';
 import { WorkspacePanel } from '../../features/workspace/components/workspace-panel/workspace-panel';
+import { AnalysisPanel } from '../../features/plan-analysis/components/analysis-panel/analysis-panel';
 import { PlanningPanel } from '../../features/planning/planning-panel';
 import { ExecutionPanel } from '../../features/execution/execution-panel';
 
@@ -21,6 +22,7 @@ import { ExecutionPanel } from '../../features/execution/execution-panel';
  */
 export const UI_MODE_REGISTRY: Record<AppMode, readonly ToolSchema[]> = {
   analysis: [
+    { id: 'plan-analyze', label: 'Plan Analysis', component: AnalysisPanel as Type<unknown>, defaultOpen: true },
     { id: 'fk', label: 'Forward Kinematics', component: JointControl, defaultOpen: true },
     { id: 'ik', label: 'Inverse Kinematics', component: IkTargetPanel, defaultOpen: true },
     { id: 'workspace', label: 'Workspace Analysis', component: WorkspacePanel, defaultOpen: false },
