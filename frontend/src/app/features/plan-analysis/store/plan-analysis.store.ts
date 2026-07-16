@@ -61,7 +61,19 @@ export class PlanAnalysisStore {
       const res: PlanAnalysisResponse = await firstValueFrom(this.api.analyzePlan(planId));
       this.applyResponse(res);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Analysis failed';
+      let msg = 'Analysis failed';
+      if (err instanceof Error) {
+        msg = err.message;
+      } else if (typeof err === 'object' && err !== null) {
+        // Try Angular HttpErrorResponse
+        const httpErr = err as Record<string, unknown>;
+        if (typeof httpErr['error'] === 'object' && httpErr['error'] !== null) {
+          const body = httpErr['error'] as Record<string, unknown>;
+          msg = (body['error'] as string) ?? (body['message'] as string) ?? msg;
+        } else if (typeof httpErr['message'] === 'string') {
+          msg = httpErr['message'];
+        }
+      }
       this.error.set(msg);
     } finally {
       this.loading.set(false);

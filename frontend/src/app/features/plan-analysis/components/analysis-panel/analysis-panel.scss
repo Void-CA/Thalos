@@ -1,6 +1,52 @@
 @use '../../../../../styles/variables' as *;
 @use '../../../../shared/styles/panel' as panel;
 
+// ── Plan info ──
+
+.analysis-panel__plan-info {
+  @include panel.card-input;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.72rem;
+}
+
+.plan-info__badge {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  font-weight: 600;
+
+  &--created { background: rgba(51,153,255,0.2); color: #3399ff; }
+  &--active { background: rgba(51,221,51,0.2); color: #33dd33; }
+  &--paused { background: rgba(238,187,34,0.2); color: #eebb22; }
+  &--terminal { background: rgba(238,51,51,0.2); color: #ee3333; }
+  &--default { background: rgba(255,255,255,0.1); color: #aaa; }
+}
+
+.plan-info__text {
+  opacity: 0.7;
+}
+
+// ── Ready state ──
+
+.analysis-panel__ready {
+  @include panel.card-output;
+  text-align: center;
+  padding: 0.8rem 0.7rem;
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.analysis-panel__hint {
+  font-size: 0.65rem;
+  opacity: 0.5;
+  margin-top: 0.3rem;
+}
+
 // ── Container ──
 
 .analysis-panel {

@@ -9,6 +9,19 @@ import { SceneStore } from '../../../scene/store/scene.store';
   styleUrl: './analysis-panel.scss',
   template: `
     <div class="analysis-panel">
+      <!-- ── PLAN STATUS ── -->
+      @if (activePlanInfo(); as info) {
+        <section class="analysis-panel__plan-info">
+          <span class="plan-info__badge" [class]="'plan-info__badge--' + info.stateClass">
+            {{ info.stateLabel }}
+          </span>
+          <span class="plan-info__text">
+            {{ info.segments }} segment{{ info.segments !== 1 ? 's' : '' }}
+            &middot; {{ info.waypoints }} waypoints
+          </span>
+        </section>
+      }
+
       <!-- ── ACTION ── -->
       <section class="analysis-panel__action">
         <button
@@ -17,7 +30,13 @@ import { SceneStore } from '../../../scene/store/scene.store';
           [disabled]="store.loading() || disabledReason() !== null"
           [title]="disabledReason() ?? ''"
         >
-          {{ store.loading() ? 'Analyzing\u2026' : 'Analyze Plan' }}
+          @if (store.loading()) {
+            Analyzing&hellip;
+          } @else if (store.hasResult()) {
+            Re-analyze
+          } @else {
+            Analyze Plan
+          }
         </button>
       </section>
 
@@ -35,12 +54,17 @@ import { SceneStore } from '../../../scene/store/scene.store';
                 <span class="summary__metric">⏱ {{ m.duration.toFixed(1) }}s</span>
                 @if (m.average_manipulability !== null) {
                   <span class="summary__metric">
-                    μ {{ m.average_manipulability.toFixed(2) }}
+                    &mu; {{ m.average_manipulability.toFixed(2) }}
                   </span>
                 }
                 @if (m.min_collision_distance !== null && m.min_collision_distance > 0) {
                   <span class="summary__metric">
-                    ⎔ {{ (m.min_collision_distance * 1000).toFixed(0) }}mm
+                    &#x2399; {{ (m.min_collision_distance * 1000).toFixed(0) }}mm
+                  </span>
+                }
+                @if (m.singular_count > 0) {
+                  <span class="summary__metric summary__metric--warn">
+                    &#x26D4; {{ m.singular_count }} singular
                   </span>
                 }
               }
@@ -52,7 +76,9 @@ import { SceneStore } from '../../../scene/store/scene.store';
       <!-- ── FINDINGS ── -->
       @if (store.findings().length > 0) {
         <section class="analysis-panel__findings">
-          <h4 class="analysis-panel__label" style="margin:0 0 0.4rem">Findings</h4>
+          <h4 class="analysis-panel__label" style="margin:0 0 0.4rem">
+            Findings ({{ store.findings().length }})
+          </h4>
           <ul class="findings__list">
             @for (f of store.findings(); track f) {
               <li
@@ -74,7 +100,9 @@ import { SceneStore } from '../../../scene/store/scene.store';
       <!-- ── RECOMMENDATIONS ── -->
       @if (store.recommendations().length > 0) {
         <section class="analysis-panel__recommendations">
-          <h4 class="analysis-panel__label" style="margin:0 0 0.4rem">Recommendations</h4>
+          <h4 class="analysis-panel__label" style="margin:0 0 0.4rem">
+            Recommendations ({{ store.recommendations().length }})
+          </h4>
           <ul class="recommendations__list">
             @for (r of store.recommendations(); track r) {
               <li class="recommendation">
@@ -91,11 +119,21 @@ import { SceneStore } from '../../../scene/store/scene.store';
         </section>
       }
 
-      <!-- ── EMPTY ── -->
+      <!-- ── EMPTY STATE ── -->
       @if (!store.hasResult() && !store.loading() && !store.error()) {
-        <section class="analysis-panel__empty">
-          No analysis yet. Create a plan and press "Analyze Plan".
-        </section>
+        @if (activePlanInfo()) {
+          <section class="analysis-panel__ready">
+            Plan ready. Press <strong>Analyze Plan</strong> to check for issues.
+          </section>
+        } @else {
+          <section class="analysis-panel__empty">
+            <p>No plan to analyze.</p>
+            <p class="analysis-panel__hint">
+              Switch to <strong>Planning</strong> mode, create a motion program,
+              and press <strong>Preview</strong> first.
+            </p>
+          </section>
+        }
       }
 
       <!-- ── ERROR ── -->
@@ -109,30 +147,50 @@ export class AnalysisPanel {
   readonly store = inject(PlanAnalysisStore);
   private readonly sceneStore = inject(SceneStore);
 
+  /** Info about the active plan, or null if none. */
+  protected readonly activePlanInfo = computed<{
+    stateLabel: string;
+    stateClass: string;
+    segments: number;
+    waypoints: number;
+  } | null>(() => {
+    const plan = this.sceneStore.state().activePlan;
+    if (!plan) return null;
+
+    const stateLabel = plan.state;
+    const stateClass = plan.state === 'Created' ? 'created'
+      : plan.state === 'Active' ? 'active'
+      : plan.state === 'Paused' ? 'paused'
+      : plan.state === 'Completed' || plan.state === 'Failed' ? 'terminal'
+      : 'default';
+
+    const segments = plan.segments?.length ?? 1;
+    const waypoints = plan.visualization?.waypoints.length ?? 0;
+    return { stateLabel, stateClass, segments, waypoints };
+  });
+
   /** Reason why buttons are disabled, or null if they should be enabled. */
   protected readonly disabledReason = computed<string | null>(() => {
     const plan = this.sceneStore.state().activePlan;
-    if (plan) return null;
-    return 'No active plan';
+    if (!plan) return 'Create a plan in Planning mode first';
+    if (plan.state === 'Failed') return 'Plan failed';
+    return null;
   });
 
   onAnalyze(): void {
     this.store.analyzePlan();
   }
 
-  /** When a finding waypoint is clicked, navigate the scene to it. */
   onFindingClick(waypoint: number | null): void {
     if (waypoint === null) return;
-    // TODO: Highlight waypoint in the Three.js viewer
-    // For now, the click selects the finding
   }
 
   iconFor(severity: string): string {
     switch (severity) {
-      case 'error': return '✕';
-      case 'warning': return '⚠';
-      case 'info': return 'ℹ';
-      default: return '•';
+      case 'error': return '\u2715';
+      case 'warning': return '\u26A0';
+      case 'info': return '\u2139';
+      default: return '\u2022';
     }
   }
 }
