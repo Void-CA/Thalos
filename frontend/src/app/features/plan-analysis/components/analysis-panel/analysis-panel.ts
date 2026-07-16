@@ -2,6 +2,8 @@ import { Component, computed, inject } from '@angular/core';
 import { PlanAnalysisStore } from '../../store/plan-analysis.store';
 import { SceneStore } from '../../../scene/store/scene.store';
 import { FocusService } from '../../../../shared/services/focus.service';
+import { ActionDispatcher } from '../../../../shared/services/action-dispatcher.service';
+import { suggestionKindToAction } from '../../../../shared/types/recommendation-action';
 
 @Component({
   selector: 'analysis-panel',
@@ -112,6 +114,11 @@ import { FocusService } from '../../../../shared/services/focus.service';
                     {{ r.impact }}
                   </span>
                   <span class="recommendation__kind">{{ r.kind.replace('_', ' ') }}</span>
+                  <button
+                    class="recommendation__apply"
+                    (click)="onApplyRecommendation(r)"
+                    title="Apply"
+                  >Apply</button>
                 </div>
                 <div class="recommendation__message">{{ r.message }}</div>
               </li>
@@ -148,6 +155,7 @@ export class AnalysisPanel {
   readonly store = inject(PlanAnalysisStore);
   private readonly sceneStore = inject(SceneStore);
   private readonly focus = inject(FocusService);
+  private readonly actions = inject(ActionDispatcher);
 
   /** Info about the active plan, or null if none. */
   protected readonly activePlanInfo = computed<{
@@ -187,6 +195,11 @@ export class AnalysisPanel {
     if (waypoint !== null) {
       this.focus.focusWaypoint(waypoint);
     }
+  }
+
+  onApplyRecommendation(r: { kind: string; waypoint: number | null }): void {
+    const action = suggestionKindToAction(r.kind, r.waypoint);
+    this.actions.dispatch(action);
   }
 
   iconFor(severity: string): string {

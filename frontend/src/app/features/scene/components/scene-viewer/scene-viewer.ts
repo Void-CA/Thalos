@@ -171,17 +171,47 @@ export class SceneViewer implements AfterViewInit, OnDestroy {
     // Subscribe to focus/navigation requests from panels
     this.focusSub = this.focus.focus$.subscribe(req => {
       switch (req.target.type) {
-        case 'waypoint':
-          this.renderer.focusOnWaypoint(req.target.index);
+        case 'waypoint': {
+          const ok = this.renderer.focusOnWaypoint(req.target.index);
+          if (!ok) console.warn(`Focus: waypoint ${req.target.index} not found`);
           break;
-        case 'pose':
+        }
+        case 'pose': {
           this.renderer.focusOnPosition(req.target.position);
           break;
-        case 'finding':
+        }
+        case 'finding': {
+          // Navigate to the associated waypoint, if any
           if (req.target.waypoint != null) {
             this.renderer.focusOnWaypoint(req.target.waypoint);
           }
           break;
+        }
+        case 'joint': {
+          // Joint focus: position not available without FK data — fallback
+          // TODO: Resolve joint position from FK when available
+          console.warn(`Focus: joint ${req.target.index} — not yet implemented`);
+          break;
+        }
+        case 'link': {
+          // Link focus: resolve from object registry
+          const pos = this.renderer.getFramePosition(String(req.target.id));
+          if (pos) {
+            this.renderer.focusOnPosition(pos);
+          } else {
+            console.warn(`Focus: link ${req.target.id} not found in scene`);
+          }
+          break;
+        }
+        case 'obstacle': {
+          const pos = this.renderer.getFramePosition(`obstacle_${req.target.id}`);
+          if (pos) {
+            this.renderer.focusOnPosition(pos);
+          } else {
+            console.warn(`Focus: obstacle ${req.target.id} not found`);
+          }
+          break;
+        }
       }
     });
   }

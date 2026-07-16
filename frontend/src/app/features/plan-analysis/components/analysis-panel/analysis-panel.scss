@@ -225,6 +225,30 @@
   margin-bottom: 0.15rem;
 }
 
+.recommendation__apply {
+  margin-left: auto;
+  font-family: $font-mono;
+  font-size: 0.6rem;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid $border-default;
+  border-radius: 3px;
+  background: $bg-card;
+  color: $text-secondary;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+
+  .recommendation:hover & {
+    opacity: 1;
+  }
+
+  &:hover {
+    background: $bg-elevated;
+    border-color: $accent;
+    color: $accent;
+  }
+}
+
 .recommendation__impact {
   font-size: 0.6rem;
   text-transform: uppercase;

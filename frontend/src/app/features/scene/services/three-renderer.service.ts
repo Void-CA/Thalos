@@ -70,6 +70,10 @@ export class ThreeRendererService {
   private onTargetDrag: ((pos: [number, number, number]) => void) | null = null;
   private frameId: number | null = null;
   private trajectorySlot: TrajectorySlot | null = null;
+  /** Index of the currently highlighted waypoint, or -1 if none. */
+  private highlightedWaypoint: number = -1;
+  /** Monotonically increasing generation counter to invalidate stale highlights. */
+  private highlightGen: number = 0;
   /** Positions of all waypoint markers (index → position). Used for focus-on-waypoint. */
   private readonly trajectoryWaypoints: [number, number, number][] = [];
   private readonly overlays = new Set<SceneOverlay>();
@@ -928,6 +932,15 @@ export class ThreeRendererService {
   }
 
   /**
+   * Get the 3D position of a waypoint by its index in the trajectory.
+   * Returns null if the index is out of bounds or no trajectory is loaded.
+   */
+  getWaypointPosition(index: number): [number, number, number] | null {
+    if (index < 0 || index >= this.trajectoryWaypoints.length) return null;
+    return this.trajectoryWaypoints[index];
+  }
+
+  /**
    * Focus the camera on a specific 3D position.
    *
    * Moves orbit controls target to the position and adjusts the camera
@@ -945,22 +958,52 @@ export class ThreeRendererService {
 
   /**
    * Focus on a waypoint by its index in the trajectory.
-   * Returns true if the waypoint exists, false otherwise.
+   * Returns true if the waypoint exists and was focused, false otherwise.
+   *
+   * Uses a generation counter to safely handle rapid sequential highlights —
+   * only the most recent generation's timeout takes effect.
    */
   focusOnWaypoint(index: number): boolean {
-    if (index < 0 || index >= this.trajectoryWaypoints.length) return false;
-    // Highlight the waypoint by temporarily scaling its marker
+    const pos = this.getWaypointPosition(index);
+    if (!pos) return false;
+
+    // Bump generation to invalidate any pending highlight from a previous call
+    this.highlightGen++;
+    const gen = this.highlightGen;
+
+    // Reset previous highlight
+    this.resetWaypointHighlight();
+
+    // Highlight the new waypoint
     const slot = this.trajectorySlot;
     if (slot && index < slot.markers.length) {
       const marker = slot.markers[index];
-      // Pulse animation via scale
-      marker.scale.set(2, 2, 2);
+      marker.scale.set(2.5, 2.5, 2.5);
+      this.highlightedWaypoint = index;
+
+      // Use setTimeout but guard with generation token
       setTimeout(() => {
-        marker.scale.set(1, 1, 1);
-      }, 1500);
+        // Only apply if no newer highlight has been requested
+        if (this.highlightGen === gen) {
+          this.resetWaypointHighlight();
+        }
+      }, 2000);
     }
-    this.focusOnPosition(this.trajectoryWaypoints[index]);
+
+    this.focusOnPosition(pos);
     return true;
+  }
+
+  /** Reset all waypoint markers to normal scale. */
+  private resetWaypointHighlight(): void {
+    if (this.highlightedWaypoint < 0) return;
+    const slot = this.trajectorySlot;
+    if (slot) {
+      for (const m of slot.markers) {
+        m.scale.set(1, 1, 1);
+      }
+    }
+    this.highlightedWaypoint = -1;
   }
 
   // ── Private ──
