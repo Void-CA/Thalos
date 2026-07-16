@@ -1,9 +1,11 @@
-import { AfterViewInit, Component, computed, effect, ElementRef, inject, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, computed, effect, ElementRef, inject, OnDestroy, ViewChild } from '@angular/core';
 import { NgIcon } from '@ng-icons/core';
+import { Subscription } from 'rxjs';
 import { SceneStore } from '../../store/scene.store';
 import { ThreeRendererService } from '../../services/three-renderer.service';
 import { WorkspaceOverlayService } from '../../services/workspace-overlay.service';
 import { WorkspaceStore } from '../../../workspace/store/workspace.store';
+import { FocusService } from '../../../../shared/services/focus.service';
 import { rotationDtoToQuaternion } from '../../utils/rotation';
 
 /**
@@ -47,13 +49,15 @@ import { rotationDtoToQuaternion } from '../../utils/rotation';
   `,
   styleUrl: './scene-viewer.scss',
 })
-export class SceneViewer implements AfterViewInit {
+export class SceneViewer implements AfterViewInit, OnDestroy {
   @ViewChild('canvas') private readonly canvasRef!: ElementRef<HTMLCanvasElement>;
 
   private readonly store = inject(SceneStore);
   private readonly workspace = inject(WorkspaceStore);
   private readonly renderer = inject(ThreeRendererService);
   private readonly overlay = inject(WorkspaceOverlayService);
+  private readonly focus = inject(FocusService);
+  private readonly focusSub: Subscription;
 
   private sceneApplied = false;
 
@@ -163,6 +167,27 @@ export class SceneViewer implements AfterViewInit {
     effect(() => {
       this.syncPointCloudOverlay();
     });
+
+    // Subscribe to focus/navigation requests from panels
+    this.focusSub = this.focus.focus$.subscribe(req => {
+      switch (req.target.type) {
+        case 'waypoint':
+          this.renderer.focusOnWaypoint(req.target.index);
+          break;
+        case 'pose':
+          this.renderer.focusOnPosition(req.target.position);
+          break;
+        case 'finding':
+          if (req.target.waypoint != null) {
+            this.renderer.focusOnWaypoint(req.target.waypoint);
+          }
+          break;
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.focusSub.unsubscribe();
   }
 
   ngAfterViewInit(): void {

@@ -1,6 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
 import { PlanAnalysisStore } from '../../store/plan-analysis.store';
 import { SceneStore } from '../../../scene/store/scene.store';
+import { FocusService } from '../../../../shared/services/focus.service';
 
 @Component({
   selector: 'analysis-panel',
@@ -146,6 +147,7 @@ import { SceneStore } from '../../../scene/store/scene.store';
 export class AnalysisPanel {
   readonly store = inject(PlanAnalysisStore);
   private readonly sceneStore = inject(SceneStore);
+  private readonly focus = inject(FocusService);
 
   /** Info about the active plan, or null if none. */
   protected readonly activePlanInfo = computed<{
@@ -182,7 +184,9 @@ export class AnalysisPanel {
   }
 
   onFindingClick(waypoint: number | null): void {
-    if (waypoint === null) return;
+    if (waypoint !== null) {
+      this.focus.focusWaypoint(waypoint);
+    }
   }
 
   iconFor(severity: string): string {

@@ -70,6 +70,8 @@ export class ThreeRendererService {
   private onTargetDrag: ((pos: [number, number, number]) => void) | null = null;
   private frameId: number | null = null;
   private trajectorySlot: TrajectorySlot | null = null;
+  /** Positions of all waypoint markers (index → position). Used for focus-on-waypoint. */
+  private readonly trajectoryWaypoints: [number, number, number][] = [];
   private readonly overlays = new Set<SceneOverlay>();
 
   // ── Scene content caches (id → slot) ──
@@ -723,6 +725,11 @@ export class ThreeRendererService {
     const markers: THREE.Mesh[] = [];
     const markerGeo = new THREE.SphereGeometry(0.005, 12, 12);
     const pts = waypoints.map(wp => new THREE.Vector3(wp.position[0], wp.position[1], wp.position[2]));
+    // Store waypoint positions for focus-on-waypoint
+    this.trajectoryWaypoints.length = 0;
+    for (const wp of waypoints) {
+      this.trajectoryWaypoints.push([wp.position[0], wp.position[1], wp.position[2]]);
+    }
 
     if (segments && segments.length > 0) {
       // ── Multi-segment: color each segment by palette index ──
@@ -794,6 +801,7 @@ export class ThreeRendererService {
     this.contentGroup?.remove(this.trajectorySlot.group);
     this.disposeTrajectory(this.trajectorySlot);
     this.trajectorySlot = null;
+    this.trajectoryWaypoints.length = 0;
   }
 
   private disposeTrajectory(slot: TrajectorySlot): void {
@@ -917,6 +925,42 @@ export class ThreeRendererService {
 
     controls.target.copy(center);
     controls.update();
+  }
+
+  /**
+   * Focus the camera on a specific 3D position.
+   *
+   * Moves orbit controls target to the position and adjusts the camera
+   * to look at it from the current direction.
+   */
+  focusOnPosition(position: [number, number, number]): void {
+    const camera = this.camera;
+    const controls = this.controls;
+    if (!camera || !controls) return;
+
+    const target = new THREE.Vector3(position[0], position[1], position[2]);
+    controls.target.copy(target);
+    controls.update();
+  }
+
+  /**
+   * Focus on a waypoint by its index in the trajectory.
+   * Returns true if the waypoint exists, false otherwise.
+   */
+  focusOnWaypoint(index: number): boolean {
+    if (index < 0 || index >= this.trajectoryWaypoints.length) return false;
+    // Highlight the waypoint by temporarily scaling its marker
+    const slot = this.trajectorySlot;
+    if (slot && index < slot.markers.length) {
+      const marker = slot.markers[index];
+      // Pulse animation via scale
+      marker.scale.set(2, 2, 2);
+      setTimeout(() => {
+        marker.scale.set(1, 1, 1);
+      }, 1500);
+    }
+    this.focusOnPosition(this.trajectoryWaypoints[index]);
+    return true;
   }
 
   // ── Private ──
