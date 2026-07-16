@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 thalos_core = { path = "../thalos-core" }
+thalos-collision = { path = "../thalos-collision" }
 thiserror = "2.0"
