@@ -13,13 +13,32 @@ use thalos_core::{
 };
 use thalos_planning::motion::program::CompiledPlan;
 
+use crate::backends::controller::RobotController;
 use crate::backends::manager::BackendManager;
 use crate::backends::RobotBackend;
 use crate::commands::handler::ExecutableCommand;
 use crate::commands::Command;
 use crate::error::RuntimeError;
+use crate::plan::{PlanState, SessionStatus};
 use crate::snapshots::{RuntimeSnapshot, TickDelta};
 use crate::state::robot::{ActiveRobot, SceneRuntime};
+
+/// Derive an ExecutionSession from a RobotState.
+fn session_from_state(state: &Arc<crate::state::robot_state::RobotState>) -> Option<crate::plan::ExecutionSession> {
+    use crate::state::robot_state::MotionMode;
+    let progress = state.execution.progress;
+    let status = match state.motion.mode {
+        MotionMode::Idle if progress >= 1.0 => SessionStatus::Completed,
+        MotionMode::Moving => SessionStatus::Running,
+        MotionMode::Paused => SessionStatus::Paused,
+        MotionMode::Stopping => SessionStatus::Cancelled,
+        MotionMode::EStop => SessionStatus::Failed,
+        _ => SessionStatus::Ready,
+    };
+    Some(crate::plan::ExecutionSession::derived(status, progress))
+}
+
+
 
 const IK_MAX_ITERS: usize = 500;
 const IK_TOLERANCE: f64 = 1e-6;
@@ -73,6 +92,51 @@ impl SceneService {
             active_plan: runtime.active_plan.clone(),
             execution: None,
             active_tcp: runtime.active_tcp.clone(),
+            generated_at: chrono::Utc::now(),
+        }
+    }
+
+    /// Build a snapshot that includes execution state from the controller.
+    ///
+    /// Reads the controller's RobotState and derives ExecutionSession + joints.
+    async fn build_snapshot_with_execution(
+        runtime: &tokio::sync::RwLock<SceneRuntime>,
+        controller: &Arc<RwLock<dyn RobotController + Send + Sync>>,
+    ) -> RuntimeSnapshot {
+        let ctrl = controller.read().await;
+        let state = ctrl.robot_state().await;
+        let mut rt = runtime.write().await;
+        rt.set_joints_from_state(&state.joints.positions);
+
+        let fk_result = Self::compute_fk(&rt.active_robot.chain, &rt.active_robot.joints);
+        let execution = session_from_state(&state);
+
+        // Sync the active_plan state with the execution
+        if let Some(ref mut plan) = rt.active_plan {
+            if let Some(ref exe) = execution {
+                match exe.status {
+                    SessionStatus::Running => plan.state = PlanState::Active,
+                    SessionStatus::Paused => plan.state = PlanState::Paused,
+                    SessionStatus::Completed => plan.state = PlanState::Completed,
+                    SessionStatus::Cancelled => plan.state = PlanState::Cancelled,
+                    SessionStatus::Failed => plan.state = PlanState::Failed,
+                    SessionStatus::Ready => {},
+                }
+            }
+        }
+
+        RuntimeSnapshot {
+            robot: rt.active_robot.model,
+            robot_source: rt.robot_source.clone(),
+            robot_name: rt.robot_name.clone(),
+            joints_meta: rt.joints_meta.clone(),
+            joints: rt.active_robot.joints.clone(),
+            chain: rt.active_robot.chain.clone(),
+            fk_result,
+            ik_result: None,
+            active_plan: rt.active_plan.clone(),
+            execution,
+            active_tcp: rt.active_tcp.clone(),
             generated_at: chrono::Utc::now(),
         }
     }
@@ -144,7 +208,8 @@ impl SceneService {
             if !waypoints.is_empty() && duration > 0.0 {
                 let mut c = ctrl.write().await;
                 c.execute(waypoints, duration).await?;
-            }
+            } // write lock dropped here
+            return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
         }
         let runtime = self.runtime.read().await;
         Ok(Self::build_snapshot(&runtime, None))
@@ -152,8 +217,11 @@ impl SceneService {
 
     pub async fn pause_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
         if let Some(ctrl) = self.manager.get_controller().await {
-            let mut c = ctrl.write().await;
-            c.pause().await?;
+            {
+                let mut c = ctrl.write().await;
+                c.pause().await?;
+            } // write lock dropped
+            return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
         }
         let runtime = self.runtime.read().await;
         Ok(Self::build_snapshot(&runtime, None))
@@ -161,8 +229,11 @@ impl SceneService {
 
     pub async fn resume_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
         if let Some(ctrl) = self.manager.get_controller().await {
-            let mut c = ctrl.write().await;
-            c.resume().await?;
+            {
+                let mut c = ctrl.write().await;
+                c.resume().await?;
+            } // write lock dropped
+            return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
         }
         let runtime = self.runtime.read().await;
         Ok(Self::build_snapshot(&runtime, None))
@@ -170,15 +241,17 @@ impl SceneService {
 
     pub async fn cancel_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
         if let Some(ctrl) = self.manager.get_controller().await {
-            let mut c = ctrl.write().await;
-            c.stop().await?;
+            {
+                let mut c = ctrl.write().await;
+                c.stop().await?;
+            } // write lock dropped
+            return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
         }
         let runtime = self.runtime.read().await;
         Ok(Self::build_snapshot(&runtime, None))
     }
 
     pub async fn reset_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
-        // Reset the controller and plan for re-execution
         if let Some(ctrl) = self.manager.get_controller().await {
             let (waypoints, duration) = {
                 let runtime = self.runtime.read().await;
@@ -187,7 +260,8 @@ impl SceneService {
             if !waypoints.is_empty() && duration > 0.0 {
                 let mut c = ctrl.write().await;
                 c.execute(waypoints, duration).await?;
-            }
+            } // write lock dropped
+            return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
         }
         let runtime = self.runtime.read().await;
         Ok(Self::build_snapshot(&runtime, None))

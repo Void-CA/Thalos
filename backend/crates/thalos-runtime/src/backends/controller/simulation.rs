@@ -135,12 +135,40 @@ impl RobotController for SimulationController {
             return Ok(());
         }
 
+        let initial_positions = waypoints.first().cloned().unwrap_or_default();
         *self.waypoints.write().await = waypoints;
         *self.duration.write().await = duration;
 
         let mut exec = self.execution.write().await;
         exec.reset();
         exec.start();
+
+        // Update the shared state to reflect active execution
+        let new_revision = self.state.load().revision + 1;
+        let new_state = RobotState {
+            revision: new_revision,
+            joints: JointState {
+                positions: initial_positions,
+                velocities: vec![0.0; self.dof],
+                torques: vec![0.0; self.dof],
+            },
+            execution: ExecutionState {
+                current_program: None,
+                current_segment: None,
+                progress: 0.0,
+            },
+            motion: MotionState {
+                mode: MotionMode::Moving,
+                power_on: true,
+                motion_enabled: true,
+            },
+            diagnostics: Diagnostics {
+                timestamp: chrono::Utc::now(),
+                ..Diagnostics::default()
+            },
+            ..RobotState::default()
+        };
+        self.state.store(Arc::new(new_state));
 
         Ok(())
     }
