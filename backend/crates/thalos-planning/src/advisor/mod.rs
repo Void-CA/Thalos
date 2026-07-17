@@ -95,7 +95,7 @@ impl PlanAdvisor {
                     Recommendation {
                         kind: SuggestionKind::Manipulability,
                         message: format!(
-                            "Manipulabilidad baja ({:.3}). Cambiar solución IK puede mejorarla.",
+                            "Low manipulability ({:.3}). Switching to an alternative IK solver may improve it.",
                             finding.value.unwrap_or(0.0),
                         ),
                         impact: Impact::High,
@@ -103,7 +103,7 @@ impl PlanAdvisor {
                     },
                     Recommendation {
                         kind: SuggestionKind::Waypoint,
-                        message: "Agregar waypoint intermedio en zona de baja manipulabilidad.".to_string(),
+                        message: "Add an intermediate waypoint in the low-manipulability region.".to_string(),
                         impact: Impact::Medium,
                         waypoint: finding.waypoint,
                     },
@@ -134,7 +134,7 @@ impl PlanAdvisor {
                 vec![Recommendation {
                     kind: SuggestionKind::Singularity,
                     message: format!(
-                        "Singularidad en waypoint {}. La trayectoria no es ejecutable en este punto.",
+                        "Singularity at waypoint {}. The trajectory cannot be executed at this point.",
                         finding.waypoint.map(|i| i.to_string()).unwrap_or_default(),
                     ),
                     impact: Impact::High,
@@ -158,7 +158,7 @@ impl PlanAdvisor {
                 vec![Recommendation {
                     kind: SuggestionKind::Collision,
                     message: format!(
-                        "Distancia a obstáculo baja ({:.1} mm). Reducir velocidad o agregar waypoint.",
+                        "Obstacle distance low ({:.1} mm). Reduce speed or add intermediate waypoint.",
                         finding.value.unwrap_or(0.0) * 1000.0,
                     ),
                     impact: Impact::Medium,
@@ -205,7 +205,7 @@ mod tests {
             kind: FindingKind::LowManipulability,
             severity: Severity::Warning,
             waypoint: Some(3),
-            message: "manipulabilidad baja".into(),
+            message: "low manipulability".into(),
             value: Some(0.15),
             threshold: Some(0.3),
         }];

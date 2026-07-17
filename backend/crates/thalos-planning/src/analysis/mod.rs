@@ -279,7 +279,7 @@ impl<'a> TrajectoryAnalyzer<'a> {
                         kind: FindingKind::LowManipulability,
                         severity: Severity::Warning,
                         waypoint: Some(worst.0),
-                        message: format!("Manipulabilidad baja ({:.3}) en waypoint {}", worst.1, worst.0),
+                        message: format!("Low manipulability ({:.3}) at waypoint {}", worst.1, worst.0),
                         value: Some(worst.1),
                         threshold: Some(manip_threshold),
                     });
@@ -295,7 +295,7 @@ impl<'a> TrajectoryAnalyzer<'a> {
                         kind: FindingKind::Singularity,
                         severity: Severity::Error,
                         waypoint: Some(wp.index),
-                        message: format!("Singularidad en waypoint {} (condition number: {:.1})", wp.index, sr.condition_number),
+                        message: format!("Singularity at waypoint {} (condition number: {:.1})", wp.index, sr.condition_number),
                         value: Some(sr.condition_number),
                         threshold: Some(1000.0),
                     });
@@ -304,7 +304,7 @@ impl<'a> TrajectoryAnalyzer<'a> {
                         kind: FindingKind::NearSingularity,
                         severity: Severity::Warning,
                         waypoint: Some(wp.index),
-                        message: format!("Cerca de singularidad en waypoint {} (condition number: {:.1})", wp.index, sr.condition_number),
+                        message: format!("Near singularity at waypoint {} (condition number: {:.1})", wp.index, sr.condition_number),
                         value: Some(sr.condition_number),
                         threshold: Some(100.0),
                     });
@@ -318,10 +318,10 @@ impl<'a> TrajectoryAnalyzer<'a> {
                 kind: FindingKind::Collision,
                 severity: Severity::Error,
                 waypoint: metrics.first_collision_waypoint,
-                message: format!(
-                    "Colisión en waypoint {}",
-                    metrics.first_collision_waypoint.map(|i| i.to_string()).unwrap_or_else(|| "desconocido".to_string()),
-                ),
+                    message: format!(
+                        "Collision at waypoint {}",
+                        metrics.first_collision_waypoint.map(|i| i.to_string()).unwrap_or_else(|| "unknown".to_string()),
+                    ),
                 value: metrics.min_collision_distance,
                 threshold: Some(0.0),
             });
@@ -331,7 +331,7 @@ impl<'a> TrajectoryAnalyzer<'a> {
                     kind: FindingKind::CollisionNear,
                     severity: Severity::Warning,
                     waypoint: metrics.min_collision_waypoint,
-                    message: format!("Distancia a obstáculo baja ({:.1} mm)", min_dist * 1000.0),
+                    message: format!("Obstacle distance low ({:.1} mm)", min_dist * 1000.0),
                     value: Some(min_dist),
                     threshold: Some(0.05),
                 });
