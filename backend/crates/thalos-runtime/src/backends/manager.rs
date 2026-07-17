@@ -44,6 +44,26 @@ impl BackendManager {
         Ok(())
     }
 
+    /// Replace the active controller with a new one.
+    ///
+    /// Disconnects and removes the previous controller, then connects
+    /// and sets the new one. Useful when the robot changes (e.g., new DOF).
+    pub async fn replace_controller(
+        &self,
+        controller: Arc<RwLock<dyn RobotController + Send + Sync>>,
+    ) -> Result<(), ControllerError> {
+        let mut active = self.active.write().await;
+        // Disconnect previous if any
+        if let Some(prev) = active.take() {
+            let mut guard = prev.write().await;
+            let _ = guard.disconnect().await;
+        }
+        // Connect and set the new one
+        controller.write().await.connect().await?;
+        *active = Some(controller);
+        Ok(())
+    }
+
     /// Is any controller connected?
     pub async fn is_connected(&self) -> bool {
         self.active.read().await.is_some()

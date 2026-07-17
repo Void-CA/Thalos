@@ -40,6 +40,18 @@ impl SimulationController {
         }
     }
 
+    /// Reinitialize the controller for a different robot DOF.
+    ///
+    /// Called when the user loads a new robot (canonical or URDF).
+    /// Preserves the connected state (if any), resets everything else.
+    pub fn reconfigure(&mut self, dof: usize) {
+        self.waypoints = RwLock::new(Vec::new());
+        self.duration = RwLock::new(0.0);
+        self.execution = RwLock::new(ExecutionSession::new("sim"));
+        self.dof = dof;
+        self.state.store(Arc::new(RobotState::default()));
+    }
+
     /// Advance the simulation by `dt` seconds, interpolating joint angles
     /// and updating the internal `RobotState`.
     pub async fn advance_inner(&self, dt: f64) {

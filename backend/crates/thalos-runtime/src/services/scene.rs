@@ -13,6 +13,7 @@ use thalos_core::{
 };
 use thalos_planning::motion::program::CompiledPlan;
 
+use crate::backends::controller::simulation::SimulationController;
 use crate::backends::controller::RobotController;
 use crate::backends::manager::BackendManager;
 use crate::backends::RobotBackend;
@@ -149,10 +150,26 @@ impl SceneService {
 
     /// Execute a command (IK motion, FK set joints, etc.).
     pub async fn execute(&self, cmd: Command) -> Result<RuntimeSnapshot, RuntimeError> {
+        let is_robot_change = matches!(cmd, Command::LoadRobot(_) | Command::LoadUrdfRobot { .. });
+
         let ik_result = {
             let mut runtime = self.runtime.write().await;
             cmd.execute(&mut *runtime)?
         };
+
+        // If the robot changed, update the SimulationController with the new DOF
+        if is_robot_change {
+            let dof = {
+                let rt = self.runtime.read().await;
+                rt.active_robot.chain.dof_count()
+            };
+            let new_ctrl = Arc::new(RwLock::new(
+                SimulationController::new(dof),
+            )) as Arc<RwLock<dyn RobotController + Send + Sync>>;
+            // Silently replace — the manager handles disconnection
+            let _ = self.manager.replace_controller(new_ctrl).await;
+        }
+
         let runtime = self.runtime.read().await;
         Ok(Self::build_snapshot(&runtime, ik_result))
     }
