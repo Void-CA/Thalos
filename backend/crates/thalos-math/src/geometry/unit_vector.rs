@@ -9,6 +9,12 @@ impl UnitVector3 {
         Ok(Self(vector.normalized()?))
     }
 
+    /// Create a UnitVector3 by normalizing, returning a default if the
+    /// input is a zero vector (instead of an error).
+    pub fn new_normalize(vector: Vector3) -> Self {
+        vector.normalized().map(Self).unwrap_or_else(|_| Self(Vector3::new(1.0, 0.0, 0.0)))
+    }
+
     pub fn into_inner(self) -> Vector3 {
         self.0
     }

@@ -13,6 +13,13 @@ pub struct Transform3D {
 }
 
 impl Transform3D {
+    pub fn from_translation_rotation(translation: Vector3, rotation: UnitQuaternion) -> Self {
+        Self {
+            translation,
+            rotation,
+        }
+    }
+
     pub fn from_translation(translation: Vector3) -> Self {
         Self {
             translation,
