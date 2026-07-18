@@ -98,7 +98,7 @@ export class SceneViewer implements AfterViewInit, OnDestroy {
       const plan = this.activePlan();
       const vis = plan?.visualization;
       const segs = plan?.segments;
-      const analysisWp = this.planAnalysis.waypoints();
+      const analysisWp = this.planAnalysis.waypoints() ?? [];
 
       if (vis && vis.waypoints.length > 0) {
         const severity = analysisWp.length === vis.waypoints.length

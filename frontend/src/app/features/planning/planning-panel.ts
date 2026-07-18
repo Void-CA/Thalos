@@ -210,13 +210,15 @@ export class PlanningPanel {
     ).subscribe({
       next: res => {
         this.scene.applySnapshot(res);
-        this.loading.set(false);
+        // Defer loading flag to next microtask — evita NG0100
+        // cuando el Observable emite sincrónicamente (zoneless).
+        queueMicrotask(() => this.loading.set(false));
         // Auto-analyze the freshly compiled plan
         this.analysis.analyzePlan();
       },
       error: (err: Error) => {
         this.error.set(err.message ?? 'Plan compilation failed');
-        this.loading.set(false);
+        queueMicrotask(() => this.loading.set(false));
       },
     });
   }

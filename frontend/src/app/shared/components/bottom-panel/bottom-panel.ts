@@ -6,6 +6,7 @@ import { PlanAnalysisStore } from '../../../features/plan-analysis/store/plan-an
 import { FocusService } from '../../services/focus.service';
 import { ActionDispatcher } from '../../services/action-dispatcher.service';
 import { suggestionKindToAction } from '../../types/recommendation-action';
+import { PlanningStore } from '../../store/planning.store';
 import { LogStore } from '../../store/log.store';
 import { LayoutStore } from '../../store/layout.store';
 import type { RecommendationDto } from '../../../features/plan-analysis/plan-analysis-api.types';
@@ -313,6 +314,7 @@ export class BottomPanel {
   protected readonly pa = inject(PlanAnalysisStore);
   private readonly focus = inject(FocusService);
   private readonly actions = inject(ActionDispatcher);
+  private readonly planning = inject(PlanningStore);
   protected readonly log = inject(LogStore);
   protected readonly layout = inject(LayoutStore);
 
@@ -488,8 +490,19 @@ export class BottomPanel {
   // ── Plan Analysis actions ──
 
   protected onPlanFindingClick(waypoint: number | null): void {
-    if (waypoint !== null) {
-      this.focus.focusWaypoint(waypoint);
+    if (waypoint == null) return;
+
+    this.focus.focusWaypoint(waypoint);
+
+    // Expandir el segmento que contiene este waypoint en el editor de planning
+    const segments = this.scene.state().activePlan?.segments;
+    if (segments) {
+      const segIdx = segments.findIndex(
+        s => waypoint >= s.waypointStart && waypoint < s.waypointEnd,
+      );
+      if (segIdx >= 0) {
+        this.planning.expandSegment(segIdx);
+      }
     }
   }
 

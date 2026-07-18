@@ -105,6 +105,17 @@ export class PlanningStore {
     });
   }
 
+  /** Ensure a segment is expanded (no-op if already expanded). */
+  expandSegment(index: number): void {
+    this.segmentsSignal.update(arr => {
+      if (index < 0 || index >= arr.length) return arr;
+      if (arr[index].expanded) return arr;
+      const next = [...arr];
+      next[index] = { ...next[index], expanded: true };
+      return next;
+    });
+  }
+
   updateField<K extends keyof SegmentModel>(index: number, field: K, value: SegmentModel[K]): void {
     this.segmentsSignal.update(arr => {
       const next = [...arr];

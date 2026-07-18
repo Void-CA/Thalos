@@ -745,16 +745,34 @@ export class ThreeRendererService {
     }
 
     if (segments && segments.length > 0) {
-      // ── Multi-segment: color each segment by palette index ──
+      // ── Multi-segment ──
       for (let s = 0; s < segments.length; s++) {
         const seg = segments[s];
-        const color = SEGMENT_PALETTE[s % SEGMENT_PALETTE.length];
+        const segColor = SEGMENT_PALETTE[s % SEGMENT_PALETTE.length];
 
-        // Per-segment path line
+        // Per-segment path line (vertex-colored gradient when analysis available)
         const segPts = pts.slice(seg.waypointStart, seg.waypointEnd);
         if (segPts.length >= 2) {
           const lineGeo = new THREE.BufferGeometry().setFromPoints(segPts);
-          const lineMat = new THREE.LineBasicMaterial({ color });
+
+          let lineMat: THREE.Material;
+          if (waypointSeverity) {
+            const cols = new Float32Array(segPts.length * 3);
+            for (let j = 0; j < segPts.length; j++) {
+              const wpIdx = seg.waypointStart + j;
+              const c = new THREE.Color(
+                ThreeRendererService.SEVERITY_COLORS[waypointSeverity[wpIdx]] ?? 0x888888,
+              );
+              cols[j * 3] = c.r;
+              cols[j * 3 + 1] = c.g;
+              cols[j * 3 + 2] = c.b;
+            }
+            lineGeo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+            lineMat = new THREE.LineBasicMaterial({ vertexColors: true });
+          } else {
+            lineMat = new THREE.LineBasicMaterial({ color: segColor });
+          }
+
           const line = new THREE.Line(lineGeo, lineMat);
           group.add(line);
           lines.push(line);
@@ -764,8 +782,8 @@ export class ThreeRendererService {
         for (let i = seg.waypointStart; i < seg.waypointEnd; i++) {
           const wp = waypoints[i];
           const markerColor = waypointSeverity
-            ? (ThreeRendererService.SEVERITY_COLORS[waypointSeverity[i]] ?? color)
-            : color;
+            ? (ThreeRendererService.SEVERITY_COLORS[waypointSeverity[i]] ?? segColor)
+            : segColor;
           const mat = new THREE.MeshStandardMaterial({ color: markerColor });
           const mesh = new THREE.Mesh(markerGeo.clone(), mat);
           mesh.position.set(wp.position[0], wp.position[1], wp.position[2]);
@@ -775,13 +793,33 @@ export class ThreeRendererService {
         }
       }
     } else {
-      // ── Single motion: color by motion type ──
+      // ── Single motion ──
       const lineColor = motionType === 'movel' ? 0x33ccff : 0xff8800;
-      const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
-      const lineMat = new THREE.LineBasicMaterial({ color: lineColor });
-      const line = new THREE.Line(lineGeo, lineMat);
-      group.add(line);
-      lines.push(line);
+
+      if (waypointSeverity) {
+        // Gradiente por severity sobre toda la trayectoria
+        const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+        const cols = new Float32Array(pts.length * 3);
+        for (let i = 0; i < pts.length; i++) {
+          const c = new THREE.Color(
+            ThreeRendererService.SEVERITY_COLORS[waypointSeverity[i]] ?? 0x888888,
+          );
+          cols[i * 3] = c.r;
+          cols[i * 3 + 1] = c.g;
+          cols[i * 3 + 2] = c.b;
+        }
+        lineGeo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+        const lineMat = new THREE.LineBasicMaterial({ vertexColors: true });
+        const line = new THREE.Line(lineGeo, lineMat);
+        group.add(line);
+        lines.push(line);
+      } else {
+        const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+        const lineMat = new THREE.LineBasicMaterial({ color: lineColor });
+        const line = new THREE.Line(lineGeo, lineMat);
+        group.add(line);
+        lines.push(line);
+      }
 
       for (let i = 0; i < waypoints.length; i++) {
         const wp = waypoints[i];
