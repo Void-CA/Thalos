@@ -1,4 +1,4 @@
-import { Injectable, NgZone, inject } from '@angular/core';
+import { Injectable, NgZone, inject, signal } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
@@ -42,6 +42,8 @@ interface SceneOverlay {
   attach(scene: THREE.Scene): void;
 }
 
+export type TrajectoryColorMode = 'segment' | 'trajectory-quality' | 'manipulability' | 'singularity';
+
 @Injectable({ providedIn: 'root' })
 export class ThreeRendererService {
   private readonly ngZone = inject(NgZone);
@@ -70,6 +72,10 @@ export class ThreeRendererService {
   private onTargetDrag: ((pos: [number, number, number]) => void) | null = null;
   private frameId: number | null = null;
   private trajectorySlot: TrajectorySlot | null = null;
+
+  /** How to color the trajectory — shared state between planning panel and scene viewer. */
+  readonly colorMode = signal<TrajectoryColorMode>('segment');
+
   /** Index of the currently highlighted waypoint, or -1 if none. */
   private highlightedWaypoint: number = -1;
   /** Monotonically increasing generation counter to invalidate stale highlights. */
@@ -711,11 +717,12 @@ export class ThreeRendererService {
 
   // ── Trajectory rendering ──
 
-  /** Severity → color lookup for analysis-coloured trajectories. */
-  private static readonly SEVERITY_COLORS: Record<string, number> = {
+  /** Color key → Three.js color lookup. Used by all analysis-based color modes. */
+  private static readonly COLOR_MAP: Record<string, number> = {
     good: 0x44cc44,
     warning: 0xeebb22,
     critical: 0xee3333,
+    nodata: 0x888888,
   };
 
   /** Render or update the trajectory path + waypoint markers. */
@@ -761,7 +768,7 @@ export class ThreeRendererService {
             for (let j = 0; j < segPts.length; j++) {
               const wpIdx = seg.waypointStart + j;
               const c = new THREE.Color(
-                ThreeRendererService.SEVERITY_COLORS[waypointSeverity[wpIdx]] ?? 0x888888,
+                ThreeRendererService.COLOR_MAP[waypointSeverity[wpIdx]] ?? 0x888888,
               );
               cols[j * 3] = c.r;
               cols[j * 3 + 1] = c.g;
@@ -782,7 +789,7 @@ export class ThreeRendererService {
         for (let i = seg.waypointStart; i < seg.waypointEnd; i++) {
           const wp = waypoints[i];
           const markerColor = waypointSeverity
-            ? (ThreeRendererService.SEVERITY_COLORS[waypointSeverity[i]] ?? segColor)
+            ? (ThreeRendererService.COLOR_MAP[waypointSeverity[i]] ?? segColor)
             : segColor;
           const mat = new THREE.MeshStandardMaterial({ color: markerColor });
           const mesh = new THREE.Mesh(markerGeo.clone(), mat);
@@ -802,7 +809,7 @@ export class ThreeRendererService {
         const cols = new Float32Array(pts.length * 3);
         for (let i = 0; i < pts.length; i++) {
           const c = new THREE.Color(
-            ThreeRendererService.SEVERITY_COLORS[waypointSeverity[i]] ?? 0x888888,
+            ThreeRendererService.COLOR_MAP[waypointSeverity[i]] ?? 0x888888,
           );
           cols[i * 3] = c.r;
           cols[i * 3 + 1] = c.g;
@@ -824,7 +831,7 @@ export class ThreeRendererService {
       for (let i = 0; i < waypoints.length; i++) {
         const wp = waypoints[i];
         const color = waypointSeverity
-          ? (ThreeRendererService.SEVERITY_COLORS[waypointSeverity[i]] ?? 0xcccccc)
+          ? (ThreeRendererService.COLOR_MAP[waypointSeverity[i]] ?? 0xcccccc)
           : (() => {
               switch (wp.waypointType) {
                 case 'Start': return 0x44cc44;

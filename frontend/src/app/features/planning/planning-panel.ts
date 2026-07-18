@@ -7,6 +7,7 @@ import { PlanningStore, SegmentKind, SegmentModel } from '../../shared/store/pla
 import { SceneApiService } from '../scene/services/scene-api.service';
 import { SceneStore } from '../scene/store/scene.store';
 import { PlanAnalysisStore } from '../plan-analysis/store/plan-analysis.store';
+import { ThreeRendererService, type TrajectoryColorMode } from '../scene/services/three-renderer.service';
 import type { MotionPlanRequest, MotionSegmentDto } from '../scene/scene-api.types';
 
 const SEGMENT_COLORS = [
@@ -20,6 +21,18 @@ const SEGMENT_COLORS = [
   imports: [FormsModule, JointEditor, PoseInputs],
   template: `
     <div class="planning-panel">
+      <!-- Trajectory color mode -->
+      <div class="planning-panel__color-mode">
+        <span class="planning-panel__color-label">Color by</span>
+        @for (m of colorModes; track m.key) {
+          <button
+            class="planning-panel__color-btn"
+            [class.planning-panel__color-btn--active]="renderer.colorMode() === m.key"
+            (click)="renderer.colorMode.set(m.key)"
+          >{{ m.label }}</button>
+        }
+      </div>
+
       @if (planning.segments().length === 0) {
         <div class="planning-panel__empty">
           <p>No segments. Add a motion command to build a program.</p>
@@ -99,7 +112,15 @@ export class PlanningPanel {
   private readonly api = inject(SceneApiService);
   private readonly scene = inject(SceneStore);
   private readonly analysis = inject(PlanAnalysisStore);
+  protected readonly renderer = inject(ThreeRendererService);
   private readonly destroyRef = inject(DestroyRef);
+
+  protected readonly colorModes: { key: TrajectoryColorMode; label: string }[] = [
+    { key: 'segment', label: 'Segment' },
+    { key: 'trajectory-quality', label: 'Trajectory Quality' },
+    { key: 'manipulability', label: 'Manipulability' },
+    { key: 'singularity', label: 'Singularity' },
+  ];
 
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);

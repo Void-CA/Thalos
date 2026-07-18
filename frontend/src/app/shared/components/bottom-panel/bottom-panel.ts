@@ -4,12 +4,9 @@ import { SceneStore } from '../../../features/scene/store/scene.store';
 import { WorkspaceStore } from '../../../features/workspace/store/workspace.store';
 import { PlanAnalysisStore } from '../../../features/plan-analysis/store/plan-analysis.store';
 import { FocusService } from '../../services/focus.service';
-import { ActionDispatcher } from '../../services/action-dispatcher.service';
-import { suggestionKindToAction } from '../../types/recommendation-action';
 import { PlanningStore } from '../../store/planning.store';
 import { LogStore } from '../../store/log.store';
 import { LayoutStore } from '../../store/layout.store';
-import type { RecommendationDto } from '../../../features/plan-analysis/plan-analysis-api.types';
 
 type TabId = 'snapshot' | 'analysis' | 'timeline' | 'plan-analysis' | 'log';
 
@@ -212,7 +209,7 @@ const SEGMENT_COLORS = [
                       <span class="plan-analysis__metric">&#x2399; {{ (m.min_collision_distance * 1000).toFixed(0) }}mm</span>
                     }
                     @if (m.singular_count > 0) {
-                      <span class="plan-analysis__metric plan-analysis__metric--warn">&#x26D4; {{ m.singular_count }} singular</span>
+                      <span class="plan-analysis__metric plan-analysis__metric--warn">&#x26D4; {{ m.singular_count }} singular waypoints</span>
                     }
                   }
                 </div>
@@ -254,26 +251,6 @@ const SEGMENT_COLORS = [
                   </section>
                 }
 
-                <!-- Recommendations -->
-                @if (pa.recommendations.length > 0) {
-                  <details class="plan-analysis__section" open>
-                    <summary class="plan-analysis__section-header">
-                      Recommendations ({{ pa.recommendations.length }})
-                    </summary>
-                    <ul class="plan-analysis__list">
-                      @for (r of pa.recommendations; track r) {
-                        <li class="plan-analysis__recommendation">
-                          <div class="plan-analysis__rec-header">
-                            <span class="plan-analysis__rec-impact" [class]="'impact--' + r.impact">{{ r.impact }}</span>
-                            <span class="plan-analysis__rec-kind">{{ r.kind.replace('_', ' ') }}</span>
-                            <button class="plan-analysis__rec-apply" (click)="onApplyRecommendation(r)">Apply</button>
-                          </div>
-                          <p class="plan-analysis__rec-msg">{{ r.message }}</p>
-                        </li>
-                      }
-                    </ul>
-                  </details>
-                }
               </div>
             } @else {
               <p class="bottom-panel__empty">
@@ -313,7 +290,6 @@ export class BottomPanel {
   protected readonly ws = inject(WorkspaceStore);
   protected readonly pa = inject(PlanAnalysisStore);
   private readonly focus = inject(FocusService);
-  private readonly actions = inject(ActionDispatcher);
   private readonly planning = inject(PlanningStore);
   protected readonly log = inject(LogStore);
   protected readonly layout = inject(LayoutStore);
@@ -504,11 +480,6 @@ export class BottomPanel {
         this.planning.expandSegment(segIdx);
       }
     }
-  }
-
-  protected onApplyRecommendation(r: RecommendationDto): void {
-    const action = suggestionKindToAction(r.kind, r.waypoint);
-    this.actions.dispatch(action);
   }
 
   protected iconFor(severity: string): string {

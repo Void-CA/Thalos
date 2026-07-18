@@ -453,7 +453,7 @@
       }
     }
 
-    // ── Collapsible sections (findings / recommendations) ──
+    // ── Collapsible sections ──
 
     &__section {
       border: 1px solid $border-default;
@@ -528,72 +528,6 @@
       opacity: 0.5;
     }
 
-    // ── Recommendation item ──
-
-    &__recommendation {
-      padding: 0.3rem 0.4rem;
-      border-radius: $radius-sm;
-
-      &:hover {
-        background: rgba(255, 255, 255, 0.03);
-      }
-    }
-
-    &__rec-header {
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-      margin-bottom: 0.15rem;
-    }
-
-    &__rec-impact {
-      font-size: 0.6rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      padding: 0.1rem 0.3rem;
-      border-radius: 2px;
-
-      &.impact--high { background: rgba(238, 51, 51, 0.2); color: #ee3333; }
-      &.impact--medium { background: rgba(238, 187, 34, 0.2); color: #eebb22; }
-      &.impact--low { background: rgba(51, 221, 51, 0.2); color: #33dd33; }
-    }
-
-    &__rec-kind {
-      font-size: 0.65rem;
-      opacity: 0.5;
-      text-transform: uppercase;
-    }
-
-    &__rec-apply {
-      margin-left: auto;
-      font-family: $font-mono;
-      font-size: 0.6rem;
-      padding: 0.1rem 0.35rem;
-      border: 1px solid $border-default;
-      border-radius: 3px;
-      background: transparent;
-      color: $text-secondary;
-      cursor: pointer;
-      transition: opacity 0.15s;
-      opacity: 0;
-
-      .plan-analysis__recommendation:hover & {
-        opacity: 1;
-      }
-
-      &:hover {
-        background: $bg-elevated;
-        border-color: $accent;
-        color: $accent;
-      }
-    }
-
-    &__rec-msg {
-      margin: 0;
-      font-size: 0.72rem;
-      line-height: 1.3;
-      opacity: 0.85;
-    }
   }
 
   // ── Plan Analysis — grouped findings ──

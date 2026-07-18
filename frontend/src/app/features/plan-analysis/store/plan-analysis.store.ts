@@ -101,7 +101,7 @@ export class PlanAnalysisStore {
   private applyResponse(res: PlanAnalysisResponse): void {
     this.summary.set(res.summary);
     this.metrics.set(res.metrics);
-    this.waypoints.set(res.waypoints);
+    this.waypoints.set(res.waypoints ?? []);
     this.findings.set(res.findings);
     this.recommendations.set(res.recommendations);
   }

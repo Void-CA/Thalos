@@ -6,6 +6,7 @@ import { ThreeRendererService } from '../../services/three-renderer.service';
 import { WorkspaceOverlayService } from '../../services/workspace-overlay.service';
 import { WorkspaceStore } from '../../../workspace/store/workspace.store';
 import { PlanAnalysisStore } from '../../../plan-analysis/store/plan-analysis.store';
+import type { WaypointAnalysisDto } from '../../../plan-analysis/plan-analysis-api.types';
 import { FocusService } from '../../../../shared/services/focus.service';
 import { rotationDtoToQuaternion } from '../../utils/rotation';
 
@@ -63,8 +64,40 @@ export class SceneViewer implements AfterViewInit, OnDestroy {
 
   private sceneApplied = false;
 
+  /** Compute per-waypoint color keys from analysis data for a given color mode. */
+  private static computeColors(
+    mode: string,
+    waypoints: WaypointAnalysisDto[],
+  ): string[] {
+    return waypoints.map(w => {
+      switch (mode) {
+        case 'trajectory-quality':
+          return w.severity; // 'good' | 'warning' | 'critical'
+
+        case 'manipulability':
+          if (w.manipulability == null) return 'nodata';
+          if (w.manipulability >= 0.5) return 'good';
+          if (w.manipulability >= 0.3) return 'warning';
+          return 'critical';
+
+        case 'singularity':
+          switch (w.singularity_state) {
+            case 'singular': return 'critical';
+            case 'near': return 'warning';
+            case 'normal': return 'good';
+            default: return 'nodata';
+          }
+
+        default:
+          return 'nodata';
+      }
+    });
+  }
+
   /** True when the scene has renderable robot data. */
   protected readonly hasData = computed(() => this.store.state().data !== null);
+
+
 
   /**
    * Computeds que aíslan propiedades específicas del state.
@@ -93,16 +126,17 @@ export class SceneViewer implements AfterViewInit, OnDestroy {
       }
     });
 
-    // Effect 2: trajectory overlay — coloreada por análisis si está disponible
+    // Effect 2: trajectory overlay — coloreado según modo seleccionado
     effect(() => {
       const plan = this.activePlan();
       const vis = plan?.visualization;
       const segs = plan?.segments;
+      const mode = this.renderer.colorMode();
       const analysisWp = this.planAnalysis.waypoints() ?? [];
 
       if (vis && vis.waypoints.length > 0) {
         const severity = analysisWp.length === vis.waypoints.length
-          ? analysisWp.map(w => w.severity)
+          ? SceneViewer.computeColors(mode, analysisWp)
           : undefined;
         this.renderer.syncTrajectory(vis.waypoints, vis.motionType, segs ?? undefined, severity);
       } else {
