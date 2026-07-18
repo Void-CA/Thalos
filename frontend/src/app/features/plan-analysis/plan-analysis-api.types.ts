@@ -8,6 +8,7 @@ export interface PlanAnalysisRequest {
 export interface PlanAnalysisResponse {
   summary: SummaryDto;
   metrics: MetricsDto;
+  waypoints: WaypointAnalysisDto[];
   findings: FindingDto[];
   recommendations: RecommendationDto[];
 }
@@ -17,6 +18,14 @@ export interface SummaryDto {
   score: number;
   grade: 'Excellent' | 'Good' | 'Fair' | 'Poor' | 'Invalid';
   message: string;
+}
+
+export interface WaypointAnalysisDto {
+  index: number;
+  severity: 'good' | 'warning' | 'critical';
+  manipulability: number | null;
+  singularity_state: 'normal' | 'near' | 'singular' | null;
+  clearance: number | null;
 }
 
 export interface MetricsDto {

@@ -5,7 +5,6 @@ import { JointControl } from '../../features/scene/components/joint-control/join
 import { IkTargetPanel } from '../../features/scene/components/ik-target-panel/ik-target-panel';
 import { TcpInfoPanel } from '../../features/scene/components/tcp-info-panel/tcp-info-panel';
 import { WorkspacePanel } from '../../features/workspace/components/workspace-panel/workspace-panel';
-import { AnalysisPanel } from '../../features/plan-analysis/components/analysis-panel/analysis-panel';
 import { PlanningPanel } from '../../features/planning/planning-panel';
 import { ExecutionPanel } from '../../features/execution/execution-panel';
 
@@ -29,7 +28,6 @@ export const UI_MODE_REGISTRY: Record<AppMode, readonly ToolSchema[]> = {
   ],
   planning: [
     { id: 'planning', label: 'Motion Planning', component: PlanningPanel as Type<unknown>, defaultOpen: true },
-    { id: 'plan-analyze', label: 'Plan Analysis', component: AnalysisPanel as Type<unknown>, defaultOpen: true },
   ],
   execution: [
     { id: 'execution', label: 'Active Plan', component: ExecutionPanel, defaultOpen: true },

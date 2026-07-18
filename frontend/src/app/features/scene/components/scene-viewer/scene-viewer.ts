@@ -5,6 +5,7 @@ import { SceneStore } from '../../store/scene.store';
 import { ThreeRendererService } from '../../services/three-renderer.service';
 import { WorkspaceOverlayService } from '../../services/workspace-overlay.service';
 import { WorkspaceStore } from '../../../workspace/store/workspace.store';
+import { PlanAnalysisStore } from '../../../plan-analysis/store/plan-analysis.store';
 import { FocusService } from '../../../../shared/services/focus.service';
 import { rotationDtoToQuaternion } from '../../utils/rotation';
 
@@ -54,6 +55,7 @@ export class SceneViewer implements AfterViewInit, OnDestroy {
 
   private readonly store = inject(SceneStore);
   private readonly workspace = inject(WorkspaceStore);
+  private readonly planAnalysis = inject(PlanAnalysisStore);
   private readonly renderer = inject(ThreeRendererService);
   private readonly overlay = inject(WorkspaceOverlayService);
   private readonly focus = inject(FocusService);
@@ -91,13 +93,18 @@ export class SceneViewer implements AfterViewInit, OnDestroy {
       }
     });
 
-    // Effect 2: trajectory overlay — solo al compilar/preview (NUNCA en tick)
+    // Effect 2: trajectory overlay — coloreada por análisis si está disponible
     effect(() => {
       const plan = this.activePlan();
       const vis = plan?.visualization;
       const segs = plan?.segments;
+      const analysisWp = this.planAnalysis.waypoints();
+
       if (vis && vis.waypoints.length > 0) {
-        this.renderer.syncTrajectory(vis.waypoints, vis.motionType, segs ?? undefined);
+        const severity = analysisWp.length === vis.waypoints.length
+          ? analysisWp.map(w => w.severity)
+          : undefined;
+        this.renderer.syncTrajectory(vis.waypoints, vis.motionType, segs ?? undefined, severity);
       } else {
         this.renderer.clearTrajectory();
       }

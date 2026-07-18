@@ -18,7 +18,7 @@ use crate::app::prelude::*;
 use crate::app::state::AppState;
 use crate::features::plan_analysis::dto::{
     FindingDto, MetricsDto, PlanAnalysisRequest, PlanAnalysisResponse,
-    RecommendationDto, SummaryDto,
+    RecommendationDto, SummaryDto, WaypointAnalysisDto,
 };
 
 /// POST /api/v1/plan/analyze
@@ -64,6 +64,7 @@ pub async fn analyze_plan(
             min_collision_distance: metrics.min_collision_distance,
             has_collisions: metrics.has_collisions,
         },
+        waypoints: result.analysis.waypoints.iter().map(WaypointAnalysisDto::from).collect(),
         findings: findings.iter().map(FindingDto::from).collect(),
         recommendations: result
             .recommendations

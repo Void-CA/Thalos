@@ -43,6 +43,20 @@ pub struct PlanAnalysis {
     pub constraint_violations: Vec<ConstraintViolation>,
 }
 
+/// Severidad resumida para visualización de trayectoria.
+///
+/// Es un "semáforo" que el renderer 3D consume directamente
+/// sin conocer las métricas internas.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnalysisSeverity {
+    /// Punto válido, sin problemas.
+    Good,
+    /// Requiere atención (baja manipulabilidad, near-singular, clearance bajo).
+    Warning,
+    /// Punto crítico (singular, colisión, violación grave).
+    Critical,
+}
+
 /// Análisis de un waypoint individual.
 #[derive(Debug, Clone)]
 pub struct WaypointAnalysis {
@@ -58,6 +72,44 @@ pub struct WaypointAnalysis {
     pub manipulability: Option<ManipulabilityReport>,
     /// Distancia mínima a obstáculos (negativo = colisión).
     pub min_collision_distance: Option<f64>,
+}
+
+impl WaypointAnalysis {
+    /// Severidad resumida del waypoint para visualización.
+    ///
+    /// Reglas:
+    ///   - Colisión (distancia < 0) → Critical
+    ///   - Singular → Critical
+    ///   - Near-singular → Warning
+    ///   - Manipulabilidad < 0.3 → Warning
+    ///   - Clearance < 1 cm → Warning
+    ///   - Resto → Good
+    pub fn severity(&self) -> AnalysisSeverity {
+        // Colisión
+        if let Some(d) = self.min_collision_distance {
+            if d < 0.0 { return AnalysisSeverity::Critical; }
+        }
+
+        // Singularidad
+        if let Some(s) = &self.singularity {
+            // Condition number alto → cerca de singularidad.
+            // Umbrales típicos: < 50 normal, 50-200 near, > 200 singular.
+            if s.condition_number > 200.0 { return AnalysisSeverity::Critical; }
+            if s.condition_number > 50.0 { return AnalysisSeverity::Warning; }
+        }
+
+        // Manipulabilidad
+        if let Some(m) = &self.manipulability {
+            if m.yoshikawa < 0.3 { return AnalysisSeverity::Warning; }
+        }
+
+        // Clearance bajo
+        if let Some(d) = self.min_collision_distance {
+            if d < 0.01 { return AnalysisSeverity::Warning; }
+        }
+
+        AnalysisSeverity::Good
+    }
 }
 
 /// Métricas agregadas de la trayectoria completa.

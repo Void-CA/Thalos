@@ -13,6 +13,7 @@
 use serde::{Deserialize, Serialize};
 use thalos_planning::{
     advisor::{Impact, Recommendation, SuggestionKind},
+    analysis::{AnalysisSeverity, WaypointAnalysis},
     finding::{Finding, FindingKind, Severity},
 };
 
@@ -31,6 +32,8 @@ pub struct PlanAnalysisResponse {
     pub summary: SummaryDto,
     /// Métricas agregadas de la trayectoria.
     pub metrics: MetricsDto,
+    /// Análisis por punto de la trayectoria (para colorear visualización).
+    pub waypoints: Vec<WaypointAnalysisDto>,
     /// Hallazgos objetivos detectados.
     pub findings: Vec<FindingDto>,
     /// Recomendaciones accionables.
@@ -142,6 +145,45 @@ pub struct RecommendationDto {
     pub impact: String,
     /// Waypoint asociado (opcional).
     pub waypoint: Option<usize>,
+}
+
+/// Análisis de un punto individual de la trayectoria para visualización.
+#[derive(Debug, Serialize)]
+pub struct WaypointAnalysisDto {
+    /// Índice del punto en la trayectoria.
+    pub index: usize,
+    /// Severidad resumida para coloreado ("good", "warning", "critical").
+    pub severity: String,
+    /// Manipulabilidad de Yoshikawa (opcional).
+    pub manipulability: Option<f64>,
+    /// Estado de singularidad: "normal", "near", "singular" o null.
+    pub singularity_state: Option<String>,
+    /// Distancia mínima a obstáculos en metros (negativo = colisión).
+    pub clearance: Option<f64>,
+}
+
+impl From<&WaypointAnalysis> for WaypointAnalysisDto {
+    fn from(wp: &WaypointAnalysis) -> Self {
+        let severity = match wp.severity() {
+            AnalysisSeverity::Good => "good",
+            AnalysisSeverity::Warning => "warning",
+            AnalysisSeverity::Critical => "critical",
+        };
+
+        let singularity_state = wp.singularity.as_ref().map(|s| {
+            if s.condition_number > 200.0 { "singular" }
+            else if s.condition_number > 50.0 { "near" }
+            else { "normal" }
+        });
+
+        Self {
+            index: wp.index,
+            severity: severity.to_string(),
+            manipulability: wp.manipulability.map(|m| m.yoshikawa),
+            singularity_state: singularity_state.map(|s| s.to_string()),
+            clearance: wp.min_collision_distance,
+        }
+    }
 }
 
 // ─── Conversions ───────────────────────────────────────────────────

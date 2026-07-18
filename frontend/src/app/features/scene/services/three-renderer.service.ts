@@ -711,11 +711,20 @@ export class ThreeRendererService {
 
   // ── Trajectory rendering ──
 
+  /** Severity → color lookup for analysis-coloured trajectories. */
+  private static readonly SEVERITY_COLORS: Record<string, number> = {
+    good: 0x44cc44,
+    warning: 0xeebb22,
+    critical: 0xee3333,
+  };
+
   /** Render or update the trajectory path + waypoint markers. */
   syncTrajectory(
     waypoints: VisualWaypoint[],
     motionType?: string,
     segments?: SegmentInfo[],
+    /** Optional per-waypoint severity ('good'|'warning'|'critical'). Overrides segment/type coloring. */
+    waypointSeverity?: string[],
   ): void {
     if (!this.contentGroup) return;
 
@@ -754,7 +763,10 @@ export class ThreeRendererService {
         // Per-segment markers
         for (let i = seg.waypointStart; i < seg.waypointEnd; i++) {
           const wp = waypoints[i];
-          const mat = new THREE.MeshStandardMaterial({ color });
+          const markerColor = waypointSeverity
+            ? (ThreeRendererService.SEVERITY_COLORS[waypointSeverity[i]] ?? color)
+            : color;
+          const mat = new THREE.MeshStandardMaterial({ color: markerColor });
           const mesh = new THREE.Mesh(markerGeo.clone(), mat);
           mesh.position.set(wp.position[0], wp.position[1], wp.position[2]);
           mesh.quaternion.set(wp.orientation[1], wp.orientation[2], wp.orientation[3], wp.orientation[0]);
@@ -773,18 +785,15 @@ export class ThreeRendererService {
 
       for (let i = 0; i < waypoints.length; i++) {
         const wp = waypoints[i];
-        let color: number;
-        switch (wp.waypointType) {
-          case 'Start':
-            color = 0x44cc44;
-            break;
-          case 'Goal':
-            color = 0xcc4444;
-            break;
-          default:
-            color = 0xcccccc;
-            break;
-        }
+        const color = waypointSeverity
+          ? (ThreeRendererService.SEVERITY_COLORS[waypointSeverity[i]] ?? 0xcccccc)
+          : (() => {
+              switch (wp.waypointType) {
+                case 'Start': return 0x44cc44;
+                case 'Goal': return 0xcc4444;
+                default: return 0xcccccc;
+              }
+            })();
 
         const mat = new THREE.MeshStandardMaterial({ color });
         const mesh = new THREE.Mesh(markerGeo.clone(), mat);

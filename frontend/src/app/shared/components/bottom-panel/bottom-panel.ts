@@ -2,15 +2,21 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { NgIcon } from '@ng-icons/core';
 import { SceneStore } from '../../../features/scene/store/scene.store';
 import { WorkspaceStore } from '../../../features/workspace/store/workspace.store';
+import { PlanAnalysisStore } from '../../../features/plan-analysis/store/plan-analysis.store';
+import { FocusService } from '../../services/focus.service';
+import { ActionDispatcher } from '../../services/action-dispatcher.service';
+import { suggestionKindToAction } from '../../types/recommendation-action';
 import { LogStore } from '../../store/log.store';
 import { LayoutStore } from '../../store/layout.store';
+import type { RecommendationDto } from '../../../features/plan-analysis/plan-analysis-api.types';
 
-type TabId = 'snapshot' | 'analysis' | 'timeline' | 'log';
+type TabId = 'snapshot' | 'analysis' | 'timeline' | 'plan-analysis' | 'log';
 
 const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'snapshot', label: 'Snapshot', icon: 'heroCamera' },
   { id: 'analysis', label: 'Analysis', icon: 'heroChartBar' },
   { id: 'timeline', label: 'Timeline', icon: 'heroClock' },
+  { id: 'plan-analysis', label: 'Plan Analysis', icon: 'heroClipboardDocumentCheck' },
   { id: 'log', label: 'Log', icon: 'heroDocumentText' },
 ];
 
@@ -44,6 +50,12 @@ const SEGMENT_COLORS = [
             >
               <ng-icon [name]="t.icon" size="16" />
               {{ t.label }}
+              @if (t.id === 'plan-analysis') {
+                @let badge = planAnalysisBadge();
+                @if (badge) {
+                  <span class="bottom-panel__tab-badge" [class]="'badge--' + badge.kind">{{ badge.label }}</span>
+                }
+              }
             </button>
           }
           <span class="bottom-panel__spacer"></span>
@@ -173,6 +185,102 @@ const SEGMENT_COLORS = [
             }
           }
 
+          @if (activeTab() === 'plan-analysis') {
+            @let pa = planAnalysis();
+            @if (pa.loading) {
+              <p class="bottom-panel__empty">Analyzing plan…</p>
+            } @else if (pa.hasResult) {
+              <div class="plan-analysis">
+                <!-- Score -->
+                <div class="plan-analysis__score-row">
+                  <div class="plan-analysis__score" [class]="'score--' + pa.status">
+                    <span class="plan-analysis__score-value">{{ pa.score }}</span>
+                    <span class="plan-analysis__score-grade">{{ pa.grade }}</span>
+                  </div>
+                  <p class="plan-analysis__message">{{ pa.message }}</p>
+                </div>
+
+                <!-- Metrics -->
+                <div class="plan-analysis__metrics">
+                  @if (pa.metrics; as m) {
+                    <span class="plan-analysis__metric">⏱ {{ m.duration.toFixed(1) }}s</span>
+                    @if (m.average_manipulability != null) {
+                      <span class="plan-analysis__metric">&mu; {{ m.average_manipulability.toFixed(2) }}</span>
+                    }
+                    @if (m.min_collision_distance != null && m.min_collision_distance > 0) {
+                      <span class="plan-analysis__metric">&#x2399; {{ (m.min_collision_distance * 1000).toFixed(0) }}mm</span>
+                    }
+                    @if (m.singular_count > 0) {
+                      <span class="plan-analysis__metric plan-analysis__metric--warn">&#x26D4; {{ m.singular_count }} singular</span>
+                    }
+                  }
+                </div>
+
+                <!-- Findings (agrupados por tipo) -->
+                @let groups = groupedFindings();
+                @if (groups.length > 0) {
+                  <section class="plan-analysis__findings">
+                    <h4 class="plan-analysis__findings-title">
+                      Findings ({{ pa.findings.length }})
+                    </h4>
+                    <div class="plan-analysis__groups">
+                      @for (g of groups; track g.kind) {
+                        <details class="plan-analysis__group" open>
+                          <summary class="plan-analysis__group-header">
+                            <span class="plan-analysis__group-sev">{{ iconFor(g.severity) }}</span>
+                            <span class="plan-analysis__group-kind">{{ g.kind.replace(/_/g, ' ') }}</span>
+                            <span class="plan-analysis__group-count" [class]="'count--' + g.severity">{{ g.count }}</span>
+                          </summary>
+                          <div class="plan-analysis__group-body">
+                            <p class="plan-analysis__group-msg">{{ g.message }}</p>
+                            @if (g.waypoints.length > 0) {
+                              <div class="plan-analysis__group-wpts">
+                                @for (wp of g.waypoints; track wp; let i = $index) {
+                                  @if (i < 20) {
+                                    <span class="plan-analysis__group-wpt" (click)="onPlanFindingClick(wp)">
+                                      wp{{ wp }}
+                                    </span>
+                                  } @else if (i === 20) {
+                                    <span class="plan-analysis__group-more">&hellip; ({{ g.waypoints.length - 20 }} more)</span>
+                                  }
+                                }
+                              </div>
+                            }
+                          </div>
+                        </details>
+                      }
+                    </div>
+                  </section>
+                }
+
+                <!-- Recommendations -->
+                @if (pa.recommendations.length > 0) {
+                  <details class="plan-analysis__section" open>
+                    <summary class="plan-analysis__section-header">
+                      Recommendations ({{ pa.recommendations.length }})
+                    </summary>
+                    <ul class="plan-analysis__list">
+                      @for (r of pa.recommendations; track r) {
+                        <li class="plan-analysis__recommendation">
+                          <div class="plan-analysis__rec-header">
+                            <span class="plan-analysis__rec-impact" [class]="'impact--' + r.impact">{{ r.impact }}</span>
+                            <span class="plan-analysis__rec-kind">{{ r.kind.replace('_', ' ') }}</span>
+                            <button class="plan-analysis__rec-apply" (click)="onApplyRecommendation(r)">Apply</button>
+                          </div>
+                          <p class="plan-analysis__rec-msg">{{ r.message }}</p>
+                        </li>
+                      }
+                    </ul>
+                  </details>
+                }
+              </div>
+            } @else {
+              <p class="bottom-panel__empty">
+                Compile a plan in <strong>Planning</strong> mode to see analysis results.
+              </p>
+            }
+          }
+
           @if (activeTab() === 'log') {
             @let entries = logEntries();
             @if (entries.length === 0) {
@@ -202,6 +310,9 @@ const SEGMENT_COLORS = [
 export class BottomPanel {
   protected readonly scene = inject(SceneStore);
   protected readonly ws = inject(WorkspaceStore);
+  protected readonly pa = inject(PlanAnalysisStore);
+  private readonly focus = inject(FocusService);
+  private readonly actions = inject(ActionDispatcher);
   protected readonly log = inject(LogStore);
   protected readonly layout = inject(LayoutStore);
 
@@ -307,6 +418,94 @@ export class BottomPanel {
       isLive: effectiveState === 'Active',
     };
   });
+
+  // ── Plan Analysis ──
+
+  /** Badge metadata for the Plan Analysis tab. Null when nothing to show. */
+  protected readonly planAnalysisBadge = computed<{ kind: string; label: string } | null>(() => {
+    const findings = this.pa.findings();
+    if (findings.length === 0) return null;
+
+    const errors = findings.filter(f => f.severity === 'error').length;
+    const warnings = findings.filter(f => f.severity === 'warning').length;
+
+    if (errors > 0) return { kind: 'error', label: `\u2715 ${errors}` };
+    if (warnings > 0) return { kind: 'warn', label: `\u26A0 ${warnings}` };
+    return { kind: 'info', label: `\u2139 ${findings.length}` };
+  });
+
+  /** Aggregated plan-analysis view-model. */
+  protected readonly planAnalysis = computed(() => {
+    const summary = this.pa.summary();
+    const metrics = this.pa.metrics();
+    const findings = this.pa.findings();
+    const recommendations = this.pa.recommendations();
+
+    return {
+      hasResult: summary !== null || findings.length > 0,
+      loading: this.pa.loading(),
+      status: summary?.status ?? 'ok',
+      score: summary?.score ?? 0,
+      grade: summary?.grade ?? '',
+      message: summary?.message ?? '',
+      metrics,
+      findings,
+      recommendations,
+    };
+  });
+
+  /** Findings agrupados por kind+severity, con conteo y waypoints. */
+  protected readonly groupedFindings = computed(() => {
+    const map = new Map<string, {
+      kind: string;
+      severity: string;
+      count: number;
+      waypoints: number[];
+      message: string;
+    }>();
+
+    for (const f of this.pa.findings()) {
+      const key = `${f.severity}::${f.kind}`;
+      let g = map.get(key);
+      if (!g) {
+        g = { kind: f.kind, severity: f.severity, count: 0, waypoints: [], message: f.message };
+        map.set(key, g);
+      }
+      g.count++;
+      if (f.waypoint != null) {
+        g.waypoints.push(f.waypoint);
+      }
+    }
+
+    // Sort: errors first, then warnings, then info
+    const severityOrder = { error: 0, warning: 1, info: 2 };
+    return Array.from(map.values()).sort(
+      (a, b) => (severityOrder[a.severity as keyof typeof severityOrder] ?? 9)
+                - (severityOrder[b.severity as keyof typeof severityOrder] ?? 9),
+    );
+  });
+
+  // ── Plan Analysis actions ──
+
+  protected onPlanFindingClick(waypoint: number | null): void {
+    if (waypoint !== null) {
+      this.focus.focusWaypoint(waypoint);
+    }
+  }
+
+  protected onApplyRecommendation(r: RecommendationDto): void {
+    const action = suggestionKindToAction(r.kind, r.waypoint);
+    this.actions.dispatch(action);
+  }
+
+  protected iconFor(severity: string): string {
+    switch (severity) {
+      case 'error': return '\u2715';
+      case 'warning': return '\u26A0';
+      case 'info': return '\u2139';
+      default: return '\u2022';
+    }
+  }
 
   // ── Log ──
 

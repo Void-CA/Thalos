@@ -365,6 +365,344 @@
     }
   }
 
+  // ── Tab badge (Plan Analysis) ──
+
+  &__tab-badge {
+    font-size: 0.55rem;
+    font-weight: 700;
+    padding: 0.05rem 0.3rem;
+    border-radius: 3px;
+    line-height: 1.2;
+
+    &.badge--error {
+      background: rgba(238, 51, 51, 0.25);
+      color: #ee3333;
+    }
+    &.badge--warn {
+      background: rgba(238, 187, 34, 0.25);
+      color: #eebb22;
+    }
+    &.badge--info {
+      background: rgba(51, 153, 255, 0.25);
+      color: #3399ff;
+    }
+  }
+
+  // ── Plan Analysis ──
+
+  .plan-analysis {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+
+    &__score-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    &__score {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 5rem;
+
+      &.score--ok { color: #33dd33; }
+      &.score--warning { color: #eebb22; }
+      &.score--error { color: #ee3333; }
+    }
+
+    &__score-value {
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    &__score-grade {
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-top: 0.2rem;
+    }
+
+    &__message {
+      margin: 0;
+      font-size: 0.75rem;
+      opacity: 0.85;
+    }
+
+    // ── Metrics row ──
+
+    &__metrics {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      padding: 0.35rem 0.5rem;
+      background: $bg-card;
+      border-radius: $radius-md;
+      border: 1px solid $border-default;
+    }
+
+    &__metric {
+      font-size: 0.72rem;
+      opacity: 0.7;
+
+      &--warn {
+        color: #eebb22;
+        opacity: 1;
+      }
+    }
+
+    // ── Collapsible sections (findings / recommendations) ──
+
+    &__section {
+      border: 1px solid $border-default;
+      border-radius: $radius-md;
+      background: $bg-card;
+      overflow: hidden;
+    }
+
+    &__section-header {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.35rem 0.5rem;
+      cursor: pointer;
+      opacity: 0.8;
+      user-select: none;
+
+      &:hover {
+        opacity: 1;
+        background: rgba(255, 255, 255, 0.03);
+      }
+    }
+
+    &__list {
+      list-style: none;
+      padding: 0.25rem 0.5rem 0.5rem;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      border-top: 1px solid $border-subtle;
+    }
+
+    // ── Finding item ──
+
+    &__finding {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.4rem;
+      padding: 0.3rem 0.4rem;
+      border-radius: $radius-sm;
+      cursor: pointer;
+      transition: background $transition-fast;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      &.finding--error { border-left: 2px solid $danger; }
+      &.finding--warning { border-left: 2px solid #eebb22; }
+      &.finding--info { border-left: 2px solid $accent; }
+    }
+
+    &__finding-icon {
+      flex-shrink: 0;
+      width: 1rem;
+      text-align: center;
+      font-size: 0.7rem;
+    }
+
+    &__finding-msg {
+      flex: 1;
+      min-width: 0;
+      font-size: 0.72rem;
+      line-height: 1.3;
+    }
+
+    &__finding-wp {
+      flex-shrink: 0;
+      font-size: 0.65rem;
+      opacity: 0.5;
+    }
+
+    // ── Recommendation item ──
+
+    &__recommendation {
+      padding: 0.3rem 0.4rem;
+      border-radius: $radius-sm;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.03);
+      }
+    }
+
+    &__rec-header {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin-bottom: 0.15rem;
+    }
+
+    &__rec-impact {
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.1rem 0.3rem;
+      border-radius: 2px;
+
+      &.impact--high { background: rgba(238, 51, 51, 0.2); color: #ee3333; }
+      &.impact--medium { background: rgba(238, 187, 34, 0.2); color: #eebb22; }
+      &.impact--low { background: rgba(51, 221, 51, 0.2); color: #33dd33; }
+    }
+
+    &__rec-kind {
+      font-size: 0.65rem;
+      opacity: 0.5;
+      text-transform: uppercase;
+    }
+
+    &__rec-apply {
+      margin-left: auto;
+      font-family: $font-mono;
+      font-size: 0.6rem;
+      padding: 0.1rem 0.35rem;
+      border: 1px solid $border-default;
+      border-radius: 3px;
+      background: transparent;
+      color: $text-secondary;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      opacity: 0;
+
+      .plan-analysis__recommendation:hover & {
+        opacity: 1;
+      }
+
+      &:hover {
+        background: $bg-elevated;
+        border-color: $accent;
+        color: $accent;
+      }
+    }
+
+    &__rec-msg {
+      margin: 0;
+      font-size: 0.72rem;
+      line-height: 1.3;
+      opacity: 0.85;
+    }
+  }
+
+  // ── Plan Analysis — grouped findings ──
+
+  .plan-analysis__findings {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .plan-analysis__findings-title {
+    margin: 0;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.8;
+  }
+
+  .plan-analysis__groups {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .plan-analysis__group {
+    border: 1px solid $border-default;
+    border-radius: $radius-md;
+    background: $bg-card;
+    overflow: hidden;
+  }
+
+  .plan-analysis__group-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.5rem;
+    cursor: pointer;
+    font-size: 0.72rem;
+    user-select: none;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+  }
+
+  .plan-analysis__group-sev {
+    flex-shrink: 0;
+    width: 1rem;
+    text-align: center;
+    font-size: 0.7rem;
+  }
+
+  .plan-analysis__group-kind {
+    flex: 1;
+    font-weight: 500;
+    text-transform: capitalize;
+  }
+
+  .plan-analysis__group-count {
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 0.05rem 0.35rem;
+    border-radius: 3px;
+    line-height: 1.4;
+
+    &.count--error { background: rgba(238, 51, 51, 0.2); color: #ee3333; }
+    &.count--warning { background: rgba(238, 187, 34, 0.2); color: #eebb22; }
+    &.count--info { background: rgba(51, 153, 255, 0.2); color: #3399ff; }
+  }
+
+  .plan-analysis__group-body {
+    padding: 0 0.5rem 0.5rem;
+    border-top: 1px solid $border-subtle;
+  }
+
+  .plan-analysis__group-msg {
+    margin: 0.3rem 0;
+    font-size: 0.7rem;
+    opacity: 0.75;
+    line-height: 1.3;
+  }
+
+  .plan-analysis__group-wpts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem;
+  }
+
+  .plan-analysis__group-wpt {
+    font-size: 0.6rem;
+    padding: 0.05rem 0.25rem;
+    border-radius: 3px;
+    background: $bg-elevated;
+    cursor: pointer;
+    transition: background $transition-fast, color $transition-fast;
+
+    &:hover {
+      background: $accent;
+      color: #fff;
+    }
+  }
+
+  .plan-analysis__group-more {
+    font-size: 0.6rem;
+    opacity: 0.45;
+    padding: 0.05rem 0.25rem;
+  }
+
   // ── Log ──
 
   .log {
