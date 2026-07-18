@@ -18,7 +18,6 @@ use thalos_planning::{
 
 /// Request para analizar un plan activo.
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct PlanAnalysisRequest {
     /// ID del plan activo a analizar (opcional — si no se especifica,
     /// analiza el plan activo del runtime).
@@ -27,7 +26,6 @@ pub struct PlanAnalysisRequest {
 
 /// Respuesta completa del análisis de un plan.
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct PlanAnalysisResponse {
     /// Resumen ejecutivo del análisis.
     pub summary: SummaryDto,
@@ -41,7 +39,6 @@ pub struct PlanAnalysisResponse {
 
 /// Resumen ejecutivo.
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SummaryDto {
     /// Estado general: "ok", "warning", "error"
     pub status: String,
@@ -102,7 +99,6 @@ impl SummaryDto {
 
 /// Métricas agregadas de la trayectoria.
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct MetricsDto {
     /// Duración total estimada (segundos).
     pub duration: f64,
@@ -122,7 +118,6 @@ pub struct MetricsDto {
 
 /// Hallazgo objetivo del análisis.
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct FindingDto {
     /// Tipo de hallazgo.
     pub kind: String,
@@ -138,7 +133,6 @@ pub struct FindingDto {
 
 /// Recomendación accionable.
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct RecommendationDto {
     /// Tipo de recomendación.
     pub kind: String,

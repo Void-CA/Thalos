@@ -5,7 +5,7 @@ import { Subject } from 'rxjs';
  * Semantic keyboard actions — no UI coupling.
  */
 export type KeyboardAction =
-  | { type: 'set-mode'; mode: 'analysis' | 'planning' | 'execution' }
+  | { type: 'set-mode'; mode: 'robot' | 'planning' | 'execution' }
   | { type: 'execution-toggle' }
   | { type: 'execution-cancel' }
   | { type: 'preview-plan' }
@@ -44,7 +44,7 @@ export class KeyboardShortcutService implements OnDestroy {
     switch (e.code) {
       case 'Digit1':
         e.preventDefault();
-        this.actions$.next({ type: 'set-mode', mode: 'analysis' });
+        this.actions$.next({ type: 'set-mode', mode: 'robot' });
         break;
       case 'Digit2':
         e.preventDefault();

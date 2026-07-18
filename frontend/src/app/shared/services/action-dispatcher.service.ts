@@ -25,13 +25,13 @@ export class ActionDispatcher {
         break;
 
       case 'select-ik-solution':
-        // Focus the IK panel: switch to analysis mode where IK tools live
-        this.mode.setMode('analysis');
+        // Focus the IK panel: switch to robot mode where IK tools live
+        this.mode.setMode('robot');
         break;
 
       case 'open-ik-settings':
-        // Same: IK settings are in analysis mode
-        this.mode.setMode('analysis');
+        // Same: IK settings are in robot mode
+        this.mode.setMode('robot');
         break;
 
       case 'open-speed-settings':
@@ -49,12 +49,12 @@ export class ActionDispatcher {
 
       case 'open-constraint-editor':
         // TODO: open constraint panel when implemented
-        this.mode.setMode('analysis');
+        this.mode.setMode('robot');
         break;
 
       case 'open-tool-frame-settings':
-        // TCP settings are in analysis mode
-        this.mode.setMode('analysis');
+        // TCP settings are in robot mode
+        this.mode.setMode('robot');
         break;
 
       case 'open-scene-editor':

@@ -21,8 +21,7 @@ import { ExecutionPanel } from '../../features/execution/execution-panel';
  * El componente de cada tool es un standalone component Angular.
  */
 export const UI_MODE_REGISTRY: Record<AppMode, readonly ToolSchema[]> = {
-  analysis: [
-    { id: 'plan-analyze', label: 'Plan Analysis', component: AnalysisPanel as Type<unknown>, defaultOpen: true },
+  robot: [
     { id: 'fk', label: 'Forward Kinematics', component: JointControl, defaultOpen: true },
     { id: 'ik', label: 'Inverse Kinematics', component: IkTargetPanel, defaultOpen: true },
     { id: 'workspace', label: 'Workspace Analysis', component: WorkspacePanel, defaultOpen: false },
@@ -30,6 +29,7 @@ export const UI_MODE_REGISTRY: Record<AppMode, readonly ToolSchema[]> = {
   ],
   planning: [
     { id: 'planning', label: 'Motion Planning', component: PlanningPanel as Type<unknown>, defaultOpen: true },
+    { id: 'plan-analyze', label: 'Plan Analysis', component: AnalysisPanel as Type<unknown>, defaultOpen: true },
   ],
   execution: [
     { id: 'execution', label: 'Active Plan', component: ExecutionPanel, defaultOpen: true },

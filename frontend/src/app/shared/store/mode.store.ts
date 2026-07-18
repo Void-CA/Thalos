@@ -18,7 +18,13 @@ export class ModeStore {
     ? localStorage.getItem(STORAGE_KEY) as AppMode | null
     : null;
 
-  readonly mode = signal<AppMode>(this.stored ?? 'analysis');
+  /** Map legacy 'analysis' values from localStorage to 'robot'. */
+  private static migrate(stored: string | null): AppMode | null {
+    if (stored === 'analysis') return 'robot';
+    return stored as AppMode | null;
+  }
+
+  readonly mode = signal<AppMode>(ModeStore.migrate(this.stored) ?? 'robot');
 
   setMode(mode: AppMode): void {
     this.mode.set(mode);
@@ -28,7 +34,7 @@ export class ModeStore {
   }
 
   toggle(): void {
-    const cycle: AppMode[] = ['analysis', 'planning', 'execution'];
+    const cycle: AppMode[] = ['robot', 'planning', 'execution'];
     const idx = cycle.indexOf(this.mode());
     const next = cycle[(idx + 1) % cycle.length];
     this.setMode(next);

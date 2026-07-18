@@ -55,12 +55,12 @@ import { suggestionKindToAction } from '../../../../shared/types/recommendation-
             <div class="summary__metrics">
               @if (store.metrics(); as m) {
                 <span class="summary__metric">⏱ {{ m.duration.toFixed(1) }}s</span>
-                @if (m.average_manipulability !== null) {
+                @if (m.average_manipulability != null) {
                   <span class="summary__metric">
                     &mu; {{ m.average_manipulability.toFixed(2) }}
                   </span>
                 }
-                @if (m.min_collision_distance !== null && m.min_collision_distance > 0) {
+                @if (m.min_collision_distance != null && m.min_collision_distance > 0) {
                   <span class="summary__metric">
                     &#x2399; {{ (m.min_collision_distance * 1000).toFixed(0) }}mm
                   </span>

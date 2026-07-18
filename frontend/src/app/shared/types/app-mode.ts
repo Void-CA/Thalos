@@ -1,1 +1,1 @@
-export type AppMode = 'analysis' | 'planning' | 'execution';
+export type AppMode = 'robot' | 'planning' | 'execution';

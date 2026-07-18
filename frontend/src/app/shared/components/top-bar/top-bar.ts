@@ -3,8 +3,14 @@ import { NgIcon } from '@ng-icons/core';
 import { ModeStore } from '../../store/mode.store';
 import type { AppMode } from '../../types/app-mode';
 
+const MODE_LABELS: Record<AppMode, string> = {
+  robot: 'Robot',
+  planning: 'Planning',
+  execution: 'Execution',
+};
+
 const MODE_ICONS: Record<AppMode, string> = {
-  analysis: 'heroChartBar',
+  robot: 'heroAdjustmentsVertical',
   planning: 'heroClipboardDocumentList',
   execution: 'heroPlay',
 };
@@ -23,7 +29,7 @@ const MODE_ICONS: Record<AppMode, string> = {
             (click)="store.setMode(m)"
           >
             <ng-icon class="top-bar__icon" [name]="MODE_ICONS[m]" size="20" />
-            <span>{{ m }}</span>
+            <span>{{ MODE_LABELS[m] }}</span>
           </button>
         }
       </nav>
@@ -34,7 +40,8 @@ const MODE_ICONS: Record<AppMode, string> = {
   styleUrl: './top-bar.scss',
 })
 export class TopBar {
+  protected readonly MODE_LABELS = MODE_LABELS;
   protected readonly MODE_ICONS = MODE_ICONS;
   protected readonly store = inject(ModeStore);
-  protected readonly modes: AppMode[] = ['analysis', 'planning', 'execution'];
+  protected readonly modes: AppMode[] = ['robot', 'planning', 'execution'];
 }

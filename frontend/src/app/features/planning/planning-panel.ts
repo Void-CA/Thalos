@@ -6,6 +6,7 @@ import { PoseInputs, PoseInputsValue } from '../../shared/components/pose-inputs
 import { PlanningStore, SegmentKind, SegmentModel } from '../../shared/store/planning.store';
 import { SceneApiService } from '../scene/services/scene-api.service';
 import { SceneStore } from '../scene/store/scene.store';
+import { PlanAnalysisStore } from '../plan-analysis/store/plan-analysis.store';
 import type { MotionPlanRequest, MotionSegmentDto } from '../scene/scene-api.types';
 
 const SEGMENT_COLORS = [
@@ -97,6 +98,7 @@ export class PlanningPanel {
   protected readonly planning = inject(PlanningStore);
   private readonly api = inject(SceneApiService);
   private readonly scene = inject(SceneStore);
+  private readonly analysis = inject(PlanAnalysisStore);
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly loading = signal(false);
@@ -209,6 +211,8 @@ export class PlanningPanel {
       next: res => {
         this.scene.applySnapshot(res);
         this.loading.set(false);
+        // Auto-analyze the freshly compiled plan
+        this.analysis.analyzePlan();
       },
       error: (err: Error) => {
         this.error.set(err.message ?? 'Plan compilation failed');
