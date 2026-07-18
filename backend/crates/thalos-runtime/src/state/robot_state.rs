@@ -3,6 +3,52 @@ use chrono::{DateTime, Utc};
 /// Monotonic revision counter — every state change increments this.
 pub type Revision = u64;
 
+/// Estado de conexión del backend físico.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum ConnectionState {
+    #[default]
+    Disconnected,
+    Connecting,
+    Connected,
+    Error(String),
+}
+
+/// Error de robot reportado por el backend físico.
+#[derive(Clone, Debug, PartialEq)]
+pub enum RobotError {
+    MotorOverheated { motor_id: usize, temperature: f64 },
+    EncoderDisconnected { joint: usize },
+    EmergencyStop,
+    LowBattery { voltage: f64 },
+    CommunicationTimeout,
+    JointLimitViolation { joint: usize, value: f64, limit: f64 },
+    VelocityLimitExceeded { joint: usize, velocity: f64, limit: f64 },
+}
+
+impl std::fmt::Display for RobotError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RobotError::MotorOverheated { motor_id, temperature } => {
+                write!(f, "Motor {} overheated ({:.1}°C)", motor_id, temperature)
+            }
+            RobotError::EncoderDisconnected { joint } => {
+                write!(f, "Encoder disconnected on joint {}", joint)
+            }
+            RobotError::EmergencyStop => write!(f, "Emergency stop active"),
+            RobotError::LowBattery { voltage } => {
+                write!(f, "Low battery ({:.2}V)", voltage)
+            }
+            RobotError::CommunicationTimeout => write!(f, "Communication timeout"),
+            RobotError::JointLimitViolation { joint, value, limit } => {
+                write!(f, "Joint {} limit violation: {} (limit: {})", joint, value, limit)
+            }
+            RobotError::VelocityLimitExceeded { joint, velocity, limit } => {
+                write!(f, "Joint {} velocity exceeded: {} (limit: {})", joint, velocity, limit)
+            }
+        }
+    }
+}
+
 /// Single source of truth for the live robot condition.
 ///
 /// `RuntimeSnapshot` and `TickDelta` are DERIVED from this struct,
@@ -16,6 +62,10 @@ pub struct RobotState {
     pub devices: DeviceState,
     pub execution: ExecutionState,
     pub diagnostics: Diagnostics,
+    /// Estado de la conexión con el backend físico.
+    pub connection: ConnectionState,
+    /// Errores activos del robot (vacíos si no hay errores).
+    pub errors: Vec<RobotError>,
 }
 
 impl RobotState {
@@ -34,6 +84,8 @@ impl Default for RobotState {
             devices: DeviceState::default(),
             execution: ExecutionState::default(),
             diagnostics: Diagnostics::default(),
+            connection: ConnectionState::Disconnected,
+            errors: Vec::new(),
         }
     }
 }

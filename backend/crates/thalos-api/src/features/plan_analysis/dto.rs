@@ -91,9 +91,9 @@ impl SummaryDto {
         };
 
         let message = match status {
-            "error" => "Se encontraron problemas que impiden la ejecución segura.".to_string(),
-            "warning" => "Trayectoria válida con aspectos mejorables.".to_string(),
-            _ => "Trayectoria válida. Sin problemas detectados.".to_string(),
+            "error" => "Issues found that prevent safe execution.".to_string(),
+            "warning" => "Trajectory is valid but has room for improvement.".to_string(),
+            _ => "Trajectory is valid. No issues detected.".to_string(),
         };
 
         Self { status: status.to_string(), score, grade: grade.to_string(), message }

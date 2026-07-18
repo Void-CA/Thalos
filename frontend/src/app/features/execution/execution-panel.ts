@@ -1,6 +1,8 @@
 import { Component, computed, inject, OnDestroy, signal } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { SceneStore } from '../scene/store/scene.store';
 import { SceneApiService } from '../scene/services/scene-api.service';
+import { KeyboardShortcutService, type KeyboardAction } from '../../shared/services/keyboard-shortcut.service';
 
 const STATE_COLORS: Record<string, string> = {
   Created: '#ffaa33',
@@ -276,6 +278,8 @@ type ExecutionAction = 'start' | 'pause' | 'resume' | 'cancel' | 'reset';
 export class ExecutionPanel implements OnDestroy {
   private readonly store = inject(SceneStore);
   private readonly api = inject(SceneApiService);
+  private readonly keyboard = inject(KeyboardShortcutService);
+  private readonly keySub: Subscription;
 
   protected readonly loading = signal(false);
   private tickTimer: ReturnType<typeof setInterval> | null = null;
@@ -318,8 +322,28 @@ export class ExecutionPanel implements OnDestroy {
     };
   });
 
+  constructor() {
+    // Subscribe to keyboard shortcuts for execution control
+    this.keySub = this.keyboard.actions$.subscribe(action => {
+      switch (action.type) {
+        case 'execution-toggle':
+          // Toggle between start/pause/resume based on current state
+          const info = this.planInfo();
+          if (!info) break;
+          if (info.canStart) this.doAction('start');
+          else if (info.canResume) this.doAction('resume');
+          else if (info.canPause) this.doAction('pause');
+          break;
+        case 'execution-cancel':
+          this.doAction('cancel');
+          break;
+      }
+    });
+  }
+
   ngOnDestroy(): void {
     this.stopTickLoop();
+    this.keySub.unsubscribe();
   }
 
   protected doAction(action: ExecutionAction): void {

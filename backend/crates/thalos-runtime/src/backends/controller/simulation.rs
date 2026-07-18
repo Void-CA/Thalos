@@ -6,10 +6,12 @@ use async_trait::async_trait;
 use tokio::sync::RwLock;
 
 use crate::backends::controller::{BackendCapabilities, RobotController};
+use crate::backends::execution::ExecutionBackend;
 use crate::error::ControllerError;
 use crate::plan::{ExecutionSession, SessionStatus};
+use crate::robot_command::RobotCommand;
 use crate::state::robot_state::{
-    Diagnostics, ExecutionState, JointState, MotionMode, MotionState,
+    ConnectionState, Diagnostics, ExecutionState, JointState, MotionMode, MotionState,
     RobotState,
 };
 
@@ -140,7 +142,7 @@ impl RobotController for SimulationController {
         waypoints: Vec<Vec<f64>>,
         duration: f64,
     ) -> Result<(), ControllerError> {
-        if !self.is_connected() {
+        if !self.connected.load(Ordering::SeqCst) {
             return Err(ControllerError::NotConnected);
         }
         if waypoints.is_empty() || duration <= 0.0 {
@@ -231,5 +233,96 @@ impl RobotController for SimulationController {
 
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities::full()
+    }
+}
+
+#[async_trait]
+impl crate::backends::execution::ExecutionBackend for SimulationController {
+    async fn connect(&mut self) -> Result<(), ControllerError> {
+        if self.connected.swap(true, Ordering::SeqCst) {
+            return Err(ControllerError::AlreadyConnected);
+        }
+        Ok(())
+    }
+
+    async fn disconnect(&mut self) -> Result<(), ControllerError> {
+        self.connected.store(false, Ordering::SeqCst);
+        Ok(())
+    }
+
+    fn is_connected(&self) -> bool {
+        self.connected.load(Ordering::SeqCst)
+    }
+
+    async fn send_command(&mut self, command: RobotCommand) -> Result<(), ControllerError> {
+        match command {
+            RobotCommand::MoveJ { joints, .. } => {
+                let waypoints = vec![joints];
+                let duration = 1.0;
+                let initial_positions = waypoints.first().cloned().unwrap_or_default();
+                *self.waypoints.write().await = waypoints;
+                *self.duration.write().await = duration;
+                let mut exec = self.execution.write().await;
+                exec.reset();
+                exec.start();
+                let new_state = RobotState {
+                    revision: self.state.load().revision + 1,
+                    joints: JointState {
+                        positions: initial_positions,
+                        velocities: vec![0.0; self.dof],
+                        torques: vec![0.0; self.dof],
+                    },
+                    execution: ExecutionState {
+                        current_program: None,
+                        current_segment: None,
+                        progress: 0.0,
+                    },
+                    motion: MotionState {
+                        mode: MotionMode::Moving,
+                        power_on: true,
+                        motion_enabled: true,
+                    },
+                    connection: ConnectionState::Connected,
+                    ..RobotState::default()
+                };
+                self.state.store(Arc::new(new_state));
+            }
+            RobotCommand::Stop => {
+                self.execution.write().await.cancel();
+                self.state.rcu(|prev| {
+                    let mut s = (**prev).clone();
+                    s.revision = prev.revision + 1;
+                    s.motion.mode = MotionMode::Idle;
+                    s.execution.progress = 1.0;
+                    Arc::new(s)
+                });
+            }
+            RobotCommand::Pause => {
+                self.execution.write().await.pause();
+                self.state.rcu(|prev| {
+                    let mut s = (**prev).clone();
+                    s.revision = prev.revision + 1;
+                    s.motion.mode = MotionMode::Paused;
+                    Arc::new(s)
+                });
+            }
+            RobotCommand::Resume => {
+                self.execution.write().await.resume();
+                self.state.rcu(|prev| {
+                    let mut s = (**prev).clone();
+                    s.revision = prev.revision + 1;
+                    s.motion.mode = MotionMode::Moving;
+                    Arc::new(s)
+                });
+            }
+            RobotCommand::Enable | RobotCommand::Disable => {
+                // Simulation: no-op, always enabled
+            }
+        }
+        Ok(())
+    }
+
+    async fn read_state(&self) -> Arc<RobotState> {
+        self.state.load_full()
     }
 }

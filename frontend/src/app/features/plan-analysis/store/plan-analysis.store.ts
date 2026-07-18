@@ -1,4 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { PlanAnalysisApiService } from '../services/plan-analysis-api.service';
 import type {
@@ -62,17 +63,18 @@ export class PlanAnalysisStore {
       this.applyResponse(res);
     } catch (err: unknown) {
       let msg = 'Analysis failed';
-      if (err instanceof Error) {
+      if (err instanceof HttpErrorResponse) {
+        // Angular HTTP error — extract the semantic message from the backend
+        const body = err.error;
+        msg = (typeof body === 'object' && body !== null)
+          ? ((body as Record<string, unknown>)['error'] as string
+            ?? (body as Record<string, unknown>)['message'] as string
+            ?? `Server error (${err.status})`)
+          : `Server error (${err.status})`;
+      } else if (err instanceof Error) {
         msg = err.message;
-      } else if (typeof err === 'object' && err !== null) {
-        // Try Angular HttpErrorResponse
-        const httpErr = err as Record<string, unknown>;
-        if (typeof httpErr['error'] === 'object' && httpErr['error'] !== null) {
-          const body = httpErr['error'] as Record<string, unknown>;
-          msg = (body['error'] as string) ?? (body['message'] as string) ?? msg;
-        } else if (typeof httpErr['message'] === 'string') {
-          msg = httpErr['message'];
-        }
+      } else if (typeof err === 'string') {
+        msg = err;
       }
       this.error.set(msg);
     } finally {

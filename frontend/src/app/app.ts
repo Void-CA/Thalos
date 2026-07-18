@@ -12,6 +12,7 @@ import { LayoutStore } from './shared/store/layout.store';
 import { SceneStore } from './features/scene/store/scene.store';
 import { LogStore } from './shared/store/log.store';
 import { PlanningStore } from './shared/store/planning.store';
+import { KeyboardShortcutService } from './shared/services/keyboard-shortcut.service';
 import { UI_MODE_REGISTRY } from './shared/types/ui-mode-registry';
 import type { ToolSchema } from './shared/types/tool-schema';
 
@@ -39,6 +40,9 @@ export class App {
   protected readonly layout = inject(LayoutStore);
   protected readonly scene = inject(SceneStore);
   private readonly log = inject(LogStore);
+
+  /** Activate global keyboard shortcuts. */
+  private readonly keyboard = inject(KeyboardShortcutService);
 
   /** Watch for errors in SceneStore and push to LogStore, deduplicated. */
   private lastError: string | null = null;

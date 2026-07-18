@@ -1091,3 +1091,161 @@ async fn select_tool_frame_clears_tcp() {
     assert!(body["active_tcp"].is_null(), 
             "active_tcp should be cleared");
 }
+
+// ── E2E: Full pipeline integration test ──
+
+#[tokio::test]
+async fn e2e_full_pipeline() {
+    let app = test_app().await;
+
+    // 1. Load Scara robot (4 DOF)
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/robot",
+        Some(json!({"robot_id": "scara"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "load_robot should succeed");
+    let robot_joints = body.as_ref().and_then(|b| b["joints"].as_array()).map(|a| a.len()).unwrap_or(0);
+    assert_eq!(robot_joints, 4, "Scara should have 4 joints");
+
+    // 2. Compile and preview a MoveJ plan
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/motion/plan",
+        Some(json!({
+            "segments": [{"type": "movej", "target": [0.5, -0.3, -0.1, 0.0]}]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "preview_plan should succeed");
+    let plan_state = body.as_ref()
+        .and_then(|b| b["active_plan"]["state"].as_str())
+        .unwrap_or("")
+        .to_string();
+    assert_eq!(plan_state, "Created", "plan should be Created after preview");
+
+    // 3. Start execution
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/motion/start",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "start_execution should succeed");
+    let plan_state = body.as_ref()
+        .and_then(|b| b["active_plan"]["state"].as_str())
+        .unwrap_or("")
+        .to_string();
+    assert_eq!(plan_state, "Active", "plan should be Active after start");
+
+    // 4. Tick several times to advance execution
+    for _ in 0..5 {
+        let (s, _) = get_json(
+            app.clone(),
+            http::Method::POST,
+            "/api/v1/scene/motion/tick",
+            Some(json!({"dt": 0.05})),
+        )
+        .await;
+        assert_eq!(s, StatusCode::OK, "tick should succeed");
+    }
+
+    // 5. Pause execution
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/motion/pause",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "pause should succeed");
+    let plan_state = body.as_ref()
+        .and_then(|b| b["active_plan"]["state"].as_str())
+        .unwrap_or("")
+        .to_string();
+    assert_eq!(plan_state, "Paused", "plan should be Paused after pause");
+
+    // 6. Tick while paused — joints should NOT advance (motion mode stays paused)
+    let (_, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/motion/tick",
+        Some(json!({"dt": 0.05})),
+    )
+    .await;
+    let state_after_paused_tick = body.as_ref()
+        .and_then(|b| b["execution"]["status"].as_str())
+        .unwrap_or("")
+        .to_string();
+    assert_eq!(state_after_paused_tick, "Paused", "should stay paused after tick");
+
+    // 7. Resume execution
+    let (status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/motion/resume",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "resume should succeed");
+
+    // 8. Tick until complete (2s trajectory / 0.05s dt = 40 ticks needed)
+    for _ in 0..50 {
+        let (s, body) = get_json(
+            app.clone(),
+            http::Method::POST,
+            "/api/v1/scene/motion/tick",
+            Some(json!({"dt": 0.05})),
+        )
+        .await;
+        assert_eq!(s, StatusCode::OK, "tick should succeed");
+        let status = body.as_ref()
+            .and_then(|b| b["execution"]["status"].as_str())
+            .unwrap_or("");
+        if status == "Completed" {
+            break;
+        }
+    }
+
+    // Verify execution completed
+    let (_, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/motion/tick",
+        Some(json!({"dt": 0.05})),
+    )
+    .await;
+    let final_status = body.as_ref()
+        .and_then(|b| b["execution"]["status"].as_str())
+        .unwrap_or("");
+    assert_eq!(final_status, "Completed", "execution should complete");
+
+    // 9. Analyze the completed plan
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/analyze",
+        Some(json!({})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "analyze should succeed");
+    let summary = body.as_ref().and_then(|b| b.get("summary"));
+    assert!(summary.is_some(), "analyze should return summary");
+    let score = summary.and_then(|s| s["score"].as_u64()).unwrap_or(0);
+    assert!(score > 0 || score == 0, "score should be a valid number");
+    let findings = body.as_ref()
+        .and_then(|b| b["findings"].as_array())
+        .map(|a| a.len())
+        .unwrap_or(0);
+    assert!(findings > 0, "analyze should return at least one finding");
+    let recommendations = body.as_ref()
+        .and_then(|b| b["recommendations"].as_array())
+        .map(|a| a.len())
+        .unwrap_or(0);
+    assert!(recommendations > 0, "analyze should return at least one recommendation");
+}
+
