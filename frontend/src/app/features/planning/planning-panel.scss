@@ -4,51 +4,6 @@
 .planning-panel {
   @include panel.container;
 
-  // ── Color mode selector ──
-
-  &__color-mode {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.35rem 0.4rem;
-    margin-bottom: 0.5rem;
-    background: $bg-card;
-    border: 1px solid $border-default;
-    border-radius: $radius-md;
-    flex-wrap: wrap;
-  }
-
-  &__color-label {
-    font-size: 0.6rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    opacity: 0.5;
-    margin-right: 0.2rem;
-  }
-
-  &__color-btn {
-    font-family: $font-ui;
-    font-size: 0.65rem;
-    padding: 0.15rem 0.4rem;
-    border: 1px solid transparent;
-    border-radius: 3px;
-    background: transparent;
-    color: $text-muted;
-    cursor: pointer;
-    transition: color $transition-fast, background $transition-fast, border-color $transition-fast;
-
-    &:hover {
-      color: $text-primary;
-      border-color: $border-default;
-    }
-
-    &--active {
-      background: rgba(255, 255, 255, 0.1);
-      color: $text-primary;
-      border-color: $border-default;
-    }
-  }
-
   // ── Segment card ──
 
   &__segment {

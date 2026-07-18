@@ -6,6 +6,7 @@ import { IkTargetPanel } from '../../features/scene/components/ik-target-panel/i
 import { TcpInfoPanel } from '../../features/scene/components/tcp-info-panel/tcp-info-panel';
 import { WorkspacePanel } from '../../features/workspace/components/workspace-panel/workspace-panel';
 import { PlanningPanel } from '../../features/planning/planning-panel';
+import { TrajectoryColorPicker } from '../../features/planning/trajectory-color-picker';
 import { ExecutionPanel } from '../../features/execution/execution-panel';
 
 /**
@@ -27,6 +28,7 @@ export const UI_MODE_REGISTRY: Record<AppMode, readonly ToolSchema[]> = {
     { id: 'tcp', label: 'Active TCP', component: TcpInfoPanel, defaultOpen: false },
   ],
   planning: [
+    { id: 'color', label: 'Trajectory Color', component: TrajectoryColorPicker, defaultOpen: true },
     { id: 'planning', label: 'Motion Planning', component: PlanningPanel as Type<unknown>, defaultOpen: true },
   ],
   execution: [
