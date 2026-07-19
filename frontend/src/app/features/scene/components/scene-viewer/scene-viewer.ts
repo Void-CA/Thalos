@@ -135,7 +135,8 @@ export class SceneViewer implements AfterViewInit, OnDestroy {
       const analysisWp = this.planAnalysis.waypoints() ?? [];
 
       if (vis && vis.waypoints.length > 0) {
-        const severity = analysisWp.length === vis.waypoints.length
+        // modo 'segment' no debe usar vertex colors — usa la paleta de segmentos directamente
+        const severity = mode !== 'segment' && analysisWp.length === vis.waypoints.length
           ? SceneViewer.computeColors(mode, analysisWp)
           : undefined;
         this.renderer.syncTrajectory(vis.waypoints, vis.motionType, segs ?? undefined, severity);

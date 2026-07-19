@@ -1,4 +1,5 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { NgIcon } from '@ng-icons/core';
 import { SceneStore } from '../../../features/scene/store/scene.store';
 import { WorkspaceStore } from '../../../features/workspace/store/workspace.store';
@@ -7,13 +8,16 @@ import { FocusService } from '../../services/focus.service';
 import { PlanningStore } from '../../store/planning.store';
 import { LogStore } from '../../store/log.store';
 import { LayoutStore } from '../../store/layout.store';
+import { SessionApiService, type SessionResponse } from '../../api/session-api.service';
+import { ReplayStore } from '../../store/replay.store';
 
-type TabId = 'snapshot' | 'analysis' | 'timeline' | 'plan-analysis' | 'log';
+type TabId = 'snapshot' | 'analysis' | 'timeline' | 'plan-analysis' | 'log' | 'sessions';
 
 const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'snapshot', label: 'Snapshot', icon: 'heroCamera' },
   { id: 'analysis', label: 'Analysis', icon: 'heroChartBar' },
-  { id: 'timeline', label: 'Timeline', icon: 'heroClock' },
+  { id: 'sessions', label: 'Sessions', icon: 'heroClock' },
+  { id: 'timeline', label: 'Timeline', icon: 'heroChartBar' },
   { id: 'plan-analysis', label: 'Plan Analysis', icon: 'heroClipboardDocumentCheck' },
   { id: 'log', label: 'Log', icon: 'heroDocumentText' },
 ];
@@ -35,7 +39,7 @@ const SEGMENT_COLORS = [
 @Component({
   selector: 'bottom-panel',
   standalone: true,
-  imports: [NgIcon],
+  imports: [NgIcon, DatePipe],
   template: `
     <div class="bottom-panel" [class.bottom-panel--collapsed]="layout.bottomCollapsed()">
       @if (!layout.bottomCollapsed()) {
@@ -183,6 +187,43 @@ const SEGMENT_COLORS = [
             }
           }
 
+          @if (activeTab() === 'sessions') {
+            @let sessionList = sessions();
+            @if (sessionList.length === 0) {
+              <p class="bottom-panel__empty">No recorded sessions yet. Execute a motion to create one.</p>
+            } @else {
+              <div class="sessions">
+                <div class="sessions__list">
+                  @for (s of sessionList; track s.id) {
+                    <div class="sessions__item" [class.sessions__item--active]="selectedSessionId() === s.id" (click)="selectSession(s.id)">
+                      <div class="sessions__item-header">
+                        <span class="sessions__badge" [class]="'badge--' + s.status.toLowerCase()">{{ s.status }}</span>
+                        <span class="sessions__id">#{{ s.id }}</span>
+                        <span class="sessions__source">{{ s.source }}</span>
+                        <span class="sessions__duration">{{ s.duration.toFixed(1) }}s</span>
+                      </div>
+                      <div class="sessions__item-meta">
+                        <span>{{ s.robot_name }}</span>
+                        <span>{{ s.joint_count }} DOF</span>
+                        @if (s.completed_at) {
+                          <span>{{ s.completed_at | date:'short' }}</span>
+                        }
+                      </div>
+                      <div class="sessions__item-actions">
+                        <button class="sessions__btn sessions__btn--replay" (click)="onReplay(s.id); $event.stopPropagation()" [disabled]="replaying()">
+                          {{ replaying() ? '…' : '▶ Replay' }}
+                        </button>
+                        <button class="sessions__btn sessions__btn--export" (click)="onExport(s.id); $event.stopPropagation()">
+                          ⬇ CSV
+                        </button>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          }
+
           @if (activeTab() === 'plan-analysis') {
             @let pa = planAnalysis();
             @if (pa.loading) {
@@ -293,8 +334,61 @@ export class BottomPanel {
   private readonly planning = inject(PlanningStore);
   protected readonly log = inject(LogStore);
   protected readonly layout = inject(LayoutStore);
+  private readonly sessionApi = inject(SessionApiService);
+  private readonly replayStore = inject(ReplayStore);
 
   protected readonly activeTab = signal<TabId>('snapshot');
+  protected readonly sessions = signal<SessionResponse[]>([]);
+  protected readonly selectedSessionId = signal<number | null>(null);
+  protected readonly replaying = signal(false);
+
+  constructor() {
+    // Reload sessions when the sessions tab becomes active
+    effect(() => {
+      if (this.activeTab() === 'sessions') {
+        this.loadSessions();
+      }
+    });
+  }
+
+  private loadSessions(): void {
+    this.sessionApi.listSessions().subscribe({
+      next: (list) => this.sessions.set(list),
+      error: () => { /* API not available */ },
+    });
+  }
+
+
+  protected selectSession(id: number): void {
+    this.selectedSessionId.set(id);
+  }
+
+  protected onReplay(id: number): void {
+    this.replaying.set(true);
+    this.sessionApi.startReplay(id).subscribe({
+      next: () => {
+        this.replaying.set(false);
+        this.replayStore.startReplay(id);
+        this.activeTab.set('timeline');
+      },
+      error: () => this.replaying.set(false),
+    });
+  }
+
+  protected onExport(id: number): void {
+    this.sessionApi.exportCsv(id).subscribe({
+      next: (csv) => {
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `session-${id}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => {},
+    });
+  }
   protected readonly tabs = TABS;
 
   // ── Snapshot ──

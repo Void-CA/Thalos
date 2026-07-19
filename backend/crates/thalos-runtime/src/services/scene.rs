@@ -335,8 +335,8 @@ impl SceneService {
                 let mut c = ctrl.write().await;
                 c.stop().await?;
             }
-            // Finalize recording if active
-            self.finalize_recording().await;
+            // Finalize recording as Cancelled if active
+            self.finalize_recording(Some(crate::plan::SessionStatus::Cancelled)).await;
             return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
         }
         let runtime = self.runtime.read().await;
@@ -344,8 +344,8 @@ impl SceneService {
     }
 
     pub async fn reset_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
-        // Finalize any active recording first
-        self.finalize_recording().await;
+        // Finalize any active recording as Cancelled first
+        self.finalize_recording(Some(crate::plan::SessionStatus::Cancelled)).await;
 
         if let Some(ctrl) = self.manager.get_controller().await {
             let (waypoints, duration) = {
@@ -363,11 +363,15 @@ impl SceneService {
     }
 
     /// Finalizar la grabación activa (si existe) y guardar el trace.
-    async fn finalize_recording(&self) {
+    ///
+    /// Si `terminal_status` es `Some`, usa ese estado en vez de `Completed`.
+    /// Por defecto (`None`), usa `Completed`.
+    async fn finalize_recording(&self, terminal_status: Option<crate::plan::SessionStatus>) {
         let mut recording = self.recording.write().await;
         if let Some(mut rec) = recording.take() {
             let trace = rec.recorder.stop();
-            let _ = self.sessions.complete(rec.session_id, trace).await;
+            let status = terminal_status.unwrap_or(crate::plan::SessionStatus::Completed);
+            let _ = self.sessions.complete_with_status(rec.session_id, trace, status).await;
         }
     }
 

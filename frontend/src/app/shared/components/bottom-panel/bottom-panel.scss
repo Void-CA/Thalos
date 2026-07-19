@@ -675,3 +675,125 @@
     }
   }
 }
+
+// ── Sessions ──
+
+.sessions {
+  padding: 0.5rem;
+  overflow-y: auto;
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  &__item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: 4px;
+    background: $bg-elevated;
+    border: 1px solid $border-subtle;
+    cursor: pointer;
+    transition: border-color 0.15s;
+
+    &:hover {
+      border-color: $accent;
+    }
+
+    &--active {
+      border-color: $accent;
+    }
+  }
+
+  &__item-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.72rem;
+  }
+
+  &__badge {
+    display: inline-block;
+    padding: 0.1rem 0.3rem;
+    border-radius: 2px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+
+    &.badge--completed { background: #1a3a1a; color: #44cc44; }
+    &.badge--running { background: #1a2a3a; color: #33ccff; }
+    &.badge--paused { background: #3a2a1a; color: #ffaa33; }
+    &.badge--cancelled,
+    &.badge--failed { background: #3a1a1a; color: #cc4444; }
+    &.badge--ready { background: #333; color: #888; }
+  }
+
+  &__id {
+    font-weight: 700;
+    color: $text-primary;
+  }
+
+  &__source {
+    opacity: 0.6;
+  }
+
+  &__duration {
+    margin-left: auto;
+    font-family: monospace;
+  }
+
+  &__item-meta {
+    font-size: 0.65rem;
+    opacity: 0.5;
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  &__item-actions {
+    display: flex;
+    gap: 0.3rem;
+    margin-top: 0.15rem;
+  }
+
+  &__btn {
+    font-family: monospace;
+    font-size: 0.65rem;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    border: 1px solid $border-subtle;
+    background: $bg-surface;
+    color: $text-secondary;
+    cursor: pointer;
+    transition: background 0.15s;
+
+    &:hover:not(:disabled) {
+      background: #3a3a3a;
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+  }
+
+  &__btn--replay {
+    border-color: #44cc44;
+    color: #44cc44;
+
+    &:hover:not(:disabled) {
+      background: #1a3a1a;
+    }
+  }
+
+  &__btn--export {
+    border-color: #33ccff;
+    color: #33ccff;
+
+    &:hover:not(:disabled) {
+      background: #1a2a3a;
+    }
+  }
+}

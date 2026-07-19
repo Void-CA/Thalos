@@ -4,6 +4,7 @@ use axum::{
     extract::{Path, State},
     Json,
 };
+use serde::Serialize;
 use serde_json::Value;
 
 use thalos_runtime::{
@@ -58,6 +59,114 @@ pub async fn get_trace(
         message: e.to_string(),
     })?;
     Ok(Json(json))
+}
+
+/// Resumen de una sesión con estadísticas calculadas del trace.
+#[derive(Debug, Serialize)]
+pub struct SessionSummary {
+    pub session_id: u64,
+    pub duration: f64,
+    pub sample_count: usize,
+    pub joint_count: usize,
+    pub max_velocity: Vec<f64>,
+    pub mean_velocity: Vec<f64>,
+    pub path_length: f64,
+    pub recording_source: String,
+    pub status: String,
+}
+
+/// Obtener resumen estadístico de una sesión.
+pub async fn get_session_summary(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<u64>,
+) -> Result<Json<SessionSummary>, ApiError> {
+    let (session, trace) = {
+        let swt = state.services.sessions.get_with_trace(id).await.ok_or_else(|| {
+            ApiError::NotFound {
+                message: format!("Session {} not found", id),
+            }
+        })?;
+        (swt.session, swt.trace)
+    };
+
+    let sample_count = trace.as_ref().map(|t| t.len()).unwrap_or(0);
+    let duration = session.duration;
+    let joint_count = session.joint_count;
+
+    let (max_velocity, mean_velocity, path_length) = if let Some(ref t) = trace {
+        let samples = t.samples();
+        let n = joint_count;
+
+        // Max velocity per joint (from sample velocities)
+        let max_vel: Vec<f64> = if samples.iter().any(|s| !s.velocities.is_empty()) {
+            (0..n)
+                .map(|j| {
+                    samples
+                        .iter()
+                        .filter_map(|s| s.velocities.get(j).copied())
+                        .fold(0.0f64, |a, b| a.max(b))
+                })
+                .collect()
+        } else {
+            // Estimate velocity from position deltas
+            (0..n)
+                .map(|j| {
+                    samples
+                        .windows(2)
+                        .filter_map(|w| {
+                            let dt = (w[1].timestamp.as_secs_f64() - w[0].timestamp.as_secs_f64()).max(1e-6);
+                            let dv = (w[1].joints[j] - w[0].joints[j]).abs();
+                            Some(dv / dt)
+                        })
+                        .fold(0.0f64, |a, b| a.max(b))
+                })
+                .collect()
+        };
+
+        // Mean velocity
+        let mean_vel: Vec<f64> = (0..n)
+            .map(|j| {
+                let total: f64 = samples
+                    .windows(2)
+                    .map(|w| {
+                        let dt = (w[1].timestamp.as_secs_f64() - w[0].timestamp.as_secs_f64()).max(1e-6);
+                        (w[1].joints[j] - w[0].joints[j]).abs()
+                    })
+                    .sum();
+                total / duration.max(1e-6)
+            })
+            .collect();
+
+        // Path length (sum of Euclidean distances between consecutive joint configs)
+        let path_len: f64 = samples
+            .windows(2)
+            .map(|w| {
+                w[1]
+                    .joints
+                    .iter()
+                    .zip(&w[0].joints)
+                    .map(|(a, b)| (a - b).powi(2))
+                    .sum::<f64>()
+                    .sqrt()
+            })
+            .sum();
+
+        (max_vel, mean_vel, path_len)
+    } else {
+        (vec![], vec![], 0.0)
+    };
+
+    Ok(Json(SessionSummary {
+        session_id: session.id,
+        duration,
+        sample_count,
+        joint_count,
+        max_velocity,
+        mean_velocity,
+        path_length,
+        recording_source: session.source.to_string(),
+        status: format!("{:?}", session.status),
+    }))
 }
 
 /// Exportar trace como CSV (raw text, no JSON).

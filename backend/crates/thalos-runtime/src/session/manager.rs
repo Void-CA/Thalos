@@ -82,9 +82,15 @@ impl SessionManager {
 
     /// Marcar sesión como completada y guardar el trace.
     pub async fn complete(&self, id: u64, trace: MotionTrace) -> Option<SessionData> {
+        self.complete_with_status(id, trace, SessionStatus::Completed).await
+    }
+
+    /// Marcar sesión con un estado terminal específico y guardar el trace.
+    pub async fn complete_with_status(&self, id: u64, trace: MotionTrace, status: SessionStatus) -> Option<SessionData> {
+        debug_assert!(status.is_terminal(), "complete_with_status requires terminal status");
         let mut sessions = self.sessions.write().await;
         if let Some(session) = sessions.iter_mut().find(|s| s.id == id) {
-            session.status = SessionStatus::Completed;
+            session.status = status;
             session.completed_at = Some(Utc::now());
             self.traces.write().await.push((id, trace));
             let s = session.clone();

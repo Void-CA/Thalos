@@ -1,11 +1,14 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { SceneStore } from '../../../features/scene/store/scene.store';
 import { SceneApiService } from '../../../features/scene/services/scene-api.service';
+import { SessionApiService } from '../../api/session-api.service';
+import { ReplayStore } from '../../store/replay.store';
 
 /**
  * Pulse line at the very bottom — always visible, never collapsible.
  *
- * Shows system status + execution controls when active.
+ * Shows system status + execution controls when active + playback controls
+ * for replay sessions.
  */
 @Component({
   selector: 'status-bar',
@@ -14,7 +17,8 @@ import { SceneApiService } from '../../../features/scene/services/scene-api.serv
   template: `
     <footer class="status-bar">
       <div class="status-bar__group">
-        <span class="status-bar__item status-bar__item--backend">Sim</span>
+        <!-- Execution source -->
+        <span class="status-bar__item status-bar__item--backend">{{ execSource() }}</span>
         <span class="status-bar__sep">·</span>
 
         @let robot = robotInfo();
@@ -46,6 +50,21 @@ import { SceneApiService } from '../../../features/scene/services/scene-api.serv
           }
         }
 
+        <!-- Playback controls (seek slider) for replay -->
+        @if (isReplay()) {
+          <span class="status-bar__sep">·</span>
+          <input
+            type="range"
+            class="status-bar__seek"
+            min="0"
+            max="100"
+            [value]="seekPos()"
+            (input)="onSeek($event)"
+            title="Seek position"
+          />
+          <span class="status-bar__item">{{ seekPos() }}%</span>
+        }
+
         @if (hasError()) {
           <span class="status-bar__sep">·</span>
           <span class="status-bar__item status-bar__item--error">
@@ -65,6 +84,18 @@ import { SceneApiService } from '../../../features/scene/services/scene-api.serv
 export class StatusBar {
   private readonly scene = inject(SceneStore);
   private readonly api = inject(SceneApiService);
+  private readonly sessionApi = inject(SessionApiService);
+  private readonly replayStore = inject(ReplayStore);
+
+  protected readonly seekPos = this.replayStore.seekPos;
+  protected readonly isReplay = this.replayStore.isReplay;
+
+  /** Execution source label — Simulation, Hardware, or Replay #N. */
+  protected readonly execSource = computed(() => {
+    const rid = this.replayStore.sessionId();
+    if (rid !== null) return `Replay #${rid}`;
+    return 'Simulation';
+  });
 
   protected readonly robotInfo = computed(() => {
     const rt = this.scene.state()?.runtime;
@@ -122,7 +153,19 @@ export class StatusBar {
 
   protected onStop(): void {
     this.api.cancelExecution().subscribe({
-      next: res => this.scene.applySnapshot(res),
+      next: res => {
+        this.scene.applySnapshot(res);
+        this.replayStore.stopReplay();
+      },
     });
+  }
+
+  // ── Seek control ──
+
+  protected onSeek(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const pct = parseInt(input.value, 10);
+    this.replayStore.setSeekPos(pct);
+    this.sessionApi.seekExecution(pct / 100).subscribe();
   }
 }

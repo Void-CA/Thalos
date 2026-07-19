@@ -90,4 +90,23 @@
       color: #44cc44;
     }
   }
+
+  &__seek {
+    width: 80px;
+    height: 4px;
+    appearance: none;
+    background: #444;
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+
+    &::-webkit-slider-thumb {
+      appearance: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #33ccff;
+      cursor: pointer;
+    }
+  }
 }

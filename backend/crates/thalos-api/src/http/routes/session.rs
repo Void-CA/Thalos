@@ -13,6 +13,7 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/sessions", get(handler::list_sessions))
         .route("/sessions/{id}", get(handler::get_session))
         .route("/sessions/{id}/trace", get(handler::get_trace))
+        .route("/sessions/{id}/summary", get(handler::get_session_summary))
         .route("/sessions/{id}/export", get(handler::export_trace_csv))
         .route("/sessions/{id}/replay", post(handler::start_replay))
         .route("/sessions/import", post(handler::import_trace))
