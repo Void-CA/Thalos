@@ -1298,6 +1298,7 @@ name = "thalos-planning"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "serde",
  "thalos-collision",
  "thalos_core",
  "thiserror",

@@ -5,5 +5,6 @@ pub mod error;
 pub mod finding;
 pub mod goal;
 pub mod interpolate;
+pub mod evaluation;
 pub mod motion;
 pub mod trajectory;
