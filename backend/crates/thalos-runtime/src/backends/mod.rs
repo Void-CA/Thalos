@@ -1,7 +1,9 @@
 mod internal;
 pub mod controller;
 pub mod execution;
+pub mod hardware;
 pub mod manager;
+pub mod transport;
 
 pub use internal::InternalBackend;
 pub use manager::BackendManager;
