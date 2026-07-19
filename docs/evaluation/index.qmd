@@ -1,0 +1,438 @@
+---
+title: "Evaluación de calidad arquitectónica — Thalos"
+subtitle: "Análisis multidimensional posterior a los Milestones 1–3"
+date: last-modified
+lang: es
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-fold: false
+---
+
+```{=comment}
+Este informe evalúa la calidad del proyecto Thalos tras completar tres
+milestones de arquitectura: ExecutionBackend, HardwareBackend/Transport,
+y MotionTrace. No es una auditoría de código ni una revisión de
+funcionalidades, sino un análisis multidimensional de la calidad del
+producto desde siete ejes complementarios.
+```
+
+# Introducción
+
+Thalos comenzó como un simulador cinemático y ha evolucionado hacia una
+plataforma de control robótico con capacidad de ejecución tanto simulada
+como sobre hardware real. Los Milestones 1--3 introdujeron tres
+abstracciones fundamentales:
+
+- **ExecutionBackend** — contrato común entre simulación y hardware real
+- **Transport** — separación entre protocolo de aplicación y medio físico
+- **MotionTrace** — telemetría estructurada de ejecución
+
+Este informe evalúa la calidad del sistema resultante desde siete ejes,
+distinguiendo entre **lo que puede medirse con evidencia** y **lo que
+requiere instrumentación adicional**. El objetivo no es demostrar que
+Thalos es "bueno", sino ofrecer una imagen honesta de su madurez actual
+que sirva para justificar decisiones de diseño, identificar riesgos y
+priorizar trabajo futuro.
+
+# Criterios de evaluación
+
+El modelo de calidad sigue ISO/IEC 25010 adaptado a software robótico de
+infraestructura. Se evalúan ocho atributos:
+
+| #  | Atributo         | Pregunta principal                       | Estado                    |
+|----|------------------|------------------------------------------|---------------------------|
+| 1  | Arquitectura     | ¿Está bien diseñado?                     | @sec-architecture         |
+| 2  | Extensibilidad   | ¿Es fácil agregar implementaciones?      | @sec-extensibility        |
+| 3  | Validación diseño| ¿Las decisiones cumplen su objetivo?     | @sec-design-validation    |
+| 4  | Funcionalidad    | ¿Hace lo que debería?                    | @sec-functionality        |
+| 5  | Mantenibilidad   | ¿Es fácil modificarlo?                   | @sec-maintainability      |
+| 6  | Observabilidad   | ¿Es fácil entender qué ocurre?           | @sec-observability        |
+| 7  | Robustez         | ¿Tolera errores?                         | @sec-robustness           |
+| 8  | Rendimiento      | ¿Es suficientemente rápido?              | @sec-performance          |
+
+Los ejes 1--3 se evalúan con evidencia directa. Los ejes 4--5 se evalúan
+parcialmente (métricas disponibles pero incompletas). Los ejes 6--8
+tienen diseño preparado pero no pueden evaluarse objetivamente sin
+instrumentación adicional. Esta separación evita presentar como
+"medido" lo que aún no tiene métricas que lo respalden.
+
+# Metodología
+
+La evaluación combina cuatro técnicas:
+
+**Análisis arquitectónico**
+:   Revisión de traits, implementaciones, dependencias entre crates y
+    principios de diseño (inversión de dependencias, separación de
+    responsabilidades, módulos atómicos).
+
+**Métricas de código**
+:   Conteo de líneas (tokei v14), cobertura de tests (cargo-tarpaulin),
+    número de tests por crate, profundidad del árbol de dependencias.
+
+**Análisis de extensión**
+:   Costo estimado de incorporar nuevas implementaciones (transports,
+    backends, robots) medido en archivos a modificar.
+
+**Verificación funcional**
+:   544 tests automatizados ejecutados sobre 7 crates (excluyendo
+    `thalos-visual` por snapshot drift conocido).
+
+No se incluyen:
+
+- Benchmarks de rendimiento (no implementados)
+- Fault injection sistemático (no implementado)
+- Análisis estático formal (no configurado)
+
+# Resultados
+
+## Aspectos evaluados {#sec-architecture}
+
+### Arquitectura
+
+Thalos está organizado en 8 crates con dependencias estrictamente
+unidireccionales:
+
+```{mermaid}
+%%| caption: "Grafo de dependencias entre crates"
+flowchart LR
+    core[thalos-core]
+    math[thalos-math]
+    models[thalos-models]
+    collision[thalos-collision]
+    planning[thalos-planning]
+    runtime[thalos-runtime]
+    visual[thalos-visual]
+    api[thalos-api]
+
+    math --> core
+    models --> core
+    collision --> core
+    planning --> collision
+    planning --> core
+    runtime --> core
+    runtime --> planning
+    runtime --> collision
+    runtime --> models
+    visual --> core
+    api --> runtime
+    api --> planning
+    api --> core
+    api --> models
+    api --> visual
+```
+
+No existen dependencias circulares. El grafo es acíclico y las flechas
+van de crates de aplicación (`api`, `runtime`) hacia crates de dominio
+(`core`, `math`, `models`).
+
+Las abstracciones centrales son cuatro traits públicos:
+
+| Trait | Métodos | Implementaciones | Propósito |
+|---|---|---|---|
+| `ExecutionBackend` | 5 | 2 | Contrato simulación vs hardware |
+| `RobotController` | 10 (+4 defaults) | 1 | Controlador completo (sim) |
+| `Transport` | 4 | 2 | Medio físico (TCP, Fake) |
+| `RobotBackend` | 1 | 1 | Resolución de modelos |
+
+**Principios aplicados**:
+
+- **Inversión de dependencias**: `ExecutionSession` depende de
+  `ExecutionBackend` (trait), no de una implementación concreta.
+  Antes dependía de `SimulationController` directamente.
+- **Separación de responsabilidades**: cada crate tiene un propósito
+  único. `thalos-runtime` no conoce HTTP. `thalos-api` no conoce
+  el ciclo de simulación.
+- **Módulos atómicos**: `Transport` solo envía/recibe bytes. No conoce
+  `RobotCommand` ni `RobotState`. Esa conversión vive en
+  `HardwareBackend`.
+- **Compartición sin locks**: `SimulationController` usa `ArcSwap`
+  para exponer `RobotState`. Los lectores nunca lockean.
+
+### Extensibilidad {#sec-extensibility}
+
+El costo de extensión es el indicador más directo de la calidad del
+diseño. Cada nueva implementación requiere cambios localizados:
+
+| Extensión | Cambios requeridos | Líneas nuevas (est.) |
+|---|---|---|
+| Nuevo `Transport` (Serial, UDP, CAN, MQTT) | 1 archivo: implementar trait de 4 métodos | ~60--120 |
+| Nuevo `ExecutionBackend` (ROS 2, EtherCAT) | 1 archivo: implementar trait de 5 métodos | ~80--200 |
+| Nuevo `RobotBackend` (archivo de configuración, red) | 1 archivo: implementar trait de 1 método | ~10--30 |
+| Nuevo modelo de robot | Config + modelo DH | ~20--50 |
+
+Ninguna de estas extensiones requiere modificar el núcleo del sistema.
+No hay switch statements, pattern matching exhaustivo, ni registros
+centralizados que deban actualizarse.
+
+```{mermaid}
+%%| caption: "Árbol de implementaciones del trait Transport"
+flowchart TD
+    Transport[Transport trait]
+    Transport --> TCP[TcpTransport]
+    Transport --> Fake[FakeTransport]
+    Transport --> Serial[SerialTransport<br/><i>no implementado</i>]
+    Transport --> UDP[UdpTransport<br/><i>no implementado</i>]
+    Transport --> CAN[CanTransport<br/><i>no implementado</i>]
+
+    style Serial stroke-dasharray: 5 5
+    style UDP stroke-dasharray: 5 5
+    style CAN stroke-dasharray: 5 5
+```
+
+### Validación del diseño {#sec-design-validation}
+
+Cada decisión arquitectónica de los Milestones 1--3 produce un beneficio
+observable:
+
+| Decisión | Evidencia |
+|---|---|
+| Separar simulación y hardware | `ExecutionBackend` trait. `SimulationController` e `HardwareBackend` son intercambiables |
+| Facilitar pruebas sin hardware | `FakeTransport` permite testear `HardwareBackend` sin puerto serie ni TCP |
+| Registrar ejecución | `MotionTrace` captura samples cronológicos; `MotionRecorder` se integra al ciclo de tick |
+| Independizar protocolo del medio | `Transport` trait: bytes in, bytes out. `TcpTransport` y `FakeTransport` comparten interfaz |
+| Compartir estado sin contención | `ArcSwap<RobotState>` en `SimulationController`. `read_state()` retorna `Arc` sin locks |
+| Avanzar tiempo en simulación | `advance(dt)` en `RobotController`. `HardwareBackend` retorna `UnsupportedCapability` |
+
+El diseño no es accidental: cada trait resuelve un problema de
+acoplamiento identificado en la arquitectura anterior, donde
+`ExecutionSession` dependía directamente de `SimulationController`.
+
+## Aspectos parcialmente evaluados {#sec-functionality}
+
+### Funcionalidad
+
+**Métricas cuantitativas**:
+
+| Métrica | Valor |
+|---|---|
+| Tests totales (declarados) | 574 |
+| Tests pasan (excluyendo visual) | 544 (100%) |
+| Tests de integración HTTP | 40 (`thalos-api`) |
+| Tests de runtime | 246 |
+| Tests de planificación | 62 |
+| Cobertura de código | 77.59% (5,158/6,648 líneas) |
+
+**Lo que se verifica**:
+
+- `ExecutionBackend::send_command` produce el mismo wire format
+  independientemente del backend (testeado via `RobotCommand`)
+- `FakeTransport` hace roundtrip completo (connect → send → receive)
+- `HardwareBackend` parsea correctamente telemetría `STATE`
+- `MotionTrace` exporta a CSV con formato correcto
+- `MotionRecorder` registra samples y calcula tracking error
+- Servicios de análisis (workspace, manipulabilidad, singularidad)
+
+**Lo que NO se verifica**:
+
+- Que `SimulationController` y `HardwareBackend` produzcan el mismo
+  `RobotState` dado el mismo `RobotCommand` (no hay test de
+  equivalencia entre backends)
+- Que el sistema completo funcione de punta a punta (Scene → Plan →
+  Execute → Trace → Export) en un solo test de integración
+- Que los servicios de análisis devuelvan resultados correctos contra
+  modelos de robot conocidos (solo hay tests de forma)
+
+### Mantenibilidad {#sec-maintainability}
+
+**Métricas cuantitativas**:
+
+| Métrica | Valor |
+|---|---|
+| Líneas de Rust | 24,762 (321 archivos) |
+| Cobertura de tests | 77.59% |
+| Dependencias externas directas | 9 (thiserror, chrono, tokio, async-trait, arc-swap, nalgebra, serde, axum, tower-http) |
+| Tiempo de compilación (limpieza) | ~2 min (estimado) |
+
+**Puntos fuertes**:
+
+- Los traits clave (`ExecutionBackend`, `Transport`, `RobotController`)
+  tienen documentación con explicación del flujo, ejemplos de uso y
+  responsabilidades
+- `RobotState` es el single source of truth; `RuntimeSnapshot` y
+  `TickDelta` se derivan de él, nunca al revés
+- Los errores tienen códigos máquina (`error_code()`) para la capa API
+
+**Puntos débiles**:
+
+- `thalos-api` tiene varios archivos con cobertura baja (handlers de
+  workspace 21/117, scene error 0/13, robots error 0/4). Son archivos
+  pequeños pero sin testear.
+- No hay documentación de API pública generada (rustdoc existe pero no
+  se publica)
+- `SimulationController::advance_inner` tiene ~40 líneas y lógica de
+  interpolación + actualización de estado mezcladas
+- No hay linter configurado (clippy existe pero no forma parte del CI)
+
+## Aspectos con diseño preparado {#sec-observability}
+
+Estos tres ejes tienen soporte en la **arquitectura** pero carecen de
+**instrumentación** para ser evaluados objetivamente. Se documentan
+para establecer la línea base y priorizar trabajo futuro.
+
+### Observabilidad
+
+**Implementado**:
+
+- `MotionTrace` captura samples cronológicos con timestamp, joints,
+  velocities, target joints, progress y errores
+- `MotionRecorder` se integra al ciclo de tick del runtime
+- Exportación a CSV con cabecera dinámica (N joints → N columnas)
+- `MotionSample` puede calcular tracking error RMS y velocidad cartesiana
+
+**No implementado**:
+
+- No hay logging estructurado (`tracing` o `log`) en ningún crate
+- `Diagnostics` y `Fault` existen en el modelo de datos pero nunca se
+  escriben
+- No hay eventos de ciclo de vida (conexión, desconexión, error, inicio
+  de movimiento, fin de movimiento)
+- `thalos-api` usa `tracing` como dependencia pero no hay spans ni
+  eventos instrumentados
+- No hay exportación a formatos estándar (ROS bags, MDF, etc.)
+
+### Robustez
+
+**Diseñado**:
+
+- `HardwareBackend` detecta desconexión y marca `ConnectionState`
+- `TransportError` cubre IO, timeout, disconnected e invalid response
+- `RobotState.errors` puede contener errores específicos
+  (MotorOverheated, EncoderDisconnected, EmergencyStop, etc.)
+- `BackendManager` permite reemplazar el controlador activo
+
+**No implementado**:
+
+- `HardwareBackend::send_command` ignora errores de telemetría
+  (`Err(_) => { }` en línea 118)
+- `TcpTransport` no tiene timeout configurable en `receive`
+- No hay reconexión automática
+- No hay fault injection testing
+- No hay validación de integridad de paquetes (checksum, secuencia)
+- No hay circuit breakers ni rate limiting
+- No hay tests que verifiquen recuperación ante fallos de red
+
+### Rendimiento {#sec-performance}
+
+**Diseñado**:
+
+- `criterion` está como dev-dependency en `thalos-planning`
+  (benchmarking disponible pero no implementado)
+- `ArcSwap<RobotState>` minimiza contención en lecturas concurrentes
+
+**No implementado**:
+
+- No hay un solo benchmark (`#[bench]` o `criterion` group) en todo
+  el workspace
+- No hay mediciones de:
+  - Latencia de `HardwareBackend::send_command` (roundtrip)
+  - Throughput de `Transport::send` / `receive`
+  - Frecuencia máxima de muestreo de `MotionRecorder`
+  - Tiempo de exportación CSV para N samples
+  - Uso de memoria de `MotionTrace` con N samples
+- No hay perfilado de asignaciones en el hot path de simulación
+
+# Amenazas a la validez
+
+Esta evaluación tiene limitaciones que deben considerarse al interpretar
+los resultados:
+
+**Alcance limitado a simulación**
+:   La mayoría de los tests se ejecutan sobre `SimulationController` y
+    `FakeTransport`. La validación con hardware real se limita a
+    `HardwareBackend` con `FakeTransport` — no hay evidencia de
+    funcionamiento contra un robot físico.
+
+**Cobertura sin distinguir calidad de tests**
+:   77.59% de cobertura indica qué líneas se ejecutan, no si las
+    aserciones son significativas. Tests que ejercitan código sin
+    verificar resultados inflan la cobertura sin aportar calidad.
+
+**Sin benchmarks**
+:   No es posible afirmar nada sobre rendimiento. Las decisiones
+    arquitectónicas favorecen la extensibilidad por sobre la eficiencia
+    máxima, pero no hay datos que permitan cuantificar el costo.
+
+**Sin análisis estático formal**
+:   No se utilizaron herramientas de verificación formal, model checking
+    ni análisis de pruebas. La evaluación arquitectónica es cualitativa
+    y depende del criterio del evaluador.
+
+**Snapshot drift no resuelto**
+:   `thalos-visual` tiene 2 tests de snapshot que fallan por diferencias
+    de punto flotante entre arquitecturas. Esto se excluyó del análisis
+    pero indica fragilidad en las pruebas visuales.
+
+**Un solo evaluador**
+:   La evaluación fue realizada por una sola persona (el autor de la
+    arquitectura). Esto introduce sesgo de confirmación. Idealmente,
+    una evaluación independiente complementaría este análisis.
+
+# Discusión y trabajo futuro
+
+## Fortalezas
+
+La arquitectura de Thalos muestra madurez en sus abstracciones
+centrales. `ExecutionBackend` y `Transport` son traits pequeños (5 y 4
+métodos respectivamente) con implementaciones intercambiables. El grafo
+de dependencias entre crates es acíclico y las flechas apuntan en la
+dirección correcta (aplicación → dominio). La cobertura de tests
+(77.59%) es sólida para un proyecto en fase de desarrollo activo.
+
+La validación del diseño muestra que cada decisión arquitectónica
+resuelve un problema concreto: separar simulación de hardware,
+independizar protocolo de medio físico, compartir estado sin locks,
+registrar ejecución para análisis posterior. No hay abstracciones
+"por si acaso".
+
+## Limitaciones
+
+Tres áreas requieren atención antes de considerar Thalos como una
+plataforma madura:
+
+**1. Tests de integración entre backends**
+:   No hay un test que demuestre que `SimulationController` y
+    `HardwareBackend` producen `RobotState` equivalente para el mismo
+    `RobotCommand`. Esto es crítico si el objetivo es intercambiar
+    backends sin cambios en el runtime.
+
+**2. Instrumentación de observabilidad**
+:   `MotionTrace` es un buen inicio, pero sin logging estructurado,
+    eventos de ciclo de vida y diagnóstico de fallos, es difícil
+    operar Thalos en entornos no controlados.
+
+**3. Cobertura de la capa API**
+:   Varios handlers de `thalos-api` tienen cobertura baja (workspace,
+    scene errors). Al ser la interfaz con el frontend, estos puntos
+    ciegos son riesgosos.
+
+## Trabajo futuro
+
+A corto plazo (prioritario):
+
+- Implementar test de equivalencia entre `SimulationController` y
+  `HardwareBackend`
+- Agregar `tracing` con spans para cada operación del runtime
+- Configurar clippy en CI y resolver advertencias
+- Completar cobertura de handlers API con baja cobertura
+
+A medio plazo:
+
+- Benchmarks con criterion para los hot paths del runtime
+- Fault injection testing (transporte corrupto, timeouts,
+  desconexiones)
+- Publicar rustdoc y establecer estándar de documentación de API
+  pública
+
+A largo plazo:
+
+- Evaluar portabilidad a `no_std` / ESP32
+- Eventos SSE/WebSocket para el frontend
+- Exportación a formatos estándar de la industria (ROS bags)
+
+---
+
+*Evaluación realizada sobre el estado del repositorio al 18 de julio de 2026.
+Las métricas pueden variar con commits posteriores.*
