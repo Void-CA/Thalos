@@ -35,7 +35,7 @@ use crate::app::prelude::*;
 use crate::app::state::AppState;
 use crate::features::scene::dto::mappers::delta::to_delta_response;
 use crate::features::scene::dto::mappers::runtime::build_plan_dto;
-use crate::features::scene::dto::requests::TickRequest;
+use crate::features::scene::dto::requests::{SeekRequest, TickRequest};
 use crate::features::scene::dto::*;
 
 
@@ -263,6 +263,18 @@ pub async fn reset_execution(
     State(state): State<Arc<AppState>>,
 ) -> ApiResult<RuntimeStateResponse> {
     let snapshot = state.services.scene.reset_execution().await?;
+    Ok(Json(to_api_response(&snapshot)))
+}
+
+/// Seek execution to a position (fraction 0.0–1.0).
+///
+/// Only meaningful for replay/simulation backends.
+/// Hardware backends return an error.
+pub async fn seek_execution(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<SeekRequest>,
+) -> ApiResult<RuntimeStateResponse> {
+    let snapshot = state.services.scene.seek_execution(payload.position).await?;
     Ok(Json(to_api_response(&snapshot)))
 }
 

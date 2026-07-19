@@ -250,17 +250,21 @@ impl SceneService {
                 let runtime = self.runtime.read().await;
                 Self::trajectory_to_waypoints(&runtime)
             };
-            if !waypoints.is_empty() && duration > 0.0 {
+            let wps_for_recorder = if !waypoints.is_empty() && duration > 0.0 {
+                let wps = waypoints.clone();
                 let mut c = ctrl.write().await;
                 c.execute(waypoints, duration).await?;
-            }
+                wps
+            } else {
+                waypoints.clone()
+            };
 
             // Register session and start recording
             let robot_name = {
                 let runtime = self.runtime.read().await;
                 runtime.robot_name.clone()
             };
-            let joint_count = waypoints.first().map(|w| w.len()).unwrap_or(0);
+            let joint_count = wps_for_recorder.first().map(|w| w.len()).unwrap_or(0);
             let source = ExecutionSource::Simulation; // Will be Hardware when that's selected
             let session = self
                 .sessions
@@ -268,10 +272,8 @@ impl SceneService {
                 .await;
 
             let mut recorder = MotionRecorder::new();
-            if let Some(ref wps) = waypoints.as_slice() {
-                if !wps.is_empty() {
-                    recorder.set_target_waypoints(wps.to_vec());
-                }
+            if !wps_for_recorder.is_empty() {
+                recorder.set_target_waypoints(wps_for_recorder);
             }
             recorder.start(std::time::Duration::from_secs_f64(duration));
 
@@ -281,6 +283,22 @@ impl SceneService {
                 start_time: std::time::Duration::ZERO,
             });
 
+            return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
+        }
+        let runtime = self.runtime.read().await;
+        Ok(Self::build_snapshot(&runtime, None))
+    }
+
+    /// Seek the active controller to a position (fraction 0.0–1.0).
+    ///
+    /// Only meaningful for replay/simulation backends.
+    pub async fn seek_execution(&self, position: f64) -> Result<RuntimeSnapshot, RuntimeError> {
+        if let Some(ctrl) = self.manager.get_controller().await {
+            let ctrl_guard = ctrl.read().await;
+            ctrl_guard.seek(position).await.map_err(|e| {
+                RuntimeError::JointCountMismatch { expected: 0, received: 0 }
+            })?;
+            drop(ctrl_guard);
             return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
         }
         let runtime = self.runtime.read().await;
@@ -347,7 +365,7 @@ impl SceneService {
     /// Finalizar la grabación activa (si existe) y guardar el trace.
     async fn finalize_recording(&self) {
         let mut recording = self.recording.write().await;
-        if let Some(rec) = recording.take() {
+        if let Some(mut rec) = recording.take() {
             let trace = rec.recorder.stop();
             let _ = self.sessions.complete(rec.session_id, trace).await;
         }
@@ -381,21 +399,21 @@ impl SceneService {
 
             // 3. Record the current state if recording
             let mut recording = self.recording.write().await;
-            if let Some(ref mut rec) = *recording {
+            if let Some(ref mut rec_state) = *recording {
                 let timestamp = {
-                    let elapsed = rec.start_time + std::time::Duration::from_secs_f64(
+                    let elapsed = rec_state.start_time + std::time::Duration::from_secs_f64(
                         state.execution.progress * plan_duration.max(1.0),
                     );
                     elapsed
                 };
-                rec.recorder.record(timestamp, &state);
+                rec_state.recorder.record(timestamp, &state);
 
                 // Check if execution completed — finalize recording
                 if state.execution.progress >= 1.0
                     || matches!(state.motion.mode, crate::state::robot_state::MotionMode::Idle)
                 {
-                    let trace = rec.recorder.stop();
-                    self.sessions.complete(rec.session_id, trace).await;
+                    let trace = rec_state.recorder.stop();
+                    self.sessions.complete(rec_state.session_id, trace).await;
                     *recording = None;
                 }
             }

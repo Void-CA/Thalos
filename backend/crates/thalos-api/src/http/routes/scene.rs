@@ -32,6 +32,9 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/scene/motion/cancel", post(handler::cancel_execution))
         .route("/scene/motion/reset", post(handler::reset_execution))
 
+        // Execution seek (replay/simulation position control)
+        .route("/scene/motion/seek", post(handler::seek_execution))
+
         // Execution tick (polling-based advance)
         .route("/scene/motion/tick", post(handler::tick_execution))
 

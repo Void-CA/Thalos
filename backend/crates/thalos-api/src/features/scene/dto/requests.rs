@@ -188,6 +188,13 @@ pub struct TickRequest {
     pub dt: f64,
 }
 
+/// Request to seek execution to a position.
+#[derive(Debug, Deserialize)]
+pub struct SeekRequest {
+    /// Position as fraction 0.0–1.0.
+    pub position: f64,
+}
+
 // ── TCP selection request ──
 
 /// Request to select or clear the active Tool Center Point (TCP).
