@@ -17,12 +17,35 @@
 
 use std::time::Duration;
 
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
 use crate::state::robot_state::RobotState;
 
+/// Serialize Duration as seconds (f64).
+mod duration_secs {
+    use super::*;
+
+    pub fn serialize<S>(dur: &Duration, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_f64(dur.as_secs_f64())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let secs = f64::deserialize(deserializer)?;
+        Ok(Duration::from_secs_f64(secs))
+    }
+}
+
 /// Una muestra del estado del robot en un instante de tiempo.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MotionSample {
     /// Tiempo desde el inicio de la ejecución.
+    #[serde(with = "duration_secs")]
     pub timestamp: Duration,
     /// Posiciones articulares actuales (rad).
     pub joints: Vec<f64>,
@@ -55,7 +78,7 @@ impl MotionSample {
 /// Almacena samples ordenados por timestamp.
 /// Puede exportarse a CSV, visualizarse como gráficas, o compararse
 /// con la trayectoria planificada.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MotionTrace {
     samples: Vec<MotionSample>,
 }
@@ -234,6 +257,19 @@ mod tests {
         assert!(csv.contains("timestamp_s"), "should have header");
         assert!(csv.contains("joint_0"), "should have joint_0 column");
         assert!(csv.lines().count() >= 3, "header + 2 data rows");
+    }
+
+    #[test]
+    fn serde_roundtrip() {
+        let mut trace = MotionTrace::new();
+        trace.push(make_sample(0.0, vec![0.0, 0.0]));
+        trace.push(make_sample(1.0, vec![1.0, 0.5]));
+        let json = serde_json::to_string(&trace).expect("serialize");
+        let restored: MotionTrace = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.len(), trace.len());
+        assert!((restored.duration().as_secs_f64() - 1.0).abs() < 1e-6);
+        assert_eq!(restored.samples()[0].joints, vec![0.0, 0.0]);
+        assert_eq!(restored.samples()[1].joints, vec![1.0, 0.5]);
     }
 
     #[test]

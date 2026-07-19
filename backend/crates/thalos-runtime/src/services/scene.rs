@@ -20,11 +20,27 @@ use crate::backends::RobotBackend;
 use crate::commands::handler::ExecutableCommand;
 use crate::commands::Command;
 use crate::error::RuntimeError;
+use crate::motion_recorder::MotionRecorder;
+use crate::motion_trace::MotionTrace;
 use crate::plan::{PlanState, SessionStatus};
+use crate::session::{ExecutionSource, SessionManager};
 use crate::snapshots::{RuntimeSnapshot, TickDelta};
 use crate::state::robot::{ActiveRobot, SceneRuntime};
 
+use std::time::Duration;
+
+/// Estado de grabación de una ejecución en curso.
+struct RecordingState {
+    session_id: u64,
+    recorder: MotionRecorder,
+    start_time: Duration,
+}
+
 /// Derive an ExecutionSession from a RobotState.
+const IK_MAX_ITERS: usize = 500;
+const IK_TOLERANCE: f64 = 1e-6;
+const IK_LAMBDA: f64 = 0.1;
+
 fn session_from_state(state: &Arc<crate::state::robot_state::RobotState>) -> Option<crate::plan::ExecutionSession> {
     use crate::state::robot_state::MotionMode;
     let progress = state.execution.progress;
@@ -39,16 +55,12 @@ fn session_from_state(state: &Arc<crate::state::robot_state::RobotState>) -> Opt
     Some(crate::plan::ExecutionSession::derived(status, progress))
 }
 
-
-
-const IK_MAX_ITERS: usize = 500;
-const IK_TOLERANCE: f64 = 1e-6;
-const IK_LAMBDA: f64 = 0.1;
-
 pub struct SceneService {
     runtime: RwLock<SceneRuntime>,
     backend: Box<dyn RobotBackend + Send + Sync>,
     manager: Arc<BackendManager>,
+    sessions: Arc<SessionManager>,
+    recording: RwLock<Option<RecordingState>>,
 }
 
 impl SceneService {
@@ -56,6 +68,20 @@ impl SceneService {
         backend: Box<dyn RobotBackend + Send + Sync>,
         manager: Arc<BackendManager>,
         model: RobotModel,
+    ) -> Self {
+        Self::with_session_manager(
+            backend,
+            manager,
+            model,
+            Arc::new(SessionManager::new()),
+        )
+    }
+
+    pub fn with_session_manager(
+        backend: Box<dyn RobotBackend + Send + Sync>,
+        manager: Arc<BackendManager>,
+        model: RobotModel,
+        sessions: Arc<SessionManager>,
     ) -> Self {
         let chain = RobotRegistry::create_default(model);
         let dof = model.metadata().dof;
@@ -67,6 +93,8 @@ impl SceneService {
             runtime: RwLock::new(runtime),
             backend,
             manager,
+            sessions,
+            recording: RwLock::new(None),
         }
     }
 
@@ -225,7 +253,34 @@ impl SceneService {
             if !waypoints.is_empty() && duration > 0.0 {
                 let mut c = ctrl.write().await;
                 c.execute(waypoints, duration).await?;
-            } // write lock dropped here
+            }
+
+            // Register session and start recording
+            let robot_name = {
+                let runtime = self.runtime.read().await;
+                runtime.robot_name.clone()
+            };
+            let joint_count = waypoints.first().map(|w| w.len()).unwrap_or(0);
+            let source = ExecutionSource::Simulation; // Will be Hardware when that's selected
+            let session = self
+                .sessions
+                .register(source, "plan-exec".into(), duration, joint_count, robot_name)
+                .await;
+
+            let mut recorder = MotionRecorder::new();
+            if let Some(ref wps) = waypoints.as_slice() {
+                if !wps.is_empty() {
+                    recorder.set_target_waypoints(wps.to_vec());
+                }
+            }
+            recorder.start(std::time::Duration::from_secs_f64(duration));
+
+            *self.recording.write().await = Some(RecordingState {
+                session_id: session.id,
+                recorder,
+                start_time: std::time::Duration::ZERO,
+            });
+
             return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
         }
         let runtime = self.runtime.read().await;
@@ -261,7 +316,9 @@ impl SceneService {
             {
                 let mut c = ctrl.write().await;
                 c.stop().await?;
-            } // write lock dropped
+            }
+            // Finalize recording if active
+            self.finalize_recording().await;
             return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
         }
         let runtime = self.runtime.read().await;
@@ -269,6 +326,9 @@ impl SceneService {
     }
 
     pub async fn reset_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        // Finalize any active recording first
+        self.finalize_recording().await;
+
         if let Some(ctrl) = self.manager.get_controller().await {
             let (waypoints, duration) = {
                 let runtime = self.runtime.read().await;
@@ -284,10 +344,22 @@ impl SceneService {
         Ok(Self::build_snapshot(&runtime, None))
     }
 
+    /// Finalizar la grabación activa (si existe) y guardar el trace.
+    async fn finalize_recording(&self) {
+        let mut recording = self.recording.write().await;
+        if let Some(rec) = recording.take() {
+            let trace = rec.recorder.stop();
+            let _ = self.sessions.complete(rec.session_id, trace).await;
+        }
+    }
+
     // ── Tick ──
 
     /// Advance execution by `dt` seconds via the controller, then build
     /// a TickDelta from the resulting RobotState.
+    ///
+    /// Also records the state into the active MotionRecorder if recording
+    /// is in progress, and finalizes the session when execution completes.
     pub async fn tick_execution_delta(&self, dt: f64) -> Result<TickDelta, RuntimeError> {
         // 1. Advance simulation time via the controller trait
         if let Some(ctrl) = self.manager.get_controller().await {
@@ -306,6 +378,28 @@ impl SceneService {
                 .as_ref()
                 .map(|p| p.trajectory.duration())
                 .unwrap_or(0.0);
+
+            // 3. Record the current state if recording
+            let mut recording = self.recording.write().await;
+            if let Some(ref mut rec) = *recording {
+                let timestamp = {
+                    let elapsed = rec.start_time + std::time::Duration::from_secs_f64(
+                        state.execution.progress * plan_duration.max(1.0),
+                    );
+                    elapsed
+                };
+                rec.recorder.record(timestamp, &state);
+
+                // Check if execution completed — finalize recording
+                if state.execution.progress >= 1.0
+                    || matches!(state.motion.mode, crate::state::robot_state::MotionMode::Idle)
+                {
+                    let trace = rec.recorder.stop();
+                    self.sessions.complete(rec.session_id, trace).await;
+                    *recording = None;
+                }
+            }
+            drop(recording);
 
             let fk_result = Self::compute_fk(&runtime.active_robot.chain, &runtime.active_robot.joints);
 

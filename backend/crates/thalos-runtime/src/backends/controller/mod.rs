@@ -103,6 +103,14 @@ pub trait RobotController: Send + Sync {
         Err(ControllerError::UnsupportedCapability)
     }
 
+    /// Seek to a position (fraction 0.0–1.0) in the current trajectory.
+    ///
+    /// Only meaningful for replay/simulation backends.
+    /// Real hardware backends return `Err(UnsupportedCapability)`.
+    async fn seek(&self, _position: f64) -> Result<(), ControllerError> {
+        Err(ControllerError::UnsupportedCapability)
+    }
+
     /// Live state of the robot, as an `Arc` for cheap sharing.
     async fn robot_state(&self) -> Arc<RobotState>;
 

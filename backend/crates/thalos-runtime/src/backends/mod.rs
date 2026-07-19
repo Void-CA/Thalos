@@ -3,6 +3,8 @@ pub mod controller;
 pub mod execution;
 pub mod hardware;
 pub mod manager;
+pub mod playback;
+pub mod replay;
 pub mod transport;
 
 pub use internal::InternalBackend;
