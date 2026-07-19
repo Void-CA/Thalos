@@ -6,9 +6,14 @@
 pub mod metrics;
 pub mod cost;
 pub mod evaluator;
+pub mod generator;
 
 pub use metrics::{
     CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics, MetricKind, PlanMetrics,
 };
 pub use cost::{CostFunction, PlanScore};
 pub use evaluator::PlanEvaluator;
+pub use generator::{
+    AlternativeCandidate, AlternativeGenerator, Perturbation, PerturbationStrategy,
+    RankedAlternative, SelectionPolicy,
+};
