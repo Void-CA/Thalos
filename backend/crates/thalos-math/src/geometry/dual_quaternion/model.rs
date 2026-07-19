@@ -42,6 +42,11 @@ impl DualQuaternion {
     }
 }
 
+impl std::fmt::Display for DualQuaternion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.real, self.dual)
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
