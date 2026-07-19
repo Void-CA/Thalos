@@ -9,7 +9,7 @@ use thalos_runtime::{
         manager::BackendManager,
         InternalBackend,
     },
-    RobotController, SceneService,
+    RobotController, SceneService, SessionManager,
 };
 
 use crate::features::robots::service::RobotService;
@@ -18,6 +18,7 @@ pub struct Services {
     pub scene: SceneService,
     pub robots: RobotService,
     pub manager: Arc<BackendManager>,
+    pub sessions: Arc<SessionManager>,
 }
 
 pub struct AppState {
@@ -39,7 +40,13 @@ pub async fn new_default_state() -> SharedState {
         .await
         .expect("Failed to register simulation controller");
 
-    let scene = SceneService::new(backend, manager.clone(), RobotModel::Planar2R);
+    let sessions = Arc::new(SessionManager::new());
+    let scene = SceneService::with_session_manager(
+        backend,
+        manager.clone(),
+        RobotModel::Planar2R,
+        sessions.clone(),
+    );
     let robots = RobotService;
 
     Arc::new(AppState {
@@ -47,6 +54,7 @@ pub async fn new_default_state() -> SharedState {
             scene,
             robots,
             manager,
+            sessions,
         }),
     })
 }
