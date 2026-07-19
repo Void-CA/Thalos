@@ -1,3 +1,5 @@
+pub mod motion_recorder;
+pub mod motion_trace;
 pub mod plan;
 pub mod robot_command;
 pub mod state;
