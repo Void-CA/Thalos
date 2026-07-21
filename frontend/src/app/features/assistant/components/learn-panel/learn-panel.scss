@@ -1,0 +1,175 @@
+@use 'variables' as *;
+@use '../../../../shared/styles/panel' as panel;
+
+.learn-panel {
+  @include panel.container;
+
+  &__card-output {
+    @include panel.card-output;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  &__section-label {
+    @include panel.section-label;
+    margin: 0;
+  }
+
+  &__insights {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  &__insight {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.3rem 0.35rem;
+    border: 1px solid $border-subtle;
+    border-radius: $radius-sm;
+    background: $bg-card;
+  }
+
+  &__insight-header {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  &__insight-metric {
+    flex: 1;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  &__trend {
+    font-size: 0.75rem;
+    line-height: 1;
+
+    &.trend--up { color: #44cc44; }
+    &.trend--flat { color: #888; }
+    &.trend--down { color: #eebb22; }
+  }
+
+  &__insight-stats {
+    display: flex;
+    gap: 0.5rem;
+    font-size: 0.65rem;
+    opacity: 0.65;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__insight-rec {
+    font-size: 0.65rem;
+    opacity: 0.7;
+    line-height: 1.3;
+    padding-top: 0.1rem;
+    border-top: 1px solid $border-subtle;
+  }
+
+  &__patterns {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  &__pattern {
+    border: 1px solid $border-subtle;
+    border-radius: $radius-sm;
+    overflow: hidden;
+
+    &:hover {
+      border-color: $border-default;
+    }
+  }
+
+  &__pattern-header {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.35rem;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.68rem;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+  }
+
+  &__pattern-cat {
+    font-size: 0.55rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.04rem 0.25rem;
+    border-radius: $radius-sm;
+
+    &.cat--efficiency { background: rgba(68, 204, 68, 0.15); color: #44cc44; }
+    &.cat--safety { background: rgba(238, 187, 34, 0.15); color: #eebb22; }
+    &.cat--precision { background: rgba(51, 153, 255, 0.15); color: $accent; }
+    &.cat--reliability { background: rgba(204, 68, 68, 0.15); color: $danger; }
+  }
+
+  &__pattern-desc {
+    flex: 1;
+    line-height: 1.3;
+  }
+
+  &__pattern-conf {
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: $text-muted;
+    flex-shrink: 0;
+  }
+
+  &__pattern-body {
+    padding: 0.25rem 0.35rem 0.35rem;
+    border-top: 1px solid $border-subtle;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.65rem;
+  }
+
+  &__pattern-row {
+    display: flex;
+    gap: 0.75rem;
+    opacity: 0.55;
+  }
+
+  &__pattern-impact {
+    opacity: 0.7;
+    line-height: 1.3;
+  }
+
+  &__actions {
+    margin-top: 0.15rem;
+  }
+
+  &__refresh {
+    @include panel.action-base;
+    width: 100%;
+    font-size: 0.72rem;
+  }
+
+  &__loading {
+    font-size: 0.7rem;
+    opacity: 0.5;
+    text-align: center;
+    padding: 0.5rem;
+  }
+
+  &__error {
+    font-size: 0.7rem;
+    color: #cc4444;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid #cc444444;
+    border-radius: $radius-sm;
+    background: #cc444411;
+  }
+}
