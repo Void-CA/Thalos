@@ -1,12 +1,12 @@
-import { Component, computed, inject, signal } from '@angular/core';
-import { SessionApiService, type ExecutionStatisticsDto, type ExecutionTraceDto } from '../../shared/api/session-api.service';
+import { Component, computed, effect, inject, signal } from '@angular/core';
+import { SessionApiService, type ExecutionStatisticsDto, type ExecutionTraceDto, type SessionResponse } from '../../shared/api/session-api.service';
 import { ReplayStore } from '../../shared/store/replay.store';
 
 /**
  * Panel de telemetría — charts sincronizados con la ejecución/replay.
  *
- * Consume ExecutionTrace + ExecutionStatistics de la API.
- * Se sincroniza con ReplayStore para el cursor de playback.
+ * Auto-carga los datos de la sesión activa (replay o última ejecución).
+ * Muestra estadísticas, charts de posición/velocidad articular y timeline de eventos.
  */
 @Component({
   selector: 'execution-charts',
@@ -15,21 +15,23 @@ import { ReplayStore } from '../../shared/store/replay.store';
     <div class="ec">
       <!-- Session selector -->
       <div class="ec__toolbar">
-        <input
-          type="number"
-          class="ec__input"
-          placeholder="Session #"
-          [value]="sessionId()"
-          (change)="onSessionChange($event)"
-          min="1"
-        />
-        <button class="ec__btn ec__btn--load" (click)="loadData()" [disabled]="loading() || !sessionId()">
-          {{ loading() ? '…' : 'Load' }}
-        </button>
+        <select class="ec__select" [value]="selectedId()" (change)="onSelect($event)">
+          <option value="0" disabled>Select session…</option>
+          @for (s of sessionList(); track s.id) {
+            <option [value]="s.id">#{{ s.id }} — {{ s.robot_name }} ({{ s.duration.toFixed(1) }}s, {{ s.source }})</option>
+          }
+        </select>
+        @if (sessionList().length === 0) {
+          <span class="ec__hint">No sessions yet</span>
+        }
       </div>
 
       @if (error()) {
         <p class="ec__error">{{ error() }}</p>
+      }
+
+      @if (loading()) {
+        <p class="ec__loading">Loading…</p>
       }
 
       @if (stats(); as s) {
@@ -53,7 +55,6 @@ import { ReplayStore } from '../../shared/store/replay.store';
               @for (line of jointLines(); track $index) {
                 <polyline [attr.points]="line.points" [attr.stroke]="line.color" fill="none" stroke-width="1.5" />
               }
-              <!-- Playback cursor -->
               @if (cursorPct() > 0) {
                 <line [attr.x1]="cursorPct() * svgW" y1="0" [attr.x2]="cursorPct() * svgW" [attr.y2]="svgH" stroke="#fff" stroke-width="1" stroke-dasharray="3,3" opacity="0.5" />
               }
@@ -81,24 +82,20 @@ import { ReplayStore } from '../../shared/store/replay.store';
         }
 
         <!-- Event Timeline -->
-        @if (events(); as evts) {
-          @if (evts.length > 0) {
-            <div class="ec__timeline">
-              <div class="ec__chart-header">Events</div>
-              <div class="ec__events">
-                @for (e of evts; track $index) {
-                  <div class="ec__event" (click)="onEventClick(e.time)">
-                    <span class="ec__event-time">{{ e.time.toFixed(2) }}s</span>
-                    <span class="ec__event-label">{{ e.label }}</span>
-                    @if (e.detail) { <span class="ec__event-detail">{{ e.detail }}</span> }
-                  </div>
-                }
-              </div>
+        @if (events().length > 0) {
+          <div class="ec__timeline">
+            <div class="ec__chart-header">Events</div>
+            <div class="ec__events">
+              @for (e of events(); track $index) {
+                <div class="ec__event" (click)="onEventClick(e.timeSec)">
+                  <span class="ec__event-time">{{ e.timeSec.toFixed(2) }}s</span>
+                  <span class="ec__event-label">{{ e.label }}</span>
+                  @if (e.detail) { <span class="ec__event-detail">{{ e.detail }}</span> }
+                </div>
+              }
             </div>
-          }
+          </div>
         }
-      } @else {
-        <p class="ec__empty">Enter a session ID and click Load to view execution data.</p>
       }
     </div>
   `,
@@ -114,30 +111,29 @@ import { ReplayStore } from '../../shared/store/replay.store';
       gap: 0.3rem;
       align-items: center;
     }
-    .ec__input {
-      width: 80px;
+    .ec__select {
+      flex: 1;
       font-family: monospace;
-      font-size: 0.72rem;
-      padding: 0.2rem 0.4rem;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.3rem;
       border-radius: 3px;
       border: 1px solid #555;
       background: #222;
       color: #ddd;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .ec__btn {
-      font-family: monospace;
+    .ec__hint {
+      font-size: 0.65rem;
+      opacity: 0.4;
+    }
+    .ec__loading {
+      text-align: center;
       font-size: 0.7rem;
-      padding: 0.2rem 0.5rem;
-      border-radius: 3px;
-      border: 1px solid #3399ff;
-      background: #222;
-      color: #3399ff;
-      cursor: pointer;
-      &:hover:not(:disabled) { background: #1a2a3a; }
-      &:disabled { opacity: 0.4; cursor: default; }
+      opacity: 0.5;
     }
     .ec__error { color: #cc4444; font-size: 0.7rem; }
-    .ec__empty { text-align: center; font-size: 0.72rem; opacity: 0.5; }
     .ec__stats { display: flex; flex-wrap: wrap; gap: 0.3rem; }
     .ec__stat {
       background: #2a2a2a;
@@ -190,13 +186,13 @@ export class ExecutionCharts {
   private readonly api = inject(SessionApiService);
   private readonly replayStore = inject(ReplayStore);
 
-  protected readonly sessionId = signal<number>(0);
+  protected readonly sessionList = signal<SessionResponse[]>([]);
+  protected readonly selectedId = signal<number>(0);
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly stats = signal<ExecutionStatisticsDto | null>(null);
   protected readonly trace = signal<ExecutionTraceDto | null>(null);
 
-  // Chart dimensions
   protected readonly svgW = 300;
   protected readonly svgH = 80;
 
@@ -204,13 +200,45 @@ export class ExecutionCharts {
 
   protected readonly cursorPct = computed(() => this.replayStore.seekPos() / 100);
 
-  protected onSessionChange(event: Event): void {
-    const val = parseInt((event.target as HTMLInputElement).value, 10);
-    this.sessionId.set(isNaN(val) ? 0 : val);
+  constructor() {
+    // Load session list on init
+    this.loadSessions();
+
+    // Auto-select session when replay starts
+    effect(() => {
+      const replayId = this.replayStore.sessionId();
+      if (replayId !== null && replayId !== 0 && replayId !== this.selectedId()) {
+        this.selectedId.set(replayId);
+        this.loadData();
+      }
+    });
+  }
+
+  private loadSessions(): void {
+    this.api.listSessions().subscribe({
+      next: (list) => {
+        this.sessionList.set(list);
+        // Auto-select most recent session if none selected
+        if (list.length > 0 && this.selectedId() === 0) {
+          const latest = list.reduce((a, b) => a.id > b.id ? a : b);
+          this.selectedId.set(latest.id);
+          this.loadData();
+        }
+      },
+      error: () => {},
+    });
+  }
+
+  protected onSelect(event: Event): void {
+    const val = parseInt((event.target as HTMLSelectElement).value, 10);
+    if (!isNaN(val) && val > 0) {
+      this.selectedId.set(val);
+      this.loadData();
+    }
   }
 
   protected loadData(): void {
-    const id = this.sessionId();
+    const id = this.selectedId();
     if (!id) return;
 
     this.loading.set(true);
@@ -233,15 +261,14 @@ export class ExecutionCharts {
     });
   }
 
-  /** Build SVG polyline points for joint positions. */
+  // ── Chart data builders ──
+
   protected readonly jointLines = computed(() => {
     const t = this.trace();
     if (!t?.samples?.length) return [];
     const n = t.samples[0].joints.length;
     const duration = t.metadata.duration || 1;
-    const durSec = duration;
 
-    // Find global min/max for scaling
     let min = Infinity, max = -Infinity;
     for (const s of t.samples) {
       for (const v of s.joints) {
@@ -254,7 +281,7 @@ export class ExecutionCharts {
     return Array.from({ length: n }, (_, j) => {
       const points = t.samples
         .map(s => {
-          const x = (s.timestamp / durSec) * this.svgW;
+          const x = (s.timestamp / duration) * this.svgW;
           const y = this.svgH - ((s.joints[j] - min) / range) * (this.svgH - 4) - 2;
           return `${x.toFixed(1)},${y.toFixed(1)}`;
         })
@@ -263,15 +290,12 @@ export class ExecutionCharts {
     });
   });
 
-  /** Build SVG polyline points for velocities. */
   protected readonly velocityLines = computed(() => {
     const t = this.trace();
     if (!t?.samples?.length) return [];
     const n = t.samples[0].joints.length;
     const duration = t.metadata.duration || 1;
-    const durSec = duration;
 
-    // Estimate velocities from position deltas
     const velSeries: number[][] = Array.from({ length: n }, () => []);
     const times: number[] = [];
 
@@ -297,7 +321,7 @@ export class ExecutionCharts {
     return Array.from({ length: n }, (_, j) => {
       const points = times
         .map((t, i) => {
-          const x = (t / durSec) * this.svgW;
+          const x = (t / duration) * this.svgW;
           const y = this.svgH - ((velSeries[j][i] - min) / range) * (this.svgH - 4) - 2;
           return `${x.toFixed(1)},${y.toFixed(1)}`;
         })
@@ -306,7 +330,9 @@ export class ExecutionCharts {
     });
   });
 
-  /** Format events for display. */
+  // ── Events ──
+
+  /** Parse events — timestamp is now a f64 seconds from the API. */
   protected readonly events = computed(() => {
     const t = this.trace();
     if (!t?.events?.length) return [];
@@ -314,20 +340,20 @@ export class ExecutionCharts {
       const entry = Object.entries(e)[0];
       if (!entry) return null;
       const [kind, data] = entry as [string, { timestamp: number; waypoint?: number; segment?: number; message?: string }];
-      const time = data.timestamp ?? 0;
+      const timeSec = data.timestamp ?? 0;
       let label = kind;
       let detail = '';
       if (kind === 'WaypointReached' && data.waypoint != null) detail = `WP ${data.waypoint}`;
       if (kind === 'SegmentCompleted') detail = `Seg ${data.segment}`;
       if (kind === 'Error' && data.message) detail = data.message;
-      return { time, label, detail };
-    }).filter(Boolean) as { time: number; label: string; detail: string }[];
+      return { timeSec, label, detail };
+    }).filter(Boolean) as { timeSec: number; label: string; detail: string }[];
   });
 
-  protected onEventClick(time: number): void {
+  protected onEventClick(timeSec: number): void {
     const t = this.trace();
     if (!t?.metadata?.duration) return;
-    const pct = (time / t.metadata.duration) * 100;
+    const pct = (timeSec / t.metadata.duration) * 100;
     this.replayStore.setSeekPos(Math.round(pct));
     this.api.seekExecution(pct / 100).subscribe();
   }
