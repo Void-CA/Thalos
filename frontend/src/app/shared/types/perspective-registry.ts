@@ -6,9 +6,8 @@ import { WorkspacePanel } from '../../features/workspace/components/workspace-pa
 import { PlanningPanel } from '../../features/planning/planning-panel';
 import { TrajectoryColorPicker } from '../../features/planning/trajectory-color-picker';
 import { AlternativesPanel } from '../../features/plan-analysis/components/alternatives-panel';
-import { ExecutionCharts } from '../../features/execution/execution-charts';
 import { ExecutionPanel } from '../../features/execution/execution-panel';
-import type { Perspective, PerspectiveConfig, ToolSchema } from './perspective';
+import type { Perspective, PerspectiveConfig } from './perspective';
 
 /**
  * Registry central de configuraciones por perspectiva.
@@ -19,7 +18,7 @@ import type { Perspective, PerspectiveConfig, ToolSchema } from './perspective';
 export const PERSPECTIVE_REGISTRY: Record<Perspective, PerspectiveConfig> = {
   robot: {
     showLeftPanel: true,
-    showBottomPanel: false,
+    showBottomPanel: true,
     leftPanelContent: 'robots',
     rightPanel: [
       { id: 'fk', label: 'Forward Kinematics', component: JointControl, defaultOpen: true },
@@ -27,7 +26,10 @@ export const PERSPECTIVE_REGISTRY: Record<Perspective, PerspectiveConfig> = {
       { id: 'workspace', label: 'Workspace Analysis', component: WorkspacePanel, defaultOpen: false },
       { id: 'tcp', label: 'Active TCP', component: TcpInfoPanel, defaultOpen: false },
     ],
-    bottomTabs: [],
+    bottomTabs: [
+      { id: 'snapshot', label: 'Snapshot', icon: 'heroCamera' },
+      { id: 'analysis', label: 'Analysis', icon: 'heroChartBar' },
+    ],
   },
 
   planning: {
@@ -40,7 +42,7 @@ export const PERSPECTIVE_REGISTRY: Record<Perspective, PerspectiveConfig> = {
       { id: 'alternatives', label: 'Alternatives', component: AlternativesPanel, defaultOpen: false },
     ],
     bottomTabs: [
-      { id: 'plan-analysis', label: 'Analysis', icon: 'heroClipboardDocumentCheck', component: undefined as unknown as Type<unknown> },
+      { id: 'plan-analysis', label: 'Analysis', icon: 'heroClipboardDocumentCheck' },
     ],
   },
 
@@ -49,11 +51,11 @@ export const PERSPECTIVE_REGISTRY: Record<Perspective, PerspectiveConfig> = {
     showBottomPanel: true,
     rightPanel: [
       { id: 'execution', label: 'Active Plan', component: ExecutionPanel, defaultOpen: true },
-      { id: 'charts', label: 'Telemetry', component: ExecutionCharts, defaultOpen: false },
     ],
     bottomTabs: [
-      { id: 'timeline', label: 'Timeline', icon: 'heroClock', component: undefined as unknown as Type<unknown> },
-      { id: 'log', label: 'Log', icon: 'heroDocumentText', component: undefined as unknown as Type<unknown> },
+      { id: 'timeline', label: 'Timeline', icon: 'heroClock' },
+      { id: 'charts', label: 'Telemetry', icon: 'heroChartBar' },
+      { id: 'log', label: 'Log', icon: 'heroDocumentText' },
     ],
   },
 
@@ -62,7 +64,7 @@ export const PERSPECTIVE_REGISTRY: Record<Perspective, PerspectiveConfig> = {
     showBottomPanel: false,
     leftPanelContent: 'sessions',
     rightPanel: [
-      { id: 'execution', label: 'Active Plan', component: ExecutionPanel, defaultOpen: true },
+      { id: 'execution', label: 'Replay', component: ExecutionPanel, defaultOpen: true },
     ],
     bottomTabs: [],
   },

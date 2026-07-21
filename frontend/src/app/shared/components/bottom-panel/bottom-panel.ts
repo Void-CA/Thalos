@@ -8,8 +8,9 @@ import { PlanningStore } from '../../store/planning.store';
 import { LogStore } from '../../store/log.store';
 import { LayoutStore } from '../../store/layout.store';
 import { PerspectiveStore } from '../../store/perspective.store';
+import { ExecutionCharts } from '../../../features/execution/execution-charts';
 
-type TabId = 'snapshot' | 'analysis' | 'timeline' | 'plan-analysis' | 'log';
+type TabId = 'snapshot' | 'analysis' | 'timeline' | 'plan-analysis' | 'log' | 'charts';
 
 /** Todos los tabs disponibles. Los tabs visibles se filtran por perspectiva. */
 const ALL_TABS: { id: TabId; label: string; icon: string }[] = [
@@ -37,7 +38,7 @@ const SEGMENT_COLORS = [
 @Component({
   selector: 'bottom-panel',
   standalone: true,
-  imports: [NgIcon],
+  imports: [NgIcon, ExecutionCharts],
   template: `
     <div class="bottom-panel" [class.bottom-panel--collapsed]="layout.bottomCollapsed()">
       @if (!layout.bottomCollapsed()) {
@@ -183,6 +184,10 @@ const SEGMENT_COLORS = [
                 @if (plan.isLive) { <span class="tl__live">● LIVE</span> }
               </div>
             }
+          }
+
+          @if (activeTab() === 'charts') {
+            <execution-charts />
           }
 
           @if (activeTab() === 'plan-analysis') {
