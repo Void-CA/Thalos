@@ -117,11 +117,11 @@ import type { AlternativesResponse, RankedAlternativeDto } from '../plan-analysi
       &:hover:not(:disabled) { background: #333; }
       &:disabled { opacity: 0.4; cursor: default; }
 
-      &--primary {
-        border-color: #3399ff;
-        color: #3399ff;
-        &:hover:not(:disabled) { background: #1a2a3a; }
-      }
+    .ap__btn--primary {
+      border-color: #3399ff;
+      color: #3399ff;
+    }
+    .ap__btn--primary:hover:not(:disabled) { background: #1a2a3a; }
     }
 
     .ap__error {
@@ -153,13 +153,13 @@ import type { AlternativesResponse, RankedAlternativeDto } from '../plan-analysi
       font-weight: 700;
       font-size: 0.8rem;
       min-width: 3ch;
-      &--original { color: #33ccff; }
-      &--alt { color: #44cc44; }
+    .ap__score--original { color: #33ccff; }
+    .ap__score--alt { color: #44cc44; }
     }
 
     .ap__delta {
       font-size: 0.65rem;
-      &--pos { color: #44cc44; }
+    .ap__delta--pos { color: #44cc44; }
     }
 
     .ap__bar {
@@ -174,8 +174,8 @@ import type { AlternativesResponse, RankedAlternativeDto } from '../plan-analysi
       height: 100%;
       border-radius: 2px;
       transition: width 0.3s ease;
-      &--original { background: #33ccff; }
-      &--alt { background: #44cc44; }
+    .ap__bar-fill--original { background: #33ccff; }
+    .ap__bar-fill--alt { background: #44cc44; }
     }
 
     .ap__list {
@@ -193,9 +193,9 @@ import type { AlternativesResponse, RankedAlternativeDto } from '../plan-analysi
       background: #2a2a2a;
       border: 1px solid #444;
 
-      &--best {
-        border-color: #44cc44;
-      }
+    .ap__card--best {
+      border-color: #44cc44;
+    }
     }
 
     .ap__card-header {
@@ -240,7 +240,7 @@ import type { AlternativesResponse, RankedAlternativeDto } from '../plan-analysi
       font-size: 0.65rem;
       padding: 0.1rem 0.3rem;
       border-radius: 2px;
-      &--pos { color: #44cc44; background: #1a3a1a; }
+    .ap__improvement--pos { color: #44cc44; background: #1a3a1a; }
     }
 
     .ap__bar--alt {
