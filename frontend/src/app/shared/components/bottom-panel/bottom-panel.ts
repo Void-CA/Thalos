@@ -12,13 +12,13 @@ import { ExecutionCharts } from '../../../features/execution/execution-charts';
 
 type TabId = 'snapshot' | 'analysis' | 'timeline' | 'plan-analysis' | 'log' | 'charts';
 
-/** Todos los tabs disponibles. Los tabs visibles se filtran por perspectiva. */
 const ALL_TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'snapshot', label: 'Snapshot', icon: 'heroCamera' },
   { id: 'analysis', label: 'Analysis', icon: 'heroChartBar' },
   { id: 'timeline', label: 'Timeline', icon: 'heroClock' },
   { id: 'plan-analysis', label: 'Plan Analysis', icon: 'heroClipboardDocumentCheck' },
   { id: 'log', label: 'Log', icon: 'heroDocumentText' },
+  { id: 'charts', label: 'Telemetry', icon: 'heroChartBar' },
 ];
 
 const SEGMENT_COLORS = [

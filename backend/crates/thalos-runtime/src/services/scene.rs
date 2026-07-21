@@ -366,17 +366,17 @@ impl SceneService {
         // Finalize any active recording as Cancelled first
         self.finalize_recording(Some(crate::plan::SessionStatus::Cancelled)).await;
 
-        if let Some(ctrl) = self.manager.get_controller().await {
-            let (waypoints, duration) = {
-                let runtime = self.runtime.read().await;
-                Self::trajectory_to_waypoints(&runtime)
-            };
-            if !waypoints.is_empty() && duration > 0.0 {
-                let mut c = ctrl.write().await;
-                c.execute(waypoints, duration).await?;
-            } // write lock dropped
-            return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
+        // Reset the plan state to Created (without starting execution)
+        {
+            let mut runtime = self.runtime.write().await;
+            if let Some(ref mut plan) = runtime.active_plan {
+                plan.state = crate::plan::PlanState::Created;
+                plan.started_at = None;
+                plan.completed_at = None;
+            }
         }
+
+        // Read-only snapshot (no controller execution)
         let runtime = self.runtime.read().await;
         Ok(Self::build_snapshot(&runtime, None))
     }

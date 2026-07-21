@@ -1,6 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { SessionApiService, type SessionResponse } from '../../api/session-api.service';
 import { ReplayStore } from '../../store/replay.store';
+import { SceneStore } from '../../../features/scene/store/scene.store';
 
 /**
  * Panel izquierdo de la perspectiva Sessions.
@@ -79,6 +80,7 @@ import { ReplayStore } from '../../store/replay.store';
 export class SessionBrowser {
   private readonly api = inject(SessionApiService);
   private readonly replayStore = inject(ReplayStore);
+  private readonly scene = inject(SceneStore);
 
   protected readonly sessions = signal<SessionResponse[]>([]);
   protected readonly selectedId = signal<number | null>(null);
@@ -102,11 +104,14 @@ export class SessionBrowser {
   protected onReplay(id: number): void {
     this.replaying.set(true);
     this.api.startReplay(id).subscribe({
-      next: () => {
+      next: (res) => {
         this.replaying.set(false);
+        this.scene.applySnapshot(res);
         this.replayStore.startReplay(id);
       },
-      error: () => this.replaying.set(false),
+      error: () => {
+        this.replaying.set(false);
+      },
     });
   }
 }
