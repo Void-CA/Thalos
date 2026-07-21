@@ -19,6 +19,8 @@
     "@angular/router": "^21.2.0",
     "@ng-icons/core": "^33.3.0",
     "@ng-icons/heroicons": "^33.3.0",
+    "echarts": "^6.1.0",
+    "ngx-echarts": "^21.0.0",
     "rxjs": "~7.8.0",
     "three": "^0.184.0",
     "tslib": "^2.3.0"

@@ -1,9 +1,12 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { NgIcon } from '@ng-icons/core';
+import { NgxEchartsDirective } from 'ngx-echarts';
+import type { EChartsOption } from 'echarts';
 import { PlanAnalysisStore } from '../store/plan-analysis.store';
 import { FocusService } from '../../../shared/services/focus.service';
 import { PerspectiveStore } from '../../../shared/store/perspective.store';
 import { ExecutionCharts } from '../../execution/execution-charts';
+import { scoreBreakdownChart, severityChart } from '../../../shared/components/echart/chart-options';
 
 interface CategorySummary {
   label: string;
@@ -33,7 +36,7 @@ type AnalysisTab = 'dashboard' | 'charts';
 @Component({
   selector: 'analysis-workspace',
   standalone: true,
-  imports: [NgIcon, ExecutionCharts],
+  imports: [NgIcon, ExecutionCharts, NgxEchartsDirective],
   templateUrl: './analysis-workspace.html',
   styleUrl: './analysis-workspace.scss',
 })
@@ -160,6 +163,20 @@ export class AnalysisWorkspace {
     if (!alt?.original_breakdown?.length) return null;
     const maxVal = Math.max(...alt.original_breakdown.map(b => b.value), 1);
     return { items: alt.original_breakdown.map(b => ({ name: b.name.replace(/_/g, ' '), value: b.value, pct: (b.value / maxVal) * 100 })) };
+  });
+
+  // ── ECharts options ──
+
+  protected readonly scoreBreakdownOpts = computed<EChartsOption | null>(() => {
+    const alt = this.pa.alternativesData();
+    if (!alt?.original_breakdown?.length) return null;
+    return scoreBreakdownChart(alt.original_breakdown);
+  });
+
+  protected readonly severityChartOpts = computed<EChartsOption | null>(() => {
+    const cats = this.categories();
+    if (cats.length === 0) return null;
+    return severityChart(cats.map(c => ({ label: c.label, errors: c.errors, warnings: c.warnings, total: c.total })));
   });
 
   // ── Actions ──

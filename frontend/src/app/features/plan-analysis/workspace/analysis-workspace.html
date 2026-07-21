@@ -201,22 +201,21 @@
       </section>
     }
 
-    <!-- ── Score Breakdown ── -->
-    @let br = scoreBreakdown();
-    @if (br) {
+    <!-- ── ECharts: Severity Distribution ── -->
+    @let sevOpts = severityChartOpts();
+    @if (sevOpts) {
+      <section class="aw__section">
+        <h2 class="aw__sec-title">Severity by Category</h2>
+        <div echarts [options]="sevOpts" theme="dark" class="aw__chart"></div>
+      </section>
+    }
+
+    <!-- ── ECharts: Score Breakdown ── -->
+    @let brOpts = scoreBreakdownOpts();
+    @if (brOpts) {
       <section class="aw__section">
         <h2 class="aw__sec-title">Score Breakdown</h2>
-        <div class="aw__br-list">
-          @for (b of br.items; track b.name) {
-            <div class="aw__br">
-              <span class="aw__br-lbl">{{ b.name }}</span>
-              <div class="aw__br-tr">
-                <div class="aw__br-fill" [style.width.%]="b.pct" [style.background]="b.pct > 60 ? '#4a9e5a' : b.pct > 30 ? '#b8943a' : '#b85450'"></div>
-              </div>
-              <span class="aw__br-v">{{ b.value.toFixed(2) }}</span>
-            </div>
-          }
-        </div>
+        <div echarts [options]="brOpts" theme="dark" class="aw__chart"></div>
       </section>
     }
 

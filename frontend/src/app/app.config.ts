@@ -1,6 +1,7 @@
 import { ApplicationConfig, provideZonelessChangeDetection } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideIcons } from '@ng-icons/core';
+import { provideEchartsCore } from 'ngx-echarts';
 import {
   heroChartBar,
   heroClipboardDocumentList,
@@ -36,5 +37,6 @@ export const appConfig: ApplicationConfig = {
       heroRectangleGroup,
       heroArrowUpOnSquare,
     }),
+    provideEchartsCore({ echarts: () => import('echarts') }),
   ],
 };
