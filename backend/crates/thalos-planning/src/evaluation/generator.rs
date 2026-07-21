@@ -172,7 +172,7 @@ impl AlternativeGenerator {
         let mut next_id = 0;
 
         for &wp_idx in &target_indices {
-            if !strategy.max_candidates == 0 && candidates.len() >= strategy.max_candidates {
+            if strategy.max_candidates > 0 && candidates.len() >= strategy.max_candidates {
                 break;
             }
 
