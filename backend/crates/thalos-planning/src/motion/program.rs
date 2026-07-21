@@ -75,4 +75,54 @@ impl CompiledPlan {
             waypoint_count,
         }
     }
+
+    /// Extrae un segmento de la trayectoria por rango de waypoints.
+    ///
+    /// Devuelve `None` si el rango está fuera de los límites del plan.
+    /// No modifica el plan original.
+    pub fn extract_segment(&self, range: std::ops::Range<usize>) -> Option<Trajectory> {
+        if range.start >= self.waypoint_count || range.end > self.waypoint_count || range.is_empty()
+        {
+            return None;
+        }
+        let waypoints = self.merged_trajectory.waypoints();
+        let segment: Vec<_> = waypoints[range.clone()].to_vec();
+        Some(Trajectory::new(segment))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use thalos_core::trajectory::TrajectoryPoint;
+
+    fn sample_plan() -> CompiledPlan {
+        let points: Vec<TrajectoryPoint> = (0..100)
+            .map(|i| TrajectoryPoint::new(vec![i as f64], i as f64))
+            .collect();
+        CompiledPlan::new(Trajectory::new(points), vec![])
+    }
+
+    #[test]
+    fn test_extract_valid_range() {
+        let plan = sample_plan();
+        let segment = plan.extract_segment(10..20).unwrap();
+        assert_eq!(segment.len(), 10);
+    }
+
+    #[test]
+    fn test_extract_out_of_bounds_returns_none() {
+        let plan = sample_plan();
+        assert!(plan.extract_segment(90..110).is_none());
+        assert!(plan.extract_segment(100..110).is_none());
+    }
+
+    #[test]
+    fn test_extract_preserves_order() {
+        let plan = sample_plan();
+        let segment = plan.extract_segment(5..8).unwrap();
+        let wps = segment.waypoints();
+        assert_eq!(wps[0].joints()[0], 5.0);
+        assert_eq!(wps[2].joints()[0], 7.0);
+    }
 }
