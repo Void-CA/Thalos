@@ -1,0 +1,190 @@
+@use 'variables' as *;
+@use '../../../../shared/styles/panel' as panel;
+
+.explain-panel {
+  @include panel.container;
+
+  &__card {
+    border: 1px solid $border-subtle;
+    border-radius: $radius-sm;
+    overflow: hidden;
+    transition: border-color $transition-fast;
+
+    &:hover {
+      border-color: $border-default;
+    }
+  }
+
+  &__card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.5rem;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.72rem;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $bg-card;
+    }
+  }
+
+  &__step {
+    flex: 1;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  &__conf {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.05rem 0.3rem;
+    border-radius: $radius-sm;
+    line-height: 1.3;
+
+    &.conf--high { background: rgba(68, 204, 68, 0.2); color: #44cc44; }
+    &.conf--med { background: rgba(238, 187, 34, 0.2); color: #eebb22; }
+    &.conf--low { background: rgba(238, 51, 51, 0.2); color: #ee3333; }
+  }
+
+  &__card-body {
+    padding: 0.4rem 0.5rem;
+    border-top: 1px solid $border-subtle;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  &__decision {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: $text-primary;
+    line-height: 1.3;
+  }
+
+  &__rationale {
+    font-size: 0.7rem;
+    opacity: 0.8;
+    line-height: 1.4;
+  }
+
+  &__section-label {
+    @include panel.section-label;
+    margin: 0.15rem 0 0.25rem;
+  }
+
+  &__chain {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  &__chain-step {
+    display: flex;
+    gap: 0.35rem;
+  }
+
+  &__chain-num {
+    flex-shrink: 0;
+    width: 1.1rem;
+    height: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    font-weight: 700;
+    border-radius: 50%;
+    background: $bg-elevated;
+    color: $text-muted;
+    margin-top: 0.1rem;
+  }
+
+  &__chain-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  &__chain-desc {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  &__chain-why {
+    font-size: 0.65rem;
+    opacity: 0.7;
+    line-height: 1.3;
+  }
+
+  &__chain-data {
+    font-size: 0.6rem;
+    background: $bg-input;
+    border: 1px solid $border-subtle;
+    border-radius: $radius-sm;
+    padding: 0.1rem 0.3rem;
+    color: $text-secondary;
+    word-break: break-all;
+  }
+
+  &__alts {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  &__alt {
+    font-size: 0.65rem;
+    opacity: 0.7;
+    padding: 0.1rem 0.3rem;
+    border-left: 2px solid $border-subtle;
+
+    &::before {
+      content: '– ';
+      opacity: 0.5;
+    }
+  }
+
+  &__meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.6rem;
+    opacity: 0.4;
+    margin-top: 0.15rem;
+  }
+
+  &__id {
+    font-family: $font-mono;
+  }
+
+  &__actions {
+    margin-top: 0.3rem;
+  }
+
+  &__refresh {
+    @include panel.action-base;
+    width: 100%;
+    font-size: 0.72rem;
+  }
+
+  &__loading {
+    font-size: 0.7rem;
+    opacity: 0.5;
+    text-align: center;
+    padding: 0.5rem;
+  }
+
+  &__error {
+    font-size: 0.7rem;
+    color: #cc4444;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid #cc444444;
+    border-radius: $radius-sm;
+    background: #cc444411;
+  }
+}

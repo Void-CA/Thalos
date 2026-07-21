@@ -1,0 +1,155 @@
+@use 'variables' as *;
+@use '../../../../shared/styles/panel' as panel;
+
+.optimize-panel {
+  @include panel.container;
+
+  &__card-input {
+    @include panel.card-input;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  &__section-label {
+    @include panel.section-label;
+    margin: 0;
+  }
+
+  &__objectives {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  &__objective {
+    display: flex;
+    gap: 0.35rem;
+    align-items: flex-start;
+    padding: 0.25rem 0.35rem;
+    border: 1px solid $border-subtle;
+    border-radius: $radius-sm;
+    cursor: pointer;
+    transition: opacity $transition-fast;
+
+    &.is-disabled {
+      opacity: 0.4;
+    }
+
+    input[type="checkbox"] {
+      margin-top: 0.2rem;
+      accent-color: $accent;
+    }
+  }
+
+  &__obj-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  &__obj-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  &__obj-current {
+    font-size: 0.65rem;
+    opacity: 0.65;
+  }
+
+  &__weight {
+    width: 100%;
+    height: 4px;
+    accent-color: $accent;
+    cursor: pointer;
+  }
+
+  &__weight-label {
+    font-size: 0.6rem;
+    opacity: 0.5;
+  }
+
+  &__card-output {
+    @include panel.card-output;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  &__pareto {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  &__solution {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.35rem;
+    border-radius: $radius-sm;
+    font-size: 0.65rem;
+    background: $bg-card;
+    border: 1px solid $border-subtle;
+
+    &.solution--rank1 {
+      border-color: $accent;
+      background: rgba(51, 153, 255, 0.06);
+    }
+  }
+
+  &__sol-id {
+    font-weight: 700;
+    color: $text-primary;
+    min-width: 2.5ch;
+  }
+
+  &__sol-values {
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.15rem 0.4rem;
+  }
+
+  &__sol-val {
+    opacity: 0.7;
+  }
+
+  &__sol-rank {
+    font-size: 0.6rem;
+    opacity: 0.4;
+    flex-shrink: 0;
+  }
+
+  &__meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.65rem;
+    opacity: 0.5;
+
+    .meta--ok { color: #44cc44; }
+    .meta--warn { color: #eebb22; }
+  }
+
+  &__actions {
+    margin-top: 0.15rem;
+  }
+
+  &__run {
+    @include panel.action-base;
+    width: 100%;
+    font-size: 0.72rem;
+  }
+
+  &__error {
+    font-size: 0.7rem;
+    color: #cc4444;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid #cc444444;
+    border-radius: $radius-sm;
+    background: #cc444411;
+  }
+}
