@@ -1,4 +1,4 @@
-use crate::math::algebra::vector::DynamicVector;
+use thalos_math::DynamicVector;
 use thalos_math::{UnitQuaternion, Vector3};
 use crate::spatial::pose::Pose;
 

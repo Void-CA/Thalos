@@ -48,7 +48,7 @@ impl CollisionChecker for NaiveCollisionChecker {
 mod tests {
     use super::*;
     use thalos_core::collision::{Box3D, CollisionGeometry, CollisionType, Sphere};
-    use thalos_core::math::geometry::{rigid::Transform3D, vectors::Vector3};
+    use thalos_math::{Transform3D, Vector3};
 
     fn body(geometry: CollisionGeometry, pose: Transform3D) -> CollisionBody {
         CollisionBody::new(EntityId::Link(0), geometry, pose)

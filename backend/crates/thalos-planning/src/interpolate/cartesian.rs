@@ -1,8 +1,4 @@
-use thalos_core::math::geometry::{
-    rigid::Transform3D,
-    rotations::{Quaternion, UnitQuaternion},
-    vectors::Vector3,
-};
+use thalos_math::{Quaternion, Transform3D, UnitQuaternion, Vector3};
 
 /// SLERP that falls back to lerp+normalise for very small angles
 /// to avoid division-by-zero in sin(θ).
@@ -25,7 +21,7 @@ fn slerp(q1: &UnitQuaternion, q2: &UnitQuaternion, t: f64) -> UnitQuaternion {
         (1.0 - t, t)
     } else {
         let half_theta = cos_half_theta.acos();
-        let sin_half_theta = (1.0 - cos_half_theta * cos_half_theta).sqrt();
+        let sin_half_theta = (1.0_f64 - cos_half_theta * cos_half_theta).sqrt();
         let s0 = ((1.0 - t) * half_theta).sin() / sin_half_theta;
         let s1 = (t * half_theta).sin() / sin_half_theta;
         (s0, s1)
@@ -94,7 +90,7 @@ pub fn linear_path(start: &Transform3D, end: &Transform3D, step: f64) -> Vec<Tra
 #[cfg(test)]
 mod tests {
     use super::*;
-    use thalos_core::math::geometry::vectors::UnitVector3;
+    use thalos_math::UnitVector3;
 
     fn identity_transform() -> Transform3D {
         Transform3D::identity()

@@ -1,7 +1,7 @@
 pub use thalos_models::JointLimits;
 
-use crate::math::geometry::rigid::Transform3D;
-use crate::math::geometry::vectors::UnitVector3;
+use thalos_math::Transform3D;
+use thalos_math::UnitVector3;
 use crate::robot::joint::{
     fixed::FixedJoint,
     prismatic::PrismaticJoint,

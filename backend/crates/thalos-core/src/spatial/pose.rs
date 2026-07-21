@@ -1,6 +1,6 @@
 use crate::spatial::frame::frame::FrameId;
-use crate::math::geometry::rigid::Transform3D;
-use crate::math::geometry::vectors::Vector3;
+use thalos_math::Transform3D;
+use thalos_math::Vector3;
 
 #[derive(Debug, Clone)]
 pub struct Pose {

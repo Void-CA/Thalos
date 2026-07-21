@@ -6,7 +6,7 @@ use rand::SeedableRng;
 use thalos_core::analysis::workspace::{
     sampler::WorkspaceSampler, Workspace, WorkspaceConfig, WorkspaceError,
 };
-use thalos_core::math::geometry::vectors::Vector3;
+use thalos_math::Vector3;
 use thalos_core::models::{RobotModel, RobotRegistry};
 use thalos_core::robot::serial_chain::SerialChain;
 use thalos_core::robot::tool_frame::ToolFrame;

@@ -3,7 +3,7 @@ pub mod diff;
 
 use serde::{Deserialize, Serialize};
 use thalos_core::robot::joint::JointId;
-use thalos_core::math::geometry::rigid::Transform3D;
+use thalos_math::Transform3D;
 use thalos_core::spatial::frame::FrameId;
 
 pub use precision::VisualPrecision;

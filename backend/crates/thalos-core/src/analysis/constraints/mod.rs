@@ -28,8 +28,8 @@
 use std::fmt;
 
 use crate::kinematics::forward::ForwardKinematics;
-use crate::math::geometry::vectors::Vector3;
-use crate::math::traits::products::Dot;
+use thalos_math::Vector3;
+use thalos_math::Dot;
 use crate::robot::serial_chain::SerialChain;
 use crate::robot::tool_frame::ToolFrame;
 use crate::spatial::frame::FrameId;

@@ -4,7 +4,7 @@ use crate::kinematics::jacobian::{
     JacobianSolver,
 };
 
-use crate::math::algebra::DynamicMatrix;
+use thalos_math::DynamicMatrix;
 
 use thalos_math::Cross;
 use crate::robot::joint::JointKind;

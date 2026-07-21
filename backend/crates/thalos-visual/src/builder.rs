@@ -1,13 +1,9 @@
 use thalos_core::{
     kinematics::{forward::result::FKResult, jacobian::Jacobian},
-    math::geometry::{
-        rigid::Transform3D,
-        rotations::UnitQuaternion,
-        vectors::{UnitVector3, Vector3},
-    },
     robot::serial_chain::SerialChain,
     spatial::frame::FrameId,
 };
+use thalos_math::{Transform3D, UnitQuaternion, UnitVector3, Vector3};
 
 use crate::scene::*;
 

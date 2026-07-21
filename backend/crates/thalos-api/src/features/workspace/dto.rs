@@ -13,7 +13,7 @@ use thalos_core::analysis::singularity::{
 use thalos_core::analysis::workspace::{
     BoundingBox, Reachability, WorkspaceMetrics, WorkspaceSample,
 };
-use thalos_core::math::geometry::vectors::Vector3;
+use thalos_math::Vector3;
 
 // ─── Requests ────────────────────────────────────────────────────────────
 

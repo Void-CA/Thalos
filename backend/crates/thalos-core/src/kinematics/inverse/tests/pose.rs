@@ -1,5 +1,5 @@
 use super::*;
-use crate::math::geometry::rotations::UnitQuaternion;
+use thalos_math::UnitQuaternion;
 use crate::spatial::pose::Pose;
 
 
@@ -13,7 +13,7 @@ fn make_target_pose(ee: FrameId, q: &[f64]) -> Pose {
         q[0] + q[1],
     );
 
-    let transform = crate::math::geometry::rigid::Transform3D {
+    let transform = thalos_math::Transform3D {
         translation: pos,
         rotation: rot,
     };
@@ -181,7 +181,7 @@ fn pose_converges_where_position_ik_stagnates() {
     let target_x = 2.0 * (PI / 4.0).cos(); // √2 ≈ 1.414
     let pos_target = Vector3::new(target_x, 0.0, 0.0);
     let pose_target = {
-        let transform = crate::math::geometry::rigid::Transform3D {
+        let transform = thalos_math::Transform3D {
             translation: pos_target,
             rotation: UnitQuaternion::from_axis_angle(
                 UnitVector3::z_axis(),

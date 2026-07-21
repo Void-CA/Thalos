@@ -10,7 +10,7 @@
 use serde::{Deserialize, Serialize};
 
 use thalos_core::analysis::workspace::Workspace;
-use thalos_core::math::geometry::vectors::Vector3;
+use thalos_math::Vector3;
 
 use crate::scene::VisualScene;
 

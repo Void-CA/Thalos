@@ -13,12 +13,8 @@ use crate::{
     commands::motion::MotionCommands,
     Command, RobotController, RuntimeSnapshot, SceneService,
 };
+use thalos_math::{Transform3D, UnitQuaternion, Vector3};
 use thalos_core::{
-    math::geometry::{
-        rigid::Transform3D,
-        rotations::UnitQuaternion,
-        vectors::Vector3,
-    },
     models::RobotModel,
     prelude::IKGoal,
     spatial::{frame::FrameId, pose::Pose},
@@ -602,8 +598,6 @@ async fn select_tool_frame_sets_active_tcp_in_snapshot() {
 #[tokio::test]
 async fn select_tool_frame_with_offset_propagates_to_tick_delta() {
     use thalos_core::robot::tool_frame::ToolFrame;
-    use thalos_core::math::geometry::rigid::Transform3D;
-    use thalos_core::math::geometry::vectors::Vector3;
 
     let (svc, _mgr) = make_service(RobotModel::Scara).await;
 

@@ -4,7 +4,7 @@ use crate::kinematics::jacobian::{
     Jacobian
 };
 
-use crate::math::algebra::DynamicMatrix;
+use thalos_math::DynamicMatrix;
 /// Perturbation step for numerical differentiation.
 const JACOBIAN_EPS: f64 = 1e-6;
 use crate::spatial::frame::FrameId;

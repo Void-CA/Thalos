@@ -4,6 +4,8 @@
 //! (workspace, singularity, manipulability, IK) must reference the
 //! same active TCP when set.
 
+use thalos_math::{Transform3D, UnitQuaternion, Vector3};
+
 use std::sync::Arc;
 
 use tokio::sync::RwLock;
@@ -15,7 +17,6 @@ use thalos_core::{
         inverse::{DampedLeastSquaresSolver, IKGoal, IKSolver},
         jacobian::{GeometricJacobian, JacobianSolver},
     },
-    math::geometry::{rigid::Transform3D, vectors::Vector3},
     models::{RobotModel, RobotRegistry},
     robot::tool_frame::ToolFrame,
 };

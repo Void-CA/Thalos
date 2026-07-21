@@ -5,7 +5,7 @@ use tokio::sync::RwLock;
 use thalos_core::analysis::workspace::{
     Workspace, WorkspaceConfig, WorkspaceError,
 };
-use thalos_core::math::geometry::vectors::Vector3;
+use thalos_math::Vector3;
 use thalos_core::models::RobotModel;
 
 use crate::backends::{
@@ -153,7 +153,7 @@ fn sample_with_tcp_uses_tcp_position() {
     use thalos_core::robot::tool_frame::ToolFrame;
     use thalos_core::robot::serial_chain::SerialChain;
     use thalos_core::models::RobotRegistry;
-    use thalos_core::math::geometry::rigid::Transform3D;
+    use thalos_math::Transform3D;
 
     let chain = RobotRegistry::create_default(RobotModel::Scara);
     let config = WorkspaceConfig { samples: 50, seed: 0, tolerance: 1e-3 };

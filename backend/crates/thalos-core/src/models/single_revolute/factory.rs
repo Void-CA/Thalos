@@ -27,7 +27,7 @@ pub fn create_single_revolute(l: f64, limits_j1: JointLimits) -> SerialChain {
 mod tests {
     use super::*;
     use crate::models::single_revolute::SingleRevoluteSpec;
-    use crate::math::constants::EPS;
+    use thalos_math::constants::EPS;
 
     fn build_robot() -> SerialChain {
         SingleRevoluteSpec::ideal().build()

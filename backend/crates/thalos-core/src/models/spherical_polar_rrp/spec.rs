@@ -1,4 +1,4 @@
-use crate::math::constants::{PI, PI_2};
+use thalos_math::constants::{PI, PI_2};
 use crate::robot::joint::{JointInfo, JointKind, JointLimits};
 
 /// Spec de un robot esférico-polar RRP (Revolute + Revolute + Prismatic).

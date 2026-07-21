@@ -8,7 +8,7 @@ use rand::rngs::StdRng;
 use rand::SeedableRng;
 
 use thalos_core::analysis::workspace::{WorkspaceConfig, WorkspaceSampler};
-use thalos_core::math::geometry::vectors::Vector3;
+use thalos_math::Vector3;
 use thalos_core::models::factory::{RobotModel, RobotRegistry};
 
 /// Build a sampled workspace for reachability bench setup.

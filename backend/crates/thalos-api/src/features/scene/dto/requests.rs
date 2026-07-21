@@ -2,14 +2,10 @@ use serde::Deserialize;
 
 use thalos_core::{
     kinematics::inverse::IKGoal,
-    math::geometry::{
-        rigid::Transform3D,
-        rotations::{Quaternion, UnitQuaternion},
-        vectors::Vector3,
-    },
     models::{RobotModel, RobotModelError},
     spatial::{frame::FrameId, pose::Pose},
 };
+use thalos_math::{Quaternion, Transform3D, UnitQuaternion, Vector3};
 use thalos_planning::motion::program::MotionProgram;
 use thalos_planning::motion::segment::MotionSegment;
 use thalos_runtime::commands::kinematics::KinematicsCommand;

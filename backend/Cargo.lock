@@ -1291,6 +1291,7 @@ name = "thalos-collision"
 version = "0.1.0"
 dependencies = [
  "thalos_core",
+ "thalos_math",
 ]
 
 [[package]]
@@ -1301,6 +1302,7 @@ dependencies = [
  "serde",
  "thalos-collision",
  "thalos_core",
+ "thalos_math",
  "thiserror",
 ]
 
@@ -1314,6 +1316,7 @@ dependencies = [
  "serde_json",
  "thalos-planning",
  "thalos_core",
+ "thalos_math",
  "thalos_models",
  "thalos_runtime",
  "thalos_visual",
@@ -1364,6 +1367,7 @@ dependencies = [
  "thalos-collision",
  "thalos-planning",
  "thalos_core",
+ "thalos_math",
  "thalos_models",
  "thiserror",
  "tokio",
@@ -1378,6 +1382,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thalos_core",
+ "thalos_math",
  "thalos_models",
 ]
 

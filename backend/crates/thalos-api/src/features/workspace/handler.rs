@@ -12,7 +12,7 @@ use axum::{
 };
 
 use thalos_core::analysis::workspace::WorkspaceConfig;
-use thalos_core::math::geometry::vectors::Vector3;
+use thalos_math::Vector3;
 use thalos_core::models::RobotModel;
 use thalos_runtime::{ManipulabilityService as RuntimeManipulabilityService, SingularityService as RuntimeSingularityService, WorkspaceService as RuntimeWorkspaceService};
 

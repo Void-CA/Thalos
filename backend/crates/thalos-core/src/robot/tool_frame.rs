@@ -1,6 +1,6 @@
 use crate::kinematics::forward::result::FKResult;
 use crate::spatial::frame::FrameId;
-use crate::math::geometry::rigid::Transform3D;
+use thalos_math::Transform3D;
 
 /// Represents an active Tool Center Point (TCP) frame.
 ///
@@ -14,8 +14,8 @@ use crate::math::geometry::rigid::Transform3D;
 /// ```
 /// use thalos_core::robot::tool_frame::ToolFrame;
 /// use thalos_core::spatial::frame::FrameId;
-/// use thalos_core::math::geometry::rigid::Transform3D;
-/// use thalos_core::math::geometry::vectors::Vector3;
+/// use thalos_math::Transform3D;
+/// use thalos_math::Vector3;
 ///
 /// // TCP exactly at the tool0 frame
 /// let tcp = ToolFrame::identity(FrameId::new(42));
@@ -69,7 +69,7 @@ impl ToolFrame {
     /// Resolve the global position (translation) of this TCP given an FK result.
     ///
     /// Returns `None` if the `base_frame` is not present in the FK result.
-    pub fn resolve_position(&self, fk: &FKResult) -> Option<crate::math::geometry::vectors::Vector3> {
+    pub fn resolve_position(&self, fk: &FKResult) -> Option<thalos_math::Vector3> {
         self.resolve_pose(fk).map(|p| p.translation())
     }
 }
@@ -79,7 +79,7 @@ mod tests {
     use super::*;
     use crate::kinematics::forward::result::FKResult;
     use crate::spatial::pose::Pose;
-    use crate::math::geometry::vectors::Vector3;
+    use thalos_math::Vector3;
     use std::collections::HashMap;
 
     fn make_fk_result(frame_id: u64, translation: Vector3) -> FKResult {

@@ -1,4 +1,4 @@
-use crate::math::constants::PI;
+use thalos_math::constants::PI;
 use crate::robot::joint::{JointInfo, JointKind, JointLimits};
 
 /// Spec de un manipulador 6DOF (estilo PUMA / UR-like).

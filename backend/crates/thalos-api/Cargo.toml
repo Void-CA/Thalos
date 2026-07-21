@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 thalos_core = { path = "../thalos-core" }
+thalos_math = { path = "../thalos-math" }
 thalos_models = { path = "../thalos-models" }
 thalos-planning = { path = "../thalos-planning" }
 thalos_visual = { path = "../thalos-visual" }

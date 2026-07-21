@@ -1,4 +1,4 @@
-use crate::math::algebra::DynamicMatrix;
+use thalos_math::DynamicMatrix;
 
 pub trait JacobianSolver {
     fn evaluate(&self, q: &[f64]) -> Jacobian;

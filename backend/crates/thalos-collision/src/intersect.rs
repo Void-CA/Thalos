@@ -1,8 +1,5 @@
 use thalos_core::collision::CollisionGeometry;
-use thalos_core::math::{
-    geometry::{rigid::Transform3D, vectors::Vector3},
-    traits::products::{Cross, Dot},
-};
+use thalos_math::{Cross, Dot, Transform3D, Vector3};
 
 /// Epsilon global para comparaciones de punto flotante en detección
 /// de colisiones. Absorbe errores de redondeo en transformaciones y FK.
@@ -68,7 +65,7 @@ fn box_vs_box(
 }
 
 /// Retorna los 3 ejes locales del OBB en el marco global.
-fn obb_axes(rotation: &thalos_core::math::geometry::rotations::UnitQuaternion) -> [Vector3; 3] {
+fn obb_axes(rotation: &thalos_math::UnitQuaternion) -> [Vector3; 3] {
     let x = rotation.rotate_vector(Vector3::new(1.0, 0.0, 0.0));
     let y = rotation.rotate_vector(Vector3::new(0.0, 1.0, 0.0));
     let z = rotation.rotate_vector(Vector3::new(0.0, 0.0, 1.0));

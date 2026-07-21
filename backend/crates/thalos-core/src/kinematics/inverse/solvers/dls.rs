@@ -1,6 +1,6 @@
 use crate::kinematics::forward::ForwardKinematics;
 use crate::kinematics::jacobian::{GeometricJacobian, JacobianSolver};
-use crate::math::algebra::{DynamicMatrix, vector::{DynamicVector, vector_to_dynamic}};
+use thalos_math::algebra::{vector_to_dynamic, DynamicMatrix, DynamicVector};
 use crate::robot::joint::{JointKind, JointLimits};
 use crate::spatial::frame::FrameId;
 use crate::kinematics::inverse::{
