@@ -13,7 +13,7 @@ use thalos_runtime::{
         playback::interpolator::{Interpolator, LinearInterpolator, NearestSampleInterpolator},
         replay::ReplayBackend,
     },
-    ExecutionSource, MotionTrace,
+    ExecutionSource, ExecutionTrace, MotionTrace, TraceAnalyzer,
 };
 
 use crate::app::error::ApiError;
@@ -45,7 +45,7 @@ pub async fn get_session(
     Ok(Json(session.into()))
 }
 
-/// Obtener el trace de una sesión (JSON).
+/// Obtener el trace original (MotionTrace) de una sesión.
 pub async fn get_trace(
     State(state): State<Arc<AppState>>,
     Path(id): Path<u64>,
@@ -60,6 +60,43 @@ pub async fn get_trace(
     })?;
     Ok(Json(json))
 }
+
+/// Obtener el ExecutionTrace completo de una sesión.
+pub async fn get_execution_trace(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<u64>,
+) -> Result<Json<Value>, ApiError> {
+    let trace = state
+        .services
+        .sessions
+        .get_execution_trace(id)
+        .await
+        .ok_or_else(|| ApiError::NotFound {
+            message: format!("Execution trace for session {} not found", id),
+        })?;
+    let json = serde_json::to_value(&trace).map_err(|e| ApiError::Internal {
+        message: e.to_string(),
+    })?;
+    Ok(Json(json))
+}
+
+/// Obtener estadísticas computadas de una sesión.
+pub async fn get_session_statistics(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<u64>,
+) -> Result<Json<thalos_runtime::telemetry::analyzer::ExecutionStatistics>, ApiError> {
+    let trace = state
+        .services
+        .sessions
+        .get_execution_trace(id)
+        .await
+        .ok_or_else(|| ApiError::NotFound {
+            message: format!("Execution trace for session {} not found", id),
+        })?;
+    let stats = TraceAnalyzer::analyze(&trace);
+    Ok(Json(stats))
+}
+
 
 /// Resumen de una sesión con estadísticas calculadas del trace.
 #[derive(Debug, Serialize)]

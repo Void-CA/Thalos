@@ -19,7 +19,7 @@ pub use motion_trace::{MotionSample, MotionTrace};
 pub use robot_command::RobotCommand;
 pub use plan::{ActiveMotionPlan, ExecutionSession, MotionType, PlanState, SessionStatus};
 pub use session::{ExecutionSource, SessionData, SessionManager, SessionWithTrace};
-pub use telemetry::{ExecutionEvent, ExecutionSample, ExecutionTrace, TraceMetadata};
+pub use telemetry::{ExecutionEvent, ExecutionObserver, ExecutionRecorder, ExecutionSample, ExecutionStatistics, ExecutionTrace, TraceAnalyzer, TraceMetadata};
 pub use services::scene::SceneService;
 pub use services::singularity::SingularityService;
 pub use services::workspace::WorkspaceService;

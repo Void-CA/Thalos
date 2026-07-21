@@ -26,6 +26,9 @@ use crate::plan::{PlanState, SessionStatus};
 use crate::session::{ExecutionSource, SessionManager};
 use crate::snapshots::{RuntimeSnapshot, TickDelta};
 use crate::state::robot::{ActiveRobot, SceneRuntime};
+use crate::telemetry::{
+    ExecutionObserver, ExecutionRecorder, TraceMetadata,
+};
 
 use std::time::Duration;
 
@@ -33,6 +36,7 @@ use std::time::Duration;
 struct RecordingState {
     session_id: u64,
     recorder: MotionRecorder,
+    execution_recorder: ExecutionRecorder,
     start_time: Duration,
 }
 
@@ -250,26 +254,27 @@ impl SceneService {
                 let runtime = self.runtime.read().await;
                 Self::trajectory_to_waypoints(&runtime)
             };
-            let wps_for_recorder = if !waypoints.is_empty() && duration > 0.0 {
-                let wps = waypoints.clone();
-                let mut c = ctrl.write().await;
-                c.execute(waypoints, duration).await?;
-                wps
-            } else {
-                waypoints.clone()
-            };
 
             // Register session and start recording
             let robot_name = {
                 let runtime = self.runtime.read().await;
                 runtime.robot_name.clone()
             };
+            let source = ExecutionSource::Simulation;
+            let robot_name_clone = robot_name.clone();
+            let wps_for_recorder = waypoints.clone();
             let joint_count = wps_for_recorder.first().map(|w| w.len()).unwrap_or(0);
-            let source = ExecutionSource::Simulation; // Will be Hardware when that's selected
             let session = self
                 .sessions
-                .register(source, "plan-exec".into(), duration, joint_count, robot_name)
+                .register(source.clone(), "plan-exec".into(), duration, joint_count, robot_name)
                 .await;
+
+            // Execute on controller (moves waypoints)
+            let has_wps = !wps_for_recorder.is_empty() && duration > 0.0;
+            if has_wps {
+                let mut c = ctrl.write().await;
+                c.execute(wps_for_recorder.clone(), duration).await?;
+            }
 
             let mut recorder = MotionRecorder::new();
             if !wps_for_recorder.is_empty() {
@@ -277,9 +282,23 @@ impl SceneService {
             }
             recorder.start(std::time::Duration::from_secs_f64(duration));
 
+            let exec_metadata = TraceMetadata {
+                session_id: session.id.to_string(),
+                plan_id: session.plan_id.clone(),
+                source: source,
+                robot_name: robot_name_clone,
+                joint_count,
+                duration: std::time::Duration::from_secs_f64(duration),
+                sample_rate: 0.0,
+            };
+            let mut exec_recorder = ExecutionRecorder::new(exec_metadata);
+            let ts = std::time::Duration::ZERO;
+            ExecutionObserver::on_execution_started(&mut exec_recorder, ts);
+
             *self.recording.write().await = Some(RecordingState {
                 session_id: session.id,
                 recorder,
+                execution_recorder: exec_recorder,
                 start_time: std::time::Duration::ZERO,
             });
 
@@ -370,8 +389,14 @@ impl SceneService {
         let mut recording = self.recording.write().await;
         if let Some(mut rec) = recording.take() {
             let trace = rec.recorder.stop();
+            let ts = std::time::Duration::ZERO;
+            rec.execution_recorder.on_execution_finished(ts);
+            let exec_trace = rec.execution_recorder.trace();
             let status = terminal_status.unwrap_or(crate::plan::SessionStatus::Completed);
             let _ = self.sessions.complete_with_status(rec.session_id, trace, status).await;
+            if let Some(et) = exec_trace {
+                self.sessions.save_execution_trace(rec.session_id, et).await;
+            }
         }
     }
 
@@ -411,13 +436,19 @@ impl SceneService {
                     elapsed
                 };
                 rec_state.recorder.record(timestamp, &state);
+                rec_state.execution_recorder.on_sample(timestamp, &state);
 
                 // Check if execution completed — finalize recording
                 if state.execution.progress >= 1.0
                     || matches!(state.motion.mode, crate::state::robot_state::MotionMode::Idle)
                 {
                     let trace = rec_state.recorder.stop();
+                    rec_state.execution_recorder.on_execution_finished(timestamp);
+                    let exec_trace = rec_state.execution_recorder.trace();
                     self.sessions.complete(rec_state.session_id, trace).await;
+                    if let Some(et) = exec_trace {
+                        self.sessions.save_execution_trace(rec_state.session_id, et).await;
+                    }
                     *recording = None;
                 }
             }

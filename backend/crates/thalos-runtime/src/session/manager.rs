@@ -7,6 +7,7 @@ use tokio::sync::RwLock;
 
 use crate::motion_trace::MotionTrace;
 use crate::plan::session_status::SessionStatus;
+use crate::telemetry::ExecutionTrace;
 
 use super::execution_source::ExecutionSource;
 use super::session_data::{SessionData, SessionWithTrace};
@@ -141,6 +142,22 @@ impl SessionManager {
         let mut result = sessions.clone();
         result.sort_by(|a, b| b.id.cmp(&a.id)); // más reciente primero
         result
+    }
+
+    /// Guardar un `ExecutionTrace` asociado a una sesión.
+    pub async fn save_execution_trace(&self, id: u64, trace: ExecutionTrace) {
+        let dir = self.base_path.join(format!("{:06}", id));
+        let path = dir.join("execution_trace.json");
+        if let Ok(json) = serde_json::to_string_pretty(&trace) {
+            let _ = tokio::fs::write(path, json).await;
+        }
+    }
+
+    /// Obtener el `ExecutionTrace` de una sesión desde disco.
+    pub async fn get_execution_trace(&self, id: u64) -> Option<ExecutionTrace> {
+        let path = self.base_path.join(format!("{:06}", id)).join("execution_trace.json");
+        let content = tokio::fs::read_to_string(path).await.ok()?;
+        serde_json::from_str(&content).ok()
     }
 
     /// Importar un trace como nueva sesión.
