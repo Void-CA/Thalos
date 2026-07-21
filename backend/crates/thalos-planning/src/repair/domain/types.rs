@@ -152,6 +152,28 @@ impl std::fmt::Display for RepairError {
     }
 }
 
+
+/// Estado de un plan de reparación para una región.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RepairPlanStatus {
+    /// Estrategias aplicables generaron candidatos exitosamente.
+    Available,
+    /// Ninguna estrategia es aplicable a esta región.
+    NoStrategyApplicable,
+    /// Estrategias aplicables existieron pero todas fallaron (IK, continuidad, etc.).
+    AllStrategiesFailed,
+}
+
+/// Resultado de planificar reparaciones para una región.
+#[derive(Debug, Clone)]
+pub struct RepairPlan {
+    pub region: ProblemRegion,
+    pub candidates: Vec<RepairCandidate>,
+    /// Índice del candidato recomendado (None si no hay candidatos o si no se determinó).
+    pub recommended: Option<usize>,
+    pub status: RepairPlanStatus,
+}
+
 impl std::error::Error for RepairError {}
 
 // ═════════════════════════════════════════════════════════════════════
@@ -161,7 +183,7 @@ impl std::error::Error for RepairError {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analysis::domain::RegionId;
+use crate::analysis::domain::{ProblemRegion, RegionId};
     use crate::evaluation::metrics::{CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics};
 
     fn default_metrics() -> PlanMetrics {
