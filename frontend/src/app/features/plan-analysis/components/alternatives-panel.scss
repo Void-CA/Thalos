@@ -1,0 +1,321 @@
+@use 'variables' as *;
+
+    .alternatives-panel {
+      font-family: monospace;
+      display: flex;
+      flex-direction: column;
+      gap: $space-sm;
+    }
+
+    .ap__header {
+      display: flex;
+      gap: $space-xs;
+    }
+
+    .ap__btn {
+      font-family: monospace;
+      font-size: $text-base;
+      padding: 0.3rem 0.6rem;
+      border-radius: 3px;
+      border: 1px solid #555;
+      background: #222;
+      color: #ddd;
+      cursor: pointer;
+      transition: background 0.15s;
+
+      &:hover:not(:disabled) { background: #333; }
+      &:disabled { opacity: 0.4; cursor: default; }
+
+    .ap__btn--primary {
+      border-color: #3399ff;
+      color: #3399ff;
+    }
+    .ap__btn--primary:hover:not(:disabled) { background: #1a2a3a; }
+    }
+
+    .ap__error {
+      color: #cc4444;
+      font-size: $text-sm;
+    }
+
+    .ap__empty {
+      text-align: center;
+      font-size: $text-base;
+      opacity: 0.5;
+    }
+
+    .ap__original {
+      display: flex;
+      align-items: center;
+      gap: $space-sm;
+      font-size: $text-base;
+    }
+
+    .ap__label {
+      opacity: 0.6;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: $text-sm;
+    }
+
+    .ap__score {
+      font-weight: 700;
+      font-size: $text-base;
+      min-width: 3ch;
+    .ap__score--original { color: #33ccff; }
+    .ap__score--alt { color: #44cc44; }
+    }
+
+    .ap__delta {
+      font-size: $text-sm;
+    .ap__delta--pos { color: #44cc44; }
+    }
+
+    .ap__bar {
+      flex: 1;
+      height: 5px;
+      background: #333;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .ap__bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    .ap__bar-fill--original { background: #33ccff; }
+    .ap__bar-fill--alt { background: #44cc44; }
+    }
+
+    .ap__list {
+      display: flex;
+      flex-direction: column;
+      gap: $space-xs;
+    }
+
+    .ap__card {
+      display: flex;
+      flex-direction: column;
+      gap: $space-xs;
+      padding: 0.4rem;
+      border-radius: 4px;
+      background: #2a2a2a;
+      border: 1px solid #444;
+      cursor: pointer;
+      transition: border-color 0.15s;
+
+      &:hover { border-color: #666; }
+      &.ap__card--best { border-color: #44cc44; }
+      &.ap__card--selected { border-color: #3399ff; background: #1a2a3a; }
+    }
+
+    .ap__card-header {
+      display: flex;
+      align-items: center;
+      gap: $space-xs;
+      flex-wrap: wrap;
+    }
+
+    .ap__rank {
+      font-weight: 700;
+      color: #44cc44;
+      font-size: $text-base;
+    }
+
+    .ap__vs {
+      font-size: $text-xs;
+      opacity: 0.4;
+      margin-left: auto;
+    }
+
+    .ap__card-body {
+      display: flex;
+      flex-direction: column;
+      gap: $space-xs;
+    }
+
+    .ap__meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: $space-xs;
+      font-size: $text-sm;
+    }
+
+    .ap__meta-item {
+      background: #333;
+      padding: $space-xs $space-xs;
+      border-radius: 2px;
+      color: #aaa;
+    }
+
+    .ap__improvements {
+      display: flex;
+      flex-direction: column;
+      gap: $space-xs;
+    }
+
+    .ap__improvement {
+      font-size: $text-sm;
+      padding: $space-xs $space-xs;
+      border-radius: 2px;
+    .ap__improvement--pos { color: #44cc44; background: #1a3a1a; }
+    }
+
+    .ap__actions {
+      display: flex;
+      gap: $space-xs;
+      margin-top: 0.2rem;
+      padding-top: 0.2rem;
+      border-top: 1px solid #444;
+    }
+
+    .ap__btn {
+      font-family: monospace;
+      font-size: $text-sm;
+      padding: $space-xs $space-sm;
+      border-radius: 3px;
+      border: 1px solid #555;
+      background: transparent;
+      color: #ccc;
+      cursor: pointer;
+
+      &:hover { background: #333; }
+    }
+
+    .ap__btn--preview {
+      border-color: #3399ff;
+      color: #3399ff;
+    }
+
+    .ap__btn--active {
+      background: #1a2a3a;
+      font-weight: 700;
+    }
+
+    .ap__btn--apply {
+      border-color: #44cc44;
+      color: #44cc44;
+    }
+
+    .ap__breakdown {
+      font-size: $text-sm;
+    }
+
+    .ap__breakdown-summary {
+      cursor: pointer;
+      opacity: 0.6;
+      &:hover { opacity: 1; }
+    }
+
+    .ap__breakdown-body {
+      display: flex;
+      flex-direction: column;
+      gap: $space-xs;
+      padding: 0.2rem 0 0 0.5rem;
+    }
+
+    .ap__breakdown-row {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .ap__breakdown-name {
+      opacity: 0.5;
+    }
+
+    .ap__breakdown-val {
+      font-weight: 600;
+    }
+
+    .ap__card {
+      display: flex;
+      flex-direction: column;
+      gap: $space-xs;
+      padding: 0.4rem;
+      border-radius: 4px;
+      background: #2a2a2a;
+      border: 1px solid #444;
+
+    .ap__card--best {
+      border-color: #44cc44;
+    }
+    }
+
+    .ap__card-header {
+      display: flex;
+      align-items: center;
+      gap: $space-xs;
+    }
+
+    .ap__rank {
+      font-weight: 700;
+      color: #44cc44;
+      font-size: $text-base;
+    }
+
+    .ap__card-body {
+      display: flex;
+      flex-direction: column;
+      gap: $space-xs;
+    }
+
+    .ap__meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: $space-xs;
+      font-size: $text-sm;
+    }
+
+    .ap__meta-item {
+      background: #333;
+      padding: $space-xs $space-xs;
+      border-radius: 2px;
+      color: #aaa;
+    }
+
+    .ap__improvements {
+      display: flex;
+      flex-direction: column;
+      gap: $space-xs;
+    }
+
+    .ap__improvement {
+      font-size: $text-sm;
+      padding: $space-xs $space-xs;
+      border-radius: 2px;
+    .ap__improvement--pos { color: #44cc44; background: #1a3a1a; }
+    }
+
+    .ap__bar--alt {
+      height: 4px;
+    }
+
+    .ap__breakdown {
+      font-size: $text-sm;
+    }
+
+    .ap__breakdown-summary {
+      cursor: pointer;
+      opacity: 0.6;
+      &:hover { opacity: 1; }
+    }
+
+    .ap__breakdown-body {
+      display: flex;
+      flex-direction: column;
+      gap: $space-xs;
+      padding: 0.2rem 0 0 0.5rem;
+    }
+
+    .ap__breakdown-row {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .ap__breakdown-name {
+      opacity: 0.5;
+    }
+
+    .ap__breakdown-val {
+      font-weight: 600;
+    }

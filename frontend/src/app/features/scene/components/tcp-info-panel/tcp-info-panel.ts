@@ -43,43 +43,7 @@ import { SceneStore } from '../../store/scene.store';
       }
     </div>
   `,
-  styles: [`
-    .tcp-panel {
-      padding: 0.5rem;
-    }
-    .tcp-panel__info {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-    .tcp-panel__row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.8125rem;
-      padding: 0.125rem 0;
-    }
-    .tcp-panel__label {
-      color: #999;
-    }
-    .tcp-panel__value {
-      color: #ccc;
-      font-weight: 500;
-    }
-    .tcp-panel__value--mono {
-      font-family: 'Consolas', 'Monaco', monospace;
-      font-size: 0.75rem;
-    }
-    .tcp-panel__empty {
-      padding: 0.5rem;
-      text-align: center;
-    }
-    .tcp-panel__hint {
-      margin: 0;
-      color: #777;
-      font-size: 0.8125rem;
-    }
-  `],
+  styleUrl: './tcp-info-panel.scss',
 })
 export class TcpInfoPanel {
   private readonly store = inject(SceneStore);
