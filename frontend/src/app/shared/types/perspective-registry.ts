@@ -40,9 +40,16 @@ export const PERSPECTIVE_REGISTRY: Record<Perspective, PerspectiveConfig> = {
       { id: 'planning', label: 'Motion Planning', component: PlanningPanel as Type<unknown>, defaultOpen: true },
     ],
     bottomTabs: [
-      { id: 'plan-analysis', label: 'Analysis', icon: 'heroClipboardDocumentCheck' },
-      { id: 'alt', label: 'Alternatives', icon: 'heroAdjustmentsVertical' },
+      { id: 'timeline', label: 'Timeline', icon: 'heroClock' },
     ],
+  },
+
+  /** Analysis Workspace — layout propio, no usa el shell clásico */
+  analysis: {
+    showLeftPanel: false,
+    showBottomPanel: false,
+    rightPanel: [],
+    bottomTabs: [],
   },
 
   execution: {
@@ -54,10 +61,7 @@ export const PERSPECTIVE_REGISTRY: Record<Perspective, PerspectiveConfig> = {
     bottomTabs: [
       { id: 'execution-summary', label: 'Summary', icon: 'heroClipboardDocumentCheck' },
       { id: 'timeline', label: 'Timeline', icon: 'heroClock' },
-      { id: 'charts', label: 'Telemetry', icon: 'heroChartBar' },
-      { id: 'execution-findings', label: 'Findings', icon: 'heroAdjustmentsVertical' },
       { id: 'log', label: 'Log', icon: 'heroDocumentText' },
-      { id: 'reasoning', label: 'Reasoning', icon: 'heroRectangleGroup' },
     ],
   },
 
@@ -76,6 +80,7 @@ export const PERSPECTIVE_REGISTRY: Record<Perspective, PerspectiveConfig> = {
 export const PERSPECTIVE_LABELS: Record<Perspective, string> = {
   robot: 'Robot',
   planning: 'Planning',
+  analysis: 'Analysis',
   execution: 'Execution',
   sessions: 'Sessions',
 };
@@ -84,6 +89,7 @@ export const PERSPECTIVE_LABELS: Record<Perspective, string> = {
 export const PERSPECTIVE_ICONS: Record<Perspective, string> = {
   robot: 'heroAdjustmentsVertical',
   planning: 'heroClipboardDocumentList',
+  analysis: 'heroChartBar',
   execution: 'heroPlay',
   sessions: 'heroClock',
 };
