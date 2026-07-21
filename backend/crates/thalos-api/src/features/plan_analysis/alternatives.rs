@@ -7,8 +7,11 @@
 
 use std::sync::Arc;
 
-use axum::{extract::State, Json};
-use serde::{Deserialize, Serialize};
+use axum::{
+    extract::{Path, State},
+    Json,
+};
+use serde::Serialize;
 
 use thalos_core::collision::CollisionMatrix;
 use thalos_collision::NaiveCollisionChecker;
@@ -74,14 +77,6 @@ pub struct MetricBreakdownItem {
     pub value: f64,
 }
 
-/// Cuerpo opcional para inyectar evidencia de ejecución.
-#[derive(Debug, Deserialize)]
-pub struct AlternativesRequest {
-    /// ID de sesión para fusionar execution findings con planning findings.
-    #[serde(default)]
-    pub session_id: Option<u64>,
-}
-
 fn metric_name(key: &thalos_planning::evaluation::metrics::MetricKind) -> &'static str {
     use thalos_planning::evaluation::metrics::MetricKind;
     match key {
@@ -97,7 +92,6 @@ fn metric_name(key: &thalos_planning::evaluation::metrics::MetricKind) -> &'stat
 /// POST /api/v1/plan/analyze/alternatives
 pub async fn analyze_alternatives(
     State(state): State<Arc<AppState>>,
-    Json(body): Json<AlternativesRequest>,
 ) -> ApiResult<AlternativesResponse> {
     let snapshot = state.services.scene.snapshot().await?;
 
@@ -121,21 +115,7 @@ pub async fn analyze_alternatives(
         message: e.to_string(),
     })?;
 
-    // 2. Fusionar planning findings con execution findings si se proporciona session_id
-    let mut findings = original_analysis.findings.clone();
-    if let Some(sid) = body.session_id {
-        if let (Some(mt), Some(et), Some(session)) = (
-            state.services.sessions.get_trace(sid).await,
-            state.services.sessions.get_execution_trace(sid).await,
-            state.services.sessions.get(sid).await,
-        ) {
-            let comparison = comparison::compare(&mt, &et, &session.plan_id, &sid.to_string(), &session.robot_name);
-            let exec_analyzer = RuntimeExecutionAnalyzer::new();
-            let exec_findings = exec_analyzer.analyze(&comparison);
-            findings.extend(exec_findings);
-        }
-    }
-
+    let findings = &original_analysis.findings;
     let original_metrics = PlanEvaluator::compute_metrics(&original_analysis.waypoints);
 
     // 2. Construir CompiledPlan para el generador
@@ -237,6 +217,196 @@ pub async fn analyze_alternatives(
 
     let total = alternatives.len();
 
+    Ok(Json(AlternativesResponse {
+        original_score: original_score.total,
+        original_breakdown,
+        alternatives,
+        total_candidates: total,
+    }))
+}
+
+/// POST /api/v1/plan/regenerate-from-execution/{session_id}
+///
+/// Toma una sesión ejecutada, compara plan vs ejecución, extrae execution findings
+/// y los usa como ProblemRegions para generar nuevas alternativas.
+pub async fn regenerate_from_execution(
+    State(state): State<Arc<AppState>>,
+    Path(sid): Path<u64>,
+) -> ApiResult<AlternativesResponse> {
+    // 1. Cargar traces de la sesión
+    let motion_trace = state
+        .services
+        .sessions
+        .get_trace(sid)
+        .await
+        .ok_or_else(|| ApiError::NotFound {
+            message: format!("MotionTrace for session {} not found", sid),
+        })?;
+
+    let exec_trace = state
+        .services
+        .sessions
+        .get_execution_trace(sid)
+        .await
+        .ok_or_else(|| ApiError::NotFound {
+            message: format!("ExecutionTrace for session {} not found", sid),
+        })?;
+
+    let session = state
+        .services
+        .sessions
+        .get(sid)
+        .await
+        .ok_or_else(|| ApiError::NotFound {
+            message: format!("Session {} not found", sid),
+        })?;
+
+    // 2. Comparar y analizar ejecución
+    let comparison = comparison::compare(
+        &motion_trace,
+        &exec_trace,
+        &session.plan_id,
+        &sid.to_string(),
+        &session.robot_name,
+    );
+
+    let exec_analyzer = RuntimeExecutionAnalyzer::new();
+    let exec_findings = exec_analyzer.analyze(&comparison);
+
+    if exec_findings.is_empty() {
+        return Ok(Json(AlternativesResponse {
+            original_score: 0.0,
+            original_breakdown: vec![],
+            alternatives: vec![],
+            total_candidates: 0,
+        }));
+    }
+
+    // 3. Reconstruir CompiledPlan desde MotionTrace
+    let samples = motion_trace.samples();
+    let trajectory_points: Vec<_> = samples
+        .iter()
+        .map(|s| thalos_core::trajectory::TrajectoryPoint::new(
+            s.joints.clone(),
+            s.timestamp.as_secs_f64(),
+        ))
+        .collect();
+
+    let trajectory = thalos_core::trajectory::Trajectory::new(trajectory_points);
+    let compiled = CompiledPlan {
+        merged_trajectory: trajectory,
+        segments: vec![],
+        duration: comparison.plan_duration,
+        waypoint_count: motion_trace.len(),
+    };
+
+    // 4. Generar alternativas desde execution findings
+    let strategy = PerturbationStrategy::default_mvp();
+    let candidates = AlternativeGenerator::generate(&compiled, &exec_findings, &strategy);
+
+    if candidates.is_empty() {
+        return Ok(Json(AlternativesResponse {
+            original_score: 0.0,
+            original_breakdown: vec![],
+            alternatives: vec![],
+            total_candidates: 0,
+        }));
+    }
+
+    // 5. Evaluar y rankear (usar métricas desde joints, sin TrajectoryAnalyzer
+    //    porque no tenemos acceso al chain en este contexto)
+    let cost_function = CostFunction::defaults();
+    let original_metrics = PlanEvaluator::compute_metrics_from_joints(&compiled.merged_trajectory);
+    let original_score = cost_function.score(&original_metrics);
+
+    let mut scored: Vec<(_, _)> = candidates
+        .into_iter()
+        .map(|c| {
+            let metrics = PlanEvaluator::compute_metrics_from_joints(&c.plan.merged_trajectory);
+            let score = cost_function.score(&metrics);
+            (c, score)
+        })
+        .collect();
+
+    scored.sort_by(|a, b| a.1.total.partial_cmp(&b.1.total).unwrap_or(std::cmp::Ordering::Equal));
+
+    // 6. Convertir a DTOs
+    let original_breakdown: Vec<MetricBreakdownItem> = original_score
+        .breakdown
+        .iter()
+        .map(|(kind, val)| MetricBreakdownItem {
+            name: metric_name(kind).to_string(),
+            value: *val,
+        })
+        .collect();
+
+    let alternatives: Vec<RankedAlternativeDto> = scored
+        .into_iter()
+        .enumerate()
+        .map(|(rank, (candidate, score))| {
+            let improvements: Vec<String> = score
+                .breakdown
+                .iter()
+                .filter_map(|(kind, val)| {
+                    let orig = original_score.breakdown.get(kind).copied().unwrap_or(0.0);
+                    let diff = orig - val;
+                    if diff.abs() > 0.01 {
+                        let label = match kind {
+                            thalos_planning::evaluation::metrics::MetricKind::PathLength => "path length",
+                            thalos_planning::evaluation::metrics::MetricKind::Manipulability => "manipulability",
+                            thalos_planning::evaluation::metrics::MetricKind::JointMargin => "joint margin",
+                            thalos_planning::evaluation::metrics::MetricKind::CollisionRisk => "collision risk",
+                            thalos_planning::evaluation::metrics::MetricKind::Smoothness => "smoothness",
+                            thalos_planning::evaluation::metrics::MetricKind::OrientationChange => "orientation change",
+                        };
+                        Some(if diff > 0.0 {
+                            format!("+{}% better {}", (diff * 100.0).round(), label)
+                        } else {
+                            format!("{}% worse {}", (diff.abs() * 100.0).round(), label)
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            let breakdown: Vec<MetricBreakdownDto> = score
+                .breakdown
+                .iter()
+                .map(|(kind, val)| MetricBreakdownDto {
+                    name: metric_name(kind).to_string(),
+                    original: original_score.breakdown.get(kind).copied().unwrap_or(0.0),
+                    candidate: *val,
+                })
+                .collect();
+
+            RankedAlternativeDto {
+                rank: rank + 1,
+                source_waypoint: candidate.source_waypoint,
+                perturbations: candidate
+                    .perturbations
+                    .iter()
+                    .map(|p| PerturbationDto {
+                        waypoint: p.waypoint,
+                        joint: p.joint,
+                        delta: p.delta,
+                    })
+                    .collect(),
+                score: score.total,
+                original_score: original_score.total,
+                delta_score: original_score.total - score.total,
+                improvement_percent: if original_score.total > 0.0 {
+                    ((original_score.total - score.total) / original_score.total) * 100.0
+                } else {
+                    0.0
+                },
+                improvements,
+                breakdown,
+            }
+        })
+        .collect();
+
+    let total = alternatives.len();
     Ok(Json(AlternativesResponse {
         original_score: original_score.total,
         original_breakdown,

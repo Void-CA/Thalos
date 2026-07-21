@@ -57,6 +57,7 @@ export const PERSPECTIVE_REGISTRY: Record<Perspective, PerspectiveConfig> = {
       { id: 'charts', label: 'Telemetry', icon: 'heroChartBar' },
       { id: 'execution-findings', label: 'Findings', icon: 'heroAdjustmentsVertical' },
       { id: 'log', label: 'Log', icon: 'heroDocumentText' },
+      { id: 'reasoning', label: 'Reasoning', icon: 'heroRectangleGroup' },
     ],
   },
 

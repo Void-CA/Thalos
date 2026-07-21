@@ -25,6 +25,7 @@ const ALL_TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'alt', label: 'Alternatives', icon: 'heroAdjustmentsVertical' },
   { id: 'execution-summary', label: 'Summary', icon: 'heroClipboardDocumentCheck' },
   { id: 'execution-findings', label: 'Findings', icon: 'heroAdjustmentsVertical' },
+  { id: 'reasoning', label: 'Reasoning', icon: 'heroRectangleGroup' },
 ];
 
 const SEGMENT_COLORS = [
@@ -375,6 +376,70 @@ const SEGMENT_COLORS = [
             }
           }
 
+          @if (activeTab() === 'reasoning') {
+            @let r = reasoningState();
+            <div class="reasoning">
+              <div class="reasoning__section">
+                <h4 class="reasoning__section-title">Planning Findings ({{ r.planFindingsCount }})</h4>
+                <div class="reasoning__list">
+                  @for (f of r.planFindings; track $index) {
+                    <div class="reasoning__item">
+                      <span class="reasoning__item-sev {{ 'sev--' + f.severity }}">{{ iconFor(f.severity) }}</span>
+                      <span class="reasoning__item-kind">{{ f.kind }}</span>
+                      <span class="reasoning__item-category" [style.background]="f.catColor">{{ f.catLabel }}</span>
+                      @if (f.waypoint != null) {
+                        <span class="reasoning__item-wp">wp{{ f.waypoint }}</span>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+
+              <div class="reasoning__section">
+                <h4 class="reasoning__section-title">Execution Findings ({{ r.execFindingsCount }})</h4>
+                <div class="reasoning__list">
+                  @for (f of r.execFindings; track $index) {
+                    <div class="reasoning__item">
+                      <span class="reasoning__item-sev {{ 'sev--' + f.severity }}">{{ iconFor(f.severity) }}</span>
+                      <span class="reasoning__item-kind">{{ f.kind }}</span>
+                      <span class="reasoning__item-category" [style.background]="f.catColor">{{ f.catLabel }}</span>
+                      <span class="reasoning__item-val">{{ f.value?.toFixed(3) }}</span>
+                    </div>
+                  }
+                  @if (r.execFindingsCount === 0) {
+                    <span class="reasoning__empty">No execution findings yet. Run a comparison first.</span>
+                  }
+                </div>
+              </div>
+
+              <div class="reasoning__section">
+                <h4 class="reasoning__section-title">ProblemRegions</h4>
+                <div class="reasoning__list">
+                  @for (rgn of r.problemRegions; track $index) {
+                    <div class="reasoning__item">
+                      <span class="reasoning__item-wp">wp{{ rgn.waypoint }}</span>
+                      <span class="reasoning__item-category" [style.background]="rgn.catColor">{{ rgn.catLabel }}</span>
+                      <span class="reasoning__item-sev {{ 'sev--' + rgn.severity }}">{{ rgn.severity }}</span>
+                    </div>
+                  }
+                  @if (r.problemRegions.length === 0) {
+                    <span class="reasoning__empty">No problem regions. No findings to derive from.</span>
+                  }
+                </div>
+              </div>
+
+              <div class="reasoning__section">
+                <h4 class="reasoning__section-title">ExecutionThresholds</h4>
+                <div class="reasoning__thresholds">
+                  <span class="reasoning__threshold">RMSE warn: 0.05 rad</span>
+                  <span class="reasoning__threshold">Spike warn: 0.10 rad</span>
+                  <span class="reasoning__threshold">Joint warn: 0.10 rad</span>
+                  <span class="reasoning__threshold">Velocity warn: 1.0 rad/s</span>
+                </div>
+              </div>
+            </div>
+          }
+
           @if (activeTab() === 'log') {
             @let entries = logEntries();
             @if (entries.length === 0) {
@@ -634,6 +699,57 @@ export class BottomPanel {
   // ── Log ──
 
   protected readonly logEntries = computed(() => this.log.entries());
+
+  // ── Reasoning Inspector ──
+
+  protected readonly reasoningState = computed(() => {
+    const planFindings = this.pa.findings().map(f => ({
+      kind: f.kind,
+      severity: f.severity,
+      waypoint: f.waypoint,
+      value: f.value,
+      catLabel: this.findingCategory(f.kind).label,
+      catColor: this.findingCategory(f.kind).color,
+    }));
+
+    // Execution findings: derive from available data (placeholder for endpoint data)
+    const execFindingsRaw = this.pa.findings().filter(f =>
+      ['tracking_error', 'tracking_spike', 'joint_deviation', 'velocity_deviation'].includes(f.kind)
+    );
+    const execFindings = execFindingsRaw.map(f => ({
+      kind: f.kind,
+      severity: f.severity,
+      value: f.value,
+      catLabel: this.findingCategory(f.kind).label,
+      catColor: this.findingCategory(f.kind).color,
+    }));
+
+    // ProblemRegions: derived from waypoint findings
+    const wpFindings = this.pa.findings().filter(f => f.waypoint != null);
+    const regionMap = new Map<string, { waypoint: number; severity: string; catLabel: string; catColor: string }>();
+    for (const f of wpFindings) {
+      if (f.waypoint == null) continue;
+      const cat = this.findingCategory(f.kind);
+      const key = `wp${f.waypoint}::${cat.label}`;
+      if (!regionMap.has(key)) {
+        regionMap.set(key, {
+          waypoint: f.waypoint,
+          severity: f.severity,
+          catLabel: cat.label,
+          catColor: cat.color,
+        });
+      }
+    }
+    const problemRegions = Array.from(regionMap.values());
+
+    return {
+      planFindingsCount: planFindings.length,
+      execFindingsCount: execFindings.length,
+      planFindings,
+      execFindings,
+      problemRegions,
+    };
+  });
 
   // ── Pipeline Flow Monitor ──
 
