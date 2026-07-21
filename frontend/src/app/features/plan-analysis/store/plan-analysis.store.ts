@@ -3,6 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { PlanAnalysisApiService } from '../services/plan-analysis-api.service';
 import type {
+  AlternativesResponse,
   PlanAnalysisResponse,
   SummaryDto,
   MetricsDto,
@@ -35,6 +36,8 @@ const INITIAL: PlanAnalysisState = {
 export class PlanAnalysisStore {
   private readonly api = inject(PlanAnalysisApiService);
 
+  // ── Analysis state ──
+
   readonly summary = signal<SummaryDto | null>(INITIAL.summary);
   readonly metrics = signal<MetricsDto | null>(INITIAL.metrics);
   readonly waypoints = signal<WaypointAnalysisDto[]>(INITIAL.waypoints);
@@ -65,23 +68,9 @@ export class PlanAnalysisStore {
 
     try {
       const res: PlanAnalysisResponse = await firstValueFrom(this.api.analyzePlan(planId));
-      this.applyResponse(res);
+      this.applyAnalysisResponse(res);
     } catch (err: unknown) {
-      let msg = 'Analysis failed';
-      if (err instanceof HttpErrorResponse) {
-        // Angular HTTP error — extract the semantic message from the backend
-        const body = err.error;
-        msg = (typeof body === 'object' && body !== null)
-          ? ((body as Record<string, unknown>)['error'] as string
-            ?? (body as Record<string, unknown>)['message'] as string
-            ?? `Server error (${err.status})`)
-          : `Server error (${err.status})`;
-      } else if (err instanceof Error) {
-        msg = err.message;
-      } else if (typeof err === 'string') {
-        msg = err;
-      }
-      this.error.set(msg);
+      this.setError(err);
     } finally {
       this.loading.set(false);
     }
@@ -96,13 +85,71 @@ export class PlanAnalysisStore {
     this.recommendations.set([]);
     this.loading.set(false);
     this.error.set(null);
+    this.alternativesData.set(null);
+    this.alternativesLoading.set(false);
+    this.alternativesError.set(null);
   }
 
-  private applyResponse(res: PlanAnalysisResponse): void {
+  private applyAnalysisResponse(res: PlanAnalysisResponse): void {
     this.summary.set(res.summary);
     this.metrics.set(res.metrics);
     this.waypoints.set(res.waypoints ?? []);
     this.findings.set(res.findings);
     this.recommendations.set(res.recommendations);
+  }
+
+  private setError(err: unknown): void {
+    let msg = 'Analysis failed';
+    if (err instanceof HttpErrorResponse) {
+      const body = err.error;
+      msg = (typeof body === 'object' && body !== null)
+        ? ((body as Record<string, unknown>)['error'] as string
+          ?? (body as Record<string, unknown>)['message'] as string
+          ?? `Server error (${err.status})`)
+        : `Server error (${err.status})`;
+    } else if (err instanceof Error) {
+      msg = err.message;
+    } else if (typeof err === 'string') {
+      msg = err;
+    }
+    this.error.set(msg);
+  }
+
+  // ── Alternatives state ──
+
+  readonly alternativesData = signal<AlternativesResponse | null>(null);
+  readonly alternativesLoading = signal(false);
+  readonly alternativesError = signal<string | null>(null);
+  readonly selectedAlternativeRank = signal<number | null>(null);
+
+  /** Generate alternatives for the active plan. */
+  async generateAlternatives(sessionId?: number): Promise<void> {
+    this.alternativesLoading.set(true);
+    this.alternativesError.set(null);
+    this.alternativesData.set(null);
+
+    try {
+      const res = sessionId != null
+        ? await firstValueFrom(this.api.regenerateFromExecution(sessionId))
+        : await firstValueFrom(this.api.generateAlternatives());
+      this.alternativesData.set(res);
+    } catch (err: unknown) {
+      let msg = 'Alternatives generation failed';
+      if (err instanceof HttpErrorResponse) {
+        const body = err.error;
+        msg = (typeof body === 'object' && body !== null)
+          ? ((body as Record<string, unknown>)['error'] as string
+            ?? (body as Record<string, unknown>)['message'] as string
+            ?? `Server error (${err.status})`)
+          : `Server error (${err.status})`;
+      } else if (err instanceof Error) {
+        msg = err.message;
+      } else if (typeof err === 'string') {
+        msg = err;
+      }
+      this.alternativesError.set(msg);
+    } finally {
+      this.alternativesLoading.set(false);
+    }
   }
 }

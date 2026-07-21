@@ -359,6 +359,36 @@
       text-align: center;
     }
 
+    // ── Comparison overlay ──
+
+    &__comparison {
+      display: flex;
+      gap: 0.75rem;
+      padding: 0.3rem 0.4rem;
+      background: $bg-card;
+      border: 1px solid $border-subtle;
+      border-radius: $radius-sm;
+      font-size: 0.65rem;
+      align-items: center;
+    }
+
+    &__cmp-label {
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      opacity: 0.6;
+      font-size: 0.6rem;
+    }
+
+    &__cmp-metric {
+      font-family: $font-mono;
+      font-size: 0.65rem;
+      opacity: 0.7;
+
+      &:nth-child(2) { color: #f97316; }  // RMSE in orange
+      &:nth-child(3) { color: #ef4444; }  // Max error in red
+    }
+
     @keyframes tl-pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.4; }

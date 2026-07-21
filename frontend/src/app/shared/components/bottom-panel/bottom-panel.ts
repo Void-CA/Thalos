@@ -10,10 +10,11 @@ import { LayoutStore } from '../../store/layout.store';
 import { PerspectiveStore } from '../../store/perspective.store';
 import { ExecutionCharts } from '../../../features/execution/execution-charts';
 import { AlternativesPanel } from '../../../features/plan-analysis/components/alternatives-panel';
+import { SessionApiService } from '../../api/session-api.service';
 
 type TabId = 'snapshot' | 'analysis' | 'timeline' | 'plan-analysis'
   | 'log' | 'charts' | 'alt'
-  | 'execution-summary' | 'execution-findings';
+  | 'execution-summary' | 'execution-findings' | 'reasoning';
 
 const ALL_TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'snapshot', label: 'Snapshot', icon: 'heroCamera' },
@@ -287,6 +288,14 @@ const SEGMENT_COLORS = [
                   </div>
                 }
                 @if (plan.isLive) { <span class="tl__live">● LIVE</span> }
+                @if (plan.comparison; as cmp) {
+                  <div class="tl__comparison">
+                    <span class="tl__cmp-label">Comparison</span>
+                    <span class="tl__cmp-metric">RMSE: {{ cmp.rmse.toFixed(4) }} rad</span>
+                    <span class="tl__cmp-metric">Max: {{ cmp.maxError.toFixed(4) }} rad</span>
+                    <span class="tl__cmp-metric">Points: {{ cmp.alignedCount }}</span>
+                  </div>
+                }
               </div>
             }
           }
@@ -592,6 +601,7 @@ export class BottomPanel {
       elapsed: exe?.elapsedSecs != null ? `${exe.elapsedSecs.toFixed(1)}s` : '—',
       duration: duration != null ? `${duration.toFixed(1)}s` : null,
       isLive: effectiveState === 'Active',
+      comparison: null as { rmse: number; maxError: number; alignedCount: number } | null,
     };
   });
 

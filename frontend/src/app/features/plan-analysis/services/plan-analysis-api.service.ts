@@ -24,4 +24,12 @@ export class PlanAnalysisApiService {
       {},
     );
   }
+
+  /** Regenerate alternatives from execution evidence. */
+  regenerateFromExecution(sessionId: number): Observable<AlternativesResponse> {
+    return this.http.post<AlternativesResponse>(
+      `${this.baseUrl}/plan/regenerate-from-execution/${sessionId}`,
+      {},
+    );
+  }
 }

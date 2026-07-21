@@ -83,6 +83,30 @@ export interface ExecutionEventDto {
   Cancelled?: { timestamp: number };
 }
 
+export interface ComparisonMetricsDto {
+  global_rmse: number;
+  global_max_error: number;
+  global_avg_error: number;
+  max_tracking_error: number | null;
+  avg_tracking_error: number | null;
+  aligned_count: number;
+}
+
+export interface SessionComparisonResponse {
+  metrics: ComparisonMetricsDto;
+  findings: FindingDto[];
+  aligned_pair_count: number;
+}
+
+export interface FindingDto {
+  kind: string;
+  severity: string;
+  waypoint: number | null;
+  message: string;
+  value: number | null;
+  threshold: number | null;
+}
+
 export interface ExecutionStatisticsDto {
   duration: number;
   sample_count: number;
@@ -139,6 +163,10 @@ export class SessionApiService {
       trace_json: traceJson,
       robot_name: robotName ?? 'imported',
     } satisfies ImportRequest);
+  }
+
+  getComparison(id: number): Observable<SessionComparisonResponse> {
+    return this.http.get<SessionComparisonResponse>(`${this.baseUrl}/sessions/${id}/comparison`);
   }
 
   getExecutionTrace(id: number): Observable<ExecutionTraceDto> {

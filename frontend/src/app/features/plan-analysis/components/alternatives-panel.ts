@@ -1,6 +1,6 @@
-import { Component, inject, signal } from '@angular/core';
-import { PlanAnalysisApiService } from '../services/plan-analysis-api.service';
-import type { AlternativesResponse, RankedAlternativeDto } from '../plan-analysis-api.types';
+import { Component, inject } from '@angular/core';
+import { PlanAnalysisStore } from '../store/plan-analysis.store';
+import type { RankedAlternativeDto } from '../plan-analysis-api.types';
 
 /**
  * Panel de alternativas — muestra el plan original vs candidatos rankeados.
@@ -13,16 +13,16 @@ import type { AlternativesResponse, RankedAlternativeDto } from '../plan-analysi
   template: `
     <div class="alternatives-panel">
       <div class="ap__header">
-        <button class="ap__btn ap__btn--primary" (click)="generate()" [disabled]="loading()">
-          {{ loading() ? 'Generating…' : 'Generate Alternatives' }}
+        <button class="ap__btn ap__btn--primary" (click)="generate()" [disabled]="store.alternativesLoading()">
+          {{ store.alternativesLoading() ? 'Generating…' : 'Generate Alternatives' }}
         </button>
       </div>
 
-      @if (error()) {
-        <p class="ap__error">{{ error() }}</p>
+      @if (store.alternativesError(); as err) {
+        <p class="ap__error">{{ err }}</p>
       }
 
-      @if (data(); as d) {
+      @if (store.alternativesData(); as d) {
         @if (d.alternatives.length === 0) {
           <p class="ap__empty">No alternatives found. The plan may have no problematic waypoints.</p>
         } @else {
@@ -41,7 +41,7 @@ import type { AlternativesResponse, RankedAlternativeDto } from '../plan-analysi
               <div
                 class="ap__card"
                 [class.ap__card--best]="alt.rank === 1"
-                [class.ap__card--selected]="selectedRank() === alt.rank"
+                [class.ap__card--selected]="store.selectedAlternativeRank() === alt.rank"
                 (click)="selectAlternative(alt.rank)"
               >
                 <div class="ap__card-header">
@@ -86,8 +86,8 @@ import type { AlternativesResponse, RankedAlternativeDto } from '../plan-analysi
                   </details>
 
                   <div class="ap__actions">
-                    <button class="ap__btn ap__btn--preview" [class.ap__btn--active]="selectedRank() === alt.rank" (click)="onPreview(alt); $event.stopPropagation()">
-                      {{ selectedRank() === alt.rank ? '◉ Preview' : '○ Preview' }}
+                    <button class="ap__btn ap__btn--preview" [class.ap__btn--active]="store.selectedAlternativeRank() === alt.rank" (click)="onPreview(alt); $event.stopPropagation()">
+                      {{ store.selectedAlternativeRank() === alt.rank ? '◉ Preview' : '○ Preview' }}
                     </button>
                     <button class="ap__btn ap__btn--apply" (click)="onApply(alt); $event.stopPropagation()">
                       Apply
@@ -424,45 +424,30 @@ import type { AlternativesResponse, RankedAlternativeDto } from '../plan-analysi
   `,
 })
 export class AlternativesPanel {
-  private readonly api = inject(PlanAnalysisApiService);
-
-  protected readonly loading = signal(false);
-  protected readonly error = signal<string | null>(null);
-  protected readonly data = signal<AlternativesResponse | null>(null);
-  protected readonly selectedRank = signal<number | null>(null);
+  protected readonly store = inject(PlanAnalysisStore);
 
   protected generate(): void {
-    this.loading.set(true);
-    this.error.set(null);
+    this.store.generateAlternatives();
+  }
 
-    this.api.generateAlternatives().subscribe({
-      next: (res) => {
-        this.data.set(res);
-        this.loading.set(false);
-      },
-      error: (err) => {
-        this.error.set(err.message ?? 'Failed to generate alternatives');
-        this.loading.set(false);
-      },
-    });
+  protected generateFromSession(sessionId: number): void {
+    this.store.generateAlternatives(sessionId);
   }
 
   protected selectAlternative(rank: number): void {
-    this.selectedRank.set(this.selectedRank() === rank ? null : rank);
+    const current = this.store.selectedAlternativeRank();
+    this.store.selectedAlternativeRank.set(current === rank ? null : rank);
   }
 
   /** Preview an alternative — highlight it and (future) show trajectory in 3D. */
   protected onPreview(alt: RankedAlternativeDto): void {
-    this.selectedRank.set(alt.rank);
+    this.store.selectedAlternativeRank.set(alt.rank);
     // TODO: cargar trayectoria alternativa en el scene viewer
-    // Esto requiere que el backend devuelva los waypoints de cada candidato
   }
 
   /** Apply an alternative — replace active plan with this candidate. */
   protected onApply(alt: RankedAlternativeDto): void {
-    // TODO: endpoint para aplicar una alternativa por ID
-    // Por ahora, solo mostrar que se seleccionó
-    this.selectedRank.set(alt.rank);
+    this.store.selectedAlternativeRank.set(alt.rank);
   }
 
   /** Scale score to percentage bar width. Lower = better, so we invert. */
