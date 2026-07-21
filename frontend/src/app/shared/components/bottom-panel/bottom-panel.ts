@@ -270,9 +270,6 @@ const SEGMENT_COLORS = [
 export class BottomPanel {
   protected readonly scene = inject(SceneStore);
   protected readonly ws = inject(WorkspaceStore);
-  protected readonly pa = inject(PlanAnalysisStore);
-  private readonly focus = inject(FocusService);
-  private readonly planning = inject(PlanningStore);
   protected readonly log = inject(LogStore);
   protected readonly layout = inject(LayoutStore);
   private readonly perspective = inject(PerspectiveStore);
@@ -400,162 +397,9 @@ export class BottomPanel {
     };
   });
 
-  // ── Plan Analysis ──
-
-  /** Badge metadata for the Plan Analysis tab. Null when nothing to show. */
-  protected readonly planAnalysisBadge = computed<{ kind: string; label: string } | null>(() => {
-    const findings = this.pa.findings();
-    if (findings.length === 0) return null;
-
-    const errors = findings.filter(f => f.severity === 'error').length;
-    const warnings = findings.filter(f => f.severity === 'warning').length;
-
-    if (errors > 0) return { kind: 'error', label: `${errors}` };
-    if (warnings > 0) return { kind: 'warn', label: `${warnings}` };
-    return { kind: 'info', label: `${findings.length}` };
-  });
-
-  /** Aggregated plan-analysis view-model. */
-  protected readonly planAnalysis = computed(() => {
-    const summary = this.pa.summary();
-    const metrics = this.pa.metrics();
-    const findings = this.pa.findings();
-    const recommendations = this.pa.recommendations();
-
-    return {
-      hasResult: summary !== null || findings.length > 0,
-      loading: this.pa.loading(),
-      status: summary?.status ?? 'ok',
-      score: summary?.score ?? 0,
-      grade: summary?.grade ?? '',
-      message: summary?.message ?? '',
-      metrics,
-      findings,
-      recommendations,
-    };
-  });
-
-  /** Findings agrupados por kind+severity, con conteo, waypoints y categoría. */
-  protected readonly groupedFindings = computed(() => {
-    const map = new Map<string, {
-      kind: string;
-      severity: string;
-      count: number;
-      waypoints: number[];
-      message: string;
-      categoryLabel: string;
-      categoryColor: string;
-    }>();
-
-    for (const f of this.pa.findings()) {
-      const key = `${f.severity}::${f.kind}`;
-      let g = map.get(key);
-      if (!g) {
-        const cat = this.findingCategory(f.kind);
-        g = {
-          kind: f.kind, severity: f.severity, count: 0,
-          waypoints: [], message: f.message,
-          categoryLabel: cat.label, categoryColor: cat.color,
-        };
-        map.set(key, g);
-      }
-      g.count++;
-      if (f.waypoint != null) {
-        g.waypoints.push(f.waypoint);
-      }
-    }
-
-    // Sort: errors first, then warnings, then info
-    const severityOrder = { error: 0, warning: 1, info: 2 };
-    return Array.from(map.values()).sort(
-      (a, b) => (severityOrder[a.severity as keyof typeof severityOrder] ?? 9)
-                - (severityOrder[b.severity as keyof typeof severityOrder] ?? 9),
-    );
-  });
-
-  // ── Plan Analysis actions ──
-
-  protected onPlanFindingClick(waypoint: number | null): void {
-    if (waypoint == null) return;
-
-    this.focus.focusWaypoint(waypoint);
-
-    // Expandir el segmento que contiene este waypoint en el editor de planning
-    const segments = this.scene.state().activePlan?.segments;
-    if (segments) {
-      const segIdx = segments.findIndex(
-        s => waypoint >= s.waypointStart && waypoint < s.waypointEnd,
-      );
-      if (segIdx >= 0) {
-        this.planning.expandSegment(segIdx);
-      }
-    }
-  }
-
-  protected iconFor(severity: string): string {
-    // Severity indicator: short text label — CSS handles colors and styling
-    switch (severity) {
-      case 'error': return 'ERR';
-      case 'warning': return 'WRN';
-      case 'info': return 'INF';
-      default: return '--';
-    }
-  }
-
   // ── Log ──
 
   protected readonly logEntries = computed(() => this.log.entries());
-
-  // ── Reasoning Inspector ──
-
-  protected readonly reasoningState = computed(() => {
-    const planFindings = this.pa.findings().map(f => ({
-      kind: f.kind,
-      severity: f.severity,
-      waypoint: f.waypoint,
-      value: f.value,
-      catLabel: this.findingCategory(f.kind).label,
-      catColor: this.findingCategory(f.kind).color,
-    }));
-
-    // Execution findings: derive from available data (placeholder for endpoint data)
-    const execFindingsRaw = this.pa.findings().filter(f =>
-      ['tracking_error', 'tracking_spike', 'joint_deviation', 'velocity_deviation'].includes(f.kind)
-    );
-    const execFindings = execFindingsRaw.map(f => ({
-      kind: f.kind,
-      severity: f.severity,
-      value: f.value,
-      catLabel: this.findingCategory(f.kind).label,
-      catColor: this.findingCategory(f.kind).color,
-    }));
-
-    // ProblemRegions: derived from waypoint findings
-    const wpFindings = this.pa.findings().filter(f => f.waypoint != null);
-    const regionMap = new Map<string, { waypoint: number; severity: string; catLabel: string; catColor: string }>();
-    for (const f of wpFindings) {
-      if (f.waypoint == null) continue;
-      const cat = this.findingCategory(f.kind);
-      const key = `wp${f.waypoint}::${cat.label}`;
-      if (!regionMap.has(key)) {
-        regionMap.set(key, {
-          waypoint: f.waypoint,
-          severity: f.severity,
-          catLabel: cat.label,
-          catColor: cat.color,
-        });
-      }
-    }
-    const problemRegions = Array.from(regionMap.values());
-
-    return {
-      planFindingsCount: planFindings.length,
-      execFindingsCount: execFindings.length,
-      planFindings,
-      execFindings,
-      problemRegions,
-    };
-  });
 
   // ── Pipeline Flow Monitor ──
 
@@ -564,13 +408,12 @@ export class BottomPanel {
     const state = this.scene.state();
     const plan = state.activePlan;
     const exe = state.execution;
-    const paHasResult = this.pa.hasResult();
 
     return [
       { id: 'plan', label: 'Plan', done: !!plan, active: !!plan && !exe },
       { id: 'execute', label: 'Execute', done: exe?.status === 'Completed' || exe?.status === 'Failed' || exe?.status === 'Cancelled', active: exe?.status === 'Active' },
       { id: 'compare', label: 'Compare', done: false, active: false },
-      { id: 'knowledge', label: 'Knowledge', done: paHasResult || !!exe, active: paHasResult && !!exe },
+      { id: 'knowledge', label: 'Knowledge', done: !!exe, active: !!exe },
       { id: 'improve', label: 'Improve', done: false, active: false },
     ];
   });
@@ -596,80 +439,11 @@ export class BottomPanel {
       motionType: plan.motionType,
       duration: exe.elapsedSecs ? `${exe.elapsedSecs.toFixed(1)}s` : '—',
       waypoints: plan.visualization?.waypoints.length ?? 0,
-      planFindings: `${this.pa.findings().length}`,
+      planFindings: '—',
       execFindings: '—',
       execCompleted: exe.status === 'Completed',
-      planFindingsCount: this.pa.findings().length,
+      planFindingsCount: 0,
       execFindingsCount: 0,
     };
-  });
-
-  // ── Execution Findings (Sprint 1: placeholders from available data) ──
-
-  /** Mapea un FindingKind a categoría visual. */
-  protected findingCategory(kind: string): { label: string; color: string } {
-    switch (kind) {
-      case 'collision': case 'collision_near': return { label: 'Collision', color: '#ef4444' };
-      case 'low_manipulability': case 'near_singularity': case 'singularity': case 'ik_suggestion':
-        return { label: 'Kinematic', color: '#eab308' };
-      case 'tracking_error': case 'tracking_spike': case 'joint_deviation':
-        return { label: 'Tracking', color: '#f97316' };
-      case 'velocity_deviation': return { label: 'Velocity', color: '#3b82f6' };
-      case 'constraint_violation': return { label: 'Constraint', color: '#a855f7' };
-      default: return { label: 'Unknown', color: '#6b7280' };
-    }
-  }
-
-  /** Hallazgos de ejecución — en Sprint 1 solo planning findings con categoría; en Sprint 2+ se suman execution findings. */
-  protected readonly executionFindings = computed(() => {
-    // Por ahora, mostrar planning findings con categoría como preview.
-    // En Sprint 2, esto se reemplaza con findings del endpoint /sessions/{id}/comparison
-    const findings = this.pa.findings();
-    if (findings.length === 0) return [];
-
-    const map = new Map<string, {
-      kind: string;
-      severity: string;
-      count: number;
-      message: string;
-      value: number | null;
-      categoryLabel: string;
-      categoryColor: string;
-    }>();
-
-    for (const f of findings) {
-      const key = `${f.severity}::${f.kind}`;
-      let g = map.get(key);
-      if (!g) {
-        const cat = this.findingCategory(f.kind);
-        g = {
-          kind: f.kind, severity: f.severity, count: 0,
-          message: f.message, value: f.value ?? null,
-          categoryLabel: cat.label, categoryColor: cat.color,
-        };
-        map.set(key, g);
-      }
-      g.count++;
-      if (!g.message) g.message = f.message;
-    }
-
-    const severityOrder = { error: 0, warning: 1, info: 2 };
-    return Array.from(map.values()).sort(
-      (a, b) => (severityOrder[a.severity as keyof typeof severityOrder] ?? 9)
-                - (severityOrder[b.severity as keyof typeof severityOrder] ?? 9),
-    );
-  });
-
-  /** Badge para la pestaña Execution Findings. */
-  protected readonly executionFindingsBadge = computed<{ kind: string; label: string } | null>(() => {
-    const findings = this.executionFindings();
-    if (findings.length === 0) return null;
-
-    const errors = findings.filter(f => f.severity === 'error').length;
-    const warnings = findings.filter(f => f.severity === 'warning').length;
-
-    if (errors > 0) return { kind: 'error', label: `${errors}` };
-    if (warnings > 0) return { kind: 'warn', label: `${warnings}` };
-    return { kind: 'info', label: `${findings.length}` };
   });
 }

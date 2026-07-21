@@ -1,7 +1,7 @@
 <div class="aw">
-  <!-- ── Header ── -->
+  <!-- ═══ HEADER ═══ -->
   <header class="aw__header">
-    <h1 class="aw__title">Plan Analysis</h1>
+    <h1 class="aw__title">Analysis Dashboard</h1>
     <button class="aw__btn aw__btn--primary" (click)="onReanalyze()" [disabled]="pa.loading()">
       @if (pa.loading()) {
         <span class="aw__spinner"></span> Analyzing…
@@ -12,126 +12,276 @@
   </header>
 
   @if (vm().loading) {
-    <div class="aw__loading">
-      <div class="aw__spinner"></div>
-      <p>Analyzing plan trajectory…</p>
+    <div class="aw__center">
+      <div class="aw__spinner aw__spinner--lg"></div>
+      <p class="aw__center-hint">Analyzing plan trajectory…</p>
     </div>
   } @else if (!vm().hasResult) {
-    <div class="aw__empty">
-      <ng-icon name="heroChartBar" size="32" />
-      <p>No analysis data yet.</p>
-      <p class="aw__empty-hint">Compile a plan in <strong>Planning</strong> mode and click <strong>Re-analyze</strong> to see results here.</p>
+    <div class="aw__center">
+      <ng-icon name="heroChartBar" size="40" />
+      <p class="aw__center-title">No analysis data yet</p>
+      <p class="aw__center-hint">Compile a plan in <strong>Planning</strong> mode and click <strong>Re-analyze</strong>.</p>
     </div>
   } @else {
-    <!-- ═══════════════ SCORE ═══════════════ -->
-    <section class="aw__section">
-      <div class="aw__score-card" [style.--score-color]="scoreColor(vm().score)">
+
+    <!-- ═══════════════ EXECUTIVE SUMMARY ═══════════════ -->
+    <section class="aw__section aw__exec">
+      <!-- Score -->
+      <div class="aw__score" [style.--score-color]="scoreColor(vm().score)">
         <div class="aw__score-value">{{ vm().score }}</div>
         <div class="aw__score-grade">{{ vm().grade }}</div>
         <p class="aw__score-msg">{{ vm().message }}</p>
       </div>
 
-      @let m = vm().metrics;
-      @if (m) {
+      <!-- Severity bar -->
+      @let sd = severityDist();
+      <div class="aw__severity">
+        <div class="aw__severity-bar">
+          @if (sd.errors > 0) {
+            <div class="aw__severity-seg aw__severity-seg--error" [style.width.%]="sd.errPct" title="{{ sd.errors }} errors"></div>
+          }
+          @if (sd.warnings > 0) {
+            <div class="aw__severity-seg aw__severity-seg--warn" [style.width.%]="sd.warnPct" title="{{ sd.warnings }} warnings"></div>
+          }
+          @if (sd.infos > 0) {
+            <div class="aw__severity-seg aw__severity-seg--info" [style.width.%]="sd.infoPct" title="{{ sd.infos }} info"></div>
+          }
+        </div>
+        <div class="aw__severity-legend">
+          @if (sd.errors > 0) { <span class="aw__sev-label aw__sev-label--error">{{ severityIcon('error') }} {{ sd.errors }} critical</span> }
+          @if (sd.warnings > 0) { <span class="aw__sev-label aw__sev-label--warn">{{ severityIcon('warning') }} {{ sd.warnings }} warnings</span> }
+          @if (sd.infos > 0) { <span class="aw__sev-label aw__sev-label--info">{{ severityIcon('info') }} {{ sd.infos }} info</span> }
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ METRIC CARDS ═══════════════ -->
+    @let m = vm().metrics;
+    @if (m) {
+      <section class="aw__section">
         <div class="aw__metrics">
           <div class="aw__metric">
             <span class="aw__metric-label">Duration</span>
-            <span class="aw__metric-value">{{ m.duration.toFixed(1) }}s</span>
+            <span class="aw__metric-value">{{ m.duration.toFixed(1) }}<small>s</small></span>
           </div>
           <div class="aw__metric">
             <span class="aw__metric-label">Waypoints</span>
             <span class="aw__metric-value">{{ m.waypoint_count }}</span>
           </div>
           @if (m.average_manipulability != null) {
-            <div class="aw__metric">
+            <div class="aw__metric" [class.aw__metric--warn]="m.average_manipulability < 0.3" [class.aw__metric--danger]="m.average_manipulability < 0.15">
               <span class="aw__metric-label">Avg Manipulability</span>
-              <span class="aw__metric-value">{{ m.average_manipulability.toFixed(3) }}</span>
-            </div>
-          }
-          @if (m.min_collision_distance != null && m.min_collision_distance > 0) {
-            <div class="aw__metric">
-              <span class="aw__metric-label">Min Clearance</span>
-              <span class="aw__metric-value">{{ (m.min_collision_distance * 1000).toFixed(0) }}mm</span>
+              <span class="aw__metric-value">{{ m.average_manipulability.toFixed(2) }}</span>
             </div>
           }
           @if (m.singular_count > 0) {
             <div class="aw__metric aw__metric--warn">
-              <span class="aw__metric-label">Singular Waypoints</span>
-              <span class="aw__metric-value">{{ m.singular_count }}</span>
+              <span class="aw__metric-label">Singular</span>
+              <span class="aw__metric-value">{{ m.singular_count }} wp</span>
             </div>
           }
-          @if (m.has_collisions) {
-            <div class="aw__metric aw__metric--danger">
-              <span class="aw__metric-label">Collisions</span>
-              <span class="aw__metric-value">DETECTED</span>
+          @if (m.near_singular_count > 0) {
+            <div class="aw__metric">
+              <span class="aw__metric-label">Near Singular</span>
+              <span class="aw__metric-value">{{ m.near_singular_count }} wp</span>
             </div>
           }
-        </div>
-      }
-    </section>
-
-    <!-- ═══════════════ FINDINGS ═══════════════ -->
-    @let groups = groupedFindings();
-    @if (groups.length > 0) {
-      <section class="aw__section">
-        <h2 class="aw__section-title">
-          Findings
-          <span class="aw__badge aw__badge--count">{{ groups.length }}</span>
-        </h2>
-        <div class="aw__findings">
-          @for (g of groups; track g.kind) {
-            <details class="aw__finding-group" open>
-              <summary class="aw__finding-group-header">
-                <span class="aw__finding-sev">{{ iconFor(g.severity) }}</span>
-                <span class="aw__finding-kind">{{ g.kind.replace(/_/g, ' ') }}</span>
-                <span class="aw__finding-cat" [style.background]="g.categoryColor">{{ g.categoryLabel }}</span>
-                <span class="aw__finding-count" [class]="'aw__count--' + g.severity">{{ g.count }}</span>
-              </summary>
-              <div class="aw__finding-group-body">
-                <p class="aw__finding-msg">{{ g.message }}</p>
-                @if (g.waypoints.length > 0) {
-                  <div class="aw__finding-wpts">
-                    @for (wp of g.waypoints; track wp; let i = $index) {
-                      @if (i < 25) {
-                        <button class="aw__finding-wpt" (click)="onFindingClick(wp)">wp{{ wp }}</button>
-                      } @else if (i === 25) {
-                        <span class="aw__finding-more">&hellip; ({{ g.waypoints.length - 25 }} more)</span>
-                      }
-                    }
-                  </div>
-                }
-              </div>
-            </details>
+          @if (m.min_collision_distance != null) {
+            <div class="aw__metric" [class.aw__metric--danger]="m.has_collisions" [class.aw__metric--warn]="!m.has_collisions && m.min_collision_distance < 0.05">
+              <span class="aw__metric-label">Min Clearance</span>
+              <span class="aw__metric-value">{{ (m.min_collision_distance * 1000).toFixed(0) }}mm</span>
+            </div>
           }
         </div>
       </section>
     }
 
+    <!-- ═══════════════ CRITICAL FINDINGS ═══════════════ -->
+    @let critical = criticalFindings();
+    @if (critical.length > 0) {
+      <section class="aw__section">
+        <h2 class="aw__section-title">
+          <span class="aw__section-icon aw__section-icon--danger">✗</span>
+          Critical Findings
+        </h2>
+        <div class="aw__critical-list">
+          @for (f of critical; track $index) {
+            @let cat = findingCategory(f.kind);
+            <div class="aw__critical-card" [style.--cat-color]="cat.color">
+              <div class="aw__critical-head">
+                <span class="aw__critical-sev">{{ severityIcon(f.severity) }}</span>
+                <span class="aw__critical-kind">{{ f.kind.replace(/_/g, ' ') }}</span>
+                <span class="aw__critical-cat" [style.background]="cat.color">{{ cat.label }}</span>
+                @if (f.waypoint != null) {
+                  <span class="aw__critical-wp" (click)="onFindingFocus(f.waypoint)">wp{{ f.waypoint }}</span>
+                }
+              </div>
+              <p class="aw__critical-msg">{{ f.message }}</p>
+              <div class="aw__critical-actions">
+                @if (f.waypoint != null) {
+                  <button class="aw__btn aw__btn--xs" (click)="onFindingFocus(f.waypoint)">○ Focus</button>
+                  <button class="aw__btn aw__btn--xs aw__btn--plan" (click)="onFindingEdit(f.waypoint)">✎ Edit in Planning</button>
+                }
+                @if (f.value != null) {
+                  <span class="aw__critical-val">Value: {{ f.value.toFixed(4) }}</span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </section>
+    }
+
+    <!-- ═══════════════ CATEGORY OVERVIEW ═══════════════ -->
+    @let cats = categories();
+    @if (cats.length > 0) {
+      <section class="aw__section">
+        <h2 class="aw__section-title">
+          <span class="aw__section-icon">◫</span>
+          Finding Categories
+        </h2>
+        <div class="aw__cats">
+          @for (c of cats; track c.label) {
+            <div class="aw__cat-card" [style.--cat-color]="c.color">
+              <div class="aw__cat-header">
+                <span class="aw__cat-label">{{ c.label }}</span>
+                <span class="aw__cat-count">{{ c.total }}</span>
+              </div>
+              <div class="aw__cat-bar">
+                @if (c.errors > 0) {
+                  <div class="aw__cat-bar-seg aw__cat-bar-seg--error" [style.width.%]="(c.errors / c.total) * 100" title="{{ c.errors }} critical"></div>
+                }
+                @if (c.warnings > 0) {
+                  <div class="aw__cat-bar-seg aw__cat-bar-seg--warn" [style.width.%]="(c.warnings / c.total) * 100" title="{{ c.warnings }} warnings"></div>
+                }
+                @if (c.infos > 0) {
+                  <div class="aw__cat-bar-seg aw__cat-bar-seg--info" [style.width.%]="(c.infos / c.total) * 100" title="{{ c.infos }} info"></div>
+                }
+              </div>
+              @if (c.errors > 0 || c.warnings > 0) {
+                <div class="aw__cat-sev">
+                  @if (c.errors > 0) { <span class="aw__sev-dot aw__sev-dot--error">{{ c.errors }}</span> }
+                  @if (c.warnings > 0) { <span class="aw__sev-dot aw__sev-dot--warn">{{ c.warnings }}</span> }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </section>
+    }
+
+    <!-- ═══════════════ SCORE BREAKDOWN ═══════════════ -->
+    @let breakdown = scoreBreakdown();
+    @if (breakdown) {
+      <section class="aw__section">
+        <h2 class="aw__section-title">
+          <span class="aw__section-icon">▦</span>
+          Score Breakdown
+        </h2>
+        <div class="aw__breakdown">
+          @for (b of breakdown.items; track b.name) {
+            <div class="aw__br-row">
+              <span class="aw__br-label">{{ b.name }}</span>
+              <div class="aw__br-track">
+                <div class="aw__br-fill" [style.width.%]="b.pct" [style.background]="b.pct > 60 ? '#44cc44' : b.pct > 30 ? '#eab308' : '#ef4444'"></div>
+              </div>
+              <span class="aw__br-val">{{ b.value.toFixed(2) }}</span>
+            </div>
+          }
+        </div>
+      </section>
+    }
+
+    <!-- ═══════════════ PROBLEM REGIONS ═══════════════ -->
+    @let regions = problemRegions();
+    @if (regions.length > 0) {
+      <section class="aw__section">
+        <h2 class="aw__section-title">
+          <span class="aw__section-icon">⟐</span>
+          Problem Regions
+          <span class="aw__badge">{{ regions.length }}</span>
+        </h2>
+        <div class="aw__regions">
+          @for (r of regions; track r.waypoint) {
+            <div class="aw__region" (click)="onFindingFocus(r.waypoint)">
+              <div class="aw__region-head">
+                <span class="aw__region-wp">wp{{ r.waypoint }}</span>
+                <span class="aw__region-sev {{ 'aw__sev--' + r.severity }}">{{ severityIcon(r.severity) }} {{ r.severity }}</span>
+                <span class="aw__region-count">{{ r.count }} finding{{ r.count !== 1 ? 's' : '' }}</span>
+              </div>
+              <div class="aw__region-bar-track">
+                <div class="aw__region-bar-fill" [style.width.%]="r.pct" [class]="'aw__bar--' + r.severity"></div>
+              </div>
+              <div class="aw__region-kinds">
+                @for (k of r.kinds.slice(0, 3); track k) {
+                  <span class="aw__region-kind">{{ k.replace(/_/g, ' ') }}</span>
+                }
+                @if (r.kinds.length > 3) {
+                  <span class="aw__region-more">+{{ r.kinds.length - 3 }}</span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </section>
+    }
+
+    <!-- ═══════════════ ALL FINDINGS (collapsible) ═══════════════ -->
+    @let all = fullFindings();
+    @if (all.length > critical.length) {
+      <section class="aw__section">
+        <details class="aw__all-findings">
+          <summary class="aw__all-summary">
+            <span class="aw__section-title" style="margin:0">All Findings</span>
+            <span class="aw__badge">{{ all.length }}</span>
+            <span class="aw__all-chevron"></span>
+          </summary>
+          <div class="aw__all-list">
+            @for (f of all; track $index) {
+              @let cat = findingCategory(f.kind);
+              <div class="aw__all-item">
+                <span class="aw__all-sev {{ 'aw__sev--' + f.severity }}">{{ severityIcon(f.severity) }}</span>
+                <span class="aw__all-kind">{{ f.kind.replace(/_/g, ' ') }}</span>
+                <span class="aw__all-cat" [style.background]="cat.color">{{ cat.label }}</span>
+                @if (f.waypoint != null) {
+                  <button class="aw__all-wp" (click)="onFindingFocus(f.waypoint)">wp{{ f.waypoint }}</button>
+                }
+                <span class="aw__all-msg">{{ f.message }}</span>
+                @if (f.value != null) { <span class="aw__all-val">{{ f.value.toFixed(3) }}</span> }
+              </div>
+            }
+          </div>
+        </details>
+      </section>
+    }
+
     <!-- ═══════════════ RECOMMENDATIONS ═══════════════ -->
-    @let recs = groupedRecommendations();
+    @let recs = groupedRecs();
     @if (recs.high.length > 0 || recs.medium.length > 0 || recs.low.length > 0) {
       <section class="aw__section">
-        <h2 class="aw__section-title">Recommendations</h2>
+        <h2 class="aw__section-title">
+          <span class="aw__section-icon">⚑</span>
+          Recommendations
+        </h2>
         <div class="aw__recs">
           @for (r of recs.high; track $index) {
-            <div class="aw__rec aw__rec--high" (click)="onRecommendationClick(r.waypoint)">
-              <span class="aw__rec-impact">HIGH</span>
+            <div class="aw__rec aw__rec--high" (click)="onFindingFocus(r.waypoint)">
+              <span class="aw__rec-badge aw__rec-badge--high">HIGH</span>
               <span class="aw__rec-msg">{{ r.message }}</span>
-              @if (r.waypoint != null) { <span class="aw__rec-wp">wp{{ r.waypoint }}</span> }
+              @if (r.waypoint != null) { <button class="aw__rec-wp" (click)="onFindingEdit(r.waypoint); $event.stopPropagation()">wp{{ r.waypoint }}</button> }
             </div>
           }
           @for (r of recs.medium; track $index) {
-            <div class="aw__rec aw__rec--medium" (click)="onRecommendationClick(r.waypoint)">
-              <span class="aw__rec-impact">MED</span>
+            <div class="aw__rec aw__rec--medium">
+              <span class="aw__rec-badge aw__rec-badge--med">MED</span>
               <span class="aw__rec-msg">{{ r.message }}</span>
-              @if (r.waypoint != null) { <span class="aw__rec-wp">wp{{ r.waypoint }}</span> }
+              @if (r.waypoint != null) { <button class="aw__rec-wp" (click)="onFindingFocus(r.waypoint); $event.stopPropagation()">wp{{ r.waypoint }}</button> }
             </div>
           }
           @for (r of recs.low; track $index) {
-            <div class="aw__rec aw__rec--low" (click)="onRecommendationClick(r.waypoint)">
-              <span class="aw__rec-impact">LOW</span>
+            <div class="aw__rec aw__rec--low">
+              <span class="aw__rec-badge aw__rec-badge--low">LOW</span>
               <span class="aw__rec-msg">{{ r.message }}</span>
-              @if (r.waypoint != null) { <span class="aw__rec-wp">wp{{ r.waypoint }}</span> }
             </div>
           }
         </div>
@@ -140,74 +290,21 @@
 
     <!-- ═══════════════ ALTERNATIVES ═══════════════ -->
     <section class="aw__section">
-      <h2 class="aw__section-title">Alternative Plans</h2>
+      <h2 class="aw__section-title">
+        <span class="aw__section-icon">⇅</span>
+        Alternative Plans
+      </h2>
       <alternatives-panel />
     </section>
 
     <!-- ═══════════════ CHARTS ═══════════════ -->
     <section class="aw__section">
-      <h2 class="aw__section-title">Telemetry & Charts</h2>
+      <h2 class="aw__section-title">
+        <span class="aw__section-icon">▦</span>
+        Telemetry Charts
+      </h2>
       <execution-charts />
     </section>
 
-    <!-- ═══════════════ EVIDENCE / REASONING ═══════════════ -->
-    @let rs = reasoningState();
-    <section class="aw__section">
-      <h2 class="aw__section-title">Reasoning & Evidence</h2>
-      <div class="aw__evidence">
-        <!-- Plan findings summary -->
-        <div class="aw__evidence-card">
-          <h3 class="aw__evidence-card-title">Planning Findings ({{ rs.planFindingsCount }})</h3>
-          <div class="aw__evidence-list">
-            @for (f of rs.planFindings; track $index) {
-              <div class="aw__evidence-item" (click)="onFindingClick(f.waypoint ?? null)">
-                <span class="aw__item-sev {{ 'aw__sev--' + f.severity }}">{{ iconFor(f.severity) }}</span>
-                <span class="aw__item-kind">{{ f.kind.replace(/_/g, ' ') }}</span>
-                <span class="aw__item-cat" [style.background]="f.catColor">{{ f.catLabel }}</span>
-                @if (f.waypoint != null) { <span class="aw__item-wp">wp{{ f.waypoint }}</span> }
-              </div>
-            }
-            @if (rs.planFindings.length === 0) {
-              <span class="aw__evidence-empty">No planning findings.</span>
-            }
-          </div>
-        </div>
-
-        <!-- Problem regions -->
-        <div class="aw__evidence-card">
-          <h3 class="aw__evidence-card-title">Problem Regions ({{ rs.problemRegions.length }})</h3>
-          <div class="aw__evidence-list">
-            @for (rgn of rs.problemRegions; track $index) {
-              <div class="aw__evidence-item" (click)="onFindingClick(rgn.waypoint)">
-                <span class="aw__item-wp">wp{{ rgn.waypoint }}</span>
-                <span class="aw__item-cat" [style.background]="rgn.catColor">{{ rgn.catLabel }}</span>
-                <span class="aw__item-sev {{ 'aw__sev--' + rgn.severity }}">{{ rgn.severity }}</span>
-              </div>
-            }
-            @if (rs.problemRegions.length === 0) {
-              <span class="aw__evidence-empty">No problem regions identified.</span>
-            }
-          </div>
-        </div>
-
-        <!-- Execution findings -->
-        @let execF = executionFindings();
-        @if (execF.length > 0) {
-          <div class="aw__evidence-card">
-            <h3 class="aw__evidence-card-title">Execution Findings ({{ execF.length }})</h3>
-            <div class="aw__evidence-list">
-              @for (g of execF; track g.kind) {
-                <div class="aw__evidence-item">
-                  <span class="aw__item-sev {{ 'aw__sev--' + g.severity }}">{{ iconFor(g.severity) }}</span>
-                  <span class="aw__item-kind">{{ g.kind.replace(/_/g, ' ') }}</span>
-                  <span class="aw__item-cat" [style.background]="g.categoryColor">{{ g.categoryLabel }}</span>
-                  @if (g.value != null) { <span class="aw__item-val">{{ g.value.toFixed(3) }}</span> }
-                </div>
-              }
-            </div>
-          </div>
-        }
-      </div>
-    </section>
   }
 </div>

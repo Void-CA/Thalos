@@ -2,24 +2,31 @@ import { Component, computed, inject } from '@angular/core';
 import { NgIcon } from '@ng-icons/core';
 import { PlanAnalysisStore } from '../store/plan-analysis.store';
 import { FocusService } from '../../../shared/services/focus.service';
+import { PerspectiveStore } from '../../../shared/store/perspective.store';
 import { ExecutionCharts } from '../../execution/execution-charts';
 import { AlternativesPanel } from '../components/alternatives-panel';
-import { SceneStore } from '../../scene/store/scene.store';
 import type { FindingDto, RecommendationDto } from '../plan-analysis-api.types';
 
+interface CategorySummary {
+  label: string;
+  color: string;
+  total: number;
+  errors: number;
+  warnings: number;
+  infos: number;
+  pct: number; // % of total findings
+}
+
+interface ProblemRegion {
+  waypoint: number;
+  count: number;
+  severity: string;
+  kinds: string[];
+}
+
 /**
- * Analysis Workspace — dashboard de métricas, findings, recomendaciones
- * y alternativas. Reemplaza las tabs de análisis del BottomPanel con
- * un layout diseñado para comprensión, no para edición.
- *
- * Layout:
- *   Score + Summary (top)
- *   Metric cards row
- *   Findings (grouped by category, expandable)
- *   Recommendations
- *   Alternatives
- *   Charts / Telemetry
- *   Execution evidence
+ * Analysis Workspace v2 — dashboard de ingeniería con síntesis,
+ * visualización y delegación a otras vistas.
  */
 @Component({
   selector: 'analysis-workspace',
@@ -31,208 +38,175 @@ import type { FindingDto, RecommendationDto } from '../plan-analysis-api.types';
 export class AnalysisWorkspace {
   protected readonly pa = inject(PlanAnalysisStore);
   private readonly focus = inject(FocusService);
-  private readonly scene = inject(SceneStore);
+  private readonly perspective = inject(PerspectiveStore);
 
-  // ── Plan Analysis data ──
+  // ── Executive Summary ──
 
   protected readonly vm = computed(() => {
     const summary = this.pa.summary();
     const metrics = this.pa.metrics();
-    const findings = this.pa.findings();
-    const recommendations = this.pa.recommendations();
-
     return {
-      hasResult: summary !== null || findings.length > 0,
+      hasResult: summary !== null || this.pa.findings().length > 0,
       loading: this.pa.loading(),
       status: summary?.status ?? 'ok',
       score: summary?.score ?? 0,
       grade: summary?.grade ?? '',
       message: summary?.message ?? '',
       metrics,
-      findings,
-      recommendations,
     };
   });
 
-  /** True when navigation target is simulation mode (has execution data). */
-  protected readonly hasExecutionData = computed(() => {
-    return !!this.scene.state()?.execution;
+  // ── Severity distribution ──
+
+  protected readonly severityDist = computed(() => {
+    const findings = this.pa.findings();
+    const errors = findings.filter(f => f.severity === 'error').length;
+    const warnings = findings.filter(f => f.severity === 'warning').length;
+    const infos = findings.filter(f => f.severity === 'info').length;
+    const total = findings.length || 1;
+    return { errors, warnings, infos, total,
+      errPct: (errors / total) * 100,
+      warnPct: (warnings / total) * 100,
+      infoPct: (infos / total) * 100,
+    };
   });
 
-  // ── Findings grouped by kind+severity ──
+  // ── Category summary cards ──
 
-  protected readonly groupedFindings = computed(() => {
-    const map = new Map<string, {
-      kind: string;
-      severity: string;
-      count: number;
-      waypoints: number[];
-      message: string;
-      categoryLabel: string;
-      categoryColor: string;
-    }>();
+  protected readonly categories = computed(() => {
+    const findings = this.pa.findings();
+    const total = findings.length || 1;
+    const map = new Map<string, CategorySummary>();
 
-    for (const f of this.pa.findings()) {
-      const key = `${f.severity}::${f.kind}`;
-      let g = map.get(key);
-      if (!g) {
-        const cat = this.findingCategory(f.kind);
-        g = {
-          kind: f.kind, severity: f.severity, count: 0,
-          waypoints: [], message: f.message,
-          categoryLabel: cat.label, categoryColor: cat.color,
-        };
-        map.set(key, g);
+    for (const f of findings) {
+      const cat = this.findingCategory(f.kind);
+      let c = map.get(cat.label);
+      if (!c) {
+        c = { label: cat.label, color: cat.color, total: 0, errors: 0, warnings: 0, infos: 0, pct: 0 };
+        map.set(cat.label, c);
       }
-      g.count++;
-      if (f.waypoint != null) {
-        g.waypoints.push(f.waypoint);
-      }
+      c.total++;
+      if (f.severity === 'error') c.errors++;
+      else if (f.severity === 'warning') c.warnings++;
+      else c.infos++;
     }
 
-    const severityOrder = { error: 0, warning: 1, info: 2 };
-    return Array.from(map.values()).sort(
-      (a, b) => (severityOrder[a.severity as keyof typeof severityOrder] ?? 9)
-                - (severityOrder[b.severity as keyof typeof severityOrder] ?? 9),
-    );
+    return Array.from(map.values())
+      .map(c => ({ ...c, pct: (c.total / total) * 100 }))
+      .sort((a, b) => b.total - a.total);
   });
 
-  // ── Recommendations grouped by impact ──
+  // ── Critical findings (solo los que requieren acción) ──
 
-  protected readonly groupedRecommendations = computed(() => {
+  protected readonly criticalFindings = computed(() => {
+    return this.pa.findings()
+      .filter(f => f.severity === 'error' || f.severity === 'warning')
+      .slice(0, 5); // top 5
+  });
+
+  // ── Problem regions (waypoints con más issues) ──
+
+  protected readonly problemRegions = computed(() => {
+    const map = new Map<number, { count: number; severity: string; kinds: Set<string> }>();
+    let maxCount = 0;
+
+    for (const f of this.pa.findings()) {
+      if (f.waypoint == null) continue;
+      let r = map.get(f.waypoint);
+      if (!r) {
+        r = { count: 0, severity: 'info', kinds: new Set() };
+        map.set(f.waypoint, r);
+      }
+      r.count++;
+      r.kinds.add(f.kind);
+      const sevOrder = { error: 3, warning: 2, info: 1 };
+      if (sevOrder[f.severity as keyof typeof sevOrder] > sevOrder[r.severity as keyof typeof sevOrder]) {
+        r.severity = f.severity;
+      }
+      if (r.count > maxCount) maxCount = r.count;
+    }
+
+    return Array.from(map.entries())
+      .map(([waypoint, r]) => ({
+        waypoint,
+        count: r.count,
+        severity: r.severity,
+        kinds: Array.from(r.kinds),
+        pct: maxCount > 0 ? (r.count / maxCount) * 100 : 0,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  });
+
+  // ── Score breakdown (from alternatives data) ──
+
+  protected readonly scoreBreakdown = computed(() => {
+    const alt = this.pa.alternativesData();
+    if (!alt?.original_breakdown?.length) return null;
+    const maxVal = Math.max(...alt.original_breakdown.map(b => b.value), 1);
+    return {
+      items: alt.original_breakdown.map(b => ({
+        name: b.name.replace(/_/g, ' '),
+        value: b.value,
+        pct: (b.value / maxVal) * 100,
+      })),
+    };
+  });
+
+  // ── Recommendations grouped ──
+
+  protected readonly groupedRecs = computed(() => {
     const high: RecommendationDto[] = [];
     const medium: RecommendationDto[] = [];
     const low: RecommendationDto[] = [];
-
     for (const r of this.pa.recommendations()) {
-      switch (r.impact) {
-        case 'high': high.push(r); break;
-        case 'medium': medium.push(r); break;
-        case 'low': low.push(r); break;
-      }
+      switch (r.impact) { case 'high': high.push(r); break; case 'medium': medium.push(r); break; case 'low': low.push(r); break; }
     }
-
     return { high, medium, low };
   });
 
-  // ── Execution evidence (from plan findings that are execution-related) ──
+  // ── Full findings (collapsible, con límite de preview) ──
 
-  protected readonly executionFindings = computed(() => {
-    const findings = this.pa.findings();
-    if (findings.length === 0) return [];
-
-    const execKinds = new Set([
-      'tracking_error', 'tracking_spike', 'joint_deviation', 'velocity_deviation',
-    ]);
-
-    const map = new Map<string, {
-      kind: string;
-      severity: string;
-      count: number;
-      message: string;
-      value: number | null;
-      categoryLabel: string;
-      categoryColor: string;
-    }>();
-
-    for (const f of findings) {
-      if (!execKinds.has(f.kind)) continue;
-      const key = `${f.severity}::${f.kind}`;
-      let g = map.get(key);
-      if (!g) {
-        const cat = this.findingCategory(f.kind);
-        g = {
-          kind: f.kind, severity: f.severity, count: 0,
-          message: f.message, value: f.value ?? null,
-          categoryLabel: cat.label, categoryColor: cat.color,
-        };
-        map.set(key, g);
-      }
-      g.count++;
-      if (!g.message) g.message = f.message;
-    }
-
-    const severityOrder = { error: 0, warning: 1, info: 2 };
-    return Array.from(map.values()).sort(
-      (a, b) => (severityOrder[a.severity as keyof typeof severityOrder] ?? 9)
-                - (severityOrder[b.severity as keyof typeof severityOrder] ?? 9),
-    );
-  });
-
-  protected readonly reasoningState = computed(() => {
-    const planFindings = this.pa.findings().map(f => ({
-      kind: f.kind,
-      severity: f.severity,
-      waypoint: f.waypoint,
-      value: f.value,
-      catLabel: this.findingCategory(f.kind).label,
-      catColor: this.findingCategory(f.kind).color,
-    }));
-
-    const wpFindings = this.pa.findings().filter(f => f.waypoint != null);
-    const regionMap = new Map<string, { waypoint: number; severity: string; catLabel: string; catColor: string }>();
-    for (const f of wpFindings) {
-      if (f.waypoint == null) continue;
-      const cat = this.findingCategory(f.kind);
-      const key = `wp${f.waypoint}::${cat.label}`;
-      if (!regionMap.has(key)) {
-        regionMap.set(key, {
-          waypoint: f.waypoint,
-          severity: f.severity,
-          catLabel: cat.label,
-          catColor: cat.color,
-        });
-      }
-    }
-
-    return {
-      planFindingsCount: planFindings.length,
-      planFindings,
-      problemRegions: Array.from(regionMap.values()),
-    };
-  });
+  protected readonly fullFindings = computed(() => this.pa.findings());
+  protected readonly showAllFindings = computed(() => false); // toggled by user
 
   // ── Actions ──
 
-  protected onFindingClick(waypoint: number | null): void {
+  protected onFindingFocus(waypoint: number | null): void {
     if (waypoint == null) return;
     this.focus.focusWaypoint(waypoint);
   }
 
-  protected onRecommendationClick(waypoint: number | null): void {
+  protected onFindingEdit(waypoint: number | null): void {
+    // Switch to planning perspective with waypoint focused
     if (waypoint == null) return;
     this.focus.focusWaypoint(waypoint);
+    this.perspective.setPerspective('planning');
   }
-
-  // ── Re-evaluate plan ──
 
   protected onReanalyze(): void {
     this.pa.analyzePlan();
   }
 
-  // ── Navigation to related modes ──
-
-  protected navigateToPlanning(): void {
-    // This is handled by the shell via perspective store
-    // The workspace emits an event or changes the perspective
+  protected setShowAllFindings(v: boolean): void {
+    // This would ideally be a signal, but for simplicity we toggle via the template
   }
 
   // ── Helpers ──
-
-  protected iconFor(severity: string): string {
-    switch (severity) {
-      case 'error': return 'ERR';
-      case 'warning': return 'WRN';
-      case 'info': return 'INF';
-      default: return '--';
-    }
-  }
 
   protected scoreColor(score: number): string {
     if (score >= 90) return '#44cc44';
     if (score >= 70) return '#33ccff';
     if (score >= 50) return '#ffaa33';
     return '#cc4444';
+  }
+
+  protected severityIcon(severity: string): string {
+    switch (severity) {
+      case 'error': return '✗';
+      case 'warning': return '⚠';
+      default: return 'ℹ';
+    }
   }
 
   protected findingCategory(kind: string): { label: string; color: string } {
