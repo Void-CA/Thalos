@@ -8,6 +8,8 @@
 //!
 //! Produce un [`PlanAnalysis`] con datos por waypoint y métricas agregadas.
 
+pub mod domain;
+
 use thalos_core::{
     analysis::constraints::{Constraint, ConstraintEvaluator, ConstraintViolation},
     collision::{CollisionBodyBuilder, CollisionChecker, CollisionMatrix, EntityId},
