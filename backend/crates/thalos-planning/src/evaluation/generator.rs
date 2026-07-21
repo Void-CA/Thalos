@@ -20,7 +20,7 @@ use crate::motion::program::CompiledPlan;
 
 /// Categoría de una región problemática — agrupa `FindingKind` en familias
 /// de estrategias de búsqueda.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RegionCategory {
     /// Colisiones o proximidad a obstáculos.
     Collision,
@@ -335,62 +335,6 @@ impl AlternativeGenerator {
 
     fn make_candidate(id: usize, source_wp: usize, perturbations: Vec<Perturbation>, plan: CompiledPlan) -> AlternativeCandidate {
         AlternativeCandidate { id, source_waypoint: source_wp, perturbations, plan }
-    }
-
-    /// Aplicar perturbación a una trayectoria completa (clona si es necesario).
-    fn apply_perturbation_to_trajectory(
-        trajectory: &thalos_core::trajectory::Trajectory,
-        waypoint_idx: usize,
-        joint_idx: usize,
-        delta: f64,
-    ) -> thalos_core::trajectory::Trajectory {
-        let original = trajectory.waypoints();
-        let mut new_waypoints: Vec<thalos_core::trajectory::TrajectoryPoint> = Vec::with_capacity(original.len());
-        for (i, wp) in original.iter().enumerate() {
-            if i == waypoint_idx {
-                let mut joints = wp.joints().to_vec();
-                if joint_idx < joints.len() {
-                    joints[joint_idx] += delta;
-                }
-                new_waypoints.push(thalos_core::trajectory::TrajectoryPoint::new(joints, wp.timestamp()));
-            } else {
-                new_waypoints.push(thalos_core::trajectory::TrajectoryPoint::new(wp.joints().to_vec(), wp.timestamp()));
-            }
-        }
-        thalos_core::trajectory::Trajectory::new(new_waypoints)
-    }
-
-    /// Aplicar una perturbación articular a un waypoint específico.
-    fn apply_perturbation(
-        plan: &CompiledPlan,
-        waypoint_idx: usize,
-        joint_idx: usize,
-        delta: f64,
-    ) -> CompiledPlan {
-        let original = plan.merged_trajectory.waypoints();
-        let mut new_waypoints: Vec<TrajectoryPoint> = Vec::with_capacity(original.len());
-
-        for (i, wp) in original.iter().enumerate() {
-            if i == waypoint_idx {
-                let mut joints = wp.joints().to_vec();
-                if joint_idx < joints.len() {
-                    joints[joint_idx] += delta;
-                }
-                new_waypoints.push(TrajectoryPoint::new(joints, wp.timestamp()));
-            } else {
-                new_waypoints.push(TrajectoryPoint::new(
-                    wp.joints().to_vec(),
-                    wp.timestamp(),
-                ));
-            }
-        }
-
-        CompiledPlan {
-            merged_trajectory: Trajectory::new(new_waypoints),
-            segments: plan.segments.clone(),
-            duration: plan.duration,
-            waypoint_count: plan.waypoint_count,
-        }
     }
 
     /// Evaluar y rankear una lista de candidatos contra el plan original.
