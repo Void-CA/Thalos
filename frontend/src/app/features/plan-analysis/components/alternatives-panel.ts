@@ -55,9 +55,10 @@ import type { RankedAlternativeDto } from '../plan-analysis-api.types';
 
                 <div class="ap__card-body">
                   <div class="ap__meta">
-                    <span class="ap__meta-item">Waypoint {{ alt.source_waypoint }}</span>
-                    @for (p of alt.perturbations; track p.joint) {
-                      <span class="ap__meta-item">J{{ p.joint }} {{ p.delta > 0 ? '+' : '' }}{{ p.delta.toFixed(3) }}</span>
+                    @let wpRange = perturbationRange(alt.perturbations);
+                    <span class="ap__meta-item">Waypoints {{ wpRange.min }}{{ wpRange.max > wpRange.min ? '–' + wpRange.max : '' }}</span>
+                    @for (g of groupPerturbations(alt.perturbations); track $index) {
+                      <span class="ap__meta-item">J{{ g.joint }} {{ g.delta > 0 ? '+' : '' }}{{ g.delta.toFixed(3) }}{{ g.count > 1 ? ' \u00d7 ' + g.count : '' }}</span>
                     }
                   </div>
 
@@ -87,7 +88,7 @@ import type { RankedAlternativeDto } from '../plan-analysis-api.types';
 
                   <div class="ap__actions">
                     <button class="ap__btn ap__btn--preview" [class.ap__btn--active]="store.selectedAlternativeRank() === alt.rank" (click)="onPreview(alt); $event.stopPropagation()">
-                      {{ store.selectedAlternativeRank() === alt.rank ? '◉ Preview' : '○ Preview' }}
+                      {{ store.selectedAlternativeRank() === alt.rank ? 'Previewed' : 'Preview' }}
                     </button>
                     <button class="ap__btn ap__btn--apply" (click)="onApply(alt); $event.stopPropagation()">
                       Apply
@@ -425,6 +426,33 @@ import type { RankedAlternativeDto } from '../plan-analysis-api.types';
 })
 export class AlternativesPanel {
   protected readonly store = inject(PlanAnalysisStore);
+
+  /** Calcula el rango de waypoints afectados. */
+  protected perturbationRange(perturbations: { waypoint: number }[]): { min: number; max: number } {
+    let min = Infinity;
+    let max = -Infinity;
+    for (const p of perturbations) {
+      if (p.waypoint < min) min = p.waypoint;
+      if (p.waypoint > max) max = p.waypoint;
+    }
+    return { min: min === Infinity ? 0 : min, max: max === -Infinity ? 0 : max };
+  }
+
+  /** Agrupa perturbaciones consecutivas con el mismo joint+delta para mostrar "J2 -0.050 × 103". */
+  protected groupPerturbations(perturbations: { joint: number; delta: number }[]): { joint: number; delta: number; count: number }[] {
+    // Agrupar por (joint, delta) usando un Map con clave "joint::delta"
+    const map = new Map<string, { joint: number; delta: number; count: number }>();
+    for (const p of perturbations) {
+      const key = `${p.joint}::${p.delta}`;
+      const existing = map.get(key);
+      if (existing) {
+        existing.count++;
+      } else {
+        map.set(key, { joint: p.joint, delta: p.delta, count: 1 });
+      }
+    }
+    return Array.from(map.values());
+  }
 
   protected generate(): void {
     this.store.generateAlternatives();

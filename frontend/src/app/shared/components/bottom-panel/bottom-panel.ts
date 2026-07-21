@@ -84,11 +84,11 @@ const SEGMENT_COLORS = [
         <!-- Pipeline Flow Monitor -->
         <div class="bottom-panel__pipeline">
           @for (stage of pipelineStages(); track stage.id) {
-            <span class="pipeline__stage" [class.pipeline__stage--done]="stage.done" [class.pipeline__stage--active]="stage.active">
-              @if (stage.done) { ✅ } @else if (stage.active) { ⏳ } @else { ○ }
+            <span class="pipeline__stage" [class.pipeline__stage--done]="stage.done" [class.pipeline__stage--active]="stage.active" [class.pipeline__stage--pending]="!stage.done && !stage.active">
+              <span class="pipeline__indicator"></span>
               {{ stage.label }}
             </span>
-            @if (!$last) { <span class="pipeline__arrow">→</span> }
+            @if (!$last) { <span class="pipeline__arrow"></span> }
           }
         </div>
 
@@ -195,8 +195,7 @@ const SEGMENT_COLORS = [
                 </div>
 
                 @if (es.execCompleted) {
-                  <div class="exec-summary__status">
-                    <span class="exec-summary__status-icon">✅</span>
+                  <div class="exec-summary__status exec-summary__status--ok">
                     <span>Execution completed</span>
                   </div>
                   @if (es.planFindingsCount > 0 || es.execFindingsCount > 0) {
@@ -287,7 +286,7 @@ const SEGMENT_COLORS = [
                     }
                   </div>
                 }
-                @if (plan.isLive) { <span class="tl__live">● LIVE</span> }
+                @if (plan.isLive) { <span class="tl__live">LIVE</span> }
                 @if (plan.comparison; as cmp) {
                   <div class="tl__comparison">
                     <span class="tl__cmp-label">Comparison</span>
@@ -618,9 +617,9 @@ export class BottomPanel {
     const errors = findings.filter(f => f.severity === 'error').length;
     const warnings = findings.filter(f => f.severity === 'warning').length;
 
-    if (errors > 0) return { kind: 'error', label: `\u2715 ${errors}` };
-    if (warnings > 0) return { kind: 'warn', label: `\u26A0 ${warnings}` };
-    return { kind: 'info', label: `\u2139 ${findings.length}` };
+    if (errors > 0) return { kind: 'error', label: `${errors}` };
+    if (warnings > 0) return { kind: 'warn', label: `${warnings}` };
+    return { kind: 'info', label: `${findings.length}` };
   });
 
   /** Aggregated plan-analysis view-model. */
@@ -701,11 +700,12 @@ export class BottomPanel {
   }
 
   protected iconFor(severity: string): string {
+    // Severity indicator: short text label — CSS handles colors and styling
     switch (severity) {
-      case 'error': return '\u2715';
-      case 'warning': return '\u26A0';
-      case 'info': return '\u2139';
-      default: return '\u2022';
+      case 'error': return 'ERR';
+      case 'warning': return 'WRN';
+      case 'info': return 'INF';
+      default: return '--';
     }
   }
 
@@ -875,8 +875,8 @@ export class BottomPanel {
     const errors = findings.filter(f => f.severity === 'error').length;
     const warnings = findings.filter(f => f.severity === 'warning').length;
 
-    if (errors > 0) return { kind: 'error', label: `\u2715 ${errors}` };
-    if (warnings > 0) return { kind: 'warn', label: `\u26A0 ${warnings}` };
-    return { kind: 'info', label: `\u2139 ${findings.length}` };
+    if (errors > 0) return { kind: 'error', label: `${errors}` };
+    if (warnings > 0) return { kind: 'warn', label: `${warnings}` };
+    return { kind: 'info', label: `${findings.length}` };
   });
 }
