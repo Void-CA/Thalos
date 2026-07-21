@@ -22,36 +22,7 @@ const MODES: { key: TrajectoryColorMode; label: string }[] = [
       }
     </div>
   `,
-  styles: [
-    `
-    .color-picker {
-      display: flex;
-      flex-direction: column;
-      gap: 0.2rem;
-    }
-    .color-picker__btn {
-      font-family: inherit;
-      font-size: 0.72rem;
-      text-align: left;
-      padding: 0.25rem 0.4rem;
-      border: 1px solid transparent;
-      border-radius: 3px;
-      background: transparent;
-      color: #999;
-      cursor: pointer;
-      transition: color 0.15s, background 0.15s, border-color 0.15s;
-    }
-    .color-picker__btn:hover {
-      color: #ddd;
-      border-color: #444;
-    }
-    .color-picker__btn--active {
-      background: rgba(255, 255, 255, 0.08);
-      color: #fff;
-      border-color: #555;
-    }
-    `,
-  ],
+  styleUrl: './trajectory-color-picker.scss',
 })
 export class TrajectoryColorPicker {
   protected readonly renderer = inject(ThreeRendererService);

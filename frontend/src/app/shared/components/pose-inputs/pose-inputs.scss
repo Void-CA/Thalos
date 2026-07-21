@@ -40,7 +40,7 @@ input[type='number'] {
     flex: 1;
     padding: 0.25rem 0.4rem;
     font-family: $font-mono;
-    font-size: 0.75rem;
+    font-size: $text-base;
     cursor: pointer;
     background: transparent;
     border: none;
@@ -66,7 +66,7 @@ input[type='number'] {
 
   &--small .segmented__btn {
     padding: 0.18rem 0.3rem;
-    font-size: 0.7rem;
+    font-size: $text-sm;
   }
 }
 
@@ -79,7 +79,7 @@ input[type='number'] {
   margin-top: 0.4rem;
 
   span {
-    font-size: 0.7rem;
+    font-size: $text-sm;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: $text-secondary;

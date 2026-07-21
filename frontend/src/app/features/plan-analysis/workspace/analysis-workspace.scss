@@ -13,7 +13,7 @@ $sev-info-bg: #121e2a;
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
-  padding: $space-md $space-lg 2rem;
+  padding: $space-lg;
   background: $bg-surface;
 
   &::-webkit-scrollbar { width: 6px; }

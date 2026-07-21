@@ -13,7 +13,7 @@
   cursor: pointer;
   text-align: left;
   font-family: inherit;
-  font-size: 0.6rem;
+  font-size: $text-xs;
   transition:
     background $transition-fast,
     border-color $transition-fast;
@@ -31,7 +31,7 @@
 
 .name {
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: $text-md;
 }
 
 .meta {
@@ -45,7 +45,7 @@
   padding: 0.1rem 0.4rem;
   border-radius: $radius-sm;
   background: $bg-elevated;
-  font-size: 0.75rem;
+  font-size: $text-base;
   font-weight: 600;
   letter-spacing: 0.03em;
 
@@ -55,6 +55,6 @@
 }
 
 .joint-summary {
-  font-size: 0.75rem;
+  font-size: $text-base;
   opacity: 0.5;
 }
