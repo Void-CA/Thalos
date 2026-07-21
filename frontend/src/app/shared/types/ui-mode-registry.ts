@@ -10,6 +10,10 @@ import { TrajectoryColorPicker } from '../../features/planning/trajectory-color-
 import { AlternativesPanel } from '../../features/plan-analysis/components/alternatives-panel';
 import { ExecutionCharts } from '../../features/execution/execution-charts';
 import { ExecutionPanel } from '../../features/execution/execution-panel';
+import { ExplainPanel } from '../../features/assistant/components/explain-panel/explain-panel';
+import { OptimizePanel } from '../../features/assistant/components/optimize-panel/optimize-panel';
+import { LearnPanel } from '../../features/assistant/components/learn-panel/learn-panel';
+import { AdaptPanel } from '../../features/assistant/components/adapt-panel/adapt-panel';
 
 /**
  * Registry central de tools por modo.
@@ -26,16 +30,20 @@ export const UI_MODE_REGISTRY: Record<AppMode, readonly ToolSchema[]> = {
   robot: [
     { id: 'fk', label: 'Forward Kinematics', component: JointControl, defaultOpen: true },
     { id: 'ik', label: 'Inverse Kinematics', component: IkTargetPanel, defaultOpen: true },
+    { id: 'learn', label: 'Learn', component: LearnPanel, defaultOpen: false },
     { id: 'workspace', label: 'Workspace Analysis', component: WorkspacePanel, defaultOpen: false },
     { id: 'tcp', label: 'Active TCP', component: TcpInfoPanel, defaultOpen: false },
   ],
   planning: [
     { id: 'color', label: 'Trajectory Color', component: TrajectoryColorPicker, defaultOpen: true },
     { id: 'planning', label: 'Motion Planning', component: PlanningPanel as Type<unknown>, defaultOpen: true },
+    { id: 'optimize', label: 'Optimize', component: OptimizePanel, defaultOpen: false },
+    { id: 'explain', label: 'Explain', component: ExplainPanel, defaultOpen: false },
     { id: 'alternatives', label: 'Alternatives', component: AlternativesPanel, defaultOpen: false },
   ],
   execution: [
     { id: 'execution', label: 'Active Plan', component: ExecutionPanel, defaultOpen: true },
     { id: 'charts', label: 'Telemetry', component: ExecutionCharts, defaultOpen: false },
+    { id: 'adapt', label: 'Adapt', component: AdaptPanel, defaultOpen: false },
   ],
 } as const;
