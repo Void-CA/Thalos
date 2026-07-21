@@ -1,99 +1,88 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { NgIcon } from '@ng-icons/core';
 import { PlanAnalysisStore } from '../../plan-analysis/store/plan-analysis.store';
 import { FocusService } from '../../../shared/services/focus.service';
-import { PerspectiveStore } from '../../../shared/store/perspective.store';
-import { AlternativesPanel } from '../../plan-analysis/components/alternatives-panel';
-import type { RecommendationDto } from '../../plan-analysis/plan-analysis-api.types';
+import type { ProblemRegionDto } from '../../plan-analysis/plan-analysis-api.types';
 
 /**
- * Knowledge Workspace — centraliza el conocimiento derivado del análisis
- * del plan y lo convierte en acciones navegables.
- *
- * Layout: recommendations → evidence → alternatives
+ * Knowledge Workspace v1 — consume AnalysisReport y presenta ProblemRegions
+ * como unidad primaria de interacción.
  */
 @Component({
   selector: 'knowledge-workspace',
   standalone: true,
-  imports: [NgIcon, AlternativesPanel],
+  imports: [NgIcon],
   templateUrl: './knowledge-workspace.html',
   styleUrl: './knowledge-workspace.scss',
 })
 export class KnowledgeWorkspace {
   protected readonly pa = inject(PlanAnalysisStore);
-  private readonly focus = inject(FocusService);
-  private readonly perspective = inject(PerspectiveStore);
+  protected readonly focus = inject(FocusService);
 
-  // ── Recommendations grouped by impact ──
+  protected readonly selectedRegionId = signal<number | null>(null);
+  protected readonly expandedRegionId = signal<number | null>(null);
 
-  protected readonly recsByImpact = computed(() => {
-    const all = this.pa.recommendations();
-    const high: RecommendationDto[] = [];
-    const medium: RecommendationDto[] = [];
-    const low: RecommendationDto[] = [];
-    for (const r of all) {
-      switch (r.impact) {
-        case 'high': high.push(r); break;
-        case 'medium': medium.push(r); break;
-        case 'low': low.push(r); break;
-      }
+  protected readonly regions = computed(() => this.pa.problemRegions());
+  protected readonly healthScore = computed(() => this.pa.healthScore());
+  protected readonly rawFindings = computed(() => this.pa.findings());
+
+  protected readonly stats = computed(() => {
+    const r = this.regions();
+    let critical = 0, warnings = 0;
+    for (const region of r) {
+      if (region.severity === 'critical') critical++;
+      else if (region.severity === 'warning') warnings++;
     }
-    return { high, medium, low };
+    return { total: r.length, critical, warnings };
   });
 
-  protected readonly hasRecs = computed(() =>
-    this.pa.recommendations().length > 0,
-  );
-
-  // ── Evidence: findings with their categories ──
-
-  protected readonly evidenceItems = computed(() => {
-    const findings = this.pa.findings();
-    return findings.slice(0, 20).map(f => ({
-      kind: f.kind.replace(/_/g, ' '),
-      severity: f.severity,
-      waypoint: f.waypoint,
-      message: f.message,
-      value: f.value,
-      category: this.categoryOf(f.kind),
-    }));
-  });
-
-  protected readonly hasEvidence = computed(() =>
-    this.pa.findings().length > 0,
+  protected readonly hasData = computed(() =>
+    this.regions().length > 0 || this.rawFindings().length > 0,
   );
 
   // ── Actions ──
 
-  protected onFocus(waypoint: number | null): void {
-    if (waypoint == null) return;
-    this.focus.focusWaypoint(waypoint);
+  protected toggleRegion(id: number): void {
+    this.expandedRegionId.set(
+      this.expandedRegionId() === id ? null : id,
+    );
   }
 
-  protected onEdit(waypoint: number | null): void {
-    if (waypoint == null) return;
-    this.focus.focusWaypoint(waypoint);
-    this.perspective.setPerspective('planning');
+  protected selectRegion(region: ProblemRegionDto): void {
+    this.selectedRegionId.set(region.id);
+    const center = Math.floor((region.waypoint_start + region.waypoint_end) / 2);
+    this.focus.focusWaypoint(center,
+      `${region.kind} wp${region.waypoint_start}-${region.waypoint_end}`);
+  }
+
+  protected findingsForRegion(region: ProblemRegionDto) {
+    return this.rawFindings().filter(f =>
+      f.waypoint != null
+      && f.waypoint >= region.waypoint_start
+      && f.waypoint <= region.waypoint_end
+    );
   }
 
   // ── Helpers ──
 
-  protected iconFor(sev: string): string {
-    switch (sev) { case 'error': return '✗'; case 'warning': return '⚠'; default: return 'ℹ'; }
-  }
-
-  protected categoryOf(kind: string): { label: string; color: string } {
-    switch (kind) {
-      case 'collision': case 'collision_near': return { label: 'Collision', color: '#b85450' };
-      case 'low_manipulability': case 'near_singularity': case 'singularity': case 'ik_suggestion': return { label: 'Kinematic', color: '#b8943a' };
-      case 'tracking_error': case 'tracking_spike': case 'joint_deviation': return { label: 'Tracking', color: '#c97d3a' };
-      case 'velocity_deviation': return { label: 'Velocity', color: '#4a7a9a' };
-      case 'constraint_violation': return { label: 'Constraint', color: '#7a5a9a' };
-      default: return { label: 'Other', color: '#6a7a8a' };
+  protected severityIcon(sev: string): string {
+    switch (sev) {
+      case 'critical': return '✗';
+      case 'warning': return '⚠';
+      default: return 'ℹ';
     }
   }
 
-  protected get hasData(): boolean {
-    return this.pa.recommendations().length > 0 || this.pa.findings().length > 0;
+  protected formatScore(score: number | null): string {
+    if (score == null) return '—';
+    return score.toFixed(2);
+  }
+
+  protected kindLabel(kind: string): string {
+    return kind.replace(/_/g, ' ');
+  }
+
+  protected severityClass(sev: string): string {
+    return 'kw__sev--' + sev;
   }
 }

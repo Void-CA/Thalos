@@ -9,6 +9,7 @@
 //! Produce un [`PlanAnalysis`] con datos por waypoint y métricas agregadas.
 
 pub mod domain;
+pub mod region;
 
 use thalos_core::{
     analysis::constraints::{Constraint, ConstraintEvaluator, ConstraintViolation},
@@ -29,6 +30,7 @@ use thalos_collision::distance::geometries_distance;
 
 use crate::error::PlanningError;
 use crate::finding::{Finding, FindingKind, Severity};
+use crate::analysis::domain::{ProblemRegion, RegionMetrics, RegionSeverity};
 
 // ─── Data types ───────────────────────────────────────────────────
 
@@ -43,6 +45,20 @@ pub struct PlanAnalysis {
     pub findings: Vec<Finding>,
     /// Violaciones de constraints, si se evaluaron.
     pub constraint_violations: Vec<ConstraintViolation>,
+}
+
+/// Resultado del análisis semántico: findings originales + regiones + health score.
+///
+/// Este es el objeto canónico del pipeline de análisis. Reemplaza gradualmente
+/// a `PlanAnalysis` como la salida estándar del `TrajectoryAnalyzer`.
+#[derive(Debug, Clone)]
+pub struct AnalysisReport {
+    /// Findings originales (compatibilidad hacia atrás).
+    pub findings: Vec<Finding>,
+    /// Regiones problemáticas detectadas.
+    pub problem_regions: Vec<ProblemRegion>,
+    /// Puntaje de salud general de la trayectoria (0.0 = peor, 1.0 = mejor).
+    pub health_score: f64,
 }
 
 /// Severidad resumida para visualización de trayectoria.

@@ -10,6 +10,7 @@ import type {
   FindingDto,
   RecommendationDto,
   WaypointAnalysisDto,
+  ProblemRegionDto,
 } from '../plan-analysis-api.types';
 
 export interface PlanAnalysisState {
@@ -18,6 +19,8 @@ export interface PlanAnalysisState {
   waypoints: WaypointAnalysisDto[];
   findings: FindingDto[];
   recommendations: RecommendationDto[];
+  problemRegions: ProblemRegionDto[];
+  healthScore: number | null;
   loading: boolean;
   error: string | null;
 }
@@ -28,6 +31,8 @@ const INITIAL: PlanAnalysisState = {
   waypoints: [],
   findings: [],
   recommendations: [],
+  problemRegions: [],
+  healthScore: null,
   loading: false,
   error: null,
 };
@@ -43,6 +48,8 @@ export class PlanAnalysisStore {
   readonly waypoints = signal<WaypointAnalysisDto[]>(INITIAL.waypoints);
   readonly findings = signal<FindingDto[]>(INITIAL.findings);
   readonly recommendations = signal<RecommendationDto[]>(INITIAL.recommendations);
+  readonly problemRegions = signal<ProblemRegionDto[]>(INITIAL.problemRegions);
+  readonly healthScore = signal<number | null>(INITIAL.healthScore);
   readonly loading = signal(INITIAL.loading);
   readonly error = signal<string | null>(INITIAL.error);
 
@@ -53,6 +60,8 @@ export class PlanAnalysisStore {
     waypoints: this.waypoints(),
     findings: this.findings(),
     recommendations: this.recommendations(),
+    problemRegions: this.problemRegions(),
+    healthScore: this.healthScore(),
     loading: this.loading(),
     error: this.error(),
   });
@@ -83,6 +92,8 @@ export class PlanAnalysisStore {
     this.waypoints.set([]);
     this.findings.set([]);
     this.recommendations.set([]);
+    this.problemRegions.set([]);
+    this.healthScore.set(null);
     this.loading.set(false);
     this.error.set(null);
     this.alternativesData.set(null);
@@ -96,6 +107,8 @@ export class PlanAnalysisStore {
     this.waypoints.set(res.waypoints ?? []);
     this.findings.set(res.findings);
     this.recommendations.set(res.recommendations);
+    this.problemRegions.set(res.problem_regions ?? []);
+    this.healthScore.set(res.health_score ?? null);
   }
 
   private setError(err: unknown): void {

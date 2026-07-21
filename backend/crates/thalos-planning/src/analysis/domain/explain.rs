@@ -7,4 +7,6 @@ pub struct RegionExplanation {
     pub consequence: String,
     /// Estrategias de reparación sugeridas (strings, no tipos del dominio).
     pub recommended_strategies: Vec<String>,
+    /// Confianza en la detección (0.0..1.0).
+    pub confidence: f64,
 }

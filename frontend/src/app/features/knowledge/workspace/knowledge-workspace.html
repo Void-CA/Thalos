@@ -3,97 +3,115 @@
     <h1 class="kw__title">Knowledge</h1>
   </header>
 
-  @if (!hasData) {
+  @if (!hasData()) {
     <div class="kw__empty">
       <ng-icon name="heroRectangleGroup" size="36" />
-      <p>No analysis data yet. Compile and analyze a plan to see knowledge here.</p>
+      <p>No analysis data. Compile and analyze a plan to see results here.</p>
     </div>
   } @else {
-    <!-- ═══════ RECOMMENDATIONS ═══════ -->
-    @let recs = recsByImpact();
-    @if (recs.high.length > 0 || recs.medium.length > 0 || recs.low.length > 0) {
+
+    <!-- ═══════ HEALTH HEADER ═══════ -->
+    <section class="kw__health">
+      <div class="kw__health-score" [style.--c]="(healthScore() ?? 0) > 0.5 ? '#4a9e5a' : (healthScore() ?? 0) > 0.2 ? '#b8943a' : '#b85450'">
+        <span class="kw__health-val">{{ formatScore(healthScore()) }}</span>
+        <span class="kw__health-lbl">Health</span>
+      </div>
+      <div class="kw__health-metrics">
+        @let s = stats();
+        <div class="kw__hm">
+          <span class="kw__hm-val">{{ s.total }}</span>
+          <span class="kw__hm-lbl">Regions</span>
+        </div>
+        <div class="kw__hm">
+          <span class="kw__hm-val kw__hm--critical">{{ s.critical }}</span>
+          <span class="kw__hm-lbl">Critical</span>
+        </div>
+        <div class="kw__hm">
+          <span class="kw__hm-val kw__hm--warn">{{ s.warnings }}</span>
+          <span class="kw__hm-lbl">Warnings</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════ REGIONS ═══════ -->
+    @let regs = regions();
+    @if (regs.length === 0) {
+      <div class="kw__empty">
+        <p>No problem regions detected. The trajectory appears clean.</p>
+      </div>
+    } @else {
       <section class="kw__section">
-        <h2 class="kw__sec-title">Recommendations</h2>
-
-        @for (r of recs.high; track $index) {
-          <div class="kw__rec kw__rec--high">
-            <div class="kw__rec-head">
-              <span class="kw__rec-badge kw__rec-badge--high">HIGH</span>
-              <span class="kw__rec-msg">{{ r.message }}</span>
-            </div>
-            <div class="kw__rec-evidence">
-              <span class="kw__rec-kind">{{ r.kind.replace(/_/g, ' ') }}</span>
-              <span class="kw__rec-arrow">→</span>
-              <span class="kw__rec-impact">{{ r.impact }} impact</span>
-            </div>
-            <div class="kw__rec-actions">
-              @if (r.waypoint != null) {
-                <button class="kw__act" (click)="onFocus(r.waypoint)">○ Focus wp{{ r.waypoint }}</button>
-                <button class="kw__act kw__act--plan" (click)="onEdit(r.waypoint)">✎ Edit in Planning</button>
-              }
-            </div>
-          </div>
-        }
-
-        @for (r of recs.medium; track $index) {
-          <div class="kw__rec kw__rec--medium">
-            <div class="kw__rec-head">
-              <span class="kw__rec-badge kw__rec-badge--med">MED</span>
-              <span class="kw__rec-msg">{{ r.message }}</span>
-            </div>
-            <div class="kw__rec-actions">
-              @if (r.waypoint != null) {
-                <button class="kw__act" (click)="onFocus(r.waypoint)">○ Focus wp{{ r.waypoint }}</button>
-              }
-            </div>
-          </div>
-        }
-
-        @for (r of recs.low; track $index) {
-          <div class="kw__rec kw__rec--low">
-            <div class="kw__rec-head">
-              <span class="kw__rec-badge kw__rec-badge--low">LOW</span>
-              <span class="kw__rec-msg">{{ r.message }}</span>
-            </div>
-          </div>
-        }
-      </section>
-    }
-
-    <!-- ═══════ EVIDENCE ═══════ -->
-    @if (hasEvidence()) {
-      <section class="kw__section">
-        <h2 class="kw__sec-title">Evidence</h2>
-        <div class="kw__evidence">
-          @for (ev of evidenceItems(); track $index) {
-            <div class="kw__ev" (click)="onFocus(ev.waypoint)">
-              <div class="kw__ev-head">
-                <span class="kw__ev-sev" [class]="'kw__sev--' + ev.severity">{{ iconFor(ev.severity) }}</span>
-                <span class="kw__ev-kind">{{ ev.kind }}</span>
-                <span class="kw__ev-cat" [style.background]="ev.category.color">{{ ev.category.label }}</span>
-                @if (ev.waypoint != null) { <span class="kw__ev-wp">wp{{ ev.waypoint }}</span> }
+        <h2 class="kw__sec-title">Problem Regions</h2>
+        <div class="kw__reg-list">
+          @for (r of regs; track r.id) {
+            <div class="kw__reg"
+              [class.kw__reg--selected]="selectedRegionId() === r.id"
+              [class.kw__reg--critical]="r.severity === 'critical'"
+              [class.kw__reg--warn]="r.severity === 'warning'"
+              (click)="selectRegion(r)">
+              <div class="kw__reg-head">
+                <span class="kw__reg-sev" [class]="severityClass(r.severity)">{{ severityIcon(r.severity) }}</span>
+                <span class="kw__reg-kind">{{ kindLabel(r.kind) }}</span>
+                <span class="kw__reg-range">wp{{ r.waypoint_start }}–{{ r.waypoint_end }}</span>
+                <span class="kw__reg-count">{{ r.waypoint_count }} pts</span>
+                <button class="kw__reg-expand" (click)="toggleRegion(r.id); $event.stopPropagation()">
+                  {{ expandedRegionId() === r.id ? '▼' : '▶' }}
+                </button>
               </div>
-              <div class="kw__ev-chain">
-                <span class="kw__chain-item">{{ ev.kind }}</span>
-                <span class="kw__chain-arrow">→</span>
-                <span class="kw__chain-item">{{ ev.severity }}</span>
-                @if (ev.value != null) {
-                  <span class="kw__chain-arrow">→</span>
-                  <span class="kw__chain-item kw__chain-val">{{ ev.value.toFixed(3) }}</span>
-                }
-                <span class="kw__chain-arrow">→</span>
-                <span class="kw__chain-item kw__chain-action">Recommended action available</span>
-              </div>
+
+              @if (expandedRegionId() === r.id) {
+                <div class="kw__reg-body">
+                  @if (r.explanation) {
+                    <div class="kw__reg-detail">
+                      <span class="kw__det-lbl">Cause</span>
+                      <span class="kw__det-val">{{ r.explanation.cause }}</span>
+                    </div>
+                    <div class="kw__reg-detail">
+                      <span class="kw__det-lbl">Impact</span>
+                      <span class="kw__det-val">{{ r.explanation.consequence }}</span>
+                    </div>
+                  }
+                  @if (r.metrics) {
+                    <div class="kw__reg-metrics">
+                      <span class="kw__met">Errors: {{ r.metrics.error_count }}</span>
+                      <span class="kw__met">Warnings: {{ r.metrics.warning_count }}</span>
+                      @if (r.metrics.average_value != null) {
+                        <span class="kw__met">Avg: {{ r.metrics.average_value.toFixed(3) }}</span>
+                      }
+                      @if (r.metrics.min_value != null) {
+                        <span class="kw__met">Min: {{ r.metrics.min_value.toFixed(3) }}</span>
+                      }
+                    </div>
+                  }
+                  <!-- Findings drill-down -->
+                  @let fnds = findingsForRegion(r);
+                  @if (fnds.length > 0) {
+                    <details class="kw__reg-findings">
+                      <summary class="kw__reg-findings-summary">
+                        {{ fnds.length }} finding{{ fnds.length !== 1 ? 's' : '' }}
+                      </summary>
+                      <div class="kw__reg-findings-list">
+                        @for (f of fnds; track $index) {
+                          <div class="kw__reg-fi">
+                            <span class="kw__fi-sev" [class]="severityClass(f.severity)">{{ severityIcon(f.severity) }}</span>
+                            <span class="kw__fi-wp">wp{{ f.waypoint }}</span>
+                            <span class="kw__fi-kind">{{ kindLabel(f.kind) }}</span>
+                          </div>
+                        }
+                      </div>
+                    </details>
+                  }
+                </div>
+              }
             </div>
           }
         </div>
       </section>
     }
 
-    <!-- ═══════ ALTERNATIVES ═══════ -->
+    <!-- ═══════ CAPABILITIES STATUS ═══════ -->
     <section class="kw__section">
-      <h2 class="kw__sec-title">Alternative Plans</h2>
-      <alternatives-panel />
+      <p class="kw__status-msg">Repair capabilities not yet available — coming in M8.2.</p>
     </section>
   }
 </div>

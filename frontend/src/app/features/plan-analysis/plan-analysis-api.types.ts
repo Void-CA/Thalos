@@ -11,6 +11,37 @@ export interface PlanAnalysisResponse {
   waypoints: WaypointAnalysisDto[];
   findings: FindingDto[];
   recommendations: RecommendationDto[];
+  problem_regions?: ProblemRegionDto[];
+  health_score?: number;
+}
+
+export interface ProblemRegionDto {
+  id: number;
+  kind: string;
+  severity: string;
+  waypoint_start: number;
+  waypoint_end: number;
+  waypoint_count: number;
+  metrics?: RegionMetricsDto;
+  explanation: ExplanationDto;
+  confidence?: number;
+  recommended_strategies?: string[];
+}
+
+export interface RegionMetricsDto {
+  waypoint_count: number;
+  average_value: number | null;
+  min_value: number | null;
+  max_value: number | null;
+  error_count: number;
+  warning_count: number;
+}
+
+export interface ExplanationDto {
+  cause: string;
+  consequence: string;
+  recommended_strategies: string[];
+  confidence: number;
 }
 
 export interface SummaryDto {

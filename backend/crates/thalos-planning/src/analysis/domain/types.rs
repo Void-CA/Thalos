@@ -1,9 +1,9 @@
 /// Identificador único de una región problemática dentro de un análisis.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RegionId(pub usize);
 
 /// Clasificación de la naturaleza de una región problemática.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RegionKind {
     Singularity,
     LowManipulability,
@@ -27,7 +27,7 @@ impl RegionKind {
 }
 
 /// Severidad agregada de una región, derivada de la máxima severidad entre sus findings.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RegionSeverity {
     Info,
     Warning,

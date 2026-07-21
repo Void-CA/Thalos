@@ -44,8 +44,83 @@ $sev-info-bg: #121e2a;
   color: $text-muted;
   font-size: $text-base;
   ng-icon { opacity: 0.2; }
-  p { margin: 0; }
+  p { margin: 0; line-height: 1.5; }
 }
+
+// ── Health Header ──
+
+.kw__health {
+  display: flex;
+  gap: $space-lg;
+  align-items: stretch;
+  margin-bottom: $space-lg;
+}
+
+.kw__health-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $space-md;
+  background: $bg-card;
+  border: 1px solid $border-subtle;
+  border-radius: $radius-md;
+  min-width: 80px;
+}
+
+.kw__health-val {
+  font-size: $text-xl;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--c);
+  line-height: 1;
+}
+
+.kw__health-lbl {
+  font-size: $text-xs;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: $text-muted;
+  margin-top: $space-xs;
+}
+
+.kw__health-metrics {
+  display: flex;
+  gap: $space-sm;
+  flex: 1;
+}
+
+.kw__hm {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $space-sm;
+  background: $bg-card;
+  border: 1px solid $border-subtle;
+  border-radius: $radius-md;
+}
+
+.kw__hm-val {
+  font-size: $text-lg;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: $text-primary;
+
+  &--critical { color: $sev-error; }
+  &--warn { color: $sev-warn; }
+}
+
+.kw__hm-lbl {
+  font-size: $text-xs;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: $text-muted;
+  opacity: 0.6;
+}
+
+// ── Section ──
 
 .kw__section {
   margin-bottom: $space-lg;
@@ -61,177 +136,187 @@ $sev-info-bg: #121e2a;
   opacity: 0.6;
 }
 
-// ── Recommendations ──
+// ── Regions ──
 
-.kw__rec {
-  padding: $space-sm $space-md;
-  background: $bg-card;
-  border: 1px solid $border-subtle;
-  border-radius: $radius-md;
-  margin-bottom: $space-sm;
+.kw__reg-list {
   display: flex;
   flex-direction: column;
   gap: $space-xs;
-
-  &--high { border-left: 3px solid $sev-error; }
-  &--medium { border-left: 3px solid $sev-warn; }
-  &--low { border-left: 3px solid #6a7a8a; }
 }
 
-.kw__rec-head {
-  display: flex;
-  align-items: center;
-  gap: $space-sm;
+.kw__reg {
+  background: $bg-card;
+  border: 1px solid $border-subtle;
+  border-radius: $radius-md;
+  cursor: pointer;
+  transition: border-color $transition-fast, background $transition-fast;
+
+  &--critical { border-left: 3px solid $sev-error; }
+  &--warn { border-left: 3px solid $sev-warn; }
+  &--selected { border-color: $accent; background: $bg-surface; }
 }
 
-.kw__rec-badge {
-  font-size: $text-xs;
-  font-weight: 700;
-  padding: 0.1rem 0.35rem;
-  border-radius: $radius-sm;
-  letter-spacing: 0.05em;
-  flex-shrink: 0;
-
-  &--high { background: $sev-error-bg; color: $sev-error; }
-  &--med { background: $sev-warn-bg; color: $sev-warn; }
-  &--low { background: $bg-elevated; color: #6a7a8a; }
-}
-
-.kw__rec-msg {
-  flex: 1;
-  font-size: $text-base;
-  color: $text-secondary;
-  line-height: 1.4;
-}
-
-.kw__rec-evidence {
+.kw__reg-head {
   display: flex;
   align-items: center;
   gap: $space-xs;
+  padding: $space-sm $space-md;
+}
+
+.kw__reg-sev {
+  font-size: $text-xs;
+  font-weight: 700;
+  padding: 0.05rem 0.25rem;
+  border-radius: $radius-sm;
+  &.kw__sev--critical { color: $sev-error; background: $sev-error-bg; }
+  &.kw__sev--warning { color: $sev-warn; background: $sev-warn-bg; }
+}
+
+.kw__reg-kind {
+  flex: 1;
+  font-weight: 600;
+  font-size: $text-base;
+  color: $text-secondary;
+  text-transform: capitalize;
+}
+
+.kw__reg-range {
+  font-family: $font-mono;
   font-size: $text-sm;
   color: $text-muted;
   opacity: 0.7;
 }
 
-.kw__rec-arrow {
-  opacity: 0.4;
-}
-
-.kw__rec-kind {
-  text-transform: capitalize;
-}
-
-.kw__rec-impact {
-  text-transform: uppercase;
-  font-weight: 600;
-}
-
-.kw__rec-actions {
-  display: flex;
-  gap: $space-xs;
-  padding-top: $space-xs;
-}
-
-.kw__act {
-  font-family: $font-ui;
-  font-size: $text-sm;
-  padding: 0.15rem 0.4rem;
-  border-radius: $radius-sm;
-  border: 1px solid $border-subtle;
-  background: transparent;
-  color: $text-muted;
-  cursor: pointer;
-  transition: background $transition-fast;
-  &:hover { background: $bg-elevated; }
-  &--plan { color: #4a9e5a; border-color: #4a9e5a; &:hover { background: #1a2e1a; } }
-}
-
-// ── Evidence ──
-
-.kw__evidence {
-  display: flex;
-  flex-direction: column;
-  gap: $space-xs;
-}
-
-.kw__ev {
-  padding: $space-sm $space-md;
-  background: $bg-card;
-  border: 1px solid $border-subtle;
-  border-radius: $radius-md;
-  cursor: pointer;
-  transition: background $transition-fast;
-  display: flex;
-  flex-direction: column;
-  gap: $space-xs;
-  &:hover { background: $bg-elevated; }
-}
-
-.kw__ev-head {
-  display: flex;
-  align-items: center;
-  gap: $space-xs;
-  font-size: $text-base;
-}
-
-.kw__ev-sev {
-  font-size: $text-xs;
-  font-weight: 700;
-  padding: 0.05rem 0.25rem;
-  border-radius: $radius-sm;
-  &.kw__sev--error { color: $sev-error; background: $sev-error-bg; }
-  &.kw__sev--warning { color: $sev-warn; background: $sev-warn-bg; }
-}
-
-.kw__ev-kind {
-  flex: 1;
-  font-weight: 600;
-  color: $text-secondary;
-  text-transform: capitalize;
-}
-
-.kw__ev-cat {
+.kw__reg-count {
   font-size: $text-xs;
   padding: 0.05rem 0.3rem;
   border-radius: $radius-sm;
-  color: #111;
-  font-weight: 600;
+  background: $bg-elevated;
+  color: $text-muted;
 }
 
-.kw__ev-wp {
-  font-family: $font-mono;
+.kw__reg-expand {
+  background: none;
+  border: none;
+  color: $text-muted;
   font-size: $text-xs;
-  padding: 0.05rem 0.25rem;
-  border-radius: $radius-sm;
-  background: $bg-surface;
-  color: $accent;
+  cursor: pointer;
+  padding: $space-xs;
+  opacity: 0.5;
+  &:hover { opacity: 1; }
 }
 
-.kw__ev-chain {
+// ── Region Body (expanded) ──
+
+.kw__reg-body {
+  padding: 0 $space-md $space-md;
+  border-top: 1px solid $border-subtle;
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+}
+
+.kw__reg-detail {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+}
+
+.kw__det-lbl {
+  font-size: $text-xs;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: $text-muted;
+  opacity: 0.5;
+}
+
+.kw__det-val {
+  font-size: $text-sm;
+  color: $text-secondary;
+  line-height: 1.4;
+}
+
+.kw__reg-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $space-xs;
+}
+
+.kw__met {
+  font-size: $text-xs;
+  padding: 0.1rem 0.35rem;
+  border-radius: $radius-sm;
+  background: $bg-elevated;
+  color: $text-muted;
+  font-family: $font-mono;
+}
+
+// ── Findings drill-down ──
+
+.kw__reg-findings {
+  border: 1px solid $border-subtle;
+  border-radius: $radius-sm;
+  overflow: hidden;
+}
+
+.kw__reg-findings-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: $space-xs $space-sm;
+  font-size: $text-xs;
+  color: $text-muted;
+  opacity: 0.6;
+  user-select: none;
+  &::-webkit-details-marker { display: none; }
+  &:hover { opacity: 1; }
+}
+
+.kw__reg-findings-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 150px;
+  overflow-y: auto;
+  border-top: 1px solid $border-subtle;
+}
+
+.kw__reg-fi {
   display: flex;
   align-items: center;
   gap: $space-xs;
-  font-size: $text-sm;
+  padding: 0.15rem $space-sm;
+  font-size: $text-xs;
+  border-bottom: 1px solid $border-subtle;
+  &:last-child { border-bottom: none; }
+}
+
+.kw__fi-sev {
+  font-weight: 700;
+  font-size: 0.5rem;
+  padding: 0.05rem 0.2rem;
+  border-radius: 2px;
+  &.kw__sev--critical { color: $sev-error; background: $sev-error-bg; }
+  &.kw__sev--warning { color: $sev-warn; background: $sev-warn-bg; }
+}
+
+.kw__fi-wp {
+  font-family: $font-mono;
+  color: $accent;
+}
+
+.kw__fi-kind {
   color: $text-muted;
   opacity: 0.6;
-  flex-wrap: wrap;
 }
 
-.kw__chain-item {
-  padding: 0.05rem 0.25rem;
-  border-radius: $radius-sm;
-  background: $bg-surface;
-}
+// ── Status ──
 
-.kw__chain-arrow {
-  opacity: 0.3;
-}
-
-.kw__chain-val {
-  font-family: $font-mono;
-}
-
-.kw__chain-action {
-  color: #4a9e5a;
-  background: #1a2e1a;
+.kw__status-msg {
+  text-align: center;
+  font-size: $text-sm;
+  color: $text-muted;
+  opacity: 0.4;
+  padding: $space-md;
+  border: 1px dashed $border-subtle;
+  border-radius: $radius-md;
 }

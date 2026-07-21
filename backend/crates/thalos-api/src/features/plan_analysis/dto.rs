@@ -38,6 +38,12 @@ pub struct PlanAnalysisResponse {
     pub findings: Vec<FindingDto>,
     /// Recomendaciones accionables.
     pub recommendations: Vec<RecommendationDto>,
+    /// Regiones problemáticas semánticas (M8.1+).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub problem_regions: Vec<ProblemRegionDto>,
+    /// Puntaje de salud general (0.0..1.0).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub health_score: Option<f64>,
 }
 
 /// Resumen ejecutivo.
@@ -132,6 +138,41 @@ pub struct FindingDto {
     pub message: String,
     /// Valor numérico asociado (opcional).
     pub value: Option<f64>,
+}
+
+/// Métricas de una región problemática.
+#[derive(Debug, Serialize)]
+pub struct RegionMetricsDto {
+    pub waypoint_count: usize,
+    pub average_value: Option<f64>,
+    pub min_value: Option<f64>,
+    pub max_value: Option<f64>,
+    pub error_count: usize,
+    pub warning_count: usize,
+}
+
+/// Explicación de una región problemática.
+#[derive(Debug, Serialize)]
+pub struct ExplanationDto {
+    pub cause: String,
+    pub consequence: String,
+    pub recommended_strategies: Vec<String>,
+    pub confidence: f64,
+}
+
+/// Región problemática semántica (M8.1+).
+#[derive(Debug, Serialize)]
+pub struct ProblemRegionDto {
+    pub id: usize,
+    pub kind: String,
+    pub severity: String,
+    pub waypoint_start: usize,
+    pub waypoint_end: usize,
+    pub waypoint_count: usize,
+    pub metrics: Option<RegionMetricsDto>,
+    pub explanation: ExplanationDto,
+    pub confidence: Option<f64>,
+    pub recommended_strategies: Vec<String>,
 }
 
 /// Recomendación accionable.
