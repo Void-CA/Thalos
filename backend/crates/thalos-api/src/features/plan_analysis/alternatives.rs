@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use axum::{extract::State, Json};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use thalos_core::collision::CollisionMatrix;
 use thalos_collision::NaiveCollisionChecker;
@@ -18,6 +18,9 @@ use thalos_planning::{
         AlternativeGenerator, CostFunction, PerturbationStrategy, PlanEvaluator,
     },
     motion::program::CompiledPlan,
+};
+use thalos_runtime::{
+    comparison, ExecutionAnalyzer as RuntimeExecutionAnalyzer,
 };
 
 use crate::app::error::ApiError;
@@ -71,6 +74,14 @@ pub struct MetricBreakdownItem {
     pub value: f64,
 }
 
+/// Cuerpo opcional para inyectar evidencia de ejecución.
+#[derive(Debug, Deserialize)]
+pub struct AlternativesRequest {
+    /// ID de sesión para fusionar execution findings con planning findings.
+    #[serde(default)]
+    pub session_id: Option<u64>,
+}
+
 fn metric_name(key: &thalos_planning::evaluation::metrics::MetricKind) -> &'static str {
     use thalos_planning::evaluation::metrics::MetricKind;
     match key {
@@ -86,6 +97,7 @@ fn metric_name(key: &thalos_planning::evaluation::metrics::MetricKind) -> &'stat
 /// POST /api/v1/plan/analyze/alternatives
 pub async fn analyze_alternatives(
     State(state): State<Arc<AppState>>,
+    Json(body): Json<AlternativesRequest>,
 ) -> ApiResult<AlternativesResponse> {
     let snapshot = state.services.scene.snapshot().await?;
 
@@ -109,7 +121,21 @@ pub async fn analyze_alternatives(
         message: e.to_string(),
     })?;
 
-    let findings = &original_analysis.findings;
+    // 2. Fusionar planning findings con execution findings si se proporciona session_id
+    let mut findings = original_analysis.findings.clone();
+    if let Some(sid) = body.session_id {
+        if let (Some(mt), Some(et), Some(session)) = (
+            state.services.sessions.get_trace(sid).await,
+            state.services.sessions.get_execution_trace(sid).await,
+            state.services.sessions.get(sid).await,
+        ) {
+            let comparison = comparison::compare(&mt, &et, &session.plan_id, &sid.to_string(), &session.robot_name);
+            let exec_analyzer = RuntimeExecutionAnalyzer::new();
+            let exec_findings = exec_analyzer.analyze(&comparison);
+            findings.extend(exec_findings);
+        }
+    }
+
     let original_metrics = PlanEvaluator::compute_metrics(&original_analysis.waypoints);
 
     // 2. Construir CompiledPlan para el generador

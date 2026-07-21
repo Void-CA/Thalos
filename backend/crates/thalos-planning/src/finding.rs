@@ -12,8 +12,10 @@
 
 use std::fmt;
 
+use serde::Serialize;
+
 /// Severidad del hallazgo.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub enum Severity {
     Info,
     Warning,
@@ -31,7 +33,7 @@ impl fmt::Display for Severity {
 }
 
 /// Tipo de hallazgo.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub enum FindingKind {
     LowManipulability,
     NearSingularity,
@@ -73,7 +75,7 @@ impl fmt::Display for FindingKind {
 /// Representa un hecho, no una acción. Ejemplos:
 /// - "manipulabilidad = 0.12 en waypoint 3" (Finding)
 /// - vs "cambiar solución IK" (Recommendation)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Finding {
     pub kind: FindingKind,
     pub severity: Severity,

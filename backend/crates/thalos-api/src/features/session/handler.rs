@@ -13,8 +13,10 @@ use thalos_runtime::{
         playback::interpolator::{Interpolator, LinearInterpolator, NearestSampleInterpolator},
         replay::ReplayBackend,
     },
-    comparison, ExecutionSource, ExecutionTrace, MotionTrace, TraceAnalyzer,
+    comparison, ExecutionAnalyzer, ExecutionSource, ExecutionTrace, MotionTrace, TraceAnalyzer,
 };
+
+use thalos_planning::finding::Finding;
 
 use crate::app::error::ApiError;
 use crate::app::prelude::*;
@@ -330,4 +332,67 @@ pub async fn import_trace(
         .await;
 
     Ok(Json(session.into()))
+}
+
+// ── GET /sessions/{id}/comparison ──
+
+/// Respuesta combinada: métricas de comparación + hallazgos de ejecución.
+#[derive(Debug, Serialize)]
+pub struct SessionComparisonResponse {
+    pub metrics: comparison::ComparisonMetrics,
+    pub findings: Vec<Finding>,
+    pub aligned_pair_count: usize,
+}
+
+/// Comparar plan con ejecución y devolver métricas + hallazgos.
+pub async fn get_session_comparison(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<u64>,
+) -> Result<Json<SessionComparisonResponse>, ApiError> {
+    let motion_trace = state
+        .services
+        .sessions
+        .get_trace(id)
+        .await
+        .ok_or_else(|| ApiError::NotFound {
+            message: format!("MotionTrace for session {} not found", id),
+        })?;
+
+    let exec_trace = state
+        .services
+        .sessions
+        .get_execution_trace(id)
+        .await
+        .ok_or_else(|| ApiError::NotFound {
+            message: format!("ExecutionTrace for session {} not found", id),
+        })?;
+
+    let session = state
+        .services
+        .sessions
+        .get(id)
+        .await
+        .ok_or_else(|| ApiError::NotFound {
+            message: format!("Session {} not found", id),
+        })?;
+
+    let comparison = comparison::compare(
+        &motion_trace,
+        &exec_trace,
+        &session.plan_id,
+        &id.to_string(),
+        &session.robot_name,
+    );
+
+    let aligned_pair_count = comparison.alignment.pairs.len();
+    let metrics = comparison.metrics.clone();
+
+    let analyzer = ExecutionAnalyzer::new();
+    let findings = analyzer.analyze(&comparison);
+
+    Ok(Json(SessionComparisonResponse {
+        metrics,
+        findings,
+        aligned_pair_count,
+    }))
 }
