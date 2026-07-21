@@ -61,14 +61,14 @@
     }
 
     <!-- ═══════ EVIDENCE ═══════ -->
-    @if (hasEvidence) {
+    @if (hasEvidence()) {
       <section class="kw__section">
         <h2 class="kw__sec-title">Evidence</h2>
         <div class="kw__evidence">
           @for (ev of evidenceItems(); track $index) {
             <div class="kw__ev" (click)="onFocus(ev.waypoint)">
               <div class="kw__ev-head">
-                <span class="kw__ev-sev kw__sev--{{ev.severity}}">{{ iconFor(ev.severity) }}</span>
+                <span class="kw__ev-sev" [class]="'kw__sev--' + ev.severity">{{ iconFor(ev.severity) }}</span>
                 <span class="kw__ev-kind">{{ ev.kind }}</span>
                 <span class="kw__ev-cat" [style.background]="ev.category.color">{{ ev.category.label }}</span>
                 @if (ev.waypoint != null) { <span class="kw__ev-wp">wp{{ ev.waypoint }}</span> }
