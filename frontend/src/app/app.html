@@ -1,116 +1,112 @@
-<div class="layout">
+<div class="layout" [class]="'layout--' + perspective.perspective()">
   <top-bar class="layout__top" />
 
-  @if (isAnalysisMode()) {
-    <!-- ═══ ANALYSIS WORKSPACE — layout propio ═══ -->
-    <div class="analysis-layout__body">
-      <scene-viewer class="analysis-layout__viewport" />
-      <analysis-workspace class="analysis-layout__content" />
-    </div>
-  } @else {
-    <!-- ═══ LEGACY LAYOUT — paneles clásicos ═══ -->
-    <div class="layout__body">
-      <!-- LEFT panel — conditional by perspective -->
-      @if (perspective.showLeftPanel()) {
-        <aside
-          class="layout__panel layout__panel--left"
-          [class.layout__panel--collapsed]="layout.leftCollapsed()"
-          [style.width.px]="layout.effectiveLeftWidth()"
-        >
-          @if (!layout.leftCollapsed()) {
-            <div class="layout__panel-header">
-              <ng-icon name="heroCpuChip" size="20" />
-              <span class="layout__panel-title">{{ leftPanelTitle() }}</span>
-              <button class="layout__collapse-btn" (click)="layout.toggleLeft()" title="Collapse panel">◀</button>
-            </div>
-            <div class="layout__panel-body">
-              @if (perspective.leftPanelContent() === 'robots') {
-                <robot-catalog />
-
-                @let robot = activeRobot();
-                @if (robot) {
-                  <div class="active-robot">
-                    <div class="active-robot__header">
-                      <span class="active-robot__name">{{ robot.name }}</span>
-                      <span class="active-robot__dof">{{ robot.dof }} DOF</span>
-                    </div>
-                    <div class="active-robot__joints">
-                      @for (j of jointLabels(); track $index) {
-                        <span class="active-robot__joint">
-                          <span class="active-robot__joint-name">{{ j.label }}</span>
-                          <span class="active-robot__joint-val">{{ j.value.toFixed(4) }}</span>
-                        </span>
-                      }
-                    </div>
+  <!-- Cuerpo: scene-viewer SIEMPRE presente. Workspaces/paneles se posicionan junto a él. -->
+  <div class="layout__body">
+    <!-- ── Workspace/panel left content ── -->
+    @if (isPlanningMode()) {
+      <planning-workspace class="layout__sidebar" />
+    }
+    @if (isLegacyMode() && perspective.showLeftPanel()) {
+      <aside
+        class="layout__panel layout__panel--left"
+        [class.layout__panel--collapsed]="layout.leftCollapsed()"
+        [style.width.px]="layout.effectiveLeftWidth()"
+      >
+        @if (!layout.leftCollapsed()) {
+          <div class="layout__panel-header">
+            <ng-icon name="heroCpuChip" size="20" />
+            <span class="layout__panel-title">{{ leftPanelTitle() }}</span>
+            <button class="layout__collapse-btn" (click)="layout.toggleLeft()" title="Collapse panel">◀</button>
+          </div>
+          <div class="layout__panel-body">
+            @if (perspective.leftPanelContent() === 'robots') {
+              <robot-catalog />
+              @let robot = activeRobot();
+              @if (robot) {
+                <div class="active-robot">
+                  <div class="active-robot__header">
+                    <span class="active-robot__name">{{ robot.name }}</span>
+                    <span class="active-robot__dof">{{ robot.dof }} DOF</span>
                   </div>
-                } @else {
-                  <div class="active-robot active-robot--empty">
-                    <p class="active-robot__hint">No robot loaded</p>
+                  <div class="active-robot__joints">
+                    @for (j of jointLabels(); track $index) {
+                      <span class="active-robot__joint">
+                        <span class="active-robot__joint-name">{{ j.label }}</span>
+                        <span class="active-robot__joint-val">{{ j.value.toFixed(4) }}</span>
+                      </span>
+                    }
                   </div>
-                }
+                </div>
+              } @else {
+                <div class="active-robot active-robot--empty">
+                  <p class="active-robot__hint">No robot loaded</p>
+                </div>
               }
-
-              @if (perspective.leftPanelContent() === 'sessions') {
-                <session-browser />
-              }
-            </div>
-          } @else {
-            <button class="layout__expand-btn" (click)="layout.toggleLeft()" title="Expand panel">▶</button>
-          }
-        </aside>
-
+            }
+            @if (perspective.leftPanelContent() === 'sessions') {
+              <session-browser />
+            }
+          </div>
+        } @else {
+          <button class="layout__expand-btn" (click)="layout.toggleLeft()" title="Expand panel">▶</button>
+        }
+      </aside>
+      @if (!layout.leftCollapsed()) {
         <app-splitter direction="vertical" panel="left" />
       }
-
-      <!-- CENTER — scene viewer (always visible) -->
-      <scene-viewer class="layout__center" />
-
-      @if (hasRightPanel()) {
-        <app-splitter direction="vertical" panel="right" />
-
-        <!-- RIGHT panel (always visible) -->
-        <aside
-          class="layout__panel layout__panel--right"
-          [class.layout__panel--collapsed]="layout.rightCollapsed()"
-          [style.width.px]="layout.effectiveRightWidth()"
-        >
-          @if (!layout.rightCollapsed()) {
-            <div class="layout__panel-header">
-              <button class="layout__collapse-btn" (click)="layout.toggleRight()" title="Collapse panel">▶</button>
-              <ng-icon name="heroWrenchScrewdriver" size="20" />
-              <span class="layout__panel-title">Tools</span>
-            </div>
-            <div class="layout__panel-body">
-              @for (tool of perspective.rightPanel(); track tool.id) {
-                <details class="accordion" [open]="tool.defaultOpen">
-                  <summary class="accordion__header">
-                    <span class="accordion__title">{{ tool.label }}</span>
-                    <span class="accordion__chevron"></span>
-                  </summary>
-                  <div class="accordion__body">
-                    <ng-container *ngComponentOutlet="tool.component" />
-                  </div>
-                </details>
-              }
-              @if (perspective.rightPanel().length === 0) {
-                <p class="layout__placeholder">No tools available</p>
-              }
-            </div>
-          } @else {
-            <button class="layout__expand-btn" (click)="layout.toggleRight()" title="Expand panel">◀</button>
-          }
-        </aside>
-      }
-    </div>
-
-    @if (perspective.showBottomPanel()) {
-      <app-splitter direction="horizontal" panel="bottom" />
-
-      <bottom-panel
-        class="layout__bottom"
-        [style.height.px]="layout.effectiveBottomHeight()"
-      />
     }
+
+    <!-- ═══ SCENE VIEWER: siempre montado ═══ -->
+    <scene-viewer class="layout__viewport" />
+
+    <!-- ── Workspace/panel right content ── -->
+    @if (isAnalysisMode()) {
+      <analysis-workspace class="layout__content" />
+    }
+    @if (isLegacyMode() && hasRightPanel()) {
+      <app-splitter direction="vertical" panel="right" />
+      <aside
+        class="layout__panel layout__panel--right"
+        [class.layout__panel--collapsed]="layout.rightCollapsed()"
+        [style.width.px]="layout.effectiveRightWidth()"
+      >
+        @if (!layout.rightCollapsed()) {
+          <div class="layout__panel-header">
+            <button class="layout__collapse-btn" (click)="layout.toggleRight()" title="Collapse panel">▶</button>
+            <ng-icon name="heroWrenchScrewdriver" size="20" />
+            <span class="layout__panel-title">Tools</span>
+          </div>
+          <div class="layout__panel-body">
+            @for (tool of perspective.rightPanel(); track tool.id) {
+              <details class="accordion" [open]="tool.defaultOpen">
+                <summary class="accordion__header">
+                  <span class="accordion__title">{{ tool.label }}</span>
+                  <span class="accordion__chevron"></span>
+                </summary>
+                <div class="accordion__body">
+                  <ng-container *ngComponentOutlet="tool.component" />
+                </div>
+              </details>
+            }
+            @if (perspective.rightPanel().length === 0) {
+              <p class="layout__placeholder">No tools available</p>
+            }
+          </div>
+        } @else {
+          <button class="layout__expand-btn" (click)="layout.toggleRight()" title="Expand panel">◀</button>
+        }
+      </aside>
+    }
+  </div>
+
+  <!-- Bottom panel (solo legacy) -->
+  @if (isLegacyMode() && perspective.showBottomPanel()) {
+    <app-splitter direction="horizontal" panel="bottom" />
+    <bottom-panel
+      class="layout__bottom"
+      [style.height.px]="layout.effectiveBottomHeight()"
+    />
   }
 
   <status-bar />

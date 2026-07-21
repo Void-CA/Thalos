@@ -41,14 +41,14 @@
 
   &__seg-title {
     flex: 1;
-    font-size: 0.72rem;
+    font-size: $text-base;
     font-weight: 600;
     color: $text-primary;
     letter-spacing: 0.02em;
   }
 
   &__seg-chevron {
-    font-size: 0.6rem;
+    font-size: $text-sm;
     color: $text-muted;
   }
 
@@ -165,7 +165,7 @@
   }
 
   &__field-label {
-    font-size: 0.7rem;
+    font-size: $text-sm;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: $text-secondary;

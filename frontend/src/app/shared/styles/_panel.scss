@@ -28,8 +28,8 @@
 
 /// Section label — tiny uppercase muted heading.
 @mixin section-label {
-  margin: 0 0 0.5rem;
-  font-size: 0.7rem;
+  margin: 0 0 $space-sm;
+  font-size: $text-sm;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   opacity: 0.55;
@@ -41,7 +41,7 @@
   background: $bg-card;
   border: 1px solid $border-subtle;
   border-radius: $radius-md;
-  padding: 0.6rem 0.7rem 0.7rem;
+  padding: $space-md;
 }
 
 /// Output / read-only card — elevated background, dashed border.
@@ -50,7 +50,7 @@
   border: 1px solid $border-default;
   border-style: dashed;
   border-radius: $radius-md;
-  padding: 0.6rem 0.7rem 0.7rem;
+  padding: $space-md;
 }
 
 /// Coordinate grid — N-column grid of labelled inputs.
@@ -58,22 +58,22 @@
 @mixin coord-grid($cols: 3) {
   display: grid;
   grid-template-columns: repeat($cols, 1fr);
-  gap: 0.4rem;
+  gap: $space-sm;
 
   label {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
-    font-size: 0.7rem;
+    gap: 0.25rem;
+    font-size: $text-sm;
     opacity: 0.85;
   }
 }
 
 /// Base action button — no width (let layout context decide).
 @mixin action-base {
-  padding: 0.45rem 0.4rem;
+  padding: 0.5rem 0.5rem;
   font-family: $font-mono;
-  font-size: 0.78rem;
+  font-size: $text-base;
   font-weight: 600;
   cursor: pointer;
   background: $bg-elevated;
@@ -94,9 +94,9 @@
 /// Number input used inside coord-grid and other panel fields.
 @mixin number-input {
   width: 10ch;
-  padding: 0.2rem 0.3rem;
+  padding: 0.3rem 0.4rem;
   font-family: $font-mono;
-  font-size: 0.8rem;
+  font-size: $text-base;
   background: $bg-input;
   border: 1px solid $border-default;
   color: $text-muted;

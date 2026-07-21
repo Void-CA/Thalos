@@ -16,10 +16,10 @@
     display: flex;
     align-items: center;
     flex-shrink: 0;
-    height: 28px;
-    padding: 0 0.5rem;
+    height: 36px;
+    padding: 0 $space-md;
     border-bottom: 1px solid $border-subtle;
-    gap: 0.25rem;
+    gap: 0.35rem;
   }
 
   &__tab {
@@ -27,17 +27,17 @@
     border: none;
     color: $text-secondary;
     font-family: $font-ui;
-    font-size: 0.72rem;
+    font-size: $text-sm;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    padding: 0.3rem 0.6rem;
+    padding: 0.35rem 0.75rem;
     cursor: pointer;
     border-radius: $radius-sm $radius-sm 0 0;
     transition: background $transition-fast, color $transition-fast;
     opacity: 0.75;
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.35rem;
 
     &:hover {
       background: $bg-card;
@@ -59,9 +59,9 @@
     background: none;
     border: none;
     color: $text-muted;
-    font-size: 0.6rem;
+    font-size: $text-xs;
     cursor: pointer;
-    padding: 0.2rem 0.35rem;
+    padding: 0.25rem 0.4rem;
     opacity: 0.5;
     transition: opacity $transition-fast;
 
@@ -100,25 +100,25 @@
     flex: 1;
     overflow-y: auto;
     min-height: 0;
-    padding: 0.75rem 1rem;
+    padding: $space-md $space-lg;
     font-family: $font-mono;
-    font-size: 0.78rem;
+    font-size: $text-base;
     color: $text-primary;
-    line-height: 1.5;
+    line-height: 1.6;
   }
 
   &__json {
     margin: 0;
-    line-height: 1.5;
+    line-height: 1.6;
     white-space: pre-wrap;
     color: $text-muted;
   }
 
   &__empty {
-    margin: 1rem 0;
+    margin: $space-lg 0;
     text-align: center;
     opacity: 0.45;
-    font-size: 0.7rem;
+    font-size: $text-base;
   }
 
   // ── Analysis tab (horizontal cards) ──
@@ -680,19 +680,19 @@
   .log {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
+    gap: 0.2rem;
 
     &__entry {
       display: flex;
-      gap: 0.5rem;
-      font-size: 0.68rem;
-      line-height: 1.5;
+      gap: $space-sm;
+      font-size: $text-sm;
+      line-height: 1.6;
 
       &--error {
         color: $danger;
         background: rgba(255, 68, 68, 0.06);
         border-radius: $radius-sm;
-        padding: 0.1rem 0.25rem;
+        padding: 0.15rem 0.35rem;
       }
     }
 
@@ -717,47 +717,42 @@
 // ── Sessions ──
 
 .sessions {
-  padding: 0.5rem;
+  padding: $space-md;
   overflow-y: auto;
 
   &__list {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: $space-sm;
   }
 
   &__item {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    padding: 0.4rem 0.5rem;
-    border-radius: 4px;
+    gap: 0.35rem;
+    padding: $space-sm $space-md;
+    border-radius: $radius-md;
     background: $bg-elevated;
     border: 1px solid $border-subtle;
     cursor: pointer;
     transition: border-color 0.15s;
 
-    &:hover {
-      border-color: $accent;
-    }
-
-    &--active {
-      border-color: $accent;
-    }
+    &:hover { border-color: $accent; }
+    &--active { border-color: $accent; }
   }
 
   &__item-header {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.72rem;
+    gap: $space-sm;
+    font-size: $text-base;
   }
 
   &__badge {
     display: inline-block;
-    padding: 0.1rem 0.3rem;
-    border-radius: 2px;
-    font-size: 0.6rem;
+    padding: 0.15rem 0.4rem;
+    border-radius: $radius-sm;
+    font-size: $text-xs;
     font-weight: 700;
     text-transform: uppercase;
 
@@ -769,14 +764,8 @@
     &.badge--ready { background: #333; color: #888; }
   }
 
-  &__id {
-    font-weight: 700;
-    color: $text-primary;
-  }
-
-  &__source {
-    opacity: 0.6;
-  }
+  &__id { font-weight: 700; color: $text-primary; }
+  &__source { opacity: 0.6; }
 
   &__duration {
     margin-left: auto;
@@ -784,56 +773,35 @@
   }
 
   &__item-meta {
-    font-size: 0.65rem;
+    font-size: $text-sm;
     opacity: 0.5;
     display: flex;
-    gap: 0.75rem;
+    gap: $space-md;
   }
 
   &__item-actions {
     display: flex;
-    gap: 0.3rem;
-    margin-top: 0.15rem;
+    gap: 0.35rem;
+    margin-top: 0.25rem;
   }
 
   &__btn {
     font-family: monospace;
-    font-size: 0.65rem;
-    padding: 0.15rem 0.4rem;
-    border-radius: 3px;
+    font-size: $text-sm;
+    padding: 0.2rem 0.5rem;
+    border-radius: $radius-sm;
     border: 1px solid $border-subtle;
     background: $bg-surface;
     color: $text-secondary;
     cursor: pointer;
     transition: background 0.15s;
 
-    &:hover:not(:disabled) {
-      background: #3a3a3a;
-    }
-
-    &:disabled {
-      opacity: 0.4;
-      cursor: default;
-    }
+    &:hover:not(:disabled) { background: #3a3a3a; }
+    &:disabled { opacity: 0.4; cursor: default; }
   }
 
-  &__btn--replay {
-    border-color: #44cc44;
-    color: #44cc44;
-
-    &:hover:not(:disabled) {
-      background: #1a3a1a;
-    }
-  }
-
-  &__btn--export {
-    border-color: #33ccff;
-    color: #33ccff;
-
-    &:hover:not(:disabled) {
-      background: #1a2a3a;
-    }
-  }
+  &__btn--replay { border-color: #44cc44; color: #44cc44; &:hover:not(:disabled) { background: #1a3a1a; } }
+  &__btn--export { border-color: #33ccff; color: #33ccff; &:hover:not(:disabled) { background: #1a2a3a; } }
 }
 
 // ── Pipeline Flow Monitor ──
@@ -841,10 +809,10 @@
 .bottom-panel__pipeline {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.2rem 0.75rem;
+  gap: 0.35rem;
+  padding: 0.3rem $space-md;
   border-bottom: 1px solid $border-subtle;
-  font-size: 0.6rem;
+  font-size: $text-xs;
   font-family: $font-ui;
   background: $bg-elevated;
 }
@@ -852,7 +820,7 @@
 .pipeline__stage {
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
+  gap: 0.25rem;
   opacity: 0.35;
   font-weight: 500;
   text-transform: uppercase;
@@ -871,7 +839,7 @@
 
 .pipeline__arrow {
   opacity: 0.25;
-  font-size: 0.55rem;
+  font-size: 0.65rem;
 }
 
 // ── Execution Summary ──
