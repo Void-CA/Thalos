@@ -14,7 +14,7 @@
 
 .catalog__status {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: $text-base;
   opacity: 0.5;
 
   &--error {
@@ -28,7 +28,7 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px dashed rgba(255, 255, 255, 0.2);
   color: inherit;
-  font-size: 0.75rem;
+  font-size: $text-base;
   padding: 0.4rem;
   border-radius: $radius-sm;
   cursor: pointer;
@@ -42,7 +42,7 @@
 
 .catalog__file-name {
   margin: 0.25rem 0 0;
-  font-size: 0.7rem;
+  font-size: $text-sm;
   opacity: 0.5;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -64,7 +64,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 0.7rem;
+    font-size: $text-sm;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: $text-secondary;

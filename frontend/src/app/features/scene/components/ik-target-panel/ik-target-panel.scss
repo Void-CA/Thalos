@@ -15,7 +15,7 @@
 
 .ik-panel__sublabel {
   margin: 0.5rem 0 0.4rem;
-  font-size: 0.7rem;
+  font-size: $text-sm;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   opacity: 0.5;
@@ -61,7 +61,7 @@ input[type='number'] {
     flex: 1;
     padding: 0.25rem 0.4rem;
     font-family: $font-mono;
-    font-size: 0.75rem;
+    font-size: $text-base;
     cursor: pointer;
     background: transparent;
     border: none;
@@ -87,7 +87,7 @@ input[type='number'] {
 
   &--small .segmented__btn {
     padding: 0.18rem 0.3rem;
-    font-size: 0.7rem;
+    font-size: $text-sm;
   }
 }
 
@@ -138,14 +138,14 @@ input[type='number'] {
 
   &__empty {
     margin: 0;
-    font-size: 0.75rem;
+    font-size: $text-base;
     opacity: 0.4;
     font-style: italic;
   }
 }
 
 .q-value {
-  font-size: 0.75rem;
+  font-size: $text-base;
   background: #1a2a1a;
   padding: 0.1rem 0.4rem;
   border-radius: $radius-sm;
@@ -157,7 +157,7 @@ input[type='number'] {
   margin-top: 0.5rem;
   padding: 0.35rem 0.5rem;
   border-radius: $radius-sm;
-  font-size: 0.72rem;
+  font-size: $text-base;
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
@@ -175,7 +175,7 @@ input[type='number'] {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    font-size: 0.7rem;
+    font-size: $text-sm;
   }
   &__detail {
     opacity: 0.75;

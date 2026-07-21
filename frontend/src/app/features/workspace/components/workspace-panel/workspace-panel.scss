@@ -64,7 +64,7 @@ input[type='number'] {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.72rem;
+  font-size: $text-base;
   opacity: 0.8;
   cursor: pointer;
   user-select: none;

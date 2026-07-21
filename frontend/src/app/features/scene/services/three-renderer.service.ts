@@ -1,7 +1,7 @@
 import { Injectable, NgZone, inject, signal } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { TransformControls } from 'three/addons/controls/TransformControls.js';
+
 import { DEFAULT_FRAME_STYLE, ObjectTransform, SceneData, SceneFrame, SceneLink, ScenePrimitive, SegmentInfo, VisualWaypoint } from '../scene.types';
 
 /** Palette for multi-segment trajectories — color assigned by segment index. */
@@ -61,15 +61,7 @@ export class ThreeRendererService {
   private lastGridSize = 0;
   /** Reference dimension of the current robot — used for proportional sizing. */
   private referenceDimension = 1.0;
-  /** TransformControls for the IK target gizmo — enabled when target is visible. */
-  private transformControls: TransformControls | null = null;
-  /** True while the user is actively dragging the IK target gizmo. */
-  private isDraggingTarget = false;
-  /**
-   * Callback fired on every drag frame with the current target position.
-   * The consumer (scene-viewer) updates the store, which syncs the input panel.
-   */
-  private onTargetDrag: ((pos: [number, number, number]) => void) | null = null;
+
   private frameId: number | null = null;
   private trajectorySlot: TrajectorySlot | null = null;
 
@@ -135,33 +127,8 @@ export class ThreeRendererService {
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
 
-    // IK target TransformControls — attached to targetGroup when visible.
-    // Size set to 0.45 (visible at typical camera distance). Updated dynamically
-    // in applyScene when referenceDimension is known.
-    this.transformControls = new TransformControls(this.camera, canvas);
-    this.transformControls.setMode('translate');
-    this.transformControls.setSize(0.45);
-    this.transformControls.addEventListener('dragging-changed', (event) => {
-      this.isDraggingTarget = event.value as boolean;
-      this.controls!.enabled = !event.value;
-    });
-    // objectChange solo se dispara cuando el objeto transformado CAMBIÓ realmente,
-    // a diferencia de 'change' que se dispara por cualquier interacción (hover, click).
-    // Esto evita el feedback loop: click → updateTarget → effect → setTarget → attach.
-    this.transformControls.addEventListener('objectChange', () => {
-      if (this.onTargetDrag && this.targetGroup && this.lastDragPosition) {
-        const p = this.targetGroup.position;
-        const dx = p.x - this.lastDragPosition[0];
-        const dy = p.y - this.lastDragPosition[1];
-        const dz = p.z - this.lastDragPosition[2];
-        // Umbral para evitar updates con cambios sub-pixel
-        if (dx * dx + dy * dy + dz * dz < 1e-12) return;
-        this.lastDragPosition = [p.x, p.y, p.z];
-        this.onTargetDrag([p.x, p.y, p.z]);
-      }
-    });
-    // NOTE: TransformControls is NOT added to the scene — it manages its own
-    // internal gizmo Object3D automatically when attach() is called.
+    // IK target is read-only (visual only). No TransformControls attached.
+    // The user sets IK target position via the IK panel inputs (left sidebar).
 
     // Lights
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.5));
@@ -229,7 +196,7 @@ export class ThreeRendererService {
     this.syncLinks(scene.links);
     this.syncPrimitives(scene.primitives);
     this.updateGrid(scene.referenceDimension);
-    this.transformControls?.setSize(scene.referenceDimension * 0.45);
+
   }
 
   /**
@@ -641,38 +608,20 @@ export class ThreeRendererService {
   }
 
   /** Register a callback for IK target drag events. */
-  setOnTargetDrag(callback: ((pos: [number, number, number]) => void) | null): void {
-    this.onTargetDrag = callback;
-  }
-
-  /** Show the IK target gizmo at the given world position/orientation. */
+  /** Show the IK target at the given world position/orientation (read-only, no drag). */
   setTarget(position: [number, number, number], quaternion?: [number, number, number, number]): void {
-    if (!this.targetGroup || !this.transformControls) return;
-
-    // During an active drag, the user controls position directly via TransformControls.
-    // Skipping the position update here prevents fighting between store-driven updates
-    // and user-driven dragging.
-    if (!this.isDraggingTarget) {
-      this.targetGroup.position.set(position[0], position[1], position[2]);
-      if (quaternion) {
-        this.targetGroup.quaternion.set(quaternion[1], quaternion[2], quaternion[3], quaternion[0]);
-      } else {
-        this.targetGroup.quaternion.identity();
-      }
+    if (!this.targetGroup) return;
+    this.targetGroup.position.set(position[0], position[1], position[2]);
+    if (quaternion) {
+      this.targetGroup.quaternion.set(quaternion[1], quaternion[2], quaternion[3], quaternion[0]);
+    } else {
+      this.targetGroup.quaternion.identity();
     }
-
-    // Only attach the TransformControls gizmo on first-show, NOT on every
-    // store-driven update (which fires during drag via onTargetDrag → setTarget).
-    // Calling attach() while already attached resets the gizmo and it disappears.
-    if (!this.targetGroup.visible) {
-      this.targetGroup.visible = true;
-      this.transformControls.attach(this.targetGroup);
-    }
+    this.targetGroup.visible = true;
   }
 
-  /** Hide the IK target gizmo and detach transform controls. */
+  /** Hide the IK target gizmo. */
   clearTarget(): void {
-    this.transformControls?.detach();
     if (this.targetGroup) {
       this.targetGroup.visible = false;
     }
@@ -879,7 +828,7 @@ export class ThreeRendererService {
       this.frameId = null;
     }
     window.removeEventListener('resize', this.onResize);
-    this.transformControls?.dispose();
+
     this.controls?.dispose();
     this.renderer?.dispose();
 
