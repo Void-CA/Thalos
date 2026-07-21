@@ -255,26 +255,28 @@ impl SceneService {
                 Self::trajectory_to_waypoints(&runtime)
             };
 
-            // Register session and start recording
+            // Execute on controller FIRST (before creating session).
+            // If execution fails, no orphaned session is created.
+            let has_wps = !waypoints.is_empty() && duration > 0.0;
+            if has_wps {
+                let wps_exec = waypoints.clone();
+                let mut c = ctrl.write().await;
+                c.execute(wps_exec, duration).await?;
+            }
+
+            // Only now register the session — execution already started.
             let robot_name = {
                 let runtime = self.runtime.read().await;
                 runtime.robot_name.clone()
             };
             let source = ExecutionSource::Simulation;
-            let robot_name_clone = robot_name.clone();
             let wps_for_recorder = waypoints.clone();
             let joint_count = wps_for_recorder.first().map(|w| w.len()).unwrap_or(0);
+            let robot_name_for_session = robot_name.clone();
             let session = self
                 .sessions
-                .register(source.clone(), "plan-exec".into(), duration, joint_count, robot_name)
+                .register(source.clone(), "plan-exec".into(), duration, joint_count, robot_name_for_session)
                 .await;
-
-            // Execute on controller (moves waypoints)
-            let has_wps = !wps_for_recorder.is_empty() && duration > 0.0;
-            if has_wps {
-                let mut c = ctrl.write().await;
-                c.execute(wps_for_recorder.clone(), duration).await?;
-            }
 
             let mut recorder = MotionRecorder::new();
             if !wps_for_recorder.is_empty() {
@@ -286,7 +288,7 @@ impl SceneService {
                 session_id: session.id.to_string(),
                 plan_id: session.plan_id.clone(),
                 source: source,
-                robot_name: robot_name_clone,
+                robot_name: robot_name.clone(),
                 joint_count,
                 duration: std::time::Duration::from_secs_f64(duration),
                 sample_rate: 0.0,

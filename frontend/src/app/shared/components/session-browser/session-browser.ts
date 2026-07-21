@@ -26,6 +26,17 @@ import { SceneStore } from '../../../features/scene/store/scene.store';
               <div class="sb__item-meta">
                 <span>{{ s.robot_name }}</span>
                 <span>{{ s.joint_count }} DOF</span>
+                <span class="sb__plan-id">plan: {{ s.plan_id }}</span>
+              </div>
+              <div class="sb__item-time">
+                @if (s.completed_at) {
+                  <span class="sb__ts">{{ formatTime(s.completed_at) }}</span>
+                } @else if (s.started_at) {
+                  <span class="sb__ts">{{ formatTime(s.started_at) }}</span>
+                }
+                @if (s.status !== 'Completed' && s.status !== 'Cancelled' && s.status !== 'Failed') {
+                  <span class="sb__badge-running">● active</span>
+                }
               </div>
               <button class="sb__btn" (click)="onReplay(s.id); $event.stopPropagation()" [disabled]="replaying()">
                 {{ replaying() ? '…' : '▶ Replay' }}
@@ -62,6 +73,10 @@ import { SceneStore } from '../../../features/scene/store/scene.store';
     .sb__source { opacity: 0.6; }
     .sb__duration { margin-left: auto; }
     .sb__item-meta { font-size: 0.6rem; opacity: 0.5; display: flex; gap: 0.5rem; margin-top: 0.1rem; }
+    .sb__plan-id { font-family: monospace; opacity: 0.6; }
+    .sb__item-time { font-size: 0.55rem; display: flex; gap: 0.3rem; align-items: center; margin-top: 0.1rem; }
+    .sb__ts { opacity: 0.4; }
+    .sb__badge-running { color: #33ccff; font-size: 0.55rem; font-weight: 700; }
     .sb__btn {
       font-family: monospace;
       font-size: 0.65rem;
@@ -81,6 +96,14 @@ export class SessionBrowser {
   private readonly api = inject(SessionApiService);
   private readonly replayStore = inject(ReplayStore);
   private readonly scene = inject(SceneStore);
+
+  protected formatTime(iso: string): string {
+    try {
+      return new Date(iso).toLocaleTimeString();
+    } catch {
+      return iso;
+    }
+  }
 
   protected readonly sessions = signal<SessionResponse[]>([]);
   protected readonly selectedId = signal<number | null>(null);

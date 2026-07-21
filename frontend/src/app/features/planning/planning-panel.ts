@@ -216,8 +216,13 @@ export class PlanningPanel {
         // Auto-analyze the freshly compiled plan
         this.analysis.analyzePlan();
       },
-      error: (err: Error) => {
-        this.error.set(err.message ?? 'Plan compilation failed');
+      error: (err: any) => {
+        // Intentar extraer el mensaje de error del cuerpo de la respuesta
+        const body = err.error;
+        const msg = typeof body === 'object' && body !== null
+          ? (body as { error?: string }).error ?? (body as { message?: string }).message ?? err.message
+          : err.message ?? 'Plan compilation failed';
+        this.error.set(msg);
         queueMicrotask(() => this.loading.set(false));
       },
     });
