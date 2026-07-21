@@ -9,6 +9,7 @@ pub mod telemetry;
 pub mod commands;
 pub mod backends;
 pub mod comparison;
+pub mod execution_analysis;
 pub mod snapshots;
 pub mod error;
 
@@ -29,3 +30,4 @@ pub use services::plan_analysis::{PlanAnalysisResult, PlanAnalysisService};
 pub use snapshots::scene::RuntimeSnapshot;
 pub use snapshots::scene::TickDelta;
 pub use state::robot_state::{RobotState, MotionState, JointState, CartesianState, DeviceState, ExecutionState, Diagnostics, MotionMode, ConnectionState, RobotError};
+pub use execution_analysis::{ExecutionAnalyzer, ExecutionThresholds};

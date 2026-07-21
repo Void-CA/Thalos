@@ -15,5 +15,5 @@ pub use cost::{CostFunction, PlanScore};
 pub use evaluator::PlanEvaluator;
 pub use generator::{
     AlternativeCandidate, AlternativeGenerator, Perturbation, PerturbationStrategy,
-    ProblemRegions, RankedAlternative, SelectionPolicy,
+    ProblemRegion, ProblemRegions, RankedAlternative, RegionCategory, SelectionPolicy,
 };

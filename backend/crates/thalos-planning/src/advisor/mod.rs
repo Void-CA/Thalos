@@ -183,6 +183,25 @@ impl PlanAdvisor {
                     waypoint: finding.waypoint,
                 }]
             }
+
+            // Los hallazgos de ejecución los genera ExecutionAnalyzer, no PlanAdvisor.
+            // Se incluyen aquí para exhaustividad del match.
+            FindingKind::TrackingError | FindingKind::TrackingSpike => {
+                vec![Recommendation {
+                    kind: SuggestionKind::Constraint,
+                    message: finding.message.clone(),
+                    impact: Impact::High,
+                    waypoint: finding.waypoint,
+                }]
+            }
+            FindingKind::JointDeviation | FindingKind::VelocityDeviation => {
+                vec![Recommendation {
+                    kind: SuggestionKind::Constraint,
+                    message: finding.message.clone(),
+                    impact: Impact::Medium,
+                    waypoint: finding.waypoint,
+                }]
+            }
         }
     }
 }

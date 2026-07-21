@@ -40,6 +40,14 @@ pub enum FindingKind {
     CollisionNear,
     ConstraintViolation,
     IkSuggestion,
+    /// Error de tracking global alto (RMSE > umbral).
+    TrackingError,
+    /// Pico de error de tracking en un punto específico.
+    TrackingSpike,
+    /// Articulación específica con desviación anormal.
+    JointDeviation,
+    /// Desviación de velocidad en una articulación.
+    VelocityDeviation,
 }
 
 impl fmt::Display for FindingKind {
@@ -52,6 +60,10 @@ impl fmt::Display for FindingKind {
             FindingKind::CollisionNear => write!(f, "collision_near"),
             FindingKind::ConstraintViolation => write!(f, "constraint_violation"),
             FindingKind::IkSuggestion => write!(f, "ik_suggestion"),
+            FindingKind::TrackingError => write!(f, "tracking_error"),
+            FindingKind::TrackingSpike => write!(f, "tracking_spike"),
+            FindingKind::JointDeviation => write!(f, "joint_deviation"),
+            FindingKind::VelocityDeviation => write!(f, "velocity_deviation"),
         }
     }
 }

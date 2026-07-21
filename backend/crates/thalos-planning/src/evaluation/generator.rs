@@ -15,43 +15,123 @@ use crate::error::PlanningError;
 use crate::evaluation::cost::{CostFunction, PlanScore};
 use crate::evaluation::evaluator::PlanEvaluator;
 use crate::evaluation::metrics::{MetricKind, PlanMetrics};
-use crate::finding::Finding;
+use crate::finding::{Finding, FindingKind, Severity};
 use crate::motion::program::CompiledPlan;
 
-/// Regiones problemáticas de un plan — desacopla el generador del análisis.
+/// Categoría de una región problemática — agrupa `FindingKind` en familias
+/// de estrategias de búsqueda.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RegionCategory {
+    /// Colisiones o proximidad a obstáculos.
+    Collision,
+    /// Problemas cinemáticos (singularidad, manipulabilidad baja).
+    Kinematic,
+    /// Desviaciones de tracking en ejecución.
+    Tracking,
+    /// Desviaciones de velocidad.
+    Velocity,
+    /// Violaciones de restricciones explícitas.
+    Constraint,
+}
+
+impl RegionCategory {
+    fn from_finding_kind(kind: FindingKind) -> Self {
+        match kind {
+            FindingKind::Collision | FindingKind::CollisionNear => RegionCategory::Collision,
+            FindingKind::LowManipulability
+            | FindingKind::NearSingularity
+            | FindingKind::Singularity
+            | FindingKind::IkSuggestion => RegionCategory::Kinematic,
+            FindingKind::TrackingError
+            | FindingKind::TrackingSpike
+            | FindingKind::JointDeviation => RegionCategory::Tracking,
+            FindingKind::VelocityDeviation => RegionCategory::Velocity,
+            FindingKind::ConstraintViolation => RegionCategory::Constraint,
+        }
+    }
+}
+
+/// Una región problemática localizada — qué, dónde y por qué.
 ///
-/// El análisis produce `Vec<Finding>`. El generador consume `ProblemRegions`.
-/// Entre ambos, una conversión explícita extrae solo los waypoints relevantes.
+/// Cada `Finding` con waypoint conocido produce un `ProblemRegion`.
+#[derive(Debug, Clone)]
+pub struct ProblemRegion {
+    /// Índice del waypoint problemático.
+    pub waypoint: usize,
+    /// Articulación específica (None = todas las articulaciones).
+    pub joint: Option<usize>,
+    /// Categoría para seleccionar estrategia de búsqueda.
+    pub category: RegionCategory,
+    /// Severidad del problema.
+    pub severity: Severity,
+}
+
+/// Conjunto de regiones problemáticas — entrada estándar del generador.
+///
+/// Se construye desde `Vec<Finding>` y se consume en
+/// [`AlternativeGenerator::generate_from_regions`].
 #[derive(Debug, Clone)]
 pub struct ProblemRegions {
-    /// Índices de waypoints con problemas, ordenados.
-    pub waypoints: Vec<usize>,
+    pub regions: Vec<ProblemRegion>,
 }
 
 impl ProblemRegions {
     /// Crear desde hallazgos del análisis.
+    ///
+    /// Cada `Finding` con `waypoint: Some(n)` produce un `ProblemRegion`.
+    /// Si no tiene articulación específica, `joint` queda como `None`
+    /// (el generador perturbará todas las articulaciones del waypoint).
     pub fn from_findings(findings: &[Finding]) -> Self {
-        let mut indices: Vec<usize> = findings.iter().filter_map(|f| f.waypoint).collect();
-        indices.sort();
-        indices.dedup();
-        Self { waypoints: indices }
+        let mut regions: Vec<ProblemRegion> = findings
+            .iter()
+            .filter_map(|f| {
+                let waypoint = f.waypoint?;
+                Some(ProblemRegion {
+                    waypoint,
+                    joint: None, // el Finding actual no transporta joint
+                    category: RegionCategory::from_finding_kind(f.kind),
+                    severity: f.severity,
+                })
+            })
+            .collect();
+        // Orden estable por waypoint para que el generador itere secuencialmente.
+        regions.sort_by_key(|r| r.waypoint);
+        Self { regions }
     }
 
-    /// Crear desde una lista explícita de waypoints.
+    /// Crear desde una lista explícita de waypoints (categoría genérica).
     pub fn from_indices(indices: Vec<usize>) -> Self {
         let mut indices = indices;
         indices.sort();
         indices.dedup();
-        Self { waypoints: indices }
+        let regions: Vec<ProblemRegion> = indices
+            .into_iter()
+            .map(|waypoint| ProblemRegion {
+                waypoint,
+                joint: None,
+                category: RegionCategory::Kinematic,
+                severity: Severity::Warning,
+            })
+            .collect();
+        Self { regions }
     }
 
     /// Crear región vacía (sin problemas).
     pub fn none() -> Self {
-        Self { waypoints: vec![] }
+        Self { regions: vec![] }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.waypoints.is_empty()
+        self.regions.is_empty()
+    }
+
+    /// Extraer índices de waypoint únicos (para compatibilidad con código
+    /// que solo necesita saber qué waypoints están afectados).
+    pub fn waypoint_indices(&self) -> Vec<usize> {
+        let mut indices: Vec<usize> = self.regions.iter().map(|r| r.waypoint).collect();
+        indices.sort();
+        indices.dedup();
+        indices
     }
 }
 
@@ -145,8 +225,8 @@ impl AlternativeGenerator {
 
     /// Generar candidatos desde `ProblemRegions`.
     ///
-    /// No depende del formato completo del análisis — solo recibe los
-    /// índices de waypoints problemáticos.
+    /// Si la región tiene `joint: Some(j)`, solo perturba esa articulación.
+    /// Si es `None`, perturba todas las articulaciones del waypoint.
     pub fn generate_from_regions(
         plan: &CompiledPlan,
         regions: &ProblemRegions,
@@ -157,50 +237,56 @@ impl AlternativeGenerator {
             return vec![];
         }
 
-        let target_indices: Vec<usize> = match strategy.selection_policy {
-            SelectionPolicy::ProblematicWaypoints => regions.waypoints.clone(),
-            SelectionPolicy::AllWaypoints => {
-                (0..waypoints.len()).collect()
-            }
-        };
-
-        if target_indices.is_empty() {
-            return vec![];
-        }
-
         let dof = waypoints.first().map(|wp| wp.joints().len()).unwrap_or(0);
 
         let mut candidates: Vec<AlternativeCandidate> = Vec::new();
         let mut next_id = 0;
 
-        for &wp_idx in &target_indices {
+        // Determinar qué (waypoint, joint) explorar
+        let entries: Vec<(usize, usize)> = match strategy.selection_policy {
+            SelectionPolicy::ProblematicWaypoints => regions
+                .regions
+                .iter()
+                .flat_map(|r| {
+                    let joints: Vec<usize> = if let Some(j) = r.joint {
+                        vec![j]
+                    } else {
+                        (0..dof).collect()
+                    };
+                    joints.into_iter().map(move |j| (r.waypoint, j))
+                })
+                .collect(),
+            SelectionPolicy::AllWaypoints => (0..waypoints.len())
+                .flat_map(|wp| (0..dof).map(move |j| (wp, j)))
+                .collect(),
+        };
+
+        if entries.is_empty() {
+            return vec![];
+        }
+
+        for &(wp_idx, joint) in &entries {
             if strategy.max_candidates > 0 && candidates.len() >= strategy.max_candidates {
                 break;
             }
 
-            // Para cada articulación en este waypoint, probar ±delta
-            for joint in 0..dof {
-                for &delta in &[strategy.delta, -strategy.delta] {
-                    if strategy.max_candidates > 0 && candidates.len() >= strategy.max_candidates {
-                        break;
-                    }
-
-                    let modified = Self::apply_perturbation(plan, wp_idx, joint, delta);
-                    candidates.push(AlternativeCandidate {
-                        id: next_id,
-                        source_waypoint: wp_idx,
-                        perturbations: vec![Perturbation {
-                            waypoint: wp_idx,
-                            joint,
-                            delta,
-                        }],
-                        plan: modified,
-                    });
-                    next_id += 1;
-                }
+            for &delta in &[strategy.delta, -strategy.delta] {
                 if strategy.max_candidates > 0 && candidates.len() >= strategy.max_candidates {
                     break;
                 }
+
+                let modified = Self::apply_perturbation(plan, wp_idx, joint, delta);
+                candidates.push(AlternativeCandidate {
+                    id: next_id,
+                    source_waypoint: wp_idx,
+                    perturbations: vec![Perturbation {
+                        waypoint: wp_idx,
+                        joint,
+                        delta,
+                    }],
+                    plan: modified,
+                });
+                next_id += 1;
             }
         }
 
