@@ -9,8 +9,9 @@ import { LogStore } from '../../store/log.store';
 import { LayoutStore } from '../../store/layout.store';
 import { PerspectiveStore } from '../../store/perspective.store';
 import { ExecutionCharts } from '../../../features/execution/execution-charts';
+import { AlternativesPanel } from '../../../features/plan-analysis/components/alternatives-panel';
 
-type TabId = 'snapshot' | 'analysis' | 'timeline' | 'plan-analysis' | 'log' | 'charts';
+type TabId = 'snapshot' | 'analysis' | 'timeline' | 'plan-analysis' | 'log' | 'charts' | 'alt';
 
 const ALL_TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'snapshot', label: 'Snapshot', icon: 'heroCamera' },
@@ -19,6 +20,7 @@ const ALL_TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'plan-analysis', label: 'Plan Analysis', icon: 'heroClipboardDocumentCheck' },
   { id: 'log', label: 'Log', icon: 'heroDocumentText' },
   { id: 'charts', label: 'Telemetry', icon: 'heroChartBar' },
+  { id: 'alt', label: 'Alternatives', icon: 'heroAdjustmentsVertical' },
 ];
 
 const SEGMENT_COLORS = [
@@ -38,7 +40,7 @@ const SEGMENT_COLORS = [
 @Component({
   selector: 'bottom-panel',
   standalone: true,
-  imports: [NgIcon, ExecutionCharts],
+  imports: [NgIcon, ExecutionCharts, AlternativesPanel],
   template: `
     <div class="bottom-panel" [class.bottom-panel--collapsed]="layout.bottomCollapsed()">
       @if (!layout.bottomCollapsed()) {
@@ -188,6 +190,10 @@ const SEGMENT_COLORS = [
 
           @if (activeTab() === 'charts') {
             <execution-charts />
+          }
+
+          @if (activeTab() === 'alt') {
+            <alternatives-panel />
           }
 
           @if (activeTab() === 'plan-analysis') {

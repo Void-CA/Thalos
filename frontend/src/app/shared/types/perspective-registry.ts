@@ -5,7 +5,6 @@ import { TcpInfoPanel } from '../../features/scene/components/tcp-info-panel/tcp
 import { WorkspacePanel } from '../../features/workspace/components/workspace-panel/workspace-panel';
 import { PlanningPanel } from '../../features/planning/planning-panel';
 import { TrajectoryColorPicker } from '../../features/planning/trajectory-color-picker';
-import { AlternativesPanel } from '../../features/plan-analysis/components/alternatives-panel';
 import { ExecutionPanel } from '../../features/execution/execution-panel';
 import type { Perspective, PerspectiveConfig } from './perspective';
 
@@ -39,10 +38,10 @@ export const PERSPECTIVE_REGISTRY: Record<Perspective, PerspectiveConfig> = {
     rightPanel: [
       { id: 'color', label: 'Trajectory Color', component: TrajectoryColorPicker, defaultOpen: true },
       { id: 'planning', label: 'Motion Planning', component: PlanningPanel as Type<unknown>, defaultOpen: true },
-      { id: 'alternatives', label: 'Alternatives', component: AlternativesPanel, defaultOpen: false },
     ],
     bottomTabs: [
       { id: 'plan-analysis', label: 'Analysis', icon: 'heroClipboardDocumentCheck' },
+      { id: 'alt', label: 'Alternatives', icon: 'heroAdjustmentsVertical' },
     ],
   },
 
