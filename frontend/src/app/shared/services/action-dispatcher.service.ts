@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { FocusService } from './focus.service';
-import { ModeStore } from '../store/mode.store';
+import { PerspectiveStore } from '../store/perspective.store';
 import type { RecommendationAction } from '../types/recommendation-action';
 
 /**

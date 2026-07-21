@@ -16,7 +16,6 @@ export interface TabSchema {
   id: string;
   label: string;
   icon: string;
-  component: Type<unknown>;
 }
 
 /** Contenido del panel izquierdo. */
