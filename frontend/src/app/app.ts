@@ -13,6 +13,7 @@ import { LayoutStore } from './shared/store/layout.store';
 import { SceneStore } from './features/scene/store/scene.store';
 import { LogStore } from './shared/store/log.store';
 import { PlanningStore } from './shared/store/planning.store';
+import { AnalysisWorkspace } from './features/plan-analysis/workspace/analysis-workspace';
 
 /**
  * Layout shell — compone paneles según la perspectiva activa.
@@ -30,6 +31,7 @@ import { PlanningStore } from './shared/store/planning.store';
     BottomPanel,
     Splitter,
     StatusBar,
+    AnalysisWorkspace,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -72,6 +74,10 @@ export class App {
 
   protected readonly hasRightPanel = computed(() => {
     return this.perspective.rightPanel().length > 0;
+  });
+
+  protected readonly isAnalysisMode = computed(() => {
+    return this.perspective.perspective() === 'analysis';
   });
 
   // ── Active robot info ──

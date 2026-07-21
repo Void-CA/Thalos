@@ -2,31 +2,18 @@ import { Component, computed, effect, inject, signal } from '@angular/core';
 import { NgIcon } from '@ng-icons/core';
 import { SceneStore } from '../../../features/scene/store/scene.store';
 import { WorkspaceStore } from '../../../features/workspace/store/workspace.store';
-import { PlanAnalysisStore } from '../../../features/plan-analysis/store/plan-analysis.store';
-import { FocusService } from '../../services/focus.service';
-import { PlanningStore } from '../../store/planning.store';
 import { LogStore } from '../../store/log.store';
 import { LayoutStore } from '../../store/layout.store';
 import { PerspectiveStore } from '../../store/perspective.store';
-import { ExecutionCharts } from '../../../features/execution/execution-charts';
-import { AlternativesPanel } from '../../../features/plan-analysis/components/alternatives-panel';
-import { SessionApiService } from '../../api/session-api.service';
 
-type TabId = 'snapshot' | 'analysis' | 'timeline' | 'plan-analysis'
-  | 'log' | 'charts' | 'alt'
-  | 'execution-summary' | 'execution-findings' | 'reasoning';
+type TabId = 'snapshot' | 'analysis' | 'timeline' | 'execution-summary' | 'log';
 
 const ALL_TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'snapshot', label: 'Snapshot', icon: 'heroCamera' },
   { id: 'analysis', label: 'Analysis', icon: 'heroChartBar' },
   { id: 'timeline', label: 'Timeline', icon: 'heroClock' },
-  { id: 'plan-analysis', label: 'Plan Analysis', icon: 'heroClipboardDocumentCheck' },
-  { id: 'log', label: 'Log', icon: 'heroDocumentText' },
-  { id: 'charts', label: 'Telemetry', icon: 'heroChartBar' },
-  { id: 'alt', label: 'Alternatives', icon: 'heroAdjustmentsVertical' },
   { id: 'execution-summary', label: 'Summary', icon: 'heroClipboardDocumentCheck' },
-  { id: 'execution-findings', label: 'Findings', icon: 'heroAdjustmentsVertical' },
-  { id: 'reasoning', label: 'Reasoning', icon: 'heroRectangleGroup' },
+  { id: 'log', label: 'Log', icon: 'heroDocumentText' },
 ];
 
 const SEGMENT_COLORS = [
@@ -46,7 +33,7 @@ const SEGMENT_COLORS = [
 @Component({
   selector: 'bottom-panel',
   standalone: true,
-  imports: [NgIcon, ExecutionCharts, AlternativesPanel],
+  imports: [NgIcon],
   template: `
     <div class="bottom-panel" [class.bottom-panel--collapsed]="layout.bottomCollapsed()">
       @if (!layout.bottomCollapsed()) {
@@ -59,18 +46,6 @@ const SEGMENT_COLORS = [
             >
               <ng-icon [name]="t.icon" size="16" />
               {{ t.label }}
-              @if (t.id === 'plan-analysis') {
-                @let badge = planAnalysisBadge();
-                @if (badge) {
-                  <span class="bottom-panel__tab-badge" [class]="'badge--' + badge.kind">{{ badge.label }}</span>
-                }
-              }
-              @if (t.id === 'execution-findings') {
-                @let badge = executionFindingsBadge();
-                @if (badge) {
-                  <span class="bottom-panel__tab-badge" [class]="'badge--' + badge.kind">{{ badge.label }}</span>
-                }
-              }
             </button>
           }
           <span class="bottom-panel__spacer"></span>
@@ -210,39 +185,6 @@ const SEGMENT_COLORS = [
             }
           }
 
-          @if (activeTab() === 'execution-findings') {
-            @let ef = executionFindings();
-            @if (ef.length === 0) {
-              <p class="bottom-panel__empty">
-                No execution findings yet. After running a comparison, findings will appear here.
-              </p>
-            } @else {
-              <div class="exec-findings">
-                <section class="exec-findings__list">
-                  <h4 class="exec-findings__title">Execution Findings ({{ ef.length }})</h4>
-                  <div class="exec-findings__groups">
-                    @for (g of ef; track g.kind) {
-                      <details class="exec-findings__group" open>
-                        <summary class="exec-findings__group-header">
-                          <span class="exec-findings__group-sev">{{ iconFor(g.severity) }}</span>
-                          <span class="exec-findings__group-kind">{{ g.kind.replace(/_/g, ' ') }}</span>
-                          <span class="exec-findings__category-badge" [style.background]="g.categoryColor">{{ g.categoryLabel }}</span>
-                          <span class="exec-findings__group-count" [class]="'count--' + g.severity">{{ g.count }}</span>
-                        </summary>
-                        <div class="exec-findings__group-body">
-                          <p class="exec-findings__group-msg">{{ g.message }}</p>
-                          @if (g.value != null) {
-                            <span class="exec-findings__group-value">Value: {{ g.value.toFixed(4) }}</span>
-                          }
-                        </div>
-                      </details>
-                    }
-                  </div>
-                </section>
-              </div>
-            }
-          }
-
           @if (activeTab() === 'timeline') {
             @let plan = tlPlan();
             @if (!plan) {
@@ -297,155 +239,6 @@ const SEGMENT_COLORS = [
                 }
               </div>
             }
-          }
-
-          @if (activeTab() === 'charts') {
-            <execution-charts />
-          }
-
-          @if (activeTab() === 'alt') {
-            <alternatives-panel />
-          }
-
-          @if (activeTab() === 'plan-analysis') {
-            @let pa = planAnalysis();
-            @if (pa.loading) {
-              <p class="bottom-panel__empty">Analyzing plan…</p>
-            } @else if (pa.hasResult) {
-              <div class="plan-analysis">
-                <!-- Score -->
-                <div class="plan-analysis__score-row">
-                  <div class="plan-analysis__score" [class]="'score--' + pa.status">
-                    <span class="plan-analysis__score-value">{{ pa.score }}</span>
-                    <span class="plan-analysis__score-grade">{{ pa.grade }}</span>
-                  </div>
-                  <p class="plan-analysis__message">{{ pa.message }}</p>
-                </div>
-
-                <!-- Metrics -->
-                <div class="plan-analysis__metrics">
-                  @if (pa.metrics; as m) {
-                    <span class="plan-analysis__metric">⏱ {{ m.duration.toFixed(1) }}s</span>
-                    @if (m.average_manipulability != null) {
-                      <span class="plan-analysis__metric">&mu; {{ m.average_manipulability.toFixed(2) }}</span>
-                    }
-                    @if (m.min_collision_distance != null && m.min_collision_distance > 0) {
-                      <span class="plan-analysis__metric">&#x2399; {{ (m.min_collision_distance * 1000).toFixed(0) }}mm</span>
-                    }
-                    @if (m.singular_count > 0) {
-                      <span class="plan-analysis__metric plan-analysis__metric--warn">&#x26D4; {{ m.singular_count }} singular waypoints</span>
-                    }
-                  }
-                </div>
-
-                <!-- Findings (agrupados por tipo) -->
-                @let groups = groupedFindings();
-                @if (groups.length > 0) {
-                  <section class="plan-analysis__findings">
-                    <h4 class="plan-analysis__findings-title">
-                      Findings ({{ pa.findings.length }})
-                    </h4>
-                    <div class="plan-analysis__groups">
-                      @for (g of groups; track g.kind) {
-                          <details class="plan-analysis__group" open>
-                            <summary class="plan-analysis__group-header">
-                              <span class="plan-analysis__group-sev">{{ iconFor(g.severity) }}</span>
-                              <span class="plan-analysis__group-kind">{{ g.kind.replace(/_/g, ' ') }}</span>
-                              <span class="plan-analysis__category-badge" [style.background]="g.categoryColor">{{ g.categoryLabel }}</span>
-                              <span class="plan-analysis__group-count" [class]="'count--' + g.severity">{{ g.count }}</span>
-                            </summary>
-                          <div class="plan-analysis__group-body">
-                            <p class="plan-analysis__group-msg">{{ g.message }}</p>
-                            @if (g.waypoints.length > 0) {
-                              <div class="plan-analysis__group-wpts">
-                                @for (wp of g.waypoints; track wp; let i = $index) {
-                                  @if (i < 20) {
-                                    <span class="plan-analysis__group-wpt" (click)="onPlanFindingClick(wp)">
-                                      wp{{ wp }}
-                                    </span>
-                                  } @else if (i === 20) {
-                                    <span class="plan-analysis__group-more">&hellip; ({{ g.waypoints.length - 20 }} more)</span>
-                                  }
-                                }
-                              </div>
-                            }
-                          </div>
-                        </details>
-                      }
-                    </div>
-                  </section>
-                }
-
-              </div>
-            } @else {
-              <p class="bottom-panel__empty">
-                Compile a plan in <strong>Planning</strong> mode to see analysis results.
-              </p>
-            }
-          }
-
-          @if (activeTab() === 'reasoning') {
-            @let r = reasoningState();
-            <div class="reasoning">
-              <div class="reasoning__section">
-                <h4 class="reasoning__section-title">Planning Findings ({{ r.planFindingsCount }})</h4>
-                <div class="reasoning__list">
-                  @for (f of r.planFindings; track $index) {
-                    <div class="reasoning__item">
-                      <span class="reasoning__item-sev {{ 'sev--' + f.severity }}">{{ iconFor(f.severity) }}</span>
-                      <span class="reasoning__item-kind">{{ f.kind }}</span>
-                      <span class="reasoning__item-category" [style.background]="f.catColor">{{ f.catLabel }}</span>
-                      @if (f.waypoint != null) {
-                        <span class="reasoning__item-wp">wp{{ f.waypoint }}</span>
-                      }
-                    </div>
-                  }
-                </div>
-              </div>
-
-              <div class="reasoning__section">
-                <h4 class="reasoning__section-title">Execution Findings ({{ r.execFindingsCount }})</h4>
-                <div class="reasoning__list">
-                  @for (f of r.execFindings; track $index) {
-                    <div class="reasoning__item">
-                      <span class="reasoning__item-sev {{ 'sev--' + f.severity }}">{{ iconFor(f.severity) }}</span>
-                      <span class="reasoning__item-kind">{{ f.kind }}</span>
-                      <span class="reasoning__item-category" [style.background]="f.catColor">{{ f.catLabel }}</span>
-                      <span class="reasoning__item-val">{{ f.value?.toFixed(3) }}</span>
-                    </div>
-                  }
-                  @if (r.execFindingsCount === 0) {
-                    <span class="reasoning__empty">No execution findings yet. Run a comparison first.</span>
-                  }
-                </div>
-              </div>
-
-              <div class="reasoning__section">
-                <h4 class="reasoning__section-title">ProblemRegions</h4>
-                <div class="reasoning__list">
-                  @for (rgn of r.problemRegions; track $index) {
-                    <div class="reasoning__item">
-                      <span class="reasoning__item-wp">wp{{ rgn.waypoint }}</span>
-                      <span class="reasoning__item-category" [style.background]="rgn.catColor">{{ rgn.catLabel }}</span>
-                      <span class="reasoning__item-sev {{ 'sev--' + rgn.severity }}">{{ rgn.severity }}</span>
-                    </div>
-                  }
-                  @if (r.problemRegions.length === 0) {
-                    <span class="reasoning__empty">No problem regions. No findings to derive from.</span>
-                  }
-                </div>
-              </div>
-
-              <div class="reasoning__section">
-                <h4 class="reasoning__section-title">ExecutionThresholds</h4>
-                <div class="reasoning__thresholds">
-                  <span class="reasoning__threshold">RMSE warn: 0.05 rad</span>
-                  <span class="reasoning__threshold">Spike warn: 0.10 rad</span>
-                  <span class="reasoning__threshold">Joint warn: 0.10 rad</span>
-                  <span class="reasoning__threshold">Velocity warn: 1.0 rad/s</span>
-                </div>
-              </div>
-            </div>
           }
 
           @if (activeTab() === 'log') {

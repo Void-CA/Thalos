@@ -213,6 +213,29 @@
   }
 }
 
+// ── Analysis Workspace layout ──
+
+.analysis-layout__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: $bg-surface;
+}
+
+.analysis-layout__viewport {
+  width: 35%;
+  min-width: 280px;
+  flex-shrink: 0;
+  border-right: 1px solid $border-subtle;
+}
+
+.analysis-layout__content {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
 // ── Accordion (native <details>) ──
 
 .accordion {
