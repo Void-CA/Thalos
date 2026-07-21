@@ -37,37 +37,6 @@ import { TrajectoryColorPicker } from '../trajectory-color-picker';
       </div>
     </div>
   `,
-  styles: `
-    @use 'variables' as *;
-
-    .pw {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-      height: 100%;
-      overflow-y: auto;
-      padding: $space-lg $space-lg $space-lg 1.25rem;
-      background: $bg-surface;
-      min-width: 320px;
-
-      &::-webkit-scrollbar { width: 6px; }
-      &::-webkit-scrollbar-thumb { background: $border-default; border-radius: 3px; }
-      scrollbar-color: $border-default transparent;
-      scrollbar-width: thin;
-    }
-
-    .pw__section {
-      margin-bottom: $space-lg;
-    }
-
-    .pw__title {
-      margin: 0 0 $space-sm;
-      font-size: $text-sm;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: $text-muted;
-    }
-  `,
+  styleUrl: './planning-workspace.scss',
 })
 export class PlanningWorkspace {}

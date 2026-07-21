@@ -1,0 +1,300 @@
+    @use 'variables' as *;
+
+    .sw {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow-y: auto;
+      padding: $space-lg;
+      background: $bg-surface;
+      font-family: $font-ui;
+
+      &::-webkit-scrollbar { width: 6px; }
+      &::-webkit-scrollbar-thumb { background: $border-default; border-radius: 3px; }
+      scrollbar-color: $border-default transparent;
+      scrollbar-width: thin;
+    }
+
+    .sw__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+    }
+
+    .sw__title {
+      margin: 0;
+      font-size: $text-md;
+      font-weight: 700;
+      color: $text-primary;
+    }
+
+    .sw__tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: $space-lg;
+      border-bottom: 1px solid $border-subtle;
+      flex-shrink: 0;
+    }
+
+    .sw__tab {
+      font-family: $font-ui;
+      font-size: $text-sm;
+      padding: 0.4rem 0.8rem;
+      border: none;
+      background: transparent;
+      color: $text-muted;
+      opacity: 0.5;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: opacity 0.15s, border-color 0.15s;
+      &:hover { opacity: 0.8; }
+      &.sw__tab--active { opacity: 1; color: $text-primary; border-bottom-color: $accent; }
+    }
+
+    .sw__section {
+      margin-bottom: $space-lg;
+    }
+
+    .sw__section--fill {
+      flex: 1;
+      min-height: 0;
+    }
+
+    .sw__empty {
+      text-align: center;
+      font-size: $text-base;
+      opacity: 0.45;
+      padding: $space-lg 0;
+      p { margin: 0; line-height: 1.5; }
+    }
+
+    
+
+    .sw__progress-row {
+      display: flex;
+      align-items: center;
+      gap: $space-md;
+    }
+
+    .sw__progress-track {
+      flex: 1;
+      position: relative;
+      height: 12px;
+      background: $bg-elevated;
+      border-radius: 6px;
+      overflow: visible;
+    }
+
+    .sw__progress-fill {
+      height: 100%;
+      border-radius: 6px;
+      transition: width 0.3s ease;
+    }
+
+    .sw__marker {
+      position: absolute;
+      top: -4px;
+      width: 4px;
+      height: 20px;
+      background: #fff;
+      border-radius: 2px;
+      transition: left 0.3s ease;
+    }
+
+    .sw__pct {
+      font-size: $text-md;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      min-width: 4ch;
+      color: $text-primary;
+    }
+
+    .sw__times {
+      display: flex;
+      gap: $space-lg;
+      margin-top: $space-xs;
+      font-size: $text-sm;
+      color: $text-muted;
+      opacity: 0.6;
+    }
+
+    
+
+    .sw__segments-bar {
+      display: flex;
+      height: 24px;
+      border-radius: $radius-sm;
+      overflow: hidden;
+      border: 1px solid $border-subtle;
+    }
+
+    .sw__segment {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: $text-xs;
+      color: #fff;
+      font-weight: 600;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .sw__seg-label {
+      padding: 0 0.3rem;
+    }
+
+    
+
+    .sw__controls {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .sw__ctrl {
+      font-family: $font-ui;
+      font-size: $text-base;
+      padding: 0.4rem 0.8rem;
+      border-radius: $radius-sm;
+      border: 1px solid $border-default;
+      background: $bg-card;
+      color: $text-secondary;
+      cursor: pointer;
+      transition: background 0.15s;
+      font-weight: 600;
+
+      &:hover:not(:disabled) { background: $bg-elevated; }
+      &:disabled { opacity: 0.35; cursor: default; }
+
+      &.sw__ctrl--start { border-color: #4a9e5a; color: #4a9e5a; &:hover:not(:disabled) { background: #1a2e1a; } }
+      &.sw__ctrl--pause { border-color: #b8943a; color: #b8943a; &:hover:not(:disabled) { background: #2a2210; } }
+      &.sw__ctrl--resume { border-color: $accent; color: $accent; &:hover:not(:disabled) { background: #1a2a4a; } }
+      &.sw__ctrl--stop { border-color: #b85450; color: #b85450; &:hover:not(:disabled) { background: #2a1818; } }
+      &.sw__ctrl--reset { border-color: #6a7a8a; color: #6a7a8a; &:hover:not(:disabled) { background: #1a1a2a; } }
+    }
+
+    .sw__live {
+      font-size: $text-xs;
+      color: #4a9e5a;
+      font-weight: 700;
+      animation: sw-pulse 1s ease-in-out infinite;
+      margin-left: auto;
+    }
+
+    @keyframes sw-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    
+
+    .sw__wpts-strip {
+      position: relative;
+      height: 8px;
+      background: $bg-elevated;
+      border-radius: 4px;
+    }
+
+    .sw__wpt {
+      position: absolute;
+      top: -1px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      transform: translateX(-50%);
+      border: 2px solid $bg-surface;
+
+      &.sw__wpt--start { background: #4a9e5a; }
+      &.sw__wpt--goal { background: #b85450; }
+      &.sw__wpt--via { background: #b8943a; }
+    }
+
+    
+
+    .sw__metrics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: $space-sm;
+    }
+
+    .sw__metric {
+      flex: 1;
+      min-width: 80px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+      padding: 0.4rem 0.5rem;
+      background: $bg-card;
+      border: 1px solid $border-subtle;
+      border-radius: $radius-sm;
+    }
+
+    .sw__metric-lbl {
+      font-size: $text-xs;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: $text-muted;
+      opacity: 0.5;
+    }
+
+    .sw__metric-val {
+      font-size: $text-base;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: $text-primary;
+
+      &.sw__metric--live { color: #4a9e5a; }
+    }
+
+    
+
+    .sw__comparison {
+      padding: $space-md;
+      background: $bg-card;
+      border: 1px solid $border-subtle;
+      border-radius: $radius-md;
+    }
+
+    .sw__cmp-title {
+      font-size: $text-sm;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: $text-muted;
+      display: block;
+      margin-bottom: $space-sm;
+    }
+
+    .sw__cmp-metrics {
+      display: flex;
+      gap: $space-lg;
+      font-size: $text-sm;
+      color: $text-muted;
+    }
+
+    .sw__cmp-item strong { color: $text-primary; font-family: $font-mono; }
+
+    
+
+    .sw__log {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      font-family: $font-mono;
+      font-size: $text-sm;
+    }
+
+    .sw__log-entry {
+      display: flex;
+      gap: $space-sm;
+      line-height: 1.6;
+      padding: 0.15rem 0;
+
+      &.sw__log-entry--error { color: #b85450; background: rgba(184,84,80,0.06); border-radius: $radius-sm; padding: 0.15rem 0.35rem; }
+    }
+
+    .sw__log-time { opacity: 0.4; flex-shrink: 0; }
+    .sw__log-level { text-transform: uppercase; font-weight: 700; flex-shrink: 0; width: 5ch; }
+    .sw__log-msg { flex: 1; }

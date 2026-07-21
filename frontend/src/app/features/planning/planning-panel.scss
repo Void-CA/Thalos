@@ -4,6 +4,8 @@
 .planning-panel {
   @include panel.container;
 
+  padding: $space-md;
+  
   // ── Segment card ──
 
   &__segment {
