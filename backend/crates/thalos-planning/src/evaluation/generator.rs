@@ -4,7 +4,7 @@
 //! modificando waypoints problemáticos. Cada variante se evalúa con el
 //! `PlanEvaluator` para producir un ranking.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -225,8 +225,9 @@ impl AlternativeGenerator {
 
     /// Generar candidatos desde `ProblemRegions`.
     ///
-    /// Si la región tiene `joint: Some(j)`, solo perturba esa articulación.
-    /// Si es `None`, perturba todas las articulaciones del waypoint.
+    /// Para regiones `Kinematic` con waypoints consecutivos, perturba el mismo joint
+    /// en TODOS los waypoints de la región simultáneamente (estrategia regional).
+    /// Para el resto, perturba un waypoint a la vez (estrategia local).
     pub fn generate_from_regions(
         plan: &CompiledPlan,
         regions: &ProblemRegions,
@@ -242,55 +243,121 @@ impl AlternativeGenerator {
         let mut candidates: Vec<AlternativeCandidate> = Vec::new();
         let mut next_id = 0;
 
-        // Determinar qué (waypoint, joint) explorar
-        let entries: Vec<(usize, usize)> = match strategy.selection_policy {
-            SelectionPolicy::ProblematicWaypoints => regions
-                .regions
-                .iter()
-                .flat_map(|r| {
-                    let joints: Vec<usize> = if let Some(j) = r.joint {
-                        vec![j]
-                    } else {
-                        (0..dof).collect()
-                    };
-                    joints.into_iter().map(move |j| (r.waypoint, j))
-                })
-                .collect(),
-            SelectionPolicy::AllWaypoints => (0..waypoints.len())
-                .flat_map(|wp| (0..dof).map(move |j| (wp, j)))
-                .collect(),
-        };
-
-        if entries.is_empty() {
-            return vec![];
-        }
-
-        for &(wp_idx, joint) in &entries {
-            if strategy.max_candidates > 0 && candidates.len() >= strategy.max_candidates {
-                break;
+        match strategy.selection_policy {
+            SelectionPolicy::AllWaypoints => {
+                // Estrategia original: todos los waypoints, todos los joints
+                if dof == 0 { return vec![]; }
+                for wp_idx in 0..waypoints.len() {
+                    for joint in 0..dof {
+                        if strategy.max_candidates > 0 && candidates.len() >= strategy.max_candidates { break; }
+                        for &delta in &[strategy.delta, -strategy.delta] {
+                            if strategy.max_candidates > 0 && candidates.len() >= strategy.max_candidates { break; }
+                            let modified = Self::apply_perturbation(plan, wp_idx, joint, delta);
+                            candidates.push(Self::make_candidate(next_id, wp_idx, vec![Perturbation { waypoint: wp_idx, joint, delta }], modified));
+                            next_id += 1;
+                        }
+                    }
+                }
             }
+            SelectionPolicy::ProblematicWaypoints => {
+                // 1. Agrupar regiones Kinematic consecutivas
+                let kinematic_groups = Self::group_kinematic_regions(&regions.regions);
+                // 2. El resto como entries individuales
+                let used: std::collections::HashSet<(usize, RegionCategory)> = kinematic_groups
+                    .iter()
+                    .flat_map(|(start, end, _cat)| (*start..=*end).map(|wp| (wp, RegionCategory::Kinematic)))
+                    .collect();
+                let singles: Vec<&ProblemRegion> = regions.regions.iter().filter(|r| !used.contains(&(r.waypoint, r.category))).collect();
 
-            for &delta in &[strategy.delta, -strategy.delta] {
-                if strategy.max_candidates > 0 && candidates.len() >= strategy.max_candidates {
-                    break;
+                // Single-waypoint candidates (non-kinematic, isolated)
+                for r in &singles {
+                    let joints: Vec<usize> = if let Some(j) = r.joint { vec![j] } else { (0..dof).collect() };
+                    for &joint in &joints {
+                        if strategy.max_candidates > 0 && candidates.len() >= strategy.max_candidates { break; }
+                        for &delta in &[strategy.delta, -strategy.delta] {
+                            if strategy.max_candidates > 0 && candidates.len() >= strategy.max_candidates { break; }
+                            let modified = Self::apply_perturbation(plan, r.waypoint, joint, delta);
+                            candidates.push(Self::make_candidate(next_id, r.waypoint, vec![Perturbation { waypoint: r.waypoint, joint, delta }], modified));
+                            next_id += 1;
+                        }
+                    }
                 }
 
-                let modified = Self::apply_perturbation(plan, wp_idx, joint, delta);
-                candidates.push(AlternativeCandidate {
-                    id: next_id,
-                    source_waypoint: wp_idx,
-                    perturbations: vec![Perturbation {
-                        waypoint: wp_idx,
-                        joint,
-                        delta,
-                    }],
-                    plan: modified,
-                });
-                next_id += 1;
+                // Regional candidates (consecutive Kinematic): perturbar mismo joint en todo el rango
+                for &(start, end, _cat) in &kinematic_groups {
+                    for joint in 0..dof {
+                        if strategy.max_candidates > 0 && candidates.len() >= strategy.max_candidates { break; }
+                        for &delta in &[strategy.delta, -strategy.delta] {
+                            if strategy.max_candidates > 0 && candidates.len() >= strategy.max_candidates { break; }
+                            let mut plan_copy = plan.clone();
+                            let mut perturbations = Vec::new();
+                            for wp in start..=end {
+                                let modified_traj = Self::apply_perturbation_to_trajectory(&plan_copy.merged_trajectory, wp, joint, delta);
+                                plan_copy.merged_trajectory = modified_traj;
+                                perturbations.push(Perturbation { waypoint: wp, joint, delta });
+                            }
+                            candidates.push(Self::make_candidate(next_id, start, perturbations, plan_copy));
+                            next_id += 1;
+                        }
+                    }
+                }
             }
         }
 
         candidates
+    }
+
+    /// Agrupar regiones Kinematic consecutivas en rangos.
+    fn group_kinematic_regions(regions: &[ProblemRegion]) -> Vec<(usize, usize, RegionCategory)> {
+        let mut kinematic: Vec<usize> = regions.iter()
+            .filter(|r| r.category == RegionCategory::Kinematic)
+            .map(|r| r.waypoint)
+            .collect();
+        kinematic.sort();
+        kinematic.dedup();
+        if kinematic.is_empty() { return vec![]; }
+
+        let mut groups = Vec::new();
+        let mut start = kinematic[0];
+        let mut end = kinematic[0];
+        for &wp in &kinematic[1..] {
+            if wp == end + 1 {
+                end = wp;
+            } else {
+                if end > start { groups.push((start, end, RegionCategory::Kinematic)); }
+                start = wp;
+                end = wp;
+            }
+        }
+        if end > start { groups.push((start, end, RegionCategory::Kinematic)); }
+        groups
+    }
+
+    fn make_candidate(id: usize, source_wp: usize, perturbations: Vec<Perturbation>, plan: CompiledPlan) -> AlternativeCandidate {
+        AlternativeCandidate { id, source_waypoint: source_wp, perturbations, plan }
+    }
+
+    /// Aplicar perturbación a una trayectoria completa (clona si es necesario).
+    fn apply_perturbation_to_trajectory(
+        trajectory: &thalos_core::trajectory::Trajectory,
+        waypoint_idx: usize,
+        joint_idx: usize,
+        delta: f64,
+    ) -> thalos_core::trajectory::Trajectory {
+        let original = trajectory.waypoints();
+        let mut new_waypoints: Vec<thalos_core::trajectory::TrajectoryPoint> = Vec::with_capacity(original.len());
+        for (i, wp) in original.iter().enumerate() {
+            if i == waypoint_idx {
+                let mut joints = wp.joints().to_vec();
+                if joint_idx < joints.len() {
+                    joints[joint_idx] += delta;
+                }
+                new_waypoints.push(thalos_core::trajectory::TrajectoryPoint::new(joints, wp.timestamp()));
+            } else {
+                new_waypoints.push(thalos_core::trajectory::TrajectoryPoint::new(wp.joints().to_vec(), wp.timestamp()));
+            }
+        }
+        thalos_core::trajectory::Trajectory::new(new_waypoints)
     }
 
     /// Aplicar una perturbación articular a un waypoint específico.
@@ -402,6 +469,57 @@ impl AlternativeGenerator {
         }
 
         improvements
+    }
+
+    /// Aplicar perturbación a un waypoint de un plan completo, retornando un nuevo CompiledPlan.
+    fn apply_perturbation(
+        plan: &CompiledPlan,
+        waypoint_idx: usize,
+        joint_idx: usize,
+        delta: f64,
+    ) -> CompiledPlan {
+        let original = plan.merged_trajectory.waypoints();
+        let mut new_waypoints: Vec<TrajectoryPoint> = Vec::with_capacity(original.len());
+        for (i, wp) in original.iter().enumerate() {
+            if i == waypoint_idx {
+                let mut joints = wp.joints().to_vec();
+                if joint_idx < joints.len() {
+                    joints[joint_idx] += delta;
+                }
+                new_waypoints.push(TrajectoryPoint::new(joints, wp.timestamp()));
+            } else {
+                new_waypoints.push(TrajectoryPoint::new(wp.joints().to_vec(), wp.timestamp()));
+            }
+        }
+        CompiledPlan {
+            merged_trajectory: Trajectory::new(new_waypoints),
+            segments: plan.segments.clone(),
+            duration: plan.duration,
+            waypoint_count: plan.waypoint_count,
+        }
+    }
+
+    /// Aplicar perturbación a un waypoint de una trayectoria, retornando una nueva Trajectory.
+    fn apply_perturbation_to_trajectory(
+        trajectory: &Trajectory,
+        waypoint_idx: usize,
+        joint_idx: usize,
+        delta: f64,
+    ) -> Trajectory {
+        let original = trajectory.waypoints();
+        let mut new_waypoints: Vec<TrajectoryPoint> = Vec::with_capacity(original.len());
+        for (i, wp) in original.iter().enumerate() {
+            if i == waypoint_idx {
+                let mut joints = wp.joints().to_vec();
+                if joint_idx < joints.len() {
+                    joints[joint_idx] += delta;
+                }
+                new_waypoints.push(TrajectoryPoint::new(joints, wp.timestamp()));
+            } else {
+                new_waypoints.push(TrajectoryPoint::new(wp.joints().to_vec(), wp.timestamp()));
+            }
+        }
+        Trajectory::new(new_waypoints)
     }
 }
 

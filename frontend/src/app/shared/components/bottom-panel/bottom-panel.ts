@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { NgIcon } from '@ng-icons/core';
 import { SceneStore } from '../../../features/scene/store/scene.store';
 import { WorkspaceStore } from '../../../features/workspace/store/workspace.store';
@@ -489,15 +489,18 @@ export class BottomPanel {
   protected readonly tabs = computed(() => {
     const config = this.perspective.config();
     const tabIds = new Set(config.bottomTabs.map(t => t.id));
-    const filtered = ALL_TABS.filter(t => tabIds.has(t.id));
+    return ALL_TABS.filter(t => tabIds.has(t.id));
+  });
 
-    // Si la tab activa ya no está en las visibles, resetear a la primera disponible
+  /** Resetear activeTab si la tab activa ya no está en las visibles. */
+  private readonly _syncActiveTab = effect(() => {
+    const config = this.perspective.config();
+    const tabIds = new Set(config.bottomTabs.map(t => t.id));
     if (!tabIds.has(this.activeTab())) {
-      const first = filtered.length > 0 ? filtered[0].id : 'log';
+      const current = this.tabs();
+      const first = current.length > 0 ? current[0].id : 'log';
       this.activeTab.set(first);
     }
-
-    return filtered;
   });
 
   protected readonly activeTab = signal<TabId>(

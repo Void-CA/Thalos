@@ -29,7 +29,7 @@ import type { RankedAlternativeDto } from '../plan-analysis-api.types';
           <!-- Original score -->
           <div class="ap__original">
             <span class="ap__label">Original Score</span>
-            <span class="ap__score ap__score--original">{{ d.original_score.toFixed(1) }}</span>
+            <span class="ap__score ap__score--original">{{ d.original_score.toFixed(4) }}</span>
             <div class="ap__bar">
               <div class="ap__bar-fill ap__bar-fill--original" [style.width.%]="scorePct(d.original_score)"></div>
             </div>
@@ -46,11 +46,11 @@ import type { RankedAlternativeDto } from '../plan-analysis-api.types';
               >
                 <div class="ap__card-header">
                   <span class="ap__rank">#{{ alt.rank }}</span>
-                  <span class="ap__score ap__score--alt">{{ alt.score.toFixed(1) }}</span>
+                  <span class="ap__score ap__score--alt">{{ alt.score.toFixed(4) }}</span>
                   <span class="ap__delta" [class.ap__delta--pos]="alt.delta_score > 0">
-                    {{ alt.delta_score > 0 ? '▼' : '▲' }} {{ alt.improvement_percent.toFixed(1) }}%
+                    {{ alt.delta_score > 0 ? '▼' : '▲' }} {{ alt.improvement_percent.toFixed(2) }}%
                   </span>
-                  <span class="ap__vs">vs {{ alt.original_score.toFixed(1) }} original</span>
+                  <span class="ap__vs">vs {{ alt.original_score.toFixed(4) }} original</span>
                 </div>
 
                 <div class="ap__card-body">
@@ -72,13 +72,13 @@ import type { RankedAlternativeDto } from '../plan-analysis-api.types';
                   }
 
                   <details class="ap__breakdown">
-                    <summary class="ap__breakdown-summary">Metric breakdown</summary>
+                    <summary class="ap__breakdown-summary">Score breakdown</summary>
                     <div class="ap__breakdown-body">
                       @for (b of alt.breakdown; track b.name) {
                         <div class="ap__breakdown-row">
                           <span class="ap__breakdown-name">{{ b.name }}</span>
                           <span class="ap__breakdown-val">
-                            {{ b.original.toFixed(3) }} → {{ b.candidate.toFixed(3) }}
+                            {{ b.original.toFixed(4) }} → {{ b.candidate.toFixed(4) }}
                           </span>
                         </div>
                       }
