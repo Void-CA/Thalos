@@ -9,12 +9,14 @@ import { LogStore } from '../../store/log.store';
 import { LayoutStore } from '../../store/layout.store';
 import { PerspectiveStore } from '../../store/perspective.store';
 
-type TabId = 'timeline' | 'plan-analysis' | 'log';
+type TabId = 'snapshot' | 'analysis' | 'timeline' | 'plan-analysis' | 'log';
 
-/** Tabs disponibles para mostrar en el panel inferior por perspectiva. */
+/** Todos los tabs disponibles. Los tabs visibles se filtran por perspectiva. */
 const ALL_TABS: { id: TabId; label: string; icon: string }[] = [
+  { id: 'snapshot', label: 'Snapshot', icon: 'heroCamera' },
+  { id: 'analysis', label: 'Analysis', icon: 'heroChartBar' },
   { id: 'timeline', label: 'Timeline', icon: 'heroClock' },
-  { id: 'plan-analysis', label: 'Analysis', icon: 'heroClipboardDocumentCheck' },
+  { id: 'plan-analysis', label: 'Plan Analysis', icon: 'heroClipboardDocumentCheck' },
   { id: 'log', label: 'Log', icon: 'heroDocumentText' },
 ];
 
@@ -35,12 +37,12 @@ const SEGMENT_COLORS = [
 @Component({
   selector: 'bottom-panel',
   standalone: true,
-  imports: [NgIcon, DatePipe],
+  imports: [NgIcon],
   template: `
     <div class="bottom-panel" [class.bottom-panel--collapsed]="layout.bottomCollapsed()">
       @if (!layout.bottomCollapsed()) {
         <div class="bottom-panel__tabs">
-          @for (t of tabs; track t.id) {
+          @for (t of tabs(); track t.id) {
             <button
               class="bottom-panel__tab"
               [class.bottom-panel__tab--active]="activeTab() === t.id"
@@ -302,11 +304,7 @@ export class BottomPanel {
     return ALL_TABS.filter(t => tabIds.has(t.id));
   });
 
-  protected readonly activeTab = signal<TabId>(this.tabs()[0]?.id ?? 'log');
-
-
-
-  protected readonly tabs = TABS;
+  protected readonly activeTab = signal<TabId>('timeline');
 
   // ── Snapshot ──
 
