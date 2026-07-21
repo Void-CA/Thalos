@@ -3,8 +3,6 @@ import { JointControl } from '../../features/scene/components/joint-control/join
 import { IkTargetPanel } from '../../features/scene/components/ik-target-panel/ik-target-panel';
 import { TcpInfoPanel } from '../../features/scene/components/tcp-info-panel/tcp-info-panel';
 import { WorkspacePanel } from '../../features/workspace/components/workspace-panel/workspace-panel';
-import { PlanningPanel } from '../../features/planning/planning-panel';
-import { TrajectoryColorPicker } from '../../features/planning/trajectory-color-picker';
 import { ExecutionPanel } from '../../features/execution/execution-panel';
 import type { Perspective, PerspectiveConfig } from './perspective';
 
@@ -31,20 +29,15 @@ export const PERSPECTIVE_REGISTRY: Record<Perspective, PerspectiveConfig> = {
     ],
   },
 
+  /** Planning Workspace — layout propio (sidebar + viewport) */
   planning: {
-    showLeftPanel: true,
-    showBottomPanel: true,
-    leftPanelContent: 'robots',
-    rightPanel: [
-      { id: 'color', label: 'Trajectory Color', component: TrajectoryColorPicker, defaultOpen: true },
-      { id: 'planning', label: 'Motion Planning', component: PlanningPanel as Type<unknown>, defaultOpen: true },
-    ],
-    bottomTabs: [
-      { id: 'timeline', label: 'Timeline', icon: 'heroClock' },
-    ],
+    showLeftPanel: false,
+    showBottomPanel: false,
+    rightPanel: [],
+    bottomTabs: [],
   },
 
-  /** Analysis Workspace — layout propio, no usa el shell clásico */
+  /** Analysis Workspace — layout propio (viewport + dashboard) */
   analysis: {
     showLeftPanel: false,
     showBottomPanel: false,
@@ -52,17 +45,12 @@ export const PERSPECTIVE_REGISTRY: Record<Perspective, PerspectiveConfig> = {
     bottomTabs: [],
   },
 
+  /** Simulation Workspace — layout propio (viewport + workspace) */
   execution: {
     showLeftPanel: false,
-    showBottomPanel: true,
-    rightPanel: [
-      { id: 'execution', label: 'Active Plan', component: ExecutionPanel, defaultOpen: true },
-    ],
-    bottomTabs: [
-      { id: 'execution-summary', label: 'Summary', icon: 'heroClipboardDocumentCheck' },
-      { id: 'timeline', label: 'Timeline', icon: 'heroClock' },
-      { id: 'log', label: 'Log', icon: 'heroDocumentText' },
-    ],
+    showBottomPanel: false,
+    rightPanel: [],
+    bottomTabs: [],
   },
 
   sessions: {

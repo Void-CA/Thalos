@@ -296,9 +296,21 @@
   .layout__content { display: none; }
 }
 
-// Legacy: sin sidebar ni content workspace
-.layout--robot,
-.layout--execution,
+// Simulation: viewport 50% | workspace 50%
+.layout--execution {
+  .layout__sidebar { display: none; }
+  .layout__viewport { width: 50%; min-width: 350px; }
+  .layout__content { display: block; flex: 1; min-width: 350px; overflow: hidden; border-left: 1px solid $border-subtle; }
+}
+
+// Robot Model: legacy layout con left + right panels
+.layout--robot {
+  .layout__sidebar { display: none; }
+  .layout__content { display: none; }
+  .layout__viewport { flex: 1; }
+}
+
+// Sessions: legacy layout con left panel
 .layout--sessions {
   .layout__sidebar { display: none; }
   .layout__content { display: none; }

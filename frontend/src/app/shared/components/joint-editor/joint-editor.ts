@@ -56,19 +56,19 @@ export interface JointEntry {
     :host {
       display: flex;
       flex-direction: column;
-      gap: 0.3rem;
+      gap: 0.4rem;
     }
 
     .je-row {
       display: flex;
       align-items: center;
-      gap: 0.35rem;
-      padding: 0.15rem 0;
+      gap: 0.5rem;
+      padding: 0.2rem 0;
     }
 
     .je-row__name {
       width: 48px;
-      font-size: 0.7rem;
+      font-size: 0.8rem;
       color: #c0c0c0;
       overflow: hidden;
       text-overflow: ellipsis;

@@ -15,6 +15,7 @@ import { LogStore } from './shared/store/log.store';
 import { PlanningStore } from './shared/store/planning.store';
 import { AnalysisWorkspace } from './features/plan-analysis/workspace/analysis-workspace';
 import { PlanningWorkspace } from './features/planning/workspace/planning-workspace';
+import { SimulationWorkspace } from './features/execution/workspace/simulation-workspace';
 
 /**
  * Layout shell — compone paneles según la perspectiva activa.
@@ -34,6 +35,7 @@ import { PlanningWorkspace } from './features/planning/workspace/planning-worksp
     StatusBar,
     AnalysisWorkspace,
     PlanningWorkspace,
+    SimulationWorkspace,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -86,8 +88,12 @@ export class App {
     return this.perspective.perspective() === 'planning';
   });
 
+  protected readonly isSimulationMode = computed(() => {
+    return this.perspective.perspective() === 'execution';
+  });
+
   protected readonly isLegacyMode = computed(() => {
-    return !this.isAnalysisMode() && !this.isPlanningMode();
+    return !this.isAnalysisMode() && !this.isPlanningMode() && !this.isSimulationMode();
   });
 
   // ── Active robot info ──

@@ -8,8 +8,8 @@
 
   &__segment {
     border: 1px solid $border-subtle;
-    border-radius: $radius-sm;
-    margin-bottom: 0.4rem;
+    border-radius: $radius-md;
+    margin-bottom: $space-sm;
     overflow: hidden;
     transition: border-color $transition-fast;
 
@@ -21,8 +21,8 @@
   &__seg-header {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.35rem 0.5rem;
+    gap: $space-sm;
+    padding: $space-sm $space-md;
     cursor: pointer;
     user-select: none;
     transition: background $transition-fast;
@@ -33,8 +33,8 @@
   }
 
   &__seg-dot {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     flex-shrink: 0;
   }
@@ -56,11 +56,11 @@
     background: transparent;
     border: none;
     color: $text-muted;
-    font-size: 1rem;
+    font-size: 1.1rem;
     line-height: 1;
-    padding: 0 0.15rem;
+    padding: 0.1rem 0.2rem;
     cursor: pointer;
-    border-radius: 2px;
+    border-radius: $radius-sm;
     transition: color $transition-fast, background $transition-fast;
 
     &:hover {
@@ -70,11 +70,11 @@
   }
 
   &__seg-body {
-    padding: 0.4rem 0.5rem 0.5rem;
+    padding: $space-md;
     border-top: 1px solid $border-subtle;
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
+    gap: $space-sm;
   }
 
   // ── Joint grid (MoveJ) ──
@@ -176,15 +176,15 @@
 
   &__add-row {
     display: flex;
-    gap: 0.3rem;
-    margin-top: 0.25rem;
+    gap: $space-sm;
+    margin-top: $space-sm;
   }
 
   &__add-btn {
     @include panel.action-base;
     flex: 1;
-    font-size: 0.72rem;
-    padding: 0.3rem;
+    font-size: $text-sm;
+    padding: $space-sm;
     background: transparent;
     border-color: $border-default;
     color: $text-secondary;
@@ -198,7 +198,7 @@
   // ── Actions ──
 
   &__actions {
-    margin-top: 0.4rem;
+    margin-top: $space-sm;
   }
 
   &__submit {
@@ -210,11 +210,11 @@
 
   &__empty {
     text-align: center;
-    padding: 1.5rem 0.5rem;
+    padding: 2rem $space-md;
 
     p {
       margin: 0;
-      font-size: 0.75rem;
+      font-size: $text-base;
       color: $text-primary;
     }
   }
@@ -222,12 +222,12 @@
   // ── Error ──
 
   &__error {
-    font-size: 0.7rem;
+    font-size: $text-sm;
     color: #cc4444;
-    padding: 0.4rem;
+    padding: $space-sm $space-md;
     border: 1px solid #cc444444;
     border-radius: $radius-sm;
     background: #cc444411;
-    margin-top: 0.4rem;
+    margin-top: $space-sm;
   }
 }

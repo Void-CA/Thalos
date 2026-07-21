@@ -1,4 +1,4 @@
-<div class="layout" [class]="'layout--' + perspective.perspective()">
+<div [class]="'layout layout--' + perspective.perspective()">
   <top-bar class="layout__top" />
 
   <!-- Cuerpo: scene-viewer SIEMPRE presente. Workspaces/paneles se posicionan junto a él. -->
@@ -63,6 +63,9 @@
     <!-- ── Workspace/panel right content ── -->
     @if (isAnalysisMode()) {
       <analysis-workspace class="layout__content" />
+    }
+    @if (isSimulationMode()) {
+      <simulation-workspace class="layout__content" />
     }
     @if (isLegacyMode() && hasRightPanel()) {
       <app-splitter direction="vertical" panel="right" />
