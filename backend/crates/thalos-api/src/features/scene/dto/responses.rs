@@ -130,6 +130,9 @@ pub struct RuntimeStateResponse {
     /// When `None`, the flange is used as the default working frame.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_tcp: Option<ToolFrameDto>,
+    /// Estado de ejecución (presente cuando hay una sesión activa).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution: Option<ExecutionDto>,
     pub generated_at: DateTime<Utc>,
 }
 

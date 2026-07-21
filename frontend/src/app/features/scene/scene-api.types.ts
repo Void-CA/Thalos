@@ -93,7 +93,14 @@ export interface RuntimeStateResponse {
   active_plan: ActivePlanDto | null;
   /** Active Tool Center Point (TCP) frame. Null if using flange. */
   active_tcp?: ToolFrameDto | null;
+  execution?: ExecutionInfoDto | null;
   generated_at: string;
+}
+
+export interface ExecutionInfoDto {
+  status: string;
+  progress: number;
+  elapsed_secs: number;
 }
 
 /** Active Tool Center Point (TCP) frame exposed by the API. */

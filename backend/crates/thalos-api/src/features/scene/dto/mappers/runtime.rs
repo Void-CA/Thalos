@@ -2,7 +2,7 @@ use thalos_core::kinematics::inverse::result::IKResult;
 
 use crate::features::robots::dto::{JointMetadataDto, RobotMetadataDto};
 
-use super::super::{ActivePlanDto, IkResultDto, RuntimeStateResponse, ToolFrameDto, VisualSceneDto};
+use super::super::{ActivePlanDto, ExecutionDto, ExecutionStatusDto, IkResultDto, RuntimeStateResponse, ToolFrameDto, VisualSceneDto};
 
 impl From<IKResult> for IkResultDto {
     fn from(ik: IKResult) -> Self {
@@ -77,6 +77,22 @@ impl RuntimeStateResponse {
             }),
             active_plan,
             active_tcp: snapshot.active_tcp.as_ref().map(ToolFrameDto::from),
+            execution: snapshot.execution.as_ref().map(|exe| {
+                use thalos_runtime::SessionStatus;
+                let status = match exe.status {
+                    SessionStatus::Ready => ExecutionStatusDto::Ready,
+                    SessionStatus::Running => ExecutionStatusDto::Running,
+                    SessionStatus::Paused => ExecutionStatusDto::Paused,
+                    SessionStatus::Completed => ExecutionStatusDto::Completed,
+                    SessionStatus::Cancelled => ExecutionStatusDto::Cancelled,
+                    SessionStatus::Failed => ExecutionStatusDto::Failed,
+                };
+                ExecutionDto {
+                    status,
+                    progress: exe.current_time,
+                    elapsed_secs: exe.current_time,
+                }
+            }),
             generated_at: snapshot.generated_at,
         }
     }

@@ -5,11 +5,11 @@ import { auditTime, catchError, distinctUntilChanged, map, scan, switchMap } fro
 import { SceneApiService } from '../services/scene-api.service';
 import { toSceneData, toActivePlan, toToolFrame } from '../adapters/dto-to-model';
 import type { RuntimeDelta, RuntimeStateResponse, SolveIKResponse, RotationDto } from '../scene-api.types';
-import type { ActivePlan, ExecutionInfo, IkCommand, IkResult, IkTarget, ObjectTransform, RuntimeInfo, SceneData, SceneState, SceneUiState, ToolFrame } from '../scene.types';
+import type { ActivePlan, ExecutionInfo, ExecutionStatus, IkCommand, IkResult, IkTarget, ObjectTransform, RuntimeInfo, SceneData, SceneState, SceneUiState, ToolFrame } from '../scene.types';
 
 type SceneEvent =
   | { type: 'loading' }
-  | { type: 'scene'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null; activePlan: ActivePlan | null; activeTcp: ToolFrame | null }
+  | { type: 'scene'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null; activePlan: ActivePlan | null; activeTcp: ToolFrame | null; execution: ExecutionInfo | null }
   | { type: 'fk-update'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null; activeTcp: ToolFrame | null }
   | { type: 'ik-executed'; data: SceneData; runtime: RuntimeInfo; ikResult: IkResult | null; activePlan: ActivePlan | null; activeTcp: ToolFrame | null }
   | { type: 'solve'; joints: number[]; ikResult: IkResult }
@@ -47,6 +47,14 @@ function toSceneEvent(res: RuntimeStateResponse): SceneEvent {
       }
     : null;
 
+  const execution: ExecutionInfo | null = res.execution
+    ? {
+        status: res.execution.status as ExecutionStatus,
+        progress: res.execution.progress,
+        elapsedSecs: res.execution.elapsed_secs,
+      }
+    : null;
+
   return {
     type: 'scene',
     data: toSceneData(res.scene),
@@ -58,6 +66,7 @@ function toSceneEvent(res: RuntimeStateResponse): SceneEvent {
     ikResult,
     activePlan: toActivePlan(res.active_plan),
     activeTcp: toToolFrame(res.active_tcp),
+    execution,
   };
 }
 
@@ -309,7 +318,7 @@ export class SceneStore {
             data: event.data,
             runtime: event.runtime,
             liveTransforms: [],
-            execution: null,
+            execution: event.execution,
             ikResult: event.ikResult,
             solvedQ: null,
             ikTarget: state.ikTarget,

@@ -48,37 +48,56 @@ import { ReplayStore } from '../../shared/store/replay.store';
         </div>
 
         @if (trace(); as t) {
-          <!-- Joint Position Chart -->
-          <div class="ec__chart">
-            <div class="ec__chart-header">Joint Positions</div>
-            <svg class="ec__svg" [attr.viewBox]="'0 0 ' + svgW + ' ' + svgH" preserveAspectRatio="none">
-              @for (line of jointLines(); track $index) {
-                <polyline [attr.points]="line.points" [attr.stroke]="line.color" fill="none" stroke-width="1.5" />
-              }
-              @if (cursorPct() > 0) {
-                <line [attr.x1]="cursorPct() * svgW" y1="0" [attr.x2]="cursorPct() * svgW" [attr.y2]="svgH" stroke="#fff" stroke-width="1" stroke-dasharray="3,3" opacity="0.5" />
-              }
-            </svg>
-            <div class="ec__chart-labels">
-              <span>0s</span>
-              <span>{{ (t.metadata.duration || 1).toFixed(1) }}s</span>
-            </div>
-          </div>
-
-          <!-- Joint Velocity Chart -->
-          @if (s.avg_joint_velocity.length > 0) {
+          <div class="ec__charts-row">
+            <!-- Joint Position Chart -->
             <div class="ec__chart">
-              <div class="ec__chart-header">Joint Velocities</div>
+              <div class="ec__chart-header">Joint Positions</div>
               <svg class="ec__svg" [attr.viewBox]="'0 0 ' + svgW + ' ' + svgH" preserveAspectRatio="none">
-                @for (line of velocityLines(); track $index) {
+                @for (line of jointLines(); track $index) {
                   <polyline [attr.points]="line.points" [attr.stroke]="line.color" fill="none" stroke-width="1.5" />
                 }
                 @if (cursorPct() > 0) {
                   <line [attr.x1]="cursorPct() * svgW" y1="0" [attr.x2]="cursorPct() * svgW" [attr.y2]="svgH" stroke="#fff" stroke-width="1" stroke-dasharray="3,3" opacity="0.5" />
                 }
               </svg>
+              <div class="ec__chart-labels">
+                <span>0s</span>
+                <span class="ec__range">{{ jntMin().toFixed(2) }} – {{ jntMax().toFixed(2) }} rad</span>
+                <span>{{ (t.metadata.duration || 1).toFixed(1) }}s</span>
+              </div>
+              <div class="ec__legend">
+                @for (c of jointLegend(); track $index) {
+                  <span class="ec__legend-item">
+                    <span class="ec__legend-swatch" [style.background]="c.color"></span>
+                    {{ c.label }}
+                  </span>
+                }
+              </div>
             </div>
-          }
+
+            <!-- Joint Velocity Chart -->
+            @if (s.avg_joint_velocity.length > 0) {
+              <div class="ec__chart">
+                <div class="ec__chart-header">Joint Velocities</div>
+                <svg class="ec__svg" [attr.viewBox]="'0 0 ' + svgW + ' ' + svgH" preserveAspectRatio="none">
+                  @for (line of velocityLines(); track $index) {
+                    <polyline [attr.points]="line.points" [attr.stroke]="line.color" fill="none" stroke-width="1.5" />
+                  }
+                  @if (cursorPct() > 0) {
+                    <line [attr.x1]="cursorPct() * svgW" y1="0" [attr.x2]="cursorPct() * svgW" [attr.y2]="svgH" stroke="#fff" stroke-width="1" stroke-dasharray="3,3" opacity="0.5" />
+                  }
+                </svg>
+                <div class="ec__legend">
+                  @for (c of velLegend(); track $index) {
+                    <span class="ec__legend-item">
+                      <span class="ec__legend-swatch" [style.background]="c.color"></span>
+                      {{ c.label }}
+                    </span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
         }
 
         <!-- Event Timeline -->
@@ -146,7 +165,19 @@ import { ReplayStore } from '../../shared/store/replay.store';
     }
     .ec__stat-label { font-size: 0.6rem; opacity: 0.5; text-transform: uppercase; }
     .ec__stat-val { font-size: 0.75rem; font-weight: 700; color: #33ccff; }
-    .ec__chart { display: flex; flex-direction: column; gap: 0.15rem; }
+    .ec__charts-row {
+      display: flex;
+      flex-direction: row;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .ec__chart {
+      flex: 1;
+      min-width: 200px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
     .ec__chart-header {
       font-size: 0.65rem;
       opacity: 0.6;
@@ -165,6 +196,29 @@ import { ReplayStore } from '../../shared/store/replay.store';
       justify-content: space-between;
       font-size: 0.55rem;
       opacity: 0.4;
+    }
+    .ec__range {
+      font-weight: 600;
+      opacity: 0.6;
+    }
+    .ec__legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      margin-top: 0.1rem;
+    }
+    .ec__legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.2rem;
+      font-size: 0.6rem;
+      opacity: 0.6;
+    }
+    .ec__legend-swatch {
+      display: inline-block;
+      width: 8px;
+      height: 2px;
+      border-radius: 1px;
     }
     .ec__timeline { display: flex; flex-direction: column; gap: 0.2rem; }
     .ec__events { display: flex; flex-direction: column; gap: 0.1rem; }
@@ -262,6 +316,43 @@ export class ExecutionCharts {
   }
 
   // ── Chart data builders ──
+
+  /** Min y max de todas las posiciones articulares (para el label de rango). */
+  protected readonly jntMin = computed(() => {
+    const t = this.trace();
+    if (!t?.samples?.length) return 0;
+    let min = Infinity;
+    for (const s of t.samples) for (const v of s.joints) if (v < min) min = v;
+    return min === Infinity ? 0 : min;
+  });
+  protected readonly jntMax = computed(() => {
+    const t = this.trace();
+    if (!t?.samples?.length) return 0;
+    let max = -Infinity;
+    for (const s of t.samples) for (const v of s.joints) if (v > max) max = v;
+    return max === -Infinity ? 0 : max;
+  });
+
+  /** Leyenda de colores del chart de posiciones. */
+  protected readonly jointLegend = computed(() => {
+    const t = this.trace();
+    const n = t?.samples?.[0]?.joints?.length ?? 0;
+    return Array.from({ length: n }, (_, j) => ({
+      color: this.CHART_COLORS[j % this.CHART_COLORS.length],
+      label: `Joint ${j}`,
+    }));
+  });
+
+  /** Leyenda de colores del chart de velocidades. */
+  protected readonly velLegend = computed(() => {
+    const t = this.trace();
+    const n = t?.samples?.[0]?.joints?.length ?? 0;
+    if (n === 0) return [];
+    return Array.from({ length: n }, (_, j) => ({
+      color: this.CHART_COLORS[j % this.CHART_COLORS.length],
+      label: `Joint ${j}`,
+    }));
+  });
 
   protected readonly jointLines = computed(() => {
     const t = this.trace();
