@@ -47,6 +47,56 @@ export interface SessionSummary {
   status: string;
 }
 
+export interface ExecutionTraceDto {
+  metadata: {
+    session_id: string;
+    plan_id: string;
+    source: string;
+    robot_name: string;
+    joint_count: number;
+    duration: number;
+    sample_rate: number;
+  };
+  samples: ExecutionSampleDto[];
+  events: ExecutionEventDto[];
+}
+
+export interface ExecutionSampleDto {
+  timestamp: number;
+  joints: number[];
+  velocities: number[];
+  accelerations: number[];
+  tcp_pose: [number, number, number, number, number, number, number];
+  tcp_velocity: [number, number, number, number, number, number];
+  tracking_error: number | null;
+  progress: number;
+}
+
+export interface ExecutionEventDto {
+  Started?: { timestamp: number };
+  Paused?: { timestamp: number };
+  Resumed?: { timestamp: number };
+  WaypointReached?: { timestamp: number; waypoint: number };
+  SegmentCompleted?: { timestamp: number; segment: number };
+  Error?: { timestamp: number; message: string };
+  Completed?: { timestamp: number };
+  Cancelled?: { timestamp: number };
+}
+
+export interface ExecutionStatisticsDto {
+  duration: number;
+  sample_count: number;
+  sample_rate: number;
+  joint_count: number;
+  path_length: number;
+  max_joint_velocity: number[];
+  avg_joint_velocity: number[];
+  max_tracking_error: number | null;
+  avg_tracking_error: number | null;
+  event_count: number;
+  waypoints_completed: number;
+}
+
 export interface ReplayRequest {
   session_id: number;
   interpolation?: string;
@@ -89,6 +139,14 @@ export class SessionApiService {
       trace_json: traceJson,
       robot_name: robotName ?? 'imported',
     } satisfies ImportRequest);
+  }
+
+  getExecutionTrace(id: number): Observable<ExecutionTraceDto> {
+    return this.http.get<ExecutionTraceDto>(`${this.baseUrl}/sessions/${id}/execution-trace`);
+  }
+
+  getExecutionStatistics(id: number): Observable<ExecutionStatisticsDto> {
+    return this.http.get<ExecutionStatisticsDto>(`${this.baseUrl}/sessions/${id}/statistics`);
   }
 
   seekExecution(position: number): Observable<unknown> {

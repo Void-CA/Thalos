@@ -8,6 +8,7 @@ import { WorkspacePanel } from '../../features/workspace/components/workspace-pa
 import { PlanningPanel } from '../../features/planning/planning-panel';
 import { TrajectoryColorPicker } from '../../features/planning/trajectory-color-picker';
 import { AlternativesPanel } from '../../features/plan-analysis/components/alternatives-panel';
+import { ExecutionCharts } from '../../features/execution/execution-charts';
 import { ExecutionPanel } from '../../features/execution/execution-panel';
 
 /**
@@ -35,5 +36,6 @@ export const UI_MODE_REGISTRY: Record<AppMode, readonly ToolSchema[]> = {
   ],
   execution: [
     { id: 'execution', label: 'Active Plan', component: ExecutionPanel, defaultOpen: true },
+    { id: 'charts', label: 'Telemetry', component: ExecutionCharts, defaultOpen: false },
   ],
 } as const;
