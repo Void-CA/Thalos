@@ -84,17 +84,17 @@
   &__joint-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-    gap: 0.3rem;
+    gap: $space-xs;
 
     label {
       display: flex;
       flex-direction: column;
-      gap: 0.1rem;
+      gap: $space-xs;
     }
   }
 
   &__joint-label {
-    font-size: 0.65rem;
+    font-size: $text-sm;
     color: $text-secondary;
     font-family: $font-mono;
     text-transform: uppercase;
@@ -136,9 +136,9 @@
 
     &__btn {
       flex: 1;
-      padding: 0.25rem 0.4rem;
+      padding: $space-xs $space-sm;
       font-family: $font-mono;
-      font-size: 0.75rem;
+      font-size: $text-base;
       cursor: pointer;
       background: transparent;
       border: none;
@@ -163,7 +163,7 @@
   &__field {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: $space-xs;
   }
 
   &__field-label {

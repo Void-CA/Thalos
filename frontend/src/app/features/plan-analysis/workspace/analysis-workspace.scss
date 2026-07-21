@@ -25,7 +25,7 @@ $sev-info-bg: #121e2a;
 // ── Shared ──
 
 .aw__sec-title {
-  margin: 0 0 0.5rem;
+  margin: 0 0 $space-sm;
   font-size: $text-xs;
   font-weight: 700;
   text-transform: uppercase;
@@ -60,7 +60,7 @@ $sev-info-bg: #121e2a;
 .aw__btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: $space-xs;
   font-family: $font-ui;
   font-size: $text-sm;
   padding: $space-xs $space-sm;
@@ -95,7 +95,7 @@ $sev-info-bg: #121e2a;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: $space-sm;
   flex: 1;
   text-align: center;
   color: $text-muted;
@@ -148,7 +148,7 @@ $sev-info-bg: #121e2a;
 
 .aw__exec {
   display: flex;
-  gap: 0.75rem;
+  gap: $space-md;
   margin-bottom: 0.75rem;
 }
 
@@ -159,7 +159,7 @@ $sev-info-bg: #121e2a;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.1rem;
+  gap: $space-xs;
   padding: $space-sm $space-xs;
   background: $bg-card;
   border: 1px solid $border-subtle;
@@ -196,7 +196,7 @@ $sev-info-bg: #121e2a;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.3rem;
+  gap: $space-xs;
   min-width: 0;
 }
 
@@ -216,7 +216,7 @@ $sev-info-bg: #121e2a;
 
 .aw__sev-legend {
   display: flex;
-  gap: 0.5rem;
+  gap: $space-sm;
   flex-wrap: wrap;
 }
 
@@ -290,7 +290,7 @@ $sev-info-bg: #121e2a;
 
 .aw__metrics-row {
   display: flex;
-  gap: 0.35rem;
+  gap: $space-xs;
   margin-bottom: 0.75rem;
   flex-wrap: wrap;
 }
@@ -298,7 +298,7 @@ $sev-info-bg: #121e2a;
 .aw__mc {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: $space-xs;
   padding: $space-xs $space-sm;
   background: $bg-card;
   border: 1px solid $border-subtle;
@@ -333,7 +333,7 @@ $sev-info-bg: #121e2a;
 .aw__grid-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
+  gap: $space-md;
   margin-bottom: 0.75rem;
 }
 
@@ -346,7 +346,7 @@ $sev-info-bg: #121e2a;
 .aw__cat-list {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: $space-xs;
 }
 
 .aw__cat {
@@ -357,7 +357,7 @@ $sev-info-bg: #121e2a;
   border-radius: $radius-sm;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: $space-xs;
 }
 
 .aw__cat-head {
@@ -396,14 +396,14 @@ $sev-info-bg: #121e2a;
 .aw__reg-list {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: $space-xs;
 }
 
 .aw__reg {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.3rem 0.45rem;
+  gap: $space-xs;
+  padding: $space-xs $space-sm;
   background: $bg-card;
   border: 1px solid $border-subtle;
   border-radius: $radius-sm;
@@ -416,7 +416,7 @@ $sev-info-bg: #121e2a;
 .aw__reg-head {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: $space-xs;
   flex-shrink: 0;
 }
 
@@ -436,8 +436,8 @@ $sev-info-bg: #121e2a;
 }
 
 .aw__reg-sev {
-  font-size: 0.5rem;
-  padding: 0.04rem 0.2rem;
+  font-size: $text-xs;
+  padding: 2px $space-xs;
   border-radius: 2px;
   font-weight: 600;
 
@@ -468,8 +468,8 @@ $sev-info-bg: #121e2a;
 }
 
 .aw__reg-k {
-  font-size: 0.5rem;
-  padding: 0.04rem 0.2rem;
+  font-size: $text-xs;
+  padding: 2px $space-xs;
   border-radius: 2px;
   background: $bg-surface;
   color: $text-muted;
@@ -477,7 +477,7 @@ $sev-info-bg: #121e2a;
 }
 
 .aw__reg-more {
-  font-size: 0.5rem;
+  font-size: $text-xs;
   color: $text-muted;
   opacity: 0.4;
 }
@@ -489,7 +489,7 @@ $sev-info-bg: #121e2a;
 .aw__crit-list {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: $space-xs;
 }
 
 .aw__crit {
@@ -500,20 +500,20 @@ $sev-info-bg: #121e2a;
   border-radius: $radius-sm;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: $space-xs;
 }
 
 .aw__crit-head {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: $space-xs;
   font-size: $text-sm;
 }
 
 .aw__crit-sev {
   font-weight: 700;
   font-size: $text-xs;
-  padding: 0.05rem 0.25rem;
+  padding: $space-xs $space-xs;
   border-radius: 2px;
 
   &.aw__sev--error { color: $sev-error; background: $sev-error-bg; }
@@ -528,8 +528,8 @@ $sev-info-bg: #121e2a;
 }
 
 .aw__crit-tag {
-  font-size: 0.5rem;
-  padding: 0.05rem 0.25rem;
+  font-size: $text-xs;
+  padding: $space-xs $space-xs;
   border-radius: 2px;
   color: #111;
   font-weight: 600;
@@ -545,14 +545,14 @@ $sev-info-bg: #121e2a;
 .aw__crit-actions {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: $space-xs;
   padding-top: 0.1rem;
 }
 
 .aw__crit-wp {
   font-family: $font-mono;
   font-size: $text-xs;
-  padding: 0.05rem 0.25rem;
+  padding: $space-xs $space-xs;
   border-radius: 2px;
   background: $bg-surface;
   color: $accent;
@@ -570,7 +570,7 @@ $sev-info-bg: #121e2a;
 .aw__act {
   font-family: $font-ui;
   font-size: $text-xs;
-  padding: 0.1rem 0.35rem;
+  padding: $space-xs $space-xs;
   border-radius: 2px;
   border: 1px solid $border-subtle;
   background: transparent;
@@ -590,13 +590,13 @@ $sev-info-bg: #121e2a;
 .aw__br-list {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: $space-xs;
 }
 
 .aw__br {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: $space-xs;
   font-size: $text-xs;
 }
 
@@ -647,5 +647,5 @@ $sev-info-bg: #121e2a;
 
 .aw__charts-tab {
   flex: 1;
-  padding: 0.25rem 0;
+  padding: $space-xs 0;
 }

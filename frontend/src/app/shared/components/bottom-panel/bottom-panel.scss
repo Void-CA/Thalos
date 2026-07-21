@@ -19,7 +19,7 @@
     height: 36px;
     padding: 0 $space-md;
     border-bottom: 1px solid $border-subtle;
-    gap: 0.35rem;
+    gap: $space-xs;
   }
 
   &__tab {
@@ -30,14 +30,14 @@
     font-size: $text-sm;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    padding: 0.35rem 0.75rem;
+    padding: $space-xs $space-md;
     cursor: pointer;
     border-radius: $radius-sm $radius-sm 0 0;
     transition: background $transition-fast, color $transition-fast;
     opacity: 0.75;
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: $space-xs;
 
     &:hover {
       background: $bg-card;
@@ -61,7 +61,7 @@
     color: $text-muted;
     font-size: $text-xs;
     cursor: pointer;
-    padding: 0.25rem 0.4rem;
+    padding: $space-xs $space-sm;
     opacity: 0.5;
     transition: opacity $transition-fast;
 
@@ -83,7 +83,7 @@
     background: none;
     border: none;
     color: $text-muted;
-    font-size: 0.6rem;
+    font-size: $text-xs;
     cursor: pointer;
     opacity: 0.4;
     transition: opacity $transition-fast;
@@ -126,7 +126,7 @@
   .analysis {
     display: flex;
     flex-direction: row;
-    gap: 0.5rem;
+    gap: $space-sm;
     overflow-x: auto;
     padding-bottom: 0.25rem;
     min-height: 0;
@@ -137,15 +137,15 @@
       background: $bg-card;
       border: 1px solid $border-default;
       border-radius: $radius-md;
-      padding: 0.45rem 0.55rem;
+      padding: $space-sm $space-sm;
       display: flex;
       flex-direction: column;
-      gap: 0.25rem;
+      gap: $space-xs;
     }
 
     &__card-title {
       margin: 0;
-      font-size: 0.65rem;
+      font-size: $text-sm;
       text-transform: uppercase;
       letter-spacing: 0.06em;
       color: $text-secondary;
@@ -155,9 +155,9 @@
     &__badge {
       display: inline-block;
       align-self: flex-start;
-      padding: 0.08rem 0.35rem;
+      padding: $space-xs $space-xs;
       border-radius: $radius-sm;
-      font-size: 0.6rem;
+      font-size: $text-xs;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.05em;
@@ -170,10 +170,10 @@
 
     &__table {
       border-collapse: collapse;
-      font-size: 0.65rem;
+      font-size: $text-sm;
 
       td {
-        padding: 0.08rem 0.35rem 0.08rem 0;
+        padding: $space-xs $space-xs 0.08rem 0;
       }
 
       td:first-child {
@@ -193,14 +193,14 @@
     &__chips {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.2rem;
-      margin-top: 0.15rem;
+      gap: $space-xs;
+      margin-top: $space-xs;
     }
 
     &__chip {
-      font-size: 0.6rem;
+      font-size: $text-xs;
       background: $bg-elevated;
-      padding: 0.08rem 0.3rem;
+      padding: $space-xs $space-xs;
       border-radius: $radius-sm;
       opacity: 0.8;
     }
@@ -211,19 +211,19 @@
   .tl {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: $space-sm;
 
     &__header {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: $space-sm;
     }
 
     &__badge {
       display: inline-block;
-      padding: 0.1rem 0.35rem;
+      padding: $space-xs $space-xs;
       border-radius: $radius-sm;
-      font-size: 0.65rem;
+      font-size: $text-sm;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.05em;
@@ -232,12 +232,12 @@
     }
 
     &__id {
-      font-size: 0.7rem;
+      font-size: $text-sm;
       opacity: 0.6;
     }
 
     &__type {
-      font-size: 0.65rem;
+      font-size: $text-sm;
       opacity: 0.45;
       text-transform: uppercase;
       letter-spacing: 0.04em;
@@ -257,7 +257,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.55rem;
+      font-size: $text-xs;
       color: #fff;
       font-weight: 600;
       transition: width 0.3s ease;
@@ -274,7 +274,7 @@
     &__progress {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: $space-sm;
     }
 
     &__progress-track {
@@ -303,7 +303,7 @@
     }
 
     &__pct {
-      font-size: 0.75rem;
+      font-size: $text-base;
       font-weight: 600;
       font-variant-numeric: tabular-nums;
       min-width: 3.5ch;
@@ -313,11 +313,11 @@
 
     &__times {
       display: flex;
-      gap: 1rem;
+      gap: $space-lg;
     }
 
     &__time {
-      font-size: 0.65rem;
+      font-size: $text-sm;
       opacity: 0.55;
     }
 
@@ -328,7 +328,7 @@
       height: 6px;
       background: $bg-elevated;
       border-radius: 3px;
-      margin: 0.15rem 0;
+      margin: $space-xs 0;
     }
 
     &__wpt {
@@ -354,7 +354,7 @@
     // ── LIVE indicator ──
 
     &__live {
-      font-size: 0.6rem;
+      font-size: $text-xs;
       color: #44cc44;
       animation: tl-pulse 1s ease-in-out infinite;
       text-align: center;
@@ -364,12 +364,12 @@
 
     &__comparison {
       display: flex;
-      gap: 0.75rem;
-      padding: 0.3rem 0.4rem;
+      gap: $space-md;
+      padding: $space-xs $space-sm;
       background: $bg-card;
       border: 1px solid $border-subtle;
       border-radius: $radius-sm;
-      font-size: 0.65rem;
+      font-size: $text-sm;
       align-items: center;
     }
 
@@ -378,12 +378,12 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
       opacity: 0.6;
-      font-size: 0.6rem;
+      font-size: $text-xs;
     }
 
     &__cmp-metric {
       font-family: $font-mono;
-      font-size: 0.65rem;
+      font-size: $text-sm;
       opacity: 0.7;
 
       &:nth-child(2) { color: #f97316; }  // RMSE in orange
@@ -399,9 +399,9 @@
   // ── Tab badge (Plan Analysis) ──
 
   &__tab-badge {
-    font-size: 0.55rem;
+    font-size: $text-xs;
     font-weight: 700;
-    padding: 0.05rem 0.3rem;
+    padding: $space-xs $space-xs;
     border-radius: 3px;
     line-height: 1.2;
 
@@ -426,7 +426,7 @@
   .log {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: $space-xs;
 
     &__entry {
       display: flex;
@@ -438,7 +438,7 @@
         color: $danger;
         background: rgba(255, 68, 68, 0.06);
         border-radius: $radius-sm;
-        padding: 0.15rem 0.35rem;
+        padding: $space-xs $space-xs;
       }
     }
 
@@ -475,7 +475,7 @@
   &__item {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: $space-xs;
     padding: $space-sm $space-md;
     border-radius: $radius-md;
     background: $bg-elevated;
@@ -496,7 +496,7 @@
 
   &__badge {
     display: inline-block;
-    padding: 0.15rem 0.4rem;
+    padding: $space-xs $space-sm;
     border-radius: $radius-sm;
     font-size: $text-xs;
     font-weight: 700;
@@ -527,14 +527,14 @@
 
   &__item-actions {
     display: flex;
-    gap: 0.35rem;
-    margin-top: 0.25rem;
+    gap: $space-xs;
+    margin-top: $space-xs;
   }
 
   &__btn {
     font-family: monospace;
     font-size: $text-sm;
-    padding: 0.2rem 0.5rem;
+    padding: $space-xs $space-sm;
     border-radius: $radius-sm;
     border: 1px solid $border-subtle;
     background: $bg-surface;
@@ -555,7 +555,7 @@
 .bottom-panel__pipeline {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: $space-xs;
   padding: 0.3rem $space-md;
   border-bottom: 1px solid $border-subtle;
   font-size: $text-xs;
@@ -566,7 +566,7 @@
 .pipeline__stage {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: $space-xs;
   opacity: 0.35;
   font-weight: 500;
   text-transform: uppercase;
@@ -585,7 +585,7 @@
 
 .pipeline__arrow {
   opacity: 0.25;
-  font-size: 0.65rem;
+  font-size: $text-sm;
 }
 
 // ── Execution Summary ──
@@ -593,19 +593,19 @@
 .exec-summary {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: $space-md;
 
   &__header {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: $space-sm;
   }
 
   &__badge {
     display: inline-block;
-    padding: 0.1rem 0.35rem;
+    padding: $space-xs $space-xs;
     border-radius: $radius-sm;
-    font-size: 0.65rem;
+    font-size: $text-sm;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -618,12 +618,12 @@
   }
 
   &__id {
-    font-size: 0.7rem;
+    font-size: $text-sm;
     opacity: 0.6;
   }
 
   &__type {
-    font-size: 0.65rem;
+    font-size: $text-sm;
     opacity: 0.45;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -631,7 +631,7 @@
 
   &__stats {
     display: flex;
-    gap: 1rem;
+    gap: $space-lg;
     padding: 0.5rem;
     background: $bg-card;
     border: 1px solid $border-default;
@@ -642,18 +642,18 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.2rem;
+    gap: $space-xs;
   }
 
   &__stat-value {
-    font-size: 1.1rem;
+    font-size: $text-lg;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     color: $text-primary;
   }
 
   &__stat-label {
-    font-size: 0.6rem;
+    font-size: $text-xs;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     opacity: 0.55;
@@ -662,8 +662,8 @@
   &__status {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    font-size: 0.8rem;
+    gap: $space-xs;
+    font-size: $text-base;
     color: $text-primary;
   }
 
@@ -672,9 +672,9 @@
   }
 
   &__recommendation {
-    font-size: 0.7rem;
+    font-size: $text-sm;
     opacity: 0.7;
-    padding: 0.35rem 0.5rem;
+    padding: $space-xs $space-sm;
     background: $bg-card;
     border: 1px solid $border-default;
     border-radius: $radius-md;

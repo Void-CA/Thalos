@@ -19,7 +19,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 0.5rem;
+      margin-bottom: $space-sm;
     }
 
     .sw__title {
@@ -148,7 +148,7 @@
 
     .sw__controls {
       display: flex;
-      gap: 0.4rem;
+      gap: $space-xs;
       align-items: center;
       flex-wrap: wrap;
     }
@@ -275,7 +275,7 @@
       min-width: 80px;
       display: flex;
       flex-direction: column;
-      gap: 0.15rem;
+      gap: $space-xs;
       padding: $space-xs $space-sm;
       background: $bg-card;
       border: 1px solid $border-subtle;
@@ -332,7 +332,7 @@
     .sw__log {
       display: flex;
       flex-direction: column;
-      gap: 0.2rem;
+      gap: $space-xs;
       font-family: $font-mono;
       font-size: $text-sm;
     }
@@ -341,9 +341,9 @@
       display: flex;
       gap: $space-sm;
       line-height: 1.6;
-      padding: 0.15rem 0;
+      padding: $space-xs 0;
 
-      &.sw__log-entry--error { color: #b85450; background: rgba(184,84,80,0.06); border-radius: $radius-sm; padding: 0.15rem 0.35rem; }
+      &.sw__log-entry--error { color: #b85450; background: rgba(184,84,80,0.06); border-radius: $radius-sm; padding: $space-xs 0.35rem; }
     }
 
     .sw__log-time { opacity: 0.4; flex-shrink: 0; }

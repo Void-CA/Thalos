@@ -3,13 +3,13 @@
 .catalog {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: $space-sm;
 }
 
 .catalog__list {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: $space-xs;
 }
 
 .catalog__status {
@@ -60,7 +60,7 @@
   &__header {
     list-style: none;
     cursor: pointer;
-    padding: 0.5rem 0.6rem;
+    padding: $space-sm $space-sm;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -97,6 +97,6 @@
   }
 
   &__body {
-    padding: 0.5rem 0.6rem 0.6rem;
+    padding: $space-sm $space-sm 0.6rem;
   }
 }

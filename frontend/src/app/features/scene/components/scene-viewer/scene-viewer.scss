@@ -25,7 +25,7 @@ canvas {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.5rem;
+    gap: $space-sm;
     opacity: 0.35;
   }
 
@@ -38,7 +38,7 @@ canvas {
 
   &__hint {
     margin: 0;
-    font-size: 0.8rem;
+    font-size: $text-base;
     color: $text-muted;
   }
 }

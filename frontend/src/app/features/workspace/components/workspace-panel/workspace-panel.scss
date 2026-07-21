@@ -32,7 +32,7 @@ input[type='number'] {
 .workspace-panel__actions {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: $space-xs;
 }
 
 .action {
@@ -63,7 +63,7 @@ input[type='number'] {
 .toggle {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: $space-xs;
   font-size: $text-base;
   opacity: 0.8;
   cursor: pointer;
@@ -87,7 +87,7 @@ input[type='number'] {
 
   td {
     padding: 0.2rem 0;
-    font-size: 0.75rem;
+    font-size: $text-base;
   }
   td:first-child {
     opacity: 0.6;
@@ -126,5 +126,5 @@ input[type='number'] {
   background: #3a1a1a;
   color: #f88;
   border-radius: $radius-sm;
-  font-size: 0.75rem;
+  font-size: $text-base;
 }
