@@ -52,3 +52,41 @@ export interface RecommendationDto {
   impact: 'low' | 'medium' | 'high';
   waypoint: number | null;
 }
+
+// ── Alternatives (M5 — Expert Planning Assistant) ──
+
+export interface AlternativesResponse {
+  original_score: number;
+  original_breakdown: MetricBreakdownItem[];
+  alternatives: RankedAlternativeDto[];
+  total_candidates: number;
+}
+
+export interface MetricBreakdownItem {
+  name: string;
+  value: number;
+}
+
+export interface PerturbationDto {
+  waypoint: number;
+  joint: number;
+  delta: number;
+}
+
+export interface MetricBreakdownDto {
+  name: string;
+  original: number;
+  candidate: number;
+}
+
+export interface RankedAlternativeDto {
+  rank: number;
+  source_waypoint: number;
+  perturbations: PerturbationDto[];
+  score: number;
+  original_score: number;
+  delta_score: number;
+  improvement_percent: number;
+  improvements: string[];
+  breakdown: MetricBreakdownDto[];
+}

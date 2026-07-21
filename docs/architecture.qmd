@@ -16,7 +16,7 @@ Thalos separa **ocho dominios** que nunca deben acoplarse:
 | Robótico (core) | `thalos-core` | Estructuras robóticas, cinemática (FK/IK), frames, modelos |
 | Estructural | `thalos-models` | Estructura canónica de robot (URDF mirror) |
 | Colisiones | `thalos-collision` | Detección de colisiones (SAT, naive) |
-| Planificación | `thalos-planning` | Planificadores MoveJ/MoveL, trayectorias |
+| Planificación | `thalos-planning` | Planificadores MoveJ/MoveL, trayectorias, evaluación de calidad, generación de alternativas |
 | Visual | `thalos-visual` | Escenas, validación, diff, snapshots, primitivas |
 | Runtime | `thalos-runtime` | Orquestación, estado mutable, commands, backends, IK |
 | Comunicación | `thalos-api` | HTTP, DTOs, handlers, routing |

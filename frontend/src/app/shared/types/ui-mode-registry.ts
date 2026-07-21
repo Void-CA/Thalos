@@ -7,6 +7,7 @@ import { TcpInfoPanel } from '../../features/scene/components/tcp-info-panel/tcp
 import { WorkspacePanel } from '../../features/workspace/components/workspace-panel/workspace-panel';
 import { PlanningPanel } from '../../features/planning/planning-panel';
 import { TrajectoryColorPicker } from '../../features/planning/trajectory-color-picker';
+import { AlternativesPanel } from '../../features/plan-analysis/components/alternatives-panel';
 import { ExecutionPanel } from '../../features/execution/execution-panel';
 
 /**
@@ -30,6 +31,7 @@ export const UI_MODE_REGISTRY: Record<AppMode, readonly ToolSchema[]> = {
   planning: [
     { id: 'color', label: 'Trajectory Color', component: TrajectoryColorPicker, defaultOpen: true },
     { id: 'planning', label: 'Motion Planning', component: PlanningPanel as Type<unknown>, defaultOpen: true },
+    { id: 'alternatives', label: 'Alternatives', component: AlternativesPanel, defaultOpen: false },
   ],
   execution: [
     { id: 'execution', label: 'Active Plan', component: ExecutionPanel, defaultOpen: true },

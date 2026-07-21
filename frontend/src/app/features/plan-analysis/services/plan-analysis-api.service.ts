@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../shared/api/api-config';
-import type { PlanAnalysisResponse } from '../plan-analysis-api.types';
+import type { AlternativesResponse, PlanAnalysisResponse } from '../plan-analysis-api.types';
 
 @Injectable({ providedIn: 'root' })
 export class PlanAnalysisApiService {
@@ -14,6 +14,14 @@ export class PlanAnalysisApiService {
     return this.http.post<PlanAnalysisResponse>(
       `${this.baseUrl}/plan/analyze`,
       { plan_id: planId ?? null },
+    );
+  }
+
+  /** Generate alternative plans for the active plan. */
+  generateAlternatives(): Observable<AlternativesResponse> {
+    return this.http.post<AlternativesResponse>(
+      `${this.baseUrl}/plan/analyze/alternatives`,
+      {},
     );
   }
 }

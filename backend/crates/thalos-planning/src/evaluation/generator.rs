@@ -13,8 +13,45 @@ use thalos_core::trajectory::{Trajectory, TrajectoryPoint};
 use crate::evaluation::cost::{CostFunction, PlanScore};
 use crate::evaluation::evaluator::PlanEvaluator;
 use crate::evaluation::metrics::{MetricKind, PlanMetrics};
-use crate::finding::{Finding, FindingKind};
+use crate::finding::Finding;
 use crate::motion::program::CompiledPlan;
+
+/// Regiones problemáticas de un plan — desacopla el generador del análisis.
+///
+/// El análisis produce `Vec<Finding>`. El generador consume `ProblemRegions`.
+/// Entre ambos, una conversión explícita extrae solo los waypoints relevantes.
+#[derive(Debug, Clone)]
+pub struct ProblemRegions {
+    /// Índices de waypoints con problemas, ordenados.
+    pub waypoints: Vec<usize>,
+}
+
+impl ProblemRegions {
+    /// Crear desde hallazgos del análisis.
+    pub fn from_findings(findings: &[Finding]) -> Self {
+        let mut indices: Vec<usize> = findings.iter().filter_map(|f| f.waypoint).collect();
+        indices.sort();
+        indices.dedup();
+        Self { waypoints: indices }
+    }
+
+    /// Crear desde una lista explícita de waypoints.
+    pub fn from_indices(indices: Vec<usize>) -> Self {
+        let mut indices = indices;
+        indices.sort();
+        indices.dedup();
+        Self { waypoints: indices }
+    }
+
+    /// Crear región vacía (sin problemas).
+    pub fn none() -> Self {
+        Self { waypoints: vec![] }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.waypoints.is_empty()
+    }
+}
 
 /// Política de selección de waypoints a perturbar.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -94,13 +131,23 @@ pub struct RankedAlternative {
 pub struct AlternativeGenerator;
 
 impl AlternativeGenerator {
-    /// Generar candidatos perturbando waypoints problemáticos.
-    ///
-    /// No evalúa — solo produce planes modificados. El ranking se hace
-    /// por separado con `rank_candidates()`.
+    // Mantener compatibilidad con la API existente que pasa findings.
     pub fn generate(
         plan: &CompiledPlan,
         findings: &[Finding],
+        strategy: &PerturbationStrategy,
+    ) -> Vec<AlternativeCandidate> {
+        let regions = ProblemRegions::from_findings(findings);
+        Self::generate_from_regions(plan, &regions, strategy)
+    }
+
+    /// Generar candidatos desde `ProblemRegions`.
+    ///
+    /// No depende del formato completo del análisis — solo recibe los
+    /// índices de waypoints problemáticos.
+    pub fn generate_from_regions(
+        plan: &CompiledPlan,
+        regions: &ProblemRegions,
         strategy: &PerturbationStrategy,
     ) -> Vec<AlternativeCandidate> {
         let waypoints = plan.merged_trajectory.waypoints();
@@ -108,17 +155,8 @@ impl AlternativeGenerator {
             return vec![];
         }
 
-        // Determinar qué waypoints perturbar
         let target_indices: Vec<usize> = match strategy.selection_policy {
-            SelectionPolicy::ProblematicWaypoints => {
-                let mut indices: Vec<usize> = findings
-                    .iter()
-                    .filter_map(|f| f.waypoint)
-                    .collect();
-                indices.sort();
-                indices.dedup();
-                indices
-            }
+            SelectionPolicy::ProblematicWaypoints => regions.waypoints.clone(),
             SelectionPolicy::AllWaypoints => {
                 (0..waypoints.len()).collect()
             }
