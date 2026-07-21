@@ -52,8 +52,10 @@ export const PERSPECTIVE_REGISTRY: Record<Perspective, PerspectiveConfig> = {
       { id: 'execution', label: 'Active Plan', component: ExecutionPanel, defaultOpen: true },
     ],
     bottomTabs: [
+      { id: 'execution-summary', label: 'Summary', icon: 'heroClipboardDocumentCheck' },
       { id: 'timeline', label: 'Timeline', icon: 'heroClock' },
       { id: 'charts', label: 'Telemetry', icon: 'heroChartBar' },
+      { id: 'execution-findings', label: 'Findings', icon: 'heroAdjustmentsVertical' },
       { id: 'log', label: 'Log', icon: 'heroDocumentText' },
     ],
   },

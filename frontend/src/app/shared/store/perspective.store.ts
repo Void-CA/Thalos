@@ -8,7 +8,7 @@ const STORAGE_KEY = 'thalos-perspective';
  * Store de la perspectiva activa.
  *
  * Controla la disposición de paneles, tools y contenido según la
- * actividad del usuario. Reemplaza al anterior ModeStore.
+ * actividad del usuario.
  *
  * Persiste a localStorage entre sesiones.
  */

@@ -11,7 +11,9 @@ import { PerspectiveStore } from '../../store/perspective.store';
 import { ExecutionCharts } from '../../../features/execution/execution-charts';
 import { AlternativesPanel } from '../../../features/plan-analysis/components/alternatives-panel';
 
-type TabId = 'snapshot' | 'analysis' | 'timeline' | 'plan-analysis' | 'log' | 'charts' | 'alt';
+type TabId = 'snapshot' | 'analysis' | 'timeline' | 'plan-analysis'
+  | 'log' | 'charts' | 'alt'
+  | 'execution-summary' | 'execution-findings';
 
 const ALL_TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'snapshot', label: 'Snapshot', icon: 'heroCamera' },
@@ -21,6 +23,8 @@ const ALL_TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'log', label: 'Log', icon: 'heroDocumentText' },
   { id: 'charts', label: 'Telemetry', icon: 'heroChartBar' },
   { id: 'alt', label: 'Alternatives', icon: 'heroAdjustmentsVertical' },
+  { id: 'execution-summary', label: 'Summary', icon: 'heroClipboardDocumentCheck' },
+  { id: 'execution-findings', label: 'Findings', icon: 'heroAdjustmentsVertical' },
 ];
 
 const SEGMENT_COLORS = [
@@ -59,6 +63,12 @@ const SEGMENT_COLORS = [
                   <span class="bottom-panel__tab-badge" [class]="'badge--' + badge.kind">{{ badge.label }}</span>
                 }
               }
+              @if (t.id === 'execution-findings') {
+                @let badge = executionFindingsBadge();
+                @if (badge) {
+                  <span class="bottom-panel__tab-badge" [class]="'badge--' + badge.kind">{{ badge.label }}</span>
+                }
+              }
             </button>
           }
           <span class="bottom-panel__spacer"></span>
@@ -67,6 +77,17 @@ const SEGMENT_COLORS = [
             (click)="layout.toggleBottom()"
             title="Collapse panel"
           >▼</button>
+        </div>
+
+        <!-- Pipeline Flow Monitor -->
+        <div class="bottom-panel__pipeline">
+          @for (stage of pipelineStages(); track stage.id) {
+            <span class="pipeline__stage" [class.pipeline__stage--done]="stage.done" [class.pipeline__stage--active]="stage.active">
+              @if (stage.done) { ✅ } @else if (stage.active) { ⏳ } @else { ○ }
+              {{ stage.label }}
+            </span>
+            @if (!$last) { <span class="pipeline__arrow">→</span> }
+          }
         </div>
 
         <div class="bottom-panel__content">
@@ -137,6 +158,87 @@ const SEGMENT_COLORS = [
               </div>
             } @else {
               <p class="bottom-panel__empty">No analysis results. Run FK/IK or workspace analysis from the right panel.</p>
+            }
+          }
+
+          @if (activeTab() === 'execution-summary') {
+            @let es = executionSummary();
+            @if (!es) {
+              <p class="bottom-panel__empty">No execution data. Start an execution from the Active Plan panel.</p>
+            } @else {
+              <div class="exec-summary">
+                <div class="exec-summary__header">
+                  <span class="exec-summary__badge" [class]="'badge--' + es.statusClass">{{ es.statusLabel }}</span>
+                  <span class="exec-summary__id">{{ es.planId }}</span>
+                  <span class="exec-summary__type">{{ es.motionType }}</span>
+                </div>
+
+                <div class="exec-summary__stats">
+                  <div class="exec-summary__stat">
+                    <span class="exec-summary__stat-value">{{ es.duration }}</span>
+                    <span class="exec-summary__stat-label">Duration</span>
+                  </div>
+                  <div class="exec-summary__stat">
+                    <span class="exec-summary__stat-value">{{ es.waypoints }}</span>
+                    <span class="exec-summary__stat-label">Waypoints</span>
+                  </div>
+                  <div class="exec-summary__stat">
+                    <span class="exec-summary__stat-value">{{ es.planFindings }}</span>
+                    <span class="exec-summary__stat-label">Plan findings</span>
+                  </div>
+                  <div class="exec-summary__stat">
+                    <span class="exec-summary__stat-value">{{ es.execFindings }}</span>
+                    <span class="exec-summary__stat-label">Exec findings</span>
+                  </div>
+                </div>
+
+                @if (es.execCompleted) {
+                  <div class="exec-summary__status">
+                    <span class="exec-summary__status-icon">✅</span>
+                    <span>Execution completed</span>
+                  </div>
+                  @if (es.planFindingsCount > 0 || es.execFindingsCount > 0) {
+                    <div class="exec-summary__recommendation">
+                      @if (es.execFindingsCount > 0) {
+                        <span>Review execution findings for details.</span>
+                      }
+                    </div>
+                  }
+                }
+              </div>
+            }
+          }
+
+          @if (activeTab() === 'execution-findings') {
+            @let ef = executionFindings();
+            @if (ef.length === 0) {
+              <p class="bottom-panel__empty">
+                No execution findings yet. After running a comparison, findings will appear here.
+              </p>
+            } @else {
+              <div class="exec-findings">
+                <section class="exec-findings__list">
+                  <h4 class="exec-findings__title">Execution Findings ({{ ef.length }})</h4>
+                  <div class="exec-findings__groups">
+                    @for (g of ef; track g.kind) {
+                      <details class="exec-findings__group" open>
+                        <summary class="exec-findings__group-header">
+                          <span class="exec-findings__group-sev">{{ iconFor(g.severity) }}</span>
+                          <span class="exec-findings__group-kind">{{ g.kind.replace(/_/g, ' ') }}</span>
+                          <span class="exec-findings__category-badge" [style.background]="g.categoryColor">{{ g.categoryLabel }}</span>
+                          <span class="exec-findings__group-count" [class]="'count--' + g.severity">{{ g.count }}</span>
+                        </summary>
+                        <div class="exec-findings__group-body">
+                          <p class="exec-findings__group-msg">{{ g.message }}</p>
+                          @if (g.value != null) {
+                            <span class="exec-findings__group-value">Value: {{ g.value.toFixed(4) }}</span>
+                          }
+                        </div>
+                      </details>
+                    }
+                  </div>
+                </section>
+              </div>
             }
           }
 
@@ -236,12 +338,13 @@ const SEGMENT_COLORS = [
                     </h4>
                     <div class="plan-analysis__groups">
                       @for (g of groups; track g.kind) {
-                        <details class="plan-analysis__group" open>
-                          <summary class="plan-analysis__group-header">
-                            <span class="plan-analysis__group-sev">{{ iconFor(g.severity) }}</span>
-                            <span class="plan-analysis__group-kind">{{ g.kind.replace(/_/g, ' ') }}</span>
-                            <span class="plan-analysis__group-count" [class]="'count--' + g.severity">{{ g.count }}</span>
-                          </summary>
+                          <details class="plan-analysis__group" open>
+                            <summary class="plan-analysis__group-header">
+                              <span class="plan-analysis__group-sev">{{ iconFor(g.severity) }}</span>
+                              <span class="plan-analysis__group-kind">{{ g.kind.replace(/_/g, ' ') }}</span>
+                              <span class="plan-analysis__category-badge" [style.background]="g.categoryColor">{{ g.categoryLabel }}</span>
+                              <span class="plan-analysis__group-count" [class]="'count--' + g.severity">{{ g.count }}</span>
+                            </summary>
                           <div class="plan-analysis__group-body">
                             <p class="plan-analysis__group-msg">{{ g.message }}</p>
                             @if (g.waypoints.length > 0) {
@@ -312,10 +415,20 @@ export class BottomPanel {
   protected readonly tabs = computed(() => {
     const config = this.perspective.config();
     const tabIds = new Set(config.bottomTabs.map(t => t.id));
-    return ALL_TABS.filter(t => tabIds.has(t.id));
+    const filtered = ALL_TABS.filter(t => tabIds.has(t.id));
+
+    // Si la tab activa ya no está en las visibles, resetear a la primera disponible
+    if (!tabIds.has(this.activeTab())) {
+      const first = filtered.length > 0 ? filtered[0].id : 'log';
+      this.activeTab.set(first);
+    }
+
+    return filtered;
   });
 
-  protected readonly activeTab = signal<TabId>('timeline');
+  protected readonly activeTab = signal<TabId>(
+    this.perspective.perspective() === 'execution' ? 'execution-summary' : 'timeline',
+  );
 
   // ── Snapshot ──
 
@@ -452,7 +565,7 @@ export class BottomPanel {
     };
   });
 
-  /** Findings agrupados por kind+severity, con conteo y waypoints. */
+  /** Findings agrupados por kind+severity, con conteo, waypoints y categoría. */
   protected readonly groupedFindings = computed(() => {
     const map = new Map<string, {
       kind: string;
@@ -460,13 +573,20 @@ export class BottomPanel {
       count: number;
       waypoints: number[];
       message: string;
+      categoryLabel: string;
+      categoryColor: string;
     }>();
 
     for (const f of this.pa.findings()) {
       const key = `${f.severity}::${f.kind}`;
       let g = map.get(key);
       if (!g) {
-        g = { kind: f.kind, severity: f.severity, count: 0, waypoints: [], message: f.message };
+        const cat = this.findingCategory(f.kind);
+        g = {
+          kind: f.kind, severity: f.severity, count: 0,
+          waypoints: [], message: f.message,
+          categoryLabel: cat.label, categoryColor: cat.color,
+        };
         map.set(key, g);
       }
       g.count++;
@@ -514,4 +634,120 @@ export class BottomPanel {
   // ── Log ──
 
   protected readonly logEntries = computed(() => this.log.entries());
+
+  // ── Pipeline Flow Monitor ──
+
+  /** Estado de cada etapa del pipeline Thalos. */
+  protected readonly pipelineStages = computed(() => {
+    const state = this.scene.state();
+    const plan = state.activePlan;
+    const exe = state.execution;
+    const paHasResult = this.pa.hasResult();
+
+    return [
+      { id: 'plan', label: 'Plan', done: !!plan, active: !!plan && !exe },
+      { id: 'execute', label: 'Execute', done: exe?.status === 'Completed' || exe?.status === 'Failed' || exe?.status === 'Cancelled', active: exe?.status === 'Active' },
+      { id: 'compare', label: 'Compare', done: false, active: false },
+      { id: 'knowledge', label: 'Knowledge', done: paHasResult || !!exe, active: paHasResult && !!exe },
+      { id: 'improve', label: 'Improve', done: false, active: false },
+    ];
+  });
+
+  // ── Execution Summary ──
+
+  protected readonly executionSummary = computed(() => {
+    const state = this.scene.state();
+    const plan = state.activePlan;
+    const exe = state.execution;
+    if (!plan || !exe) return null;
+
+    const statusClass = exe.status === 'Completed' ? 'ok'
+      : exe.status === 'Failed' ? 'error'
+      : exe.status === 'Active' ? 'active'
+      : exe.status === 'Paused' ? 'warn'
+      : 'default';
+
+    return {
+      planId: plan.planId,
+      statusLabel: exe.status,
+      statusClass,
+      motionType: plan.motionType,
+      duration: exe.elapsedSecs ? `${exe.elapsedSecs.toFixed(1)}s` : '—',
+      waypoints: plan.visualization?.waypoints.length ?? 0,
+      planFindings: `${this.pa.findings().length}`,
+      execFindings: '—',
+      execCompleted: exe.status === 'Completed',
+      planFindingsCount: this.pa.findings().length,
+      execFindingsCount: 0,
+    };
+  });
+
+  // ── Execution Findings (Sprint 1: placeholders from available data) ──
+
+  /** Mapea un FindingKind a categoría visual. */
+  protected findingCategory(kind: string): { label: string; color: string } {
+    switch (kind) {
+      case 'collision': case 'collision_near': return { label: 'Collision', color: '#ef4444' };
+      case 'low_manipulability': case 'near_singularity': case 'singularity': case 'ik_suggestion':
+        return { label: 'Kinematic', color: '#eab308' };
+      case 'tracking_error': case 'tracking_spike': case 'joint_deviation':
+        return { label: 'Tracking', color: '#f97316' };
+      case 'velocity_deviation': return { label: 'Velocity', color: '#3b82f6' };
+      case 'constraint_violation': return { label: 'Constraint', color: '#a855f7' };
+      default: return { label: 'Unknown', color: '#6b7280' };
+    }
+  }
+
+  /** Hallazgos de ejecución — en Sprint 1 solo planning findings con categoría; en Sprint 2+ se suman execution findings. */
+  protected readonly executionFindings = computed(() => {
+    // Por ahora, mostrar planning findings con categoría como preview.
+    // En Sprint 2, esto se reemplaza con findings del endpoint /sessions/{id}/comparison
+    const findings = this.pa.findings();
+    if (findings.length === 0) return [];
+
+    const map = new Map<string, {
+      kind: string;
+      severity: string;
+      count: number;
+      message: string;
+      value: number | null;
+      categoryLabel: string;
+      categoryColor: string;
+    }>();
+
+    for (const f of findings) {
+      const key = `${f.severity}::${f.kind}`;
+      let g = map.get(key);
+      if (!g) {
+        const cat = this.findingCategory(f.kind);
+        g = {
+          kind: f.kind, severity: f.severity, count: 0,
+          message: f.message, value: f.value ?? null,
+          categoryLabel: cat.label, categoryColor: cat.color,
+        };
+        map.set(key, g);
+      }
+      g.count++;
+      if (!g.message) g.message = f.message;
+    }
+
+    const severityOrder = { error: 0, warning: 1, info: 2 };
+    return Array.from(map.values()).sort(
+      (a, b) => (severityOrder[a.severity as keyof typeof severityOrder] ?? 9)
+                - (severityOrder[b.severity as keyof typeof severityOrder] ?? 9),
+    );
+  });
+
+  /** Badge para la pestaña Execution Findings. */
+  protected readonly executionFindingsBadge = computed<{ kind: string; label: string } | null>(() => {
+    const findings = this.executionFindings();
+    if (findings.length === 0) return null;
+
+    const errors = findings.filter(f => f.severity === 'error').length;
+    const warnings = findings.filter(f => f.severity === 'warning').length;
+
+    if (errors > 0) return { kind: 'error', label: `\u2715 ${errors}` };
+    if (warnings > 0) return { kind: 'warn', label: `\u26A0 ${warnings}` };
+    return { kind: 'info', label: `\u2139 ${findings.length}` };
+  });
 }
