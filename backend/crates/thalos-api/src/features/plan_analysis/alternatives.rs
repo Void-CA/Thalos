@@ -10,14 +10,15 @@ use std::sync::Arc;
 use axum::{extract::State, Json};
 use serde::Serialize;
 
+use thalos_core::collision::CollisionMatrix;
+use thalos_collision::NaiveCollisionChecker;
 use thalos_planning::{
+    analysis::TrajectoryAnalyzer,
     evaluation::{
-        AlternativeGenerator, CostFunction, PerturbationStrategy, PlanEvaluator, PlanScore,
-        SelectionPolicy,
+        AlternativeGenerator, CostFunction, PerturbationStrategy, PlanEvaluator,
     },
     motion::program::CompiledPlan,
 };
-use thalos_runtime::PlanAnalysisService;
 
 use crate::app::error::ApiError;
 use crate::app::prelude::*;
@@ -98,18 +99,18 @@ pub async fn analyze_alternatives(
             code: "no_active_plan".to_string(),
         })?;
 
-    // 1. Analizar el plan original para obtener findings
-    let analysis_result = PlanAnalysisService::analyze_plan(
-        &snapshot.chain,
-        trajectory,
-        snapshot.active_tcp.as_ref(),
-        None,
-    )
-    .map_err(|e| ApiError::Internal {
+    // 1. Construir analyzer completo para evaluar original y candidatos
+    let checker = NaiveCollisionChecker;
+    let matrix = CollisionMatrix::new();
+    let analyzer = TrajectoryAnalyzer::new(&snapshot.chain, snapshot.active_tcp.as_ref())
+        .with_collision_checker(&checker, &matrix);
+
+    let original_analysis = analyzer.analyze(trajectory).map_err(|e| ApiError::Internal {
         message: e.to_string(),
     })?;
 
-    let findings = &analysis_result.findings;
+    let findings = &original_analysis.findings;
+    let original_metrics = PlanEvaluator::compute_metrics(&original_analysis.waypoints);
 
     // 2. Construir CompiledPlan para el generador
     let segments = snapshot
@@ -138,12 +139,19 @@ pub async fn analyze_alternatives(
         }));
     }
 
-    // 4. Evaluar original y candidatos
-    let original_metrics = PlanEvaluator::compute_metrics_from_joints(trajectory);
+    // 4. Evaluar y rankear candidatos con el analyzer completo
     let cost_function = CostFunction::defaults();
     let original_score = cost_function.score(&original_metrics);
 
-    let ranked = AlternativeGenerator::rank_candidates(&original_metrics, candidates, &cost_function);
+    let ranked = AlternativeGenerator::rank_candidates(
+        &analyzer,
+        &original_metrics,
+        candidates,
+        &cost_function,
+    )
+    .map_err(|e| ApiError::Internal {
+        message: e.to_string(),
+    })?;
 
     // 5. Convertir a DTOs
     let original_breakdown: Vec<MetricBreakdownItem> = original_score

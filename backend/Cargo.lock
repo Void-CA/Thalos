@@ -1314,6 +1314,7 @@ dependencies = [
  "chrono",
  "serde",
  "serde_json",
+ "thalos-collision",
  "thalos-planning",
  "thalos_core",
  "thalos_math",

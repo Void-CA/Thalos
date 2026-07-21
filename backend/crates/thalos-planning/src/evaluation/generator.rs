@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 
 use thalos_core::trajectory::{Trajectory, TrajectoryPoint};
 
+use crate::analysis::TrajectoryAnalyzer;
+use crate::error::PlanningError;
 use crate::evaluation::cost::{CostFunction, PlanScore};
 use crate::evaluation::evaluator::PlanEvaluator;
 use crate::evaluation::metrics::{MetricKind, PlanMetrics};
@@ -240,36 +242,39 @@ impl AlternativeGenerator {
 
     /// Evaluar y rankear una lista de candidatos contra el plan original.
     ///
+    /// Cada candidato se analiza con [`TrajectoryAnalyzer`] completo (FK, Jacobiano,
+    /// singularidad, manipulabilidad, colisiones) para producir métricas comparables
+    /// a las del plan original.
+    ///
     /// Retorna los candidatos ordenados por score ascendente (mejor primero).
     /// Cada entrada incluye el score original para comparación.
     pub fn rank_candidates(
+        analyzer: &TrajectoryAnalyzer,
         original_metrics: &PlanMetrics,
         candidates: Vec<AlternativeCandidate>,
         cost_function: &CostFunction,
-    ) -> Vec<RankedAlternative> {
+    ) -> Result<Vec<RankedAlternative>, PlanningError> {
         let original_score = cost_function.score(original_metrics);
 
-        // Evaluar cada candidato
+        // Evaluar cada candidato con análisis completo
         let mut scored: Vec<(AlternativeCandidate, PlanScore)> = candidates
             .into_iter()
             .filter_map(|c| {
-                // Necesitamos WaypointAnalysis para evaluar — por ahora usamos
-                // las métricas del original y las ajustamos basado en la perturbación.
-                // En el futuro, el evaluador recibirá WaypointAnalysis real.
-                // Para el MVP, computamos métricas desde los waypoints modificados.
-                let metrics = PlanEvaluator::compute_metrics_from_joints(
-                    &c.plan.merged_trajectory,
-                );
+                let analysis = match analyzer.analyze(&c.plan.merged_trajectory) {
+                    Ok(a) => a,
+                    Err(e) => return Some(Err(e)),
+                };
+                let metrics = PlanEvaluator::compute_metrics(&analysis.waypoints);
                 let score = cost_function.score(&metrics);
-                Some((c, score))
+                Some(Ok((c, score)))
             })
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
 
         // Ordenar por score ascendente
         scored.sort_by(|a, b| a.1.total.partial_cmp(&b.1.total).unwrap_or(std::cmp::Ordering::Equal));
 
         // Construir ranked alternatives con mejoras explicadas
-        scored
+        Ok(scored
             .into_iter()
             .enumerate()
             .map(|(rank, (candidate, score))| {
@@ -282,7 +287,7 @@ impl AlternativeGenerator {
                     improvements,
                 }
             })
-            .collect()
+            .collect())
     }
 
     /// Calcular diferencias legibles entre el score original y el candidato.
@@ -317,9 +322,9 @@ impl AlternativeGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::evaluation::metrics::PlanMetrics;
+    use crate::analysis::TrajectoryAnalyzer;
     use crate::finding::{Finding, FindingKind, Severity};
-    use std::collections::HashMap;
+    use thalos_core::models::{RobotModel, RobotRegistry};
 
     fn sample_plan() -> CompiledPlan {
         let waypoints = vec![
@@ -426,6 +431,7 @@ mod tests {
 
     #[test]
     fn rank_candidates_orders_by_score() {
+        let chain = RobotRegistry::create_default(RobotModel::Planar3R);
         let plan = sample_plan();
         let findings = vec![
             Finding {
@@ -440,9 +446,20 @@ mod tests {
         let strategy = PerturbationStrategy::default_mvp();
         let candidates = AlternativeGenerator::generate(&plan, &findings, &strategy);
 
-        let original_metrics = PlanEvaluator::compute_metrics_from_joints(&plan.merged_trajectory);
+        let analyzer = TrajectoryAnalyzer::new(&chain, None);
+        let original_analysis = analyzer
+            .analyze(&plan.merged_trajectory)
+            .expect("original analysis failed");
+        let original_metrics = PlanEvaluator::compute_metrics(&original_analysis.waypoints);
+
         let cost = CostFunction::defaults();
-        let ranked = AlternativeGenerator::rank_candidates(&original_metrics, candidates, &cost);
+        let ranked = AlternativeGenerator::rank_candidates(
+            &analyzer,
+            &original_metrics,
+            candidates,
+            &cost,
+        )
+        .expect("ranking failed");
 
         assert!(!ranked.is_empty());
         // Verificar que están ordenados por score ascendente
