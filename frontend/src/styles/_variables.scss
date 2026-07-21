@@ -40,24 +40,24 @@ $execute-border: #5aaa5a;
 $font-ui: system-ui, -apple-system, sans-serif;
 $font-mono: monospace;
 
-// Tamaños de fuente — escala ~30% más grande que antes
-$text-xs: 0.7rem;   // labels mínimos, badges
-$text-sm: 0.8rem;   // metadata, hints
-$text-base: 0.9rem; // contenido general
-$text-md: 1rem;     // títulos secundarios
-$text-lg: 1.15rem;  // títulos principales
-$text-xl: 1.5rem;   // scores, números grandes
-$text-display: 2.2rem; // hero numbers
+// Tamaños de fuente — grandes, legibles
+$text-xs: 0.85rem;   // labels mínimos, badges
+$text-sm: 0.95rem;   // metadata, hints
+$text-base: 1.05rem; // contenido general
+$text-md: 1.2rem;    // títulos secundarios
+$text-lg: 1.4rem;    // títulos principales
+$text-xl: 1.8rem;    // scores, números grandes
+$text-display: 2.6rem; // hero numbers
 
 // Radios
-$radius-sm: 4px;
-$radius-md: 8px;
+$radius-sm: 5px;
+$radius-md: 10px;
 
 // Espaciado
-$space-xs: 0.3rem;
-$space-sm: 0.5rem;
-$space-md: 0.75rem;
-$space-lg: 1rem;
+$space-xs: 0.4rem;
+$space-sm: 0.6rem;
+$space-md: 0.9rem;
+$space-lg: 1.25rem;
 
 // Transiciones
 $transition-fast: 0.15s;

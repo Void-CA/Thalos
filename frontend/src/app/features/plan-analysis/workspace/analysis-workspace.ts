@@ -130,6 +130,29 @@ export class AnalysisWorkspace {
       .slice(0, 10);
   });
 
+  // ── Waypoint severity map (for chart) ──
+
+  protected readonly waypointSeverityMap = computed(() => {
+    const findings = this.pa.findings();
+    if (findings.length === 0) return [];
+    const wpMap = new Map<number, { error: number; warning: number; info: number }>();
+    for (const f of findings) {
+      if (f.waypoint == null) continue;
+      let wp = wpMap.get(f.waypoint);
+      if (!wp) { wp = { error: 0, warning: 0, info: 0 }; wpMap.set(f.waypoint, wp); }
+      if (f.severity === 'error') wp.error++;
+      else if (f.severity === 'warning') wp.warning++;
+      else wp.info++;
+    }
+    const entries = Array.from(wpMap.entries()).sort((a, b) => a[0] - b[0]);
+    const maxTotal = Math.max(...entries.map(([, v]) => v.error + v.warning + v.info), 1);
+    return entries.slice(0, 30).map(([wp, c]) => ({
+      waypoint: wp, total: c.error + c.warning + c.info,
+      error: c.error, warning: c.warning, info: c.info,
+      pct: ((c.error + c.warning + c.info) / maxTotal) * 100,
+    }));
+  });
+
   // ── Score breakdown ──
 
   protected readonly scoreBreakdown = computed(() => {
@@ -178,6 +201,10 @@ export class AnalysisWorkspace {
 
   protected severityIcon(sev: string): string {
     switch (sev) { case 'error': return '✗'; case 'warning': return '⚠'; default: return 'ℹ'; }
+  }
+
+  protected barHeight(part: number, total: number): number {
+    return Math.max(2, (part / total) * 60);
   }
 
   protected get hasData(): boolean {

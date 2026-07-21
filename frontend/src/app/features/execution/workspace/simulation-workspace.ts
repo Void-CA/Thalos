@@ -138,6 +138,22 @@ const TICK_DT = TICK_INTERVAL / 1000;
             </div>
           </section>
 
+          <!-- Live Joint Positions -->
+          <section class="sw__section">
+            <div class="sw__joints-title">Joint Positions</div>
+            <div class="sw__joints">
+              @for (j of jointBars(); track $index) {
+                <div class="sw__joint-row">
+                  <span class="sw__joint-name">{{ j.name }}</span>
+                  <div class="sw__joint-track">
+                    <div class="sw__joint-fill" [style.width.%]="j.pct"></div>
+                  </div>
+                  <span class="sw__joint-pct">{{ j.pct.toFixed(0) }}%</span>
+                </div>
+              }
+            </div>
+          </section>
+
           <!-- Comparison -->
           @if (plan.comparison) {
             <section class="sw__section">
@@ -259,7 +275,20 @@ export class SimulationWorkspace implements OnDestroy {
 
   protected readonly logEntries = computed(() => this.log.entries());
 
-  
+  /** Current joint positions as horizontal bar data (0-100% of range). */
+  protected readonly jointBars = computed(() => {
+    const state = this.scene.state();
+    const rt = state?.runtime;
+    if (!rt?.robot?.joints) return [];
+    return rt.robot.joints.map((j, i) => {
+      const val = rt.joints[i] ?? 0;
+      const min = j.min ?? -Math.PI;
+      const max = j.max ?? Math.PI;
+      const range = max - min || 1;
+      const pct = ((val - min) / range) * 100;
+      return { name: j.name || `J${i+1}`, pct: Math.max(0, Math.min(100, pct)) };
+    });
+  });
 
   protected doAction(action: ExecAction): void {
     this.loading.set(true);

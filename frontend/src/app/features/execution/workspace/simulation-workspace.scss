@@ -40,7 +40,7 @@
     .sw__tab {
       font-family: $font-ui;
       font-size: $text-sm;
-      padding: 0.4rem 0.8rem;
+      padding: $space-sm $space-md;
       border: none;
       background: transparent;
       color: $text-muted;
@@ -156,7 +156,7 @@
     .sw__ctrl {
       font-family: $font-ui;
       font-size: $text-base;
-      padding: 0.4rem 0.8rem;
+      padding: $space-sm $space-md;
       border-radius: $radius-sm;
       border: 1px solid $border-default;
       background: $bg-card;
@@ -211,7 +211,58 @@
       &.sw__wpt--via { background: #b8943a; }
     }
 
-    
+    .sw__joints-title {
+      font-size: $text-sm;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: $text-muted;
+      margin-bottom: $space-sm;
+    }
+
+    .sw__joints {
+      display: flex;
+      flex-direction: column;
+      gap: $space-xs;
+    }
+
+    .sw__joint-row {
+      display: flex;
+      align-items: center;
+      gap: $space-sm;
+    }
+
+    .sw__joint-name {
+      width: 3.5rem;
+      font-family: $font-mono;
+      font-size: $text-xs;
+      color: $text-muted;
+      flex-shrink: 0;
+    }
+
+    .sw__joint-track {
+      flex: 1;
+      height: 8px;
+      background: $bg-elevated;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .sw__joint-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: $accent;
+      transition: width 0.2s ease;
+    }
+
+    .sw__joint-pct {
+      width: 2.5rem;
+      text-align: right;
+      font-family: $font-mono;
+      font-size: $text-xs;
+      color: $text-muted;
+      opacity: 0.6;
+    }
 
     .sw__metrics {
       display: flex;
@@ -225,7 +276,7 @@
       display: flex;
       flex-direction: column;
       gap: 0.15rem;
-      padding: 0.4rem 0.5rem;
+      padding: $space-xs $space-sm;
       background: $bg-card;
       border: 1px solid $border-subtle;
       border-radius: $radius-sm;

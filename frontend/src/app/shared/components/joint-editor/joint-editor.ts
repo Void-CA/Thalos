@@ -216,8 +216,13 @@ export class JointEditor {
   // ── Template handlers ──
 
   protected onChange(index: number, event: Event): void {
-    const value = parseFloat((event.target as HTMLInputElement).value);
+    let value = parseFloat((event.target as HTMLInputElement).value);
     if (!isFinite(value)) return;
+
+    const entry = this.entries()[index];
+    if (entry) {
+      value = Math.max(entry.min, Math.min(entry.max, value));
+    }
 
     this.values.update(prev => {
       const next = [...prev];

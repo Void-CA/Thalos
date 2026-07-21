@@ -151,6 +151,25 @@
       }
     </section>
 
+    <!-- ── Waypoint Severity Chart ── -->
+    @let sevMap = waypointSeverityMap();
+    @if (sevMap.length > 2) {
+      <section class="aw__section">
+        <h2 class="aw__sec-title">Findings per Waypoint</h2>
+        <div class="aw__sevmap">
+          @for (w of sevMap; track w.waypoint) {
+            <div class="aw__sevmap-bar" [title]="'wp' + w.waypoint + ': ' + w.total + ' findings'">
+              <div class="aw__sevmap-stack" [style.height.%]="w.pct">
+                @if (w.error > 0) { <div class="aw__sevmap-seg aw__sev--error" [style.height.px]="barHeight(w.error, w.total)"></div> }
+                @if (w.warning > 0) { <div class="aw__sevmap-seg aw__sev--warn" [style.height.px]="barHeight(w.warning, w.total)"></div> }
+              </div>
+              <span class="aw__sevmap-label">wp{{ w.waypoint }}</span>
+            </div>
+          }
+        </div>
+      </section>
+    }
+
     <!-- ── Critical Findings ── -->
     @let critical = criticalFindings();
     @if (critical.length > 0) {
