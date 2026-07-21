@@ -16,7 +16,7 @@ import type { RecommendationAction } from '../types/recommendation-action';
 @Injectable({ providedIn: 'root' })
 export class ActionDispatcher {
   private readonly focus = inject(FocusService);
-  private readonly mode = inject(ModeStore);
+  private readonly mode = inject(PerspectiveStore);
 
   dispatch(action: RecommendationAction): void {
     switch (action.type) {
@@ -26,22 +26,22 @@ export class ActionDispatcher {
 
       case 'select-ik-solution':
         // Focus the IK panel: switch to robot mode where IK tools live
-        this.mode.setMode('robot');
+        this.mode.setPerspective('robot');
         break;
 
       case 'open-ik-settings':
         // Same: IK settings are in robot mode
-        this.mode.setMode('robot');
+        this.mode.setPerspective('robot');
         break;
 
       case 'open-speed-settings':
         // Speed settings live in the planning segment editor
-        this.mode.setMode('planning');
+        this.mode.setPerspective('planning');
         break;
 
       case 'open-waypoint-editor':
         // Waypoint editing is in planning mode
-        this.mode.setMode('planning');
+        this.mode.setPerspective('planning');
         if (action.waypoint != null) {
           this.focus.focusWaypoint(action.waypoint);
         }
@@ -49,17 +49,17 @@ export class ActionDispatcher {
 
       case 'open-constraint-editor':
         // TODO: open constraint panel when implemented
-        this.mode.setMode('robot');
+        this.mode.setPerspective('robot');
         break;
 
       case 'open-tool-frame-settings':
         // TCP settings are in robot mode
-        this.mode.setMode('robot');
+        this.mode.setPerspective('robot');
         break;
 
       case 'open-scene-editor':
         // Scene editing is in planning mode
-        this.mode.setMode('planning');
+        this.mode.setPerspective('planning');
         break;
     }
   }
