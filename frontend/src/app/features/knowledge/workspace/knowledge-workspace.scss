@@ -1,0 +1,237 @@
+@use 'variables' as *;
+
+$sev-error: #b85450;
+$sev-warn: #b8943a;
+$sev-error-bg: #2a1818;
+$sev-warn-bg: #2a2210;
+$sev-info-bg: #121e2a;
+
+.kw {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  padding: $space-lg;
+  background: $bg-surface;
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-thumb { background: $border-default; border-radius: 3px; }
+  scrollbar-color: $border-default transparent;
+  scrollbar-width: thin;
+}
+
+.kw__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $space-md;
+}
+
+.kw__title {
+  margin: 0;
+  font-size: $text-md;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.kw__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $space-sm;
+  flex: 1;
+  text-align: center;
+  color: $text-muted;
+  font-size: $text-base;
+  ng-icon { opacity: 0.2; }
+  p { margin: 0; }
+}
+
+.kw__section {
+  margin-bottom: $space-lg;
+}
+
+.kw__sec-title {
+  margin: 0 0 $space-sm;
+  font-size: $text-sm;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: $text-muted;
+  opacity: 0.6;
+}
+
+// ── Recommendations ──
+
+.kw__rec {
+  padding: $space-sm $space-md;
+  background: $bg-card;
+  border: 1px solid $border-subtle;
+  border-radius: $radius-md;
+  margin-bottom: $space-sm;
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+
+  &--high { border-left: 3px solid $sev-error; }
+  &--medium { border-left: 3px solid $sev-warn; }
+  &--low { border-left: 3px solid #6a7a8a; }
+}
+
+.kw__rec-head {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+}
+
+.kw__rec-badge {
+  font-size: $text-xs;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: $radius-sm;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+
+  &--high { background: $sev-error-bg; color: $sev-error; }
+  &--med { background: $sev-warn-bg; color: $sev-warn; }
+  &--low { background: $bg-elevated; color: #6a7a8a; }
+}
+
+.kw__rec-msg {
+  flex: 1;
+  font-size: $text-base;
+  color: $text-secondary;
+  line-height: 1.4;
+}
+
+.kw__rec-evidence {
+  display: flex;
+  align-items: center;
+  gap: $space-xs;
+  font-size: $text-sm;
+  color: $text-muted;
+  opacity: 0.7;
+}
+
+.kw__rec-arrow {
+  opacity: 0.4;
+}
+
+.kw__rec-kind {
+  text-transform: capitalize;
+}
+
+.kw__rec-impact {
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.kw__rec-actions {
+  display: flex;
+  gap: $space-xs;
+  padding-top: $space-xs;
+}
+
+.kw__act {
+  font-family: $font-ui;
+  font-size: $text-sm;
+  padding: 0.15rem 0.4rem;
+  border-radius: $radius-sm;
+  border: 1px solid $border-subtle;
+  background: transparent;
+  color: $text-muted;
+  cursor: pointer;
+  transition: background $transition-fast;
+  &:hover { background: $bg-elevated; }
+  &--plan { color: #4a9e5a; border-color: #4a9e5a; &:hover { background: #1a2e1a; } }
+}
+
+// ── Evidence ──
+
+.kw__evidence {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+}
+
+.kw__ev {
+  padding: $space-sm $space-md;
+  background: $bg-card;
+  border: 1px solid $border-subtle;
+  border-radius: $radius-md;
+  cursor: pointer;
+  transition: background $transition-fast;
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+  &:hover { background: $bg-elevated; }
+}
+
+.kw__ev-head {
+  display: flex;
+  align-items: center;
+  gap: $space-xs;
+  font-size: $text-base;
+}
+
+.kw__ev-sev {
+  font-size: $text-xs;
+  font-weight: 700;
+  padding: 0.05rem 0.25rem;
+  border-radius: $radius-sm;
+  &.kw__sev--error { color: $sev-error; background: $sev-error-bg; }
+  &.kw__sev--warning { color: $sev-warn; background: $sev-warn-bg; }
+}
+
+.kw__ev-kind {
+  flex: 1;
+  font-weight: 600;
+  color: $text-secondary;
+  text-transform: capitalize;
+}
+
+.kw__ev-cat {
+  font-size: $text-xs;
+  padding: 0.05rem 0.3rem;
+  border-radius: $radius-sm;
+  color: #111;
+  font-weight: 600;
+}
+
+.kw__ev-wp {
+  font-family: $font-mono;
+  font-size: $text-xs;
+  padding: 0.05rem 0.25rem;
+  border-radius: $radius-sm;
+  background: $bg-surface;
+  color: $accent;
+}
+
+.kw__ev-chain {
+  display: flex;
+  align-items: center;
+  gap: $space-xs;
+  font-size: $text-sm;
+  color: $text-muted;
+  opacity: 0.6;
+  flex-wrap: wrap;
+}
+
+.kw__chain-item {
+  padding: 0.05rem 0.25rem;
+  border-radius: $radius-sm;
+  background: $bg-surface;
+}
+
+.kw__chain-arrow {
+  opacity: 0.3;
+}
+
+.kw__chain-val {
+  font-family: $font-mono;
+}
+
+.kw__chain-action {
+  color: #4a9e5a;
+  background: #1a2e1a;
+}

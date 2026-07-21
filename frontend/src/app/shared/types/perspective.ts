@@ -1,7 +1,7 @@
 import { Type } from '@angular/core';
 
 /** Perspectiva de la interfaz — define la disposición de paneles para una tarea. */
-export type Perspective = 'robot' | 'planning' | 'analysis' | 'execution' | 'sessions';
+export type Perspective = 'robot' | 'planning' | 'analysis' | 'execution' | 'sessions' | 'knowledge';
 
 /** Un tool del panel derecho. */
 export interface ToolSchema {

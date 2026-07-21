@@ -67,6 +67,9 @@
     @if (isSimulationMode()) {
       <simulation-workspace class="layout__content" />
     }
+    @if (isKnowledgeMode()) {
+      <knowledge-workspace class="layout__content" />
+    }
     @if (isLegacyMode() && hasRightPanel()) {
       <app-splitter direction="vertical" panel="right" />
       <aside

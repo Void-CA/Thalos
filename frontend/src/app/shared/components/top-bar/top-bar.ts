@@ -32,5 +32,5 @@ export class TopBar {
   protected readonly PERSPECTIVE_LABELS = PERSPECTIVE_LABELS;
   protected readonly PERSPECTIVE_ICONS = PERSPECTIVE_ICONS;
   protected readonly store = inject(PerspectiveStore);
-  protected readonly perspectives: Perspective[] = ['robot', 'planning', 'analysis', 'execution', 'sessions'];
+  protected readonly perspectives: Perspective[] = ['robot', 'planning', 'analysis', 'execution', 'knowledge', 'sessions'];
 }

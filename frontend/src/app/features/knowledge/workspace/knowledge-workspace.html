@@ -1,0 +1,99 @@
+<div class="kw">
+  <header class="kw__header">
+    <h1 class="kw__title">Knowledge</h1>
+  </header>
+
+  @if (!hasData) {
+    <div class="kw__empty">
+      <ng-icon name="heroRectangleGroup" size="36" />
+      <p>No analysis data yet. Compile and analyze a plan to see knowledge here.</p>
+    </div>
+  } @else {
+    <!-- ═══════ RECOMMENDATIONS ═══════ -->
+    @let recs = recsByImpact();
+    @if (recs.high.length > 0 || recs.medium.length > 0 || recs.low.length > 0) {
+      <section class="kw__section">
+        <h2 class="kw__sec-title">Recommendations</h2>
+
+        @for (r of recs.high; track $index) {
+          <div class="kw__rec kw__rec--high">
+            <div class="kw__rec-head">
+              <span class="kw__rec-badge kw__rec-badge--high">HIGH</span>
+              <span class="kw__rec-msg">{{ r.message }}</span>
+            </div>
+            <div class="kw__rec-evidence">
+              <span class="kw__rec-kind">{{ r.kind.replace(/_/g, ' ') }}</span>
+              <span class="kw__rec-arrow">→</span>
+              <span class="kw__rec-impact">{{ r.impact }} impact</span>
+            </div>
+            <div class="kw__rec-actions">
+              @if (r.waypoint != null) {
+                <button class="kw__act" (click)="onFocus(r.waypoint)">○ Focus wp{{ r.waypoint }}</button>
+                <button class="kw__act kw__act--plan" (click)="onEdit(r.waypoint)">✎ Edit in Planning</button>
+              }
+            </div>
+          </div>
+        }
+
+        @for (r of recs.medium; track $index) {
+          <div class="kw__rec kw__rec--medium">
+            <div class="kw__rec-head">
+              <span class="kw__rec-badge kw__rec-badge--med">MED</span>
+              <span class="kw__rec-msg">{{ r.message }}</span>
+            </div>
+            <div class="kw__rec-actions">
+              @if (r.waypoint != null) {
+                <button class="kw__act" (click)="onFocus(r.waypoint)">○ Focus wp{{ r.waypoint }}</button>
+              }
+            </div>
+          </div>
+        }
+
+        @for (r of recs.low; track $index) {
+          <div class="kw__rec kw__rec--low">
+            <div class="kw__rec-head">
+              <span class="kw__rec-badge kw__rec-badge--low">LOW</span>
+              <span class="kw__rec-msg">{{ r.message }}</span>
+            </div>
+          </div>
+        }
+      </section>
+    }
+
+    <!-- ═══════ EVIDENCE ═══════ -->
+    @if (hasEvidence) {
+      <section class="kw__section">
+        <h2 class="kw__sec-title">Evidence</h2>
+        <div class="kw__evidence">
+          @for (ev of evidenceItems(); track $index) {
+            <div class="kw__ev" (click)="onFocus(ev.waypoint)">
+              <div class="kw__ev-head">
+                <span class="kw__ev-sev kw__sev--{{ev.severity}}">{{ iconFor(ev.severity) }}</span>
+                <span class="kw__ev-kind">{{ ev.kind }}</span>
+                <span class="kw__ev-cat" [style.background]="ev.category.color">{{ ev.category.label }}</span>
+                @if (ev.waypoint != null) { <span class="kw__ev-wp">wp{{ ev.waypoint }}</span> }
+              </div>
+              <div class="kw__ev-chain">
+                <span class="kw__chain-item">{{ ev.kind }}</span>
+                <span class="kw__chain-arrow">→</span>
+                <span class="kw__chain-item">{{ ev.severity }}</span>
+                @if (ev.value != null) {
+                  <span class="kw__chain-arrow">→</span>
+                  <span class="kw__chain-item kw__chain-val">{{ ev.value.toFixed(3) }}</span>
+                }
+                <span class="kw__chain-arrow">→</span>
+                <span class="kw__chain-item kw__chain-action">Recommended action available</span>
+              </div>
+            </div>
+          }
+        </div>
+      </section>
+    }
+
+    <!-- ═══════ ALTERNATIVES ═══════ -->
+    <section class="kw__section">
+      <h2 class="kw__sec-title">Alternative Plans</h2>
+      <alternatives-panel />
+    </section>
+  }
+</div>

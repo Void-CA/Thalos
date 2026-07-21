@@ -53,6 +53,14 @@ export const PERSPECTIVE_REGISTRY: Record<Perspective, PerspectiveConfig> = {
     bottomTabs: [],
   },
 
+  /** Knowledge Workspace — layout propio (viewport + content) */
+  knowledge: {
+    showLeftPanel: false,
+    showBottomPanel: false,
+    rightPanel: [],
+    bottomTabs: [],
+  },
+
   sessions: {
     showLeftPanel: true,
     showBottomPanel: false,
@@ -70,6 +78,7 @@ export const PERSPECTIVE_LABELS: Record<Perspective, string> = {
   planning: 'Planning',
   analysis: 'Analysis',
   execution: 'Execution',
+  knowledge: 'Knowledge',
   sessions: 'Sessions',
 };
 
@@ -79,5 +88,6 @@ export const PERSPECTIVE_ICONS: Record<Perspective, string> = {
   planning: 'heroClipboardDocumentList',
   analysis: 'heroChartBar',
   execution: 'heroPlay',
+  knowledge: 'heroRectangleGroup',
   sessions: 'heroClock',
 };

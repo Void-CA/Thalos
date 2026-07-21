@@ -296,6 +296,13 @@
   .layout__content { display: none; }
 }
 
+// Knowledge: viewport 35% | workspace 65% (mismo layout que analysis)
+.layout--knowledge {
+  .layout__sidebar { display: none; }
+  .layout__viewport { width: 35%; min-width: 280px; flex-shrink: 0; border-right: 1px solid $border-subtle; }
+  .layout__content { display: block; flex: 1; min-width: 0; overflow: hidden; }
+}
+
 // Simulation: viewport 50% | workspace 50%
 .layout--execution {
   .layout__sidebar { display: none; }

@@ -16,6 +16,7 @@ import { PlanningStore } from './shared/store/planning.store';
 import { AnalysisWorkspace } from './features/plan-analysis/workspace/analysis-workspace';
 import { PlanningWorkspace } from './features/planning/workspace/planning-workspace';
 import { SimulationWorkspace } from './features/execution/workspace/simulation-workspace';
+import { KnowledgeWorkspace } from './features/knowledge/workspace/knowledge-workspace';
 
 /**
  * Layout shell — compone paneles según la perspectiva activa.
@@ -36,6 +37,7 @@ import { SimulationWorkspace } from './features/execution/workspace/simulation-w
     AnalysisWorkspace,
     PlanningWorkspace,
     SimulationWorkspace,
+    KnowledgeWorkspace,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -92,8 +94,12 @@ export class App {
     return this.perspective.perspective() === 'execution';
   });
 
+  protected readonly isKnowledgeMode = computed(() => {
+    return this.perspective.perspective() === 'knowledge';
+  });
+
   protected readonly isLegacyMode = computed(() => {
-    return !this.isAnalysisMode() && !this.isPlanningMode() && !this.isSimulationMode();
+    return !this.isAnalysisMode() && !this.isPlanningMode() && !this.isSimulationMode() && !this.isKnowledgeMode();
   });
 
   // ── Active robot info ──

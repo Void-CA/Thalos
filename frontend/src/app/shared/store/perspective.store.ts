@@ -43,12 +43,12 @@ export class PerspectiveStore {
 
   /** Cycle para la top bar o atajo de teclado. */
   cycle(): void {
-    const order: Perspective[] = ['robot', 'planning', 'analysis', 'execution', 'sessions'];
+    const order: Perspective[] = ['robot', 'planning', 'analysis', 'execution', 'knowledge', 'sessions'];
     const idx = order.indexOf(this.perspective());
     this.setPerspective(order[(idx + 1) % order.length]);
   }
 
   private isValid(p: string): p is Perspective {
-    return ['robot', 'planning', 'analysis', 'execution', 'sessions'].includes(p);
+    return ['robot', 'planning', 'analysis', 'execution', 'sessions', 'knowledge'].includes(p);
   }
 }
