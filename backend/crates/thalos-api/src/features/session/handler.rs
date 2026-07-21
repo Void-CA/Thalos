@@ -13,7 +13,7 @@ use thalos_runtime::{
         playback::interpolator::{Interpolator, LinearInterpolator, NearestSampleInterpolator},
         replay::ReplayBackend,
     },
-    ExecutionSource, ExecutionTrace, MotionTrace, TraceAnalyzer,
+    comparison, ExecutionSource, ExecutionTrace, MotionTrace, TraceAnalyzer,
 };
 
 use crate::app::error::ApiError;
@@ -97,6 +97,50 @@ pub async fn get_session_statistics(
     Ok(Json(stats))
 }
 
+/// Comparar plan (MotionTrace) con ejecución (ExecutionTrace) de una sesión.
+pub async fn compare_plan_execution(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<u64>,
+) -> Result<Json<comparison::PlanExecutionComparison>, ApiError> {
+    // Obtener MotionTrace (plan) — usando el trace original de la sesión
+    let motion_trace = state
+        .services
+        .sessions
+        .get_trace(id)
+        .await
+        .ok_or_else(|| ApiError::NotFound {
+            message: format!("MotionTrace for session {} not found", id),
+        })?;
+
+    // Obtener ExecutionTrace (ejecución)
+    let exec_trace = state
+        .services
+        .sessions
+        .get_execution_trace(id)
+        .await
+        .ok_or_else(|| ApiError::NotFound {
+            message: format!("ExecutionTrace for session {} not found", id),
+        })?;
+
+    let session = state
+        .services
+        .sessions
+        .get(id)
+        .await
+        .ok_or_else(|| ApiError::NotFound {
+            message: format!("Session {} not found", id),
+        })?;
+
+    let result = comparison::compare(
+        &motion_trace,
+        &exec_trace,
+        &session.plan_id,
+        &id.to_string(),
+        &session.robot_name,
+    );
+
+    Ok(Json(result))
+}
 
 /// Resumen de una sesión con estadísticas calculadas del trace.
 #[derive(Debug, Serialize)]

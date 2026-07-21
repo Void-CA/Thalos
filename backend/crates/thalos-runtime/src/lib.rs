@@ -8,6 +8,7 @@ pub mod services;
 pub mod telemetry;
 pub mod commands;
 pub mod backends;
+pub mod comparison;
 pub mod snapshots;
 pub mod error;
 
