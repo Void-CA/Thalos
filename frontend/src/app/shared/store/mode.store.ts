@@ -18,7 +18,7 @@ export class ModeStore {
     ? localStorage.getItem(STORAGE_KEY) as AppMode | null
     : null;
 
-  /** Map legacy 'analysis' values from localStorage to 'robot'. */
+  /** Map legacy values from localStorage. */
   private static migrate(stored: string | null): AppMode | null {
     if (stored === 'analysis') return 'robot';
     return stored as AppMode | null;
