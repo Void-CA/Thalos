@@ -1,19 +1,8 @@
 import { Component, inject } from '@angular/core';
 import { NgIcon } from '@ng-icons/core';
-import { ModeStore } from '../../store/mode.store';
-import type { AppMode } from '../../types/app-mode';
-
-const MODE_LABELS: Record<AppMode, string> = {
-  robot: 'Robot',
-  planning: 'Planning',
-  execution: 'Execution',
-};
-
-const MODE_ICONS: Record<AppMode, string> = {
-  robot: 'heroAdjustmentsVertical',
-  planning: 'heroClipboardDocumentList',
-  execution: 'heroPlay',
-};
+import { PerspectiveStore } from '../../store/perspective.store';
+import { PERSPECTIVE_LABELS, PERSPECTIVE_ICONS } from '../../types/perspective-registry';
+import type { Perspective } from '../../types/perspective';
 
 @Component({
   selector: 'top-bar',
@@ -22,14 +11,14 @@ const MODE_ICONS: Record<AppMode, string> = {
   template: `
     <header class="top-bar">
       <nav class="top-bar__tabs">
-        @for (m of modes; track m) {
+        @for (p of perspectives; track p) {
           <button
             class="top-bar__tab"
-            [class.top-bar__tab--active]="store.mode() === m"
-            (click)="store.setMode(m)"
+            [class.top-bar__tab--active]="store.perspective() === p"
+            (click)="store.setPerspective(p)"
           >
-            <ng-icon class="top-bar__icon" [name]="MODE_ICONS[m]" size="20" />
-            <span>{{ MODE_LABELS[m] }}</span>
+            <ng-icon class="top-bar__icon" [name]="PERSPECTIVE_ICONS[p]" size="20" />
+            <span>{{ PERSPECTIVE_LABELS[p] }}</span>
           </button>
         }
       </nav>
@@ -40,8 +29,8 @@ const MODE_ICONS: Record<AppMode, string> = {
   styleUrl: './top-bar.scss',
 })
 export class TopBar {
-  protected readonly MODE_LABELS = MODE_LABELS;
-  protected readonly MODE_ICONS = MODE_ICONS;
-  protected readonly store = inject(ModeStore);
-  protected readonly modes: AppMode[] = ['robot', 'planning', 'execution'];
+  protected readonly PERSPECTIVE_LABELS = PERSPECTIVE_LABELS;
+  protected readonly PERSPECTIVE_ICONS = PERSPECTIVE_ICONS;
+  protected readonly store = inject(PerspectiveStore);
+  protected readonly perspectives: Perspective[] = ['robot', 'planning', 'execution', 'sessions'];
 }

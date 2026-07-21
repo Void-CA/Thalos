@@ -7,17 +7,15 @@ import { TopBar } from './shared/components/top-bar/top-bar';
 import { BottomPanel } from './shared/components/bottom-panel/bottom-panel';
 import { Splitter } from './shared/components/splitter/splitter';
 import { StatusBar } from './shared/components/status-bar/status-bar';
-import { ModeStore } from './shared/store/mode.store';
+import { SessionBrowser } from './shared/components/session-browser/session-browser';
+import { PerspectiveStore } from './shared/store/perspective.store';
 import { LayoutStore } from './shared/store/layout.store';
 import { SceneStore } from './features/scene/store/scene.store';
 import { LogStore } from './shared/store/log.store';
 import { PlanningStore } from './shared/store/planning.store';
-import { KeyboardShortcutService } from './shared/services/keyboard-shortcut.service';
-import { UI_MODE_REGISTRY } from './shared/types/ui-mode-registry';
-import type { ToolSchema } from './shared/types/tool-schema';
 
 /**
- * Layout shell — compone las 6 zonas del layout redimensionable.
+ * Layout shell — compone paneles según la perspectiva activa.
  */
 @Component({
   selector: 'app-root',
@@ -27,6 +25,7 @@ import type { ToolSchema } from './shared/types/tool-schema';
     NgIcon,
     SceneViewer,
     RobotCatalog,
+    SessionBrowser,
     TopBar,
     BottomPanel,
     Splitter,
@@ -36,15 +35,12 @@ import type { ToolSchema } from './shared/types/tool-schema';
   styleUrl: './app.scss',
 })
 export class App {
-  protected readonly modeStore = inject(ModeStore);
+  protected readonly perspective = inject(PerspectiveStore);
   protected readonly layout = inject(LayoutStore);
-  protected readonly scene = inject(SceneStore);
+  private readonly scene = inject(SceneStore);
   private readonly log = inject(LogStore);
 
-  /** Activate global keyboard shortcuts. */
-  private readonly keyboard = inject(KeyboardShortcutService);
-
-  /** Watch for errors in SceneStore and push to LogStore, deduplicated. */
+  /** Watch for errors in SceneStore and push to LogStore. */
   private lastError: string | null = null;
   private readonly errorSignal = computed(() => this.scene.state().ui?.error ?? null);
   private readonly errorWatcher = effect(() => {
@@ -69,17 +65,21 @@ export class App {
     this.lastRobotId = robotId;
   });
 
-  protected readonly currentTools = computed<readonly ToolSchema[]>(
-    () => UI_MODE_REGISTRY[this.modeStore.mode()],
-  );
+  protected readonly leftPanelTitle = computed(() => {
+    const content = this.perspective.leftPanelContent();
+    return content === 'sessions' ? 'Sessions' : 'Robots';
+  });
 
-  // ── Active robot info (for left panel) ──
+  protected readonly hasRightPanel = computed(() => {
+    return this.perspective.rightPanel().length > 0;
+  });
+
+  // ── Active robot info ──
 
   protected readonly activeRobot = computed(() => {
     const state = this.scene.state();
     const rt = state?.runtime;
     if (!rt?.robot) return null;
-
     return {
       name: rt.robot.display_name,
       dof: rt.robot.dof,
