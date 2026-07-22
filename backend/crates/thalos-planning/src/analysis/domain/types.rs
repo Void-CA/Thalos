@@ -34,6 +34,14 @@ pub enum RegionSeverity {
     Critical,
 }
 
+/// Evidencia de conocimiento para una región problemática.
+#[derive(Debug, Clone)]
+pub struct RegionEvidence {
+    pub source: String,
+    pub reason: String,
+    pub weight: f64,
+}
+
 /// Una región problemática semántica — rango contiguo de waypoints con la misma causa raíz.
 ///
 /// # Invariantes
@@ -50,6 +58,11 @@ pub struct ProblemRegion {
     pub metrics: Option<super::metrics::RegionMetrics>,
     pub boundary: Option<super::metrics::RegionBoundary>,
     pub explanation: Option<super::explain::RegionExplanation>,
+    /// Confianza en la detección (0.0..1.0). Inicialmente 1.0.
+    /// El conocimiento puede ajustarla.
+    pub confidence: f64,
+    /// Evidencia estructurada del conocimiento que respalda la región.
+    pub evidence: Vec<RegionEvidence>,
 }
 
 impl ProblemRegion {
@@ -79,6 +92,8 @@ impl ProblemRegion {
             metrics: None,
             boundary: None,
             explanation: None,
+            confidence: 1.0,
+            evidence: vec![],
         }
     }
 

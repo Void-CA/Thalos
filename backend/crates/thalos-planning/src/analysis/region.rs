@@ -9,9 +9,10 @@
 //! El pipeline es DETERMINISTA: misma entrada → mismas regiones.
 
 use crate::analysis::domain::{
-    metrics::RegionMetrics, types::*, ProblemRegion, RegionExplanation, RegionId, RegionKind,
-    RegionSeverity,
+    metrics::RegionMetrics, types::*, ProblemRegion, RegionEvidence, RegionExplanation,
+    RegionId, RegionKind, RegionSeverity,
 };
+use crate::analysis::domain::traits::PlanningKnowledgeProvider;
 use crate::analysis::AnalysisReport;
 use crate::finding::{Finding, FindingKind};
 
@@ -110,6 +111,53 @@ impl RegionDetector {
             findings: findings.to_vec(),
             problem_regions: regions,
             health_score,
+        }
+    }
+
+    /// Detecta regiones y las enriquece con conocimiento del workspace.
+    ///
+    /// El conocimiento es opcional. Si no se provee, el comportamiento
+    /// es idéntico a `detect()`.
+    pub fn detect_with_knowledge(
+        &self,
+        findings: &[Finding],
+        knowledge: Option<&dyn PlanningKnowledgeProvider>,
+    ) -> AnalysisReport {
+        let mut report = self.detect(findings);
+        if let Some(kp) = knowledge {
+            for region in &mut report.problem_regions {
+                self.enrich_region(region, kp);
+            }
+        }
+        report
+    }
+
+    /// Enriquece una región con evidencia del conocimiento.
+    /// No modifica los límites de la región — solo su confianza y evidencia.
+    fn enrich_region(&self, region: &mut ProblemRegion, knowledge: &dyn PlanningKnowledgeProvider) {
+        // Consultar singularidad cercana
+        let mid_wp = (region.waypoint_range.start + region.waypoint_range.end) / 2;
+        let mid_joints = vec![mid_wp as f64; region.waypoint_range.len()]; // placeholder
+
+        if let Some(zone) = knowledge.nearby_singularity(&mid_joints) {
+            region.evidence.push(RegionEvidence {
+                source: "PlanningKnowledge".to_string(),
+                reason: format!(
+                    "Inside known singularity zone {} (severity: {:?})",
+                    zone.id, zone.severity
+                ),
+                weight: 0.25,
+            });
+            region.confidence = (region.confidence + 0.1).min(1.0);
+        }
+
+        // Consultar manipulabilidad
+        if knowledge.manipulability_at(&mid_joints).map_or(false, |v| v < 0.1) {
+            region.evidence.push(RegionEvidence {
+                source: "PlanningKnowledge".to_string(),
+                reason: "Known low-manipulability region".to_string(),
+                weight: 0.15,
+            });
         }
     }
 
@@ -253,6 +301,8 @@ impl RegionDetector {
             metrics: Some(metrics),
             boundary: None,
             explanation: Some(explanation),
+            confidence: 1.0,
+            evidence: vec![],
         }
     }
 
