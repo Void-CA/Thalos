@@ -23,14 +23,7 @@ pub use types::{ProblemRegion, RegionId, RegionKind, RegionSeverity};
 pub use metrics::{RegionBoundary, RegionMetrics};
 pub use explain::RegionExplanation;
 pub use traits::{
-    PlanningKnowledgeProvider, RegionDetector, RepairCapability, SingularityZone, StrategyKind,
+    PlanningKnowledgeProvider, RegionDetector, RepairCapability, StrategyKind,
 };
 
-/// Marcador para conocimiento permanente del robot.
-pub struct RobotKnowledge;
-/// Marcador para conocimiento del espacio de trabajo.
-pub struct PlanningKnowledge;
-/// Marcador para conocimiento específico de una trayectoria.
-pub struct TrajectoryKnowledge;
-/// Marcador para conocimiento efímero de reparación.
-pub struct RepairKnowledge;
+// Los tipos de knowledge han migrado a `crate::knowledge::domain` (M8.3).

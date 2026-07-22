@@ -6,6 +6,7 @@ pub mod evaluation;
 pub mod finding;
 pub mod goal;
 pub mod interpolate;
+pub mod knowledge;
 pub mod motion;
 pub mod repair;
 pub mod trajectory;
