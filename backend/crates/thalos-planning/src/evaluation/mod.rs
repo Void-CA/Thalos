@@ -3,17 +3,16 @@
 //! Separa el **qué medir** (`PlanMetrics`) del **cómo ponderarlo** (`CostFunction`).
 //! El evaluador (`PlanEvaluator`) convierte análisis existentes en puntajes comparables.
 
-pub mod metrics;
 pub mod cost;
 pub mod evaluator;
-pub mod generator;
+pub mod metrics;
 
+pub use cost::{CostFunction, PlanScore};
+pub use evaluator::PlanEvaluator;
 pub use metrics::{
     CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics, MetricKind, PlanMetrics,
 };
-pub use cost::{CostFunction, PlanScore};
-pub use evaluator::PlanEvaluator;
-pub use generator::{
-    AlternativeCandidate, AlternativeGenerator, Perturbation, PerturbationStrategy,
-    ProblemRegion, ProblemRegions, RankedAlternative, RegionCategory, SelectionPolicy,
-};
+
+// Legacy types — eliminados en M8.2:
+// - AlternativeGenerator, PerturbationStrategy → reemplazados por RepairPlanner
+// - ProblemRegions → reemplazado por M8.1 SemanticRegion analysis

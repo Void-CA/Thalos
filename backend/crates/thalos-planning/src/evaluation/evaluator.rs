@@ -186,7 +186,7 @@ impl PlanEvaluator {
 
     /// Computar métricas directamente desde una trayectoria (sin análisis completo).
     ///
-    /// Útil para evaluar candidatos generados por `AlternativeGenerator`.
+    /// Útil para evaluar candidatos de reparación (M8.2).
     /// No produce análisis de manipulabilidad, singularidad ni colisiones.
     pub fn compute_metrics_from_joints(trajectory: &Trajectory) -> PlanMetrics {
         let wps = trajectory.waypoints();

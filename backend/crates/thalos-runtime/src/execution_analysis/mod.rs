@@ -4,7 +4,7 @@
 //! y produce [`Finding`] en el mismo lenguaje que el sistema experto de planificación.
 //!
 //! Esto cierra el feedback loop:
-//!   Comparison → ExecutionAnalyzer → Findings → ProblemRegions → AlternativeGenerator
+//!   Comparison → ExecutionAnalyzer → Findings → ProblemRegions → RepairPlanner
 //!
 //! Los hallazgos son a nivel de plan (sin waypoint específico) en el MVP.
 //! Versiones futuras podrán mapear picos de error a waypoints concretos.
