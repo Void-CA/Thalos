@@ -19,7 +19,7 @@ pub mod metrics;
 pub mod explain;
 pub mod traits;
 
-pub use types::{ProblemRegion, RegionId, RegionKind, RegionSeverity};
+pub use types::{ProblemRegion, RegionEvidence, RegionId, RegionKind, RegionSeverity};
 pub use metrics::{RegionBoundary, RegionMetrics};
 pub use explain::RegionExplanation;
 pub use traits::{
