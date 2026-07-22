@@ -119,19 +119,19 @@ pub async fn apply_repair(
     Path(id): Path<u64>,
     Json(_req): Json<ApplyRequest>,
 ) -> Result<Json<ApplyResponse>, ApiError> {
-    // Placeholder — apply completo requiere candidate store integración
-    let mut svc = state.session_service.service.lock().unwrap();
+    // TODO M8.4.4: candidate store integración completa
+    // Por ahora devuelve el estado de la sesión sin aplicar
+    let svc = state.session_service.service.lock().unwrap();
     let session_id = SessionId(id);
 
-    // Encontrar sesión
-    svc.get_session(session_id).ok_or_else(|| ApiError::NotFound {
+    let session = svc.get_session(session_id).ok_or_else(|| ApiError::NotFound {
         message: "Session not found".into(),
     })?;
 
     Ok(Json(ApplyResponse {
-        new_revision: 0,
-        status: "not_implemented".into(),
-        history_length: 0,
+        new_revision: session.revision.0,
+        status: "pending_candidate_store".into(),
+        history_length: session.history.len(),
     }))
 }
 

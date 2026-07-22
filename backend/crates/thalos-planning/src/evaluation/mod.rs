@@ -13,6 +13,5 @@ pub use metrics::{
     CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics, MetricKind, PlanMetrics,
 };
 
-// Legacy types — eliminados en M8.2:
-// - AlternativeGenerator, PerturbationStrategy → reemplazados por RepairPlanner
-// - ProblemRegions → reemplazado por M8.1 SemanticRegion analysis
+// M8.2 reemplazó AlternativeGenerator por RepairPlanner.
+// M8.1 reemplazó ProblemRegions legacy por SemanticRegion analysis.

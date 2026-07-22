@@ -111,16 +111,16 @@ pub async fn repair_options(
     Ok(Json(RepairOptionsResponse { repairs }))
 }
 
-/// POST /api/v1/plan/repair/apply (placeholder)
+/// POST /api/v1/plan/repair/apply — redirigido a sesiones
 pub async fn repair_apply(
     State(_state): State<Arc<AppState>>,
     Json(req): Json<RepairApplyRequest>,
 ) -> ApiResult<RepairApplyResponse> {
     Ok(Json(RepairApplyResponse {
         plan_id: req.plan_id.unwrap_or_default(),
-        status: "not_implemented".to_string(),
+        status: "deprecated".to_string(),
         modified_range: None,
         metrics_delta: None,
-        reason: Some("Apply not yet implemented — use sessions (POST /repair/sessions)".to_string()),
+        reason: Some("Use POST /repair/sessions/{id}/apply".to_string()),
     }))
 }
