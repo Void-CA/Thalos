@@ -6,7 +6,7 @@ import { PlanAnalysisStore } from '../store/plan-analysis.store';
 import { FocusService } from '../../../shared/services/focus.service';
 import { PerspectiveStore } from '../../../shared/store/perspective.store';
 import { ExecutionCharts } from '../../execution/execution-charts';
-import { scoreBreakdownChart, severityChart } from '../../../shared/components/echart/chart-options';
+import { scoreBreakdownChart, severityChart } from '../../../shared/charts/builders/analysis.builder';
 
 interface CategorySummary {
   label: string;
