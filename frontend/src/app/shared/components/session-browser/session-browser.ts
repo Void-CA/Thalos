@@ -1,9 +1,11 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { NgIcon } from '@ng-icons/core';
-import { SessionApiService, type SessionResponse, type SessionComparisonResponse, type ExecutionStatisticsDto } from '../../api/session-api.service';
+import { SessionApiService, type SessionResponse, type SessionComparisonResponse, type ExecutionStatisticsDto, type ExecutionTraceDto } from '../../api/session-api.service';
 import { ReplayStore } from '../../store/replay.store';
 import { SceneStore } from '../../../features/scene/store/scene.store';
 import { PerspectiveStore } from '../../store/perspective.store';
+import { TracePreview } from '../../charts/components/trace-preview/trace-preview';
+import { ComparisonChart } from '../../charts/components/comparison-chart/comparison-chart';
 
 type StatusFilter = 'all' | 'completed' | 'failed' | 'running';
 
@@ -21,7 +23,7 @@ interface SessionDetail {
 @Component({
   selector: 'session-browser',
   standalone: true,
-  imports: [NgIcon],
+  imports: [NgIcon, TracePreview, ComparisonChart],
   templateUrl: './session-browser.html',
   styleUrl: './session-browser.scss',
 })
@@ -46,6 +48,9 @@ export class SessionBrowser {
   // ── Detail ──
 
   protected readonly detail = signal<SessionDetail | null>(null);
+  protected readonly detailTab = signal<'overview' | 'trace' | 'comparison'>('overview');
+  protected readonly traceData = signal<ExecutionTraceDto | null>(null);
+  protected readonly traceLoading = signal(false);
 
   // ── Filtered list ──
 
@@ -107,6 +112,25 @@ export class SessionBrowser {
     });
   }
 
+  protected switchTab(tab: 'overview' | 'trace' | 'comparison'): void {
+    this.detailTab.set(tab);
+    const id = this.selectedId();
+    if (tab === 'trace' && id !== null && this.traceData() === null) {
+      this.loadTrace(id);
+    }
+    if (tab === 'comparison' && id !== null && !this.detail()?.comparison) {
+      this.loadComparison(id);
+    }
+  }
+
+  private loadTrace(id: number): void {
+    this.traceLoading.set(true);
+    this.api.getExecutionTrace(id).subscribe({
+      next: (t) => { this.traceData.set(t); this.traceLoading.set(false); },
+      error: () => this.traceLoading.set(false),
+    });
+  }
+
   protected loadComparison(id: number): void {
     this.detail.update(d => d ? { ...d, comparisonLoading: true } : d);
     this.api.getComparison(id).subscribe({
@@ -156,7 +180,20 @@ export class SessionBrowser {
     this.statusFilter.set(f as StatusFilter);
   }
 
-  // ── Helpers ──
+  // ── Computed chart data ──
+
+  protected readonly comparisonChartData = computed(() => {
+    const cmp = this.detail()?.comparison;
+    if (!cmp) return null;
+    return {
+      rmse: cmp.metrics.global_rmse,
+      maxError: cmp.metrics.global_max_error,
+      alignedCount: cmp.aligned_pair_count,
+      pairedErrors: cmp.aligned_pair_count > 0 ? [cmp.metrics.global_rmse] : undefined,
+    };
+  });
+
+  // ── Template helpers ──
 
   protected formatTime(iso: string | null): string {
     if (!iso) return '—';
