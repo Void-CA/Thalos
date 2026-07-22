@@ -1,84 +1,118 @@
-import { Component, inject, signal } from '@angular/core';
-import { SessionApiService, type SessionResponse } from '../../api/session-api.service';
+import { Component, computed, inject, signal } from '@angular/core';
+import { NgIcon } from '@ng-icons/core';
+import { SessionApiService, type SessionResponse, type SessionComparisonResponse, type ExecutionStatisticsDto } from '../../api/session-api.service';
 import { ReplayStore } from '../../store/replay.store';
 import { SceneStore } from '../../../features/scene/store/scene.store';
+import { PerspectiveStore } from '../../store/perspective.store';
+
+type StatusFilter = 'all' | 'completed' | 'failed' | 'running';
+
+interface SessionDetail {
+  session: SessionResponse;
+  statistics: ExecutionStatisticsDto | null;
+  comparison: SessionComparisonResponse | null;
+  statsLoading: boolean;
+  comparisonLoading: boolean;
+}
 
 /**
- * Panel izquierdo de la perspectiva Sessions.
- * Lista ejecuciones registradas y permite seleccionar/reproducir.
+ * Session Browser — master-detail para inspección de ejecuciones.
  */
 @Component({
   selector: 'session-browser',
   standalone: true,
-  template: `
-    <div class="sb">
-      @if (sessions().length === 0) {
-        <p class="sb__empty">No sessions yet. Execute a motion to create one.</p>
-      } @else {
-        <div class="sb__list">
-          @for (s of sessions(); track s.id) {
-            <div class="sb__item" [class.sb__item--active]="selectedId() === s.id" (click)="select(s.id)">
-              <div class="sb__item-header">
-                <span class="sb__badge" [class]="'badge--' + s.status.toLowerCase()">#{{ s.id }}</span>
-                <span class="sb__source">{{ s.source }}</span>
-                <span class="sb__duration">{{ s.duration.toFixed(1) }}s</span>
-              </div>
-              <div class="sb__item-meta">
-                <span>{{ s.robot_name }}</span>
-                <span>{{ s.joint_count }} DOF</span>
-                <span class="sb__plan-id">plan: {{ s.plan_id }}</span>
-              </div>
-              <div class="sb__item-time">
-                @if (s.completed_at) {
-                  <span class="sb__ts">{{ formatTime(s.completed_at) }}</span>
-                } @else if (s.started_at) {
-                  <span class="sb__ts">{{ formatTime(s.started_at) }}</span>
-                }
-                @if (s.status !== 'Completed' && s.status !== 'Cancelled' && s.status !== 'Failed') {
-                  <span class="sb__badge-running">● active</span>
-                }
-              </div>
-              <button class="sb__btn" (click)="onReplay(s.id); $event.stopPropagation()" [disabled]="replaying()">
-                {{ replaying() ? '…' : '▶ Replay' }}
-              </button>
-            </div>
-          }
-        </div>
-      }
-    </div>
-  `,
+  imports: [NgIcon],
+  templateUrl: './session-browser.html',
   styleUrl: './session-browser.scss',
 })
 export class SessionBrowser {
   private readonly api = inject(SessionApiService);
   private readonly replayStore = inject(ReplayStore);
   private readonly scene = inject(SceneStore);
+  private readonly perspective = inject(PerspectiveStore);
 
-  protected formatTime(iso: string): string {
-    try {
-      return new Date(iso).toLocaleTimeString();
-    } catch {
-      return iso;
-    }
-  }
+  // ── Filters ──
+
+  protected readonly statusFilter = signal<StatusFilter>('all');
+  protected readonly searchTerm = signal('');
+
+  // ── Data ──
 
   protected readonly sessions = signal<SessionResponse[]>([]);
+  protected readonly listLoading = signal(true);
   protected readonly selectedId = signal<number | null>(null);
   protected readonly replaying = signal(false);
 
+  // ── Detail ──
+
+  protected readonly detail = signal<SessionDetail | null>(null);
+
+  // ── Filtered list ──
+
+  protected readonly filteredSessions = computed(() => {
+    let list = this.sessions();
+    const filter = this.statusFilter();
+    const search = this.searchTerm().toLowerCase().trim();
+
+    if (filter === 'completed') list = list.filter(s => s.status === 'Completed');
+    else if (filter === 'failed') list = list.filter(s => s.status === 'Failed' || s.status === 'Cancelled');
+    else if (filter === 'running') list = list.filter(s => s.status !== 'Completed' && s.status !== 'Failed' && s.status !== 'Cancelled');
+
+    if (search) {
+      list = list.filter(s =>
+        s.plan_id.toLowerCase().includes(search) ||
+        s.robot_name.toLowerCase().includes(search)
+      );
+    }
+
+    return list.sort((a, b) => b.id - a.id);
+  });
+
+  // ── Lifecycle ──
+
   constructor() {
-    this.load();
+    this.loadSessions();
   }
 
-  private load(): void {
+  private loadSessions(): void {
+    this.listLoading.set(true);
     this.api.listSessions().subscribe({
-      next: (list) => this.sessions.set(list),
-      error: () => {},
+      next: (list) => { this.sessions.set(list); this.listLoading.set(false); },
+      error: () => this.listLoading.set(false),
     });
   }
 
+  // ── Actions ──
+
   protected select(id: number): void {
     this.selectedId.set(id);
+    this.loadDetail(id);
+  }
+
+  private loadDetail(id: number): void {
+    const session = this.sessions().find(s => s.id === id);
+    if (!session) return;
+
+    this.detail.set({
+      session,
+      statistics: null,
+      comparison: null,
+      statsLoading: true,
+      comparisonLoading: false,
+    });
+
+    this.api.getExecutionStatistics(id).subscribe({
+      next: (stats) => this.detail.update(d => d ? { ...d, statistics: stats, statsLoading: false } : d),
+      error: () => this.detail.update(d => d ? { ...d, statsLoading: false } : d),
+    });
+  }
+
+  protected loadComparison(id: number): void {
+    this.detail.update(d => d ? { ...d, comparisonLoading: true } : d);
+    this.api.getComparison(id).subscribe({
+      next: (cmp) => this.detail.update(d => d ? { ...d, comparison: cmp, comparisonLoading: false } : d),
+      error: () => this.detail.update(d => d ? { ...d, comparisonLoading: false } : d),
+    });
   }
 
   protected onReplay(id: number): void {
@@ -89,9 +123,56 @@ export class SessionBrowser {
         this.scene.applySnapshot(res);
         this.replayStore.startReplay(id);
       },
-      error: () => {
-        this.replaying.set(false);
+      error: () => this.replaying.set(false),
+    });
+  }
+
+  protected onExport(id: number): void {
+    this.api.exportCsv(id).subscribe({
+      next: (csv) => {
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `thalos-session-${id}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
       },
     });
+  }
+
+  protected viewInKnowledge(sessionId: number): void {
+    // TODO M8.4.4: cargar análisis de la sesión en Knowledge Workspace
+    this.perspective.setPerspective('knowledge');
+  }
+
+  // ── Template helpers ──
+
+  protected onSearch(event: Event): void {
+    this.searchTerm.set((event.target as HTMLInputElement).value);
+  }
+
+  protected setFilter(f: string): void {
+    this.statusFilter.set(f as StatusFilter);
+  }
+
+  // ── Helpers ──
+
+  protected formatTime(iso: string | null): string {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleString(); } catch { return iso; }
+  }
+
+  protected statusClass(status: string): string {
+    switch (status) {
+      case 'Completed': return 'badge--completed';
+      case 'Failed': case 'Cancelled': return 'badge--failed';
+      case 'Active': case 'Running': return 'badge--running';
+      default: return 'badge--ready';
+    }
+  }
+
+  protected isActive(status: string): boolean {
+    return status !== 'Completed' && status !== 'Failed' && status !== 'Cancelled';
   }
 }
