@@ -125,6 +125,25 @@ pub enum RepairResult {
     },
 }
 
+/// Razón por la que una estrategia fue recomendada o priorizada.
+#[derive(Debug, Clone)]
+pub enum RecommendationReason {
+    NearKnownSingularity,
+    PreferredConfigurationNearby,
+    HighReachability,
+    LowReachability,
+    LowManipulability,
+    JointLimitProximity,
+}
+
+/// Recomendación de una estrategia con su justificación.
+#[derive(Debug, Clone)]
+pub struct StrategyRecommendation {
+    pub strategy: StrategyKind,
+    pub score: f64,
+    pub reasons: Vec<RecommendationReason>,
+}
+
 /// Razones esperadas de fallo en una reparación.
 #[derive(Debug, Clone)]
 pub enum RepairError {
