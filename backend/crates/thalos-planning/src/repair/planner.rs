@@ -93,6 +93,7 @@ impl RepairPlanner {
         region: &ProblemRegion,
         context: &RepairContext,
     ) -> RepairPlan {
+            recommendations: vec![] ,
         // 1. Seleccionar estrategias aplicables
         let applicable: Vec<&Box<dyn RepairStrategy>> = self
             .strategies
@@ -102,6 +103,8 @@ impl RepairPlanner {
 
         if applicable.is_empty() {
             return RepairPlan {
+                recommendations: vec![] ,
+            recommendations: vec![] ,
                 region: region.clone(),
                 candidates: vec![],
                 recommended: None,
@@ -117,6 +120,8 @@ impl RepairPlanner {
 
         if candidates.is_empty() {
             return RepairPlan {
+                recommendations: vec![] ,
+            recommendations: vec![] ,
                 region: region.clone(),
                 candidates: vec![],
                 recommended: None,
@@ -161,6 +166,7 @@ impl RepairPlanner {
         };
 
         RepairPlan {
+            recommendations: vec![] ,
             region: region.clone(),
             candidates,
             recommended,

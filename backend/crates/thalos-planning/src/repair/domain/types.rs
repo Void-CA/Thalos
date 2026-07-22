@@ -126,7 +126,7 @@ pub enum RepairResult {
 }
 
 /// Razón por la que una estrategia fue recomendada o priorizada.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RecommendationReason {
     NearKnownSingularity,
     PreferredConfigurationNearby,
