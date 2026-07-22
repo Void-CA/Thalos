@@ -77,3 +77,66 @@ impl BackendManager {
         self.active.read().await.clone()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::backends::controller::tests::MockController;
+    use crate::error::ControllerError;
+
+    async fn make_controller() -> Arc<RwLock<dyn RobotController + Send + Sync>> {
+        let ctrl = MockController::new();
+        Arc::new(RwLock::new(ctrl))
+    }
+
+    #[tokio::test]
+    async fn test_set_active_connects() {
+        let manager = BackendManager::new();
+        let ctrl = make_controller().await;
+
+        manager.set_active(ctrl.clone()).await.unwrap();
+        assert!(manager.is_connected().await);
+    }
+
+    #[tokio::test]
+    async fn test_double_set_active_rejected() {
+        let manager = BackendManager::new();
+        let ctrl1 = make_controller().await;
+        let ctrl2 = make_controller().await;
+
+        manager.set_active(ctrl1).await.unwrap();
+        let err = manager.set_active(ctrl2).await.unwrap_err();
+        assert_eq!(err, ControllerError::AlreadyConnected);
+    }
+
+    #[tokio::test]
+    async fn test_disconnect_cleans() {
+        let manager = BackendManager::new();
+        let ctrl = make_controller().await;
+
+        manager.set_active(ctrl).await.unwrap();
+        assert!(manager.is_connected().await);
+
+        manager.disconnect().await.unwrap();
+        assert!(!manager.is_connected().await);
+    }
+
+    #[tokio::test]
+    async fn test_replace_controller_switches() {
+        let manager = BackendManager::new();
+        let ctrl1 = make_controller().await;
+        let ctrl2 = make_controller().await;
+
+        manager.set_active(ctrl1).await.unwrap();
+        assert!(manager.is_connected().await);
+
+        manager.replace_controller(ctrl2).await.unwrap();
+        assert!(manager.is_connected().await);
+    }
+
+    #[tokio::test]
+    async fn test_get_controller_returns_none_when_empty() {
+        let manager = BackendManager::new();
+        assert!(manager.get_controller().await.is_none());
+    }
+}

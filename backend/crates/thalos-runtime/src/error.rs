@@ -6,7 +6,7 @@ use thalos_core::models::RobotModelError;
 use thalos_planning::error::PlanningError;
 
 /// Errors specific to the RobotController trait.
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum ControllerError {
     #[error("controller is already connected")]
     AlreadyConnected,
