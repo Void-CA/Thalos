@@ -170,6 +170,17 @@
       </section>
     }
 
+    <!-- ── Manipulability Timeline ── -->
+    @if (manipulabilityData().length > 0) {
+      <section class="aw__section">
+        <h2 class="aw__sec-title">Manipulability over Trajectory</h2>
+        <manipulability-timeline
+          [data]="manipulabilityData()"
+          (waypointClick)="onTimelineClick($event)"
+        />
+      </section>
+    }
+
     <!-- ── Critical Findings ── -->
     @let critical = criticalFindings();
     @if (critical.length > 0) {

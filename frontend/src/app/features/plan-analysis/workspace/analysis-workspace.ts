@@ -6,6 +6,7 @@ import { PlanAnalysisStore } from '../store/plan-analysis.store';
 import { FocusService } from '../../../shared/services/focus.service';
 import { PerspectiveStore } from '../../../shared/store/perspective.store';
 import { ExecutionCharts } from '../../execution/execution-charts';
+import { ManipulabilityTimeline } from '../../../shared/charts/components/manipulability-timeline/manipulability-timeline';
 import { scoreBreakdownChart, severityChart } from '../../../shared/charts/builders/analysis.builder';
 
 interface CategorySummary {
@@ -36,7 +37,7 @@ type AnalysisTab = 'dashboard' | 'charts';
 @Component({
   selector: 'analysis-workspace',
   standalone: true,
-  imports: [NgIcon, ExecutionCharts, NgxEchartsDirective],
+  imports: [NgIcon, ExecutionCharts, NgxEchartsDirective, ManipulabilityTimeline],
   templateUrl: './analysis-workspace.html',
   styleUrl: './analysis-workspace.scss',
 })
@@ -164,6 +165,21 @@ export class AnalysisWorkspace {
     const maxVal = Math.max(...alt.original_breakdown.map(b => b.value), 1);
     return { items: alt.original_breakdown.map(b => ({ name: b.name.replace(/_/g, ' '), value: b.value, pct: (b.value / maxVal) * 100 })) };
   });
+
+  // ── Manipulability Timeline data ──
+
+  protected readonly manipulabilityData = computed(() => {
+    const wps = this.pa.waypoints();
+    return wps.map(wp => ({
+      index: wp.index,
+      yoshikawa: wp.manipulability ?? 0,
+      severity: wp.severity as 'good' | 'warning' | 'critical' | undefined,
+    }));
+  });
+
+  protected onTimelineClick(waypoint: number): void {
+    this.focus.focusWaypoint(waypoint);
+  }
 
   // ── ECharts options ──
 
