@@ -34,7 +34,7 @@ export class KnowledgeWorkspace implements OnDestroy {
   protected readonly expandedRegionId = signal<number | null>(null);
 
   // ── Preview state ──
-  protected readonly previewResult = signal<{ strategy: string; improvement: number; continuity: boolean; baseRevision: number } | null>(null);
+  protected readonly previewResult = signal<{ strategy: string; improvement: number; continuity: boolean; baseRevision: number; candidateId: number } | null>(null);
   protected readonly previewLoading = signal(false);
 
   // ── Repair options from /repair/options ──
@@ -129,6 +129,7 @@ export class KnowledgeWorkspace implements OnDestroy {
             improvement: res.improvement,
             continuity: res.continuity_ok,
             baseRevision: res.base_revision,
+            candidateId: res.candidate_id,
           });
           this.previewLoading.set(false);
         },
@@ -161,8 +162,8 @@ export class KnowledgeWorkspace implements OnDestroy {
     const sid = this.sessionId();
     if (sid === null) return;
 
-    // TODO M8.4.4: candidate_id de la preview
-    const candidateId = 0;
+    const preview = this.previewResult();
+    const candidateId = preview?.candidateId ?? 0;
     this.subs.add(
       this.api.applyRepair(sid, { candidate_id: candidateId }).subscribe({
         next: (res) => {

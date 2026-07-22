@@ -1,5 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { PlanAnalysisStore } from '../store/plan-analysis.store';
+import { FocusService } from '../../../shared/services/focus.service';
 import type { RankedAlternativeDto } from '../plan-analysis-api.types';
 
 /**
@@ -106,6 +107,7 @@ import type { RankedAlternativeDto } from '../plan-analysis-api.types';
 })
 export class AlternativesPanel {
   protected readonly store = inject(PlanAnalysisStore);
+  private readonly focus = inject(FocusService);
 
   /** Calcula el rango de waypoints afectados. */
   protected perturbationRange(perturbations: { waypoint: number }[]): { min: number; max: number } {
@@ -147,10 +149,12 @@ export class AlternativesPanel {
     this.store.selectedAlternativeRank.set(current === rank ? null : rank);
   }
 
-  /** Preview an alternative — highlight it and (future) show trajectory in 3D. */
+  /** Preview an alternative — navigate to the affected waypoint. */
   protected onPreview(alt: RankedAlternativeDto): void {
     this.store.selectedAlternativeRank.set(alt.rank);
-    // TODO: cargar trayectoria alternativa en el scene viewer
+    if (alt.source_waypoint > 0) {
+      this.focus.focusWaypoint(alt.source_waypoint, `Alternative #${alt.rank}`);
+    }
   }
 
   /** Apply an alternative — replace active plan with this candidate. */

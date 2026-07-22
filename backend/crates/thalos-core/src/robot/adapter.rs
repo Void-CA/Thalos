@@ -16,29 +16,22 @@ use thalos_math::Transform3D;
 
 #[derive(Debug, Clone)]
 pub enum AdapterError {
-    /// Robot has no links.
     EmptyRobot,
-    /// Robot has no joints (nothing to actuate).
     NoJoints,
-    /// A joint references a link that does not exist in the robot.
     MissingLink {
         joint: String,
         link: String,
     },
-    /// Floating and Planar joints are not supported in SerialChain.
     UnsupportedJointKind {
         joint: String,
         kind: String,
     },
-    /// Revolute, Continuous, or Prismatic joint missing required axis.
     MissingAxis {
         joint: String,
     },
-    /// Joint has no limits (required for Revolute/Prismatic in core).
     MissingLimits {
         joint: String,
     },
-    /// URDF parse error.
     Parse(String),
 }
 
@@ -74,31 +67,11 @@ impl From<UrdfError> for AdapterError {
 
 // ─── Public API ─────────────────────────────────────────────────
 
-/// Parse a URDF string and convert directly to a [`SerialChain`].
-///
-/// Uses [`auto`] heuristics to select the kinematic chain (picks the
-/// leaf with the most actuated joints).
-///
-/// For explicit control, parse the URDF first and then call
-/// [`from_tip`] or [`auto`].
 pub fn from_urdf(source: &str) -> Result<SerialChain, AdapterError> {
     let robot = parse_robot(source)?;
     auto(&robot)
 }
 
-/// Convert a [`ModelRobot`] into a [`SerialChain`] consumable by the
-/// core kinematics pipeline.
-///
-/// This function uses [`bfs_joints`](thalos_models::Robot::bfs_joints)
-/// which has **non-deterministic HashMap iteration order**. Prefer
-/// [`from_tip`] or [`auto`] for deterministic behavior.
-///
-/// # Limitations
-///
-/// - Only serial (single-branch) topologies are supported.
-/// - `Floating` and `Planar` joint types are rejected.
-/// - Revolute/Continuous joints MUST have an axis.
-/// - Revolute/Prismatic joints MUST have limits.
 pub fn from_robot(robot: &ModelRobot) -> Result<SerialChain, AdapterError> {
     if robot.links.is_empty() {
         return Err(AdapterError::EmptyRobot);
@@ -177,15 +150,6 @@ pub fn from_robot(robot: &ModelRobot) -> Result<SerialChain, AdapterError> {
         end_effector,
     })
 }
-
-/// Build a [`SerialChain`] from a robot by specifying the target
-/// (end-effector) link by name.
-///
-/// The chain starts at `robot.root_link` and follows the unique
-/// kinematic path to `target_name`.
-///
-/// This is the **primary API** for importing robots. Use it when you
-/// know which link is the end-effector.
 pub fn from_tip(robot: &ModelRobot, target_name: &str) -> Result<SerialChain, AdapterError> {
     use thalos_models::graph::RobotGraph;
 
@@ -251,24 +215,6 @@ pub fn from_tip(robot: &ModelRobot, target_name: &str) -> Result<SerialChain, Ad
         end_effector,
     })
 }
-
-/// Automatically select a kinematic chain from a robot using heuristics.
-///
-/// The heuristic:
-/// 1. Build a [`RobotGraph`](thalos_models::graph::RobotGraph) from the robot.
-/// 2. For every leaf link, count the actuated (non-fixed) joints on the
-///    path from `root_link`.
-/// 3. Pick the leaf with the **most actuated joints** (ties: most segments).
-///
-/// This works well for:
-/// - Industrial robot arms (UR5, PUMA, SCARA) → picks the TCP tip.
-/// - Simple serial chains → the only leaf is the end-effector.
-///
-/// It may **not** work well for:
-/// - Humanoids / quadrupeds → multiple actuated branches.
-/// - Robots with multiple tool frames (tool0, camera, gripper).
-///   In these cases, use [`from_tip`] to specify the target explicitly.
-///
 pub fn auto(robot: &ModelRobot) -> Result<SerialChain, AdapterError> {
     use thalos_models::graph::RobotGraph;
 
@@ -279,28 +225,32 @@ pub fn auto(robot: &ModelRobot) -> Result<SerialChain, AdapterError> {
         return Err(AdapterError::EmptyRobot);
     }
 
-    // Pick the leaf with the most actuated joints on the path from root.
-    let best = leaves
-        .iter()
-        .max_by_key(|&&leaf| {
-            graph
-                .path(graph.root, leaf)
-                .map(|p| (graph.actuated_count(&p, robot), p.joints.len()))
-                .unwrap_or((0, 0))
-        })
-        .copied()
-        .unwrap();
+    // Prefer a leaf named "tool0" or "tcp" (common URDF conventions).
+    // Fall back to the leaf with the most actuated joints.
+    let best = {
+        let named = leaves.iter().find(|&&leaf| {
+            graph.link_name(leaf).map_or(false, |name| {
+                name == "tool0" || name == "tcp"
+            })
+        });
+        match named {
+            Some(&id) => id,
+            None => leaves.iter()
+                .max_by_key(|&&leaf| {
+                    graph.path(graph.root, leaf)
+                        .map(|p| (graph.actuated_count(&p, robot), p.joints.len()))
+                        .unwrap_or((0, 0))
+                })
+                .copied()
+                .unwrap(),
+        }
+    };
 
     let target_name = graph.link_name(best).unwrap_or("unknown");
     from_tip(robot, target_name)
 }
 
 // ─── Internal helpers ───────────────────────────────────────────
-
-/// Convert a [`thalos_models::Joint`] into a core [`JointType`].
-///
-/// Accessible within the crate so that [`SerialChain::from_tip`] and
-/// [`auto`] can reuse this conversion without code duplication.
 pub(crate) fn build_joint_type(
     joint: &thalos_models::Joint,
     counter: &mut u32,
@@ -357,7 +307,6 @@ pub(crate) fn build_joint_type(
 mod tests {
     use super::*;
 
-    /// Inline URDF for a planar 2R arm.
     const PLANAR_2R_URDF: &str = r#"
         <robot name="planar_2r">
             <link name="base"/>
