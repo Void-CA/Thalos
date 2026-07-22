@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use thalos_core::trajectory::Trajectory;
 
-use crate::analysis::domain::RegionId;
+use crate::analysis::domain::{ProblemRegion, RegionId};
 use crate::evaluation::metrics::PlanMetrics;
 use crate::motion::program::CompiledPlan;
 
