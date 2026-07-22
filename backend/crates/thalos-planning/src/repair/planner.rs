@@ -7,13 +7,19 @@
 //! 4. Produce RepairPlan con candidato recomendado
 
 use crate::{
-    analysis::domain::ProblemRegion,
+    analysis::domain::{
+        traits::PlanningKnowledgeProvider,
+        ProblemRegion,
+    },
     motion::program::CompiledPlan,
     repair::{
         context::RepairContext,
         domain::{
             traits::RepairStrategy,
-            types::{RepairCandidate, RepairPlan, RepairPlanStatus},
+            types::{
+                RecommendationReason, RepairCandidate, RepairPlan, RepairPlanStatus,
+                StrategyRecommendation,
+            },
         },
         evaluation::EvaluationPipeline,
         merger::PlanMerger,
@@ -49,9 +55,35 @@ impl RepairPlanner {
         regions: &[ProblemRegion],
         context: &RepairContext,
     ) -> Vec<RepairPlan> {
+        self.plan_with_knowledge(plan, regions, context, None)
+    }
+
+    /// Planifica reparaciones utilizando conocimiento del workspace
+    /// para rankear estrategias.
+    pub fn plan_with_knowledge(
+        &self,
+        plan: &CompiledPlan,
+        regions: &[ProblemRegion],
+        context: &RepairContext,
+        knowledge: Option<&dyn PlanningKnowledgeProvider>,
+    ) -> Vec<RepairPlan> {
         regions
             .iter()
-            .map(|region| self.plan_for_region(plan, region, context))
+            .map(|region| {
+                let mut rp = self.plan_for_region(plan, region, context);
+                if let Some(kp) = knowledge {
+                    rp.recommendations = self.knowledge_recommendations(region, kp);
+                    if !rp.recommendations.is_empty() && rp.candidates.len() > 1 {
+                        // Re-rankear candidates basado en recomendaciones
+                        rp.candidates.sort_by(|a, b| {
+                            let score_a = self.strategy_score(&a.strategy, &rp.recommendations);
+                            let score_b = self.strategy_score(&b.strategy, &rp.recommendations);
+                            score_b.partial_cmp(&score_a).unwrap_or(std::cmp::Ordering::Equal)
+                        });
+                    }
+                }
+                rp
+            })
             .collect()
     }
 
@@ -133,7 +165,77 @@ impl RepairPlanner {
             candidates,
             recommended,
             status: RepairPlanStatus::Available,
+            recommendations: vec![],
         }
+    }
+
+    /// Genera recomendaciones de estrategias basadas en conocimiento del workspace.
+    fn knowledge_recommendations(
+        &self,
+        region: &ProblemRegion,
+        knowledge: &dyn PlanningKnowledgeProvider,
+    ) -> Vec<StrategyRecommendation> {
+        let mut recs = Vec::new();
+
+        // Evaluar LiftTcp
+        let mut lift_score = 0.5;
+        let mut lift_reasons = Vec::new();
+        if knowledge.nearby_singularity(&vec![0.0; region.waypoint_range.len()]).is_some() {
+            lift_score += 0.3;
+            lift_reasons.push(RecommendationReason::NearKnownSingularity);
+        }
+        if knowledge.manipulability_at(&vec![0.0; region.waypoint_range.len()])
+            .map_or(false, |v| v < 0.2)
+        {
+            lift_score += 0.2;
+            lift_reasons.push(RecommendationReason::LowManipulability);
+        }
+        recs.push(StrategyRecommendation {
+            strategy: crate::repair::domain::types::StrategyKind::LiftTcp,
+            score: lift_score,
+            reasons: lift_reasons,
+        });
+
+        // Evaluar RotateTool
+        let mut rotate_score = 0.4;
+        let mut rotate_reasons = Vec::new();
+        if lift_reasons.contains(&RecommendationReason::NearKnownSingularity) {
+            rotate_score += 0.1;
+            rotate_reasons.push(RecommendationReason::NearKnownSingularity);
+        }
+        recs.push(StrategyRecommendation {
+            strategy: crate::repair::domain::types::StrategyKind::RotateTool,
+            score: rotate_score,
+            reasons: rotate_reasons,
+        });
+
+        // Evaluar SplitSegment
+        let mut split_score = 0.3;
+        let mut split_reasons = Vec::new();
+        if region.waypoint_range.len() > 50 {
+            split_score += 0.2;
+        }
+        recs.push(StrategyRecommendation {
+            strategy: crate::repair::domain::types::StrategyKind::SplitSegment,
+            score: split_score,
+            reasons: split_reasons,
+        });
+
+        recs.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        recs
+    }
+
+    /// Puntúa una estrategia según las recomendaciones de conocimiento.
+    fn strategy_score(
+        &self,
+        strategy: &crate::repair::domain::types::StrategyKind,
+        recommendations: &[StrategyRecommendation],
+    ) -> f64 {
+        recommendations
+            .iter()
+            .find(|r| r.strategy == *strategy)
+            .map(|r| r.score)
+            .unwrap_or(0.0)
     }
 }
 

@@ -191,6 +191,8 @@ pub struct RepairPlan {
     /// Índice del candidato recomendado (None si no hay candidatos o si no se determinó).
     pub recommended: Option<usize>,
     pub status: RepairPlanStatus,
+    /// Recomendaciones basadas en conocimiento (M8.3.4).
+    pub recommendations: Vec<StrategyRecommendation>,
 }
 
 impl std::error::Error for RepairError {}
