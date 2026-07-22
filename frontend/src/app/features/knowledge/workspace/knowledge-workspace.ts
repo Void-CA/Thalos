@@ -1,8 +1,9 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { NgIcon } from '@ng-icons/core';
 import { PlanAnalysisStore } from '../../plan-analysis/store/plan-analysis.store';
+import { PlanAnalysisApiService } from '../../plan-analysis/services/plan-analysis-api.service';
 import { FocusService } from '../../../shared/services/focus.service';
-import type { ProblemRegionDto } from '../../plan-analysis/plan-analysis-api.types';
+import type { ProblemRegionDto, RepairOptionDto } from '../../plan-analysis/plan-analysis-api.types';
 
 /**
  * Knowledge Workspace v1 — consume AnalysisReport y presenta ProblemRegions
@@ -18,9 +19,13 @@ import type { ProblemRegionDto } from '../../plan-analysis/plan-analysis-api.typ
 export class KnowledgeWorkspace {
   protected readonly pa = inject(PlanAnalysisStore);
   protected readonly focus = inject(FocusService);
+  private readonly api = inject(PlanAnalysisApiService);
 
   protected readonly selectedRegionId = signal<number | null>(null);
   protected readonly expandedRegionId = signal<number | null>(null);
+  protected readonly repairOptions = signal<RepairOptionDto[]>([]);
+  protected readonly optionsLoading = signal(false);
+  protected readonly optionsCalled = signal(false);
 
   protected readonly regions = computed(() => this.pa.problemRegions());
   protected readonly healthScore = computed(() => this.pa.healthScore());
@@ -39,6 +44,24 @@ export class KnowledgeWorkspace {
   protected readonly hasData = computed(() =>
     this.regions().length > 0 || this.rawFindings().length > 0,
   );
+
+  // ── Repair options ──
+
+  protected fetchRepairOptions(): void {
+    this.optionsLoading.set(true);
+    this.optionsCalled.set(true);
+    this.api.getRepairOptions().subscribe({
+      next: (res) => {
+        this.repairOptions.set(res.repairs);
+        this.optionsLoading.set(false);
+      },
+      error: () => this.optionsLoading.set(false),
+    });
+  }
+
+  protected optionsForRegion(regionId: number): RepairOptionDto[] {
+    return this.repairOptions().filter(o => o.region_id === regionId);
+  }
 
   // ── Actions ──
 
@@ -84,5 +107,9 @@ export class KnowledgeWorkspace {
 
   protected severityClass(sev: string): string {
     return 'kw__sev--' + sev;
+  }
+
+  protected strategyLabel(strategy: string): string {
+    return strategy.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   }
 }

@@ -83,6 +83,27 @@
                       }
                     </div>
                   }
+
+                  <!-- Repair Options -->
+                  @let opts = optionsForRegion(r.id);
+                  @if (opts.length > 0) {
+                    <div class="kw__repair-options">
+                      <div class="kw__ro-title">Repair Options</div>
+                      @for (o of opts; track o.strategy) {
+                        <div class="kw__ro">
+                          <span class="kw__ro-strategy">{{ strategyLabel(o.strategy) }}</span>
+                          @if (o.improvement > 0) {
+                            <span class="kw__ro-imp">+{{ (o.improvement * 100).toFixed(0) }}%</span>
+                          } @else {
+                            <span class="kw__ro-imp kw__ro-imp--none">—</span>
+                          }
+                          <button class="kw__ro-preview" (click)="$event.stopPropagation()">Preview</button>
+                        </div>
+                      }
+                    </div>
+                  } @else if (optionsLoading()) {
+                    <div class="kw__repair-loading">Loading repair options…</div>
+                  }
                   <!-- Findings drill-down -->
                   @let fnds = findingsForRegion(r);
                   @if (fnds.length > 0) {
@@ -109,9 +130,18 @@
       </section>
     }
 
-    <!-- ═══════ CAPABILITIES STATUS ═══════ -->
+    <!-- ═══════ REPAIR OPTIONS ═══════ -->
     <section class="kw__section">
-      <p class="kw__status-msg">Repair capabilities not yet available — coming in M8.2.</p>
+      <button class="kw__repair-btn" (click)="fetchRepairOptions()" [disabled]="optionsLoading()">
+        @if (optionsLoading()) {
+          Loading…
+        } @else {
+          ↻ Generate Repair Options
+        }
+      </button>
+      @if (!optionsLoading() && repairOptions().length === 0 && optionsCalled()) {
+        <p class="kw__status-msg">No repair options available for the current regions.</p>
+      }
     </section>
   }
 </div>

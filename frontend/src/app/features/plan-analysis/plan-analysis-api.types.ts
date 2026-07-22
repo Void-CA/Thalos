@@ -44,6 +44,26 @@ export interface ExplanationDto {
   confidence: number;
 }
 
+// ── Repair Options (M8.2.3) ──
+
+export interface RepairOptionsResponse {
+  repairs: RepairOptionDto[];
+}
+
+export interface RepairOptionDto {
+  region_id: number;
+  strategy: string;
+  status: string;
+  improvement: number;
+  metrics_before: MetricsSummary | null;
+  metrics_after: MetricsSummary | null;
+}
+
+export interface MetricsSummary {
+  manipulability: number;
+  smoothness: number;
+}
+
 export interface SummaryDto {
   status: 'ok' | 'warning' | 'error';
   score: number;

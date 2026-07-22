@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../shared/api/api-config';
-import type { AlternativesResponse, PlanAnalysisResponse } from '../plan-analysis-api.types';
+import type { AlternativesResponse, PlanAnalysisResponse, RepairOptionsResponse } from '../plan-analysis-api.types';
 
 @Injectable({ providedIn: 'root' })
 export class PlanAnalysisApiService {
@@ -21,6 +21,14 @@ export class PlanAnalysisApiService {
   generateAlternatives(): Observable<AlternativesResponse> {
     return this.http.post<AlternativesResponse>(
       `${this.baseUrl}/plan/analyze/alternatives`,
+      {},
+    );
+  }
+
+  /** Get repair options for the active plan (M8.2.3). */
+  getRepairOptions(): Observable<RepairOptionsResponse> {
+    return this.http.post<RepairOptionsResponse>(
+      `${this.baseUrl}/plan/repair/options`,
       {},
     );
   }

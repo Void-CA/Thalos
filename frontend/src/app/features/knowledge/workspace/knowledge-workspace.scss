@@ -309,6 +309,84 @@ $sev-info-bg: #121e2a;
   opacity: 0.6;
 }
 
+// ── Repair Options ──
+
+.kw__repair-btn {
+  width: 100%;
+  font-family: $font-ui;
+  font-size: $text-base;
+  padding: $space-sm $space-md;
+  border-radius: $radius-md;
+  border: 1px solid $accent;
+  background: transparent;
+  color: $accent;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background $transition-fast;
+  &:hover:not(:disabled) { background: #1a2a4a; }
+  &:disabled { opacity: 0.4; cursor: default; }
+}
+
+.kw__repair-options {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+}
+
+.kw__ro-title {
+  font-size: $text-xs;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #4a9e5a;
+  margin-bottom: $space-xs;
+}
+
+.kw__ro {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  padding: $space-xs $space-sm;
+  background: $bg-surface;
+  border: 1px solid $border-subtle;
+  border-radius: $radius-sm;
+}
+
+.kw__ro-strategy {
+  flex: 1;
+  font-size: $text-sm;
+  font-weight: 600;
+  color: $text-secondary;
+}
+
+.kw__ro-imp {
+  font-size: $text-sm;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #4a9e5a;
+
+  &--none { color: $text-muted; opacity: 0.4; }
+}
+
+.kw__ro-preview {
+  font-size: $text-xs;
+  padding: 0.1rem 0.35rem;
+  border-radius: $radius-sm;
+  border: 1px solid $border-subtle;
+  background: transparent;
+  color: $accent;
+  cursor: pointer;
+  &:hover { background: $bg-elevated; }
+}
+
+.kw__repair-loading {
+  text-align: center;
+  font-size: $text-sm;
+  color: $text-muted;
+  opacity: 0.5;
+  padding: $space-sm;
+}
+
 // ── Status ──
 
 .kw__status-msg {
