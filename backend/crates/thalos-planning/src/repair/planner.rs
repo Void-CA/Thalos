@@ -143,14 +143,18 @@ mod tests {
     use crate::analysis::domain::{RegionId, RegionKind, RegionSeverity};
     use crate::repair::domain::types::{StrategyKind, RepairCandidate, PlanDelta};
     use thalos_core::trajectory::Trajectory;
+    use std::sync::Arc as _Arc;
 
     struct TestStrategy;
     impl RepairStrategy for TestStrategy {
         fn kind(&self) -> StrategyKind { StrategyKind::LiftTcp }
         fn applies_to(&self, r: &ProblemRegion) -> bool { r.kind == RegionKind::Singularity }
         fn generate(&self, _ctx: &RepairContext, _plan: &CompiledPlan, region: &ProblemRegion) -> Vec<RepairCandidate> {
-            let delta = PlanDelta::new(region.id, region.waypoint_range.clone(), Trajectory::new(vec![])).ok()?;
-            Some(RepairCandidate::new(StrategyKind::LiftTcp, delta))
+            if let Ok(delta) = PlanDelta::new(region.id, region.waypoint_range.clone(), Trajectory::new(vec![])) {
+                vec![RepairCandidate::new(StrategyKind::LiftTcp, delta)]
+            } else {
+                vec![]
+            }
         }
     }
 
@@ -158,7 +162,24 @@ mod tests {
     fn test_planner_empty_regions() {
         let planner = RepairPlanner::new(vec![]);
         let plan = CompiledPlan::new(Trajectory::new(vec![]), vec![]);
-        let results = planner.plan(&plan, &[], &unsafe { std::mem::zeroed() });
+        // Context not used for empty regions — create a dummy one
+        use thalos_core::models::{RobotModel, RobotRegistry};
+        use crate::repair::context::RepairContext;
+        let chain = std::sync::Arc::new(RobotRegistry::create_default(RobotModel::Planar2R));
+        let frame = chain.end_effector().clone();
+        use thalos_core::kinematics::{
+            forward::ForwardKinematics,
+            inverse::JacobianTransposeSolver,
+        };
+        use std::sync::Arc as _Arc;
+        let fk = ForwardKinematics::new((*chain).clone());
+        let solver = JacobianTransposeSolver::new(fk, frame.clone(), 50, 1e-3, 0.5);
+        let ctx = RepairContext {
+            chain: chain.clone(),
+            tcp_frame: frame,
+            ik_solver: _Arc::new(solver),
+        };
+        let results = planner.plan(&plan, &[], &ctx);
         assert!(results.is_empty());
     }
 }

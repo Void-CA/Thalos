@@ -1,6 +1,7 @@
-pub mod scene;
-pub mod robots;
-pub mod session;
-pub mod workspace;
 pub mod motion;
 pub mod plan_analysis;
+pub mod repair;
+pub mod robots;
+pub mod scene;
+pub mod session;
+pub mod workspace;
