@@ -4,7 +4,7 @@
 //! `knowledge().workspace` es siempre `None`.
 
 use crate::knowledge::domain::{ConfigurationRegion, JointLimit, PlanningKnowledge, RobotKnowledge, SingularityZone};
-use crate::analysis::domain::traits::PlanningKnowledgeProvider;
+use crate::knowledge::provider::PlanningKnowledgeProvider;
 use thalos_core::robot::serial_chain::SerialChain;
 use thalos_math::Transform3D;
 

@@ -23,7 +23,7 @@ pub use types::{ProblemRegion, RegionEvidence, RegionId, RegionKind, RegionSever
 pub use metrics::{RegionBoundary, RegionMetrics};
 pub use explain::RegionExplanation;
 pub use traits::{
-    PlanningKnowledgeProvider, RegionDetector, RepairCapability, StrategyKind,
+    RegionDetector, RepairCapability, StrategyKind,
 };
 
 // Los tipos de knowledge han migrado a `crate::knowledge::domain` (M8.3).

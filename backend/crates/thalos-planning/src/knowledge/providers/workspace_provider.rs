@@ -8,7 +8,7 @@
 use crate::knowledge::domain::{
     ConfigurationRegion, PlanningKnowledge, SingularityZone, WorkspaceKnowledge,
 };
-use crate::analysis::domain::traits::PlanningKnowledgeProvider;
+use crate::knowledge::provider::PlanningKnowledgeProvider;
 use thalos_math::{Transform3D, Vector3};
 
 /// Proveedor que consulta un `WorkspaceKnowledge` ya generado.

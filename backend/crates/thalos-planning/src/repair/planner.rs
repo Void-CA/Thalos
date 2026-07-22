@@ -7,10 +7,8 @@
 //! 4. Produce RepairPlan con candidato recomendado
 
 use crate::{
-    analysis::domain::{
-        traits::PlanningKnowledgeProvider,
-        ProblemRegion,
-    },
+    analysis::domain::ProblemRegion,
+    knowledge::provider::PlanningKnowledgeProvider,
     motion::program::CompiledPlan,
     repair::{
         context::RepairContext,

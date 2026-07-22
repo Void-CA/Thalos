@@ -12,7 +12,7 @@ use crate::analysis::domain::{
     metrics::RegionMetrics, types::*, ProblemRegion, RegionEvidence, RegionExplanation,
     RegionId, RegionKind, RegionSeverity,
 };
-use crate::analysis::domain::traits::PlanningKnowledgeProvider;
+use crate::knowledge::provider::PlanningKnowledgeProvider;
 use crate::analysis::AnalysisReport;
 use crate::finding::{Finding, FindingKind};
 
