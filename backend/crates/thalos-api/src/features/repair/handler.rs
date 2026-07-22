@@ -2,15 +2,21 @@ use std::sync::Arc;
 
 use axum::{extract::State, Json};
 
+use thalos_core::kinematics::{
+    forward::ForwardKinematics,
+    inverse::JacobianTransposeSolver,
+};
+use thalos_math::Vector3;
 use thalos_planning::{
     analysis::region::{RegionDetector, RegionDetectorConfig},
     repair::{
+        context::RepairContext,
         domain::RepairStrategy,
         planner::RepairPlanner,
         strategies::{LiftTcpStrategy, RotateToolStrategy, SplitSegment},
     },
 };
-use thalos_runtime::PlanAnalysisService;
+use thalos_runtime::{PlanAnalysisService, RuntimeSnapshot};
 
 use crate::app::{
     error::ApiError,
@@ -19,12 +25,27 @@ use crate::app::{
 };
 use crate::features::repair::dto::*;
 
+fn build_repair_context(snapshot: &RuntimeSnapshot) -> RepairContext {
+    let chain = Arc::new(snapshot.chain.clone());
+    let tcp_frame = snapshot
+        .active_tcp
+        .as_ref()
+        .map(|tcp| tcp.base_frame.clone())
+        .unwrap_or_else(|| chain.end_effector().clone());
+    let fk = ForwardKinematics::new((*chain).clone());
+    let solver = JacobianTransposeSolver::new(fk, tcp_frame.clone(), 100, 1e-4, 0.3);
+    RepairContext {
+        chain: chain.clone(),
+        tcp_frame,
+        ik_solver: Arc::new(solver),
+    }
+}
+
 /// POST /api/v1/plan/repair/options
 pub async fn repair_options(
     State(state): State<Arc<AppState>>,
 ) -> ApiResult<RepairOptionsResponse> {
     let snapshot = state.services.scene.snapshot().await?;
-
     let trajectory = snapshot
         .active_plan
         .as_ref()
@@ -34,7 +55,6 @@ pub async fn repair_options(
             code: "no_active_plan".to_string(),
         })?;
 
-    // Analizar plan
     let result = PlanAnalysisService::analyze_plan(
         &snapshot.chain,
         trajectory,
@@ -42,19 +62,16 @@ pub async fn repair_options(
         None,
     )?;
 
-    // Detectar regiones (M8.1)
     let detector = RegionDetector::new(RegionDetectorConfig::default());
     let report = detector.detect(&result.findings);
 
-    // Construir estrategias
     let strategies: Vec<Box<dyn RepairStrategy>> = vec![
-        Box::new(LiftTcpStrategy::new(thalos_math::Vector3::new(0.0, 0.0, 0.05))),
+        Box::new(LiftTcpStrategy::new(Vector3::new(0.0, 0.0, 0.05))),
         Box::new(RotateToolStrategy::new(0.1)),
         Box::new(SplitSegment::new(2)),
     ];
     let planner = RepairPlanner::new(strategies);
 
-    // Construir CompiledPlan
     let segments = snapshot
         .active_plan
         .as_ref()
@@ -67,31 +84,7 @@ pub async fn repair_options(
         waypoint_count: trajectory.waypoints().len(),
     };
 
-    // Construir RepairContext
-    use std::sync::Arc as _Arc;
-    let chain = _Arc::new(snapshot.chain.clone());
-    let tcp_frame = snapshot
-        .active_tcp
-        .as_ref()
-        .map(|tcp| tcp.base_frame.clone())
-        .unwrap_or_else(|| {
-            chain.end_effector().clone()
-        });
-    use thalos_core::kinematics::inverse::JacobianTransposeSolver;
-    use thalos_core::kinematics::forward::ForwardKinematics;
-    let fk = ForwardKinematics::new((*chain).clone());
-    let solver = JacobianTransposeSolver::new(
-        fk,
-        tcp_frame.clone(),
-        100, 1e-4, 0.3,
-    );
-    let ctx = thalos_planning::repair::context::RepairContext {
-        chain: chain.clone(),
-        tcp_frame,
-        ik_solver: _Arc::new(solver),
-    };
-
-    // Planificar reparaciones
+    let ctx = build_repair_context(&snapshot);
     let plans = planner.plan(&compiled, &report.problem_regions, &ctx);
 
     let mut repairs = Vec::new();
@@ -118,7 +111,7 @@ pub async fn repair_options(
     Ok(Json(RepairOptionsResponse { repairs }))
 }
 
-/// POST /api/v1/plan/repair/apply (placeholder — M8.4)
+/// POST /api/v1/plan/repair/apply (placeholder)
 pub async fn repair_apply(
     State(_state): State<Arc<AppState>>,
     Json(req): Json<RepairApplyRequest>,
@@ -128,6 +121,6 @@ pub async fn repair_apply(
         status: "not_implemented".to_string(),
         modified_range: None,
         metrics_delta: None,
-        reason: Some("Apply not yet implemented — planned for M8.4".to_string()),
+        reason: Some("Apply not yet implemented — use sessions (POST /repair/sessions)".to_string()),
     }))
 }

@@ -60,3 +60,44 @@ pub struct MetricChange {
     pub before: f64,
     pub after: f64,
 }
+
+// ── Repair Session DTOs (M8.4) ──
+
+#[derive(Debug, Serialize)]
+pub struct CreateSessionResponse {
+    pub session_id: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PreviewRequest {
+    pub region_id: usize,
+    pub strategy: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PreviewResponse {
+    pub candidate_id: u64,
+    pub base_revision: u32,
+    pub continuity_ok: bool,
+    pub improvement: f64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApplyRequest {
+    pub candidate_id: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ApplyResponse {
+    pub new_revision: u32,
+    pub status: String,
+    pub history_length: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SessionStatusResponse {
+    pub session_id: u64,
+    pub revision: u32,
+    pub status: String,
+    pub history_length: usize,
+}

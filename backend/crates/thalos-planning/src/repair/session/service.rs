@@ -1,6 +1,6 @@
-//! RepairSessionService — orquesta las operaciones de sesión entre
-//! el store, el planner y el merger. Los handlers HTTP dependen de este
-//! servicio, no del store directamente.
+//! RepairSessionService — orquesta las operaciones de sesión.
+//!
+//! Posee el store, planner y merger. Los handlers solo llaman métodos.
 
 use crate::analysis::domain::{ProblemRegion, RegionId};
 use crate::evaluation::metrics::PlanMetrics;
@@ -14,9 +14,7 @@ use crate::repair::{
     merger::PlanMerger,
     planner::RepairPlanner,
     session::{
-        domain::{
-            PlanRevision, RepairPreview, RepairSession, RepairSessionStatus, SessionId,
-        },
+        domain::{PlanRevision, RepairPreview, RepairSession, RepairSessionStatus, SessionId},
         store::RepairSessionStore,
     },
 };
@@ -30,15 +28,17 @@ pub struct ApplyResult {
 
 /// Servicio de sesiones de reparación.
 ///
-/// Los handlers HTTP llaman a este servicio. El servicio no conoce HTTP.
+/// Encapsula store, planner y merger. Los handlers no conocen estas dependencias.
 pub struct RepairSessionService {
     pub store: RepairSessionStore,
+    planner: RepairPlanner,
 }
 
 impl RepairSessionService {
-    pub fn new() -> Self {
+    pub fn new(strategies: Vec<Box<dyn RepairStrategy>>) -> Self {
         Self {
             store: RepairSessionStore::new(),
+            planner: RepairPlanner::new(strategies),
         }
     }
 
@@ -52,7 +52,6 @@ impl RepairSessionService {
     pub fn preview(
         &self,
         session_id: SessionId,
-        planner: &RepairPlanner,
         context: &RepairContext,
         region: &ProblemRegion,
         strategy: &dyn RepairStrategy,
@@ -64,17 +63,14 @@ impl RepairSessionService {
 
         let candidates = strategy.generate(context, &session.working_plan, region);
         let candidate = candidates.into_iter().next()?;
-
         let eval = candidate.evaluation.as_ref()?;
         let delta = candidate.delta.clone();
-
-        // Verificar continuidad vía PlanMerger
         let continuity_ok = PlanMerger::apply(&session.working_plan, &delta).is_ok();
 
         Some(RepairPreview {
             session_id,
             base_revision: session.revision,
-            candidate_id: 0, // será asignado por el store
+            candidate_id: 0,
             delta,
             evaluation: eval.clone(),
             continuity_ok,
@@ -91,7 +87,6 @@ impl RepairSessionService {
         metrics_before: PlanMetrics,
         metrics_after: PlanMetrics,
     ) -> Result<ApplyResult, &'static str> {
-        // 1. Clonar working_plan antes de mutar
         let working_plan = {
             let s = self.store.get(&session_id).ok_or("session not found")?;
             s.working_plan.clone()
@@ -99,32 +94,29 @@ impl RepairSessionService {
         let delta = &candidate.delta;
         let new_plan = PlanMerger::apply(&working_plan, delta).map_err(|_| "merge failed")?;
 
-        // 2. Mutar sesión
         let revision = {
             let session = self.store.get_mut(&session_id).ok_or("session not found")?;
             session.apply(region_id, strategy, candidate, new_plan, metrics_before, metrics_after)?
         };
 
-        // 3. Invalidar previews
         self.store.invalidate_session_previews(&session_id);
 
-        // 4. Obtener resultado
         let session = self.store.get(&session_id).ok_or("session not found")?.clone();
         Ok(ApplyResult { new_revision: revision, session })
     }
 
     /// Cierra una sesión.
     pub fn close_session(&mut self, session_id: SessionId) -> bool {
-        if let Some(s) = self.store.get_mut(&session_id) {
-            s.close();
-            true
-        } else {
-            false
-        }
+        self.store.get_mut(&session_id).map(|s| { s.close(); true }).unwrap_or(false)
     }
 
     /// Descarta una sesión.
     pub fn discard_session(&mut self, session_id: SessionId) -> bool {
         self.store.delete(&session_id)
+    }
+
+    /// Obtiene una sesión (solo lectura).
+    pub fn get_session(&self, session_id: SessionId) -> Option<&RepairSession> {
+        self.store.get(&session_id)
     }
 }

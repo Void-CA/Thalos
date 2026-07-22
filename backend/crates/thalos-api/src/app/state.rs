@@ -12,6 +12,7 @@ use thalos_runtime::{
     RobotController, SceneService, SessionManager,
 };
 
+use crate::features::repair::session_handler::SessionServiceState;
 use crate::features::robots::service::RobotService;
 
 pub struct Services {
@@ -23,6 +24,7 @@ pub struct Services {
 
 pub struct AppState {
     pub services: Arc<Services>,
+    pub session_service: SessionServiceState,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -56,5 +58,6 @@ pub async fn new_default_state() -> SharedState {
             manager,
             sessions,
         }),
+        session_service: SessionServiceState::new(),
     })
 }
