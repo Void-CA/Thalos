@@ -93,7 +93,6 @@ impl RepairPlanner {
         region: &ProblemRegion,
         context: &RepairContext,
     ) -> RepairPlan {
-            recommendations: vec![] ,
         // 1. Seleccionar estrategias aplicables
         let applicable: Vec<&Box<dyn RepairStrategy>> = self
             .strategies
@@ -104,7 +103,6 @@ impl RepairPlanner {
         if applicable.is_empty() {
             return RepairPlan {
                 recommendations: vec![] ,
-            recommendations: vec![] ,
                 region: region.clone(),
                 candidates: vec![],
                 recommended: None,
@@ -121,7 +119,6 @@ impl RepairPlanner {
         if candidates.is_empty() {
             return RepairPlan {
                 recommendations: vec![] ,
-            recommendations: vec![] ,
                 region: region.clone(),
                 candidates: vec![],
                 recommended: None,
@@ -166,12 +163,11 @@ impl RepairPlanner {
         };
 
         RepairPlan {
-            recommendations: vec![] ,
+            recommendations: vec![],
             region: region.clone(),
             candidates,
             recommended,
             status: RepairPlanStatus::Available,
-            recommendations: vec![],
         }
     }
 
@@ -196,6 +192,7 @@ impl RepairPlanner {
             lift_score += 0.2;
             lift_reasons.push(RecommendationReason::LowManipulability);
         }
+        let near_singularity = lift_reasons.contains(&RecommendationReason::NearKnownSingularity);
         recs.push(StrategyRecommendation {
             strategy: crate::repair::domain::types::StrategyKind::LiftTcp,
             score: lift_score,
@@ -205,7 +202,7 @@ impl RepairPlanner {
         // Evaluar RotateTool
         let mut rotate_score = 0.4;
         let mut rotate_reasons = Vec::new();
-        if lift_reasons.contains(&RecommendationReason::NearKnownSingularity) {
+        if near_singularity {
             rotate_score += 0.1;
             rotate_reasons.push(RecommendationReason::NearKnownSingularity);
         }
