@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../shared/api/api-config';
 import type { AlternativesResponse, PlanAnalysisResponse, RepairOptionsResponse } from '../plan-analysis-api.types';
+import type { CreateSessionResponse, PreviewRequest, PreviewResponse, ApplyRequest, ApplyResponse } from '../repair-session.types';
 
 @Injectable({ providedIn: 'root' })
 export class PlanAnalysisApiService {
@@ -30,6 +31,45 @@ export class PlanAnalysisApiService {
     return this.http.post<RepairOptionsResponse>(
       `${this.baseUrl}/plan/repair/options`,
       {},
+    );
+  }
+
+  /** Create a repair session (M8.4). */
+  createSession(): Observable<CreateSessionResponse> {
+    return this.http.post<CreateSessionResponse>(
+      `${this.baseUrl}/repair/sessions`,
+      {},
+    );
+  }
+
+  /** Preview a strategy for a session (M8.4). */
+  previewRepair(sessionId: number, req: PreviewRequest): Observable<PreviewResponse> {
+    return this.http.post<PreviewResponse>(
+      `${this.baseUrl}/repair/sessions/${sessionId}/preview`,
+      req,
+    );
+  }
+
+  /** Apply a repair (M8.4). */
+  applyRepair(sessionId: number, req: ApplyRequest): Observable<ApplyResponse> {
+    return this.http.post<ApplyResponse>(
+      `${this.baseUrl}/repair/sessions/${sessionId}/apply`,
+      req,
+    );
+  }
+
+  /** Undo last repair (M8.4.3). */
+  undoRepair(sessionId: number): Observable<ApplyResponse> {
+    return this.http.post<ApplyResponse>(
+      `${this.baseUrl}/repair/sessions/${sessionId}/undo`,
+      {},
+    );
+  }
+
+  /** Delete a session (M8.4). */
+  deleteSession(sessionId: number): Observable<void> {
+    return this.http.delete<void>(
+      `${this.baseUrl}/repair/sessions/${sessionId}`,
     );
   }
 

@@ -309,40 +309,77 @@ $sev-info-bg: #121e2a;
   opacity: 0.6;
 }
 
-// ── Repair Options ──
+// ── Session ──
 
-.kw__repair-btn {
-  width: 100%;
+.kw__session-btn {
   font-family: $font-ui;
-  font-size: $text-base;
-  padding: $space-sm $space-md;
-  border-radius: $radius-md;
+  font-size: $text-sm;
+  padding: $space-xs $space-md;
+  border-radius: $radius-sm;
   border: 1px solid $accent;
   background: transparent;
   color: $accent;
   cursor: pointer;
   font-weight: 600;
   transition: background $transition-fast;
-  &:hover:not(:disabled) { background: #1a2a4a; }
-  &:disabled { opacity: 0.4; cursor: default; }
+  &:hover { background: #1a2a4a; }
 }
 
-.kw__repair-options {
+.kw__session-btn--undo {
+  border-color: #b8943a;
+  color: #b8943a;
+  padding: $space-xs $space-sm;
+  font-size: $text-xs;
+  &:hover { background: $sev-warn-bg; }
+}
+
+.kw__session-btn--end {
+  border-color: $sev-error;
+  color: $sev-error;
+  padding: $space-xs $space-sm;
+  font-size: $text-xs;
+  &:hover { background: $sev-error-bg; }
+}
+
+.kw__session-info {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+}
+
+.kw__session-badge {
+  font-size: $text-xs;
+  padding: $space-xs $space-sm;
+  border-radius: $radius-sm;
+  background: $bg-elevated;
+  color: #4a9e5a;
+  font-weight: 700;
+}
+
+.kw__session-rev {
+  font-size: $text-xs;
+  color: $text-muted;
+  opacity: 0.6;
+}
+
+// ── Strategies ──
+
+.kw__strategies {
   display: flex;
   flex-direction: column;
   gap: $space-xs;
 }
 
-.kw__ro-title {
+.kw__strat-title {
   font-size: $text-xs;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #4a9e5a;
+  color: $accent;
   margin-bottom: $space-xs;
 }
 
-.kw__ro {
+.kw__strat {
   display: flex;
   align-items: center;
   gap: $space-sm;
@@ -350,25 +387,26 @@ $sev-info-bg: #121e2a;
   background: $bg-surface;
   border: 1px solid $border-subtle;
   border-radius: $radius-sm;
+  cursor: pointer;
+  transition: background $transition-fast;
+  &:hover { background: $bg-elevated; }
 }
 
-.kw__ro-strategy {
+.kw__strat-name {
   flex: 1;
   font-size: $text-sm;
   font-weight: 600;
   color: $text-secondary;
 }
 
-.kw__ro-imp {
+.kw__strat-imp {
   font-size: $text-sm;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: #4a9e5a;
-
-  &--none { color: $text-muted; opacity: 0.4; }
 }
 
-.kw__ro-preview {
+.kw__strat-preview {
   font-size: $text-xs;
   padding: 0.1rem 0.35rem;
   border-radius: $radius-sm;
@@ -379,12 +417,65 @@ $sev-info-bg: #121e2a;
   &:hover { background: $bg-elevated; }
 }
 
-.kw__repair-loading {
+.kw__strat-loading {
   text-align: center;
-  font-size: $text-sm;
+  font-size: $text-xs;
   color: $text-muted;
   opacity: 0.5;
+  padding: $space-xs;
+}
+
+// ── Preview Panel ──
+
+.kw__preview {
+  border: 1px solid $accent;
+  border-radius: $radius-md;
+  padding: $space-sm $space-md;
+  background: #1a2a3a;
+}
+
+.kw__preview-body {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+}
+
+.kw__pv-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kw__pv-lbl {
+  font-size: $text-sm;
+  color: $text-muted;
+  opacity: 0.6;
+}
+
+.kw__pv-val {
+  font-size: $text-base;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: $text-primary;
+}
+
+.kw__pv--pos { color: #4a9e5a; }
+.kw__pv--ok { color: #4a9e5a; }
+.kw__pv--bad { color: $sev-error; }
+
+.kw__apply-btn {
+  width: 100%;
+  font-family: $font-ui;
+  font-size: $text-base;
   padding: $space-sm;
+  border-radius: $radius-sm;
+  border: none;
+  background: #4a9e5a;
+  color: #111;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity $transition-fast;
+  &:hover { opacity: 0.9; }
 }
 
 // ── Status ──

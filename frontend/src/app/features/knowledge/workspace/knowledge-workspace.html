@@ -1,6 +1,18 @@
 <div class="kw">
   <header class="kw__header">
     <h1 class="kw__title">Knowledge</h1>
+    @if (sessionId() === null) {
+      <button class="kw__session-btn" (click)="startSession()">▶ Start Session</button>
+    } @else {
+      <div class="kw__session-info">
+        <span class="kw__session-badge">Session #{{ sessionId() }}</span>
+        <span class="kw__session-rev">Rev {{ revision() }}</span>
+        @if (historyLength() > 0) {
+          <button class="kw__session-btn kw__session-btn--undo" (click)="undoLast()">↩ Undo</button>
+        }
+        <button class="kw__session-btn kw__session-btn--end" (click)="endSession()">✕ End</button>
+      </div>
+    }
   </header>
 
   @if (!hasData()) {
@@ -9,7 +21,6 @@
       <p>No analysis data. Compile and analyze a plan to see results here.</p>
     </div>
   } @else {
-
     <!-- ═══════ HEALTH HEADER ═══════ -->
     <section class="kw__health">
       <div class="kw__health-score" [style.--c]="(healthScore() ?? 0) > 0.5 ? '#4a9e5a' : (healthScore() ?? 0) > 0.2 ? '#b8943a' : '#b85450'">
@@ -30,18 +41,22 @@
           <span class="kw__hm-val kw__hm--warn">{{ s.warnings }}</span>
           <span class="kw__hm-lbl">Warnings</span>
         </div>
+        @if (historyLength() > 0) {
+          <div class="kw__hm">
+            <span class="kw__hm-val">{{ historyLength() }}</span>
+            <span class="kw__hm-lbl">Repairs</span>
+          </div>
+        }
       </div>
     </section>
 
     <!-- ═══════ REGIONS ═══════ -->
-    @let regs = regions();
-    @if (regs.length === 0) {
-      <div class="kw__empty">
-        <p>No problem regions detected. The trajectory appears clean.</p>
-      </div>
-    } @else {
-      <section class="kw__section">
-        <h2 class="kw__sec-title">Problem Regions</h2>
+    <section class="kw__section">
+      <h2 class="kw__sec-title">Problem Regions</h2>
+      @let regs = regions();
+      @if (regs.length === 0) {
+        <p class="kw__status-msg">No problem regions detected.</p>
+      } @else {
         <div class="kw__reg-list">
           @for (r of regs; track r.id) {
             <div class="kw__reg"
@@ -75,42 +90,33 @@
                     <div class="kw__reg-metrics">
                       <span class="kw__met">Errors: {{ r.metrics.error_count }}</span>
                       <span class="kw__met">Warnings: {{ r.metrics.warning_count }}</span>
-                      @if (r.metrics.average_value != null) {
-                        <span class="kw__met">Avg: {{ r.metrics.average_value.toFixed(3) }}</span>
-                      }
-                      @if (r.metrics.min_value != null) {
-                        <span class="kw__met">Min: {{ r.metrics.min_value.toFixed(3) }}</span>
-                      }
                     </div>
                   }
 
-                  <!-- Repair Options -->
+                  <!-- Strategies (desplegadas automáticamente) -->
                   @let opts = optionsForRegion(r.id);
                   @if (opts.length > 0) {
-                    <div class="kw__repair-options">
-                      <div class="kw__ro-title">Repair Options</div>
+                    <div class="kw__strategies">
+                      <div class="kw__strat-title">Strategies</div>
                       @for (o of opts; track o.strategy) {
-                        <div class="kw__ro">
-                          <span class="kw__ro-strategy">{{ strategyLabel(o.strategy) }}</span>
+                        <div class="kw__strat" (click)="requestPreview(r.id, o.strategy); $event.stopPropagation()">
+                          <span class="kw__strat-name">{{ strategyLabel(o.strategy) }}</span>
                           @if (o.improvement > 0) {
-                            <span class="kw__ro-imp">+{{ (o.improvement * 100).toFixed(0) }}%</span>
-                          } @else {
-                            <span class="kw__ro-imp kw__ro-imp--none">—</span>
+                            <span class="kw__strat-imp">+{{ (o.improvement * 100).toFixed(1) }}%</span>
                           }
-                          <button class="kw__ro-preview" (click)="$event.stopPropagation()">Preview</button>
+                          <button class="kw__strat-preview">Preview</button>
                         </div>
                       }
                     </div>
                   } @else if (optionsLoading()) {
-                    <div class="kw__repair-loading">Loading repair options…</div>
+                    <span class="kw__strat-loading">Loading strategies…</span>
                   }
+
                   <!-- Findings drill-down -->
                   @let fnds = findingsForRegion(r);
                   @if (fnds.length > 0) {
                     <details class="kw__reg-findings">
-                      <summary class="kw__reg-findings-summary">
-                        {{ fnds.length }} finding{{ fnds.length !== 1 ? 's' : '' }}
-                      </summary>
+                      <summary class="kw__reg-findings-summary">{{ fnds.length }} finding{{ fnds.length !== 1 ? 's' : '' }}</summary>
                       <div class="kw__reg-findings-list">
                         @for (f of fnds; track $index) {
                           <div class="kw__reg-fi">
@@ -127,21 +133,47 @@
             </div>
           }
         </div>
+      }
+    </section>
+
+    <!-- ═══════ PREVIEW PANEL ═══════ -->
+    @if (previewResult(); as pr) {
+      <section class="kw__section kw__preview">
+        <h2 class="kw__sec-title">Preview — {{ strategyLabel(pr.strategy) }}</h2>
+        <div class="kw__preview-body">
+          <div class="kw__pv-row">
+            <span class="kw__pv-lbl">Expected Improvement</span>
+            <span class="kw__pv-val kw__pv--pos">+{{ (pr.improvement * 100).toFixed(1) }}%</span>
+          </div>
+          <div class="kw__pv-row">
+            <span class="kw__pv-lbl">Continuity</span>
+            <span class="kw__pv-val" [class.kw__pv--ok]="pr.continuity" [class.kw__pv--bad]="!pr.continuity">
+              {{ pr.continuity ? '✓ Pass' : '✗ Fail' }}
+            </span>
+          </div>
+          <div class="kw__pv-row">
+            <span class="kw__pv-lbl">Base Revision</span>
+            <span class="kw__pv-val">{{ pr.baseRevision }}</span>
+          </div>
+          @if (sessionId() !== null) {
+            <button class="kw__apply-btn" (click)="applyRepair()">Apply Repair</button>
+          }
+        </div>
       </section>
     }
 
-    <!-- ═══════ REPAIR OPTIONS ═══════ -->
-    <section class="kw__section">
-      <button class="kw__repair-btn" (click)="fetchRepairOptions()" [disabled]="optionsLoading()">
-        @if (optionsLoading()) {
-          Loading…
-        } @else {
-          ↻ Generate Repair Options
-        }
-      </button>
-      @if (!optionsLoading() && repairOptions().length === 0 && optionsCalled()) {
-        <p class="kw__status-msg">No repair options available for the current regions.</p>
-      }
-    </section>
+    @if (previewLoading()) {
+      <section class="kw__section">
+        <p class="kw__status-msg">Generating preview…</p>
+      </section>
+    }
+
+    <!-- ═══════ HISTORY ═══════ -->
+    @if (historyLength() > 0) {
+      <section class="kw__section">
+        <h2 class="kw__sec-title">Session History</h2>
+        <p class="kw__status-msg">{{ historyLength() }} repair(s) applied in revision {{ revision() }}.</p>
+      </section>
+    }
   }
 </div>

@@ -11,7 +11,7 @@ use thalos_planning::repair::session::{
     service::RepairSessionService,
 };
 
-use crate::app::{error::ApiError, prelude::ApiResult, state::AppState};
+use crate::app::{error::ApiError, prelude::*, state::AppState};
 use crate::features::repair::dto::*;
 
 /// Estado compartido del servicio de sesiones.
@@ -132,6 +132,26 @@ pub async fn apply_repair(
         new_revision: 0,
         status: "not_implemented".into(),
         history_length: 0,
+    }))
+}
+
+/// POST /repair/sessions/{id}/undo
+pub async fn undo_repair(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<u64>,
+) -> Result<Json<ApplyResponse>, ApiError> {
+    let mut svc = state.session_service.service.lock().unwrap();
+    let session_id = SessionId(id);
+
+    let new_revision = svc.undo(session_id).map_err(|e| ApiError::InvalidState {
+        message: e.into(),
+        code: "undo_failed".into(),
+    })?;
+
+    Ok(Json(ApplyResponse {
+        new_revision: new_revision.0,
+        status: "undo_success".into(),
+        history_length: svc.get_session(session_id).map(|s| s.history.len()).unwrap_or(0),
     }))
 }
 

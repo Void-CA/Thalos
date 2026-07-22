@@ -115,6 +115,41 @@ impl RepairSessionService {
         self.store.delete(&session_id)
     }
 
+    /// Deshace la última reparación. Reconstruye desde original_plan + history[..N-1].
+    pub fn undo(&mut self, session_id: SessionId) -> Result<PlanRevision, &'static str> {
+        // 1. Extraer datos antes de mutar
+        let (original_plan, to_replay) = {
+            let s = self.store.get(&session_id).ok_or("session not found")?;
+            if s.status != RepairSessionStatus::Active {
+                return Err("session not active");
+            }
+            if s.history.is_empty() {
+                return Err("nothing to undo");
+            }
+            let n = s.history.len() - 1;
+            (s.original_plan.clone(), s.history[..n].to_vec())
+        };
+
+        // 2. Reconstruir working_plan replayando N-1 reparaciones
+        let mut working_plan = original_plan;
+        for repair in &to_replay {
+            working_plan = PlanMerger::apply(&working_plan, &repair.candidate.delta)
+                .map_err(|_| "merge failed during undo rebuild")?;
+        }
+
+        // 3. Actualizar sesión e invalidar previews
+        let new_revision = PlanRevision(to_replay.len() as u32);
+        {
+            let session = self.store.get_mut(&session_id).ok_or("session not found")?;
+            session.working_plan = working_plan;
+            session.revision = new_revision;
+            session.history.truncate(to_replay.len());
+        }
+        self.store.invalidate_session_previews(&session_id);
+
+        Ok(new_revision)
+    }
+
     /// Obtiene una sesión (solo lectura).
     pub fn get_session(&self, session_id: SessionId) -> Option<&RepairSession> {
         self.store.get(&session_id)

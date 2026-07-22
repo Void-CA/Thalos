@@ -18,4 +18,5 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/repair/sessions/{id}", delete(session_handler::delete_session))
         .route("/repair/sessions/{id}/preview", post(session_handler::preview_repair))
         .route("/repair/sessions/{id}/apply", post(session_handler::apply_repair))
+        .route("/repair/sessions/{id}/undo", post(session_handler::undo_repair))
 }
