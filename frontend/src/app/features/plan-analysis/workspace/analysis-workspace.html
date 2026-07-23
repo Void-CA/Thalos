@@ -26,11 +26,17 @@
       </button>
     </div>
   } @else {
-    <!-- Ready — placeholder para slices 2-6 -->
-    <div class="aw__ready">
-      <p class="aw__placeholder-text">
-        Analysis content will appear here.
-      </p>
-    </div>
+    <!-- Ready — status banner + problem regions + inspector -->
+    <status-banner />
+    <problem-regions />
+    @if (selectedRegionId() !== null) {
+      <region-inspector />
+    } @else {
+      <div class="aw__ready">
+        <p class="aw__placeholder-text">
+          Select a region to inspect.
+        </p>
+      </div>
+    }
   }
 </div>

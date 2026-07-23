@@ -1,5 +1,8 @@
 import { Component, computed, inject } from '@angular/core';
 import { NgIcon } from '@ng-icons/core';
+import { StatusBanner } from './status-banner';
+import { ProblemRegions } from './problem-regions';
+import { RegionInspector } from './region-inspector';
 import { PerspectiveStore } from '../../../shared/store/perspective.store';
 import { ProjectStateStore } from '../../../shared/store/project-state.store';
 import { PlanAnalysisStore } from '../store/plan-analysis.store';
@@ -16,7 +19,7 @@ type EmptyState = 'not-available' | 'not-analyzed' | 'ready';
 @Component({
   selector: 'analysis-workspace',
   standalone: true,
-  imports: [NgIcon],
+  imports: [NgIcon, StatusBanner, ProblemRegions, RegionInspector],
   templateUrl: './analysis-workspace.html',
   styleUrl: './analysis-workspace.scss',
 })
