@@ -43,7 +43,7 @@ export class PerspectiveStore {
 
   /** Cycle para la top bar o atajo de teclado. */
   cycle(): void {
-    const order: Perspective[] = ['robot', 'planning', 'analysis', 'execution', 'knowledge', 'sessions'];
+    const order: Perspective[] = ['robot', 'planning', 'execution', 'knowledge', 'sessions'];
     const idx = order.indexOf(this.perspective());
     this.setPerspective(order[(idx + 1) % order.length]);
   }

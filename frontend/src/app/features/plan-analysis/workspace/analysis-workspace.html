@@ -1,238 +1,36 @@
 <div class="aw">
-  <header class="aw__header">
-    <h1 class="aw__title">Analysis</h1>
-    <button class="aw__btn" (click)="onReanalyze()" [disabled]="pa.loading()">
-      @if (pa.loading()) {
-        <span class="aw__spin"></span> Analyzing…
-      } @else {
-        ↻ Re-analyze
-      }
+  <!-- Navigation breadcrumb -->
+  <header class="aw__nav">
+    <button class="aw__back-btn" (click)="goBack()">
+      <ng-icon name="heroArrowLeft" size="16" />
+      <span>Planning</span>
     </button>
+    <span class="aw__nav-sep">/</span>
+    <span class="aw__nav-current">Analysis</span>
   </header>
 
-  <nav class="aw__tabs">
-    <button class="aw__tab" [class.aw__tab--active]="activeTab() === 'dashboard'" (click)="setTab('dashboard')">Dashboard</button>
-    <button class="aw__tab" [class.aw__tab--active]="activeTab() === 'charts'" (click)="setTab('charts')">Charts</button>
-  </nav>
-
-  @if (vm().loading) {
-    <div class="aw__center">
-      <span class="aw__spin aw__spin--lg"></span>
-      <p class="aw__hint">Analyzing trajectory…</p>
+  @if (emptyState() === 'not-available') {
+    <div class="aw__empty">
+      <ng-icon name="heroChartBar" size="40" />
+      <p class="aw__empty-text">
+        Compilá un plan en <strong>Planning</strong> para empezar el análisis.
+      </p>
     </div>
-  } @else if (!vm().hasResult) {
-    <div class="aw__center">
-      <ng-icon name="heroChartBar" size="36" />
-      <p class="aw__hint">No analysis data. Compile a plan in <strong>Planning</strong> mode and re-analyze.</p>
+  } @else if (emptyState() === 'not-analyzed') {
+    <div class="aw__empty">
+      <p class="aw__empty-text">
+        Este plan no se ha analizado aún.
+      </p>
+      <button class="aw__btn aw__btn--action" (click)="onAnalyze()">
+        Analizar plan
+      </button>
     </div>
-  } @else if (activeTab() === 'dashboard') {
-
-    <!-- ── Executive row ── -->
-    <section class="aw__exec">
-      <div class="aw__score" [style.--c]="scoreColor(vm().score)">
-        <span class="aw__score-val">{{ vm().score }}</span>
-        <span class="aw__score-grade">{{ vm().grade }}</span>
-        <span class="aw__score-msg">{{ vm().message }}</span>
-      </div>
-      @let sd = severityDist();
-      <div class="aw__sev">
-        <div class="aw__sev-bar">
-          @if (sd.errors > 0) {
-            <div class="aw__sev-seg aw__sev--error" [style.width.%]="sd.errPct"></div>
-          }
-          @if (sd.warnings > 0) {
-            <div class="aw__sev-seg aw__sev--warn" [style.width.%]="sd.warnPct"></div>
-          }
-          @if (sd.infos > 0) {
-            <div class="aw__sev-seg aw__sev--info" [style.width.%]="sd.infoPct"></div>
-          }
-        </div>
-        <div class="aw__sev-legend">
-          @if (sd.errors > 0) {
-            <span class="aw__sev-dot aw__sev--error">{{ severityIcon('error') }} {{ sd.errors }}</span>
-          }
-          @if (sd.warnings > 0) {
-            <span class="aw__sev-dot aw__sev--warn">{{ severityIcon('warning') }} {{ sd.warnings }}</span>
-          }
-          @if (sd.infos > 0) {
-            <span class="aw__sev-dot aw__sev--info">{{ severityIcon('info') }} {{ sd.infos }}</span>
-          }
-        </div>
-      </div>
-    </section>
-
-    <!-- ── Metric cards ── -->
-    @let m = vm().metrics;
-    @if (m) {
-      <section class="aw__metrics-row">
-        <div class="aw__mc">
-          <span class="aw__mc-lbl">Duration</span>
-          <span class="aw__mc-val">{{ m.duration.toFixed(1) }}<small>s</small></span>
-        </div>
-        <div class="aw__mc">
-          <span class="aw__mc-lbl">Waypoints</span>
-          <span class="aw__mc-val">{{ m.waypoint_count }}</span>
-        </div>
-        @if (m.average_manipulability != null) {
-          <div class="aw__mc" [class.aw__mc--warn]="m.average_manipulability < 0.3" [class.aw__mc--bad]="m.average_manipulability < 0.15">
-            <span class="aw__mc-lbl">Manipulability</span>
-            <span class="aw__mc-val">{{ m.average_manipulability.toFixed(2) }}</span>
-          </div>
-        }
-        @if (m.singular_count > 0) {
-          <div class="aw__mc aw__mc--warn">
-            <span class="aw__mc-lbl">Singular</span>
-            <span class="aw__mc-val">{{ m.singular_count }}<small>wp</small></span>
-          </div>
-        }
-        @if (m.min_collision_distance != null) {
-          <div class="aw__mc" [class.aw__mc--bad]="m.has_collisions">
-            <span class="aw__mc-lbl">Clearance</span>
-            <span class="aw__mc-val">{{ (m.min_collision_distance * 1000).toFixed(0) }}<small>mm</small></span>
-          </div>
-        }
-      </section>
-    }
-
-    <!-- ── Grid 2-col: Categories + Problem Regions ── -->
-    <section class="aw__grid-2">
-      @let cats = categories();
-      @if (cats.length > 0) {
-        <div class="aw__col">
-          <h2 class="aw__sec-title">Categories</h2>
-          <div class="aw__cat-list">
-            @for (c of cats; track c.label) {
-              <div class="aw__cat" [style.--cat]="c.color">
-                <div class="aw__cat-head">
-                  <span class="aw__cat-lbl">{{ c.label }}</span>
-                  <span class="aw__cat-n">{{ c.total }}</span>
-                </div>
-                <div class="aw__cat-bar">
-                  @if (c.errors > 0) {
-                    <div class="aw__cat-seg aw__sev--error" [style.width.%]="(c.errors/c.total)*100"></div>
-                  }
-                  @if (c.warnings > 0) {
-                    <div class="aw__cat-seg aw__sev--warn" [style.width.%]="(c.warnings/c.total)*100"></div>
-                  }
-                </div>
-              </div>
-            }
-          </div>
-        </div>
-      }
-
-      @let regions = problemRegions();
-      @if (regions.length > 0) {
-        <div class="aw__col">
-          <h2 class="aw__sec-title">Problem Regions</h2>
-          <div class="aw__reg-list">
-            @for (r of regions; track r.waypoint) {
-              <div class="aw__reg" (click)="onFocus(r.waypoint)">
-                <div class="aw__reg-head">
-                  <span class="aw__reg-wp">wp{{ r.waypoint }}</span>
-                  <span class="aw__reg-n">x{{ r.count }}</span>
-                  <span class="aw__reg-sev" [class]="'aw__sev--' + r.severity">{{ severityIcon(r.severity) }}</span>
-                </div>
-                <div class="aw__reg-bar">
-                  <div class="aw__reg-fill" [class]="'aw__sev--' + r.severity" [style.width.%]="r.pct"></div>
-                </div>
-                <div class="aw__reg-kinds">
-                  @for (k of r.kinds.slice(0,2); track k) {
-                    <span class="aw__reg-k">{{ k.replace(/_/g,' ') }}</span>
-                  }
-                  @if (r.kinds.length > 2) {
-                    <span class="aw__reg-more">+{{ r.kinds.length-2 }}</span>
-                  }
-                </div>
-              </div>
-            }
-          </div>
-        </div>
-      }
-    </section>
-
-    <!-- ── Waypoint Severity Chart ── -->
-    @let sevMap = waypointSeverityMap();
-    @if (sevMap.length > 2) {
-      <section class="aw__section">
-        <h2 class="aw__sec-title">Findings per Waypoint</h2>
-        <div class="aw__sevmap">
-          @for (w of sevMap; track w.waypoint) {
-            <div class="aw__sevmap-bar" [title]="'wp' + w.waypoint + ': ' + w.total + ' findings'">
-              <div class="aw__sevmap-stack" [style.height.%]="w.pct">
-                @if (w.error > 0) { <div class="aw__sevmap-seg aw__sev--error" [style.height.px]="barHeight(w.error, w.total)"></div> }
-                @if (w.warning > 0) { <div class="aw__sevmap-seg aw__sev--warn" [style.height.px]="barHeight(w.warning, w.total)"></div> }
-              </div>
-              <span class="aw__sevmap-label">wp{{ w.waypoint }}</span>
-            </div>
-          }
-        </div>
-      </section>
-    }
-
-    <!-- ── Manipulability Timeline ── -->
-    @if (manipulabilityData().length > 0) {
-      <section class="aw__section">
-        <h2 class="aw__sec-title">Manipulability over Trajectory</h2>
-        <manipulability-timeline
-          [data]="manipulabilityData()"
-          (waypointClick)="onTimelineClick($event)"
-        />
-      </section>
-    }
-
-    <!-- ── Critical Findings ── -->
-    @let critical = criticalFindings();
-    @if (critical.length > 0) {
-      <section class="aw__section">
-        <h2 class="aw__sec-title aw__sec-title--critical">Critical Findings</h2>
-        <div class="aw__crit-list">
-          @for (f of critical; track $index) {
-            @let cat = categoryOf(f.kind);
-            <div class="aw__crit" [style.--cat]="cat.color">
-              <div class="aw__crit-head">
-                <span class="aw__crit-sev" [class]="'aw__sev--' + f.severity">{{ severityIcon(f.severity) }}</span>
-                <span class="aw__crit-kind">{{ f.kind.replace(/_/g,' ') }}</span>
-                <span class="aw__crit-tag" [style.background]="cat.color">{{ cat.label }}</span>
-              </div>
-              <span class="aw__crit-msg">{{ f.message }}</span>
-              <div class="aw__crit-actions">
-                @if (f.waypoint != null) {
-                  <button class="aw__act" (click)="onFocus(f.waypoint)">Focus</button>
-                  <button class="aw__act aw__act--plan" (click)="onEdit(f.waypoint)">Edit</button>
-                  <span class="aw__crit-wp">wp{{ f.waypoint }}</span>
-                }
-                @if (f.value != null) {
-                  <span class="aw__crit-val">{{ f.value.toFixed(3) }}</span>
-                }
-              </div>
-            </div>
-          }
-        </div>
-      </section>
-    }
-
-    <!-- ── ECharts: Severity Distribution ── -->
-    @let sevOpts = severityChartOpts();
-    @if (sevOpts) {
-      <section class="aw__section">
-        <h2 class="aw__sec-title">Severity by Category</h2>
-        <div echarts [options]="sevOpts" theme="dark" class="aw__chart"></div>
-      </section>
-    }
-
-    <!-- ── ECharts: Score Breakdown ── -->
-    @let brOpts = scoreBreakdownOpts();
-    @if (brOpts) {
-      <section class="aw__section">
-        <h2 class="aw__sec-title">Score Breakdown</h2>
-        <div echarts [options]="brOpts" theme="dark" class="aw__chart"></div>
-      </section>
-    }
-
   } @else {
-    <section class="aw__charts-tab">
-      <execution-charts />
-    </section>
+    <!-- Ready — placeholder para slices 2-6 -->
+    <div class="aw__ready">
+      <p class="aw__placeholder-text">
+        Analysis content will appear here.
+      </p>
+    </div>
   }
 </div>

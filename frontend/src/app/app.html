@@ -61,14 +61,14 @@
     <scene-viewer class="layout__viewport" />
 
     <!-- ── Workspace/panel right content ── -->
-    @if (isAnalysisMode()) {
-      <analysis-workspace class="layout__content" />
-    }
     @if (isSimulationMode()) {
       <simulation-workspace class="layout__content" />
     }
     @if (isKnowledgeMode()) {
       <knowledge-workspace class="layout__content" />
+    }
+    @if (isAnalysisMode()) {
+      <analysis-workspace class="layout__content" />
     }
     @if (isLegacyMode() && hasRightPanel()) {
       <app-splitter direction="vertical" panel="right" />

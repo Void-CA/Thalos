@@ -96,6 +96,7 @@ export class PlanAnalysisStore {
     this.healthScore.set(null);
     this.loading.set(false);
     this.error.set(null);
+    this.selectedRegionId.set(null);
     this.alternativesData.set(null);
     this.alternativesLoading.set(false);
     this.alternativesError.set(null);
@@ -126,6 +127,21 @@ export class PlanAnalysisStore {
       msg = err;
     }
     this.error.set(msg);
+  }
+
+  // ── Selected region (stub for slices 3-5) ──
+
+  /** Región seleccionada en el panel contextual. Stub — habilitado en slices 3-5. */
+  readonly selectedRegionId = signal<number | null>(null);
+
+  /** Seleccionar una región para inspeccionar en el panel contextual. */
+  selectRegion(id: number): void {
+    this.selectedRegionId.set(id);
+  }
+
+  /** Limpiar la selección actual. */
+  clearSelection(): void {
+    this.selectedRegionId.set(null);
   }
 
   // ── Alternatives state ──

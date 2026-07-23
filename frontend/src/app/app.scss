@@ -282,13 +282,6 @@
   display: none;     // oculto por defecto
 }
 
-// Analysis: viewport 35% | content 65%
-.layout--analysis {
-  .layout__sidebar { display: none; }
-  .layout__viewport { width: 35%; min-width: 280px; flex-shrink: 0; border-right: 1px solid $border-subtle; }
-  .layout__content { display: block; flex: 1; min-width: 0; overflow: hidden; }
-}
-
 // Planning: sidebar 380px | viewport resto
 .layout--planning {
   .layout__sidebar { display: block; width: 380px; min-width: 320px; flex-shrink: 0; border-right: 1px solid $border-subtle; overflow: hidden; }
@@ -296,7 +289,7 @@
   .layout__content { display: none; }
 }
 
-// Knowledge: viewport 35% | workspace 65% (mismo layout que analysis)
+// Knowledge: viewport 35% | workspace 65%
 .layout--knowledge {
   .layout__sidebar { display: none; }
   .layout__viewport { width: 35%; min-width: 280px; flex-shrink: 0; border-right: 1px solid $border-subtle; }
@@ -315,6 +308,13 @@
   .layout__sidebar { display: none; }
   .layout__content { display: none; }
   .layout__viewport { flex: 1; }
+}
+
+// Analysis: viewport 50% | workspace 50%
+.layout--analysis {
+  .layout__sidebar { display: none; }
+  .layout__viewport { width: 50%; min-width: 350px; }
+  .layout__content { display: block; flex: 1; min-width: 350px; overflow: hidden; border-left: 1px solid $border-subtle; }
 }
 
 // Sessions: legacy layout con left panel

@@ -1,6 +1,6 @@
 @use 'variables' as *;
 
-// ── Severity tokens (neutros) ──
+// ── Severity tokens (neutros — preservados para slices 2-3) ──
 $sev-error: #b85450;
 $sev-warn: #b8943a;
 $sev-info: #4a7a9a;
@@ -12,50 +12,51 @@ $sev-info-bg: #121e2a;
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow-y: auto;
-  padding: $space-lg;
+  padding: $space-md;
   background: $bg-surface;
-
-  &::-webkit-scrollbar { width: 6px; }
-  &::-webkit-scrollbar-thumb { background: $border-default; border-radius: 3px; }
-  scrollbar-color: $border-default transparent;
-  scrollbar-width: thin;
 }
 
-// ── Shared ──
+// ── Navigation breadcrumb ──
 
-.aw__sec-title {
-  margin: 0 0 $space-sm;
-  font-size: $text-xs;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: $text-muted;
-  opacity: 0.6;
-
-  &--critical { color: $sev-error; opacity: 1; }
-}
-
-.aw__section {
-  margin-bottom: 1rem;
-}
-
-// ── Header ──
-
-.aw__header {
+.aw__nav {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
+  gap: $space-xs;
+  margin-bottom: $space-md;
   flex-shrink: 0;
+  font-size: $text-sm;
+  color: $text-muted;
 }
 
-.aw__title {
-  margin: 0;
-  font-size: $text-md;
-  font-weight: 700;
-  color: $text-primary;
+.aw__back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: none;
+  border: none;
+  color: $accent;
+  cursor: pointer;
+  padding: 0.15rem 0.25rem;
+  border-radius: $radius-sm;
+  font-family: $font-ui;
+  font-size: $text-sm;
+  transition: background $transition-fast;
+
+  &:hover {
+    background: rgba($accent, 0.1);
+  }
 }
+
+.aw__nav-sep {
+  opacity: 0.35;
+}
+
+.aw__nav-current {
+  color: $text-secondary;
+  font-weight: 600;
+}
+
+// ── Buttons ──
 
 .aw__btn {
   display: inline-flex;
@@ -73,579 +74,55 @@ $sev-info-bg: #121e2a;
 
   &:hover:not(:disabled) { background: $bg-elevated; }
   &:disabled { opacity: 0.35; cursor: default; }
-}
 
-.aw__spin {
-  display: inline-block;
-  width: 10px; height: 10px;
-  border: 2px solid $border-default;
-  border-top-color: $accent;
-  border-radius: 50%;
-  animation: aw-spin 0.6s linear infinite;
+  &--action {
+    background: $accent;
+    color: #111;
+    border-color: $accent;
+    font-weight: 600;
+    padding: $space-sm $space-lg;
 
-  &--lg { width: 22px; height: 22px; border-width: 3px; }
-}
-
-@keyframes aw-spin { to { transform: rotate(360deg); } }
-
-// ── Loading / Empty ──
-
-.aw__center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: $space-sm;
-  flex: 1;
-  text-align: center;
-  color: $text-muted;
-  ng-icon { opacity: 0.2; }
-}
-
-.aw__hint {
-  margin: 0;
-  font-size: $text-sm;
-  opacity: 0.5;
-  line-height: 1.5;
-}
-
-// ═══════════════════════════════════════════════════════════════
-// TABS
-// ═══════════════════════════════════════════════════════════════
-
-.aw__tabs {
-  display: flex;
-  gap: 0;
-  margin-bottom: 1rem;
-  border-bottom: 1px solid $border-subtle;
-  flex-shrink: 0;
-}
-
-.aw__tab {
-  font-family: $font-ui;
-  font-size: $text-sm;
-  padding: $space-sm $space-md;
-  border: none;
-  background: transparent;
-  color: $text-muted;
-  opacity: 0.5;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: opacity $transition-fast, border-color $transition-fast;
-
-  &:hover { opacity: 0.8; }
-
-  &--active {
-    opacity: 1;
-    color: $text-primary;
-    border-bottom-color: $accent;
+    &:hover:not(:disabled) {
+      background: lighten($accent, 8%);
+    }
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// EXECUTIVE ROW
-// ═══════════════════════════════════════════════════════════════
+// ── Empty states ──
 
-.aw__exec {
-  display: flex;
-  gap: $space-md;
-  margin-bottom: 0.75rem;
-}
-
-.aw__score {
-  flex-shrink: 0;
-  width: 100px;
+.aw__empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: $space-xs;
-  padding: $space-sm $space-xs;
-  background: $bg-card;
-  border: 1px solid $border-subtle;
-  border-radius: $radius-md;
-}
-
-.aw__score-val {
-  font-size: $text-display;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: var(--c);
-  line-height: 1;
-}
-
-.aw__score-grade {
-  font-size: $text-sm;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--c);
-}
-
-.aw__score-msg {
-  margin: 0.1rem 0 0;
-  font-size: $text-xs;
-  color: $text-muted;
+  gap: $space-md;
+  flex: 1;
   text-align: center;
-  line-height: 1.3;
-  opacity: 0.7;
+  color: $text-muted;
+
+  ng-icon { opacity: 0.15; }
 }
 
-.aw__sev {
-  flex: 1;
+.aw__empty-text {
+  margin: 0;
+  font-size: $text-base;
+  opacity: 0.55;
+  line-height: 1.6;
+  max-width: 36ch;
+}
+
+// ── Ready placeholder ──
+
+.aw__ready {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  gap: $space-xs;
-  min-width: 0;
-}
-
-.aw__sev-bar {
-  display: flex;
-  height: 6px;
-  border-radius: 3px;
-  overflow: hidden;
-  background: $bg-elevated;
-}
-
-.aw__sev-seg { transition: width 0.4s ease; }
-
-.aw__sev--error { background: $sev-error; }
-.aw__sev--warn { background: $sev-warn; }
-.aw__sev--info { background: $sev-info; }
-
-.aw__sev-legend {
-  display: flex;
-  gap: $space-sm;
-  flex-wrap: wrap;
-}
-
-.aw__sev-dot {
-  font-size: $text-xs;
-  font-weight: 600;
-  padding: $space-xs $space-xs;
-  border-radius: 2px;
-
-  &.aw__sev--error { color: $sev-error; background: $sev-error-bg; }
-  &.aw__sev--warn { color: $sev-warn; background: $sev-warn-bg; }
-  &.aw__sev--info { color: $sev-info; background: $sev-info-bg; }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// WAYPOINT SEVERITY MAP
-
-.aw__sevmap {
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 80px;
-  padding: $space-xs 0;
-  overflow-x: auto;
-  border-bottom: 1px solid $border-subtle;
-
-  &::-webkit-scrollbar { height: 4px; }
-  &::-webkit-scrollbar-thumb { background: $border-default; border-radius: 2px; }
-}
-
-.aw__sevmap-bar {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 20px;
-  cursor: pointer;
-  transition: opacity 0.15s;
-
-  &:hover { opacity: 0.8; }
-}
-
-.aw__sevmap-stack {
-  display: flex;
-  flex-direction: column-reverse;
-  align-items: center;
-  width: 12px;
-  border-radius: 2px 2px 0 0;
-  overflow: hidden;
-  background: $bg-elevated;
-  transition: height 0.3s ease;
-}
-
-.aw__sevmap-seg {
-  width: 100%;
-  min-height: 2px;
-  border-radius: 1px;
-  transition: height 0.3s ease;
-}
-
-.aw__sevmap-label {
-  font-size: $text-xs;
-  color: $text-muted;
-  opacity: 0.5;
-  margin-top: 2px;
-  white-space: nowrap;
-}
-
-// ═══════════════════════════════════════════════════════════════
-// METRIC ROW
-// ═══════════════════════════════════════════════════════════════
-
-.aw__metrics-row {
-  display: flex;
-  gap: $space-xs;
-  margin-bottom: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.aw__mc {
-  display: flex;
-  flex-direction: column;
-  gap: $space-xs;
-  padding: $space-xs $space-sm;
-  background: $bg-card;
-  border: 1px solid $border-subtle;
-  border-radius: $radius-sm;
-  min-width: 70px;
-
-  small { opacity: 0.4; font-weight: 400; margin-left: 0.1rem; font-size: $text-xs; }
-
-  &--warn { border-color: $sev-warn; background: $sev-warn-bg; }
-  &--bad { border-color: $sev-error; background: $sev-error-bg; }
-}
-
-.aw__mc-lbl {
-  font-size: $text-xs;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: $text-muted;
-  opacity: 0.5;
-}
-
-.aw__mc-val {
-  font-size: $text-base;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: $text-primary;
-}
-
-// ═══════════════════════════════════════════════════════════════
-// TWO-COLUMN GRID
-// ═══════════════════════════════════════════════════════════════
-
-.aw__grid-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: $space-md;
-  margin-bottom: 0.75rem;
-}
-
-.aw__col {
-  min-width: 0;
-}
-
-// ── Categories ──
-
-.aw__cat-list {
-  display: flex;
-  flex-direction: column;
-  gap: $space-xs;
-}
-
-.aw__cat {
-  padding: $space-xs $space-sm;
-  background: $bg-card;
-  border: 1px solid $border-subtle;
-  border-left: 2px solid var(--cat);
-  border-radius: $radius-sm;
-  display: flex;
-  flex-direction: column;
-  gap: $space-xs;
-}
-
-.aw__cat-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.aw__cat-lbl {
-  font-size: $text-sm;
-  font-weight: 600;
-  color: var(--cat);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.aw__cat-n {
-  font-size: $text-base;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: $text-primary;
-}
-
-.aw__cat-bar {
-  display: flex;
-  height: 3px;
-  border-radius: 2px;
-  overflow: hidden;
-  background: $bg-elevated;
-}
-
-.aw__cat-seg { transition: width 0.3s ease; }
-
-// ── Problem Regions ──
-
-.aw__reg-list {
-  display: flex;
-  flex-direction: column;
-  gap: $space-xs;
-}
-
-.aw__reg {
-  display: flex;
-  align-items: center;
-  gap: $space-xs;
-  padding: $space-xs $space-sm;
-  background: $bg-card;
-  border: 1px solid $border-subtle;
-  border-radius: $radius-sm;
-  cursor: pointer;
-  transition: background $transition-fast;
-
-  &:hover { background: $bg-elevated; }
-}
-
-.aw__reg-head {
-  display: flex;
-  align-items: center;
-  gap: $space-xs;
-  flex-shrink: 0;
-}
-
-.aw__reg-wp {
-  font-family: $font-mono;
-  font-size: $text-xs;
-  font-weight: 700;
-  color: $accent;
-  min-width: 3ch;
-}
-
-.aw__reg-n {
-  font-size: $text-xs;
-  color: $text-muted;
-  opacity: 0.5;
-  font-weight: 600;
-}
-
-.aw__reg-sev {
-  font-size: $text-xs;
-  padding: 2px $space-xs;
-  border-radius: 2px;
-  font-weight: 600;
-
-  &.aw__sev--error { background: $sev-error-bg; color: $sev-error; }
-  &.aw__sev--warning { background: $sev-warn-bg; color: $sev-warn; }
-}
-
-.aw__reg-bar {
   flex: 1;
-  height: 3px;
-  background: $bg-elevated;
-  border-radius: 2px;
-  overflow: hidden;
-  min-width: 30px;
 }
 
-.aw__reg-fill {
-  height: 100%;
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
-
-.aw__reg-kinds {
-  display: flex;
-  gap: 0.15rem;
-  flex-shrink: 0;
-  overflow: hidden;
-}
-
-.aw__reg-k {
-  font-size: $text-xs;
-  padding: 2px $space-xs;
-  border-radius: 2px;
-  background: $bg-surface;
-  color: $text-muted;
-  white-space: nowrap;
-}
-
-.aw__reg-more {
-  font-size: $text-xs;
+.aw__placeholder-text {
+  margin: 0;
+  font-size: $text-sm;
   color: $text-muted;
   opacity: 0.4;
-}
-
-// ═══════════════════════════════════════════════════════════════
-// CRITICAL FINDINGS
-// ═══════════════════════════════════════════════════════════════
-
-.aw__crit-list {
-  display: flex;
-  flex-direction: column;
-  gap: $space-xs;
-}
-
-.aw__crit {
-  padding: $space-xs $space-sm;
-  background: $bg-card;
-  border: 1px solid $border-subtle;
-  border-left: 3px solid var(--cat);
-  border-radius: $radius-sm;
-  display: flex;
-  flex-direction: column;
-  gap: $space-xs;
-}
-
-.aw__crit-head {
-  display: flex;
-  align-items: center;
-  gap: $space-xs;
-  font-size: $text-sm;
-}
-
-.aw__crit-sev {
-  font-weight: 700;
-  font-size: $text-xs;
-  padding: $space-xs $space-xs;
-  border-radius: 2px;
-
-  &.aw__sev--error { color: $sev-error; background: $sev-error-bg; }
-  &.aw__sev--warning { color: $sev-warn; background: $sev-warn-bg; }
-}
-
-.aw__crit-kind {
-  flex: 1;
-  font-weight: 600;
-  color: $text-secondary;
-  text-transform: capitalize;
-}
-
-.aw__crit-tag {
-  font-size: $text-xs;
-  padding: $space-xs $space-xs;
-  border-radius: 2px;
-  color: #111;
-  font-weight: 600;
-}
-
-.aw__crit-msg {
-  margin: 0;
-  font-size: $text-xs;
-  color: $text-muted;
-  line-height: 1.35;
-}
-
-.aw__crit-actions {
-  display: flex;
-  align-items: center;
-  gap: $space-xs;
-  padding-top: 0.1rem;
-}
-
-.aw__crit-wp {
-  font-family: $font-mono;
-  font-size: $text-xs;
-  padding: $space-xs $space-xs;
-  border-radius: 2px;
-  background: $bg-surface;
-  color: $accent;
-  margin-left: auto;
-}
-
-.aw__crit-val {
-  font-family: $font-mono;
-  font-size: $text-xs;
-  color: $text-muted;
-  opacity: 0.5;
-  margin-left: 0.25rem;
-}
-
-.aw__act {
-  font-family: $font-ui;
-  font-size: $text-xs;
-  padding: $space-xs $space-xs;
-  border-radius: 2px;
-  border: 1px solid $border-subtle;
-  background: transparent;
-  color: $text-muted;
-  cursor: pointer;
-  transition: background $transition-fast;
-
-  &:hover { background: $bg-elevated; }
-
-  &--plan { color: #4a9e5a; border-color: #4a9e5a; &:hover { background: #1a2e1a; } }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// SCORE BREAKDOWN
-// ═══════════════════════════════════════════════════════════════
-
-.aw__br-list {
-  display: flex;
-  flex-direction: column;
-  gap: $space-xs;
-}
-
-.aw__br {
-  display: flex;
-  align-items: center;
-  gap: $space-xs;
-  font-size: $text-xs;
-}
-
-.aw__br-lbl {
-  width: 11ch;
-  text-transform: capitalize;
-  color: $text-muted;
-  flex-shrink: 0;
-  font-size: $text-xs;
-}
-
-.aw__br-tr {
-  flex: 1;
-  height: 5px;
-  background: $bg-elevated;
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.aw__br-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.4s ease;
-}
-
-.aw__br-v {
-  width: 3.5ch;
-  text-align: right;
-  font-family: $font-mono;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: $text-primary;
-  font-size: $text-xs;
-}
-
-// ═══════════════════════════════════════════════════════════════
-// ECHARTS
-// ═══════════════════════════════════════════════════════════════
-
-.aw__chart {
-  width: 100%;
-  height: 200px;
-}
-
-// ═══════════════════════════════════════════════════════════════
-// CHARTS TAB
-// ═══════════════════════════════════════════════════════════════
-
-.aw__charts-tab {
-  flex: 1;
-  padding: $space-xs 0;
 }

@@ -13,8 +13,8 @@ import { LayoutStore } from './shared/store/layout.store';
 import { SceneStore } from './features/scene/store/scene.store';
 import { LogStore } from './shared/store/log.store';
 import { PlanningStore } from './shared/store/planning.store';
-import { AnalysisWorkspace } from './features/plan-analysis/workspace/analysis-workspace';
 import { PlanningWorkspace } from './features/planning/workspace/planning-workspace';
+import { AnalysisWorkspace } from './features/plan-analysis/workspace/analysis-workspace';
 import { SimulationWorkspace } from './features/execution/workspace/simulation-workspace';
 import { KnowledgeWorkspace } from './features/knowledge/workspace/knowledge-workspace';
 
@@ -34,8 +34,8 @@ import { KnowledgeWorkspace } from './features/knowledge/workspace/knowledge-wor
     BottomPanel,
     Splitter,
     StatusBar,
-    AnalysisWorkspace,
     PlanningWorkspace,
+    AnalysisWorkspace,
     SimulationWorkspace,
     KnowledgeWorkspace,
   ],
@@ -82,10 +82,6 @@ export class App {
     return this.perspective.rightPanel().length > 0;
   });
 
-  protected readonly isAnalysisMode = computed(() => {
-    return this.perspective.perspective() === 'analysis';
-  });
-
   protected readonly isPlanningMode = computed(() => {
     return this.perspective.perspective() === 'planning';
   });
@@ -98,8 +94,15 @@ export class App {
     return this.perspective.perspective() === 'knowledge';
   });
 
+  protected readonly isAnalysisMode = computed(() => {
+    return this.perspective.perspective() === 'analysis';
+  });
+
   protected readonly isLegacyMode = computed(() => {
-    return !this.isAnalysisMode() && !this.isPlanningMode() && !this.isSimulationMode() && !this.isKnowledgeMode();
+    return !this.isPlanningMode()
+      && !this.isSimulationMode()
+      && !this.isKnowledgeMode()
+      && !this.isAnalysisMode();
   });
 
   // ── Active robot info ──
