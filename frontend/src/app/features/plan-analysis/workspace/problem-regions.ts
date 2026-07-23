@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, input, signal } from '@angular/core';
 import { NgIcon } from '@ng-icons/core';
 import { PlanAnalysisStore } from '../store/plan-analysis.store';
 import type { ProblemRegionDto } from '../plan-analysis-api.types';
@@ -13,10 +13,14 @@ type SeverityTier = 'critical' | 'warning' | 'info';
     <div class="pr">
       <header class="pr__header">
         <h3 class="pr__title">Problem Regions</h3>
-        <span class="pr__count">{{ totalFiltered() }} total</span>
+        @if (compact()) {
+          <button class="pr__back" (click)="pa.clearSelection()">View all ({{ totalFiltered() }})</button>
+        } @else {
+          <span class="pr__count">{{ totalFiltered() }} total</span>
+        }
       </header>
 
-      @if (categories().length > 0) {
+      @if (!compact() && categories().length > 0) {
         <div class="pr__filters">
           <button
             class="pr__filter"
@@ -33,8 +37,9 @@ type SeverityTier = 'critical' | 'warning' | 'info';
         </div>
       }
 
-      <!-- Collapsible groups -->
-      @for (tier of tiers(); track tier) {
+      <!-- Collapsible groups (hidden in compact mode) -->
+      @if (!compact()) {
+        @for (tier of tiers(); track tier) {
         @let regions = grouped()[tier];
         @if (regions && regions.length > 0) {
           <details class="pr__group" [open]="tier === 'critical'">
@@ -65,6 +70,7 @@ type SeverityTier = 'critical' | 'warning' | 'info';
             </div>
           </details>
         }
+      }
       }
       @if (totalFiltered() === 0) {
         <p class="pr__empty">No regions match the selected filter.</p>
@@ -98,6 +104,18 @@ type SeverityTier = 'critical' | 'warning' | 'info';
       color: #666;
       font-variant-numeric: tabular-nums;
     }
+    .pr__back {
+      font-family: inherit;
+      font-size: 0.75rem;
+      background: none;
+      border: 1px solid #333;
+      color: #5588aa;
+      cursor: pointer;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      transition: background 0.12s;
+    }
+    .pr__back:hover { background: #1a2a36; }
 
     /* ── Filter pills ── */
     .pr__filters {
@@ -305,7 +323,10 @@ type SeverityTier = 'critical' | 'warning' | 'info';
   `],
 })
 export class ProblemRegions {
-  private readonly pa = inject(PlanAnalysisStore);
+  protected readonly pa = inject(PlanAnalysisStore);
+
+  /** Modo compacto: solo header + botón para volver a la lista completa. */
+  readonly compact = input(false);
 
   protected readonly problemRegions = this.pa.problemRegions;
   protected readonly selectedRegionId = this.pa.selectedRegionId;

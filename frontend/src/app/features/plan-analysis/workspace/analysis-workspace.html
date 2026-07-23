@@ -1,12 +1,14 @@
 <div class="aw">
-  <!-- Navigation breadcrumb -->
+  <!-- Navigation breadcrumb — profundidad dinámica -->
   <header class="aw__nav">
-    <button class="aw__back-btn" (click)="goBack()">
-      <ng-icon name="heroArrowLeft" size="16" />
-      <span>Planning</span>
-    </button>
-    <span class="aw__nav-sep">/</span>
-    <span class="aw__nav-current">Analysis</span>
+    @for (item of breadcrumb(); track item.label; let last = $last) {
+      @if (item.action) {
+        <button class="aw__nav-btn" (click)="onBreadcrumb(item)">{{ item.label }}</button>
+        <span class="aw__nav-sep">/</span>
+      } @else {
+        <span class="aw__nav-current">{{ item.label }}</span>
+      }
+    }
   </header>
 
   @if (emptyState() === 'not-available') {
@@ -25,18 +27,18 @@
         Analizar plan
       </button>
     </div>
+  } @else if (selectedRegion()) {
+    <!-- Deep inspection: breadcrumb + inspector a pantalla completa -->
+    <status-banner />
+    <region-inspector />
   } @else {
-    <!-- Ready — status banner + problem regions + inspector -->
+    <!-- Overview: breadcrumb + status + regions list -->
     <status-banner />
     <problem-regions />
-    @if (selectedRegionId() !== null) {
-      <region-inspector />
-    } @else {
-      <div class="aw__ready">
-        <p class="aw__placeholder-text">
-          Select a region to inspect.
-        </p>
-      </div>
-    }
+    <div class="aw__ready">
+      <p class="aw__placeholder-text">
+        Select a region to inspect.
+      </p>
+    </div>
   }
 </div>

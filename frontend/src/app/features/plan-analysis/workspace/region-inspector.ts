@@ -38,19 +38,19 @@ import type { ProblemRegionDto } from '../plan-analysis-api.types';
             <div class="ri__metrics">
               @if (region.metrics.average_value != null) {
                 <div class="ri__metric">
-                  <span class="ri__metric-value">{{ region.metrics.average_value.toFixed(4) }}</span>
+                  <span class="ri__metric-value">{{ fmt(region.metrics.average_value) }}</span>
                   <span class="ri__metric-label">Average value</span>
                 </div>
               }
               @if (region.metrics.min_value != null) {
                 <div class="ri__metric">
-                  <span class="ri__metric-value">{{ region.metrics.min_value.toFixed(4) }}</span>
+                  <span class="ri__metric-value">{{ fmt(region.metrics.min_value) }}</span>
                   <span class="ri__metric-label">Min</span>
                 </div>
               }
               @if (region.metrics.max_value != null) {
                 <div class="ri__metric">
-                  <span class="ri__metric-value">{{ region.metrics.max_value.toFixed(4) }}</span>
+                  <span class="ri__metric-value">{{ fmt(region.metrics.max_value) }}</span>
                   <span class="ri__metric-label">Max</span>
                 </div>
               }
@@ -247,6 +247,15 @@ export class RegionInspector {
 
   protected clear(): void {
     this.pa.clearSelection();
+  }
+
+  /** Format a metric value: normal numbers to 4 decimals, very small to scientific. */
+  protected fmt(val: number): string {
+    if (val === 0) return '0';
+    const abs = Math.abs(val);
+    if (abs >= 0.001) return val.toFixed(4);
+    if (abs >= 1e-6) return val.toFixed(6);
+    return val.toExponential(2);
   }
 
   /** Human-readable waypoint range. */
