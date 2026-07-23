@@ -7,6 +7,7 @@ import { PerspectiveStore } from '../../../shared/store/perspective.store';
 import { ProjectStateStore } from '../../../shared/store/project-state.store';
 import { PlanAnalysisStore } from '../store/plan-analysis.store';
 import { FocusService } from '../../../shared/services/focus.service';
+import { ThreeRendererService } from '../../scene/services/three-renderer.service';
 import type { ProblemRegionDto } from '../plan-analysis-api.types';
 
 type EmptyState = 'not-available' | 'not-analyzed' | 'ready';
@@ -27,7 +28,15 @@ export class AnalysisWorkspace {
   private readonly perspective = inject(PerspectiveStore);
   private readonly projectState = inject(ProjectStateStore);
   private readonly focus = inject(FocusService);
+  private readonly renderer = inject(ThreeRendererService);
   protected readonly pa = inject(PlanAnalysisStore);
+
+  /** Auto-colorear la trayectoria por severidad al entrar a Analysis. */
+  private readonly colorEffect = effect(() => {
+    if (this.emptyState() === 'ready') {
+      this.renderer.setColorMode('trajectory-quality');
+    }
+  });
 
   /** Auto-enfocar el viewport en la región seleccionada. */
   private readonly focusEffect = effect(() => {

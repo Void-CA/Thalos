@@ -68,6 +68,11 @@ export class ThreeRendererService {
   /** How to color the trajectory — shared state between planning panel and scene viewer. */
   readonly colorMode = signal<TrajectoryColorMode>('segment');
 
+  /** Set the trajectory color mode. Used by Analysis and Planning workspaces. */
+  setColorMode(mode: TrajectoryColorMode): void {
+    this.colorMode.set(mode);
+  }
+
   /** Index of the currently highlighted waypoint, or -1 if none. */
   private highlightedWaypoint: number = -1;
   /** Monotonically increasing generation counter to invalidate stale highlights. */

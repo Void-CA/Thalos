@@ -1,6 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
 import { NgIcon } from '@ng-icons/core';
 import { PlanAnalysisStore } from '../store/plan-analysis.store';
+import { FocusService } from '../../../shared/services/focus.service';
 import type { ProblemRegionDto } from '../plan-analysis-api.types';
 
 /**
@@ -19,9 +20,14 @@ import type { ProblemRegionDto } from '../plan-analysis-api.types';
       <div class="ri">
         <header class="ri__header">
           <h3 class="ri__title">Region Details</h3>
-          <button class="ri__close" (click)="clear()" title="Close">
-            <ng-icon name="heroXMark" size="16" />
-          </button>
+          <div class="ri__actions">
+            <button class="ri__action-btn" (click)="focusRegion()" title="Focus viewport on this region">
+              <ng-icon name="heroMagnifyingGlassPlus" size="16" />
+            </button>
+            <button class="ri__close" (click)="clear()" title="Close">
+              <ng-icon name="heroXMark" size="16" />
+            </button>
+          </div>
         </header>
 
         <!-- Cause -->
@@ -122,6 +128,23 @@ import type { ProblemRegionDto } from '../plan-analysis-api.types';
       letter-spacing: 0.06em;
       color: #888;
     }
+    .ri__actions {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .ri__action-btn {
+      display: inline-flex;
+      align-items: center;
+      background: none;
+      border: 1px solid #333;
+      color: #5588aa;
+      cursor: pointer;
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      transition: all 0.12s;
+    }
+    .ri__action-btn:hover { background: #1a2a36; border-color: #5588aa; }
     .ri__close {
       display: inline-flex;
       align-items: center;
@@ -238,6 +261,7 @@ import type { ProblemRegionDto } from '../plan-analysis-api.types';
 })
 export class RegionInspector {
   private readonly pa = inject(PlanAnalysisStore);
+  private readonly focus = inject(FocusService);
 
   protected readonly selectedRegion = computed(() => {
     const id = this.pa.selectedRegionId();
@@ -264,6 +288,21 @@ export class RegionInspector {
     const e = region.waypoint_end;
     if (e === undefined || e === null || e === s) return `wp${s}`;
     return `wp${s}–wp${e}`;
+  }
+
+  /** Re-enfocar el viewport en esta región. */
+  protected focusRegion(): void {
+    const region = this.selectedRegion();
+    if (!region) return;
+    this.focus.request({
+      target: { type: 'waypoint', index: region.waypoint_start },
+      emphasis: 'strong',
+      label: this.regionTitle(region),
+    });
+  }
+
+  private regionTitle(region: ProblemRegionDto): string {
+    return region.explanation?.cause ?? region.kind.replace(/_/g, ' ');
   }
 
   /** Safe accessor for strategies array (avoids template narrowing issues). */
