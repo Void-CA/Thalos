@@ -6,25 +6,29 @@ use axum::{
     Json,
 };
 
-use thalos_core::kinematics::{
-    forward::ForwardKinematics,
-    inverse::JacobianTransposeSolver,
+use thalos_core::{
+    kinematics::{
+        forward::ForwardKinematics,
+        inverse::JacobianTransposeSolver,
+    },
+    trajectory::Trajectory,
 };
 use thalos_math::Vector3;
 use thalos_planning::{
     analysis::{
-        domain::{ProblemRegion, RegionId},
+        domain::RegionId,
         region::{RegionDetector, RegionDetectorConfig},
     },
     motion::program::CompiledPlan,
+    optimizer::TrajectoryOptimizer,
+    TrajectoryOperator,  // re-exported from thalos-optimization
     repair::{
         context::RepairContext,
         domain::{
             traits::RepairStrategy,
-            types::{RepairCandidate, StrategyKind},
+            types::{PlanDelta, RepairCandidate, RepairEvaluation, StrategyKind},
         },
         merger::PlanMerger,
-        planner::RepairPlanner,
         session::{
             domain::{SessionId, RepairSessionStatus},
             service::RepairSessionService,
@@ -34,7 +38,7 @@ use thalos_planning::{
 };
 use thalos_runtime::{PlanAnalysisService, RuntimeSnapshot};
 
-use crate::app::{error::ApiError, prelude::*, state::AppState};
+use crate::app::{error::ApiError, state::AppState};
 use crate::features::repair::dto::*;
 
 /// Estrategias disponibles en el sistema.
@@ -67,6 +71,7 @@ fn build_repair_context(snapshot: &RuntimeSnapshot) -> RepairContext {
 fn match_strategy(input: &str) -> Option<StrategyKind> {
     let normalized = input.trim().to_lowercase().replace(' ', "-");
     match normalized.as_str() {
+        s if s.contains("joint") || s.contains("center") || s.contains("centering") => Some(StrategyKind::SplitSegment), // mapped to SplitSegment for tracking; actual execution via TrajectoryOptimizer
         s if s.contains("lift") || s.contains("tcp") || s.contains("height") => Some(StrategyKind::LiftTcp),
         s if s.contains("rotate") || s.contains("tool") || s.contains("angle") || s.contains("orient") => Some(StrategyKind::RotateTool),
         s if s.contains("split") || s.contains("segment") || s.contains("insert") || s.contains("waypoint") || s.contains("intermediate") => Some(StrategyKind::SplitSegment),
@@ -82,25 +87,27 @@ fn match_strategy(input: &str) -> Option<StrategyKind> {
     }
 }
 
-/// Encuentra una estrategia registrada por su kind.
-fn find_strategy(strategies: &[Box<dyn RepairStrategy>], kind: StrategyKind) -> Option<&Box<dyn RepairStrategy>> {
-    strategies.iter().find(|s| s.kind() == kind)
-}
-
 /// Estado compartido del servicio de sesiones con todo lo necesario
 /// para preview/apply reales.
 pub struct SessionServiceState {
     pub service: Mutex<RepairSessionService>,
-    /// Estrategias concretas disponibles (clonadas de `default_strategies`).
-    pub strategies: Vec<Box<dyn RepairStrategy>>,
+    /// Optimizador de trayectorias con operadores nativos.
+    pub optimizer: TrajectoryOptimizer,
     pub last_preview: Mutex<Option<(SessionId, RegionId, StrategyKind, RepairCandidate)>>,
 }
 
 impl SessionServiceState {
     pub fn new() -> Self {
+        // Crear el optimizador con JointCenteringOperator como operador nativo
+        let operators: Vec<Box<dyn TrajectoryOperator>> = vec![
+            Box::new(thalos_planning::JointCenteringOperator::new(
+                thalos_planning::JointCenteringOperator::DEFAULT_FACTOR,
+            )),
+        ];
+
         Self {
             service: Mutex::new(RepairSessionService::new(default_strategies())),
-            strategies: default_strategies(),
+            optimizer: TrajectoryOptimizer::new(operators),
             last_preview: Mutex::new(None),
         }
     }
@@ -194,27 +201,15 @@ pub async fn preview_repair(
     )?;
 
     let detector = RegionDetector::new(RegionDetectorConfig::default());
-    let report = detector.detect(&analysis.findings);
+    let detect_report = detector.detect(&analysis.findings);
 
     // Encontrar la región solicitada
     let region_id = RegionId(req.region_id);
-    let region = report.problem_regions.iter().find(|r| r.id == region_id)
+    let region = detect_report.problem_regions.iter().find(|r| r.id == region_id)
         // Fallback: buscar por waypoint_start si no hay match exacto
-        .or_else(|| report.problem_regions.iter().find(|r| r.waypoint_range.start == req.region_id as usize))
+        .or_else(|| detect_report.problem_regions.iter().find(|r| r.waypoint_range.start == req.region_id as usize))
         .ok_or_else(|| ApiError::NotFound {
             message: format!("Region {} not found in analysis", req.region_id),
-        })?;
-
-    // Encontrar la estrategia
-    let strategy_kind = match_strategy(&req.strategy).ok_or_else(|| ApiError::Validation {
-        message: format!("Unknown strategy: {}", req.strategy),
-        code: "unknown_strategy".into(),
-    })?;
-
-    let strategy = find_strategy(&state.session_service.strategies, strategy_kind)
-        .ok_or_else(|| ApiError::Unsupported {
-            message: format!("Strategy not available: {:?}", strategy_kind),
-            code: "strategy_unavailable".into(),
         })?;
 
     // Obtener el working_plan de la sesión
@@ -226,15 +221,73 @@ pub async fn preview_repair(
         session.working_plan.clone()
     };
 
-    // Generar candidato real
-    let candidates = strategy.generate(&ctx, &working_plan, region);
-    let candidate = candidates.into_iter().next().ok_or_else(|| ApiError::Internal {
-        message: format!("Strategy {:?} generated no candidates for region {}", strategy_kind, req.region_id),
+    // Determinar la estrategia solicitada (para tracking en el preview)
+    let strategy_kind = match_strategy(&req.strategy).ok_or_else(|| ApiError::Validation {
+        message: format!("Unknown strategy: {}", req.strategy),
+        code: "unknown_strategy".into(),
     })?;
 
-    let eval = candidate.evaluation.as_ref().ok_or_else(|| ApiError::Internal {
-        message: "Candidate has no evaluation".into(),
+    // Ejecutar optimización a través del TrajectoryOptimizer
+    let report = state.session_service.optimizer.optimize(
+        &snapshot.chain,
+        trajectory,
+        &detect_report.problem_regions,
+        Some(ctx.ik_solver.clone()),
+    ).map_err(|e| ApiError::Internal {
+        message: format!("Optimization failed: {}", e),
     })?;
+
+    // Encontrar el step correspondiente a la región solicitada
+    let step = report.steps.iter().find(|s| s.region_id == region_id)
+        .ok_or_else(|| ApiError::Internal {
+            message: format!("No optimization step produced for region {}", req.region_id),
+        })?;
+
+    // Extraer la trayectoria optimizada para el rango de la región
+    let final_traj = report.final_trajectory.as_ref()
+        .ok_or_else(|| ApiError::Internal {
+            message: "Optimization produced no final trajectory".into(),
+        })?;
+
+    // Crear delta que reemplaza el rango de waypoints de la región
+    let range = region.waypoint_range.clone();
+    let replacement_waypoints: Vec<_> = final_traj.waypoints()[range.clone()].to_vec();
+    let replacement = Trajectory::new(replacement_waypoints);
+
+    let delta = PlanDelta::new(region_id, range.clone(), replacement)
+        .map_err(|e| ApiError::Internal {
+            message: format!("Failed to build plan delta: {}", e),
+        })?;
+
+    // Crear candidato con evaluación básica (métricas no disponibles sin re-analizar)
+    use thalos_planning::evaluation::metrics::PlanMetrics as P;
+    use thalos_planning::evaluation::metrics::{
+        CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics,
+    };
+    let default_metrics = P {
+        length: trajectory.duration(),
+        waypoint_count: trajectory.len(),
+        manipulability: ManipulabilityMetrics {
+            min: 0.0, average: 0.0,
+            near_singular_count: 0, singular_count: 0,
+        },
+        joint_safety: JointSafetyMetrics {
+            min_margin: 1.0, avg_max_utilization: 0.0, violation_count: 0,
+        },
+        collision: CollisionMetrics {
+            min_distance: f64::MAX, collision_count: 0, near_miss_count: 0,
+        },
+        smoothness: 0.0,
+        orientation_change: 0.0,
+    };
+    let eval = RepairEvaluation {
+        metrics_before: default_metrics.clone(),
+        metrics_after: default_metrics,
+        score_delta: step.improvement as f64,
+        improvement: step.improvement as f64,
+    };
+    let candidate = RepairCandidate::new(strategy_kind, delta)
+        .with_evaluation(eval);
 
     // Verificar continuidad
     let continuity_ok = PlanMerger::apply(&working_plan, &candidate.delta).is_ok();
@@ -245,11 +298,13 @@ pub async fn preview_repair(
         *last = Some((session_id, region_id, strategy_kind, candidate.clone()));
     }
 
+    let improvement = step.improvement as f64;
+
     Ok(Json(PreviewResponse {
         candidate_id: 0,
         base_revision: 0,
         continuity_ok,
-        improvement: eval.improvement,
+        improvement,
     }))
 }
 

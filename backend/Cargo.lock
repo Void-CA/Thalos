@@ -1309,6 +1309,7 @@ dependencies = [
  "rand",
  "serde",
  "thalos-collision",
+ "thalos-optimization",
  "thalos_core",
  "thalos_math",
  "thiserror",

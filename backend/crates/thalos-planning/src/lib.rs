@@ -1,3 +1,4 @@
+pub mod adapters;
 pub mod analysis;
 pub mod advisor;
 pub mod collision;
@@ -8,5 +9,12 @@ pub mod goal;
 pub mod interpolate;
 pub mod knowledge;
 pub mod motion;
+pub mod optimizer;
 pub mod repair;
 pub mod trajectory;
+
+// Re-export key optimization types for use by API crate consumers
+pub use thalos_optimization::{
+    domain::TrajectoryOperator,
+    operators::JointCenteringOperator,
+};

@@ -28,6 +28,7 @@ use crate::{
 ///
 /// No depende del robot — las capacidades cinemáticas se inyectan
 /// via `RepairContext` en `plan()`.
+#[deprecated(note = "Use TrajectoryOptimizer + OptimizationPipeline from thalos-optimization instead. RepairPlanner will be removed after M10.")]
 pub struct RepairPlanner {
     strategies: Vec<Box<dyn RepairStrategy>>,
     evaluator: EvaluationPipeline,

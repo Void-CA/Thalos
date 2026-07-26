@@ -57,6 +57,6 @@ pub fn compute_pose_error(current: &Pose, target: &Pose) -> DynamicVector {
 
 // ─── IKSolver trait ───────────────────────────────────────────────────
 
-pub trait IKSolver {
+pub trait IKSolver: Send + Sync {
     fn solve(&self, q0: &[f64], goal: IKGoal) -> IKResult;
 }

@@ -8,6 +8,7 @@ use super::types::{RepairCandidate, StrategyKind};
 /// Cada estrategia propone candidatos. No evalúa ni aplica.
 /// La evaluación es responsabilidad de `EvaluationPipeline`.
 /// La aplicación es responsabilidad de `PlanMerger`.
+#[deprecated(note = "Use TrajectoryOperator from thalos-optimization instead. RepairStrategy will be removed after M10.")]
 pub trait RepairStrategy: Send + Sync {
     /// Identificador único del tipo de estrategia.
     fn kind(&self) -> StrategyKind;

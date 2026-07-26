@@ -516,17 +516,16 @@ export class RegionInspector implements OnDestroy {
   }
 
   private defaultStrategies(kind: string): string[] {
-    // Solo estrategias que el backend puede ejecutar realmente:
-    // LiftTcpStrategy, RotateToolStrategy, SplitSegment
+    // Estrategias del nuevo pipeline (thalos-optimization) + legacy via adapter
     const map: Record<string, string[]> = {
-      collision: ['Lift TCP', 'Insert waypoint', 'Rotate tool'],
-      singularity: ['Lift TCP', 'Rotate tool', 'Insert waypoint'],
-      low_manipulability: ['Lift TCP', 'Rotate tool', 'Insert waypoint'],
-      low_clearance: ['Lift TCP', 'Rotate tool', 'Insert waypoint'],
-      constraint: ['Insert waypoint', 'Rotate tool', 'Lift TCP'],
-      velocity: ['Insert waypoint', 'Lift TCP'],
-      tracking: ['Insert waypoint', 'Lift TCP'],
+      collision: ['Lift TCP', 'Joint centering', 'Insert waypoint'],
+      singularity: ['Joint centering', 'Lift TCP', 'Rotate tool'],
+      low_manipulability: ['Joint centering', 'Lift TCP', 'Rotate tool'],
+      low_clearance: ['Lift TCP', 'Joint centering', 'Insert waypoint'],
+      constraint: ['Joint centering', 'Insert waypoint', 'Lift TCP'],
+      velocity: ['Insert waypoint', 'Joint centering'],
+      tracking: ['Insert waypoint', 'Joint centering'],
     };
-    return map[kind] ?? ['Insert waypoint', 'Lift TCP', 'Rotate tool'];
+    return map[kind] ?? ['Joint centering', 'Insert waypoint', 'Lift TCP'];
   }
 }

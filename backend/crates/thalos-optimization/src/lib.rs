@@ -14,6 +14,8 @@
 
 pub mod domain;
 pub mod error;
+pub mod operators;
+pub mod pipeline;
 
 // Re-export the problem region types used by the operator trait.
 // These types are defined in thalos-core and re-exported for convenience.
@@ -28,6 +30,9 @@ pub use domain::{
     OptimizationReport, OptimizationStep, PipelineConfig, Reason, TrajectoryOperator,
 };
 pub use error::OptimizationError;
+
+// Re-exports from pipeline
+pub use pipeline::{OptimizationPipeline, OptimizationResult, OperatorSelector};
 
 #[cfg(test)]
 mod tests {
@@ -162,5 +167,367 @@ mod tests {
     fn score_compute_via_domain_module() {
         let s = score::compute_score(1.0, 1.0, 1.0);
         assert!((s - 1.0).abs() < f32::EPSILON);
+    }
+
+    // ── Helpers ──────────────────────────────────────────
+
+    fn test_region(id: usize) -> ProblemRegion {
+        ProblemRegion::new(
+            RegionId(id),
+            RegionKind::Singularity,
+            RegionSeverity::Critical,
+            id..(id + 3),
+        )
+    }
+
+    fn test_robot() -> SerialChain {
+        RobotRegistry::create_default(RobotModel::Planar2R)
+    }
+
+    fn test_trajectory() -> Trajectory {
+        Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![0.5, 0.5], 1.0),
+            TrajectoryPoint::new(vec![1.0, 1.0], 2.0),
+        ])
+    }
+
+    fn test_metrics() -> PlanMetrics {
+        PlanMetrics::new(
+            0.0, 0,
+            thalos_core::evaluation::ManipulabilityMetrics::new(0.0, 0.0, 0, 0),
+            thalos_core::evaluation::JointSafetyMetrics::new(1.0, 0.0, 0),
+            thalos_core::evaluation::CollisionMetrics::new(1.0, 0, 0),
+            0.0, 0.0,
+        )
+    }
+
+    fn test_ctx() -> OptimizationContext {
+        OptimizationContext {
+            joint_limits: JointLimits {
+                lower: vec![-3.14, -3.14],
+                upper: vec![3.14, 3.14],
+            },
+            config: PipelineConfig::default(),
+        }
+    }
+
+    /// Mock operator with configurable scores and apply behavior.
+    struct ScoreMock {
+        id: &'static str,
+        family: OperatorFamily,
+        applicability: f32,
+        improvement: f32,
+        cost: f32,
+        apply_ok: bool,
+    }
+
+    impl ScoreMock {
+        const fn new(
+            id: &'static str,
+            family: OperatorFamily,
+            applicability: f32,
+            improvement: f32,
+            cost: f32,
+        ) -> Self {
+            Self {
+                id,
+                family,
+                applicability,
+                improvement,
+                cost,
+                apply_ok: true,
+            }
+        }
+
+        fn with_failure(mut self) -> Self {
+            self.apply_ok = false;
+            self
+        }
+    }
+
+    impl TrajectoryOperator for ScoreMock {
+        fn id(&self) -> &'static str {
+            self.id
+        }
+
+        fn family(&self) -> OperatorFamily {
+            self.family
+        }
+
+        fn applicability(&self, _region: &ProblemRegion) -> f32 {
+            self.applicability
+        }
+
+        fn estimate_improvement(&self, _region: &ProblemRegion, _metrics: &PlanMetrics) -> f32 {
+            self.improvement
+        }
+
+        fn estimate_cost(&self) -> f32 {
+            self.cost
+        }
+
+        fn apply(
+            &self,
+            _robot: &SerialChain,
+            trajectory: &Trajectory,
+            _region: &ProblemRegion,
+            _ctx: &OptimizationContext,
+        ) -> Result<Trajectory, OptimizationError> {
+            if self.apply_ok {
+                Ok(trajectory.clone())
+            } else {
+                Err(OptimizationError::OperatorFailed {
+                    operator: self.id,
+                    reason: "mock failure".into(),
+                })
+            }
+        }
+    }
+
+    // ── OperatorSelector Tests ───────────────────────────
+
+    #[test]
+    fn operator_selector_assess_computes_correct_score() {
+        let op = ScoreMock::new("test_op", OperatorFamily::JointSpace, 0.8, 0.5, 2.0);
+        let region = test_region(0);
+        let metrics = test_metrics();
+
+        let assessment = OperatorSelector::assess(&op, &region, &metrics);
+
+        assert_eq!(assessment.operator_id, "test_op");
+        assert_eq!(assessment.family, OperatorFamily::JointSpace);
+        let expected_composite = 0.8 * 0.5 / 2.0;
+        assert!(
+            (assessment.score.composite - expected_composite).abs() < f32::EPSILON,
+            "expected {} got {}",
+            expected_composite,
+            assessment.score.composite
+        );
+        assert!((assessment.score.applicability - 0.8).abs() < f32::EPSILON);
+        assert!((assessment.score.estimated_improvement - 0.5).abs() < f32::EPSILON);
+        assert!((assessment.score.estimated_cost - 2.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn operator_selector_rank_empty_list() {
+        let operators: [&dyn TrajectoryOperator; 0] = [];
+        let region = test_region(0);
+        let metrics = test_metrics();
+
+        let ranked = OperatorSelector::rank(&operators, &region, &metrics);
+        assert!(ranked.is_empty());
+    }
+
+    #[test]
+    fn operator_selector_rank_single_operator() {
+        let op = ScoreMock::new("single", OperatorFamily::Geometry, 1.0, 1.0, 1.0);
+        let operators: [&dyn TrajectoryOperator; 1] = [&op];
+        let region = test_region(0);
+        let metrics = test_metrics();
+
+        let ranked = OperatorSelector::rank(&operators, &region, &metrics);
+        assert_eq!(ranked.len(), 1);
+        assert_eq!(ranked[0].0.id(), "single");
+        assert!((ranked[0].1.score.composite - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn operator_selector_rank_sorts_by_score_descending() {
+        let high = ScoreMock::new("high", OperatorFamily::JointSpace, 0.9, 0.9, 1.0);
+        let mid = ScoreMock::new("mid", OperatorFamily::Geometry, 0.5, 0.5, 1.0);
+        let low = ScoreMock::new("low", OperatorFamily::Temporal, 0.1, 0.1, 1.0);
+
+        let operators: [&dyn TrajectoryOperator; 3] = [&low, &high, &mid];
+        let region = test_region(0);
+        let metrics = test_metrics();
+
+        let ranked = OperatorSelector::rank(&operators, &region, &metrics);
+        assert_eq!(ranked.len(), 3);
+        assert_eq!(ranked[0].0.id(), "high");
+        assert_eq!(ranked[1].0.id(), "mid");
+        assert_eq!(ranked[2].0.id(), "low");
+        // Verify scores are strictly descending
+        assert!(ranked[0].1.score.composite > ranked[1].1.score.composite);
+        assert!(ranked[1].1.score.composite > ranked[2].1.score.composite);
+    }
+
+    #[test]
+    fn operator_selector_rank_ties_preserve_insertion_order() {
+        let a = ScoreMock::new("a", OperatorFamily::Sampling, 0.5, 0.5, 1.0);
+        let b = ScoreMock::new("b", OperatorFamily::Geometry, 0.5, 0.5, 1.0);
+
+        let operators: [&dyn TrajectoryOperator; 2] = [&a, &b];
+        let region = test_region(0);
+        let metrics = test_metrics();
+
+        // With equal scores, partial_cmp returns Equal, preserving original order
+        let ranked = OperatorSelector::rank(&operators, &region, &metrics);
+        assert_eq!(ranked.len(), 2);
+        assert!(ranked[0].0.id() == "a" || ranked[0].0.id() == "b");
+    }
+
+    // ── OptimizationPipeline Tests ───────────────────────
+
+    #[test]
+    fn pipeline_default_config_values() {
+        let config = PipelineConfig::default();
+        assert_eq!(config.max_iterations_per_region, 3);
+        assert!((config.improvement_threshold - 0.01).abs() < f32::EPSILON);
+        assert!((config.centering_factor - 0.3).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn pipeline_with_no_operators_returns_empty_report() {
+        let config = PipelineConfig::default();
+        let pipeline = OptimizationPipeline::new(config);
+        let robot = test_robot();
+        let traj = test_trajectory();
+        let regions = vec![test_region(0)];
+        let metrics = test_metrics();
+        let ctx = test_ctx();
+
+        let result = pipeline
+            .optimize(&[], &robot, &traj, &regions, &metrics, &ctx)
+            .expect("pipeline should succeed with no operators");
+
+        assert!(result.report.steps.is_empty(), "expected no steps");
+        // Trajectory should be unchanged
+        assert_eq!(result.trajectory.len(), traj.len());
+    }
+
+    #[test]
+    fn pipeline_single_region_applies_best_operator() {
+        let config = PipelineConfig::default();
+        let pipeline = OptimizationPipeline::new(config);
+        let robot = test_robot();
+        let traj = test_trajectory();
+        let regions = vec![test_region(0)];
+        let metrics = test_metrics();
+        let ctx = test_ctx();
+
+        let op = ScoreMock::new("best_op", OperatorFamily::Geometry, 1.0, 1.0, 1.0);
+        let operators: [&dyn TrajectoryOperator; 1] = [&op];
+
+        let result = pipeline
+            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx)
+            .expect("pipeline should succeed");
+
+        assert_eq!(result.report.steps.len(), 1);
+        assert_eq!(result.report.steps[0].operator_id, "best_op");
+        assert!(result.report.steps[0].accepted);
+        assert_eq!(result.report.steps[0].region_id, RegionId(0));
+    }
+
+    #[test]
+    fn pipeline_multiple_regions_processes_all() {
+        let config = PipelineConfig::default();
+        let pipeline = OptimizationPipeline::new(config);
+        let robot = test_robot();
+        let traj = test_trajectory();
+        let regions = vec![test_region(0), test_region(1), test_region(2)];
+        let metrics = test_metrics();
+        let ctx = test_ctx();
+
+        let op = ScoreMock::new("universal_op", OperatorFamily::JointSpace, 0.9, 0.6, 1.0);
+        let operators: [&dyn TrajectoryOperator; 1] = [&op];
+
+        let result = pipeline
+            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx)
+            .expect("pipeline should succeed");
+
+        assert_eq!(result.report.steps.len(), 3);
+        for step in &result.report.steps {
+            assert_eq!(step.operator_id, "universal_op");
+            assert!(step.accepted);
+        }
+    }
+
+    #[test]
+    fn pipeline_all_operators_fail_records_failure() {
+        let config = PipelineConfig::default();
+        let pipeline = OptimizationPipeline::new(config);
+        let robot = test_robot();
+        let traj = test_trajectory();
+        let regions = vec![test_region(0)];
+        let metrics = test_metrics();
+        let ctx = test_ctx();
+
+        let op = ScoreMock::new("failing_op", OperatorFamily::Temporal, 1.0, 1.0, 1.0)
+            .with_failure();
+        let operators: [&dyn TrajectoryOperator; 1] = [&op];
+
+        let result = pipeline
+            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx)
+            .expect("pipeline should not error on operator failure");
+
+        assert_eq!(result.report.steps.len(), 1);
+        assert_eq!(result.report.steps[0].operator_id, "none");
+        assert!(!result.report.steps[0].accepted);
+    }
+
+    #[test]
+    fn pipeline_falls_back_to_next_operator_when_first_fails() {
+        let config = PipelineConfig::default();
+        let pipeline = OptimizationPipeline::new(config);
+        let robot = test_robot();
+        let traj = test_trajectory();
+        let regions = vec![test_region(0)];
+        let metrics = test_metrics();
+        let ctx = test_ctx();
+
+        let fail_op = ScoreMock::new("fails", OperatorFamily::Geometry, 0.9, 0.8, 1.0)
+            .with_failure();
+        let succeed_op =
+            ScoreMock::new("succeeds", OperatorFamily::JointSpace, 0.5, 0.5, 1.0);
+        // fail_op has higher score, so it's tried first
+        let operators: [&dyn TrajectoryOperator; 2] = [&succeed_op, &fail_op];
+
+        let result = pipeline
+            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx)
+            .expect("pipeline should succeed");
+
+        assert_eq!(result.report.steps.len(), 1);
+        // Since succeed_op has score 0.25 and fail_op has score 0.72,
+        // fail_op is ranked first but fails, then succeed_op succeeds
+        assert_eq!(result.report.steps[0].operator_id, "succeeds");
+        assert!(result.report.steps[0].accepted);
+    }
+
+    #[test]
+    fn pipeline_operators_are_ranked_before_application() {
+        let config = PipelineConfig::default();
+        let pipeline = OptimizationPipeline::new(config);
+        let robot = test_robot();
+        let traj = test_trajectory();
+        let regions = vec![test_region(0)];
+        let metrics = test_metrics();
+        let ctx = test_ctx();
+
+        // low score succeeds, high score fails — high score tried first
+        let high_score_fails =
+            ScoreMock::new("high_score_fails", OperatorFamily::Geometry, 0.9, 0.9, 1.0)
+                .with_failure();
+        let low_score_succeeds =
+            ScoreMock::new("low_score_succeeds", OperatorFamily::JointSpace, 0.3, 0.3, 1.0);
+
+        let operators: [&dyn TrajectoryOperator; 2] = [&low_score_succeeds, &high_score_fails];
+
+        let result = pipeline
+            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx)
+            .expect("pipeline should succeed");
+
+        assert_eq!(result.report.steps.len(), 1);
+        // High score (0.81) fails, then low score (0.09) succeeds
+        assert_eq!(result.report.steps[0].operator_id, "low_score_succeeds");
+        assert!(result.report.steps[0].accepted);
+    }
+
+    #[test]
+    fn pipeline_re_exports_are_accessible() {
+        // Verify that the pipeline types are re-exported from the crate root
+        let _pipe: OptimizationPipeline;
+        let _result: OptimizationResult;
+        let _selector: OperatorSelector;
     }
 }

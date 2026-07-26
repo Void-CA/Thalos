@@ -7,6 +7,7 @@ edition = "2024"
 thalos_core = { path = "../thalos-core" }
 thalos_math = { path = "../thalos-math" }
 thalos-collision = { path = "../thalos-collision" }
+thalos-optimization = { path = "../thalos-optimization" }
 thiserror = "2.0"
 rand = "0.8"
 serde = { version = "1", features = ["derive"] }
