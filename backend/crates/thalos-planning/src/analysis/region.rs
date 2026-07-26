@@ -286,10 +286,19 @@ impl RegionDetector {
             metrics.average_value = Some(sum / value_count as f64);
         }
 
+        let strategies = match region_kind {
+            RegionKind::Collision => vec!["Lift TCP".into(), "Insert waypoint".into(), "Adjust approach angle".into()],
+            RegionKind::Singularity => vec!["Switch IK solver".into(), "Lift TCP".into(), "Adjust path".into()],
+            RegionKind::LowManipulability => vec!["Switch IK solver".into(), "Lift TCP".into(), "Insert waypoint".into()],
+            RegionKind::Constraint => vec!["Adjust joint range".into(), "Insert intermediate waypoint".into()],
+            RegionKind::Velocity => vec!["Reduce speed".into(), "Adjust acceleration profile".into()],
+            RegionKind::Tracking => vec!["Increase sample rate".into(), "Adjust tracking parameters".into()],
+        };
+
         let explanation = RegionExplanation {
             cause: format!("{} region detected at waypoints {}–{}", region_kind.name(), range.start, range.end.saturating_sub(1)),
             consequence: format!("{} findings, {} errors, {} warnings", metrics.waypoint_count, metrics.error_count, metrics.warning_count),
-            recommended_strategies: vec![],
+            recommended_strategies: strategies,
             confidence: 1.0,
         };
 
