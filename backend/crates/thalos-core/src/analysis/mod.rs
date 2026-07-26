@@ -6,6 +6,7 @@
 //! [`constraints`] provides symbolic constraint evaluation for configurations.
 //! [`trajectory_analysis`] provides per-waypoint analysis types used by planning.
 
+pub mod region;
 pub mod workspace;
 pub mod singularity;
 pub mod manipulability;

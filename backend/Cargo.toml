@@ -9,5 +9,6 @@ members = [
     "crates/thalos-collision",
     "crates/thalos-visual",
     "crates/thalos-runtime", 
-    "crates/thalos-planning"
+    "crates/thalos-planning",
+    "crates/thalos-optimization"
     ]

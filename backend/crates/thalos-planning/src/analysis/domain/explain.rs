@@ -1,12 +1,6 @@
-/// Explicación legible de una región problemática.
-#[derive(Debug, Clone)]
-pub struct RegionExplanation {
-    /// Causa raíz del problema en lenguaje natural.
-    pub cause: String,
-    /// Consecuencias e impacto.
-    pub consequence: String,
-    /// Estrategias de reparación sugeridas (strings, no tipos del dominio).
-    pub recommended_strategies: Vec<String>,
-    /// Confianza en la detección (0.0..1.0).
-    pub confidence: f64,
-}
+//! Region explanation types — re-exported from `thalos_core`.
+//!
+//! The canonical definitions have moved to `thalos_core::analysis::region`.
+//! This module re-exports them for backward compatibility.
+
+pub use thalos_core::analysis::region::RegionExplanation;
