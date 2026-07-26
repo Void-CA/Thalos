@@ -66,8 +66,8 @@ pub async fn repair_options(
     let report = detector.detect(&result.findings);
 
     let strategies: Vec<Box<dyn RepairStrategy>> = vec![
-        Box::new(LiftTcpStrategy::new(Vector3::new(0.0, 0.0, 0.05))),
-        Box::new(RotateToolStrategy::new(0.1)),
+        Box::new(LiftTcpStrategy::new(Vector3::new(0.0, 0.0, 0.01))),
+        Box::new(RotateToolStrategy::new(0.05)),
         Box::new(SplitSegment::new(2)),
     ];
     let planner = RepairPlanner::new(strategies);

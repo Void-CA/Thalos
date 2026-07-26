@@ -156,7 +156,7 @@ pub async fn analyze_alternatives(
 
     // RepairPlanner con estrategias
     let strategies: Vec<Box<dyn RepairStrategy>> = vec![
-        Box::new(LiftTcpStrategy::new(thalos_math::Vector3::new(0.0, 0.0, 0.05))),
+        Box::new(LiftTcpStrategy::new(thalos_math::Vector3::new(0.0, 0.0, 0.01))),
         Box::new(RotateToolStrategy::new(0.1)),
         Box::new(SplitSegment::new(2)),
     ];

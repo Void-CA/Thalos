@@ -516,15 +516,17 @@ export class RegionInspector implements OnDestroy {
   }
 
   private defaultStrategies(kind: string): string[] {
+    // Solo estrategias que el backend puede ejecutar realmente:
+    // LiftTcpStrategy, RotateToolStrategy, SplitSegment
     const map: Record<string, string[]> = {
-      collision: ['Lift TCP', 'Insert waypoint', 'Adjust approach angle'],
-      low_manipulability: ['Switch IK solver', 'Adjust TCP height', 'Insert waypoint'],
-      singularity: ['Avoid singularity region', 'Switch IK solver', 'Adjust path'],
-      low_clearance: ['Lift TCP', 'Adjust approach angle', 'Move obstacle'],
-      joint_limit: ['Adjust joint range', 'Insert intermediate waypoint'],
-      velocity: ['Reduce speed', 'Adjust acceleration profile'],
-      tracking: ['Increase sample rate', 'Adjust tracking parameters'],
+      collision: ['Lift TCP', 'Insert waypoint', 'Rotate tool'],
+      singularity: ['Lift TCP', 'Rotate tool', 'Insert waypoint'],
+      low_manipulability: ['Lift TCP', 'Rotate tool', 'Insert waypoint'],
+      low_clearance: ['Lift TCP', 'Rotate tool', 'Insert waypoint'],
+      constraint: ['Insert waypoint', 'Rotate tool', 'Lift TCP'],
+      velocity: ['Insert waypoint', 'Lift TCP'],
+      tracking: ['Insert waypoint', 'Lift TCP'],
     };
-    return map[kind] ?? ['Review waypoint parameters', 'Adjust trajectory constraints'];
+    return map[kind] ?? ['Insert waypoint', 'Lift TCP', 'Rotate tool'];
   }
 }

@@ -40,9 +40,9 @@ use crate::features::repair::dto::*;
 /// Estrategias disponibles en el sistema.
 fn default_strategies() -> Vec<Box<dyn RepairStrategy>> {
     vec![
-        Box::new(LiftTcpStrategy::new(Vector3::new(0.0, 0.0, 0.05))),
-        Box::new(RotateToolStrategy::new(0.1)),
-        Box::new(SplitSegment::new(2)),
+        Box::new(LiftTcpStrategy::new(Vector3::new(0.0, 0.0, 0.01))), // 1cm Z offset
+        Box::new(RotateToolStrategy::new(0.05)),                       // ~3° rotation
+        Box::new(SplitSegment::new(2)),                                // 2 intermediate waypoints
     ]
 }
 
@@ -77,7 +77,8 @@ fn match_strategy(input: &str) -> Option<StrategyKind> {
             Some(StrategyKind::SplitSegment)
         }
         s if s.contains("path") || s.contains("move") || s.contains("obstacle") => Some(StrategyKind::SplitSegment),
-        _ => None,
+        // Catch-all: SplitSegment no requiere IK y siempre funciona
+        _ => Some(StrategyKind::SplitSegment),
     }
 }
 

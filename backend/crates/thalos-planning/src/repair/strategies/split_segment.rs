@@ -103,8 +103,17 @@ impl RepairStrategy for SplitSegment {
 
         let metrics_before = PlanEvaluator::compute_metrics_from_joints(&segment);
         let metrics_after = PlanEvaluator::compute_metrics_from_joints(&delta.replacement);
-        let improvement =
-            metrics_after.smoothness.max(metrics_before.smoothness) - metrics_before.smoothness;
+
+        // Smoothness: lower is better → positive delta when after < before
+        let smooth_before = metrics_before.smoothness.max(0.001);
+        let smooth_pct = ((metrics_before.smoothness - metrics_after.smoothness) / smooth_before) * 100.0;
+
+        // Manipulability: higher is better
+        let manip_before = metrics_before.manipulability.average.max(0.001);
+        let manip_pct = ((metrics_after.manipulability.average - metrics_before.manipulability.average) / manip_before) * 100.0;
+
+        // Composite score: weighted average
+        let improvement = smooth_pct * 0.7 + manip_pct.max(0.0) * 0.3;
 
         let evaluation = crate::repair::domain::RepairEvaluation {
             metrics_before,

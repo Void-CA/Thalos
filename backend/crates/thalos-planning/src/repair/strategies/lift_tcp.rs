@@ -84,8 +84,21 @@ impl RepairStrategy for LiftTcpStrategy {
         // Evaluar mejora
         let metrics_before = PlanEvaluator::compute_metrics_from_joints(&segment);
         let metrics_after = PlanEvaluator::compute_metrics_from_joints(&delta.replacement);
-        let improvement =
-            metrics_after.manipulability.average - metrics_before.manipulability.average;
+        let manip_pct = if metrics_before.manipulability.average > 0.001 {
+            ((metrics_after.manipulability.average - metrics_before.manipulability.average)
+                / metrics_before.manipulability.average) * 100.0
+        } else {
+            metrics_after.manipulability.average * 100.0
+        };
+
+        // Smoothness también mejora (lower is better)
+        let smooth_pct = if metrics_before.smoothness > 0.001 {
+            ((metrics_before.smoothness - metrics_after.smoothness) / metrics_before.smoothness) * 100.0
+        } else {
+            0.0
+        };
+
+        let improvement = manip_pct * 0.6 + smooth_pct.max(0.0) * 0.4;
 
         let evaluation = crate::repair::domain::RepairEvaluation {
             metrics_before,
