@@ -12,6 +12,7 @@ use thalos_core::{
     robot::serial_chain::SerialChain,
     trajectory::Trajectory,
 };
+use thalos_core::operation::ConstraintQuery;
 use thalos_optimization::{
     domain::operator::OperatorFamily, error::OptimizationError, OptimizationContext, PlanMetrics,
     ProblemRegion, TrajectoryOperator,
@@ -84,6 +85,7 @@ impl TrajectoryOperator for RepairStrategyAdapter<'_> {
         traj: &Trajectory,
         region: &ProblemRegion,
         _ctx: &OptimizationContext,
+        _constraints: Option<&dyn ConstraintQuery>,
     ) -> Result<Trajectory, OptimizationError> {
         let compiled_plan = CompiledPlan::new(traj.clone(), vec![]);
 
@@ -271,7 +273,7 @@ mod tests {
         let region = test_region();
         let ctx = test_ctx();
 
-        let result = adapter.apply(&robot, &traj, &region, &ctx);
+        let result = adapter.apply(&robot, &traj, &region, &ctx, None);
         assert!(result.is_ok());
 
         let opt_traj = result.unwrap();
@@ -289,7 +291,7 @@ mod tests {
         let region = test_region();
         let ctx = test_ctx();
 
-        let result = adapter.apply(&robot, &traj, &region, &ctx);
+        let result = adapter.apply(&robot, &traj, &region, &ctx, None);
         assert!(result.is_err());
         match result.unwrap_err() {
             OptimizationError::NoApplicableOperator => {} // expected

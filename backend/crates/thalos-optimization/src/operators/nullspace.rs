@@ -31,6 +31,7 @@ use thalos_core::{
     evaluation::PlanMetrics,
     kinematics::forward::ForwardKinematics,
     kinematics::jacobian::{GeometricJacobian, JacobianSolver},
+    operation::ConstraintQuery,
     robot::serial_chain::SerialChain,
     trajectory::{Trajectory, TrajectoryPoint},
 };
@@ -136,6 +137,7 @@ impl TrajectoryOperator for NullSpaceOptimization {
         trajectory: &Trajectory,
         region: &ProblemRegion,
         ctx: &OptimizationContext,
+        _constraints: Option<&dyn ConstraintQuery>,
     ) -> Result<Trajectory, OptimizationError> {
         let range = &region.waypoint_range;
         let all_wps = trajectory.waypoints();
@@ -558,7 +560,7 @@ mod unit_tests {
         // FK position before
         let before = fk_position(&robot, &q_nominal);
 
-        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx, None).unwrap();
         let after = fk_position(&robot, result.waypoints()[0].joints());
 
         let dx = (after - before).magnitude();
@@ -584,7 +586,7 @@ mod unit_tests {
             TrajectoryPoint::new(vec![0.5, -0.3, 0.2, 0.0], 0.0),
             TrajectoryPoint::new(vec![0.5, -0.3, 0.2, 0.0], 1.0),
         ]);
-        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx);
+        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx, None);
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(result.len(), traj.len());
@@ -603,7 +605,7 @@ mod unit_tests {
             TrajectoryPoint::new(vec![PI, 0.0, 0.0], 0.0),
             TrajectoryPoint::new(vec![PI, 0.0, 0.0], 1.0),
         ]);
-        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx, None).unwrap();
         let clamped = result.waypoints()[0].joints();
 
         // Joint 0 at PI — should be clamped at PI or less, never above
@@ -640,7 +642,7 @@ mod unit_tests {
         ]);
         let region = region(0..2, RegionKind::Singularity);
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
 
         // Waypoints should be unchanged (skipped via None from pinv)
         assert_eq!(
@@ -668,7 +670,7 @@ mod unit_tests {
             TrajectoryPoint::new(vec![0.5, -0.3], 0.0),
             TrajectoryPoint::new(vec![0.5, -0.3], 1.0),
         ]);
-        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx);
+        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx, None);
         assert!(result.is_ok(), "non-redundant robot should not error");
         assert_eq!(result.unwrap().len(), traj.len());
     }
@@ -687,7 +689,7 @@ mod unit_tests {
         ]);
         let region = region(1..2, RegionKind::Constraint);
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
         assert_eq!(result.len(), traj.len());
         for (orig, res) in traj.waypoints().iter().zip(result.waypoints().iter()) {
             assert_eq!(orig.joints(), res.joints());
@@ -708,7 +710,7 @@ mod unit_tests {
         ]);
         let region = region(0..100, RegionKind::Constraint);
 
-        let result = op.apply(&robot, &traj, &region, &ctx);
+        let result = op.apply(&robot, &traj, &region, &ctx, None);
         assert!(result.is_err());
     }
 
@@ -724,7 +726,7 @@ mod unit_tests {
             TrajectoryPoint::new(vec![0.5, -0.3, 0.1], 0.0),
             TrajectoryPoint::new(vec![0.5, -0.3, 0.2], 1.0),
         ]);
-        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx, None).unwrap();
         assert_eq!(result.len(), traj.len());
         for (orig, res) in traj.waypoints().iter().zip(result.waypoints().iter()) {
             assert_eq!(orig.joints(), res.joints());
@@ -746,7 +748,7 @@ mod unit_tests {
             TrajectoryPoint::new(vec![3.0, 0.0, 0.0], 3.0),
         ]);
         // Region covers middle two waypoints only
-        let result = op.apply(&robot, &traj, &region(1..3, RegionKind::Constraint), &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region(1..3, RegionKind::Constraint), &ctx, None).unwrap();
         // First and last waypoints should be byte-identical
         assert_eq!(result.waypoints()[0].joints(), traj.waypoints()[0].joints());
         assert_eq!(result.waypoints()[3].joints(), traj.waypoints()[3].joints());
@@ -764,7 +766,7 @@ mod unit_tests {
             TrajectoryPoint::new(vec![0.0, 0.0, 0.0], 0.0),
             TrajectoryPoint::new(vec![1.0, 0.0, 0.0], 1.0),
         ]);
-        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx, None).unwrap();
         for (orig, res) in traj.waypoints().iter().zip(result.waypoints().iter()) {
             assert!(
                 (orig.timestamp() - res.timestamp()).abs() < 1e-10,
@@ -832,11 +834,11 @@ mod integration_tests {
         let r = region_2wp(RegionKind::Constraint);
 
         // Apply NullSpaceOptimization first (no-op for Planar2R)
-        let after_ns = ns.apply(&robot(), &traj, &r, &ctx).unwrap();
+        let after_ns = ns.apply(&robot(), &traj, &r, &ctx, None).unwrap();
         assert_eq!(after_ns.len(), traj.len());
 
         // Then apply JointCenteringOperator
-        let after_jc = jc.apply(&robot(), &after_ns, &r, &ctx).unwrap();
+        let after_jc = jc.apply(&robot(), &after_ns, &r, &ctx, None).unwrap();
         assert_eq!(after_jc.len(), traj.len());
 
         // Joints should be closer to center after both operators
@@ -949,7 +951,7 @@ mod benchmarks {
         let before_pos = fk.evaluate(&q).ee_position()
             .expect("EE position");
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
         assert_eq!(result.len(), traj.len());
 
         let q_after = result.waypoints()[0].joints();
@@ -1036,7 +1038,7 @@ mod benchmarks {
             .map(|(qj, (lo, hi))| (qj - lo).min(hi - qj))
             .fold(f64::MAX, |a, b| a.min(b));
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
         let q_after = result.waypoints()[0].joints();
 
         // Compute after: min distance to nearest joint limit

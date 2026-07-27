@@ -28,6 +28,7 @@
 use thalos_core::{
     analysis::region::{ProblemRegion, RegionKind},
     evaluation::PlanMetrics,
+    operation::ConstraintQuery,
     robot::serial_chain::SerialChain,
     trajectory::{Trajectory, TrajectoryPoint},
 };
@@ -134,6 +135,7 @@ impl TrajectoryOperator for Retime {
         trajectory: &Trajectory,
         region: &ProblemRegion,
         ctx: &OptimizationContext,
+        _constraints: Option<&dyn ConstraintQuery>,
     ) -> Result<Trajectory, OptimizationError> {
         let range = &region.waypoint_range;
         let all_wps = trajectory.waypoints();
@@ -271,7 +273,7 @@ mod unit_tests {
         let original_joints: Vec<Vec<f64>> =
             traj.waypoints().iter().map(|wp| wp.joints().to_vec()).collect();
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
 
         let result_joints: Vec<Vec<f64>> =
             result.waypoints().iter().map(|wp| wp.joints().to_vec()).collect();
@@ -293,7 +295,7 @@ mod unit_tests {
         let region = three_wp_velocity_region();
         let ctx = ctx_with_velocity(vec![1.0, 1.0]);
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
 
         let timestamps: Vec<f64> = result.waypoints().iter().map(|wp| wp.timestamp()).collect();
         for i in 1..timestamps.len() {
@@ -322,7 +324,7 @@ mod unit_tests {
         let region = two_wp_velocity_region();
         let ctx = ctx_with_velocity(vec![1.0, 1.0]);
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
 
         let new_dt = result.waypoints()[1].timestamp() - result.waypoints()[0].timestamp();
         // Required: max(1.0/1.0, 1.0/1.0) = 1.0 → stretched from 0.5 to 1.0
@@ -347,7 +349,7 @@ mod unit_tests {
         let region = two_wp_velocity_region();
         let ctx = ctx_with_velocity(vec![1.0, 1.0]);
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
 
         let new_dt = result.waypoints()[1].timestamp() - result.waypoints()[0].timestamp();
         assert!(
@@ -372,7 +374,7 @@ mod unit_tests {
         let region = velocity_region(0..2);
         let ctx = ctx_with_velocity(vec![1.0]);
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
 
         let new_dt = result.waypoints()[1].timestamp() - result.waypoints()[0].timestamp();
         assert!(
@@ -401,7 +403,7 @@ mod unit_tests {
         );
         let ctx = ctx_with_velocity(vec![1.0, 1.0]);
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
         assert_eq!(result.len(), traj.len());
         for (orig, res) in traj.waypoints().iter().zip(result.waypoints().iter()) {
             assert_eq!(orig.joints(), res.joints());
@@ -431,7 +433,7 @@ mod unit_tests {
         let ctx = ctx_with_velocity(vec![0.5, 0.5]);
 
         let original_wps = traj.waypoints().to_vec();
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
 
         // Waypoint 0 outside region → fully unchanged
         assert_eq!(result.waypoints()[0].joints(), original_wps[0].joints());
@@ -559,7 +561,7 @@ mod unit_tests {
         // No velocity limits in ctx → falls back to self.default_velocity = 1.0
         let ctx = OptimizationContext::default();
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
 
         let new_dt = result.waypoints()[1].timestamp() - result.waypoints()[0].timestamp();
         // Required: max(2.0/1.0, 2.0/1.0) = 2.0
@@ -635,7 +637,7 @@ mod integration_tests {
         // Apply Retime first (stretches timestamps)
         let retime_ctx = ctx_with_velocity(vec![0.5, 0.5]);
         let retimed = retime
-            .apply(&robot, &traj, &region, &retime_ctx)
+            .apply(&robot, &traj, &region, &retime_ctx, None)
             .unwrap();
 
         // Verify Retime actually stretched
@@ -648,7 +650,7 @@ mod integration_tests {
 
         // Then apply JointCentering to the retimed result
         let centered = centering
-            .apply(&robot, &retimed, &region, &joint_centering_ctx())
+            .apply(&robot, &retimed, &region, &joint_centering_ctx(), None)
             .unwrap();
 
         // Verify both operators' effects are visible:

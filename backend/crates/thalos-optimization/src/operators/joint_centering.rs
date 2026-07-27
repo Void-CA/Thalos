@@ -8,6 +8,8 @@
 use thalos_core::{
     analysis::region::{ProblemRegion, RegionKind},
     evaluation::PlanMetrics,
+    operation::ConstraintQuery,
+    operation::PrecisionLevel,
     robot::serial_chain::SerialChain,
     trajectory::{Trajectory, TrajectoryPoint},
 };
@@ -92,6 +94,7 @@ impl TrajectoryOperator for JointCenteringOperator {
         trajectory: &Trajectory,
         region: &ProblemRegion,
         ctx: &OptimizationContext,
+        constraints: Option<&dyn ConstraintQuery>,
     ) -> Result<Trajectory, OptimizationError> {
         let range = region.waypoint_range.clone();
         let waypoints = trajectory.waypoints();
@@ -126,13 +129,21 @@ impl TrajectoryOperator for JointCenteringOperator {
             .map(|(l, u)| (l + u) / 2.0)
             .collect();
 
-        let factor = self.factor as f64;
+        let base_factor = self.factor as f64;
 
         // Build the modified waypoint list
         let mut new_waypoints: Vec<TrajectoryPoint> = waypoints.to_vec();
 
         for i in range {
             let wp = &waypoints[i];
+
+            // Constraint-aware guard: if constraints forbid position modification, skip.
+            if let Some(cq) = constraints {
+                if !cq.can_modify_position(i) {
+                    continue;
+                }
+            }
+
             let q = wp.joints();
 
             if q.len() != num_joints {
@@ -143,6 +154,20 @@ impl TrajectoryOperator for JointCenteringOperator {
                     num_joints
                 )));
             }
+
+            // Scale centering factor by required precision level.
+            // Critical/High precision operations get a smaller factor.
+            let factor = if let Some(cq) = constraints {
+                let precision = cq.required_precision(i);
+                match precision {
+                    PrecisionLevel::Critical => base_factor * 0.3,
+                    PrecisionLevel::High => base_factor * 0.6,
+                    PrecisionLevel::Normal => base_factor,
+                    PrecisionLevel::None => base_factor,
+                }
+            } else {
+                base_factor
+            };
 
             // q_new = q + (q_center - q) * factor
             let new_joints: Vec<f64> = q
@@ -272,7 +297,7 @@ mod tests {
         let region = test_region(RegionKind::Constraint);
         let ctx = test_ctx();
 
-        let result = op.apply(&robot, &traj, &region, &ctx);
+        let result = op.apply(&robot, &traj, &region, &ctx, None);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), traj.len());
     }
@@ -285,7 +310,7 @@ mod tests {
         let region = test_region(RegionKind::Constraint);
         let ctx = test_ctx();
 
-        let result = op.apply(&robot, &traj, &region, &ctx);
+        let result = op.apply(&robot, &traj, &region, &ctx, None);
         assert!(result.is_ok());
 
         let optimized = result.unwrap();
@@ -312,7 +337,7 @@ mod tests {
         let region = test_region(RegionKind::Constraint);
         let ctx = test_ctx();
 
-        let result = op.apply(&robot, &traj, &region, &ctx);
+        let result = op.apply(&robot, &traj, &region, &ctx, None);
         assert!(result.is_ok());
 
         let optimized = result.unwrap();
@@ -337,7 +362,7 @@ mod tests {
         );
         let ctx = test_ctx();
 
-        let result = op.apply(&robot, &traj, &region, &ctx);
+        let result = op.apply(&robot, &traj, &region, &ctx, None);
         assert!(result.is_ok());
 
         let optimized = result.unwrap();
@@ -370,7 +395,7 @@ mod tests {
         );
         let ctx = test_ctx();
 
-        let result = op.apply(&robot, &traj, &region, &ctx);
+        let result = op.apply(&robot, &traj, &region, &ctx, None);
         assert!(result.is_ok());
 
         let optimized = result.unwrap();
@@ -399,7 +424,7 @@ mod tests {
         );
         let ctx = test_ctx();
 
-        let result = op.apply(&robot, &traj, &region, &ctx);
+        let result = op.apply(&robot, &traj, &region, &ctx, None);
         assert!(result.is_err());
     }
 
@@ -420,7 +445,7 @@ mod tests {
         let region = test_region(RegionKind::Constraint);
         let ctx = test_ctx();
 
-        let result = op.apply(&robot, &traj, &region, &ctx);
+        let result = op.apply(&robot, &traj, &region, &ctx, None);
         assert!(result.is_ok());
 
         let optimized = result.unwrap();
@@ -446,5 +471,140 @@ mod tests {
     fn default_invariants_is_empty() {
         let op = JointCenteringOperator::new(0.3);
         assert!(op.invariants().is_empty());
+    }
+
+    // ── 3.1 Constraint query tests ────────────────────────
+
+    #[test]
+    fn constraint_query_forbids_position_modification_at_waypoint() {
+        use thalos_core::operation::{
+            ConstraintQuery,
+            precision::PrecisionLevel,
+        };
+
+        struct ForbidPositionAtOne {
+            forbidden_index: usize,
+        }
+        impl ConstraintQuery for ForbidPositionAtOne {
+            fn can_relax_orientation(&self, _waypoint_index: usize, _max_angle: f64) -> bool { true }
+            fn can_modify_position(&self, waypoint_index: usize) -> bool {
+                waypoint_index != self.forbidden_index
+            }
+            fn max_position_error(&self, _waypoint_index: usize) -> Option<f64> { None }
+            fn max_velocity(&self, _waypoint_index: usize) -> Option<f64> { None }
+            fn required_precision(&self, _waypoint_index: usize) -> PrecisionLevel { PrecisionLevel::None }
+        }
+
+        let op = JointCenteringOperator::new(1.0);
+        let robot = RobotRegistry::create_default(RobotModel::Planar2R);
+        let traj = test_trajectory();
+        let region = ProblemRegion::new(
+            RegionId(0), RegionKind::Constraint, RegionSeverity::Warning, 0..3,
+        );
+        let ctx = test_ctx();
+        let constraint_query = ForbidPositionAtOne { forbidden_index: 1 };
+
+        let result = op.apply(&robot, &traj, &region, &ctx,
+            Some(&constraint_query as &dyn ConstraintQuery)).unwrap();
+        let waypoints = result.waypoints();
+
+        // Waypoint 1 (forbidden) should be unchanged
+        assert_eq!(waypoints[1].joints(), &[0.0, 0.0],
+            "forbidden waypoint should remain unchanged");
+        // Waypoint 0 and 2 (allowed) should be centered
+        assert!((waypoints[0].joints()[0] - 0.0).abs() < 1e-10,
+            "allowed waypoint should be centered");
+        assert_eq!(waypoints[3].joints(), &[2.0, 2.0],
+            "outside region should be unchanged");
+    }
+
+    #[test]
+    fn required_precision_scales_centering_factor() {
+        use thalos_core::operation::{
+            ConstraintQuery,
+            precision::PrecisionLevel,
+        };
+
+        struct PrecisionControlledQuery {
+            precision: PrecisionLevel,
+        }
+        impl ConstraintQuery for PrecisionControlledQuery {
+            fn can_relax_orientation(&self, _waypoint_index: usize, _max_angle: f64) -> bool { true }
+            fn can_modify_position(&self, _waypoint_index: usize) -> bool { true }
+            fn max_position_error(&self, _waypoint_index: usize) -> Option<f64> { None }
+            fn max_velocity(&self, _waypoint_index: usize) -> Option<f64> { None }
+            fn required_precision(&self, _waypoint_index: usize) -> PrecisionLevel {
+                self.precision
+            }
+        }
+
+        let robot = RobotRegistry::create_default(RobotModel::Planar2R);
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![1.5, -1.5], 0.0),
+            TrajectoryPoint::new(vec![1.5, -1.5], 1.0),
+        ]);
+        let region = ProblemRegion::new(
+            RegionId(0), RegionKind::Constraint, RegionSeverity::Warning, 0..2,
+        );
+        let center_ctx = || OptimizationContext {
+            joint_limits: JointLimits {
+                lower: vec![-2.0, -2.0],
+                upper: vec![2.0, 2.0],
+                velocity: None,
+                acceleration: None,
+            },
+            config: PipelineConfig::default(),
+            tool_frame: None,
+        };
+
+        // Apply with Normal precision → full factor
+        let op_normal = JointCenteringOperator::new(0.5);
+        let query_normal = PrecisionControlledQuery { precision: PrecisionLevel::Normal };
+        let result_normal = op_normal.apply(&robot, &traj, &region, &center_ctx(),
+            Some(&query_normal as &dyn ConstraintQuery)).unwrap();
+        let wp_normal = result_normal.waypoints()[0].joints();
+        // factor=0.5, q=1.5, center=0.0 → q_new = 1.5 + (0.0-1.5)*0.5 = 0.75
+        assert!((wp_normal[0] - 0.75).abs() < 1e-10);
+
+        // Apply with Critical precision → reduced factor (= factor * 0.3 = 0.15)
+        let op_critical = JointCenteringOperator::new(0.5);
+        let query_critical = PrecisionControlledQuery { precision: PrecisionLevel::Critical };
+        let result_critical = op_critical.apply(&robot, &traj, &region, &center_ctx(),
+            Some(&query_critical as &dyn ConstraintQuery)).unwrap();
+        let wp_critical = result_critical.waypoints()[0].joints();
+        // With Critical, effective factor = 0.5 * 0.3 = 0.15
+        // q_new = 1.5 + (0.0-1.5)*0.15 = 1.5 - 0.225 = 1.275
+        assert!((wp_critical[0] - 1.275).abs() < 1e-10,
+            "Critical precision should reduce centering: got {}", wp_critical[0]);
+
+        // Critical displacement < Normal displacement
+        let displacement_critical = (1.5 - wp_critical[0]).abs();
+        let displacement_normal = (1.5 - wp_normal[0]).abs();
+        assert!(
+            displacement_critical < displacement_normal,
+            "Critical precision should produce smaller displacement: critical={}, normal={}",
+            displacement_critical, displacement_normal
+        );
+    }
+
+    #[test]
+    fn without_constraint_query_behavior_is_unchanged() {
+        let op = JointCenteringOperator::new(1.0);
+        let robot = RobotRegistry::create_default(RobotModel::Planar2R);
+        let traj = test_trajectory();
+        let region = test_region(RegionKind::Constraint);
+        let ctx = test_ctx();
+
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
+        let waypoints = result.waypoints();
+        // With factor=1.0, all region waypoints should snap to center
+        for wp in waypoints.iter().take(3) {
+            for q in wp.joints() {
+                assert!((q - 0.0).abs() < 1e-10,
+                    "without constraints, should center fully: got {}", q);
+            }
+        }
+        // Outside region unchanged
+        assert_eq!(waypoints[3].joints(), &[2.0, 2.0]);
     }
 }

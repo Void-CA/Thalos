@@ -1,6 +1,7 @@
 use thalos_core::{
     analysis::region::ProblemRegion,
     evaluation::PlanMetrics,
+    operation::ConstraintQuery,
     robot::serial_chain::SerialChain,
     trajectory::Trajectory,
 };
@@ -114,12 +115,17 @@ pub trait TrajectoryOperator: Send + Sync {
 
     /// Apply the operator to a trajectory region, producing an optimized
     /// trajectory segment, or returning an error.
+    ///
+    /// When `constraints` is `Some`, operators SHOULD query constraints before
+    /// modifying any waypoint. When `None`, operators SHALL behave identically
+    /// to the pre-existing contract (backward compatible).
     fn apply(
         &self,
         robot: &SerialChain,
         trajectory: &Trajectory,
         region: &ProblemRegion,
         ctx: &OptimizationContext,
+        constraints: Option<&dyn ConstraintQuery>,
     ) -> Result<Trajectory, OptimizationError>;
 
     /// Returns the primary optimization objective of this operator.

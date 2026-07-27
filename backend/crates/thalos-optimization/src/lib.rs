@@ -51,6 +51,7 @@ mod tests {
         analysis::region::{ProblemRegion, RegionId, RegionKind, RegionSeverity},
         evaluation::PlanMetrics,
         models::{RobotModel, RobotRegistry},
+        operation::ConstraintQuery,
         robot::serial_chain::SerialChain,
         trajectory::{Trajectory, TrajectoryPoint},
     };
@@ -85,6 +86,7 @@ mod tests {
             trajectory: &Trajectory,
             _region: &ProblemRegion,
             _ctx: &OptimizationContext,
+            _constraints: Option<&dyn ConstraintQuery>,
         ) -> Result<Trajectory, OptimizationError> {
             Ok(trajectory.clone())
         }
@@ -142,7 +144,7 @@ mod tests {
             tool_frame: None,
         };
 
-        let result = op.apply(&robot, &traj, &region, &ctx);
+        let result = op.apply(&robot, &traj, &region, &ctx, None);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 1);
     }
@@ -287,6 +289,7 @@ mod tests {
             trajectory: &Trajectory,
             _region: &ProblemRegion,
             _ctx: &OptimizationContext,
+            _constraints: Option<&dyn ConstraintQuery>,
         ) -> Result<Trajectory, OptimizationError> {
             if self.apply_ok {
                 Ok(trajectory.clone())

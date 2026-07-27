@@ -1,6 +1,10 @@
 use std::ops::Range;
 
-use thalos_core::prelude::{RobotState, Trajectory, TrajectoryPoint};
+use thalos_core::{
+    motion::{expansion::expand_operation, segment::MotionSegment},
+    operation::{MotionNode, Operation, OperationConstraints, RangeConstraintQuery},
+    prelude::{RobotState, Trajectory, TrajectoryPoint},
+};
 
 use crate::error::{CompileError, PlanningError};
 use crate::goal::{
@@ -10,7 +14,6 @@ use crate::motion::move_j::{MoveJConfig, MoveJPlanner};
 use crate::motion::move_l::{MoveLConfig, MoveLPlanner};
 use crate::motion::planner::{MotionPlanner, PlanningContext};
 use crate::motion::program::{CompiledPlan, MotionProgram, PlannedSegment};
-use thalos_core::motion::segment::MotionSegment;
 
 /// Dispatches a `MotionSegment` to the appropriate `MotionPlanner`.
 ///
@@ -196,6 +199,63 @@ impl PlanCompiler {
         let merged = Trajectory::new(all_waypoints);
         Ok(CompiledPlan::new(merged, segments))
     }
+
+    /// Compile a sequence of Operations into a plan with a built-in ConstraintQuery.
+    ///
+    /// Expands each Operation into MotionNodes, builds a MotionProgram,
+    /// compiles it, and constructs a RangeConstraintQuery that maps each
+    /// operation's waypoint range to its constraints.
+    pub fn compile_with_operations(
+        &self,
+        operations: &[Operation],
+        ctx: &PlanningContext,
+    ) -> Result<OperationCompilation, CompileError> {
+        // 1. Expand each operation to MotionNodes.
+        let mut all_nodes: Vec<MotionNode> = Vec::new();
+        let mut op_node_ranges: Vec<(Range<usize>, OperationConstraints)> = Vec::new();
+
+        for op in operations {
+            let expansion = expand_operation(op);
+            let node_count = expansion.len();
+            op_node_ranges.push((
+                all_nodes.len()..all_nodes.len() + node_count,
+                op.constraints().clone(),
+            ));
+            all_nodes.extend(expansion);
+        }
+
+        // 2. Extract segments and build a MotionProgram.
+        let segments: Vec<MotionSegment> =
+            all_nodes.into_iter().map(|n| n.segment).collect();
+        let program = MotionProgram::new(segments);
+
+        // 4. Compile the program normally.
+        let plan = self.compile(&program, ctx)?;
+
+        // 5. Build waypoint-level ranges from the per-operation node ranges.
+        let mut waypoint_ranges: Vec<(Range<usize>, OperationConstraints)> = Vec::new();
+        for (node_range, constraints) in &op_node_ranges {
+            let start_wp = plan.segments[node_range.start].waypoint_range.start;
+            let end_wp = plan.segments[node_range.end - 1].waypoint_range.end;
+            waypoint_ranges.push((start_wp..end_wp, constraints.clone()));
+        }
+
+        let constraint_query = RangeConstraintQuery::new(waypoint_ranges);
+
+        Ok(OperationCompilation {
+            plan,
+            constraint_query,
+        })
+    }
+}
+
+/// Result of compiling a sequence of Operations.
+///
+/// Includes the compiled plan and a RangeConstraintQuery built from
+/// the operations' constraints, mapped to the compiled waypoint ranges.
+pub struct OperationCompilation {
+    pub plan: CompiledPlan,
+    pub constraint_query: RangeConstraintQuery,
 }
 
 #[cfg(test)]
@@ -428,5 +488,154 @@ mod tests {
         assert_eq!(err.segment_index, 1);
         assert_eq!(err.segment_1based(), 2);
         assert_eq!(err.to_string(), "segment 2 failed: Invalid goal: second segment fails");
+    }
+
+    // ── 3.6 Integration: Operation → expand → compile → constraint query ──
+
+    use thalos_core::{
+        operation::{
+            ConstraintQuery, Operation as CoreOperation, OperationConstraints, OperationId,
+            OperationType, PrecisionLevel,
+        },
+        spatial::frame::FrameId,
+        spatial::pose::Pose,
+    };
+    use thalos_math::Transform3D;
+    use thalos_optimization::{
+        domain::context::OptimizationContext,
+        operators::JointCenteringOperator,
+        TrajectoryOperator,
+    };
+
+    fn sample_pose() -> Pose {
+        Pose::new(FrameId::World, FrameId::Id(1), Transform3D::identity())
+    }
+
+    fn make_pick(id: u64, constraints: OperationConstraints) -> CoreOperation {
+        CoreOperation::Pick {
+            id: OperationId(id),
+            target_pose: sample_pose(),
+            constraints,
+        }
+    }
+
+    #[test]
+    fn compile_with_operations_builds_range_constraint_query() {
+        let h = TestHarness::new();
+        let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
+
+        let constraints = OperationConstraints {
+            position_tolerance: Some(0.001),
+            orientation_tolerance: Some(0.5_f64.to_radians()),
+            ..Default::default()
+        };
+        let ops = vec![make_pick(1, constraints)];
+
+        let result = compiler.compile_with_operations(&ops, &h.ctx()).expect("compile_with_operations failed");
+        let opc = result;
+
+        // Should have a valid plan
+        assert!(!opc.plan.merged_trajectory.is_empty());
+        assert_eq!(opc.plan.segments.len(), 5, "Pick expands to 5 segments");
+
+        // RangeConstraintQuery should cover all waypoints
+        let total_wps = opc.plan.waypoint_count;
+        for i in 0..total_wps {
+            // Pick has tight position_tolerance → can_modify_position should be false
+            assert!(!opc.constraint_query.can_modify_position(i),
+                "waypoint {} should NOT allow position modification (tight tolerance)", i);
+        }
+
+        // Orientation tolerance is 0.5°, do not allow relaxation > 0.5°
+        assert!(!opc.constraint_query.can_relax_orientation(0, 1.0_f64.to_radians()),
+            "should forbid relaxation beyond tolerance");
+    }
+
+    #[test]
+    fn compile_with_transit_produces_no_constraints() {
+        let h = TestHarness::new();
+        let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
+
+        // Transit has default (empty) constraints → no restrictions
+        let transit = CoreOperation::Transit {
+            id: OperationId(2),
+            target_pose: sample_pose(),
+            constraints: OperationConstraints::default(),
+        };
+        let ops = vec![transit];
+
+        let result = compiler.compile_with_operations(&ops, &h.ctx()).expect("compile_with_operations failed");
+        let opc = result;
+
+        assert_eq!(opc.plan.segments.len(), 1, "Transit expands to 1 segment");
+        // Unconstrained transit should allow everything
+        assert!(opc.constraint_query.can_modify_position(0),
+            "unconstrained transit should allow position modification");
+        assert!(opc.constraint_query.can_relax_orientation(0, 10.0_f64.to_radians()),
+            "unconstrained transit should allow orientation relaxation");
+    }
+
+    #[test]
+    fn constraint_query_from_compiler_affects_optimization_operator() {
+        use thalos_core::analysis::region::{
+            ProblemRegion, RegionId, RegionKind, RegionSeverity,
+        };
+        use thalos_core::models::{RobotModel, RobotRegistry};
+
+        let h = TestHarness::new();
+        let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
+
+        // Pick with tight position tolerance → JointCentering should NOT modify
+        let constraints = OperationConstraints {
+            position_tolerance: Some(0.001),
+            ..Default::default()
+        };
+        let ops = vec![make_pick(1, constraints)];
+
+        let plan = compiler.compile_with_operations(&ops, &h.ctx()).expect("compile_with_operations failed");
+
+        // Use a Planar2R robot (same as TestHarness)
+        let robot = RobotRegistry::create_default(RobotModel::Planar2R);
+        let traj = &plan.plan.merged_trajectory;
+
+        use std::f64::consts::PI as STD_PI;
+        use thalos_optimization::domain::context::JointLimits;
+        let opt_ctx = OptimizationContext {
+            joint_limits: JointLimits {
+                lower: vec![-STD_PI, -STD_PI],
+                upper: vec![STD_PI, STD_PI],
+                velocity: None,
+                acceleration: None,
+            },
+            ..OptimizationContext::default()
+        };
+
+        // Full trajectory region
+        let region = ProblemRegion::new(
+            RegionId(0), RegionKind::Constraint, RegionSeverity::Warning,
+            0..traj.len(),
+        );
+
+        let jc = JointCenteringOperator::new(1.0); // snap to center
+
+        // Apply WITHOUT constraints → joints should center
+        let without = jc.apply(&robot, traj, &region, &opt_ctx, None).unwrap();
+        let without_joints = without.waypoints()[0].joints().to_vec();
+
+        // Apply WITH constraints → joints should NOT move (position_tolerance is tight)
+        let with = jc.apply(&robot, traj, &region, &opt_ctx,
+            Some(&plan.constraint_query as &dyn ConstraintQuery)).unwrap();
+        let with_joints = with.waypoints()[0].joints().to_vec();
+
+        // Without constraints: joints moved toward center (not all-zero start)
+        // With constraints: joints unchanged from original
+        let original_joints = traj.waypoints()[0].joints();
+
+        // Verify that with constraints, waypoints are preserved
+        for (i, (&w, &o)) in with_joints.iter().zip(original_joints.iter()).enumerate() {
+            assert!((w - o).abs() < 1e-10,
+                "constrained waypoint[{}] joint {} should match original (diff={})",
+                0, i, (w - o).abs());
+        }
     }
 }

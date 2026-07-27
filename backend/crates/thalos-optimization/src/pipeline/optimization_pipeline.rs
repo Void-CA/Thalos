@@ -11,6 +11,7 @@ use crate::{
 };
 use thalos_core::{
     evaluation::PlanMetrics,
+    operation::ConstraintQuery,
     robot::serial_chain::SerialChain,
     trajectory::Trajectory,
 };
@@ -101,7 +102,7 @@ impl OptimizationPipeline {
                     continue;
                 }
 
-                match op.apply(robot, &current, region, ctx) {
+                match op.apply(robot, &current, region, ctx, None) {
                     Ok(candidate_raw) => {
                         let blended = compose_trajectory(
                             &current,
@@ -177,7 +178,7 @@ impl OptimizationPipeline {
                 0..current.len(),
             );
 
-            match retime_op.apply(robot, &current, &full_range, ctx) {
+            match retime_op.apply(robot, &current, &full_range, ctx, None) {
                 Ok(retimed) => {
                     let blended = compose_trajectory(
                         &current,

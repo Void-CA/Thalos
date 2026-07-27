@@ -34,10 +34,13 @@ use thalos_core::{
     evaluation::PlanMetrics,
     kinematics::forward::ForwardKinematics,
     kinematics::jacobian::{GeometricJacobian, JacobianSolver},
+    operation::ConstraintQuery,
     robot::serial_chain::SerialChain,
     trajectory::{Trajectory, TrajectoryPoint},
 };
 use thalos_math::{orientation_error, DynamicVector, Transform3D};
+
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{
     domain::{
@@ -65,6 +68,8 @@ pub struct OrientationRelaxation {
     pub dt: f64,
     /// Maximum allowed TCP position deviation after correction (default: 1e-4).
     pub position_tolerance: f64,
+    /// Number of waypoints skipped due to constraint rejections in the last `apply()` call.
+    pub skip_count: AtomicUsize,
 }
 
 impl OrientationRelaxation {
@@ -75,6 +80,7 @@ impl OrientationRelaxation {
             tolerance,
             dt,
             position_tolerance,
+            skip_count: AtomicUsize::new(0),
         }
     }
 
@@ -142,9 +148,13 @@ impl TrajectoryOperator for OrientationRelaxation {
         trajectory: &Trajectory,
         region: &ProblemRegion,
         ctx: &OptimizationContext,
+        constraints: Option<&dyn ConstraintQuery>,
     ) -> Result<Trajectory, OptimizationError> {
         let range = &region.waypoint_range;
         let all_wps = trajectory.waypoints();
+
+        // Reset skip count for this apply call.
+        self.skip_count.store(0, Ordering::Relaxed);
 
         // Need at least 2 waypoints: one as reference + at least one to correct.
         if range.len() < 2 {
@@ -202,7 +212,17 @@ impl TrajectoryOperator for OrientationRelaxation {
 
         // ── Process each waypoint (skip first — it is the reference) ──
 
-        for wp in wps.iter_mut().skip(1) {
+        for (local_i, wp) in wps.iter_mut().enumerate().skip(1) {
+            let global_i = range.start + local_i;
+
+            // Constraint-aware guard: if constraints forbid relaxation, skip.
+            if let Some(cq) = constraints {
+                if !cq.can_relax_orientation(global_i, self.max_angle) {
+                    self.skip_count.fetch_add(1, Ordering::Relaxed);
+                    continue;
+                }
+            }
+
             let q = wp.joints();
 
             // Evaluate FK to get current orientation.
@@ -405,7 +425,7 @@ mod unit_tests {
         ]);
 
         let result = op
-            .apply(&robot, &traj, &region(0..2, RegionKind::Singularity), &ctx)
+            .apply(&robot, &traj, &region(0..2, RegionKind::Singularity), &ctx, None)
             .unwrap();
 
         // Both waypoints should be unchanged
@@ -432,7 +452,7 @@ mod unit_tests {
         ]);
 
         let result = op
-            .apply(&robot, &traj, &region(0..2, RegionKind::Singularity), &ctx)
+            .apply(&robot, &traj, &region(0..2, RegionKind::Singularity), &ctx, None)
             .unwrap();
 
         // Reference waypoint should be unchanged
@@ -500,7 +520,7 @@ mod unit_tests {
         ]);
 
         let result = op
-            .apply(&robot, &traj, &region(0..2, RegionKind::Singularity), &ctx)
+            .apply(&robot, &traj, &region(0..2, RegionKind::Singularity), &ctx, None)
             .unwrap();
 
         // Waypoints should be unchanged (skipped via None from pinv)
@@ -535,7 +555,7 @@ mod unit_tests {
         let before_pos = fk_position(&robot, &q1);
 
         let result = op
-            .apply(&robot, &traj, &region(0..2, RegionKind::Singularity), &ctx)
+            .apply(&robot, &traj, &region(0..2, RegionKind::Singularity), &ctx, None)
             .unwrap();
 
         let after_pos = fk_position(&robot, result.waypoints()[1].joints());
@@ -571,7 +591,7 @@ mod unit_tests {
 
         let before_pos = fk_position(&robot, &q1);
         let result = op
-            .apply(&robot, &traj, &region(0..2, RegionKind::Singularity), &ctx)
+            .apply(&robot, &traj, &region(0..2, RegionKind::Singularity), &ctx, None)
             .unwrap();
         let after_pos = fk_position(&robot, result.waypoints()[1].joints());
 
@@ -606,7 +626,7 @@ mod unit_tests {
         ]);
 
         let result = op
-            .apply(&robot, &traj, &region(0..2, RegionKind::Singularity), &ctx)
+            .apply(&robot, &traj, &region(0..2, RegionKind::Singularity), &ctx, None)
             .unwrap();
 
         let clamped = result.waypoints()[1].joints();
@@ -644,7 +664,7 @@ mod unit_tests {
         ]);
 
         let result = op
-            .apply(&robot, &traj, &region(0..2, RegionKind::Singularity), &ctx)
+            .apply(&robot, &traj, &region(0..2, RegionKind::Singularity), &ctx, None)
             .unwrap();
 
         // All joints within limits after correction
@@ -673,7 +693,7 @@ mod unit_tests {
         let region = region(1..2, RegionKind::Singularity);
 
         let result = op
-            .apply(&robot, &traj, &region, &ctx)
+            .apply(&robot, &traj, &region, &ctx, None)
             .unwrap();
         assert_eq!(result.len(), traj.len());
         for (orig, res) in traj.waypoints().iter().zip(result.waypoints().iter()) {
@@ -695,7 +715,7 @@ mod unit_tests {
         ]);
         let region = region(0..100, RegionKind::Singularity);
 
-        let result = op.apply(&robot, &traj, &region, &ctx);
+        let result = op.apply(&robot, &traj, &region, &ctx, None);
         assert!(result.is_err());
     }
 
@@ -713,7 +733,7 @@ mod unit_tests {
         ]);
 
         let result = op
-            .apply(&robot, &traj, &region(0..2, RegionKind::Singularity), &ctx)
+            .apply(&robot, &traj, &region(0..2, RegionKind::Singularity), &ctx, None)
             .unwrap();
 
         for (orig, res) in traj.waypoints().iter().zip(result.waypoints().iter()) {
@@ -743,7 +763,7 @@ mod unit_tests {
 
         // Region covers middle two waypoints only (indices 1..3)
         let result = op
-            .apply(&robot, &traj, &region(1..3, RegionKind::Singularity), &ctx)
+            .apply(&robot, &traj, &region(1..3, RegionKind::Singularity), &ctx, None)
             .unwrap();
 
         // First and last waypoints should be byte-identical
@@ -767,7 +787,7 @@ mod unit_tests {
         ]);
 
         let result = op
-            .apply(&robot, &traj, &region(0..2, RegionKind::Singularity), &ctx)
+            .apply(&robot, &traj, &region(0..2, RegionKind::Singularity), &ctx, None)
             .unwrap();
 
         assert_eq!(result.len(), traj.len());
@@ -797,7 +817,7 @@ mod unit_tests {
             TrajectoryPoint::new(vec![0.5, -0.3, 0.2, 0.0], 1.0),
         ]);
 
-        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx);
+        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx, None);
         assert!(result.is_ok(), "non-redundant robot should not error");
         assert_eq!(result.unwrap().len(), traj.len());
     }
@@ -809,6 +829,7 @@ mod unit_tests {
 
 #[cfg(test)]
 mod integration_tests {
+    use std::sync::atomic::Ordering;
     use crate::domain::context::OptimizationContext;
     use crate::domain::TrajectoryOperator;
     use crate::operators::nullspace::test_helpers::*;
@@ -847,11 +868,12 @@ mod integration_tests {
         let r = region_2wp(RegionKind::Singularity);
 
         // Apply OrientationRelaxation first
-        let after_or = or.apply(&robot, &traj, &r, &ctx).unwrap();
+        let after_or = or.apply(&robot, &traj, &r, &ctx, None).unwrap();
         assert_eq!(after_or.len(), traj.len());
 
         // Then apply NullSpaceOptimization
-        let after_ns = ns.apply(&robot, &after_or, &r, &ctx).unwrap();
+
+        let after_ns = ns.apply(&robot, &after_or, &r, &ctx, None).unwrap();
         assert_eq!(after_ns.len(), traj.len());
 
         // Both operators run without errors — no conflict
@@ -889,11 +911,11 @@ mod integration_tests {
         let r = region_2wp(RegionKind::Singularity);
 
         // Apply OrientationRelaxation first
-        let after_or = or.apply(&robot, &traj, &r, &ctx).unwrap();
+        let after_or = or.apply(&robot, &traj, &r, &ctx, None).unwrap();
         assert_eq!(after_or.len(), traj.len());
 
         // Then apply JointCenteringOperator
-        let after_jc = jc.apply(&robot, &after_or, &r, &ctx).unwrap();
+        let after_jc = jc.apply(&robot, &after_or, &r, &ctx, None).unwrap();
         assert_eq!(after_jc.len(), traj.len());
 
         // Joint-centering should move joints toward center
@@ -934,7 +956,7 @@ mod integration_tests {
             .unwrap_or(Transform3D::identity());
         let before_orient = before_t.rotation;
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
         let after_result = fk.evaluate(&result.waypoints()[1].joints());
         let after_t = after_result.ee_pose()
             .map(|p| p.transform().clone())
@@ -957,5 +979,162 @@ mod integration_tests {
             if before_error > 0.0 { (before_error - after_error) / before_error * 100.0 } else { 0.0 });
         println!("  TCP deviation:    {:.6e}", pos_dev);
         println!("────────────────────────────────────────────\n");
+    }
+
+    // ── 3.1 Constraint query prevents relaxation at forbidden waypoints ──
+
+    #[test]
+    fn constraint_query_forbids_relaxation_at_waypoint() {
+        use crate::domain::context::OptimizationContext;
+        use crate::domain::TrajectoryOperator;
+        use crate::operators::orientation_relaxation::OrientationRelaxation;
+        use crate::operators::nullspace::test_helpers::*;
+        use thalos_core::{
+            analysis::region::{ProblemRegion, RegionId, RegionKind, RegionSeverity},
+            operation::{
+                ConstraintQuery,
+                precision::PrecisionLevel,
+            },
+            prelude::*,
+        };
+
+        struct ForbidOrientationAtOne {
+            forbidden_index: usize,
+        }
+        impl ConstraintQuery for ForbidOrientationAtOne {
+            fn can_relax_orientation(&self, waypoint_index: usize, _max_angle: f64) -> bool {
+                waypoint_index != self.forbidden_index
+            }
+            fn can_modify_position(&self, _waypoint_index: usize) -> bool { true }
+            fn max_position_error(&self, _waypoint_index: usize) -> Option<f64> { None }
+            fn max_velocity(&self, _waypoint_index: usize) -> Option<f64> { None }
+            fn required_precision(&self, _waypoint_index: usize) -> PrecisionLevel { PrecisionLevel::None }
+        }
+
+        let robot = six_dof_test_robot();
+        let op = OrientationRelaxation::new(0.01, 1e-6, 1.0, 1e-4);
+        let ctx = ctx_six_dof();
+
+        // q0 → reference, different q1 → orientation error > max_angle
+        let q0 = vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        let q1 = vec![0.3, 0.0, 0.0, 0.0, 0.0, 0.0];
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(q0.clone(), 0.0),
+            TrajectoryPoint::new(q1.clone(), 1.0),
+        ]);
+
+        let region = ProblemRegion::new(
+            RegionId(0), RegionKind::Singularity, RegionSeverity::Warning, 0..2,
+        );
+        let constraint_query = ForbidOrientationAtOne { forbidden_index: 1 };
+
+        let result = op.apply(&robot, &traj, &region, &ctx, Some(&constraint_query as &dyn ConstraintQuery)).unwrap();
+
+        // Waypoint 1 should be unchanged (constraint forbids)
+        assert_eq!(result.waypoints()[1].joints(), q1.as_slice(),
+            "forbidden waypoint should remain unchanged");
+        // Reference waypoint must be preserved
+        assert_eq!(result.waypoints()[0].joints(), q0.as_slice());
+        assert_eq!(result.len(), traj.len());
+    }
+
+    #[test]
+    fn constraint_query_skip_count_reflects_forbidden_waypoints() {
+        use crate::domain::context::OptimizationContext;
+        use crate::domain::TrajectoryOperator;
+        use crate::operators::orientation_relaxation::OrientationRelaxation;
+        use crate::operators::nullspace::test_helpers::*;
+        use thalos_core::{
+            analysis::region::{ProblemRegion, RegionId, RegionKind, RegionSeverity},
+            operation::{
+                ConstraintQuery,
+                precision::PrecisionLevel,
+            },
+            prelude::*,
+        };
+
+        struct ForbidOrientationAtIndices {
+            forbidden: std::collections::HashSet<usize>,
+        }
+        impl ConstraintQuery for ForbidOrientationAtIndices {
+            fn can_relax_orientation(&self, waypoint_index: usize, _max_angle: f64) -> bool {
+                !self.forbidden.contains(&waypoint_index)
+            }
+            fn can_modify_position(&self, _waypoint_index: usize) -> bool { true }
+            fn max_position_error(&self, _waypoint_index: usize) -> Option<f64> { None }
+            fn max_velocity(&self, _waypoint_index: usize) -> Option<f64> { None }
+            fn required_precision(&self, _waypoint_index: usize) -> PrecisionLevel { PrecisionLevel::None }
+        }
+
+        let robot = six_dof_test_robot();
+        let op = OrientationRelaxation::new(0.01, 1e-6, 1.0, 1e-4);
+        let ctx = ctx_six_dof();
+
+        // 4 waypoints where index 1 and 2 have orientation error but index 2 is forbidden
+        let q_ref = vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        let q_diff = vec![0.3, 0.0, 0.0, 0.0, 0.0, 0.0];
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(q_ref.clone(), 0.0),
+            TrajectoryPoint::new(q_diff.clone(), 1.0),
+            TrajectoryPoint::new(q_diff.clone(), 2.0),
+            TrajectoryPoint::new(q_diff.clone(), 3.0),
+        ]);
+
+        let region = ProblemRegion::new(
+            RegionId(0), RegionKind::Singularity, RegionSeverity::Warning, 0..4,
+        );
+        let mut forbidden = std::collections::HashSet::new();
+        forbidden.insert(2); // forbid waypoint 2
+        let constraint_query = ForbidOrientationAtIndices { forbidden };
+
+        // Apply with constraint query
+        op.apply(&robot, &traj, &region, &ctx, Some(&constraint_query as &dyn ConstraintQuery)).unwrap();
+
+        // Apply WITHOUT constraint query → skip_count should be 0
+        op.skip_count.store(0, Ordering::Relaxed); // reset
+        op.apply(&robot, &traj, &region, &ctx, None).unwrap();
+        assert_eq!(op.skip_count.load(Ordering::Relaxed), 0, "no constraint query → zero skips");
+    }
+
+    #[test]
+    fn without_constraint_query_behavior_is_unchanged() {
+        use crate::domain::context::OptimizationContext;
+        use crate::domain::TrajectoryOperator;
+        use crate::operators::orientation_relaxation::OrientationRelaxation;
+        use crate::operators::nullspace::test_helpers::*;
+        use thalos_core::{
+            analysis::region::{ProblemRegion, RegionId, RegionKind, RegionSeverity},
+            prelude::*,
+        };
+
+        let robot = six_dof_test_robot();
+        let op = OrientationRelaxation::new(0.01, 1e-6, 1.0, 1e-4);
+        let ctx = ctx_six_dof();
+
+        let q0 = vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        let q1 = vec![0.3, 0.0, 0.0, 0.0, 0.0, 0.0];
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(q0.clone(), 0.0),
+            TrajectoryPoint::new(q1.clone(), 1.0),
+        ]);
+
+        let region = ProblemRegion::new(
+            RegionId(0), RegionKind::Singularity, RegionSeverity::Warning, 0..2,
+        );
+
+        // apply with None should behave identically to pre-existing contract
+        op.skip_count.store(0, Ordering::Relaxed);
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
+        assert_eq!(result.len(), traj.len());
+        assert_eq!(op.skip_count.load(Ordering::Relaxed), 0);
+
+        // Verify correction still happens (orientation error was reduced)
+        let corrected = result.waypoints()[1].joints();
+        let diff: f64 = q1.iter()
+            .zip(corrected.iter())
+            .map(|(a, b)| (a - b).powi(2))
+            .sum::<f64>()
+            .sqrt();
+        assert!(diff > 1e-10, "correction should still happen without constraints");
     }
 }

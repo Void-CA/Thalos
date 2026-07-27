@@ -19,6 +19,7 @@ use thalos_core::{
         CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics, PlanMetrics,
     },
     kinematics::inverse::{IKSolver, IKGoal, IKResult, IKStatus},
+    operation::ConstraintQuery,
     robot::serial_chain::SerialChain,
     trajectory::Trajectory,
 };
@@ -269,6 +270,7 @@ mod tests {
             trajectory: &Trajectory,
             _region: &ProblemRegion,
             _ctx: &OptimizationContext,
+            _constraints: Option<&dyn ConstraintQuery>,
         ) -> Result<Trajectory, OptimizationError> {
             Ok(trajectory.clone())
         }

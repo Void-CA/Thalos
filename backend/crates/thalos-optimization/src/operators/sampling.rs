@@ -28,6 +28,7 @@
 use thalos_core::{
     analysis::region::{ProblemRegion, RegionKind},
     evaluation::PlanMetrics,
+    operation::ConstraintQuery,
     robot::serial_chain::SerialChain,
     trajectory::{Trajectory, TrajectoryPoint},
 };
@@ -204,6 +205,7 @@ impl TrajectoryOperator for AdaptiveSampling {
         trajectory: &Trajectory,
         region: &ProblemRegion,
         _ctx: &OptimizationContext,
+        _constraints: Option<&dyn ConstraintQuery>,
     ) -> Result<Trajectory, OptimizationError> {
         let range = &region.waypoint_range;
         let all_wps = trajectory.waypoints();
@@ -356,7 +358,7 @@ mod unit_tests {
         let region = two_waypoint_region();
         let ctx = test_ctx();
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
         // Initial error ≈ 14.14 > 8.0 → insert (1 waypoint added)
         // Sub-segment errors ≈ 7.07 < 8.0 → stop
         assert_eq!(result.len(), 3, "expected 1 insertion, got {}", result.len());
@@ -376,7 +378,7 @@ mod unit_tests {
         let region = two_waypoint_region();
         let ctx = test_ctx();
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
         assert_eq!(result.len(), traj.len(), "expected no insertion");
     }
 
@@ -402,7 +404,7 @@ mod unit_tests {
         let region = three_waypoint_region();
         let ctx = test_ctx();
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
         // The curvature trigger should insert at least 1 waypoint
         assert!(
             result.len() > traj.len(),
@@ -425,7 +427,7 @@ mod unit_tests {
         let region = three_waypoint_region();
         let ctx = test_ctx();
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
         // Both segments have error ≈1.414 < 5.0, and curvature≈0 < 0.1
         // No insertions should occur
         assert_eq!(
@@ -450,7 +452,7 @@ mod unit_tests {
         let region = three_waypoint_region();
         let ctx = test_ctx();
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
         // max_points=5, input has 3 inside region + possibly outside region
         // The operator caps region waypoints at max_points
         // Total output should be <= (full_traj_len - region_len + max_points)
@@ -479,7 +481,7 @@ mod unit_tests {
         let original_joints: Vec<Vec<f64>> =
             traj.waypoints().iter().map(|wp| wp.joints().to_vec()).collect();
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
 
         // All original waypoints should appear in order in the output
         let result_joints: Vec<&[f64]> =
@@ -514,7 +516,7 @@ mod unit_tests {
         let region = three_waypoint_region();
         let ctx = test_ctx();
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
 
         let first_input = traj.waypoints().first().unwrap();
         let last_input = traj.waypoints().last().unwrap();
@@ -547,7 +549,7 @@ mod unit_tests {
         );
         let ctx = test_ctx();
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
         assert_eq!(result.len(), traj.len(), "expected no-op for dense trajectory");
         for (orig, res) in traj.waypoints().iter().zip(result.waypoints().iter()) {
             assert_eq!(orig.joints(), res.joints());
@@ -573,7 +575,7 @@ mod unit_tests {
         );
         let ctx = test_ctx();
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
         assert_eq!(result.len(), traj.len());
         for (orig, res) in traj.waypoints().iter().zip(result.waypoints().iter()) {
             assert_eq!(orig.joints(), res.joints());
@@ -595,7 +597,7 @@ mod unit_tests {
         let region = three_waypoint_region();
         let ctx = test_ctx();
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
         assert_eq!(result.len(), 3, "expected no insertion with zero headroom");
         for (orig, res) in traj.waypoints().iter().zip(result.waypoints().iter()) {
             assert_eq!(orig.joints(), res.joints());
@@ -700,7 +702,7 @@ mod benchmarks {
             0..traj.len(),
         );
 
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
         let after_max = max_segment_error(&result);
         let after_count = result.len();
 
@@ -760,7 +762,7 @@ mod benchmarks {
         );
 
         let before_count = traj.len();
-        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
         let after_count = result.len();
 
         println!("\n═══ Benchmark: Dense trajectory ────────────────");
@@ -860,7 +862,7 @@ mod integration_tests {
         let region = two_waypoint_region();
         let ctx = test_ctx();
 
-        let modified = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let modified = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
         // Lengths differ → compose_trajectory returns modified directly
         let composed = compose_trajectory(
             &traj,
@@ -894,7 +896,7 @@ mod integration_tests {
         );
         let ctx = test_ctx();
 
-        let first = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let first = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
         assert_eq!(first.len(), 3, "expected exactly 1 insertion in first pass");
 
         // Second pass on the result (new region covering the full trajectory)
@@ -904,7 +906,7 @@ mod integration_tests {
             RegionSeverity::Warning,
             0..first.len(),
         );
-        let second = op.apply(&robot, &first, &second_region, &ctx).unwrap();
+        let second = op.apply(&robot, &first, &second_region, &ctx, None).unwrap();
 
         // After first pass, all errors should be below threshold
         // so second pass should not add new waypoints

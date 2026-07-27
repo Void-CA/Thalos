@@ -54,7 +54,7 @@ fn make_ctx(chain: &SerialChain) -> OptimizationContext {
 fn run_operator(name: &str, op: &dyn TrajectoryOperator, chain: &SerialChain,
     traj: &Trajectory, region: &thalos_core::analysis::region::ProblemRegion,
     before: &PlanMetrics, ctx: &OptimizationContext) {
-    let result = op.apply(chain, traj, region, ctx);
+    let result = op.apply(chain, traj, region, ctx, None);
     match result {
         Ok(new_traj) => {
             let m = compute_metrics(&new_traj);
@@ -178,7 +178,7 @@ fn benchmark_adaptive_sampling_baseline() {
         thalos_core::analysis::region::RegionSeverity::Warning,
         15..25,
     );
-    let result = adapter.apply(&chain, &traj, &region, &ctx);
+    let result = adapter.apply(&chain, &traj, &region, &ctx, None);
     match result {
         Ok(new_traj) => {
             let m2 = compute_metrics(&new_traj);
