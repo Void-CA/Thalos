@@ -99,6 +99,13 @@ function rustQuatToThree([w, x, y, z]: [number, number, number, number]): THREE.
   return new THREE.Quaternion(x, y, z, w)
 }
 
+/** Crea una THREE.Line para casos donde radius≈0. */
+function createAxisLine(dir: THREE.Vector3, length: number, color: THREE.Color): THREE.Line {
+  const pts = [new THREE.Vector3(0, 0, 0), dir.clone().multiplyScalar(length)]
+  const geom = new THREE.BufferGeometry().setFromPoints(pts)
+  return new THREE.Line(geom, new THREE.LineBasicMaterial({ color }))
+}
+
 /** Construye una flecha de eje: shaft cilíndrico + cono en la punta. */
 function AxisArrow({
   dir,
@@ -137,14 +144,7 @@ function AxisArrow({
   }
 
   // Fallback: línea cuando radius ≈ 0
-  const pts = [new THREE.Vector3(0, 0, 0), dir.clone().multiplyScalar(length)]
-  const geom = new THREE.BufferGeometry().setFromPoints(pts)
-
-  return (
-    <line geometry={geom}>
-      <lineBasicMaterial color={color} />
-    </line>
-  )
+  return <primitive object={createAxisLine(dir, length, color)} />
 }
 
 function FrameComponent({ frame }: FrameComponentProps) {
@@ -205,9 +205,8 @@ function createPrimitiveGeometry(geo: PrimitiveGeometry): THREE.BufferGeometry {
   }
 }
 
-function PrimitiveComponent({ primitive }: PrimitiveComponentProps) {
+function PrimitiveComponent({ primitive }: { primitive: ScenePrimitive }) {
   const geometry = useMemo(() => createPrimitiveGeometry(primitive.geometry), [primitive.geometry])
-  const parentGroup = useFrameGroup(primitive.frameId)
 
   const color = primitive.color
     ? new THREE.Color(primitive.color[0], primitive.color[1], primitive.color[2])

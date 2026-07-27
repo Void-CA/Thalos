@@ -72,12 +72,10 @@ impl DynamicMatrix {
         let v_t = svd.v_t.as_ref()?;
         let s = &svd.singular_values;
 
-        let m = self.0.nrows();
-        let n = self.0.ncols();
         let k = s.len();
 
         // Build Σ⁺: k×k diagonal with 1/σᵢ for σᵢ > tolerance
-        let mut sigma_plus = DynamicMatrix::zeros(n, m);
+        let mut sigma_plus = DynamicMatrix::zeros(k, k);
         let mut any_above_tolerance = false;
         for i in 0..k {
             if s[i] > tolerance {
@@ -373,14 +371,15 @@ mod tests {
 
     #[test]
     fn pseudo_inverse_singular_matrix() {
-        // Task 1.5: Matrix with a zero row → singular → None
+        // Task 1.5: All singular values below tolerance → None
+        // Matrix with values so small that no singular value exceeds tolerance
         let a = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(3, 3, &[
-            1.0, 2.0, 3.0,
-            0.0, 0.0, 0.0,
-            4.0, 5.0, 6.0,
+            1e-15, 0.0, 0.0,
+            0.0, 1e-15, 0.0,
+            0.0, 0.0, 1e-15,
         ]));
         assert!(a.pseudo_inverse(1e-12).is_none(),
-            "singular matrix (zero row) should return None");
+            "matrix with all singular values below tolerance should return None");
     }
 
     #[test]

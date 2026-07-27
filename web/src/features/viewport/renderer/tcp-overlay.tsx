@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useSceneStore } from '../store'
 
@@ -82,13 +83,15 @@ export function TcpOverlay() {
 }
 
 function LinePoints({ points }: { points: [[number, number, number], [number, number, number]] }) {
-  const geom = new THREE.BufferGeometry().setFromPoints(
-    points.map(p => new THREE.Vector3(...p)),
-  )
+  const line = useMemo(() => {
+    const geom = new THREE.BufferGeometry().setFromPoints(
+      points.map(p => new THREE.Vector3(...p)),
+    )
+    return new THREE.Line(
+      geom,
+      new THREE.LineBasicMaterial({ color: '#00ffff', transparent: true, opacity: 0.4 }),
+    )
+  }, [points])
 
-  return (
-    <line geometry={geom}>
-      <lineBasicMaterial color="#00ffff" transparent opacity={0.4} />
-    </line>
-  )
+  return <primitive object={line} />
 }

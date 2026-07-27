@@ -1,7 +1,6 @@
 import { Suspense, useRef } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, AdaptiveDpr, Stats } from '@react-three/drei'
-import * as THREE from 'three'
 import { RobotModel } from './robot-model'
 import { useSceneStore } from '../store'
 
