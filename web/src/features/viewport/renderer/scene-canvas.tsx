@@ -2,6 +2,9 @@ import { Suspense, useRef } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, AdaptiveDpr, Stats } from '@react-three/drei'
 import { RobotModel } from './robot-model'
+import { Trajectory } from './trajectory'
+import { IkGizmo } from './ik-gizmo'
+import { TcpOverlay } from './tcp-overlay'
 import { useSceneStore } from '../store'
 
 interface SceneCanvasProps {
@@ -9,11 +12,8 @@ interface SceneCanvasProps {
 }
 
 /**
- * Z-up Camera Controller
- *
- * Three.js defaults to Y-up. Thalos usa Z-up (convención robótica).
- * Este componente se monta dentro del Canvas y configura la cámara
- * con up = (0, 0, 1) para que el plano XY sea el ground horizontal.
+ * Z-up Camera Controller — configura cámara con up=(0,0,1)
+ * para convención robótica (plano XY horizontal).
  */
 function CameraSetup() {
   const { camera } = useThree()
@@ -29,26 +29,19 @@ function CameraSetup() {
   return null
 }
 
-/**
- * Grid Z-up — GridHelper rotado 90° en X para que quede en el plano XY
- * en vez del XZ default de Three.js.
- *
- * El tamaño se ajusta dinámicamente según referenceDimension del robot.
- */
-function Grid() {
+/** GridHelper rotado π/2 en X para Z-up. */
+function SceneGrid() {
   const refDim = useSceneStore(s => s.data?.referenceDimension) ?? 1.0
   const size = Math.max(refDim * 4, 0.5)
-  const divs = 10
 
   return (
     <gridHelper
-      args={[size, divs, 0x666666, 0x444444]}
+      args={[size, 10, 0x666666, 0x444444]}
       rotation={[Math.PI / 2, 0, 0]}
     />
   )
 }
 
-/** Luz ambiental + direccional siguiendo la convención Angular. */
 function SceneLights() {
   return (
     <>
@@ -58,7 +51,7 @@ function SceneLights() {
   )
 }
 
-/** Contenedor R3F con Z-up, controles de órbita y modelo del robot. */
+/** Contenedor R3F con Z-up, controles, robot y overlays. */
 export function SceneCanvas({ showStats = false }: SceneCanvasProps) {
   const sceneData = useSceneStore(s => s.data)
 
@@ -71,26 +64,23 @@ export function SceneCanvas({ showStats = false }: SceneCanvasProps) {
       <color attach="background" args={[0x1a1a1a]} />
       <AdaptiveDpr pixelated />
 
-      {/* Z-up: reconfigura cámara antes de OrbitControls */}
       <CameraSetup />
-
-      {/* Iluminación (coincide con Angular: ambient 0.5 + directional (2,5,3) 1.0) */}
       <SceneLights />
+      <SceneGrid />
 
-      {/* Grid rotado para Z-up (plano XY horizontal) */}
-      <Grid />
-
-      {/* Ejes de referencia (globales) */}
+      {/* Ejes globales */}
       <axesHelper args={[0.5]} />
 
-      {/* Modelo del robot */}
+      {/* Robot + overlays */}
       {sceneData && (
         <Suspense fallback={null}>
           <RobotModel />
+          <Trajectory />
+          <IkGizmo />
+          <TcpOverlay />
         </Suspense>
       )}
 
-      {/* Controles con damping — respetan camera.up (Z-up) */}
       <OrbitControls
         enableDamping
         dampingFactor={0.15}

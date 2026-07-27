@@ -1,32 +1,27 @@
 import { useMutation } from '@tanstack/react-query'
-import { sceneApi } from '../api/scene-api'
 import { useSceneStore } from '../store'
-import { toSceneData, toRuntimeInfo, toIkResult, toToolFrame } from '../adapter'
+import { useSceneService } from '../services/service-context'
 
 /**
- * Hook para enviar cambios de ángulos articulares (FK) al backend
- * y actualizar la escena con la respuesta.
+ * Hook para enviar cambios de ángulos articulares (FK) al backend.
  *
- * Uso:
- * ```tsx
- * const fkMutation = useFkStream()
- * fkMutation.mutate([0.5, 0.1, -0.3, ...])
- * ```
+ * Dependencia: SceneService (inyectado via ServicesProvider).
  */
 export function useFkStream() {
+  const service = useSceneService()
   const applyFkUpdate = useSceneStore(s => s.applyFkUpdate)
   const setLoading = useSceneStore(s => s.setLoading)
   const setError = useSceneStore(s => s.setError)
 
   return useMutation({
-    mutationFn: (joints: number[]) => sceneApi.setJoints(joints),
+    mutationFn: (joints: number[]) => service.setJoints(joints),
     onMutate: () => setLoading(true),
-    onSuccess: (res) => {
+    onSuccess: (snapshot) => {
       applyFkUpdate(
-        toSceneData(res.scene),
-        toRuntimeInfo(res),
-        toIkResult(res.ik_result),
-        toToolFrame(res.active_tcp),
+        snapshot.scene,
+        snapshot.runtime,
+        snapshot.ikResult,
+        snapshot.activeTcp,
       )
     },
     onError: (err: Error) => setError(err.message),

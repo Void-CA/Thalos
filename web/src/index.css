@@ -7,43 +7,72 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* ── Thalos Dark Theme (siempre oscuro) ── */
-/* Mapeo directo de frontend/src/styles/_variables.scss */
+/* ═══════════════════════════════════════════════════
+   Thalos Dark Theme v2
+
+   Más profundidad que la v1: las capas suben de
+   luminosidad con un tinte cálido sutil (h ~ 45-55)
+   y chroma mínimo. Los bordes son más contrastados
+   para que los paneles no se fundan entre sí.
+
+   Paleta:
+     bg-canvas     #161614   → fondo general
+     bg-surface    #1c1c1a   → sidebar, paneles
+     bg-card       #222220   → tarjetas
+     bg-elevated   #2a2a27   → hover, elevated
+     border        #353532   → bordes visibles
+     text-primary  #d4d4cc   → texto principal
+     text-muted    #9e9e94   → texto secundario
+     accent        #3399ff   → azul técnico
+   ═══════════════════════════════════════════════════ */
 :root {
-  --background: oklch(0.11 0 0);        /* #111 → bg-canvas */
-  --foreground: oklch(0.78 0 0);        /* #c0c0c0 → text-primary */
-  --card: oklch(0.145 0 0);             /* #252525 → bg-card */
-  --card-foreground: oklch(0.8 0 0);    /* #ccc → text-secondary */
-  --popover: oklch(0.13 0 0);           /* ~#1e1e1e → bg-surface */
-  --popover-foreground: oklch(0.78 0 0);
-  --primary: oklch(0.58 0.12 255);      /* #3399ff → accent */
+  /* ── Superficies ── */
+  --background: oklch(0.14 0.005 55);         /* #161614 */
+  --sidebar: oklch(0.155 0.006 52);           /* #1c1c1a */
+  --popover: oklch(0.155 0.006 52);
+  --card: oklch(0.175 0.007 50);              /* #222220 */
+  --secondary: oklch(0.195 0.008 48);         /* #2a2a27 */
+  --muted: oklch(0.18 0.007 49);              /* #252523 */
+  --accent: oklch(0.21 0.009 46);             /* #2f2f2c */
+  --input: oklch(0.195 0.008 48);
+
+  /* ── Bordes ── */
+  --border: oklch(0.245 0.009 46);            /* #353532 */
+  --sidebar-border: oklch(0.245 0.009 46);
+  --ring: oklch(0.48 0.14 255);
+
+  /* ── Texto ── */
+  --foreground: oklch(0.83 0.008 55);         /* #d4d4cc */
+  --card-foreground: oklch(0.86 0.009 55);
+  --popover-foreground: oklch(0.83 0.008 55);
+  --secondary-foreground: oklch(0.76 0.01 55);
+  --muted-foreground: oklch(0.62 0.012 52);   /* #9e9e94 */
+  --accent-foreground: oklch(0.86 0.009 55);
+
+  /* ── Brand ── */
+  --primary: oklch(0.56 0.16 255);            /* #3399ff */
   --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.2 0 0);          /* #333 → bg-elevated */
-  --secondary-foreground: oklch(0.78 0 0);
-  --muted: oklch(0.17 0 0);             /* #2a2a2a */
-  --muted-foreground: oklch(0.55 0 0);  /* #8a8a8a */
-  --accent: oklch(0.58 0.12 255);       /* #3399ff */
-  --accent-foreground: oklch(0.98 0 0);
-  --destructive: oklch(0.63 0.19 25);   /* #ff6644 → danger */
+
+  /* ── Semánticos ── */
+  --destructive: oklch(0.6 0.22 30);          /* #ff6644 */
   --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.2 0 0);             /* #333 → border-subtle */
-  --input: oklch(0.22 0 0);             /* #333 */
-  --ring: oklch(0.4 0.08 255);          /* accent at 50% */
-  --radius: 0.5rem;                     /* 8px */
-  --sidebar-background: oklch(0.13 0 0);    /* #1e1e1e */
-  --sidebar-foreground: oklch(0.78 0 0);
-  --sidebar-primary: oklch(0.58 0.12 255);
+  --chart-1: oklch(0.56 0.16 255);
+  --chart-2: oklch(0.52 0.16 170);
+  --chart-3: oklch(0.58 0.18 85);
+  --chart-4: oklch(0.6 0.18 45);
+  --chart-5: oklch(0.62 0.18 340);
+
+  /* ── Sidebar ── */
+  --sidebar-background: oklch(0.155 0.006 52);
+  --sidebar-foreground: oklch(0.83 0.008 55);
+  --sidebar-primary: oklch(0.56 0.16 255);
   --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.18 0 0);
-  --sidebar-accent-foreground: oklch(0.85 0 0);
-  --sidebar-border: oklch(0.2 0 0);
-  --sidebar-ring: oklch(0.4 0.08 255);
-  --chart-1: oklch(0.6 0.1 255);
-  --chart-2: oklch(0.55 0.12 170);
-  --chart-3: oklch(0.6 0.15 80);
-  --chart-4: oklch(0.6 0.15 30);
-  --chart-5: oklch(0.65 0.15 340);
-  --sidebar: oklch(0.13 0 0);
+  --sidebar-accent: oklch(0.195 0.008 48);
+  --sidebar-accent-foreground: oklch(0.83 0.008 55);
+  --sidebar-ring: oklch(0.48 0.14 255);
+
+  /* ── Radios ── */
+  --radius: 0.5rem;
 }
 
 @theme inline {
@@ -74,6 +103,12 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: calc(var(--radius) - 1px);
   --radius-lg: var(--radius);
@@ -81,12 +116,6 @@
   --font-sans: 'Geist Variable', system-ui, -apple-system, sans-serif;
   --font-mono: ui-monospace, Consolas, monospace;
   --font-heading: var(--font-sans);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
 }
 
 @layer base {
@@ -104,6 +133,6 @@
     @apply bg-background text-foreground;
   }
   html {
-    @apply font-sans;
+    @apply font-sans antialiased;
   }
 }
