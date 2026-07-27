@@ -26,8 +26,9 @@ pub use thalos_core::evaluation::PlanMetrics;
 
 // Convenience re-exports from domain
 pub use domain::{
-    JointLimits, OperatorAssessment, OperatorFamily, OperatorScore, OptimizationContext,
-    OptimizationReport, OptimizationStep, PipelineConfig, Reason, TrajectoryOperator,
+    Invariant, JointLimits, OperatorAssessment, OperatorFamily, OperatorScore,
+    OptimizationContext, OptimizationObjective, OptimizationReport, OptimizationStep,
+    PipelineConfig, Reason, TrajectoryOperator,
 };
 pub use error::OptimizationError;
 

@@ -12,5 +12,5 @@ pub mod score;
 
 pub use assessment::{OperatorAssessment, OperatorScore, Reason};
 pub use context::{JointLimits, OptimizationContext, PipelineConfig};
-pub use operator::{OperatorFamily, TrajectoryOperator};
+pub use operator::{Invariant, OperatorFamily, OptimizationObjective, TrajectoryOperator};
 pub use report::{OptimizationReport, OptimizationStep};

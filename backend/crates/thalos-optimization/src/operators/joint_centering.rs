@@ -169,6 +169,7 @@ mod tests {
 
     use crate::{
         domain::context::{JointLimits, PipelineConfig},
+        domain::operator::OptimizationObjective,
         PlanMetrics,
     };
 
@@ -428,5 +429,19 @@ mod tests {
                 opt.timestamp()
             );
         }
+    }
+
+    // ── Default trait method tests (M9.1) ──────────────────
+
+    #[test]
+    fn default_objective_is_feasibility() {
+        let op = JointCenteringOperator::new(0.3);
+        assert_eq!(op.objective(), OptimizationObjective::Feasibility);
+    }
+
+    #[test]
+    fn default_invariants_is_empty() {
+        let op = JointCenteringOperator::new(0.3);
+        assert!(op.invariants().is_empty());
     }
 }

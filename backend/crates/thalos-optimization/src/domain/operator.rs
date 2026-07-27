@@ -21,6 +21,42 @@ pub enum OperatorFamily {
     Sampling,
 }
 
+/// High-level optimization objective of an operator.
+///
+/// Operators declare their primary goal through this enum, enabling
+/// the pipeline to select operators that align with the current
+/// optimization strategy.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum OptimizationObjective {
+    /// Produce a feasible (valid) trajectory.
+    #[default]
+    Feasibility,
+    /// Produce a smooth trajectory (low jerk/acceleration).
+    Smoothness,
+    /// Produce a continuous path (well-sampled, no gaps).
+    Continuity,
+    /// Produce an efficient trajectory (low time/energy).
+    Efficiency,
+    /// Produce a safe trajectory (max margins).
+    Safety,
+}
+
+/// Behavioral invariants that an operator guarantees.
+///
+/// Operators declare which properties they preserve. The pipeline
+/// can use this information to reason about operator composition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Invariant {
+    /// Existing waypoints are never modified, reordered, or removed.
+    PreserveExistingWaypoints,
+    /// The start waypoint of the trajectory is preserved.
+    PreserveStart,
+    /// The end waypoint of the trajectory is preserved.
+    PreserveEnd,
+    /// Timestamps remain monotonically non-decreasing.
+    MonotonicTimestamps,
+}
+
 /// A trait representing an operator that can optimize a trajectory region.
 ///
 /// Operators are the atomic unit of optimization work. Each operator
@@ -53,4 +89,96 @@ pub trait TrajectoryOperator: Send + Sync {
         region: &ProblemRegion,
         ctx: &OptimizationContext,
     ) -> Result<Trajectory, OptimizationError>;
+
+    /// Returns the primary optimization objective of this operator.
+    ///
+    /// Default: returns `OptimizationObjective::Feasibility`.
+    fn objective(&self) -> OptimizationObjective {
+        OptimizationObjective::default()
+    }
+
+    /// Returns the behavioral invariants that this operator guarantees.
+    ///
+    /// Default: returns an empty slice (no invariants declared).
+    fn invariants(&self) -> &'static [Invariant] {
+        &[]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── OptimizationObjective tests ────────────────────────
+
+    #[test]
+    fn optimization_objective_continuity_is_distinct() {
+        assert_ne!(
+            OptimizationObjective::Continuity,
+            OptimizationObjective::Safety
+        );
+        assert_ne!(
+            OptimizationObjective::Continuity,
+            OptimizationObjective::Efficiency
+        );
+    }
+
+    #[test]
+    fn optimization_objective_default_is_feasibility() {
+        assert_eq!(
+            OptimizationObjective::default(),
+            OptimizationObjective::Feasibility
+        );
+    }
+
+    #[test]
+    fn optimization_objective_exhaustive_match() {
+        let objectives = [
+            OptimizationObjective::Feasibility,
+            OptimizationObjective::Smoothness,
+            OptimizationObjective::Continuity,
+            OptimizationObjective::Efficiency,
+            OptimizationObjective::Safety,
+        ];
+        for obj in &objectives {
+            match obj {
+                OptimizationObjective::Feasibility
+                | OptimizationObjective::Smoothness
+                | OptimizationObjective::Continuity
+                | OptimizationObjective::Efficiency
+                | OptimizationObjective::Safety => {}
+            }
+        }
+    }
+
+    // ── Invariant tests ────────────────────────────────────
+
+    #[test]
+    fn invariant_variants_are_distinct() {
+        assert_ne!(
+            Invariant::PreserveExistingWaypoints,
+            Invariant::PreserveStart
+        );
+        assert_ne!(Invariant::PreserveExistingWaypoints, Invariant::PreserveEnd);
+        assert_ne!(Invariant::PreserveStart, Invariant::PreserveEnd);
+        assert_ne!(Invariant::PreserveStart, Invariant::MonotonicTimestamps);
+    }
+
+    #[test]
+    fn invariant_exhaustive_match() {
+        let invariants = [
+            Invariant::PreserveExistingWaypoints,
+            Invariant::PreserveStart,
+            Invariant::PreserveEnd,
+            Invariant::MonotonicTimestamps,
+        ];
+        for inv in &invariants {
+            match inv {
+                Invariant::PreserveExistingWaypoints
+                | Invariant::PreserveStart
+                | Invariant::PreserveEnd
+                | Invariant::MonotonicTimestamps => {}
+            }
+        }
+    }
 }
