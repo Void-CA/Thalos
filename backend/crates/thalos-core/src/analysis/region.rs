@@ -173,6 +173,48 @@ impl ProblemRegion {
     }
 }
 
+/// A problem region enriched with operation-level semantic context.
+///
+/// Bridges the gap between low-level waypoint ranges and high-level
+/// operation intent for frontend consumption.
+#[derive(Debug, Clone)]
+pub struct SemanticProblem {
+    /// The operation that produced this problem, if provenance is available.
+    pub operation_id: Option<crate::operation::OperationId>,
+    /// The role of the operation within its parent operation, if provenance is available.
+    pub role: Option<crate::operation::MotionRole>,
+    /// The kind of problem (inherited from the source region).
+    pub kind: RegionKind,
+    /// The severity of the problem (inherited from the source region).
+    pub severity: RegionSeverity,
+    /// The waypoint range of the problem (inherited from the source region).
+    pub waypoint_range: std::ops::Range<usize>,
+}
+
+/// Project a `ProblemRegion` into a `SemanticProblem` by attaching
+/// operation-level context from provenance.
+///
+/// Finds the first `MotionProvenance` entry whose waypoint range overlaps
+/// the region's waypoint range, and extracts `operation_id` and `role`.
+/// Returns a `SemanticProblem` with `operation_id: None` and `role: None`
+/// when no matching provenance is found.
+pub fn project_semantic_problem(
+    region: &ProblemRegion,
+    provenance: &[crate::operation::MotionProvenance],
+) -> SemanticProblem {
+    let matching = provenance.iter().find(|p| {
+        p.waypoint_range.start < region.waypoint_range.end
+            && p.waypoint_range.end > region.waypoint_range.start
+    });
+    SemanticProblem {
+        operation_id: matching.map(|p| p.operation_id),
+        role: matching.map(|p| p.role),
+        kind: region.kind,
+        severity: region.severity,
+        waypoint_range: region.waypoint_range.clone(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -270,5 +312,177 @@ mod tests {
         };
         assert!(boundary.entry_pose.is_none());
         assert!(boundary.exit_pose.is_none());
+    }
+
+    // ── SemanticProblem ───────────────────────────────────
+
+    use crate::operation::{MotionProvenance, MotionRole, OperationId};
+
+    #[test]
+    fn semantic_problem_construction() {
+        let problem = SemanticProblem {
+            operation_id: Some(OperationId(1)),
+            role: Some(MotionRole::Execution),
+            kind: RegionKind::Singularity,
+            severity: RegionSeverity::Critical,
+            waypoint_range: 5..10,
+        };
+
+        assert_eq!(problem.operation_id, Some(OperationId(1)));
+        assert_eq!(problem.role, Some(MotionRole::Execution));
+        assert_eq!(problem.kind, RegionKind::Singularity);
+        assert_eq!(problem.severity, RegionSeverity::Critical);
+        assert_eq!(problem.waypoint_range, 5..10);
+    }
+
+    #[test]
+    fn semantic_problem_without_operation_context() {
+        let problem = SemanticProblem {
+            operation_id: None,
+            role: None,
+            kind: RegionKind::Velocity,
+            severity: RegionSeverity::Warning,
+            waypoint_range: 0..20,
+        };
+
+        assert!(problem.operation_id.is_none());
+        assert!(problem.role.is_none());
+        assert_eq!(problem.kind, RegionKind::Velocity);
+        assert_eq!(problem.severity, RegionSeverity::Warning);
+        assert_eq!(problem.waypoint_range, 0..20);
+    }
+
+    // ── project_semantic_problem ──────────────────────────
+
+    #[test]
+    fn project_with_matching_provenance() {
+        let region = ProblemRegion::new(
+            RegionId(0),
+            RegionKind::Singularity,
+            RegionSeverity::Critical,
+            5..10,
+        );
+        let provenance = vec![
+            MotionProvenance {
+                waypoint_range: 0..5,
+                operation_id: OperationId(1),
+                role: MotionRole::Approach,
+            },
+            MotionProvenance {
+                waypoint_range: 5..10,
+                operation_id: OperationId(2),
+                role: MotionRole::Execution,
+            },
+        ];
+
+        let result = project_semantic_problem(&region, &provenance);
+
+        assert_eq!(result.operation_id, Some(OperationId(2)));
+        assert_eq!(result.role, Some(MotionRole::Execution));
+        assert_eq!(result.kind, RegionKind::Singularity);
+        assert_eq!(result.severity, RegionSeverity::Critical);
+        assert_eq!(result.waypoint_range, 5..10);
+    }
+
+    #[test]
+    fn project_without_provenance() {
+        let region = ProblemRegion::new(
+            RegionId(0),
+            RegionKind::Velocity,
+            RegionSeverity::Warning,
+            0..20,
+        );
+        let provenance: Vec<MotionProvenance> = vec![];
+
+        let result = project_semantic_problem(&region, &provenance);
+
+        assert!(result.operation_id.is_none());
+        assert!(result.role.is_none());
+        assert_eq!(result.kind, RegionKind::Velocity);
+        assert_eq!(result.severity, RegionSeverity::Warning);
+        assert_eq!(result.waypoint_range, 0..20);
+    }
+
+    #[test]
+    fn project_with_provenance_before_region() {
+        // Provenance range ends before region starts → no match
+        let region = ProblemRegion::new(
+            RegionId(0),
+            RegionKind::Collision,
+            RegionSeverity::Critical,
+            10..15,
+        );
+        let provenance = vec![MotionProvenance {
+            waypoint_range: 0..5,
+            operation_id: OperationId(1),
+            role: MotionRole::Approach,
+        }];
+
+        let result = project_semantic_problem(&region, &provenance);
+
+        assert!(result.operation_id.is_none());
+        assert!(result.role.is_none());
+    }
+
+    #[test]
+    fn project_with_provenance_after_region() {
+        // Provenance range starts after region ends → no match
+        let region = ProblemRegion::new(
+            RegionId(0),
+            RegionKind::Constraint,
+            RegionSeverity::Info,
+            0..5,
+        );
+        let provenance = vec![MotionProvenance {
+            waypoint_range: 10..15,
+            operation_id: OperationId(1),
+            role: MotionRole::Transit,
+        }];
+
+        let result = project_semantic_problem(&region, &provenance);
+
+        assert!(result.operation_id.is_none());
+        assert!(result.role.is_none());
+    }
+
+    #[test]
+    fn project_with_overlapping_provenance() {
+        // Region 3..8, provenance 0..6 → overlap (start < 8 && end > 3)
+        let region = ProblemRegion::new(
+            RegionId(0),
+            RegionKind::LowManipulability,
+            RegionSeverity::Warning,
+            3..8,
+        );
+        let provenance = vec![MotionProvenance {
+            waypoint_range: 0..6,
+            operation_id: OperationId(42),
+            role: MotionRole::Execution,
+        }];
+
+        let result = project_semantic_problem(&region, &provenance);
+
+        assert_eq!(result.operation_id, Some(OperationId(42)));
+        assert_eq!(result.role, Some(MotionRole::Execution));
+    }
+
+    // ── SemanticProblem is cloneable ──────────────────────
+
+    #[test]
+    fn semantic_problem_is_cloneable() {
+        let problem = SemanticProblem {
+            operation_id: Some(OperationId(3)),
+            role: Some(MotionRole::Interaction),
+            kind: RegionKind::Tracking,
+            severity: RegionSeverity::Warning,
+            waypoint_range: 1..4,
+        };
+
+        let cloned = problem.clone();
+        assert_eq!(cloned.operation_id, problem.operation_id);
+        assert_eq!(cloned.role, problem.role);
+        assert_eq!(cloned.kind, problem.kind);
+        assert_eq!(cloned.severity, problem.severity);
+        assert_eq!(cloned.waypoint_range, problem.waypoint_range);
     }
 }

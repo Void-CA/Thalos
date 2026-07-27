@@ -65,6 +65,24 @@ impl ConstraintQuery for RangeConstraintQuery {
             None => PrecisionLevel::None,
         }
     }
+
+    fn can_modify_timing(&self, waypoint_index: usize) -> bool {
+        match self.constraints_at(waypoint_index) {
+            Some(c) => c.velocity_limit.is_none(),
+            None => true,
+        }
+    }
+
+    fn can_modify_joints(&self, waypoint_index: usize) -> bool {
+        self.can_modify_position(waypoint_index)
+    }
+
+    fn can_modify_neighbors(&self, waypoint_index: usize) -> bool {
+        match self.constraints_at(waypoint_index) {
+            Some(c) => c.position_tolerance.is_none(),
+            None => true,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -262,6 +280,81 @@ mod tests {
         let constraints = pick_constraints();
         let query = RangeConstraintQuery::new(vec![(0..5, constraints)]);
         assert_eq!(query.required_precision(99), PrecisionLevel::None);
+    }
+
+    // ── can_modify_timing (velocity_limit.is_none()) ─────
+
+    #[test]
+    fn can_modify_timing_returns_false_when_velocity_limit_is_set() {
+        let constraints = OperationConstraints {
+            velocity_limit: Some(0.5),
+            ..Default::default()
+        };
+        let query = RangeConstraintQuery::new(vec![(0..5, constraints)]);
+        assert!(!query.can_modify_timing(2));
+    }
+
+    #[test]
+    fn can_modify_timing_returns_true_when_no_velocity_limit() {
+        let constraints = pick_constraints(); // velocity_limit = None
+        let query = RangeConstraintQuery::new(vec![(0..5, constraints)]);
+        assert!(query.can_modify_timing(2));
+    }
+
+    #[test]
+    fn can_modify_timing_returns_true_for_out_of_bounds_index() {
+        let constraints = OperationConstraints {
+            velocity_limit: Some(0.5),
+            ..Default::default()
+        };
+        let query = RangeConstraintQuery::new(vec![(0..5, constraints)]);
+        assert!(query.can_modify_timing(99));
+    }
+
+    // ── can_modify_joints (delegates to can_modify_position) ─
+
+    #[test]
+    fn can_modify_joints_returns_false_when_position_tolerance_is_set() {
+        let constraints = pick_constraints(); // position_tolerance = 0.001
+        let query = RangeConstraintQuery::new(vec![(0..5, constraints)]);
+        assert!(!query.can_modify_joints(2));
+    }
+
+    #[test]
+    fn can_modify_joints_returns_true_when_no_position_constraint() {
+        let constraints = transit_constraints(); // all None
+        let query = RangeConstraintQuery::new(vec![(0..1, constraints)]);
+        assert!(query.can_modify_joints(0));
+    }
+
+    #[test]
+    fn can_modify_joints_returns_true_for_out_of_bounds_index() {
+        let constraints = pick_constraints();
+        let query = RangeConstraintQuery::new(vec![(0..5, constraints)]);
+        assert!(query.can_modify_joints(99));
+    }
+
+    // ── can_modify_neighbors (position_tolerance.is_none()) ─
+
+    #[test]
+    fn can_modify_neighbors_returns_false_when_position_tolerance_is_set() {
+        let constraints = pick_constraints(); // position_tolerance = 0.001
+        let query = RangeConstraintQuery::new(vec![(0..5, constraints)]);
+        assert!(!query.can_modify_neighbors(2));
+    }
+
+    #[test]
+    fn can_modify_neighbors_returns_true_when_no_position_constraint() {
+        let constraints = transit_constraints(); // all None
+        let query = RangeConstraintQuery::new(vec![(0..1, constraints)]);
+        assert!(query.can_modify_neighbors(0));
+    }
+
+    #[test]
+    fn can_modify_neighbors_returns_true_for_out_of_bounds_index() {
+        let constraints = pick_constraints();
+        let query = RangeConstraintQuery::new(vec![(0..5, constraints)]);
+        assert!(query.can_modify_neighbors(99));
     }
 
     // ── Multi-range queries (triangulation) ───────────────

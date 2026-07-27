@@ -1295,6 +1295,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "thalos-document"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "thalos-optimization"
 version = "0.1.0"
 dependencies = [

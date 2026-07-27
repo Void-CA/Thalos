@@ -20,6 +20,27 @@ pub trait ConstraintQuery: Send + Sync {
 
     /// Required precision level for this waypoint.
     fn required_precision(&self, waypoint_index: usize) -> PrecisionLevel;
+
+    /// May the operator modify the timestamp of waypoint `i`?
+    ///
+    /// Default: `true` — unconstrained, operators may adjust timing freely.
+    fn can_modify_timing(&self, _waypoint_index: usize) -> bool {
+        true
+    }
+
+    /// May the operator modify the joint values at waypoint `i`?
+    ///
+    /// Default: `true` — unconstrained, operators may adjust joints freely.
+    fn can_modify_joints(&self, _waypoint_index: usize) -> bool {
+        true
+    }
+
+    /// May the operator insert/remove waypoints adjacent to waypoint `i`?
+    ///
+    /// Default: `true` — unconstrained, operators may add/remove waypoints freely.
+    fn can_modify_neighbors(&self, _waypoint_index: usize) -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
@@ -120,6 +141,44 @@ mod tests {
     fn required_precision_returns_stored_level() {
         let query = MockConstraintQuery::new(false, false, PrecisionLevel::Critical);
         assert_eq!(query.required_precision(0), PrecisionLevel::Critical);
+    }
+
+    // ── New constraint methods (default true) ─────────────
+
+    #[test]
+    fn can_modify_timing_defaults_to_true() {
+        let query = MockConstraintQuery::new(false, false, PrecisionLevel::Critical);
+        assert!(query.can_modify_timing(0));
+    }
+
+    #[test]
+    fn can_modify_timing_works_for_any_index() {
+        let query = MockConstraintQuery::new(true, true, PrecisionLevel::Normal);
+        assert!(query.can_modify_timing(99));
+    }
+
+    #[test]
+    fn can_modify_joints_defaults_to_true() {
+        let query = MockConstraintQuery::new(false, false, PrecisionLevel::Critical);
+        assert!(query.can_modify_joints(5));
+    }
+
+    #[test]
+    fn can_modify_joints_works_for_any_index() {
+        let query = MockConstraintQuery::new(true, true, PrecisionLevel::Normal);
+        assert!(query.can_modify_joints(100));
+    }
+
+    #[test]
+    fn can_modify_neighbors_defaults_to_true() {
+        let query = MockConstraintQuery::new(false, false, PrecisionLevel::Critical);
+        assert!(query.can_modify_neighbors(3));
+    }
+
+    #[test]
+    fn can_modify_neighbors_works_for_any_index() {
+        let query = MockConstraintQuery::new(true, true, PrecisionLevel::Normal);
+        assert!(query.can_modify_neighbors(0));
     }
 
     // ── Trait object safety ───────────────────────────────
