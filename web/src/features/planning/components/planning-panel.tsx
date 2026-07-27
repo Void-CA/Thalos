@@ -128,7 +128,7 @@ export function PlanningPanel() {
         </button>
         {segments.length > 0 && (
           <button onClick={clear}
-            className="px-2 py-2 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-destructive hover:border-destructive/30 transition-all cursor-pointer"
+            className="px-2 py-2 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:text-destructive hover:border-destructive-mid transition-all cursor-pointer"
             title="Clear all segments">
             <Trash2 className="h-3.5 w-3.5" />
           </button>
@@ -136,7 +136,7 @@ export function PlanningPanel() {
       </div>
 
       {handleError && (
-        <div className="text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
+        <div className="text-xs text-destructive bg-destructive-weak border border-destructive-weak rounded-lg px-3 py-2">
           {handleError}
         </div>
       )}
@@ -174,7 +174,7 @@ function SegmentCard({ segment, index, color, dof, onToggle, onRemove, onUpdateF
             <input type="number" step={0.1} min={0.01} placeholder="default"
               value={segment.velocityStr}
               onChange={e => onUpdateField('velocityStr', e.target.value)}
-              className="w-full text-xs font-mono bg-input border border-border rounded-md px-2 py-1 text-left tabular-nums focus:outline-none focus:border-ring focus:ring-1 focus:ring-ring/30 [appearance:textfield]" />
+              className="w-full text-xs font-mono bg-input border border-border rounded-md px-2 py-1 text-left tabular-nums focus:outline-none focus:border-ring focus:ring-1 focus:ring-ring-weak [appearance:textfield]" />
           </label>
         </div>
       )}
@@ -236,7 +236,7 @@ function MoveLEditor({ segment, onUpdateField }: {
                 <span className="text-[10px] text-muted-foreground">{label}</span>
                 <input type="number" step={0.01} value={segment[field]}
                   onChange={e => onUpdateField(field, e.target.value)}
-                  className="w-full text-xs font-mono bg-input border border-border rounded-md px-2 py-1 text-left tabular-nums focus:outline-none focus:border-ring focus:ring-1 focus:ring-ring/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                  className="w-full text-xs font-mono bg-input border border-border rounded-md px-2 py-1 text-left tabular-nums focus:outline-none focus:border-ring focus:ring-1 focus:ring-ring-weak [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
               </label>
             )
           })}

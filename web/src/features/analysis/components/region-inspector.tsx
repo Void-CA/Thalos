@@ -137,7 +137,7 @@ export function RegionInspector() {
                   disabled={previewRepair.isPending}
                   className={`flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-md border transition-all cursor-pointer text-left
                     ${isSelected
-                      ? 'border-chart-4/40 bg-chart-4/10 text-foreground'
+                      ? 'border-chart-4/40 bg-warning-weak text-foreground'
                       : 'border-border bg-secondary/30 text-muted-foreground hover:text-foreground hover:bg-accent/50'
                     }
                   `}
@@ -153,7 +153,7 @@ export function RegionInspector() {
 
       {/* Preview result */}
       {previewResult && (
-        <div className="rounded-lg border border-chart-3/30 bg-chart-3/10 p-2.5 flex flex-col gap-1.5">
+        <div className="rounded-lg border border-success-mid bg-success-weak p-2.5 flex flex-col gap-1.5">
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground">Improvement</span>
             <span className={`font-semibold font-mono tabular-nums ${previewResult.improvement > 0 ? 'text-chart-3' : 'text-destructive'}`}>
@@ -169,7 +169,7 @@ export function RegionInspector() {
           <div className="flex gap-1.5 pt-1">
             <button onClick={() => apply.mutate()} disabled={apply.isPending}
               className="flex-1 inline-flex items-center justify-center gap-1 px-2 py-1 text-xs font-medium rounded-md 
-                         border border-chart-3/40 bg-chart-3/15 text-chart-3 hover:bg-chart-3/25 transition-all cursor-pointer disabled:opacity-40">
+                         border border-chart-3/40 bg-success-weak text-chart-3 hover:bg-chart-3/25 transition-all cursor-pointer disabled:opacity-40">
               <Check className="h-3 w-3" /> {apply.isPending ? 'Applying…' : 'Apply'}
             </button>
             {historyCount > 0 && (

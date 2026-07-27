@@ -136,7 +136,7 @@ function NumberInput({
         onChange={e => onChange(+e.target.value)}
         className="w-full text-xs font-mono bg-input border border-border rounded-md
                    px-2 py-1.5 text-left tabular-nums
-                   focus:outline-none focus:border-ring focus:ring-1 focus:ring-ring/30
+                   focus:outline-none focus:border-ring focus:ring-1 focus:ring-ring-weak
                    [appearance:textfield]
                    [&::-webkit-outer-spin-button]:appearance-none
                    [&::-webkit-inner-spin-button]:appearance-none"

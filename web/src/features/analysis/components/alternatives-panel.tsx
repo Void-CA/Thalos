@@ -82,7 +82,7 @@ export function AlternativesPanel() {
                   onClick={() => setSelectedRank(isSelected ? null : alt.rank)}
                   className={`w-full text-left p-2.5 rounded-lg border transition-all cursor-pointer
                     ${isSelected ? 'border-primary-mid bg-primary/5' : 'border-border bg-card/50 hover:bg-accent/30'}
-                    ${alt.rank === 1 ? 'ring-1 ring-chart-4/30' : ''}
+                    ${alt.rank === 1 ? 'ring-1 ring-warning-mid' : ''}
                   `}
                 >
                   <div className="flex items-center justify-between gap-2 mb-1">
@@ -103,7 +103,7 @@ export function AlternativesPanel() {
                   {alt.improvements.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">
                       {alt.improvements.map((imp, i) => (
-                        <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded ${imp.includes('worse') ? 'bg-destructive/10 text-destructive' : 'bg-chart-3/10 text-chart-3'}`}>
+                        <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded ${imp.includes('worse') ? 'bg-destructive-weak text-destructive' : 'bg-success-weak text-chart-3'}`}>
                           {imp}
                         </span>
                       ))}

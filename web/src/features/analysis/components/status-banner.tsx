@@ -22,9 +22,9 @@ export function StatusBanner() {
   const infoCount = findings.filter(f => f.severity === 'info').length
 
   const colors: Record<BannerState, { bg: string; border: string; text: string }> = {
-    good: { bg: 'bg-chart-3/10', border: 'border-chart-3/30', text: 'text-chart-3' },
-    attention: { bg: 'bg-chart-4/10', border: 'border-chart-4/30', text: 'text-chart-4' },
-    critical: { bg: 'bg-destructive/10', border: 'border-destructive/30', text: 'text-destructive' },
+    good: { bg: 'bg-success-weak', border: 'border-success-mid', text: 'text-chart-3' },
+    attention: { bg: 'bg-warning-weak', border: 'border-warning-mid', text: 'text-chart-4' },
+    critical: { bg: 'bg-destructive-weak', border: 'border-destructive-mid', text: 'text-destructive' },
   }
 
   const c = colors[bannerState]

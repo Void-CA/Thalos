@@ -29,6 +29,8 @@
   --border: oklch(0.325 0.008 268);              /* #4a4a4f */
   --sidebar-border: oklch(0.325 0.008 268);
   --ring: oklch(0.50 0.14 285);
+  --ring-weak: color-mix(in oklch, var(--ring) 30%, transparent);
+  --ring-mid: color-mix(in oklch, var(--ring) 50%, transparent);
 
   /* ── Texto ── */
   --foreground: oklch(0.89 0.006 285);           /* #e8e8ec */
@@ -128,6 +130,8 @@
   --color-warning-weak: var(--warning-weak);
   --color-warning-mid: var(--warning-mid);
   --color-warning-strong: var(--warning-strong);
+  --color-ring-weak: var(--ring-weak);
+  --color-ring-mid: var(--ring-mid);
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: calc(var(--radius) - 1px);
   --radius-lg: var(--radius);

@@ -171,8 +171,8 @@ export function IkPanel() {
             <span className="text-[11px] font-semibold text-foreground">Solved IK</span>
             <span className={`inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
               result.status === 'Converged'
-                ? 'bg-chart-3/15 text-chart-3'
-                : 'bg-chart-4/15 text-chart-4'
+                ? 'bg-success-weak text-chart-3'
+                : 'bg-warning-weak text-chart-4'
             }`}>
               {result.status === 'Converged'
                 ? <CheckCircle2 className="h-3 w-3" />
@@ -256,7 +256,7 @@ function CoordInput({
         onChange={e => onChange(+e.target.value)}
         className="w-full text-xs font-mono bg-input border border-border rounded-md
                    px-2 py-1.5 text-left tabular-nums
-                   focus:outline-none focus:border-ring focus:ring-1 focus:ring-ring/30
+                   focus:outline-none focus:border-ring focus:ring-1 focus:ring-ring-weak
                    [appearance:textfield]
                    [&::-webkit-outer-spin-button]:appearance-none
                    [&::-webkit-inner-spin-button]:appearance-none"
@@ -298,7 +298,7 @@ function ActionButton({
 
 function ErrorBox({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive">
+    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-destructive-weak border border-destructive-weak text-xs text-destructive">
       <XCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
       <span>{message}</span>
     </div>

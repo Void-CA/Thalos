@@ -74,8 +74,8 @@ export function ProblemRegions() {
             <button
               onClick={() => toggleTier(tier)}
               className={`flex items-center gap-2 w-full px-3 py-2 text-xs font-semibold uppercase tracking-wider cursor-pointer transition-colors
-                ${tier === 'critical' ? 'bg-destructive/10 text-destructive hover:bg-destructive/15' : ''}
-                ${tier === 'warning' ? 'bg-chart-4/10 text-chart-4 hover:bg-chart-4/15' : ''}
+                ${tier === 'critical' ? 'bg-destructive-weak text-destructive hover:bg-destructive-weak' : ''}
+                ${tier === 'warning' ? 'bg-warning-weak text-chart-4 hover:bg-warning-weak' : ''}
                 ${tier === 'info' ? 'bg-muted text-muted-foreground hover:bg-accent/50' : ''}
               `}
             >
@@ -128,8 +128,8 @@ function RegionCard({ region, selected, onSelect }: { region: ProblemRegion; sel
     : region.severity === 'warning' ? 'warning' : 'info'
 
   const tierStyles = {
-    critical: 'border-l-destructive bg-destructive/5 hover:bg-destructive/10',
-    warning: 'border-l-chart-4 bg-chart-4/5 hover:bg-chart-4/10',
+    critical: 'border-l-destructive bg-destructive/5 hover:bg-destructive-weak',
+    warning: 'border-l-chart-4 bg-chart-4/5 hover:bg-warning-weak',
     info: 'border-l-muted-foreground bg-card/50 hover:bg-accent/30',
   }
 

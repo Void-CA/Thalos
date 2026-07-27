@@ -283,7 +283,7 @@ function gradeBadge(singularCount: number, total: number): React.ReactNode {
   const isWarn = ratio < 0.05
   return (
     <span className={`inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
-      isGood ? 'bg-chart-3/15 text-chart-3' : isWarn ? 'bg-chart-4/15 text-chart-4' : 'bg-destructive/15 text-destructive'
+      isGood ? 'bg-success-weak text-chart-3' : isWarn ? 'bg-warning-weak text-chart-4' : 'bg-destructive-weak text-destructive'
     }`}>
       {isGood ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
       {isGood ? 'Good' : isWarn ? 'Fair' : 'Poor'}
@@ -297,7 +297,7 @@ function gradeBadgeInverse(value: number): React.ReactNode {
   const isWarn = value >= 0.3
   return (
     <span className={`inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
-      isGood ? 'bg-chart-3/15 text-chart-3' : isWarn ? 'bg-chart-4/15 text-chart-4' : 'bg-destructive/15 text-destructive'
+      isGood ? 'bg-success-weak text-chart-3' : isWarn ? 'bg-warning-weak text-chart-4' : 'bg-destructive-weak text-destructive'
     }`}>
       {isGood ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
       {isGood ? 'Good' : isWarn ? 'Fair' : 'Poor'}
@@ -307,7 +307,7 @@ function gradeBadgeInverse(value: number): React.ReactNode {
 
 function ErrorBox({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive">
+    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-destructive-weak border border-destructive-weak text-xs text-destructive">
       <XCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
       <span>{message}</span>
     </div>

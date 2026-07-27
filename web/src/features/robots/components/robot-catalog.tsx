@@ -53,7 +53,7 @@ export function RobotCatalog() {
 
   if (error) {
     return (
-      <div className="flex items-start gap-2 p-3 text-sm text-destructive bg-destructive/10 rounded-md border border-destructive/20">
+      <div className="flex items-start gap-2 p-3 text-sm text-destructive bg-destructive-weak rounded-md border border-destructive-weak">
         <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
         <span>{String(error)}</span>
       </div>
