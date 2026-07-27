@@ -5,6 +5,7 @@ import { RobotModel } from './robot-model'
 import { Trajectory } from './trajectory'
 import { IkGizmo } from './ik-gizmo'
 import { TcpOverlay } from './tcp-overlay'
+import { PointCloud } from './point-cloud'
 import { useSceneStore } from '../store'
 
 interface SceneCanvasProps {
@@ -78,6 +79,7 @@ export function SceneCanvas({ showStats = false }: SceneCanvasProps) {
           <Trajectory />
           <IkGizmo />
           <TcpOverlay />
+          <PointCloud />
         </Suspense>
       )}
 
