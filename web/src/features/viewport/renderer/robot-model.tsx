@@ -1,169 +1,97 @@
-import { useMemo, useRef } from 'react'
+import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useSceneStore } from '../store'
 import { DEFAULT_FRAME_STYLE } from '../types'
-import type { SceneFrame, SceneLink, ScenePrimitive, PrimitiveGeometry } from '../types'
+import type { SceneFrame, SceneLink, ScenePrimitive } from '../types'
+import { AXIS_ORIGIN, LINK_COLOR, LINK_OPACITY } from '@/shared/tokens'
 
 /**
  * RobotModel — renderiza frames, links y primitivas de la escena robótica.
  *
- * Convenciones Thalos (Z-up):
- *   - Three.js CylinderGeometry es Y-aligned → se rota según dirección.
- *   - Quaternions desde Rust: [w, x, y, z] → Three.js: .set(x, y, z, w).
- *   - Grid en plano XY (Z-up horizontal), gridHelper rotado π/2 en X.
+ * Las primitivas se renderizan como hijas de su frame padre en el scene graph
+ * de R3F, heredando su transformación. Esto es crítico para URDF: el backend
+ * envía `frame_id` + translación/rotación LOCAL al frame.
  *
- * Matching exacto del renderer Angular (three-renderer.service.ts):
- *   - Links: Cylinder #3399ff, opacity 0.35, 8 radial segments.
- *   - Frames: shaft (cylinder) + head (cone) por eje, colores X=1,0.5,0 | Y=0,0.8,0 | Z=0,0.5,1.
- *   - Primitivas anidadas bajo su frame padre.
+ * Matching exacto del Angular three-renderer.service.ts que hace:
+ *   parentGroup = frameSlots.get(p.frameId)?.group ?? fallback;
+ *   parentGroup.add(mesh);
+ *   mesh.position.set(p.translation);
  */
 export function RobotModel() {
   const data = useSceneStore(s => s.data)
-  const groupRef = useRef<THREE.Group>(null)
-
   if (!data) return null
 
+  // Agrupar primitivas por frameId para anidarlas bajo su frame padre
+  const primitivesByFrame = useMemo(() => {
+    const map = new Map<string, ScenePrimitive[]>()
+    for (const p of data.primitives) {
+      const list = map.get(p.frameId) ?? []
+      list.push(p)
+      map.set(p.frameId, list)
+    }
+    return map
+  }, [data.primitives])
+
+  const frameIds = new Set(data.frames.map(f => f.id))
+
   return (
-    <group ref={groupRef}>
-      {/* Links primero (detrás de todo) */}
+    <group>
+      {/* Links */}
       {data.links.map(link => (
         <LinkComponent key={link.id} link={link} refDim={data.referenceDimension} />
       ))}
 
-      {/* Primitivas visuales */}
-      {data.primitives.map(p => (
-        <PrimitiveComponent key={p.id} primitive={p} />
-      ))}
+      {/* Frames con sus primitivas hijas */}
+      {data.frames.map(frame => {
+        const children = primitivesByFrame.get(frame.id)
+        return (
+          <FrameComponent key={frame.id} frame={frame}>
+            {children?.map(p => (
+              <PrimitiveComponent key={p.id} primitive={p} />
+            ))}
+          </FrameComponent>
+        )
+      })}
 
-      {/* Frames de coordenadas encima de todo */}
-      {data.frames.map(frame => (
-        <FrameComponent key={frame.id} frame={frame} />
-      ))}
+      {/* Primitivas huérfanas (sin frame padre conocido) */}
+      {data.primitives
+        .filter(p => !frameIds.has(p.frameId))
+        .map(p => (
+          <PrimitiveComponent key={p.id} primitive={p} />
+        ))}
     </group>
   )
 }
 
-// ═══════════════════════════════════════════
-//  Link — cilindro entre dos articulaciones
-// ═══════════════════════════════════════════
-
-interface LinkComponentProps {
-  link: SceneLink
-  refDim: number
-}
-
-function LinkComponent({ link, refDim }: LinkComponentProps) {
-  const radius = Math.max(refDim * 0.015, 0.003)
-
-  const mesh = useMemo(() => {
-    const start = new THREE.Vector3(...link.start)
-    const end = new THREE.Vector3(...link.end)
-    const dir = new THREE.Vector3().subVectors(end, start)
-    const length = dir.length()
-
-    if (length < 1e-10) return null
-
-    const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5)
-    const up = new THREE.Vector3(0, 1, 0) // CylinderGeometry es Y-aligned
-    const quat = new THREE.Quaternion().setFromUnitVectors(up, dir.clone().normalize())
-
-    return { position: mid, quaternion: quat, scale: [1, length, 1] as const }
-  }, [link.start, link.end])
-
-  if (!mesh) return null
-
-  return (
-    <mesh position={mesh.position} quaternion={mesh.quaternion} scale={mesh.scale}>
-      {/* Unit cylinder along +Y, scaled Y to actual length — matching Angular */}
-      <cylinderGeometry args={[radius, radius, 1, 8, 1]} />
-      {/* #3399ff con 0.35 opacity — matching Angular */}
-      <meshStandardMaterial
-        color="#3399ff"
-        transparent
-        opacity={0.35}
-      />
-    </mesh>
-  )
-}
-
-// ═══════════════════════════════════════════
-//  Frame — ejes de coordenadas X(rojo/anaranjado) Y(verde) Z(azul)
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════════
+//  Frame — eje de coordenadas + primitivas hijas
+// ═══════════════════════════════════════════════
 
 interface FrameComponentProps {
   frame: SceneFrame
+  children?: React.ReactNode
 }
 
-/** Convierte quaternion Rust [w, x, y, z] → Three.js (x, y, z, w). */
 function rustQuatToThree([w, x, y, z]: [number, number, number, number]): THREE.Quaternion {
   return new THREE.Quaternion(x, y, z, w)
 }
 
-/** Crea una THREE.Line para casos donde radius≈0. */
-function createAxisLine(dir: THREE.Vector3, length: number, color: THREE.Color): THREE.Line {
-  const pts = [new THREE.Vector3(0, 0, 0), dir.clone().multiplyScalar(length)]
-  const geom = new THREE.BufferGeometry().setFromPoints(pts)
-  return new THREE.Line(geom, new THREE.LineBasicMaterial({ color }))
-}
-
-/** Construye una flecha de eje: shaft cilíndrico + cono en la punta. */
-function AxisArrow({
-  dir,
-  length,
-  radius,
-  color,
-}: {
-  dir: THREE.Vector3
-  length: number
-  radius: number
-  color: THREE.Color
-}) {
-  const headLen = Math.min(length * 0.2, 0.04)
-  const shaftLen = length - headLen
-  const up = new THREE.Vector3(0, 1, 0)
-  const shaftCenter = dir.clone().multiplyScalar(shaftLen / 2)
-  const headCenter = dir.clone().multiplyScalar(shaftLen + headLen / 2)
-
-  if (radius > 1e-6) {
-    const quat = new THREE.Quaternion().setFromUnitVectors(up, dir)
-
-    return (
-      <group>
-        {/* Shaft */}
-        <mesh position={shaftCenter} quaternion={quat}>
-          <cylinderGeometry args={[radius, radius, shaftLen, 6, 1]} />
-          <meshStandardMaterial color={color} />
-        </mesh>
-        {/* Arrow head */}
-        <mesh position={headCenter} quaternion={quat}>
-          <coneGeometry args={[radius * 3, headLen, 6, 1]} />
-          <meshStandardMaterial color={color} />
-        </mesh>
-      </group>
-    )
-  }
-
-  // Fallback: línea cuando radius ≈ 0
-  return <primitive object={createAxisLine(dir, length, color)} />
-}
-
-function FrameComponent({ frame }: FrameComponentProps) {
+function FrameComponent({ frame, children }: FrameComponentProps) {
   const style = frame.style ?? DEFAULT_FRAME_STYLE
   const pos = new THREE.Vector3(...frame.translation)
-  // Rust quaternion [w, x, y, z] → Three.js (x, y, z, w)
   const quat = rustQuatToThree(frame.rotation)
 
   return (
     <group position={pos} quaternion={quat}>
-      {/* Origin sphere — matching Angular: solo si originRadius > 0 */}
+      {/* Origin sphere */}
       {style.originRadius > 0 && (
         <mesh>
           <sphereGeometry args={[style.originRadius, 12, 12]} />
-          <meshStandardMaterial color="#cccccc" />
+          <meshStandardMaterial color={AXIS_ORIGIN} />
         </mesh>
       )}
 
-      {/* Ejes — matching Angular: X=1,0.5,0 | Y=0,0.8,0 | Z=0,0.5,1 */}
+      {/* Ejes X(1,0.5,0) Y(0,0.8,0) Z(0,0.5,1) */}
       <AxisArrow
         dir={new THREE.Vector3(1, 0, 0)}
         length={style.axisLength}
@@ -182,48 +110,85 @@ function FrameComponent({ frame }: FrameComponentProps) {
         radius={style.axisRadius}
         color={new THREE.Color(...style.colorZ)}
       />
+
+      {/* Primitivas hijas (heredan la transformación del frame) */}
+      {children}
     </group>
   )
 }
 
-// ═══════════════════════════════════════════
-//  Primitive — geometría URDF (box, sphere, cylinder)
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════════
+//  Link — cilindro entre dos articulaciones
+// ═══════════════════════════════════════════════
 
-// TODO: parentear primitivas al grupo del frame padre requiere un registry
-// de refs compartido entre FrameComponent y PrimitiveComponent.
-// Por ahora se renderizan en world space (translación + rotación absolutos).
-
-function createPrimitiveGeometry(geo: PrimitiveGeometry): THREE.BufferGeometry {
-  switch (geo.type) {
-    case 'box':
-      return new THREE.BoxGeometry(geo.width, geo.height, geo.depth)
-    case 'sphere':
-      return new THREE.SphereGeometry(geo.radius, 16, 16)
-    case 'cylinder':
-      return new THREE.CylinderGeometry(geo.radius, geo.radius, geo.height, 16, 1)
-  }
+interface LinkComponentProps {
+  link: SceneLink
+  refDim: number
 }
 
+function LinkComponent({ link, refDim }: LinkComponentProps) {
+  const radius = Math.max(refDim * 0.015, 0.003)
+
+  const mesh = useMemo(() => {
+    const start = new THREE.Vector3(...link.start)
+    const end = new THREE.Vector3(...link.end)
+    const dir = new THREE.Vector3().subVectors(end, start)
+    const length = dir.length()
+    if (length < 1e-10) return null
+
+    const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5)
+    const up = new THREE.Vector3(0, 1, 0)
+    const quat = new THREE.Quaternion().setFromUnitVectors(up, dir.clone().normalize())
+
+    return { position: mid, quaternion: quat, length }
+  }, [link.start, link.end])
+
+  if (!mesh) return null
+
+  return (
+    <mesh position={mesh.position} quaternion={mesh.quaternion} scale={[1, mesh.length, 1]}>
+      <cylinderGeometry args={[radius, radius, 1, 8, 1]} />
+      <meshStandardMaterial color={LINK_COLOR} transparent opacity={LINK_OPACITY} />
+    </mesh>
+  )
+}
+
+// ═══════════════════════════════════════════════
+//  Primitive — geometría URDF (box, sphere, cylinder)
+// ═══════════════════════════════════════════════
+
 function PrimitiveComponent({ primitive }: { primitive: ScenePrimitive }) {
-  const geometry = useMemo(() => createPrimitiveGeometry(primitive.geometry), [primitive.geometry])
+  const geometry = useMemo(() => {
+    switch (primitive.geometry.type) {
+      case 'box':
+        return new THREE.BoxGeometry(
+          primitive.geometry.width,
+          primitive.geometry.height,
+          primitive.geometry.depth,
+        )
+      case 'sphere':
+        return new THREE.SphereGeometry(primitive.geometry.radius, 16, 16)
+      case 'cylinder':
+        return new THREE.CylinderGeometry(
+          primitive.geometry.radius,
+          primitive.geometry.radius,
+          primitive.geometry.height,
+          16,
+          1,
+        )
+    }
+  }, [primitive.geometry])
 
   const color = primitive.color
     ? new THREE.Color(primitive.color[0], primitive.color[1], primitive.color[2])
     : new THREE.Color(0xaaaaaa)
 
   const opacity = primitive.color?.[3] ?? 1
-
-  // Rust quaternion [w, x, y, z] → Three.js (x, y, z, w)
   const pos = new THREE.Vector3(...primitive.translation)
   const quat = rustQuatToThree(primitive.rotation)
 
   return (
-    <mesh
-      geometry={geometry}
-      position={pos}
-      quaternion={quat}
-    >
+    <mesh geometry={geometry} position={pos} quaternion={quat} frustumCulled={false}>
       <meshStandardMaterial
         color={color}
         opacity={opacity}
@@ -233,4 +198,49 @@ function PrimitiveComponent({ primitive }: { primitive: ScenePrimitive }) {
       />
     </mesh>
   )
+}
+
+// ═══════════════════════════════════════════════
+//  AxisArrow — flecha cilíndrica para ejes
+// ═══════════════════════════════════════════════
+
+function createAxisLine(dir: THREE.Vector3, length: number, color: THREE.Color): THREE.Line {
+  const pts = [new THREE.Vector3(0, 0, 0), dir.clone().multiplyScalar(length)]
+  return new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({ color }),
+  )
+}
+
+function AxisArrow({
+  dir, length, radius, color,
+}: {
+  dir: THREE.Vector3
+  length: number
+  radius: number
+  color: THREE.Color
+}) {
+  if (radius > 1e-6) {
+    const headLen = Math.min(length * 0.2, 0.04)
+    const shaftLen = length - headLen
+    const up = new THREE.Vector3(0, 1, 0)
+    const shaftCenter = dir.clone().multiplyScalar(shaftLen / 2)
+    const headCenter = dir.clone().multiplyScalar(shaftLen + headLen / 2)
+    const quat = new THREE.Quaternion().setFromUnitVectors(up, dir)
+
+    return (
+      <group>
+        <mesh position={shaftCenter} quaternion={quat}>
+          <cylinderGeometry args={[radius, radius, shaftLen, 6, 1]} />
+          <meshStandardMaterial color={color} />
+        </mesh>
+        <mesh position={headCenter} quaternion={quat}>
+          <coneGeometry args={[radius * 3, headLen, 6, 1]} />
+          <meshStandardMaterial color={color} />
+        </mesh>
+      </group>
+    )
+  }
+
+  return <primitive object={createAxisLine(dir, length, color)} />
 }

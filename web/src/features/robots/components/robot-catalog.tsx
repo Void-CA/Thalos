@@ -1,8 +1,9 @@
+import { useRef, useState } from 'react'
 import { useRobots } from '../api/use-robots'
 import { useRobotStore, useSelectedRobot } from '../store'
+import { useLoadRobotFromUrdf } from '@/features/viewport/synchronization/use-scene-loader'
 import { RobotCard } from './robot-card'
-import { Loader2, AlertCircle, ChevronRight, ChevronDown } from 'lucide-react'
-import { useState } from 'react'
+import { Loader2, AlertCircle, ChevronRight, ChevronDown, Upload } from 'lucide-react'
 
 /** IDs de robots a excluir del catálogo. */
 const EXCLUDED_IDS = new Set([
@@ -19,9 +20,28 @@ export function RobotCatalog() {
   const select = useRobotStore(s => s.select)
   const selectedRobot = useSelectedRobot()
   const [canonicalOpen, setCanonicalOpen] = useState(true)
+  const [urdfOpen, setUrdfOpen] = useState(false)
+  const [urdfFileName, setUrdfFileName] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const loadUrdf = useLoadRobotFromUrdf()
 
-  // Todos los robots visibles van bajo "Canonical Models"
   const displayedRobots = robots.filter(r => !EXCLUDED_IDS.has(r.id.toLowerCase()))
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUrdfFileName(file.name)
+    select(null) // deselect any canonical robot
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      loadUrdf.mutate(reader.result as string)
+    }
+    reader.readAsText(file)
+    // Reset input so same file can be re-selected
+    e.target.value = ''
+  }
 
   if (isLoading) {
     return (
@@ -42,7 +62,7 @@ export function RobotCatalog() {
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Todos los robots bajo Canonical Models — colapsable */}
+      {/* ── Canonical Models ── */}
       {displayedRobots.length > 0 && (
         <div className="rounded-md border border-border overflow-hidden">
           <button
@@ -62,7 +82,10 @@ export function RobotCatalog() {
                   key={robot.id}
                   robot={robot}
                   selected={selectedId === robot.id}
-                  onSelect={() => select(robot.id)}
+                  onSelect={() => {
+                    setUrdfFileName(null)
+                    select(robot.id)
+                  }}
                   compact
                 />
               ))}
@@ -70,6 +93,56 @@ export function RobotCatalog() {
           )}
         </div>
       )}
+
+      {/* ── Import URDF ── */}
+      <div className="rounded-md border border-border overflow-hidden">
+        <button
+          onClick={() => setUrdfOpen(!urdfOpen)}
+          className="flex items-center gap-1.5 w-full px-2.5 py-1.5 text-xs font-semibold uppercase
+                     tracking-wider text-muted-foreground bg-secondary/30 hover:bg-secondary/60
+                     transition-colors cursor-pointer"
+        >
+          {urdfOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+          Import URDF
+        </button>
+        {urdfOpen && (
+          <div className="p-2.5 flex flex-col gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".urdf,.xml"
+              onChange={handleFile}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loadUrdf.isPending}
+              className="inline-flex items-center justify-center gap-2 w-full px-3 py-2 text-xs font-medium
+                         rounded-lg border border-dashed border-border bg-transparent
+                         text-muted-foreground hover:text-foreground hover:border-border hover:bg-secondary/30
+                         transition-all cursor-pointer disabled:opacity-40"
+            >
+              {loadUrdf.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Upload className="h-3.5 w-3.5" />
+              )}
+              {loadUrdf.isPending ? 'Importing…' : 'Choose file…'}
+            </button>
+            {urdfFileName && (
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <span className="truncate">{urdfFileName}</span>
+                {loadUrdf.isSuccess && <span className="text-chart-3 shrink-0">✓ loaded</span>}
+              </div>
+            )}
+            {loadUrdf.error && (
+              <div className="text-[11px] text-destructive">
+                {(loadUrdf.error as Error).message}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {robots.length === 0 && !isLoading && (
         <p className="text-xs text-muted-foreground text-center py-8">

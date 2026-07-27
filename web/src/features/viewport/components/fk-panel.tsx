@@ -1,40 +1,68 @@
-import { memo, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useSceneStore } from '../store'
 import { useFkStream } from '../synchronization/use-fk-stream'
 
 /**
  * FK Panel — Forward Kinematics joint control.
  *
- * Optimizado: los slider rows son React.memo y la función onChange
- * se mantiene estable via ref para no romper la memoización.
+ * Clave de fluidez: usa **throttle con trailing** (matching auditTime(16)
+ * de Angular) para que los sliders envíen FK a ~60fps durante el arrastre.
+ *
+ * No se subscribe a s.runtime — usa un effect que solo corre cuando
+ * cambia el DOF (robot nuevo), evitando re-renders en cada respuesta FK.
  */
 export function FkPanel() {
-  const runtime = useSceneStore(s => s.runtime)
   const fkMutation = useFkStream()
   const localValues = useRef<number[]>([])
+  const meta = useRef<{ name: string; min: number; max: number }[]>([])
 
-  const joints = runtime?.robot.joints ?? []
-  const runtimeValues = runtime?.joints ?? []
+  // Lee DOF del store — cambia solo cuando se carga un robot nuevo
+  const dof = useSceneStore(s => s.runtime?.robot.joints.length ?? 0)
 
-  // Solo sincronizar del store cuando cambia el DOF (robot nuevo)
-  const prevDof = useRef(0)
+  // Sincroniza metadata y valores cuando cambia el DOF
   useEffect(() => {
-    const dof = joints.length
-    if (dof > 0 && dof !== prevDof.current) {
-      prevDof.current = dof
-      localValues.current = [...runtimeValues]
-    }
-  }, [joints.length, runtimeValues])
+    if (dof === 0) return
+    const state = useSceneStore.getState()
+    const runtime = state.runtime
+    if (!runtime || runtime.robot.joints.length !== dof) return
 
-  // Ref mutable: debounce 16ms (~60fps) para no saturar la API
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const sendFkRef = useRef<(values: number[]) => void>(() => {})
-  sendFkRef.current = (values) => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => { fkMutation.mutate(values) }, 16)
+    localValues.current = [...runtime.joints]
+    meta.current = runtime.robot.joints.map(j => ({
+      name: j.name,
+      min: j.min ?? -Math.PI,
+      max: j.max ?? Math.PI,
+    }))
+  }, [dof])
+
+  // ── Throttle con trailing (matching auditTime(16) de Angular) ──
+  const lastCall = useRef(0)
+  const pending = useRef<number[] | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const scheduleFk = (values: number[]) => {
+    const now = Date.now()
+    const elapsed = now - lastCall.current
+
+    if (elapsed >= 16) {
+      lastCall.current = now
+      pending.current = null
+      fkMutation.mutate(values)
+    } else {
+      pending.current = values
+      if (!timer.current) {
+        timer.current = setTimeout(() => {
+          timer.current = null
+          if (pending.current) {
+            lastCall.current = Date.now()
+            fkMutation.mutate(pending.current)
+            pending.current = null
+          }
+        }, 16 - elapsed)
+      }
+    }
   }
 
-  if (!runtime) {
+  if (dof === 0) {
     return (
       <div className="px-1 py-6 text-xs text-muted-foreground text-center">
         Load a robot to adjust joints
@@ -44,42 +72,37 @@ export function FkPanel() {
 
   return (
     <div className="flex flex-col gap-2">
-      {joints.map((j, i) => {
-        const val = localValues.current[i] ?? runtimeValues[i] ?? 0
+      {meta.current.map((j, i) => {
+        const val = localValues.current[i] ?? 0
         return (
           <SliderRow
             key={j.name}
             name={j.name}
             value={val}
-            min={j.min ?? -Math.PI}
-            max={j.max ?? Math.PI}
-            index={i}
-            onChange={(idx, v) => {
-              localValues.current[idx] = v
-              sendFkRef.current([...localValues.current])
+            min={j.min}
+            max={j.max}
+            onChange={(v) => {
+              localValues.current[i] = v
+              scheduleFk([...localValues.current])
             }}
           />
         )
       })}
-      {/* "updating…" eliminado — parpadea al mover sliders */}
     </div>
   )
 }
 
-// ── SliderRow memoizado ──
+// ── SliderRow — sin memo, el render de ~6 joints es barato ──
 
-interface SliderRowProps {
+function SliderRow({
+  name, value, min, max, onChange,
+}: {
   name: string
   value: number
   min: number
   max: number
-  index: number
-  onChange: (index: number, value: number) => void
-}
-
-const SliderRow = memo(function SliderRow({
-  name, value, min, max, index, onChange,
-}: SliderRowProps) {
+  onChange: (v: number) => void
+}) {
   const pct = max > min ? ((value - min) / (max - min)) * 100 : 0
 
   return (
@@ -97,13 +120,13 @@ const SliderRow = memo(function SliderRow({
             min={min}
             max={max}
             step={0.001}
-            defaultValue={value}
-            onChange={e => onChange(index, +e.target.value)}
+            value={value}
+            onChange={e => onChange(+e.target.value)}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
           />
           <div className="w-full h-1.5 rounded-full bg-secondary overflow-hidden">
             <div
-              className="h-full rounded-full bg-primary/60 transition-none"
+              className="h-full rounded-full bg-primary/60"
               style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
             />
           </div>
@@ -114,7 +137,7 @@ const SliderRow = memo(function SliderRow({
           max={max}
           step={0.01}
           value={value}
-          onChange={e => onChange(index, +e.target.value)}
+          onChange={e => onChange(+e.target.value)}
           className="w-20 text-xs font-mono bg-input border border-border rounded-md
                      px-2 py-1 text-left tabular-nums
                      focus:outline-none focus:border-ring focus:ring-1 focus:ring-ring/30
@@ -125,4 +148,4 @@ const SliderRow = memo(function SliderRow({
       </div>
     </div>
   )
-})
+}

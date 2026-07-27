@@ -5,6 +5,7 @@ import { useSceneService } from '../services/service-context'
 import type { IkTarget } from '../types'
 import type { RotationDto } from '../api/scene-api.types'
 import { CheckCircle2, XCircle, Loader2, Eye, Cpu, Play } from 'lucide-react'
+import { BTN_SOLVE_BG, BTN_EXECUTE_BG } from '@/shared/tokens'
 
 /**
  * IK Panel — Inverse Kinematics target control (3-step flow).
@@ -277,19 +278,17 @@ function ActionButton({
   variant?: 'default' | 'solve' | 'execute'
   disabled?: boolean
 }) {
-  const variants: Record<string, string> = {
-    default: 'bg-secondary text-foreground border-border hover:bg-accent',
-    solve: 'bg-[#1a5a9c] border-[#2a6ab0] text-white hover:bg-[#1a6abc]',
-    execute: 'bg-[#2a6a2a] border-[#3a8a3a] text-white hover:bg-[#3a7a3a]',
-  }
+  const base = 'inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed'
+  const style = variant === 'solve' ? { background: BTN_SOLVE_BG, borderColor: '#2a6ab0', color: '#fff' }
+    : variant === 'execute' ? { background: BTN_EXECUTE_BG, borderColor: '#3a8a3a', color: '#fff' }
+    : {}
+  const cls = variant === 'default' ? 'bg-secondary text-foreground border-border hover:bg-accent' : ''
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium
-                 rounded-lg border transition-all cursor-pointer
-                 disabled:opacity-40 disabled:cursor-not-allowed
-                 ${variants[variant]}`}
+      style={style}
+      className={`${base} ${cls}`}
     >
       {Icon && <Icon className={`h-3.5 w-3.5 ${disabled && Icon === Loader2 ? 'animate-spin' : ''}`} />}
       {label}

@@ -6,6 +6,7 @@ import { Trajectory } from './trajectory'
 import { IkGizmo } from './ik-gizmo'
 import { TcpOverlay } from './tcp-overlay'
 import { PointCloud } from './point-cloud'
+import { SCENE_BG, GRID_COLOR_CENTER, GRID_COLOR_LINE } from '@/shared/tokens'
 import { useSceneStore } from '../store'
 
 interface SceneCanvasProps {
@@ -36,10 +37,10 @@ function SceneGrid() {
   const size = Math.max(refDim * 4, 0.5)
 
   return (
-    <gridHelper
-      args={[size, 10, 0x666666, 0x444444]}
-      rotation={[Math.PI / 2, 0, 0]}
-    />
+      <gridHelper
+          args={[size, 10, GRID_COLOR_CENTER, GRID_COLOR_LINE]}
+          rotation={[Math.PI / 2, 0, 0]}
+        />
   )
 }
 
@@ -62,15 +63,12 @@ export function SceneCanvas({ showStats = false }: SceneCanvasProps) {
       gl={{ antialias: true, alpha: false }}
       style={{ width: '100%', height: '100%' }}
     >
-      <color attach="background" args={[0x1a1a1a]} />
+      <color attach="background" args={[SCENE_BG]} />
       <AdaptiveDpr pixelated />
 
       <CameraSetup />
       <SceneLights />
       <SceneGrid />
-
-      {/* Ejes globales */}
-      <axesHelper args={[0.5]} />
 
       {/* Robot + overlays */}
       {sceneData && (

@@ -1,61 +1,162 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useSceneStore } from '../store'
-import type { VisualWaypointDto } from '../../viewport/api/scene-api.types'
-
-const WAYPOINT_COLORS: Record<string, string> = {
-  Start: '#22c55e',
-  Goal: '#ef4444',
-  Via: '#3b82f6',
-}
+import { useAnalysisStore } from '@/features/analysis/store'
+import type { VisualWaypointDto } from '../api/scene-api.types'
+import {
+  SEGMENT_PALETTE,
+  WAYPOINT_TYPE,
+  TRAJECTORY_LINE,
+  SEVERITY,
+  MANIP_HIGH, MANIP_MED, MANIP_LOW,
+  SINGULAR_NORMAL, SINGULAR_NEAR, SINGULAR_SINGULAR,
+} from '@/shared/tokens'
 
 /**
- * Trajectory — renderiza la trayectoria del plan activo como una línea
- * con marcadores de waypoint.
+ * Trajectory — renderiza la trayectoria del plan activo.
  */
 export function Trajectory() {
   const activePlan = useSceneStore(s => s.activePlan)
-
+  const colorMode = useSceneStore(s => s.trajectoryColorMode)
+  const analysisWp = useAnalysisStore(s => s.waypoints)
+  const segments = activePlan?.segments
   const vis = activePlan?.visualization
+
+  const hasAnalysis = analysisWp.length > 0 && analysisWp.length === (vis?.waypoints.length ?? 0)
+
+  const perWaypointColor = useMemo(() => {
+    if (!vis || !hasAnalysis || !analysisWp.length || colorMode === 'segment') return null
+    return analysisWp.map(wp => {
+      switch (colorMode) {
+        case 'trajectory-quality':
+          return SEVERITY[wp.severity] ?? SEVERITY.nodata
+        case 'manipulability':
+          if (wp.manipulability == null) return SEVERITY.nodata
+          if (wp.manipulability >= 0.5) return MANIP_HIGH
+          if (wp.manipulability >= 0.3) return MANIP_MED
+          return MANIP_LOW
+        case 'singularity':
+          switch (wp.singularity_state) {
+            case 'singular': return SINGULAR_SINGULAR
+            case 'near': return SINGULAR_NEAR
+            case 'normal': return SINGULAR_NORMAL
+            default: return SEVERITY.nodata
+          }
+        default:
+          return SEVERITY.nodata
+      }
+    })
+  }, [colorMode, analysisWp, hasAnalysis, vis])
+
+  const fallbackLine = useMemo(() => {
+    if (!vis || vis.waypoints.length < 2) return null
+    const pts = vis.waypoints.map((w: VisualWaypointDto) => new THREE.Vector3(...w.position))
+    return new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({ color: TRAJECTORY_LINE }),
+    )
+  }, [vis])
+
   if (!vis || vis.waypoints.length < 2) return null
 
   return (
     <group>
-      <TrajectoryLine waypoints={vis.waypoints} />
-      <WaypointMarkers waypoints={vis.waypoints} />
+      <TrajectoryLines
+        waypoints={vis.waypoints} colorMode={colorMode}
+        segments={segments ?? undefined} perWaypointColor={perWaypointColor}
+        fallbackLine={fallbackLine}
+      />
+      <WaypointMarkers
+        waypoints={vis.waypoints} colorMode={colorMode}
+        segments={segments ?? undefined} perWaypointColor={perWaypointColor}
+      />
     </group>
   )
 }
 
-function TrajectoryLine({ waypoints }: { waypoints: VisualWaypointDto[] }) {
-  const points = useMemo(() => {
-    return waypoints.map(w => new THREE.Vector3(...w.position))
-  }, [waypoints])
+function TrajectoryLines({
+  waypoints, colorMode, segments, perWaypointColor, fallbackLine,
+}: {
+  waypoints: VisualWaypointDto[]
+  colorMode: string
+  segments?: { segmentIndex: number; waypointStart: number; waypointEnd: number }[]
+  perWaypointColor: number[] | null
+  fallbackLine: THREE.Line | null
+}) {
+  if (colorMode === 'segment' && segments && segments.length > 0) {
+    return (
+      <group>
+        {segments.map((seg, segIdx) => {
+          const wpSeg = waypoints.slice(seg.waypointStart, seg.waypointEnd + 1)
+          if (wpSeg.length < 2) return null
+          const pts = wpSeg.map(w => new THREE.Vector3(...w.position))
+          const line = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints(pts),
+            new THREE.LineBasicMaterial({ color: SEGMENT_PALETTE[segIdx % SEGMENT_PALETTE.length] }),
+          )
+          return <primitive key={segIdx} object={line} />
+        })}
+      </group>
+    )
+  }
 
-  const geometry = useMemo(() => {
-    const geo = new THREE.BufferGeometry().setFromPoints(points)
-    return geo
-  }, [points])
+  if (perWaypointColor && perWaypointColor.length === waypoints.length) {
+    return <primitive object={buildColoredLine(waypoints, perWaypointColor)} />
+  }
 
-  return (
-    <line>
-      <bufferGeometry {...geometry} />
-      <lineBasicMaterial color="#3b82f6" linewidth={2} />
-    </line>
-  )
+  if (!fallbackLine) return null
+  return <primitive object={fallbackLine} />
 }
 
-function WaypointMarkers({ waypoints }: { waypoints: VisualWaypointDto[] }) {
+function WaypointMarkers({
+  waypoints, colorMode, segments, perWaypointColor,
+}: {
+  waypoints: VisualWaypointDto[]
+  colorMode: string
+  segments?: { segmentIndex: number; waypointStart: number; waypointEnd: number }[]
+  perWaypointColor: number[] | null
+}) {
   return (
     <group>
-      {waypoints.map((wp, i) => (
-        <mesh key={i} position={wp.position}>
-          <sphereGeometry args={[0.012, 12, 12]} />
-          <meshStandardMaterial
-            color={WAYPOINT_COLORS[wp.waypoint_type] ?? '#888888'}
-          />
-        </mesh>
-      ))}
+      {waypoints.map((wp, i) => {
+        let color: number
+        if (perWaypointColor?.[i] !== undefined) {
+          color = perWaypointColor[i]
+        } else if (colorMode === 'segment' && segments) {
+          color = getSegmentColor(i, segments)
+        } else {
+          color = WAYPOINT_TYPE[wp.waypoint_type] ?? SEVERITY.nodata
+        }
+        return (
+          <mesh key={i} position={wp.position}>
+            <sphereGeometry args={[0.012, 12, 12]} />
+            <meshBasicMaterial color={color} />
+          </mesh>
+        )
+      })}
     </group>
   )
+}
+
+function buildColoredLine(waypoints: VisualWaypointDto[], colors: number[]): THREE.Line {
+  const positions = new Float32Array(waypoints.length * 3)
+  const colorArr = new Float32Array(waypoints.length * 3)
+  for (let i = 0; i < waypoints.length; i++) {
+    const wp = waypoints[i]; const c = new THREE.Color(colors[i] ?? SEVERITY.nodata)
+    positions[i * 3] = wp.position[0]; positions[i * 3 + 1] = wp.position[1]; positions[i * 3 + 2] = wp.position[2]
+    colorArr[i * 3] = c.r; colorArr[i * 3 + 1] = c.g; colorArr[i * 3 + 2] = c.b
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geo.setAttribute('color', new THREE.BufferAttribute(colorArr, 3))
+  return new THREE.Line(geo, new THREE.LineBasicMaterial({ vertexColors: true }))
+}
+
+function getSegmentColor(i: number, segments: { segmentIndex: number; waypointStart: number; waypointEnd: number }[]): number {
+  for (const seg of segments) {
+    if (i >= seg.waypointStart && i <= seg.waypointEnd) {
+      return SEGMENT_PALETTE[seg.segmentIndex % SEGMENT_PALETTE.length]
+    }
+  }
+  return SEVERITY.nodata
 }

@@ -1,0 +1,131 @@
+import { useState } from 'react'
+import { useAnalysisStore, useSelectedRegion } from './store'
+import { planAnalysisApi } from './api/plan-analysis-api'
+import { StatusBanner } from './components/status-banner'
+import { ProblemRegions } from './components/problem-regions'
+import { RegionInspector } from './components/region-inspector'
+import { AlternativesPanel } from './components/alternatives-panel'
+import { usePerspectiveStore } from '@/shared/layout/perspective-store'
+import { useSceneStore } from '@/features/viewport/store'
+
+import { ChartBar, Loader2, ChevronRight } from 'lucide-react'
+
+/**
+ * AnalysisWorkspace — layout del workspace Analysis.
+ *
+ * Matching Angular analysis-workspace.ts con:
+ *   - Breadcrumb navigation
+ *   - StatusBanner
+ *   - ProblemRegions (overview) / RegionInspector (deep inspection)
+ *   - AlternativesPanel
+ */
+export function AnalysisWorkspace() {
+  const setPerspective = usePerspectiveStore(s => s.setPerspective)
+  const hasPlan = useSceneStore(s => s.activePlan !== null)
+  const summary = useAnalysisStore(s => s.summary)
+  const setAnalysis = useAnalysisStore(s => s.setAnalysis)
+  const selectedRegion = useSelectedRegion()
+  const hasAnalysis = summary !== null
+
+  const [analyzing, setAnalyzing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleAnalyze = async () => {
+    setAnalyzing(true)
+    setError(null)
+    try {
+      const res = await planAnalysisApi.analyze()
+      setAnalysis(res)
+    } catch (err: any) {
+      setError(err.message ?? 'Analysis failed')
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-1.5 px-4 py-2 border-b border-border text-xs text-muted-foreground shrink-0">
+        <button onClick={() => setPerspective('planning')} className="hover:text-foreground transition-colors cursor-pointer">
+          Planning
+        </button>
+        <ChevronRight className="h-3 w-3" />
+        {selectedRegion ? (
+          <>
+            <button onClick={() => useAnalysisStore.getState().selectRegion(null)} className="hover:text-foreground transition-colors cursor-pointer">
+              Analysis
+            </button>
+            <ChevronRight className="h-3 w-3" />
+            <span className="text-foreground font-medium">
+              {selectedRegion.severity === 'critical' || selectedRegion.severity === 'error' ? 'Critical' : selectedRegion.severity === 'warning' ? 'Warning' : 'Info'}
+            </span>
+          </>
+        ) : (
+          <span className="text-foreground font-medium">Analysis</span>
+        )}
+      </nav>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {!hasPlan && !hasAnalysis && (
+          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+            <ChartBar className="h-10 w-10 mb-3 opacity-30" />
+            <p className="text-sm font-medium">No plan compiled</p>
+            <p className="text-xs mt-1 opacity-60">
+              Compile a plan in <strong>Planning</strong> to start analysis.
+            </p>
+          </div>
+        )}
+
+        {hasPlan && !hasAnalysis && !analyzing && (
+          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+            <p className="text-sm mb-3">This plan has not been analyzed yet.</p>
+            <button
+              onClick={handleAnalyze}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg
+                         border border-primary/40 bg-primary/10 text-primary
+                         hover:bg-primary/20 transition-all cursor-pointer"
+            >
+              <ChartBar className="h-4 w-4" />
+              Analyze Plan
+            </button>
+          </div>
+        )}
+
+        {analyzing && (
+          <div className="flex items-center justify-center py-8 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin mr-2" />
+            <span className="text-sm">Analyzing…</span>
+          </div>
+        )}
+
+        {error && (
+          <div className="text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
+            {error}
+          </div>
+        )}
+
+        {hasAnalysis && (
+          <>
+            <StatusBanner />
+
+            {selectedRegion ? (
+              <RegionInspector />
+            ) : (
+              <>
+                <ProblemRegions />
+                <div className="border-t border-border pt-3">
+                  <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">
+                    Alternatives
+                  </h3>
+                  <AlternativesPanel />
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}

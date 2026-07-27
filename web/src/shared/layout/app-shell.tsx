@@ -6,6 +6,8 @@ import { RobotCatalog } from '@/features/robots/components/robot-catalog'
 import { Viewport } from '@/features/viewport/viewport'
 import { useSceneRobotSync } from '@/features/viewport/synchronization/use-scene-robot-sync'
 import { TOOLS_BY_PERSPECTIVE } from '@/features/viewport/components/tools-registry'
+import { PlanningWorkspace } from '@/features/planning/workspace'
+import { AnalysisWorkspace } from '@/features/analysis/workspace'
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
 
 /**
@@ -16,7 +18,8 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/
  *   [left-panel | scene-viewer | right-panel (tools)]
  *   [status-bar]
  *
- * Analysis / Planning / etc: workspaces full-width en vez de right panel.
+ * Planning: [sidebar 380px | viewport]
+ * Analysis: [viewport | workspace]
  */
 export function AppShell() {
   // Sync robot selection → scene loader
@@ -128,15 +131,23 @@ export function AppShell() {
           </div>
         )}
 
-        {/* ── Full-width workspace views ── */}
+        {/* ── Planning sidebar (380px) + viewport al lado ── */}
+        {perspective === 'planning' && (
+          <div
+            className="flex-shrink-0 border-r border-border bg-sidebar overflow-y-auto"
+            style={{ width: 380 }}
+          >
+            <PlanningWorkspace />
+          </div>
+        )}
+
+        {/* ── Analysis workspace (50% width, matching Angular) ── */}
         {perspective === 'analysis' && (
-          <div className="flex-1 border-l border-border bg-sidebar overflow-y-auto">
-            <div className="p-4">
-              <h2 className="text-lg font-semibold mb-2">Analysis Workspace</h2>
-              <p className="text-sm text-muted-foreground">
-                Analysis content renders here.
-              </p>
-            </div>
+          <div
+            className="border-l border-border bg-sidebar overflow-hidden"
+            style={{ width: '50%', minWidth: 350 }}
+          >
+            <AnalysisWorkspace />
           </div>
         )}
       </div>

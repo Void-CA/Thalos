@@ -50,6 +50,10 @@ export const sceneApi = {
   executeIk: (joints: number[]) =>
     apiClient.post<RuntimeStateResponse>('/scene/execute-ik', { joint_angles: joints }).then(r => r.data),
 
+  /** Preview a motion program (compile + visualize, no execution). */
+  previewPlan: (request: { segments: any[] }) =>
+    apiClient.post<RuntimeStateResponse>('/scene/motion/plan', request).then(r => r.data),
+
   /** Execution control. */
   startExecution: () =>
     apiClient.post<RuntimeStateResponse>('/scene/motion/start').then(r => r.data),

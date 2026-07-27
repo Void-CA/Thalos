@@ -8,72 +8,58 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ═══════════════════════════════════════════════════
-   Thalos Dark Theme v3
+   Thalos Dark Theme — Morado oscuro profesional
 
-   Oscuro con personalidad: las superficies tienen un
-   tinte carboncillo cálido (h ~ 35-50), los bordes
-   se ven sin ser agresivos, y el texto es cremoso.
-
-   La clave está en que ningún gris es neutro (chroma
-   0) — llevan una saturación mínima que el ojo
-   percibe como "rico" sin que se vea colorado.
-
-   Paleta:
-     bg-canvas     #1c1a18   → fondo, carboncillo cálido
-     bg-surface    #211f1c   → sidebar/paneles
-     bg-card       #282522   → tarjetas, un escalón arriba
-     bg-elevated   #302d28   → hovers, secondary bg
-     border        #3d3933   → bordes visibles, cálidos
-     text-primary  #ddd8d0   → texto cremoso
-     accent-blue   #3399ff   → acento técnico (contrasta)
+   Superficies gris-morado oscuro (nada de negro),
+   acentos índigo. Tinte púrpura sutil en lugar de
+   azul frío.
    ═══════════════════════════════════════════════════ */
 :root {
-  /* ── Superficies (cálidas, escalonadas) ── */
-  --background: oklch(0.165 0.012 45);         /* #1c1a18 */
-  --sidebar: oklch(0.18 0.013 43);             /* #211f1c */
-  --popover: oklch(0.18 0.013 43);
-  --card: oklch(0.20 0.015 41);                /* #282522 */
-  --secondary: oklch(0.225 0.016 40);          /* #302d28 */
-  --muted: oklch(0.195 0.014 42);              /* #272422 */
-  --accent: oklch(0.24 0.017 38);              /* #34312b */
-  --input: oklch(0.21 0.015 41);
+  /* ── Superficies ── */
+  --background: oklch(0.225 0.006 280);         /* #2a2a2e */
+  --sidebar: oklch(0.24 0.006 278);              /* #303034 */
+  --popover: oklch(0.24 0.006 278);
+  --card: oklch(0.26 0.007 275);                 /* #36363a */
+  --secondary: oklch(0.285 0.007 273);           /* #3e3e42 */
+  --muted: oklch(0.25 0.006 276);                /* #333337 */
+  --accent: oklch(0.30 0.008 270);               /* #454549 */
+  --input: oklch(0.27 0.007 274);
 
-  /* ── Bordes (notables pero no agresivos) ── */
-  --border: oklch(0.28 0.02 40);               /* #3d3933 */
-  --sidebar-border: oklch(0.28 0.02 40);
-  --ring: oklch(0.5 0.16 255);
+  /* ── Bordes ── */
+  --border: oklch(0.325 0.008 268);              /* #4a4a4f */
+  --sidebar-border: oklch(0.325 0.008 268);
+  --ring: oklch(0.50 0.14 285);
 
-  /* ── Texto (cremoso, legible) ── */
-  --foreground: oklch(0.85 0.015 50);          /* #ddd8d0 */
-  --card-foreground: oklch(0.88 0.016 50);
-  --popover-foreground: oklch(0.85 0.015 50);
-  --secondary-foreground: oklch(0.78 0.018 48);
-  --muted-foreground: oklch(0.65 0.02 45);     /* #aaa49a */
-  --accent-foreground: oklch(0.88 0.016 50);
+  /* ── Texto ── */
+  --foreground: oklch(0.89 0.006 285);           /* #e8e8ec */
+  --card-foreground: oklch(0.91 0.006 285);
+  --popover-foreground: oklch(0.89 0.006 285);
+  --secondary-foreground: oklch(0.84 0.007 283);
+  --muted-foreground: oklch(0.70 0.01 280);      /* #b6b6bc */
+  --accent-foreground: oklch(0.91 0.006 285);
 
-  /* ── Brand (azul técnico, más vivo) ── */
-  --primary: oklch(0.55 0.18 260);             /* #3399ff */
+  /* ── Brand (índigo) ── */
+  --primary: oklch(0.54 0.15 280);               /* #5a6cdb */
   --primary-foreground: oklch(0.98 0 0);
 
   /* ── Semánticos ── */
-  --destructive: oklch(0.58 0.22 30);          /* #ff6644 */
+  --destructive: oklch(0.56 0.16 25);
   --destructive-foreground: oklch(0.98 0 0);
-  --chart-1: oklch(0.55 0.18 260);             /* blue */
-  --chart-2: oklch(0.5 0.18 170);              /* teal */
-  --chart-3: oklch(0.56 0.2 85);               /* green */
-  --chart-4: oklch(0.58 0.2 45);               /* amber */
-  --chart-5: oklch(0.6 0.2 340);               /* pink */
+  --chart-1: oklch(0.54 0.15 280);               /* indigo */
+  --chart-2: oklch(0.52 0.13 210);               /* teal */
+  --chart-3: oklch(0.56 0.14 150);               /* green */
+  --chart-4: oklch(0.58 0.14 75);                /* amber */
+  --chart-5: oklch(0.60 0.14 340);               /* pink */
 
   /* ── Sidebar ── */
-  --sidebar-background: oklch(0.18 0.013 43);
-  --sidebar-foreground: oklch(0.85 0.015 50);
-  --sidebar-primary: oklch(0.55 0.18 260);
+  --sidebar-background: oklch(0.24 0.006 278);
+  --sidebar-foreground: oklch(0.89 0.006 285);
+  --sidebar-primary: oklch(0.54 0.15 280);
   --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.225 0.016 40);
-  --sidebar-accent-foreground: oklch(0.85 0.015 50);
-  --sidebar-ring: oklch(0.5 0.16 255);
+  --sidebar-accent: oklch(0.285 0.007 273);
+  --sidebar-accent-foreground: oklch(0.89 0.006 285);
+  --sidebar-ring: oklch(0.50 0.14 285);
 
-  /* ── Radios ── */
   --radius: 0.5rem;
 }
 
