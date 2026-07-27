@@ -5,34 +5,26 @@ import { useFkStream } from '../synchronization/use-fk-stream'
 /**
  * FK Panel — Forward Kinematics joint control.
  *
- * Clave de fluidez: usa **throttle con trailing** (matching auditTime(16)
- * de Angular) para que los sliders envíen FK a ~60fps durante el arrastre.
- *
- * No se subscribe a s.runtime — usa un effect que solo corre cuando
- * cambia el DOF (robot nuevo), evitando re-renders en cada respuesta FK.
+ * Lee joints y runtime del store directo. Se re-renderiza en cada
+ * respuesta FK, pero es barato (~6 sliders). El throttle evita
+ * saturar la API durante el arrastre.
  */
 export function FkPanel() {
   const fkMutation = useFkStream()
+  const runtime = useSceneStore(s => s.runtime)
+  const joints = runtime?.robot.joints ?? []
+  const runtimeValues = runtime?.joints ?? []
   const localValues = useRef<number[]>([])
-  const meta = useRef<{ name: string; min: number; max: number }[]>([])
 
-  // Lee DOF del store — cambia solo cuando se carga un robot nuevo
-  const dof = useSceneStore(s => s.runtime?.robot.joints.length ?? 0)
-
-  // Sincroniza metadata y valores cuando cambia el DOF
+  // Sincroniza localValues cuando cambia el robot (por identidad, no solo DOF)
+  const robotKey = runtime?.robot.id ?? ''
+  const prevKey = useRef('')
   useEffect(() => {
-    if (dof === 0) return
-    const state = useSceneStore.getState()
-    const runtime = state.runtime
-    if (!runtime || runtime.robot.joints.length !== dof) return
-
-    localValues.current = [...runtime.joints]
-    meta.current = runtime.robot.joints.map(j => ({
-      name: j.name,
-      min: j.min ?? -Math.PI,
-      max: j.max ?? Math.PI,
-    }))
-  }, [dof])
+    if (robotKey && robotKey !== prevKey.current) {
+      prevKey.current = robotKey
+      localValues.current = [...runtimeValues]
+    }
+  }, [robotKey, runtimeValues])
 
   // ── Throttle con trailing (matching auditTime(16) de Angular) ──
   const lastCall = useRef(0)
@@ -62,7 +54,7 @@ export function FkPanel() {
     }
   }
 
-  if (dof === 0) {
+  if (!runtime) {
     return (
       <div className="px-1 py-6 text-xs text-muted-foreground text-center">
         Load a robot to adjust joints
@@ -72,15 +64,15 @@ export function FkPanel() {
 
   return (
     <div className="flex flex-col gap-2">
-      {meta.current.map((j, i) => {
-        const val = localValues.current[i] ?? 0
+      {joints.map((j, i) => {
+        const val = localValues.current[i] ?? runtimeValues[i] ?? 0
         return (
           <SliderRow
             key={j.name}
             name={j.name}
             value={val}
-            min={j.min}
-            max={j.max}
+            min={j.min ?? -Math.PI}
+            max={j.max ?? Math.PI}
             onChange={(v) => {
               localValues.current[i] = v
               scheduleFk([...localValues.current])
@@ -92,7 +84,7 @@ export function FkPanel() {
   )
 }
 
-// ── SliderRow — sin memo, el render de ~6 joints es barato ──
+// ── SliderRow ──
 
 function SliderRow({
   name, value, min, max, onChange,
