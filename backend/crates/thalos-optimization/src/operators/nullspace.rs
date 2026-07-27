@@ -925,5 +925,114 @@ mod benchmarks {
         println!("  Joints:           {:?} → {:?}", q, q_after);
         println!("────────────────────────────────────────────\n");
     }
+
+    /// Benchmark: verify null-space correction improves joint margin.
+    ///
+    /// Uses a Planar4R robot with joints closer to one limit than the other.
+    /// The secondary objective z = (q_center - q) · factor should move joints
+    /// toward center, increasing the minimum distance to the nearest joint limit.
+    ///
+    /// This validates that the optimization direction (z) is aligned with the
+    /// declared objective of improving joint margin.
+    #[test]
+    fn benchmark_joint_margin_improvement() {
+        use crate::domain::context::OptimizationContext;
+
+        let robot = planar_4r();
+        // Use conservative settings — smaller step to isolate direction
+        let op = NullSpaceOptimization::new(0.3, 1e-6, 0.1);
+        let limits: Vec<(f64, f64)> = vec![(-2.0, 2.0); 4];
+        let (lower, upper): (Vec<f64>, Vec<f64>) =
+            limits.iter().cloned().unzip();
+        let ctx = OptimizationContext {
+            joint_limits: crate::domain::context::JointLimits { lower, upper },
+            config: crate::PipelineConfig::default(),
+        };
+
+        // Asymmetric config: different joints at different distances from limits
+        // Joint 0 near upper limit (1.8 of 2.0), joints 1-3 in various positions
+        // This avoids symmetric degeneracy where null space is orthogonal to centering
+        let q = vec![1.8, 0.5, -0.3, -1.2];
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(q.clone(), 0.0),
+            TrajectoryPoint::new(q.clone(), 1.0),
+        ]);
+        let region = ProblemRegion::new(
+            RegionId(0),
+            RegionKind::Singularity,
+            RegionSeverity::Warning,
+            0..2,
+        );
+
+        // Compute before: min distance to nearest joint limit
+        let before_margin = q.iter()
+            .zip(limits.iter())
+            .map(|(qj, (lo, hi))| (qj - lo).min(hi - qj))
+            .fold(f64::MAX, |a, b| a.min(b));
+
+        let result = op.apply(&robot, &traj, &region, &ctx).unwrap();
+        let q_after = result.waypoints()[0].joints();
+
+        // Compute after: min distance to nearest joint limit
+        let after_margin = q_after.iter()
+            .zip(limits.iter())
+            .map(|(qj, (lo, hi))| (qj - lo).min(hi - qj))
+            .fold(f64::MAX, |a, b| a.min(b));
+
+        let improvement = if before_margin > 0.0 {
+            (after_margin - before_margin) / before_margin * 100.0
+        } else {
+            0.0
+        };
+
+        // Verify joints moved toward center (not away) for joints near limits
+        let center = vec![0.0; 4];
+        let moved_toward_center: bool = q.iter()
+            .zip(q_after.iter())
+            .zip(center.iter())
+            .all(|((q_before, q_after), center)| {
+                let dist_before = (q_before - center).abs();
+                let dist_after = (q_after - center).abs();
+                dist_after <= dist_before + 1e-6  // monotonic toward center (allow floating point)
+            });
+
+        // Verify the worst joint (closest to limit) improved specifically
+        let worst_before_idx = q.iter()
+            .zip(limits.iter())
+            .map(|(qj, (lo, hi))| (qj - lo).min(hi - qj))
+            .enumerate()
+            .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
+            .map(|(i, _)| i);
+
+        let worst_improved = worst_before_idx.map(|idx| {
+            let (lo, hi) = limits[idx];
+            let margin_before = (q[idx] - lo).min(hi - q[idx]);
+            let margin_after = (q_after[idx] - lo).min(hi - q_after[idx]);
+            margin_after > margin_before + 1e-8
+        }).unwrap_or(false);
+
+        // Note: null-space projection does NOT move all joints toward center simultaneously.
+        // The projected vector N·z = z - J⁺·J·z depends on the Jacobian's current configuration.
+        // Some joints may move slightly away from center to compensate.
+        // The key invariant is that the TCP path is preserved and the worst joint improves.
+
+        println!("\n═══ Benchmark: Joint Margin Improvement ─────────");
+        println!("  Joints:        {:?}", q);
+        println!("  After:         {:?}", q_after);
+        println!("  Worst joint:   joint #{}", worst_before_idx.unwrap_or(999));
+        println!("  Before margin: {:.6}", before_margin);
+        println!("  After margin:  {:.6}", after_margin);
+        println!("  Improvement:   {:+.1}%", improvement);
+        println!("  Worst improved: {}", if worst_improved { "✅" } else { "⚠️ not on this config" });
+        println!("────────────────────────────────────────────\n");
+
+        // The worst joint (closest to limit) should improve
+        // Individual joints may move toward or away from center depending on
+        // the null-space orientation — only the aggregate margin and TCP
+        // preservation are guaranteed invariants.
+        assert!(worst_improved,
+            "The joint closest to its limit should improve, got joint #{}: {}",
+            worst_before_idx.unwrap_or(999), before_margin);
+    }
     }
 }

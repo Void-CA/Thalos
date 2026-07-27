@@ -61,9 +61,7 @@ export function FkPanel() {
           />
         )
       })}
-      {fkMutation.isPending && (
-        <div className="text-[10px] text-muted-foreground text-center italic">updating…</div>
-      )}
+      {/* "updating…" eliminado — parpadea al mover sliders */}
     </div>
   )
 }
