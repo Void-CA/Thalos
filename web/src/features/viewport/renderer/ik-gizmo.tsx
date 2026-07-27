@@ -1,8 +1,12 @@
 import { useSceneStore } from '../store'
 
 /**
- * IkGizmo — esfera arrastrable que representa el target IK.
- * Por ahora solo muestra la posición; el drag se habilita en una iteración futura.
+ * IkGizmo — target visual del IK solver.
+ *
+ * Matching Angular (three-renderer.service.ts → buildTargetGizmo):
+ *   - Ring: RingGeometry(0.08, 0.10, 32), #ff6600, DoubleSide, opacity 0.5
+ *   - Center dot: SphereGeometry(0.025, 12, 12), #ff6600, opacity 0.9
+ *   - Wireframe crosshair: SphereGeometry(wireR=0.09, 16, 8), #ff6600, opacity 0.25
  */
 export function IkGizmo() {
   const ikTarget = useSceneStore(s => s.ikTarget)
@@ -10,15 +14,39 @@ export function IkGizmo() {
   if (!ikTarget) return null
 
   return (
-    <mesh position={ikTarget.translation}>
-      <sphereGeometry args={[0.03, 16, 16]} />
-      <meshStandardMaterial
-        color="#33ccff"
-        emissive="#33ccff"
-        emissiveIntensity={0.3}
-        transparent
-        opacity={0.8}
-      />
-    </mesh>
+    <group position={ikTarget.translation}>
+      {/* Outer ring — primary visual indicator */}
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.08, 0.10, 32]} />
+        <meshBasicMaterial
+          color="#ff6600"
+          side={2} // DoubleSide
+          transparent
+          opacity={0.5}
+          depthTest={false}
+        />
+      </mesh>
+
+      {/* Center dot */}
+      <mesh>
+        <sphereGeometry args={[0.025, 12, 12]} />
+        <meshBasicMaterial
+          color="#ff6600"
+          transparent
+          opacity={0.9}
+        />
+      </mesh>
+
+      {/* Wireframe crosshair sphere — makes orientation obvious */}
+      <mesh>
+        <sphereGeometry args={[0.09, 16, 8]} />
+        <meshBasicMaterial
+          color="#ff6600"
+          wireframe
+          transparent
+          opacity={0.25}
+        />
+      </mesh>
+    </group>
   )
 }

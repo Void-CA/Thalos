@@ -3,7 +3,11 @@ import { useSceneStore } from '../store'
 
 /**
  * TcpOverlay — indicador visual del Tool Center Point.
- * Muestra un anillo + cono en la posición del TCP.
+ *
+ * Matching Angular (three-renderer.service.ts → buildTcpGizmo):
+ *   - Ring: RingGeometry(0.06, 0.075, 32), #00ffff (cyan), DoubleSide, opacity 0.6
+ *   - Center dot: SphereGeometry(0.02, 12, 12), #00ffff, opacity 0.9
+ *   - Crosshair lines: X(-len..len), Y(-len..len), Z(-len..len), len=0.08, #00ffff, opacity 0.4
  */
 export function TcpOverlay() {
   const activeTcp = useSceneStore(s => s.activeTcp)
@@ -12,7 +16,6 @@ export function TcpOverlay() {
 
   if (!activeTcp || !data) return null
 
-  // Buscar frame base: primero en liveTransforms (runtime), después en frames estáticos
   const frameId = String(activeTcp.baseFrameId)
   const liveTransform = liveTransforms.find(t => t.id === frameId)
 
@@ -26,23 +29,66 @@ export function TcpOverlay() {
     position = new THREE.Vector3(...staticFrame.translation)
   }
 
-  // Aplicar offset del TCP
   if (activeTcp.offset) {
     position.add(new THREE.Vector3(...activeTcp.offset))
   }
 
+  const lineLen = 0.08
+
   return (
     <group position={position}>
-      {/* Anillo TCP */}
+      {/* Cyan ring */}
       <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.04, 0.006, 8, 24]} />
-        <meshStandardMaterial color="#ff6633" emissive="#ff6633" emissiveIntensity={0.2} />
+        <ringGeometry args={[0.06, 0.075, 32]} />
+        <meshBasicMaterial
+          color="#00ffff"
+          side={2} // DoubleSide
+          transparent
+          opacity={0.6}
+        />
       </mesh>
-      {/* Cono direccional */}
-      <mesh position={[0, 0, 0.04]}>
-        <coneGeometry args={[0.02, 0.04, 8]} />
-        <meshStandardMaterial color="#ff6633" />
+
+      {/* Center dot */}
+      <mesh>
+        <sphereGeometry args={[0.02, 12, 12]} />
+        <meshBasicMaterial
+          color="#00ffff"
+          transparent
+          opacity={0.9}
+        />
       </mesh>
+
+      {/* Crosshair lines — X, Y, Z */}
+      <LinePoints
+        points={[
+          [-lineLen, 0, 0],
+          [lineLen, 0, 0],
+        ]}
+      />
+      <LinePoints
+        points={[
+          [0, -lineLen, 0],
+          [0, lineLen, 0],
+        ]}
+      />
+      <LinePoints
+        points={[
+          [0, 0, -lineLen],
+          [0, 0, lineLen],
+        ]}
+      />
     </group>
+  )
+}
+
+function LinePoints({ points }: { points: [[number, number, number], [number, number, number]] }) {
+  const geom = new THREE.BufferGeometry().setFromPoints(
+    points.map(p => new THREE.Vector3(...p)),
+  )
+
+  return (
+    <line geometry={geom}>
+      <lineBasicMaterial color="#00ffff" transparent opacity={0.4} />
+    </line>
   )
 }

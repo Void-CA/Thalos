@@ -60,6 +60,41 @@ impl DynamicMatrix {
         svd.singular_values.iter().copied().collect()
     }
 
+    /// Moore-Penrose pseudo-inverse via SVD.
+    ///
+    /// Computes `J⁺ = V · Σ⁺ · Uᵀ` where singular values above `tolerance`
+    /// are inverted (`1/σᵢ`) and all others are treated as zero.
+    /// Returns `None` when ALL singular values are at or below `tolerance`
+    /// (effectively a zero matrix).
+    pub fn pseudo_inverse(&self, tolerance: f64) -> Option<Self> {
+        let svd = self.0.clone().svd(true, true);
+        let u = svd.u.as_ref()?;
+        let v_t = svd.v_t.as_ref()?;
+        let s = &svd.singular_values;
+
+        let m = self.0.nrows();
+        let n = self.0.ncols();
+        let k = s.len();
+
+        // Build Σ⁺: k×k diagonal with 1/σᵢ for σᵢ > tolerance
+        let mut sigma_plus = DynamicMatrix::zeros(n, m);
+        let mut any_above_tolerance = false;
+        for i in 0..k {
+            if s[i] > tolerance {
+                sigma_plus.0[(i, i)] = 1.0 / s[i];
+                any_above_tolerance = true;
+            }
+        }
+        if !any_above_tolerance {
+            return None;
+        }
+
+        // J⁺ = V · Σ⁺ · Uᵀ
+        // v_t is Vᵀ (k×n), so V = (Vᵀ)ᵀ = v_tᵀ (n×k)
+        let v = v_t.transpose();
+        Some(DynamicMatrix(v * sigma_plus.0 * u.transpose()))
+    }
+
     /// Acceso inmutable al `na::DMatrix<f64>` interno.
     pub fn inner(&self) -> &na::DMatrix<f64> {
         &self.0
@@ -235,6 +270,126 @@ impl From<na::DMatrix<f64>> for DynamicMatrix {
 mod tests {
     use super::*;
     use crate::constants::EPS;
+
+    // ─── pseudo_inverse tests (Strict TDD: RED → GREEN → Triangulate) ─────
+
+    #[test]
+    fn pseudo_inverse_full_rank_square() {
+        // Task 1.2: Full-rank square → true inverse
+        // 3×3 invertible matrix with det ≠ 0
+        let a = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(3, 3, &[
+            2.0, 1.0, 1.0,
+            1.0, 3.0, 2.0,
+            1.0, 0.0, 2.0,
+        ]));
+        let pinv = a.pseudo_inverse(1e-12).expect("full-rank square should have pseudo-inverse");
+
+        // A · A⁺ ≈ I₃
+        let a_pinv = &a * &pinv;
+        // A⁺ · A ≈ I₃
+        let pinv_a = &pinv * &a;
+
+        let i3 = DynamicMatrix::identity(3, 3);
+        for i in 0..3 {
+            for j in 0..3 {
+                let diff_a = (a_pinv[(i, j)] - i3[(i, j)]).abs();
+                let diff_b = (pinv_a[(i, j)] - i3[(i, j)]).abs();
+                assert!(diff_a < 1e-10, "A·A⁺[{i},{j}] = {}, expected ~{}", a_pinv[(i, j)], i3[(i, j)]);
+                assert!(diff_b < 1e-10, "A⁺·A[{i},{j}] = {}, expected ~{}", pinv_a[(i, j)], i3[(i, j)]);
+            }
+        }
+    }
+
+    #[test]
+    fn pseudo_inverse_full_rank_tall() {
+        // Task 1.3: Full-rank tall (4×3) → left pseudo-inverse: A⁺ · A ≈ I₃
+        let a = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(4, 3, &[
+            1.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            0.0, 0.0, 1.0,
+            1.0, 1.0, 0.0,
+        ]));
+        let pinv = a.pseudo_inverse(1e-12).expect("full-rank tall should have pseudo-inverse");
+
+        // A⁺ · A ≈ I₃
+        let pinv_a = &pinv * &a;
+        let i3 = DynamicMatrix::identity(3, 3);
+        for i in 0..3 {
+            for j in 0..3 {
+                let diff = (pinv_a[(i, j)] - i3[(i, j)]).abs();
+                assert!(diff < 1e-10, "A⁺·A[{i},{j}] = {}, expected ~{}", pinv_a[(i, j)], i3[(i, j)]);
+            }
+        }
+    }
+
+    #[test]
+    fn pseudo_inverse_penrose_conditions() {
+        // Task 1.4: Verify all four Penrose conditions for a 3×2 matrix
+        let a = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(3, 2, &[
+            1.0, 2.0,
+            3.0, 4.0,
+            5.0, 6.0,
+        ]));
+        let pinv = a.pseudo_inverse(1e-12).expect("full-rank rectangular should have pseudo-inverse");
+
+        // 1. A·A⁺·A = A
+        let a_pinv_a = &a * (&pinv * &a);
+        for i in 0..3 {
+            for j in 0..2 {
+                let diff = (a_pinv_a[(i, j)] - a[(i, j)]).abs();
+                assert!(diff < 1e-10, "A·A⁺·A[{i},{j}] = {}, expected ~{}", a_pinv_a[(i, j)], a[(i, j)]);
+            }
+        }
+
+        // 2. A⁺·A·A⁺ = A⁺
+        let pinv_a_pinv = &pinv * (&a * &pinv);
+        for i in 0..2 {
+            for j in 0..3 {
+                let diff = (pinv_a_pinv[(i, j)] - pinv[(i, j)]).abs();
+                assert!(diff < 1e-10, "A⁺·A·A⁺[{i},{j}] = {}, expected ~{}", pinv_a_pinv[(i, j)], pinv[(i, j)]);
+            }
+        }
+
+        // 3. (A·A⁺)ᵀ = A·A⁺  (symmetry in the row space)
+        let a_pinv_t = (&a * &pinv).transpose();
+        let a_pinv = &a * &pinv;
+        for i in 0..3 {
+            for j in 0..3 {
+                let diff = (a_pinv_t[(i, j)] - a_pinv[(i, j)]).abs();
+                assert!(diff < 1e-10, "(A·A⁺)ᵀ[{i},{j}] = {}, expected ~{}", a_pinv_t[(i, j)], a_pinv[(i, j)]);
+            }
+        }
+
+        // 4. (A⁺·A)ᵀ = A⁺·A  (symmetry in the column space)
+        let pinv_a = &pinv * &a;
+        let pinv_a_t = pinv_a.transpose();
+        for i in 0..2 {
+            for j in 0..2 {
+                let diff = (pinv_a_t[(i, j)] - pinv_a[(i, j)]).abs();
+                assert!(diff < 1e-10, "(A⁺·A)ᵀ[{i},{j}] = {}, expected ~{}", pinv_a_t[(i, j)], pinv_a[(i, j)]);
+            }
+        }
+    }
+
+    #[test]
+    fn pseudo_inverse_singular_matrix() {
+        // Task 1.5: Matrix with a zero row → singular → None
+        let a = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(3, 3, &[
+            1.0, 2.0, 3.0,
+            0.0, 0.0, 0.0,
+            4.0, 5.0, 6.0,
+        ]));
+        assert!(a.pseudo_inverse(1e-12).is_none(),
+            "singular matrix (zero row) should return None");
+    }
+
+    #[test]
+    fn pseudo_inverse_zero_matrix() {
+        // Task 1.6: Zero matrix → None
+        let a = DynamicMatrix::zeros(3, 3);
+        assert!(a.pseudo_inverse(1e-12).is_none(),
+            "zero matrix should return None");
+    }
 
     #[test]
     fn zeros_creates_correct_dimensions() {
