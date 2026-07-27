@@ -16,6 +16,7 @@ pub mod domain;
 pub mod error;
 pub mod operators;
 pub mod pipeline;
+pub mod temporal;
 
 // Re-export the problem region types used by the operator trait.
 // These types are defined in thalos-core and re-exported for convenience.
@@ -31,6 +32,9 @@ pub use domain::{
     PipelineConfig, Reason, TrajectoryOperator,
 };
 pub use error::OptimizationError;
+
+// Re-exports from temporal
+pub use temporal::{extract_velocity_limits, min_segment_duration};
 
 // Re-exports from pipeline
 pub use pipeline::{OptimizationPipeline, OptimizationResult, OperatorSelector};
@@ -126,10 +130,13 @@ mod tests {
         );
         let ctx = OptimizationContext {
             joint_limits: JointLimits {
-                lower: vec![-3.14, -3.14],
-                upper: vec![3.14, 3.14],
+                lower: vec![-std::f64::consts::PI, -std::f64::consts::PI],
+                upper: vec![std::f64::consts::PI, std::f64::consts::PI],
+                velocity: None,
+                acceleration: None,
             },
             config: PipelineConfig::default(),
+            tool_frame: None,
         };
 
         let result = op.apply(&robot, &traj, &region, &ctx);
@@ -206,10 +213,13 @@ mod tests {
     fn test_ctx() -> OptimizationContext {
         OptimizationContext {
             joint_limits: JointLimits {
-                lower: vec![-3.14, -3.14],
-                upper: vec![3.14, 3.14],
+                lower: vec![-std::f64::consts::PI, -std::f64::consts::PI],
+                upper: vec![std::f64::consts::PI, std::f64::consts::PI],
+                velocity: None,
+                acceleration: None,
             },
             config: PipelineConfig::default(),
+            tool_frame: None,
         }
     }
 

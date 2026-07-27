@@ -122,7 +122,7 @@ export function PlanningPanel() {
 
       <div className="flex gap-1.5">
         <button onClick={handlePreview} disabled={segments.length === 0 || preview.isPending}
-          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary/60 transition-all cursor-pointer disabled:opacity-35">
+          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-primary-mid bg-primary-weak text-primary hover:bg-primary-weak hover:border-primary-strong transition-all cursor-pointer disabled:opacity-35">
           {preview.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
           {preview.isPending ? 'Compiling…' : 'Preview'}
         </button>
@@ -205,7 +205,7 @@ function MoveJEditor({ segment, dof, onChange }: {
                 onChange={e => { const n = [...vals]; n[i] = +e.target.value; onChange(n) }}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
               <div className="w-full h-1 rounded-full bg-secondary overflow-hidden">
-                <div className="h-full rounded-full bg-primary/90" style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
+                <div className="h-full rounded-full bg-primary-strong" style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
               </div>
             </div>
             <input type="number" min={min} max={max} step={0.01} value={val}

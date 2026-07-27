@@ -193,8 +193,11 @@ mod tests {
             joint_limits: JointLimits {
                 lower: vec![-2.0, -2.0],
                 upper: vec![2.0, 2.0],
+                velocity: None,
+                acceleration: None,
             },
             config: PipelineConfig::default(),
+            tool_frame: None,
         }
     }
 

@@ -1,5 +1,5 @@
 use thalos_math::DynamicVector;
-use thalos_math::{UnitQuaternion, Vector3};
+use thalos_math::{orientation_error, UnitQuaternion, Vector3};
 use crate::spatial::pose::Pose;
 
 use super::result::IKResult;
@@ -19,21 +19,12 @@ pub enum IKGoal {
 /// Error de orientación 3-DOF a partir de la rotación relativa entre la
 /// orientación actual y la deseada.
 ///
-/// Usa la aproximación `ω = 2 · imag(q_rel)`, donde `q_rel` es el
-/// cuaternión relativo `q_target · q_current⁻¹`. Para errores pequeños
-/// esto es equivalente al vector de rotación (ángulo · eje), y para
-/// errores grandes la dirección sigue siendo correcta para descenso por
-/// gradiente.
+/// Delega a [`orientation_error`] de `thalos-math`, que usa la exponencial
+/// logarítmica exacta `log(q_target · q_current⁻¹)` en lugar de la
+/// aproximación `2·imag(q_rel)`. Para errores pequeños (típicos en IK
+/// iterativo) ambas son equivalentes.
 fn orientation_error_3d(target_rot: &UnitQuaternion, current_rot: &UnitQuaternion) -> Vector3 {
-    // r_rel = r_target * r_cur^{-1}
-    let r_rel = *target_rot * current_rot.inverse();
-
-    // ω ≈ 2 · imag(r_rel)
-    Vector3::new(
-        2.0 * r_rel.inner().x,
-        2.0 * r_rel.inner().y,
-        2.0 * r_rel.inner().z,
-    )
+    orientation_error(target_rot, current_rot)
 }
 
 /// Error completo 6-DOF para pose: [error_posición (3), error_orientación (3)].

@@ -1,3 +1,5 @@
+use thalos_core::spatial::frame::FrameId;
+
 use crate::pipeline::trajectory_composer::BlendPolicy;
 
 /// Configuration for the optimization pipeline.
@@ -13,6 +15,10 @@ pub struct PipelineConfig {
     pub blend_window: usize,
     /// Policy for blending modified segments back into the trajectory (default: SmoothStep).
     pub blend_policy: BlendPolicy,
+    /// Fallback velocity limit (rad/s) when per-joint limits are not available (default: 3.0).
+    pub default_velocity_limit: f64,
+    /// Fallback acceleration limit (rad/s²) when per-joint limits are not available (default: 5.0).
+    pub default_acceleration_limit: f64,
 }
 
 impl Default for PipelineConfig {
@@ -23,6 +29,8 @@ impl Default for PipelineConfig {
             centering_factor: 0.3,
             blend_window: 5,
             blend_policy: BlendPolicy::SmoothStep,
+            default_velocity_limit: 3.0,
+            default_acceleration_limit: 5.0,
         }
     }
 }
@@ -34,6 +42,10 @@ pub struct JointLimits {
     pub lower: Vec<f64>,
     /// Upper joint limits.
     pub upper: Vec<f64>,
+    /// Maximum velocity per joint (rad/s). `None` if not configured.
+    pub velocity: Option<Vec<f64>>,
+    /// Maximum acceleration per joint (rad/s²). `None` if not configured.
+    pub acceleration: Option<Vec<f64>>,
 }
 
 /// Robot-agnostic optimization context carrying configuration and joint limits.
@@ -47,6 +59,11 @@ pub struct OptimizationContext {
     pub joint_limits: JointLimits,
     /// Pipeline configuration parameters.
     pub config: PipelineConfig,
+    /// Optional tool frame override for kinematics computations.
+    /// When `Some`, operators that need end-effector kinematics
+    /// should use this frame instead of the robot's default
+    /// end-effector frame.
+    pub tool_frame: Option<FrameId>,
 }
 
 impl Default for OptimizationContext {
@@ -55,8 +72,11 @@ impl Default for OptimizationContext {
             joint_limits: JointLimits {
                 lower: vec![],
                 upper: vec![],
+                velocity: None,
+                acceleration: None,
             },
             config: PipelineConfig::default(),
+            tool_frame: None,
         }
     }
 }

@@ -39,17 +39,35 @@
   --accent-foreground: oklch(0.91 0.006 285);
 
   /* ── Brand (índigo) ── */
-  --primary: oklch(0.54 0.15 280);               /* #5a6cdb */
+  --primary: oklch(0.54 0.15 280);
   --primary-foreground: oklch(0.98 0 0);
 
-  /* ── Semánticos ── */
+  /* ── Semánticos (basados en color-mix para consistencia) ── */
   --destructive: oklch(0.56 0.16 25);
   --destructive-foreground: oklch(0.98 0 0);
-  --chart-1: oklch(0.54 0.15 280);               /* indigo */
-  --chart-2: oklch(0.52 0.13 210);               /* teal */
-  --chart-3: oklch(0.56 0.14 150);               /* green */
-  --chart-4: oklch(0.58 0.14 75);                /* amber */
-  --chart-5: oklch(0.60 0.14 340);               /* pink */
+  --chart-3: oklch(0.56 0.14 150);
+  --chart-4: oklch(0.58 0.14 75);
+
+  /* ── Capas semánticas de opacidad (color-mix) ── */
+  --primary-weak:   color-mix(in oklch, var(--primary) 10%, transparent);
+  --primary-mid:    color-mix(in oklch, var(--primary) 30%, transparent);
+  --primary-strong: color-mix(in oklch, var(--primary) 50%, transparent);
+
+  --destructive-weak:   color-mix(in oklch, var(--destructive) 10%, transparent);
+  --destructive-mid:    color-mix(in oklch, var(--destructive) 30%, transparent);
+  --destructive-strong: color-mix(in oklch, var(--destructive) 50%, transparent);
+
+  --success-weak:   color-mix(in oklch, var(--chart-3) 10%, transparent);
+  --success-mid:    color-mix(in oklch, var(--chart-3) 30%, transparent);
+  --success-strong: color-mix(in oklch, var(--chart-3) 50%, transparent);
+
+  --warning-weak:   color-mix(in oklch, var(--chart-4) 10%, transparent);
+  --warning-mid:    color-mix(in oklch, var(--chart-4) 30%, transparent);
+  --warning-strong: color-mix(in oklch, var(--chart-4) 50%, transparent);
+
+  --chart-1: oklch(0.54 0.15 280);
+  --chart-2: oklch(0.52 0.13 210);
+  --chart-5: oklch(0.60 0.14 340);
 
   /* ── Sidebar ── */
   --sidebar-background: oklch(0.24 0.006 278);
@@ -97,6 +115,19 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  /* Capas semánticas */
+  --color-primary-weak: var(--primary-weak);
+  --color-primary-mid: var(--primary-mid);
+  --color-primary-strong: var(--primary-strong);
+  --color-destructive-weak: var(--destructive-weak);
+  --color-destructive-mid: var(--destructive-mid);
+  --color-destructive-strong: var(--destructive-strong);
+  --color-success-weak: var(--success-weak);
+  --color-success-mid: var(--success-mid);
+  --color-success-strong: var(--success-strong);
+  --color-warning-weak: var(--warning-weak);
+  --color-warning-mid: var(--warning-mid);
+  --color-warning-strong: var(--warning-strong);
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: calc(var(--radius) - 1px);
   --radius-lg: var(--radius);

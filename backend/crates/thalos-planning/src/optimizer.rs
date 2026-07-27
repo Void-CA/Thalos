@@ -119,6 +119,7 @@ impl TrajectoryOptimizer {
         let ctx = OptimizationContext {
             joint_limits,
             config: PipelineConfig::default(),
+            tool_frame: None,
         };
 
         // 2. Compute basic plan metrics from the trajectory
@@ -166,16 +167,31 @@ impl TrajectoryOptimizer {
     fn extract_joint_limits(chain: &SerialChain) -> JointLimits {
         let mut lower = Vec::new();
         let mut upper = Vec::new();
+        let mut velocity = Vec::new();
 
         for segment in &chain.segments {
             let limits = segment.joint.limits();
             if limits.enabled {
                 lower.push(limits.min);
                 upper.push(limits.max);
+                if let Some(v) = limits.velocity {
+                    velocity.push(v);
+                }
             }
         }
 
-        JointLimits { lower, upper }
+        let velocity = if velocity.len() == lower.len() {
+            Some(velocity)
+        } else {
+            None
+        };
+
+        JointLimits {
+            lower,
+            upper,
+            velocity,
+            acceleration: None,
+        }
     }
 
     /// Compute basic `PlanMetrics` from a trajectory.

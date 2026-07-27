@@ -23,7 +23,7 @@ export function TrajectoryColorPicker() {
           onClick={() => setMode(m.key)}
           className={`px-2 py-1 text-[10px] font-medium rounded-md border transition-all cursor-pointer
             ${mode === m.key
-              ? 'bg-primary/15 border-primary/60 text-primary'
+              ? 'bg-primary-weak border-primary-strong text-primary'
               : 'bg-transparent border-border text-muted-foreground hover:text-foreground hover:bg-secondary/50'
             }`}
         >

@@ -108,7 +108,7 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
       onClick={onClick}
       className={`px-2 py-0.5 text-[10px] font-medium rounded-md border transition-all cursor-pointer
         ${active
-          ? 'bg-primary/10 border-primary/30 text-primary'
+          ? 'bg-primary-weak border-primary-mid text-primary'
           : 'bg-transparent border-border text-muted-foreground hover:text-foreground hover:bg-secondary/50'
         }`}
     >
@@ -138,7 +138,7 @@ function RegionCard({ region, selected, onSelect }: { region: ProblemRegion; sel
       onClick={onSelect}
       className={`w-full text-left px-3 py-2 rounded-lg border border-border border-l-4 transition-all cursor-pointer
         ${tierStyles[tier]}
-        ${selected ? 'ring-1 ring-primary/30' : ''}
+        ${selected ? 'ring-1 ring-primary-mid' : ''}
       `}
     >
       <div className="text-xs font-medium text-foreground truncate mb-0.5">{cause}</div>

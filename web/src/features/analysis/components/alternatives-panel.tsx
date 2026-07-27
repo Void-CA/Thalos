@@ -43,8 +43,8 @@ export function AlternativesPanel() {
         onClick={() => query.mutate()}
         disabled={query.isPending}
         className="inline-flex items-center justify-center gap-2 w-full px-3 py-2 text-xs font-medium
-                   rounded-lg border border-primary/30 bg-primary/10 text-primary
-                   hover:bg-primary/20 transition-all cursor-pointer disabled:opacity-40"
+                   rounded-lg border border-primary-mid bg-primary-weak text-primary
+                   hover:bg-primary-weak transition-all cursor-pointer disabled:opacity-40"
       >
         {query.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Lightbulb className="h-3.5 w-3.5" />}
         {query.isPending ? 'Generating…' : 'Generate Alternatives'}
@@ -81,7 +81,7 @@ export function AlternativesPanel() {
                   key={alt.rank}
                   onClick={() => setSelectedRank(isSelected ? null : alt.rank)}
                   className={`w-full text-left p-2.5 rounded-lg border transition-all cursor-pointer
-                    ${isSelected ? 'border-primary/30 bg-primary/5' : 'border-border bg-card/50 hover:bg-accent/30'}
+                    ${isSelected ? 'border-primary-mid bg-primary/5' : 'border-border bg-card/50 hover:bg-accent/30'}
                     ${alt.rank === 1 ? 'ring-1 ring-chart-4/30' : ''}
                   `}
                 >

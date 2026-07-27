@@ -324,8 +324,9 @@ pub(crate) mod test_helpers {
     pub fn ctx_with_limits(limits: &[(f64, f64)]) -> OptimizationContext {
         let (lower, upper): (Vec<f64>, Vec<f64>) = limits.iter().cloned().unzip();
         OptimizationContext {
-            joint_limits: crate::domain::context::JointLimits { lower, upper },
+            joint_limits: crate::domain::context::JointLimits { lower, upper, velocity: None, acceleration: None },
             config: PipelineConfig::default(),
+            tool_frame: None,
         }
     }
 
@@ -341,10 +342,73 @@ pub(crate) mod test_helpers {
         ctx_with_limits(&[(-PI, PI), (-PI, PI)])
     }
 
+    pub fn ctx_six_dof() -> OptimizationContext {
+        ctx_with_limits(&[(-PI, PI); 6])
+    }
+
     pub fn fk_position(robot: &SerialChain, q: &[f64]) -> Vector3 {
         let fk = ForwardKinematics::new(robot.clone());
         let result = fk.evaluate(q);
         result.ee_position().expect("EE position should exist")
+    }
+
+    /// Build a 6-DOF spatial test robot with 6 revolute joints
+    /// on alternating Z/Y axes for non-degenerate geometry.
+    ///
+    /// Each link is 1 m along X. Joint limits are [−π, π].
+    pub fn six_dof_test_robot() -> SerialChain {
+        let mut builder = SerialChainBuilder::new();
+        let f1 = builder.create_frame("link_1");
+        let f2 = builder.create_frame("link_2");
+        let f3 = builder.create_frame("link_3");
+        let f4 = builder.create_frame("link_4");
+        let f5 = builder.create_frame("link_5");
+        let f6 = builder.create_frame("link_6");
+
+        let limits = JointLimitsJoint::new(-PI, PI);
+
+        let make_link = |id: usize| -> Link {
+            Link {
+                id: id as u32,
+                transform: Transform3D::from_translation(Vector3::new(1.0, 0.0, 0.0)),
+                collision_geometry: None,
+            }
+        };
+
+        builder.add_segment(Segment::new(
+            FrameId::World,
+            f1.clone(),
+            JointType::Revolute(RevoluteJoint::new(0, UnitVector3::z_axis(), limits, Transform3D::identity())),
+            make_link(0),
+        ));
+        builder.add_segment(Segment::new(
+            f1, f2.clone(),
+            JointType::Revolute(RevoluteJoint::new(1, UnitVector3::y_axis(), limits, Transform3D::identity())),
+            make_link(1),
+        ));
+        builder.add_segment(Segment::new(
+            f2, f3.clone(),
+            JointType::Revolute(RevoluteJoint::new(2, UnitVector3::z_axis(), limits, Transform3D::identity())),
+            make_link(2),
+        ));
+        builder.add_segment(Segment::new(
+            f3, f4.clone(),
+            JointType::Revolute(RevoluteJoint::new(3, UnitVector3::y_axis(), limits, Transform3D::identity())),
+            make_link(3),
+        ));
+        builder.add_segment(Segment::new(
+            f4, f5.clone(),
+            JointType::Revolute(RevoluteJoint::new(4, UnitVector3::z_axis(), limits, Transform3D::identity())),
+            make_link(4),
+        ));
+        builder.add_segment(Segment::new(
+            f5, f6.clone(),
+            JointType::Revolute(RevoluteJoint::new(5, UnitVector3::y_axis(), limits, Transform3D::identity())),
+            make_link(5),
+        ));
+
+        builder.set_end_effector(f6);
+        builder.build().expect("6DOF test robot should build")
     }
 
     /// Minimum distance from any joint to its nearest limit
@@ -844,8 +908,9 @@ mod benchmarks {
         let (lower, upper): (Vec<f64>, Vec<f64>) =
             limits.iter().cloned().unzip();
         let ctx = OptimizationContext {
-            joint_limits: crate::domain::context::JointLimits { lower, upper },
+            joint_limits: crate::domain::context::JointLimits { lower, upper, velocity: None, acceleration: None },
             config: crate::PipelineConfig::default(),
+            tool_frame: None,
         };
 
         // Asymmetrical configuration — all joints off centre.
@@ -945,8 +1010,9 @@ mod benchmarks {
         let (lower, upper): (Vec<f64>, Vec<f64>) =
             limits.iter().cloned().unzip();
         let ctx = OptimizationContext {
-            joint_limits: crate::domain::context::JointLimits { lower, upper },
+            joint_limits: crate::domain::context::JointLimits { lower, upper, velocity: None, acceleration: None },
             config: crate::PipelineConfig::default(),
+            tool_frame: None,
         };
 
         // Asymmetric config: different joints at different distances from limits

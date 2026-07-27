@@ -238,6 +238,50 @@ impl UnitQuaternion {
             ),
         }
     }
+
+    // ── SO(3) Lie algebra ─────────────────────────────────
+
+    /// Returns the rotation angle in radians [0, π].
+    pub fn angle(&self) -> f64 {
+        2.0 * self.q.w.clamp(-1.0, 1.0).acos()
+    }
+
+    /// Logarithmic map: SO(3) → so(3).
+    ///
+    /// Returns the rotation vector ω = θ·axis, the so(3) tangent
+    /// vector corresponding to this rotation.
+    /// Returns the zero vector for the identity quaternion.
+    pub fn log(&self) -> Vector3 {
+        let w = self.q.w.clamp(-1.0, 1.0);
+        let angle = 2.0 * w.acos();
+        if angle.abs() < 1e-12 {
+            return Vector3::zero();
+        }
+        let sin_ha = (angle / 2.0).sin();
+        let scale = if sin_ha.abs() < 1e-12 {
+            // Limit as θ → 0: θ / sin(θ/2) → 2
+            2.0
+        } else {
+            angle / sin_ha
+        };
+        Vector3::new(self.q.x * scale, self.q.y * scale, self.q.z * scale)
+    }
+
+    /// Exponential map: so(3) → SO(3).
+    ///
+    /// Returns the unit quaternion corresponding to rotation
+    /// vector ω = θ·axis. For ‖ω‖ < 1e-12 returns identity.
+    pub fn exp_map(v: &Vector3) -> Self {
+        let theta = v.norm();
+        if theta < 1e-12 {
+            return UnitQuaternion::identity();
+        }
+        let half = theta * 0.5;
+        let s = half.sin() / theta;
+        Self {
+            q: Quaternion::new(half.cos(), v.x * s, v.y * s, v.z * s),
+        }
+    }
 }
 
 

@@ -39,6 +39,8 @@ pub enum OptimizationObjective {
     Efficiency,
     /// Produce a safe trajectory (max margins).
     Safety,
+    /// Improve manipulability (distance from singularities).
+    Manipulability,
 }
 
 /// Behavioral invariants that an operator guarantees.
@@ -73,6 +75,18 @@ pub enum Invariant {
     /// follows the same Cartesian path even if individual joint values are modified.
     /// Used by kinematics-aware operators (e.g., null-space optimization).
     PreserveCartesianPath,
+    /// TCP position is preserved; orientation may change.
+    ///
+    /// A weaker semantic invariant than `PreserveCartesianPath`: the operator
+    /// guarantees that the TCP position path in task space is unchanged,
+    /// but the orientation at each waypoint may be modified.
+    PreservePositionPath,
+    /// Joint values are preserved (only timestamps may change).
+    ///
+    /// Temporal invariant: the operator guarantees that the joint position
+    /// vector at each waypoint is byte-identical before and after the operation.
+    /// Only timestamp values are modified (e.g., re-timing operators).
+    PreserveJointPath,
 }
 
 /// A trait representing an operator that can optimize a trajectory region.
@@ -157,6 +171,7 @@ mod tests {
             OptimizationObjective::Continuity,
             OptimizationObjective::Efficiency,
             OptimizationObjective::Safety,
+            OptimizationObjective::Manipulability,
         ];
         for obj in &objectives {
             match obj {
@@ -164,7 +179,8 @@ mod tests {
                 | OptimizationObjective::Smoothness
                 | OptimizationObjective::Continuity
                 | OptimizationObjective::Efficiency
-                | OptimizationObjective::Safety => {}
+                | OptimizationObjective::Safety
+                | OptimizationObjective::Manipulability => {}
             }
         }
     }
@@ -190,6 +206,8 @@ mod tests {
             Invariant::PreserveEnd,
             Invariant::MonotonicTimestamps,
             Invariant::PreserveCartesianPath,
+            Invariant::PreservePositionPath,
+            Invariant::PreserveJointPath,
         ];
         for inv in &invariants {
             match inv {
@@ -197,7 +215,9 @@ mod tests {
                 | Invariant::PreserveStart
                 | Invariant::PreserveEnd
                 | Invariant::MonotonicTimestamps
-                | Invariant::PreserveCartesianPath => {}
+                | Invariant::PreserveCartesianPath
+                | Invariant::PreservePositionPath
+                | Invariant::PreserveJointPath => {}
             }
         }
     }
@@ -207,5 +227,22 @@ mod tests {
         assert_ne!(Invariant::PreserveCartesianPath, Invariant::PreserveExistingWaypoints);
         assert_ne!(Invariant::PreserveCartesianPath, Invariant::PreserveStart);
         assert_ne!(Invariant::PreserveCartesianPath, Invariant::PreserveEnd);
+    }
+
+    #[test]
+    fn invariant_preserve_position_path_is_distinct() {
+        assert_ne!(Invariant::PreservePositionPath, Invariant::PreserveCartesianPath);
+        assert_ne!(Invariant::PreservePositionPath, Invariant::PreserveExistingWaypoints);
+        assert_ne!(Invariant::PreservePositionPath, Invariant::PreserveStart);
+        assert_ne!(Invariant::PreservePositionPath, Invariant::PreserveEnd);
+    }
+
+    #[test]
+    fn optimization_objective_manipulability_is_distinct() {
+        assert_ne!(OptimizationObjective::Manipulability, OptimizationObjective::Continuity);
+        assert_ne!(OptimizationObjective::Manipulability, OptimizationObjective::Safety);
+        assert_ne!(OptimizationObjective::Manipulability, OptimizationObjective::Efficiency);
+        assert_ne!(OptimizationObjective::Manipulability, OptimizationObjective::Feasibility);
+        assert_ne!(OptimizationObjective::Manipulability, OptimizationObjective::Smoothness);
     }
 }

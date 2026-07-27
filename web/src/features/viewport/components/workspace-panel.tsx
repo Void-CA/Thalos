@@ -56,8 +56,8 @@ export function WorkspacePanel() {
         disabled={!!disabledReason}
         title={disabledReason ?? undefined}
         className="inline-flex items-center justify-center gap-2 w-full px-3 py-2 text-xs font-medium
-                   rounded-lg border border-primary/40 bg-primary/10 text-primary
-                   hover:bg-primary/20 hover:border-primary/60
+                   rounded-lg border border-primary-mid bg-primary-weak text-primary
+                   hover:bg-primary-weak hover:border-primary-strong
                    transition-all cursor-pointer
                    disabled:opacity-35 disabled:cursor-not-allowed"
       >
@@ -78,7 +78,7 @@ export function WorkspacePanel() {
                 onClick={() => setColorMode(m.key)}
                 className={`px-2 py-1.5 text-xs font-medium rounded-md border transition-all cursor-pointer
                   ${colorMode === m.key
-                    ? 'bg-primary/15 border-primary/40 text-primary'
+                    ? 'bg-primary-weak border-primary-mid text-primary'
                     : 'bg-transparent border-border text-muted-foreground hover:text-foreground hover:bg-secondary/50'
                   }`}
               >

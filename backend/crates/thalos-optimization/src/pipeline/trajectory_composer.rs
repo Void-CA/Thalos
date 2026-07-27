@@ -93,7 +93,7 @@ pub fn compose_trajectory(
             .map(|(o, t)| o + (t - o) * alpha)
             .collect();
 
-        result[i] = TrajectoryPoint::new(blended, orig_wps[i].timestamp());
+        result[i] = TrajectoryPoint::new(blended, mod_wps[i].timestamp());
     }
 
     // --- Exit blend: transition FROM modified[range.end-1] TOWARD original[i] ---
@@ -117,7 +117,7 @@ pub fn compose_trajectory(
                 .map(|(s, o)| s + (o - s) * alpha)
                 .collect();
 
-            result[i] = TrajectoryPoint::new(blended, orig_wps[i].timestamp());
+            result[i] = TrajectoryPoint::new(blended, mod_wps[i].timestamp());
         }
     }
 

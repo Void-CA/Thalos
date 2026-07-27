@@ -217,8 +217,11 @@ mod tests {
             joint_limits: thalos_optimization::domain::context::JointLimits {
                 lower: vec![-3.14, -3.14],
                 upper: vec![3.14, 3.14],
+                velocity: None,
+                acceleration: None,
             },
             config: thalos_optimization::domain::context::PipelineConfig::default(),
+            tool_frame: None,
         }
     }
 

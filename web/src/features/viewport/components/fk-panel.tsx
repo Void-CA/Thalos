@@ -126,7 +126,7 @@ function SliderRow({
           />
           <div className="w-full h-1.5 rounded-full bg-secondary overflow-hidden">
             <div
-              className="h-full rounded-full bg-primary/60"
+              className="h-full rounded-full bg-primary-strong"
               style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
             />
           </div>

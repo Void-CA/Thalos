@@ -17,7 +17,7 @@ export function RobotCard({ robot, selected, onSelect, compact }: RobotCardProps
           'w-full text-left px-2.5 py-1.5 rounded-md border transition-all duration-100',
           'hover:bg-accent/40',
           selected
-            ? 'border-primary/30 bg-primary/10'
+            ? 'border-primary-mid bg-primary-weak'
             : 'border-transparent',
         )}
       >
@@ -38,7 +38,7 @@ export function RobotCard({ robot, selected, onSelect, compact }: RobotCardProps
         'w-full text-left p-2.5 rounded-lg border transition-all duration-100',
         'hover:bg-accent/40',
         selected
-          ? 'border-primary/30 bg-primary/10 shadow-sm'
+          ? 'border-primary-mid bg-primary-weak shadow-sm'
           : 'border-transparent bg-card/50',
       )}
     >

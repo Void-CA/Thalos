@@ -84,8 +84,8 @@ export function AnalysisWorkspace() {
             <button
               onClick={handleAnalyze}
               className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg
-                         border border-primary/40 bg-primary/10 text-primary
-                         hover:bg-primary/20 transition-all cursor-pointer"
+                         border border-primary-mid bg-primary-weak text-primary
+                         hover:bg-primary-weak transition-all cursor-pointer"
             >
               <ChartBar className="h-4 w-4" />
               Analyze Plan

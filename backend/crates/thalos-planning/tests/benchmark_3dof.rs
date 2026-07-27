@@ -45,8 +45,9 @@ fn make_ctx(chain: &SerialChain) -> OptimizationContext {
     let lower: Vec<f64> = chain.segments.iter().map(|s| s.joint.limits().min).collect();
     let upper: Vec<f64> = chain.segments.iter().map(|s| s.joint.limits().max).collect();
     OptimizationContext {
-        joint_limits: JointLimits { lower, upper },
+        joint_limits: JointLimits { lower, upper, velocity: None, acceleration: None },
         config: PipelineConfig::default(),
+        tool_frame: None,
     }
 }
 

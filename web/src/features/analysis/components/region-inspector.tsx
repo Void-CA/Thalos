@@ -116,7 +116,7 @@ export function RegionInspector() {
       {/* Location */}
       <div>
         <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Location</h4>
-        <span className="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded">{wpRange}</span>
+        <span className="text-xs font-mono text-primary bg-primary-weak px-2 py-0.5 rounded">{wpRange}</span>
       </div>
 
       {/* Strategies */}
