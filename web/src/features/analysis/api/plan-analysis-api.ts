@@ -1,5 +1,5 @@
 import { apiClient } from '@/shared/api-client'
-import type { PlanAnalysisResponse } from './plan-analysis.types'
+import type { PlanAnalysisResponse, OptimizeResponse } from './plan-analysis.types'
 
 export const planAnalysisApi = {
   analyze: (planId?: string) =>
@@ -7,4 +7,7 @@ export const planAnalysisApi = {
 
   alternatives: () =>
     apiClient.post<{ original_score: number; alternatives: unknown[] }>('/plan/analyze/alternatives', {}).then(r => r.data),
+
+  optimize: () =>
+    apiClient.post<OptimizeResponse>('/plan/optimize', {}).then(r => r.data),
 }

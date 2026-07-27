@@ -12,9 +12,9 @@
 
 use serde::{Deserialize, Serialize};
 use thalos_planning::{
-    advisor::{Impact, Recommendation, SuggestionKind},
+    advisor::Recommendation,
     analysis::{AnalysisSeverity, WaypointAnalysis},
-    finding::{Finding, FindingKind, Severity},
+    finding::{Finding, Severity},
 };
 
 /// Request para analizar un plan activo.
@@ -173,6 +173,47 @@ pub struct ProblemRegionDto {
     pub explanation: ExplanationDto,
     pub confidence: Option<f64>,
     pub recommended_strategies: Vec<String>,
+}
+
+/// Optimization response DTOs.
+
+/// One-shot optimization report.
+#[derive(Debug, Serialize)]
+pub struct OptimizeResponse {
+    /// Health score before optimization (0..1).
+    pub health_before: f64,
+    /// Health score after optimization (0..1).
+    pub health_after: f64,
+    /// Operators that were applied (one per problem region).
+    pub operators_applied: Vec<OperatorAppliedDto>,
+    /// Metrics comparison before vs after.
+    pub metrics: MetricsComparisonDto,
+    /// Optimized trajectory positions [[x,y,z], ...] for 3D overlay.
+    pub optimized_positions: Vec<[f64; 3]>,
+}
+
+/// Status of an operator applied to one problem region.
+#[derive(Debug, Serialize)]
+pub struct OperatorAppliedDto {
+    /// Operator identifier, e.g. "joint_centering".
+    pub id: String,
+    /// Operator family, e.g. "JointSpace".
+    pub family: String,
+    /// Whether the operator was applied, rejected, or failed.
+    pub status: String,
+}
+
+/// Before/after metrics comparison.
+#[derive(Debug, Serialize)]
+pub struct MetricsComparisonDto {
+    pub manipulability_before: f64,
+    pub manipulability_after: f64,
+    pub joint_margin_before: f64,
+    pub joint_margin_after: f64,
+    pub max_velocity_before: f64,
+    pub max_velocity_after: f64,
+    pub max_segment_error_before: f64,
+    pub max_segment_error_after: f64,
 }
 
 /// Recomendación accionable.

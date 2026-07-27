@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { SceneData, RuntimeInfo, IkResult, IkTarget, ActivePlan, ToolFrame, ExecutionInfo, ObjectTransform } from './types'
 
 export type TrajectoryColorMode = 'segment' | 'trajectory-quality' | 'manipulability' | 'singularity'
+export type TrajectoryViewMode = 'original' | 'optimized'
 
 export interface SceneState {
   data: SceneData | null
@@ -12,6 +13,10 @@ export interface SceneState {
   solvedQ: number[] | null
   ikTarget: IkTarget | null
   activePlan: ActivePlan | null
+  /// Optimized trajectory positions [[x,y,z], ...] for 3D overlay.
+  optimizedPositions: number[][] | null
+  /// Mutually exclusive view: show original OR optimized, never both.
+  trajectoryViewMode: TrajectoryViewMode
   activeTcp: ToolFrame | null
   loading: boolean
   error: string | null
@@ -24,6 +29,8 @@ interface SceneActions {
   applyRuntimeDelta: (joints: number[], transforms: ObjectTransform[], execution: ExecutionInfo) => void
   setIkTarget: (target: IkTarget | null) => void
   setTrajectoryColorMode: (mode: TrajectoryColorMode) => void
+  setTrajectoryViewMode: (mode: TrajectoryViewMode) => void
+  setOptimizedPositions: (positions: number[][] | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   reset: () => void
@@ -38,6 +45,8 @@ const INITIAL: SceneState = {
   solvedQ: null,
   ikTarget: null,
   activePlan: null,
+  optimizedPositions: null,
+  trajectoryViewMode: 'original',
   activeTcp: null,
   loading: false,
   error: null,
@@ -50,6 +59,8 @@ export const useSceneStore = create<SceneState & SceneActions>((set) => ({
   applyScene: (data, runtime, ikResult, activePlan, activeTcp, execution) => set({
     data, runtime, liveTransforms: [], execution, ikResult,
     solvedQ: null, activePlan, activeTcp, loading: false, error: null,
+    optimizedPositions: null,
+    trajectoryViewMode: 'original',
   }),
 
   applyFkUpdate: (data, runtime, ikResult, activeTcp) => set((state) => ({
@@ -65,6 +76,8 @@ export const useSceneStore = create<SceneState & SceneActions>((set) => ({
 
   setIkTarget: (target) => set({ ikTarget: target }),
   setTrajectoryColorMode: (trajectoryColorMode) => set({ trajectoryColorMode }),
+  setTrajectoryViewMode: (trajectoryViewMode) => set({ trajectoryViewMode }),
+  setOptimizedPositions: (optimizedPositions) => set({ optimizedPositions }),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error, loading: false }),
   reset: () => set(INITIAL),

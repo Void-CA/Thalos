@@ -37,7 +37,10 @@ pub use error::OptimizationError;
 pub use temporal::{extract_velocity_limits, min_segment_duration};
 
 // Re-exports from pipeline
-pub use pipeline::{OptimizationPipeline, OptimizationResult, OperatorSelector};
+pub use pipeline::{
+    AcceptanceEvaluation, AcceptancePolicy, OptimizationPipeline, OptimizationResult,
+    OperatorSelector,
+};
 
 #[cfg(test)]
 mod tests {
@@ -473,8 +476,12 @@ mod tests {
             .expect("pipeline should not error on operator failure");
 
         assert_eq!(result.report.steps.len(), 1);
-        assert_eq!(result.report.steps[0].operator_id, "none");
+        assert_eq!(result.report.steps[0].operator_id, "failing_op");
         assert!(!result.report.steps[0].accepted);
+        assert!(
+            result.report.steps[0].rejection_reason.is_some(),
+            "rejection reason should be recorded for operator failure"
+        );
     }
 
     #[test]

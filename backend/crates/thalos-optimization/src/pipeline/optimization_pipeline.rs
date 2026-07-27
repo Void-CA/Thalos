@@ -4,10 +4,12 @@ use crate::{
         TrajectoryOperator,
     },
     error::OptimizationError,
-    pipeline::{trajectory_composer::compose_trajectory, OperatorSelector},
+    pipeline::{
+        acceptance::AcceptancePolicy, trajectory_composer::compose_trajectory, OperatorSelector,
+    },
+    ProblemRegion, RegionId, RegionKind, RegionSeverity,
 };
 use thalos_core::{
-    analysis::region::ProblemRegion,
     evaluation::PlanMetrics,
     robot::serial_chain::SerialChain,
     trajectory::Trajectory,
@@ -27,11 +29,16 @@ pub struct OptimizationResult {
 ///
 /// For each region the pipeline:
 /// 1. Ranks available operators by composite score
-/// 2. Attempts the top-ranked operator
+/// 2. Attempts the top-ranked operator → produces a **candidate**
 /// 3. Blends the modified segment with the original trajectory at boundaries
-/// 4. If it succeeds, accepts the result and moves to the next region
-/// 5. If it fails, falls back to the next operator in the ranking
-/// 6. If all operators fail for a region, records a failed step
+/// 4. **Evaluates** the candidate with `AcceptancePolicy` — if metrics
+///    degraded, rejects and tries the next operator
+/// 5. If accepted, moves to the next region
+/// 6. If all operators fail or are rejected, records a failed step
+///    with the rejection reason from the last attempted operator.
+///
+/// After all geometric regions are processed, runs a **temporal post-pass**
+/// (Retime) on the full trajectory if the operator is available.
 #[derive(Debug, Clone)]
 pub struct OptimizationPipeline {
     config: PipelineConfig,
@@ -67,51 +74,150 @@ impl OptimizationPipeline {
         let mut current = trajectory.clone();
         let mut steps = Vec::new();
         let total_improvement = 0.0;
+        let policy = AcceptancePolicy::default();
 
+        // ── Phase 1: Geometric optimization (per-region, with acceptance) ──
         for region in regions {
             let ranked = OperatorSelector::rank(operators, region, metrics);
             if ranked.is_empty() {
                 continue;
             }
 
-            let mut region_improved = false;
+            let mut accepted_step: Option<OptimizationStep> = None;
+            let mut last_rejection: Option<OptimizationStep> = None;
+
             for (op, _assessment) in ranked {
+                // Skip temporal operators in the geometric pass — they run
+                // as a mandatory post-pass.
+                if op.family() == crate::domain::operator::OperatorFamily::Temporal {
+                    last_rejection = Some(OptimizationStep {
+                        region_id: region.id,
+                        operator_id: op.id(),
+                        improvement: 0.0,
+                        accepted: false,
+                        iteration: 0,
+                        rejection_reason: Some("deferred to temporal post-pass".into()),
+                    });
+                    continue;
+                }
+
                 match op.apply(robot, &current, region, ctx) {
-                    Ok(new_traj) => {
-                        // Blend the modified segment with the original to avoid
-                        // boundary discontinuities. Uses the pipeline's configured
-                        // window size and policy (default: SmoothStep).
+                    Ok(candidate_raw) => {
                         let blended = compose_trajectory(
-                            &current,         // original trajectory (before this op)
-                            &new_traj,        // operator's output (modified)
+                            &current,
+                            &candidate_raw,
                             &region.waypoint_range,
                             self.config.blend_window,
                             self.config.blend_policy,
                         );
 
-                        steps.push(OptimizationStep {
+                        let evaluation = policy.evaluate(&current, &blended, ctx);
+
+                        if evaluation.accepted {
+                            accepted_step = Some(OptimizationStep {
+                                region_id: region.id,
+                                operator_id: op.id(),
+                                improvement: 0.0,
+                                accepted: true,
+                                iteration: 0,
+                                rejection_reason: None,
+                            });
+                            current = blended;
+                            break;
+                        } else {
+                            last_rejection = Some(OptimizationStep {
+                                region_id: region.id,
+                                operator_id: op.id(),
+                                improvement: 0.0,
+                                accepted: false,
+                                iteration: 0,
+                                rejection_reason: Some(format!(
+                                    "rejected: {}",
+                                    evaluation.reason
+                                )),
+                            });
+                        }
+                    }
+                    Err(e) => {
+                        last_rejection = Some(OptimizationStep {
                             region_id: region.id,
                             operator_id: op.id(),
                             improvement: 0.0,
-                            accepted: true,
+                            accepted: false,
                             iteration: 0,
+                            rejection_reason: Some(format!("error: {}", e)),
                         });
-                        current = blended;
-                        region_improved = true;
-                        break;
                     }
-                    Err(_) => continue,
                 }
             }
 
-            if !region_improved {
+            // Push exactly ONE step per region
+            if let Some(accepted) = accepted_step {
+                steps.push(accepted);
+            } else if let Some(rejected) = last_rejection {
+                steps.push(rejected);
+            } else {
                 steps.push(OptimizationStep {
                     region_id: region.id,
                     operator_id: "none",
                     improvement: 0.0,
                     accepted: false,
                     iteration: 0,
+                    rejection_reason: None,
                 });
+            }
+        }
+
+        // ── Phase 2: Temporal post-pass (Retime on full trajectory) ──
+        if let Some(retime_op) = operators.iter().find(|op| op.id() == "retime") {
+            let full_range = ProblemRegion::new(
+                RegionId(usize::MAX),
+                RegionKind::Velocity,
+                RegionSeverity::Info,
+                0..current.len(),
+            );
+
+            match retime_op.apply(robot, &current, &full_range, ctx) {
+                Ok(retimed) => {
+                    let blended = compose_trajectory(
+                        &current,
+                        &retimed,
+                        &full_range.waypoint_range,
+                        self.config.blend_window,
+                        self.config.blend_policy,
+                    );
+                    let eval = policy.evaluate(&current, &blended, ctx);
+                    if eval.accepted {
+                        steps.push(OptimizationStep {
+                            region_id: full_range.id,
+                            operator_id: "retime",
+                            improvement: 0.0,
+                            accepted: true,
+                            iteration: 0,
+                            rejection_reason: None,
+                        });
+                        current = blended;
+                    } else {
+                        steps.push(OptimizationStep {
+                            region_id: full_range.id,
+                            operator_id: "retime",
+                            improvement: 0.0,
+                            accepted: false,
+                            iteration: 0,
+                            rejection_reason: Some(eval.reason),
+                        });
+                    }
+                }
+                Err(e) => {
+                    steps.push(OptimizationStep {
+                        region_id: full_range.id,
+                        operator_id: "retime",
+                        improvement: 0.0,
+                        accepted: false,
+                        iteration: 0,
+                        rejection_reason: Some(format!("error: {}", e)),
+                    });
+                }
             }
         }
 

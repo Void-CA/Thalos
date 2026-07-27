@@ -14,9 +14,17 @@ import {
 
 /**
  * Trajectory — renderiza la trayectoria del plan activo.
+ *
+ * Muestra exclusivamente una de las dos según `trajectoryViewMode`:
+ * - `original`  → trayectoria original coloreada por modo
+ * - `optimized` → solo la trayectoria optimizada (verde sólido)
+ *
+ * Nunca ambas al mismo tiempo — toggle mutuamente excluyente.
  */
 export function Trajectory() {
   const activePlan = useSceneStore(s => s.activePlan)
+  const optimizedPositions = useSceneStore(s => s.optimizedPositions)
+  const trajectoryViewMode = useSceneStore(s => s.trajectoryViewMode)
   const colorMode = useSceneStore(s => s.trajectoryColorMode)
   const analysisWp = useAnalysisStore(s => s.waypoints)
   const segments = activePlan?.segments
@@ -57,6 +65,42 @@ export function Trajectory() {
     )
   }, [vis])
 
+  // Optimized trajectory (from /plan/optimize)
+  const optimizedLine = useMemo(() => {
+    if (!optimizedPositions || optimizedPositions.length < 2) return null
+    const pts = optimizedPositions.map(p => new THREE.Vector3(p[0], p[1], p[2]))
+    const geo = new THREE.BufferGeometry().setFromPoints(pts)
+    const mat = new THREE.LineBasicMaterial({
+      color: 0x22c55e,
+      transparent: true,
+      opacity: 0.8,
+    })
+    return <primitive object={new THREE.Line(geo, mat)} />
+  }, [optimizedPositions])
+
+  const optimizedMarkers = useMemo(() => {
+    if (!optimizedPositions) return null
+    return optimizedPositions.map((p, i) => (
+      <mesh key={`opt-${i}`} position={[p[0], p[1], p[2]]}>
+        <sphereGeometry args={[0.015, 8, 8]} />
+        <meshBasicMaterial color={0x22c55e} transparent opacity={0.7} />
+      </mesh>
+    ))
+  }, [optimizedPositions])
+
+  // ── Mutually exclusive render ──
+  if (trajectoryViewMode === 'optimized' && optimizedPositions) {
+    // Only show optimized trajectory
+    if (optimizedPositions.length < 2) return null
+    return (
+      <group>
+        {optimizedLine}
+        {optimizedMarkers}
+      </group>
+    )
+  }
+
+  // Default: show original trajectory
   if (!vis || vis.waypoints.length < 2) return null
 
   return (

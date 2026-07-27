@@ -4,7 +4,7 @@ import { planAnalysisApi } from './api/plan-analysis-api'
 import { StatusBanner } from './components/status-banner'
 import { ProblemRegions } from './components/problem-regions'
 import { RegionInspector } from './components/region-inspector'
-import { AlternativesPanel } from './components/alternatives-panel'
+import { OptimizationPanel } from './components/optimization-panel'
 import { usePerspectiveStore } from '@/shared/layout/perspective-store'
 import { useSceneStore } from '@/features/viewport/store'
 
@@ -112,17 +112,12 @@ export function AnalysisWorkspace() {
 
             {selectedRegion ? (
               <RegionInspector />
-            ) : (
-              <>
-                <ProblemRegions />
-                <div className="border-t border-border pt-3">
-                  <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">
-                    Alternatives
-                  </h3>
-                  <AlternativesPanel />
-                </div>
-              </>
-            )}
+              ) : (
+                <>
+                  <ProblemRegions />
+                  <OptimizationPanel />
+                </>
+              )}
           </>
         )}
       </div>

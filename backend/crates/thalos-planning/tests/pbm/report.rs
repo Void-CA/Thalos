@@ -126,6 +126,7 @@ mod tests {
             improvement: 0.0,
             accepted,
             iteration: 0,
+            rejection_reason: None,
         }
     }
 
