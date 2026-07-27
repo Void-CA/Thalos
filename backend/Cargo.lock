@@ -1299,6 +1299,7 @@ name = "thalos-optimization"
 version = "0.1.0"
 dependencies = [
  "thalos_core",
+ "thalos_math",
 ]
 
 [[package]]

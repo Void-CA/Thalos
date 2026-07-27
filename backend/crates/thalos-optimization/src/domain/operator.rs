@@ -45,6 +45,18 @@ pub enum OptimizationObjective {
 ///
 /// Operators declare which properties they preserve. The pipeline
 /// can use this information to reason about operator composition.
+///
+/// ## Structural vs. Semantic Invariants
+///
+/// Some invariants are **structural** (the trajectory representation is unchanged):
+/// - `PreserveExistingWaypoints` — waypoint count and joint values are preserved
+/// - `PreserveStart` / `PreserveEnd` — endpoints are fixed
+///
+/// Others are **semantic** (the physical meaning is preserved even if representation changes):
+/// - `PreserveCartesianPath` — TCP position is unchanged in task space
+///
+/// Semantic invariants are critical for kinematics-aware operators like
+/// `NullSpaceOptimization`, which modifies joint values but preserves the Cartesian path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Invariant {
     /// Existing waypoints are never modified, reordered, or removed.
@@ -55,6 +67,12 @@ pub enum Invariant {
     PreserveEnd,
     /// Timestamps remain monotonically non-decreasing.
     MonotonicTimestamps,
+    /// The Cartesian TCP path is preserved (joint values may change).
+    ///
+    /// Semantic invariant: the operator guarantees that the robot's end-effector
+    /// follows the same Cartesian path even if individual joint values are modified.
+    /// Used by kinematics-aware operators (e.g., null-space optimization).
+    PreserveCartesianPath,
 }
 
 /// A trait representing an operator that can optimize a trajectory region.
@@ -171,14 +189,23 @@ mod tests {
             Invariant::PreserveStart,
             Invariant::PreserveEnd,
             Invariant::MonotonicTimestamps,
+            Invariant::PreserveCartesianPath,
         ];
         for inv in &invariants {
             match inv {
                 Invariant::PreserveExistingWaypoints
                 | Invariant::PreserveStart
                 | Invariant::PreserveEnd
-                | Invariant::MonotonicTimestamps => {}
+                | Invariant::MonotonicTimestamps
+                | Invariant::PreserveCartesianPath => {}
             }
         }
+    }
+
+    #[test]
+    fn invariant_preserve_cartesian_path_is_distinct() {
+        assert_ne!(Invariant::PreserveCartesianPath, Invariant::PreserveExistingWaypoints);
+        assert_ne!(Invariant::PreserveCartesianPath, Invariant::PreserveStart);
+        assert_ne!(Invariant::PreserveCartesianPath, Invariant::PreserveEnd);
     }
 }
