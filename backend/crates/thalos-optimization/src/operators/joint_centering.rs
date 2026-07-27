@@ -132,7 +132,7 @@ impl TrajectoryOperator for JointCenteringOperator {
         let mut new_waypoints: Vec<TrajectoryPoint> = waypoints.to_vec();
 
         for i in range {
-            let wp = &new_waypoints[i];
+            let wp = &waypoints[i];
             let q = wp.joints();
 
             if q.len() != num_joints {

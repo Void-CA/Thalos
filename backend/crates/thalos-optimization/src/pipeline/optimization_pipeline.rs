@@ -4,7 +4,7 @@ use crate::{
         TrajectoryOperator,
     },
     error::OptimizationError,
-    pipeline::OperatorSelector,
+    pipeline::{trajectory_composer::compose_trajectory, OperatorSelector},
 };
 use thalos_core::{
     analysis::region::ProblemRegion,
@@ -28,12 +28,12 @@ pub struct OptimizationResult {
 /// For each region the pipeline:
 /// 1. Ranks available operators by composite score
 /// 2. Attempts the top-ranked operator
-/// 3. If it succeeds, accepts the result and moves to the next region
-/// 4. If it fails, falls back to the next operator in the ranking
-/// 5. If all operators fail for a region, records a failed step
+/// 3. Blends the modified segment with the original trajectory at boundaries
+/// 4. If it succeeds, accepts the result and moves to the next region
+/// 5. If it fails, falls back to the next operator in the ranking
+/// 6. If all operators fail for a region, records a failed step
 #[derive(Debug, Clone)]
 pub struct OptimizationPipeline {
-    #[allow(dead_code)]
     config: PipelineConfig,
 }
 
@@ -78,6 +78,17 @@ impl OptimizationPipeline {
             for (op, _assessment) in ranked {
                 match op.apply(robot, &current, region, ctx) {
                     Ok(new_traj) => {
+                        // Blend the modified segment with the original to avoid
+                        // boundary discontinuities. Uses the pipeline's configured
+                        // window size and policy (default: SmoothStep).
+                        let blended = compose_trajectory(
+                            &current,         // original trajectory (before this op)
+                            &new_traj,        // operator's output (modified)
+                            &region.waypoint_range,
+                            self.config.blend_window,
+                            self.config.blend_policy,
+                        );
+
                         steps.push(OptimizationStep {
                             region_id: region.id,
                             operator_id: op.id(),
@@ -85,7 +96,7 @@ impl OptimizationPipeline {
                             accepted: true,
                             iteration: 0,
                         });
-                        current = new_traj;
+                        current = blended;
                         region_improved = true;
                         break;
                     }

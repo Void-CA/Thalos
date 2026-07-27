@@ -1,3 +1,5 @@
+use crate::pipeline::trajectory_composer::BlendPolicy;
+
 /// Configuration for the optimization pipeline.
 #[derive(Debug, Clone)]
 pub struct PipelineConfig {
@@ -7,6 +9,10 @@ pub struct PipelineConfig {
     pub improvement_threshold: f32,
     /// Centering factor for joint-centering operator (default: 0.3).
     pub centering_factor: f64,
+    /// Number of waypoints on each side of a region for boundary blending (default: 5).
+    pub blend_window: usize,
+    /// Policy for blending modified segments back into the trajectory (default: SmoothStep).
+    pub blend_policy: BlendPolicy,
 }
 
 impl Default for PipelineConfig {
@@ -15,6 +21,8 @@ impl Default for PipelineConfig {
             max_iterations_per_region: 3,
             improvement_threshold: 0.01,
             centering_factor: 0.3,
+            blend_window: 5,
+            blend_policy: BlendPolicy::SmoothStep,
         }
     }
 }
@@ -39,4 +47,16 @@ pub struct OptimizationContext {
     pub joint_limits: JointLimits,
     /// Pipeline configuration parameters.
     pub config: PipelineConfig,
+}
+
+impl Default for OptimizationContext {
+    fn default() -> Self {
+        Self {
+            joint_limits: JointLimits {
+                lower: vec![],
+                upper: vec![],
+            },
+            config: PipelineConfig::default(),
+        }
+    }
 }

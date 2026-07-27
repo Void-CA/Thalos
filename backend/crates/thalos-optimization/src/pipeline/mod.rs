@@ -5,9 +5,12 @@
 //!
 //! - `operator_selector` — Ranks operators by composite score for a given region
 //! - `optimization_pipeline` — Iterative per-region optimization loop
+//! - `trajectory_composer` — Blends modified segments with original trajectory
 
 pub mod operator_selector;
 pub mod optimization_pipeline;
+pub mod trajectory_composer;
 
 pub use optimization_pipeline::{OptimizationPipeline, OptimizationResult};
 pub use operator_selector::OperatorSelector;
+pub use trajectory_composer::{compose_trajectory, BlendPolicy};
