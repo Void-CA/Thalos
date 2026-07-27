@@ -11,5 +11,6 @@ members = [
     "crates/thalos-runtime", 
     "crates/thalos-planning",
     "crates/thalos-optimization",
-    "crates/thalos-document"
+    "crates/thalos-document",
+    "crates/thalos-compiler"
     ]

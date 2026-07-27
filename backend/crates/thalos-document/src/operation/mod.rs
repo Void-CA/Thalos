@@ -1,9 +1,9 @@
-pub mod motion;
 pub mod io;
+pub mod motion;
 
 use crate::id::*;
-use motion::MotionProfile;
 use io::OutputValue;
+use motion::MotionProfile;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -15,9 +15,7 @@ use std::time::Duration;
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Operation {
     /// Return robot to configured home position.
-    Home {
-        id: OperationId,
-    },
+    Home { id: OperationId },
     /// Move to a target point with an optional motion profile.
     MoveTo {
         id: OperationId,
@@ -31,10 +29,7 @@ pub enum Operation {
         profile: Option<MotionProfile>,
     },
     /// Pause execution for the given duration.
-    Wait {
-        id: OperationId,
-        duration: Duration,
-    },
+    Wait { id: OperationId, duration: Duration },
     /// Set an output channel to a typed value.
     SetOutput {
         id: OperationId,
@@ -43,11 +38,24 @@ pub enum Operation {
     },
 }
 
+impl Operation {
+    /// Return the operation's unique ID.
+    pub fn id(&self) -> &OperationId {
+        match self {
+            Operation::Home { id }
+            | Operation::MoveTo { id, .. }
+            | Operation::Follow { id, .. }
+            | Operation::Wait { id, .. }
+            | Operation::SetOutput { id, .. } => id,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use motion::MotionProfile;
     use io::OutputValue;
+    use motion::MotionProfile;
     use serde_json;
     use std::time::Duration;
 
@@ -70,7 +78,9 @@ mod tests {
             target: PointId("pt_01".to_string()),
             profile: None,
         };
-        assert!(matches!(op, Operation::MoveTo { target, .. } if target == PointId("pt_01".to_string())));
+        assert!(
+            matches!(op, Operation::MoveTo { target, .. } if target == PointId("pt_01".to_string()))
+        );
     }
 
     #[test]
@@ -80,7 +90,9 @@ mod tests {
             target: PointId("pt_01".to_string()),
             profile: Some(MotionProfile::Named("slow".to_string())),
         };
-        assert!(matches!(op, Operation::MoveTo { profile: Some(MotionProfile::Named(name)), .. } if name == "slow"));
+        assert!(
+            matches!(op, Operation::MoveTo { profile: Some(MotionProfile::Named(name)), .. } if name == "slow")
+        );
     }
 
     // --- Follow ---
@@ -92,7 +104,9 @@ mod tests {
             path: PathId("path_1".to_string()),
             profile: None,
         };
-        assert!(matches!(op, Operation::Follow { path, .. } if path == PathId("path_1".to_string())));
+        assert!(
+            matches!(op, Operation::Follow { path, .. } if path == PathId("path_1".to_string()))
+        );
     }
 
     // --- Wait ---
@@ -103,7 +117,9 @@ mod tests {
             id: OperationId("op_5".to_string()),
             duration: Duration::from_secs(5),
         };
-        assert!(matches!(op, Operation::Wait { duration, .. } if duration == Duration::from_secs(5)));
+        assert!(
+            matches!(op, Operation::Wait { duration, .. } if duration == Duration::from_secs(5))
+        );
     }
 
     // --- SetOutput ---

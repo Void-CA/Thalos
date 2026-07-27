@@ -1,0 +1,104 @@
+{
+  "metadata": {
+    "name": "test_project",
+    "version": 1,
+    "created_at": "2026-07-27T00:00:00Z",
+    "modified_at": "2026-07-27T00:00:00Z"
+  },
+  "robot": {
+    "reference": "ur5e"
+  },
+  "scene": {
+    "reference": "workshop"
+  },
+  "resources": {
+    "points": [
+      {
+        "id": "pt_01",
+        "name": "pick_pose",
+        "pose": {
+          "position": [0.5, 0.0, 0.3],
+          "orientation": [0.0, 0.0, 0.0, 1.0]
+        }
+      },
+      {
+        "id": "pt_02",
+        "name": "place_pose",
+        "pose": {
+          "position": [-0.3, 0.4, 0.2],
+          "orientation": [0.0, 0.0, 0.707, 0.707]
+        }
+      }
+    ],
+    "paths": [
+      {
+        "id": "weld_path",
+        "name": "Weld Seam",
+        "points": ["pt_01", "pt_02"]
+      }
+    ],
+    "frames": [],
+    "outputs": [
+      {
+        "id": "gripper",
+        "name": "Gripper",
+        "channel_type": "digital"
+      },
+      {
+        "id": "speed_valve",
+        "name": "Speed Control",
+        "channel_type": "analog"
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "id": "main",
+      "operations": [
+        {
+          "type": "home",
+          "id": "op_1"
+        },
+        {
+          "type": "move_to",
+          "id": "op_2",
+          "target": "pt_01",
+          "profile": "default"
+        },
+        {
+          "type": "move_to",
+          "id": "op_3",
+          "target": "pt_02",
+          "profile": "slow"
+        },
+        {
+          "type": "wait",
+          "id": "op_4",
+          "duration": {
+            "secs": 1,
+            "nanos": 0
+          }
+        },
+        {
+          "type": "set_output",
+          "id": "op_5",
+          "channel": "gripper",
+          "value": {
+            "Bool": true
+          }
+        },
+        {
+          "type": "set_output",
+          "id": "op_6",
+          "channel": "speed_valve",
+          "value": {
+            "Float": 0.75
+          }
+        }
+      ]
+    }
+  ],
+  "settings": {
+    "default_profile": "standard"
+  }
+}

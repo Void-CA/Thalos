@@ -1,5 +1,5 @@
-use crate::operation::motion::MotionProfile;
 use crate::operation::Operation;
+use crate::operation::motion::MotionProfile;
 use crate::resource::Resources;
 use serde::{Deserialize, Serialize};
 
@@ -68,9 +68,9 @@ pub struct Project {
 mod tests {
     use super::*;
     use crate::id::*;
+    use crate::operation::Operation;
     use crate::operation::io::OutputValue;
     use crate::operation::motion::MotionProfile;
-    use crate::operation::Operation;
     use crate::pose::Pose;
     use crate::resource::*;
     use std::time::Duration;
