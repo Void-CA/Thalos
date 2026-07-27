@@ -1,5 +1,5 @@
-use thalos_core::spatial::frame::FrameId;
-use thalos_core::spatial::pose::Pose;
+use crate::spatial::frame::FrameId;
+use crate::spatial::pose::Pose;
 
 /// A single movement command in a motion program.
 ///

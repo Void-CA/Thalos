@@ -7,7 +7,7 @@ use thalos_core::{
 };
 use thalos_math::{Quaternion, Transform3D, UnitQuaternion, Vector3};
 use thalos_planning::motion::program::MotionProgram;
-use thalos_planning::motion::segment::MotionSegment;
+use thalos_core::motion::segment::MotionSegment;
 use thalos_runtime::commands::kinematics::KinematicsCommand;
 use thalos_runtime::Command;
 

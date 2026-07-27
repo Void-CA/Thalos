@@ -3,6 +3,8 @@ pub mod robot;
 pub mod kinematics;
 pub mod spatial;
 pub mod models;
+pub mod motion;
+pub mod operation;
 pub mod analysis;
 pub mod collision;
 pub mod evaluation;

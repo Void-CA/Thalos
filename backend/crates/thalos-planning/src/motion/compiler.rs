@@ -10,7 +10,7 @@ use crate::motion::move_j::{MoveJConfig, MoveJPlanner};
 use crate::motion::move_l::{MoveLConfig, MoveLPlanner};
 use crate::motion::planner::{MotionPlanner, PlanningContext};
 use crate::motion::program::{CompiledPlan, MotionProgram, PlannedSegment};
-use crate::motion::segment::MotionSegment;
+use thalos_core::motion::segment::MotionSegment;
 
 /// Dispatches a `MotionSegment` to the appropriate `MotionPlanner`.
 ///

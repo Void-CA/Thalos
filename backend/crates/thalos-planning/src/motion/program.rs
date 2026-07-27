@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use thalos_core::prelude::Trajectory;
 
-use super::segment::MotionSegment;
+use thalos_core::motion::segment::MotionSegment;
 
 /// A motion program: an ordered sequence of movement commands.
 ///

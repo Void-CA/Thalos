@@ -26,10 +26,10 @@ impl From<&thalos_runtime::ActiveMotionPlan> for ActivePlanDto {
                     .enumerate()
                     .map(|(i, seg)| {
                         let motion_type = match &seg.source {
-                            thalos_planning::motion::segment::MotionSegment::MoveJ { .. } => {
+                            thalos_core::motion::segment::MotionSegment::MoveJ { .. } => {
                                 "movej"
                             }
-                            thalos_planning::motion::segment::MotionSegment::MoveL { .. } => {
+                            thalos_core::motion::segment::MotionSegment::MoveL { .. } => {
                                 "movel"
                             }
                         };
