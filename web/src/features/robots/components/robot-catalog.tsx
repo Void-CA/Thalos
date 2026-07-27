@@ -4,7 +4,13 @@ import { RobotCard } from './robot-card'
 import { Loader2, AlertCircle, ChevronRight, ChevronDown } from 'lucide-react'
 import { useState } from 'react'
 
-const CANONICAL_ROBOTS = ['ur5', 'ur5e', 'ur10', 'ur10e', 'scara', 'kr6']
+/** IDs de robots a excluir del catálogo. */
+const EXCLUDED_IDS = new Set([
+  'single_revolute',
+  'manipulator_6dof',
+  'cylindrical_rpp',
+  'spherical_polar_rrp',
+])
 
 export function RobotCatalog() {
   const { isLoading, error } = useRobots()
@@ -14,8 +20,8 @@ export function RobotCatalog() {
   const selectedRobot = useSelectedRobot()
   const [canonicalOpen, setCanonicalOpen] = useState(true)
 
-  const canonicalRobots = robots.filter(r => CANONICAL_ROBOTS.includes(r.id.toLowerCase()))
-  const otherRobots = robots.filter(r => !CANONICAL_ROBOTS.includes(r.id.toLowerCase()))
+  // Todos los robots visibles van bajo "Canonical Models"
+  const displayedRobots = robots.filter(r => !EXCLUDED_IDS.has(r.id.toLowerCase()))
 
   if (isLoading) {
     return (
@@ -36,8 +42,8 @@ export function RobotCatalog() {
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Canonical Models — collapsible */}
-      {canonicalRobots.length > 0 && (
+      {/* Todos los robots bajo Canonical Models — colapsable */}
+      {displayedRobots.length > 0 && (
         <div className="rounded-md border border-border overflow-hidden">
           <button
             onClick={() => setCanonicalOpen(!canonicalOpen)}
@@ -47,11 +53,11 @@ export function RobotCatalog() {
           >
             {canonicalOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
             Canonical Models
-            <span className="ml-auto text-[10px] font-normal opacity-60">{canonicalRobots.length}</span>
+            <span className="ml-auto text-[10px] font-normal opacity-60">{displayedRobots.length}</span>
           </button>
           {canonicalOpen && (
             <div className="p-1.5 flex flex-col gap-1">
-              {canonicalRobots.map(robot => (
+              {displayedRobots.map(robot => (
                 <RobotCard
                   key={robot.id}
                   robot={robot}
@@ -62,20 +68,6 @@ export function RobotCatalog() {
               ))}
             </div>
           )}
-        </div>
-      )}
-
-      {/* Other robots */}
-      {otherRobots.length > 0 && (
-        <div className="flex flex-col gap-1">
-          {otherRobots.map(robot => (
-            <RobotCard
-              key={robot.id}
-              robot={robot}
-              selected={selectedId === robot.id}
-              onSelect={() => select(robot.id)}
-            />
-          ))}
         </div>
       )}
 
