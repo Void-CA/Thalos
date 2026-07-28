@@ -1301,6 +1301,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thalos-document",
+ "thalos-planning",
  "thiserror",
 ]
 

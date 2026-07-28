@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 thalos-document = { path = "../thalos-document" }
+thalos-planning = { path = "../thalos-planning" }
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 
