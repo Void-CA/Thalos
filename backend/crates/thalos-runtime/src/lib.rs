@@ -10,6 +10,7 @@ pub mod commands;
 pub mod backends;
 pub mod comparison;
 pub mod execution_analysis;
+pub mod execution_boundary;
 pub mod snapshots;
 pub mod error;
 
@@ -31,3 +32,11 @@ pub use snapshots::scene::RuntimeSnapshot;
 pub use snapshots::scene::TickDelta;
 pub use state::robot_state::{RobotState, MotionState, JointState, CartesianState, DeviceState, ExecutionState, Diagnostics, MotionMode, ConnectionState, RobotError};
 pub use execution_analysis::{ExecutionAnalyzer, ExecutionThresholds};
+pub use execution_boundary::{
+    ExecutionAdapter,
+    ExecutionCommand,
+    ExecutionSegmentBoundary,
+    ExecutionReport,
+    ExecutionStatus,
+    ExecutionError,
+};
