@@ -207,7 +207,7 @@ pub fn project_semantic_problem(
             && p.waypoint_range.end > region.waypoint_range.start
     });
     SemanticProblem {
-        operation_id: matching.map(|p| p.operation_id),
+        operation_id: matching.map(|p| p.operation_id.clone()),
         role: matching.map(|p| p.role),
         kind: region.kind,
         severity: region.severity,
@@ -321,14 +321,14 @@ mod tests {
     #[test]
     fn semantic_problem_construction() {
         let problem = SemanticProblem {
-            operation_id: Some(OperationId(1)),
+            operation_id: Some(OperationId("1".to_string())),
             role: Some(MotionRole::Execution),
             kind: RegionKind::Singularity,
             severity: RegionSeverity::Critical,
             waypoint_range: 5..10,
         };
 
-        assert_eq!(problem.operation_id, Some(OperationId(1)));
+        assert_eq!(problem.operation_id, Some(OperationId("1".to_string())));
         assert_eq!(problem.role, Some(MotionRole::Execution));
         assert_eq!(problem.kind, RegionKind::Singularity);
         assert_eq!(problem.severity, RegionSeverity::Critical);
@@ -365,19 +365,19 @@ mod tests {
         let provenance = vec![
             MotionProvenance {
                 waypoint_range: 0..5,
-                operation_id: OperationId(1),
+                operation_id: OperationId("1".to_string()),
                 role: MotionRole::Approach,
             },
             MotionProvenance {
                 waypoint_range: 5..10,
-                operation_id: OperationId(2),
+                operation_id: OperationId("2".to_string()),
                 role: MotionRole::Execution,
             },
         ];
 
         let result = project_semantic_problem(&region, &provenance);
 
-        assert_eq!(result.operation_id, Some(OperationId(2)));
+        assert_eq!(result.operation_id, Some(OperationId("2".to_string())));
         assert_eq!(result.role, Some(MotionRole::Execution));
         assert_eq!(result.kind, RegionKind::Singularity);
         assert_eq!(result.severity, RegionSeverity::Critical);
@@ -414,7 +414,7 @@ mod tests {
         );
         let provenance = vec![MotionProvenance {
             waypoint_range: 0..5,
-            operation_id: OperationId(1),
+            operation_id: OperationId("1".to_string()),
             role: MotionRole::Approach,
         }];
 
@@ -435,7 +435,7 @@ mod tests {
         );
         let provenance = vec![MotionProvenance {
             waypoint_range: 10..15,
-            operation_id: OperationId(1),
+            operation_id: OperationId("1".to_string()),
             role: MotionRole::Transit,
         }];
 
@@ -456,13 +456,13 @@ mod tests {
         );
         let provenance = vec![MotionProvenance {
             waypoint_range: 0..6,
-            operation_id: OperationId(42),
+            operation_id: OperationId("42".to_string()),
             role: MotionRole::Execution,
         }];
 
         let result = project_semantic_problem(&region, &provenance);
 
-        assert_eq!(result.operation_id, Some(OperationId(42)));
+        assert_eq!(result.operation_id, Some(OperationId("42".to_string())));
         assert_eq!(result.role, Some(MotionRole::Execution));
     }
 
@@ -471,7 +471,7 @@ mod tests {
     #[test]
     fn semantic_problem_is_cloneable() {
         let problem = SemanticProblem {
-            operation_id: Some(OperationId(3)),
+            operation_id: Some(OperationId("3".to_string())),
             role: Some(MotionRole::Interaction),
             kind: RegionKind::Tracking,
             severity: RegionSeverity::Warning,

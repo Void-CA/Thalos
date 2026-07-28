@@ -1,6 +1,7 @@
 use crate::motion::segment::MotionSegment;
 use crate::operation::motion_node::{MotionNode, MotionRole};
-use crate::operation::operation::{Operation, OperationId};
+use crate::ids::OperationId;
+use crate::operation::operation::Operation;
 use crate::spatial::frame::FrameId;
 use crate::spatial::pose::Pose;
 
@@ -36,23 +37,23 @@ pub fn expand_operation(op: &Operation) -> Vec<MotionNode> {
     match op {
         Operation::Pick { id, target_pose, .. } => {
             vec![
-                move_to_pose(target_pose.clone(), *id, MotionRole::Approach),
-                move_to_pose(target_pose.clone(), *id, MotionRole::Execution),
-                move_to_pose(target_pose.clone(), *id, MotionRole::Interaction),
-                move_to_pose(target_pose.clone(), *id, MotionRole::Departure),
-                move_to_pose(target_pose.clone(), *id, MotionRole::Departure),
+                move_to_pose(target_pose.clone(), id.clone(), MotionRole::Approach),
+                move_to_pose(target_pose.clone(), id.clone(), MotionRole::Execution),
+                move_to_pose(target_pose.clone(), id.clone(), MotionRole::Interaction),
+                move_to_pose(target_pose.clone(), id.clone(), MotionRole::Departure),
+                move_to_pose(target_pose.clone(), id.clone(), MotionRole::Departure),
             ]
         }
         Operation::Place { id, target_pose, .. } => {
             vec![
-                move_to_pose(target_pose.clone(), *id, MotionRole::Approach),
-                move_to_pose(target_pose.clone(), *id, MotionRole::Execution),
-                move_to_pose(target_pose.clone(), *id, MotionRole::Interaction),
-                move_to_pose(target_pose.clone(), *id, MotionRole::Departure),
+                move_to_pose(target_pose.clone(), id.clone(), MotionRole::Approach),
+                move_to_pose(target_pose.clone(), id.clone(), MotionRole::Execution),
+                move_to_pose(target_pose.clone(), id.clone(), MotionRole::Interaction),
+                move_to_pose(target_pose.clone(), id.clone(), MotionRole::Departure),
             ]
         }
         Operation::Transit { id, target_pose, .. } => {
-            vec![move_to_pose(target_pose.clone(), *id, MotionRole::Transit)]
+            vec![move_to_pose(target_pose.clone(), id.clone(), MotionRole::Transit)]
         }
     }
 }
@@ -74,7 +75,7 @@ mod tests {
 
     fn make_pick(id: u64, pose: Pose) -> Operation {
         Operation::Pick {
-            id: OperationId(id),
+            id: OperationId(id.to_string()),
             target_pose: pose,
             constraints: OperationConstraints::default(),
         }
@@ -82,7 +83,7 @@ mod tests {
 
     fn make_place(id: u64, pose: Pose) -> Operation {
         Operation::Place {
-            id: OperationId(id),
+            id: OperationId(id.to_string()),
             target_pose: pose,
             constraints: OperationConstraints::default(),
         }
@@ -90,7 +91,7 @@ mod tests {
 
     fn make_transit(id: u64, pose: Pose) -> Operation {
         Operation::Transit {
-            id: OperationId(id),
+            id: OperationId(id.to_string()),
             target_pose: pose,
             constraints: OperationConstraints::default(),
         }
@@ -124,7 +125,7 @@ mod tests {
         for (i, node) in nodes.iter().enumerate() {
             assert_eq!(
                 node.operation_id,
-                Some(OperationId(id)),
+                Some(OperationId(id.to_string())),
                 "Pick node {} should carry operation_id {}",
                 i,
                 id
@@ -191,7 +192,7 @@ mod tests {
         for (i, node) in nodes.iter().enumerate() {
             assert_eq!(
                 node.operation_id,
-                Some(OperationId(7)),
+                Some(OperationId("7".to_string())),
                 "Place node {} should carry operation_id 7",
                 i
             );
@@ -220,7 +221,7 @@ mod tests {
         let nodes = expand_operation(&op);
         assert_eq!(
             nodes[0].operation_id,
-            Some(OperationId(99)),
+            Some(OperationId("99".to_string())),
             "Transit node should carry operation_id 99"
         );
     }
@@ -232,7 +233,7 @@ mod tests {
         let op = make_pick(100, sample_pose());
         let nodes = expand_operation(&op);
         for node in &nodes {
-            assert_eq!(node.operation_id, Some(OperationId(100)));
+            assert_eq!(node.operation_id, Some(OperationId("100".to_string())));
         }
     }
 
@@ -241,7 +242,7 @@ mod tests {
         let op = make_place(200, sample_pose());
         let nodes = expand_operation(&op);
         for node in &nodes {
-            assert_eq!(node.operation_id, Some(OperationId(200)));
+            assert_eq!(node.operation_id, Some(OperationId("200".to_string())));
         }
     }
 }

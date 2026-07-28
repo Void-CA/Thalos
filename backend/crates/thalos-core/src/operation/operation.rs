@@ -1,13 +1,6 @@
+use crate::ids::OperationId;
 use crate::spatial::pose::Pose;
 use thalos_math::UnitVector3;
-
-/// Unique identifier for an operation.
-///
-/// Newtype wrapper around `u64` to prevent accidental misuse
-/// and enable future evolution (namespacing, typed IDs)
-/// without widespread refactors.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct OperationId(pub u64);
 
 /// Taxonomic classification of an operation.
 ///
@@ -89,7 +82,7 @@ impl Operation {
         match self {
             Operation::Pick { id, .. }
             | Operation::Place { id, .. }
-            | Operation::Transit { id, .. } => *id,
+            | Operation::Transit { id, .. } => id.clone(),
         }
     }
 
@@ -130,7 +123,7 @@ mod tests {
     #[test]
     fn pick_operation_has_id_type_and_constraints() {
         let op = Operation::Pick {
-            id: OperationId(42),
+            id: OperationId("42".to_string()),
             target_pose: Pose::new(
                 crate::spatial::frame::FrameId::World,
                 crate::spatial::frame::FrameId::Id(1),
@@ -139,7 +132,7 @@ mod tests {
             constraints: OperationConstraints::default(),
         };
 
-        assert_eq!(op.id(), OperationId(42));
+        assert_eq!(op.id(), OperationId("42".to_string()));
         assert_eq!(op.operation_type(), OperationType::Pick);
         assert!(op.constraints().position_tolerance.is_none());
     }
@@ -147,7 +140,7 @@ mod tests {
     #[test]
     fn place_operation_has_id_type_and_constraints() {
         let op = Operation::Place {
-            id: OperationId(7),
+            id: OperationId("7".to_string()),
             target_pose: Pose::new(
                 crate::spatial::frame::FrameId::World,
                 crate::spatial::frame::FrameId::Id(1),
@@ -156,7 +149,7 @@ mod tests {
             constraints: OperationConstraints::default(),
         };
 
-        assert_eq!(op.id(), OperationId(7));
+        assert_eq!(op.id(), OperationId("7".to_string()));
         assert_eq!(op.operation_type(), OperationType::Place);
         assert!(op.constraints().orientation_tolerance.is_none());
     }
@@ -164,7 +157,7 @@ mod tests {
     #[test]
     fn transit_operation_has_id_type_and_constraints() {
         let op = Operation::Transit {
-            id: OperationId(99),
+            id: OperationId("99".to_string()),
             target_pose: Pose::new(
                 crate::spatial::frame::FrameId::World,
                 crate::spatial::frame::FrameId::Id(1),
@@ -173,7 +166,7 @@ mod tests {
             constraints: OperationConstraints::default(),
         };
 
-        assert_eq!(op.id(), OperationId(99));
+        assert_eq!(op.id(), OperationId("99".to_string()));
         assert_eq!(op.operation_type(), OperationType::Transit);
         assert!(op.constraints().velocity_limit.is_none());
     }
@@ -181,10 +174,10 @@ mod tests {
     // ── OperationId newtype ────────────────────────────────
 
     #[test]
-    fn operation_id_is_comparable_and_copyable() {
-        let a = OperationId(1);
-        let b = OperationId(2);
-        let c = OperationId(1);
+    fn operation_id_is_comparable_and_clonable() {
+        let a = OperationId("1".to_string());
+        let b = OperationId("2".to_string());
+        let c = OperationId("1".to_string());
 
         assert_ne!(a, b);
         assert_eq!(a, c);
@@ -241,9 +234,9 @@ mod tests {
 
     #[test]
     fn operations_round_trip_through_methods() {
-        let id = OperationId(17);
+        let id = OperationId("17".to_string());
         let op = Operation::Pick {
-            id,
+            id: id.clone(),
             target_pose: Pose::new(
                 crate::spatial::frame::FrameId::World,
                 crate::spatial::frame::FrameId::Id(1),

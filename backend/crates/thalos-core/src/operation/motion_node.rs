@@ -1,5 +1,5 @@
 use crate::motion::segment::MotionSegment;
-use crate::operation::operation::OperationId;
+use crate::ids::OperationId;
 
 /// A motion primitive with provenance metadata.
 ///
@@ -74,11 +74,11 @@ mod tests {
     fn motion_node_with_operation_id() {
         let node = MotionNode {
             segment: sample_segment(),
-            operation_id: Some(OperationId(42)),
+            operation_id: Some(OperationId("42".to_string())),
             role: MotionRole::Approach,
         };
 
-        assert_eq!(node.operation_id, Some(OperationId(42)));
+        assert_eq!(node.operation_id, Some(OperationId("42".to_string())));
     }
 
     #[test]
@@ -159,7 +159,7 @@ mod tests {
     fn motion_node_is_clonable() {
         let node = MotionNode {
             segment: sample_segment(),
-            operation_id: Some(OperationId(1)),
+            operation_id: Some(OperationId("1".to_string())),
             role: MotionRole::Interaction,
         };
 
