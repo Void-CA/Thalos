@@ -13,7 +13,7 @@ use crate::ir::IrProgram;
 
 pub use analysis::{AnalysisResult, ConstraintSet};
 pub use planning::{
-    MotionStrategy, PlanMetadata, PlannedOperation, PlannedProgram, PipelineStage, StageResult,
+    MotionStrategy, PipelineStage, PlanMetadata, PlannedOperation, PlannedProgram, StageResult,
     StageStatus, Version,
 };
 
@@ -116,10 +116,7 @@ pub fn run_pipeline(
 
     // ---- Build metadata ----
     let metadata = PlanMetadata {
-        pipeline_version: Version {
-            major: 0,
-            minor: 1,
-        },
+        pipeline_version: Version { major: 0, minor: 1 },
         execution_time: start.elapsed(),
         compilation_options: options,
         diagnostics,
@@ -238,17 +235,20 @@ mod integration_tests {
         let program = result.unwrap();
 
         assert_eq!(program.operations.len(), 3);
-        assert!(matches!(&program.operations[0], PlannedOperation::Home { origin } if origin.as_str() == "op_01"));
-        assert!(matches!(&program.operations[1], PlannedOperation::Home { origin } if origin.as_str() == "op_02"));
-        assert!(matches!(&program.operations[2], PlannedOperation::Wait { origin, .. } if origin.as_str() == "op_03"));
+        assert!(
+            matches!(&program.operations[0], PlannedOperation::Home { origin } if origin.as_str() == "op_01")
+        );
+        assert!(
+            matches!(&program.operations[1], PlannedOperation::Home { origin } if origin.as_str() == "op_02")
+        );
+        assert!(
+            matches!(&program.operations[2], PlannedOperation::Wait { origin, .. } if origin.as_str() == "op_03")
+        );
     }
 
     #[test]
     fn nominal_flow_constraints_are_populated() {
-        let ir = make_ir(vec![
-            make_home("op_01"),
-            make_home("op_02"),
-        ]);
+        let ir = make_ir(vec![make_home("op_01"), make_home("op_02")]);
         let policy = StrictPolicy;
         let options = default_options();
 
@@ -290,10 +290,7 @@ mod integration_tests {
         let options = default_options();
 
         let result = run_pipeline(ir, &policy, options);
-        assert!(
-            result.is_err(),
-            "AbortPolicy should produce an error"
-        );
+        assert!(result.is_err(), "AbortPolicy should produce an error");
 
         // We lose stage_status on error, but the design only requires
         // that analysis/planning were not executed. The error return

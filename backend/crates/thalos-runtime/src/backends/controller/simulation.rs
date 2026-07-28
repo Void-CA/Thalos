@@ -11,8 +11,7 @@ use crate::error::ControllerError;
 use crate::plan::{ExecutionSession, SessionStatus};
 use crate::robot_command::RobotCommand;
 use crate::state::robot_state::{
-    ConnectionState, Diagnostics, ExecutionState, JointState, MotionMode, MotionState,
-    RobotState,
+    ConnectionState, Diagnostics, ExecutionState, JointState, MotionMode, MotionState, RobotState,
 };
 
 /// Simulation backend — the default controller when no hardware is connected.

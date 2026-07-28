@@ -1,14 +1,10 @@
 pub use thalos_models::JointLimits;
 
+use crate::robot::joint::{
+    fixed::FixedJoint, kind::JointKind, prismatic::PrismaticJoint, revolute::RevoluteJoint,
+};
 use thalos_math::Transform3D;
 use thalos_math::UnitVector3;
-use crate::robot::joint::{
-    fixed::FixedJoint,
-    prismatic::PrismaticJoint,
-    revolute::RevoluteJoint,
-    kind::JointKind,
-};
-
 
 pub use thalos_models::JointId;
 
@@ -79,19 +75,11 @@ impl JointType {
         }
     }
 
-    pub fn axis_world(
-        &self,
-        transform: &Transform3D,
-    ) -> UnitVector3 {
-
+    pub fn axis_world(&self, transform: &Transform3D) -> UnitVector3 {
         let axis_local = self.axis();
 
-        let rotated =
-            transform
-                .rotation
-                .rotate_vector(axis_local.into_inner());
+        let rotated = transform.rotation.rotate_vector(axis_local.into_inner());
 
         UnitVector3::new(rotated).unwrap()
     }
 }
-

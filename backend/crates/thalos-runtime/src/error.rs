@@ -35,10 +35,13 @@ impl ControllerError {
 impl From<ControllerError> for RuntimeError {
     fn from(e: ControllerError) -> Self {
         match e {
-            ControllerError::AlreadyConnected | ControllerError::NotConnected |
-            ControllerError::UnsupportedCapability | ControllerError::Timeout => {
-                RuntimeError::JointCountMismatch { expected: 0, received: 0 }
-            }
+            ControllerError::AlreadyConnected
+            | ControllerError::NotConnected
+            | ControllerError::UnsupportedCapability
+            | ControllerError::Timeout => RuntimeError::JointCountMismatch {
+                expected: 0,
+                received: 0,
+            },
         }
     }
 }
@@ -88,7 +91,7 @@ impl RuntimeError {
                 PlanningError::EmptyProgram => "empty_program",
                 PlanningError::InvalidContext(_) => "invalid_context",
                 PlanningError::IKFailure { .. } => "ik_failure",
-            }
+            },
             RuntimeError::JointCountMismatch { expected, received } => "joint_count_mismatch",
             RuntimeError::ToolFrameNotFound { .. } => "tool_frame_not_found",
         }

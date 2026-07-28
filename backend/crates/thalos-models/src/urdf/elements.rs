@@ -2,8 +2,8 @@
 
 use std::io::BufRead;
 
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 use crate::geometry::{Collision, Geometry, Visual};
 use crate::joint::{Joint, JointKind, JointLimits};
@@ -15,7 +15,10 @@ use thalos_math::{Transform3D, UnitVector3};
 
 /// Skip all events until the matching End tag for the current element.
 /// `depth` starts at 1 (the element whose children we're skipping).
-pub fn skip_element<R: BufRead>(reader: &mut Reader<R>, buf: &mut Vec<u8>) -> Result<(), UrdfError> {
+pub fn skip_element<R: BufRead>(
+    reader: &mut Reader<R>,
+    buf: &mut Vec<u8>,
+) -> Result<(), UrdfError> {
     let mut depth: usize = 1;
     loop {
         buf.clear();
@@ -102,13 +105,10 @@ fn parse_inertial<R: BufRead>(
                     }
                     b"mass" => {
                         let s = required_attr(&e, b"value", "mass")?;
-                        mass = Some(
-                            s.parse::<f64>()
-                                .map_err(|e2| UrdfError::ParseFloat {
-                                    value: s,
-                                    source: e2.to_string(),
-                                })?,
-                        );
+                        mass = Some(s.parse::<f64>().map_err(|e2| UrdfError::ParseFloat {
+                            value: s,
+                            source: e2.to_string(),
+                        })?);
                     }
                     b"inertia" => {
                         let ixx = required_attr(&e, b"ixx", "inertia")?;
@@ -142,9 +142,7 @@ fn parse_inertial<R: BufRead>(
                 }
             }
             Event::Eof => {
-                return Err(UrdfError::Xml(
-                    "unexpected EOF inside <inertial>".into(),
-                ));
+                return Err(UrdfError::Xml("unexpected EOF inside <inertial>".into()));
             }
             _ => {}
         }
@@ -178,11 +176,9 @@ fn parse_geometry_body<R: BufRead>(
                 match tag.as_slice() {
                     b"sphere" => {
                         let r = required_attr(&e, b"radius", "sphere")?;
-                        let radius = r.parse::<f64>().map_err(|e2| {
-                            UrdfError::ParseFloat {
-                                value: r,
-                                source: e2.to_string(),
-                            }
+                        let radius = r.parse::<f64>().map_err(|e2| UrdfError::ParseFloat {
+                            value: r,
+                            source: e2.to_string(),
                         })?;
                         return Ok(Geometry::Sphere { radius });
                     }
@@ -198,17 +194,13 @@ fn parse_geometry_body<R: BufRead>(
                     b"cylinder" => {
                         let r = required_attr(&e, b"radius", "cylinder")?;
                         let h = required_attr(&e, b"length", "cylinder")?;
-                        let radius = r.parse::<f64>().map_err(|e2| {
-                            UrdfError::ParseFloat {
-                                value: r,
-                                source: e2.to_string(),
-                            }
+                        let radius = r.parse::<f64>().map_err(|e2| UrdfError::ParseFloat {
+                            value: r,
+                            source: e2.to_string(),
                         })?;
-                        let height = h.parse::<f64>().map_err(|e2| {
-                            UrdfError::ParseFloat {
-                                value: h,
-                                source: e2.to_string(),
-                            }
+                        let height = h.parse::<f64>().map_err(|e2| UrdfError::ParseFloat {
+                            value: h,
+                            source: e2.to_string(),
                         })?;
                         return Ok(Geometry::Cylinder { radius, height });
                     }
@@ -233,9 +225,7 @@ fn parse_geometry_body<R: BufRead>(
                 }
             }
             Event::Eof => {
-                return Err(UrdfError::Xml(
-                    "unexpected EOF inside <geometry>".into(),
-                ));
+                return Err(UrdfError::Xml("unexpected EOF inside <geometry>".into()));
             }
             _ => {}
         }
@@ -319,9 +309,7 @@ fn parse_visual_material<R: BufRead>(
                 }
             }
             Event::Eof => {
-                return Err(UrdfError::Xml(
-                    "unexpected EOF inside <material>".into(),
-                ));
+                return Err(UrdfError::Xml("unexpected EOF inside <material>".into()));
             }
             _ => {}
         }
@@ -363,9 +351,7 @@ fn parse_collision<R: BufRead>(
                 }
             }
             Event::Eof => {
-                return Err(UrdfError::Xml(
-                    "unexpected EOF inside <collision>".into(),
-                ));
+                return Err(UrdfError::Xml("unexpected EOF inside <collision>".into()));
             }
             _ => {}
         }
@@ -412,10 +398,7 @@ pub fn parse_joint_body<R: BufRead>(
                         if v.norm() < 1e-12 {
                             return Err(UrdfError::ZeroAxis);
                         }
-                        axis = Some(
-                            UnitVector3::new(v)
-                                .map_err(|_| UrdfError::ZeroAxis)?,
-                        );
+                        axis = Some(UnitVector3::new(v).map_err(|_| UrdfError::ZeroAxis)?);
                     }
                     b"limit" => {
                         limits = Some(parse_limit(&e)?);
@@ -519,9 +502,7 @@ pub fn parse_global_material<R: BufRead>(
                 }
             }
             Event::Eof => {
-                return Err(UrdfError::Xml(
-                    "unexpected EOF inside <material>".into(),
-                ));
+                return Err(UrdfError::Xml("unexpected EOF inside <material>".into()));
             }
             _ => {}
         }

@@ -25,9 +25,9 @@ impl DualQuaternion {
         // t * q  where t is pure quaternion (0, tx, ty, tz)
         let dual = Quaternion::new(
             -0.5 * (translation[0] * q.x + translation[1] * q.y + translation[2] * q.z),
-             0.5 * (translation[0] * q.w + translation[1] * q.z - translation[2] * q.y),
-             0.5 * (-translation[0] * q.z + translation[1] * q.w + translation[2] * q.x),
-             0.5 * (translation[0] * q.y - translation[1] * q.x + translation[2] * q.w),
+            0.5 * (translation[0] * q.w + translation[1] * q.z - translation[2] * q.y),
+            0.5 * (-translation[0] * q.z + translation[1] * q.w + translation[2] * q.x),
+            0.5 * (translation[0] * q.y - translation[1] * q.x + translation[2] * q.w),
         );
         Self { real: q, dual }
     }

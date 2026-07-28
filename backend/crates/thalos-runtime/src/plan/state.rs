@@ -1,4 +1,3 @@
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlanState {
     Created,
@@ -11,6 +10,9 @@ pub enum PlanState {
 
 impl PlanState {
     pub fn is_terminal(&self) -> bool {
-        matches!(self, PlanState::Completed | PlanState::Cancelled | PlanState::Failed)
+        matches!(
+            self,
+            PlanState::Completed | PlanState::Cancelled | PlanState::Failed
+        )
     }
 }

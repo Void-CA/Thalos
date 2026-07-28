@@ -4,12 +4,12 @@
 //! R4 (NaN/negative/empty validation), R5 (performance budget 100k <50ms).
 
 use crate::analysis::workspace::{Reachability, Workspace, WorkspaceSample};
-use thalos_math::Vector3;
 use crate::models::{RobotModel, RobotRegistry};
 use crate::prelude::{WorkspaceConfig, WorkspaceSampler};
 use crate::robot::serial_chain::SerialChain;
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
+use thalos_math::Vector3;
 
 fn disc_workspace() -> Workspace {
     let samples: Vec<WorkspaceSample> = (0..200)
@@ -211,9 +211,7 @@ fn scara_default_workspace_has_reachable_center() {
         seed: 0,
         tolerance: 1e-3,
     };
-    let ws = WorkspaceSampler
-        .sample(&chain, config, &mut rng)
-        .unwrap();
+    let ws = WorkspaceSampler.sample(&chain, config, &mut rng).unwrap();
 
     // SCARA canonical: a1=1.0, a2=0.8, base_height=0.5, joint_2 limited to ±150°.
     // Minimum XY reachable is ~0.504 (arm can't fully fold), so (0.7, 0, 0.5) is

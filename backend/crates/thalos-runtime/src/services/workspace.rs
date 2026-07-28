@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 
 use thalos_core::analysis::workspace::{
-    sampler::WorkspaceSampler, Workspace, WorkspaceConfig, WorkspaceError,
+    Workspace, WorkspaceConfig, WorkspaceError, sampler::WorkspaceSampler,
 };
-use thalos_math::Vector3;
 use thalos_core::models::{RobotModel, RobotRegistry};
 use thalos_core::robot::serial_chain::SerialChain;
 use thalos_core::robot::tool_frame::ToolFrame;
+use thalos_math::Vector3;
 
 use crate::error::RuntimeError;
 
@@ -22,7 +22,9 @@ impl WorkspaceService {
         config: WorkspaceConfig,
     ) -> Result<Arc<Workspace>, RuntimeError> {
         if config.samples == 0 {
-            return Err(RuntimeError::Workspace(WorkspaceError::InvalidSampleCount(0)));
+            return Err(RuntimeError::Workspace(WorkspaceError::InvalidSampleCount(
+                0,
+            )));
         }
 
         let chain = RobotRegistry::create_default(model);
@@ -47,7 +49,9 @@ impl WorkspaceService {
         tcp: Option<&ToolFrame>,
     ) -> Result<Arc<Workspace>, RuntimeError> {
         if config.samples == 0 {
-            return Err(RuntimeError::Workspace(WorkspaceError::InvalidSampleCount(0)));
+            return Err(RuntimeError::Workspace(WorkspaceError::InvalidSampleCount(
+                0,
+            )));
         }
 
         let mut rng = StdRng::seed_from_u64(config.seed);

@@ -1,5 +1,5 @@
-use crate::prelude::*;
 use crate::models::single_revolute::SingleRevoluteSpec;
+use crate::prelude::*;
 
 #[test]
 fn geometric_matches_numerical() {
@@ -21,7 +21,9 @@ fn geometric_matches_numerical() {
         assert!(
             (jg.linear[(r, 0)] - jn.linear[(r, 0)]).abs() < 1e-5,
             "Linear mismatch at row {}: geometric={}, numerical={}",
-            r, jg.linear[(r, 0)], jn.linear[(r, 0)]
+            r,
+            jg.linear[(r, 0)],
+            jn.linear[(r, 0)]
         );
     }
 }
@@ -38,13 +40,19 @@ fn at_zero() {
     // q=0: ee at (1, 0, 0)
     // z × (p_e - p_0) = (0,0,1) × (1,0,0) = (0, 1, 0)
     assert!(result.linear[(0, 0)].abs() < EPS, "dx/dθ should be 0");
-    assert!((result.linear[(1, 0)] - 1.0).abs() < EPS, "dy/dθ should be 1.0");
+    assert!(
+        (result.linear[(1, 0)] - 1.0).abs() < EPS,
+        "dy/dθ should be 1.0"
+    );
     assert!(result.linear[(2, 0)].abs() < EPS, "dz/dθ should be 0");
 
     // Angular: rotation about Z
     assert!(result.angular[(0, 0)].abs() < EPS, "ωx/dθ should be 0");
     assert!(result.angular[(1, 0)].abs() < EPS, "ωy/dθ should be 0");
-    assert!((result.angular[(2, 0)] - 1.0).abs() < EPS, "ωz/dθ should be 1.0");
+    assert!(
+        (result.angular[(2, 0)] - 1.0).abs() < EPS,
+        "ωz/dθ should be 1.0"
+    );
 }
 
 #[test]
@@ -58,7 +66,10 @@ fn at_ninety_degrees() {
 
     // q=π/2: ee at (0, 1, 0)
     // z × (p_e - p_0) = (0,0,1) × (0,1,0) = (-1, 0, 0)
-    assert!((result.linear[(0, 0)] + 1.0).abs() < EPS, "dx/dθ should be -1.0");
+    assert!(
+        (result.linear[(0, 0)] + 1.0).abs() < EPS,
+        "dx/dθ should be -1.0"
+    );
     assert!(result.linear[(1, 0)].abs() < EPS, "dy/dθ should be 0");
     assert!(result.linear[(2, 0)].abs() < EPS, "dz/dθ should be 0");
 }
@@ -75,7 +86,10 @@ fn at_pi() {
     // q=π: ee at (-1, 0, 0)
     // z × (p_e - p_0) = (0,0,1) × (-1,0,0) = (0, -1, 0)
     assert!(result.linear[(0, 0)].abs() < EPS, "dx/dθ should be 0 at π");
-    assert!((result.linear[(1, 0)] + 1.0).abs() < EPS, "dy/dθ should be -1.0 at π");
+    assert!(
+        (result.linear[(1, 0)] + 1.0).abs() < EPS,
+        "dy/dθ should be -1.0 at π"
+    );
     assert!(result.linear[(2, 0)].abs() < EPS, "dz/dθ should be 0");
 }
 
@@ -87,12 +101,7 @@ fn angular_consistency() {
     let jacobian = GeometricJacobian::new(fk, end_effector);
 
     // ωz = q_dot siempre (única junta)
-    let test_configs = [
-        0.0,
-        PI / 4.0,
-        PI / 2.0,
-        -PI / 3.0,
-    ];
+    let test_configs = [0.0, PI / 4.0, PI / 2.0, -PI / 3.0];
 
     for q in test_configs {
         let result = jacobian.evaluate(&[q]);
@@ -100,7 +109,8 @@ fn angular_consistency() {
         assert!(
             (result.angular[(2, 0)] - 1.0).abs() < EPS,
             "ωz/dθ should be 1.0 at q={}, got {}",
-            q, result.angular[(2, 0)]
+            q,
+            result.angular[(2, 0)]
         );
     }
 }
@@ -130,17 +140,9 @@ fn propagates_velocity() {
     let current = fk_solver.evaluate(&q);
     let next = fk_solver.evaluate(&q_next);
 
-    let p_current = current
-        .pose(&end_effector)
-        .unwrap()
-        .transform()
-        .translation;
+    let p_current = current.pose(&end_effector).unwrap().transform().translation;
 
-    let p_next = next
-        .pose(&end_effector)
-        .unwrap()
-        .transform()
-        .translation;
+    let p_next = next.pose(&end_effector).unwrap().transform().translation;
 
     let v_actual_x = (p_next.x - p_current.x) / dt;
     let v_actual_y = (p_next.y - p_current.y) / dt;
@@ -149,7 +151,10 @@ fn propagates_velocity() {
     assert!((v_y - v_actual_y).abs() < 1e-4, "Y velocity mismatch");
 
     // ωz = q_dot (única junta)
-    assert!((omega_z - q_dot[0]).abs() < EPS, "Angular velocity mismatch");
+    assert!(
+        (omega_z - q_dot[0]).abs() < EPS,
+        "Angular velocity mismatch"
+    );
 }
 
 #[test]
@@ -184,12 +189,14 @@ fn linearity() {
     assert!(
         (combined.0 - linear.0).abs() < 1e-12,
         "Linearity fails in X: combined {}, linear {}",
-        combined.0, linear.0
+        combined.0,
+        linear.0
     );
     assert!(
         (combined.1 - linear.1).abs() < 1e-12,
         "Linearity fails in Y: combined {}, linear {}",
-        combined.1, linear.1
+        combined.1,
+        linear.1
     );
 }
 
@@ -199,16 +206,10 @@ fn velocity_consistency() {
     let end_effector = robot.segments.last().unwrap().child;
     let fk = ForwardKinematics::new(robot.clone());
     let jacobian = GeometricJacobian::new(fk, end_effector.clone());
-    let numerical = NumericalJacobian::new(ForwardKinematics::new(robot.clone()), end_effector.clone());
+    let numerical =
+        NumericalJacobian::new(ForwardKinematics::new(robot.clone()), end_effector.clone());
 
-    let test_configs = [
-        [0.0],
-        [0.4],
-        [PI / 2.0],
-        [PI],
-        [-0.5],
-        [PI / 3.0],
-    ];
+    let test_configs = [[0.0], [0.4], [PI / 2.0], [PI], [-0.5], [PI / 3.0]];
 
     for q in test_configs {
         let jg = jacobian.evaluate(&q);
@@ -218,7 +219,10 @@ fn velocity_consistency() {
             assert!(
                 (jg.linear[(r, 0)] - jn.linear[(r, 0)]).abs() < 1e-5,
                 "Mismatch at q={:?}, row {}: geo={}, num={}",
-                q, r, jg.linear[(r, 0)], jn.linear[(r, 0)]
+                q,
+                r,
+                jg.linear[(r, 0)],
+                jn.linear[(r, 0)]
             );
         }
     }
@@ -249,7 +253,8 @@ fn linear_magnitude() {
         assert!(
             (magnitude - 1.0).abs() < 1e-10,
             "Linear magnitude should be 1.0 at q={}, got {}",
-            q, magnitude
+            q,
+            magnitude
         );
     }
 }

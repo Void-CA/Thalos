@@ -275,12 +275,14 @@ mod tests {
     fn pseudo_inverse_full_rank_square() {
         // Task 1.2: Full-rank square → true inverse
         // 3×3 invertible matrix with det ≠ 0
-        let a = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(3, 3, &[
-            2.0, 1.0, 1.0,
-            1.0, 3.0, 2.0,
-            1.0, 0.0, 2.0,
-        ]));
-        let pinv = a.pseudo_inverse(1e-12).expect("full-rank square should have pseudo-inverse");
+        let a = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(
+            3,
+            3,
+            &[2.0, 1.0, 1.0, 1.0, 3.0, 2.0, 1.0, 0.0, 2.0],
+        ));
+        let pinv = a
+            .pseudo_inverse(1e-12)
+            .expect("full-rank square should have pseudo-inverse");
 
         // A · A⁺ ≈ I₃
         let a_pinv = &a * &pinv;
@@ -292,8 +294,18 @@ mod tests {
             for j in 0..3 {
                 let diff_a = (a_pinv[(i, j)] - i3[(i, j)]).abs();
                 let diff_b = (pinv_a[(i, j)] - i3[(i, j)]).abs();
-                assert!(diff_a < 1e-10, "A·A⁺[{i},{j}] = {}, expected ~{}", a_pinv[(i, j)], i3[(i, j)]);
-                assert!(diff_b < 1e-10, "A⁺·A[{i},{j}] = {}, expected ~{}", pinv_a[(i, j)], i3[(i, j)]);
+                assert!(
+                    diff_a < 1e-10,
+                    "A·A⁺[{i},{j}] = {}, expected ~{}",
+                    a_pinv[(i, j)],
+                    i3[(i, j)]
+                );
+                assert!(
+                    diff_b < 1e-10,
+                    "A⁺·A[{i},{j}] = {}, expected ~{}",
+                    pinv_a[(i, j)],
+                    i3[(i, j)]
+                );
             }
         }
     }
@@ -301,13 +313,14 @@ mod tests {
     #[test]
     fn pseudo_inverse_full_rank_tall() {
         // Task 1.3: Full-rank tall (4×3) → left pseudo-inverse: A⁺ · A ≈ I₃
-        let a = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(4, 3, &[
-            1.0, 0.0, 0.0,
-            0.0, 1.0, 0.0,
-            0.0, 0.0, 1.0,
-            1.0, 1.0, 0.0,
-        ]));
-        let pinv = a.pseudo_inverse(1e-12).expect("full-rank tall should have pseudo-inverse");
+        let a = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(
+            4,
+            3,
+            &[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0],
+        ));
+        let pinv = a
+            .pseudo_inverse(1e-12)
+            .expect("full-rank tall should have pseudo-inverse");
 
         // A⁺ · A ≈ I₃
         let pinv_a = &pinv * &a;
@@ -315,7 +328,12 @@ mod tests {
         for i in 0..3 {
             for j in 0..3 {
                 let diff = (pinv_a[(i, j)] - i3[(i, j)]).abs();
-                assert!(diff < 1e-10, "A⁺·A[{i},{j}] = {}, expected ~{}", pinv_a[(i, j)], i3[(i, j)]);
+                assert!(
+                    diff < 1e-10,
+                    "A⁺·A[{i},{j}] = {}, expected ~{}",
+                    pinv_a[(i, j)],
+                    i3[(i, j)]
+                );
             }
         }
     }
@@ -323,19 +341,26 @@ mod tests {
     #[test]
     fn pseudo_inverse_penrose_conditions() {
         // Task 1.4: Verify all four Penrose conditions for a 3×2 matrix
-        let a = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(3, 2, &[
-            1.0, 2.0,
-            3.0, 4.0,
-            5.0, 6.0,
-        ]));
-        let pinv = a.pseudo_inverse(1e-12).expect("full-rank rectangular should have pseudo-inverse");
+        let a = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(
+            3,
+            2,
+            &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        ));
+        let pinv = a
+            .pseudo_inverse(1e-12)
+            .expect("full-rank rectangular should have pseudo-inverse");
 
         // 1. A·A⁺·A = A
         let a_pinv_a = &a * (&pinv * &a);
         for i in 0..3 {
             for j in 0..2 {
                 let diff = (a_pinv_a[(i, j)] - a[(i, j)]).abs();
-                assert!(diff < 1e-10, "A·A⁺·A[{i},{j}] = {}, expected ~{}", a_pinv_a[(i, j)], a[(i, j)]);
+                assert!(
+                    diff < 1e-10,
+                    "A·A⁺·A[{i},{j}] = {}, expected ~{}",
+                    a_pinv_a[(i, j)],
+                    a[(i, j)]
+                );
             }
         }
 
@@ -344,7 +369,12 @@ mod tests {
         for i in 0..2 {
             for j in 0..3 {
                 let diff = (pinv_a_pinv[(i, j)] - pinv[(i, j)]).abs();
-                assert!(diff < 1e-10, "A⁺·A·A⁺[{i},{j}] = {}, expected ~{}", pinv_a_pinv[(i, j)], pinv[(i, j)]);
+                assert!(
+                    diff < 1e-10,
+                    "A⁺·A·A⁺[{i},{j}] = {}, expected ~{}",
+                    pinv_a_pinv[(i, j)],
+                    pinv[(i, j)]
+                );
             }
         }
 
@@ -354,7 +384,12 @@ mod tests {
         for i in 0..3 {
             for j in 0..3 {
                 let diff = (a_pinv_t[(i, j)] - a_pinv[(i, j)]).abs();
-                assert!(diff < 1e-10, "(A·A⁺)ᵀ[{i},{j}] = {}, expected ~{}", a_pinv_t[(i, j)], a_pinv[(i, j)]);
+                assert!(
+                    diff < 1e-10,
+                    "(A·A⁺)ᵀ[{i},{j}] = {}, expected ~{}",
+                    a_pinv_t[(i, j)],
+                    a_pinv[(i, j)]
+                );
             }
         }
 
@@ -364,7 +399,12 @@ mod tests {
         for i in 0..2 {
             for j in 0..2 {
                 let diff = (pinv_a_t[(i, j)] - pinv_a[(i, j)]).abs();
-                assert!(diff < 1e-10, "(A⁺·A)ᵀ[{i},{j}] = {}, expected ~{}", pinv_a_t[(i, j)], pinv_a[(i, j)]);
+                assert!(
+                    diff < 1e-10,
+                    "(A⁺·A)ᵀ[{i},{j}] = {}, expected ~{}",
+                    pinv_a_t[(i, j)],
+                    pinv_a[(i, j)]
+                );
             }
         }
     }
@@ -373,21 +413,25 @@ mod tests {
     fn pseudo_inverse_singular_matrix() {
         // Task 1.5: All singular values below tolerance → None
         // Matrix with values so small that no singular value exceeds tolerance
-        let a = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(3, 3, &[
-            1e-15, 0.0, 0.0,
-            0.0, 1e-15, 0.0,
-            0.0, 0.0, 1e-15,
-        ]));
-        assert!(a.pseudo_inverse(1e-12).is_none(),
-            "matrix with all singular values below tolerance should return None");
+        let a = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(
+            3,
+            3,
+            &[1e-15, 0.0, 0.0, 0.0, 1e-15, 0.0, 0.0, 0.0, 1e-15],
+        ));
+        assert!(
+            a.pseudo_inverse(1e-12).is_none(),
+            "matrix with all singular values below tolerance should return None"
+        );
     }
 
     #[test]
     fn pseudo_inverse_zero_matrix() {
         // Task 1.6: Zero matrix → None
         let a = DynamicMatrix::zeros(3, 3);
-        assert!(a.pseudo_inverse(1e-12).is_none(),
-            "zero matrix should return None");
+        assert!(
+            a.pseudo_inverse(1e-12).is_none(),
+            "zero matrix should return None"
+        );
     }
 
     #[test]
@@ -421,10 +465,11 @@ mod tests {
 
     #[test]
     fn transpose() {
-        let m = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(2, 3, &[
-            1.0, 2.0, 3.0,
-            4.0, 5.0, 6.0,
-        ]));
+        let m = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(
+            2,
+            3,
+            &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        ));
         let t = m.transpose();
         assert_eq!(t.nrows(), 3);
         assert_eq!(t.ncols(), 2);
@@ -433,27 +478,29 @@ mod tests {
 
     #[test]
     fn matrix_vector_mul() {
-        let m = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(2, 2, &[
-            1.0, 2.0,
-            3.0, 4.0,
-        ]));
+        let m = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(
+            2,
+            2,
+            &[1.0, 2.0, 3.0, 4.0],
+        ));
         let v = DynamicVector::from_vec(vec![2.0, 3.0]);
         let r = m * v;
-        assert!((r[0] - 8.0).abs() < EPS);  // 1*2 + 2*3 = 8
+        assert!((r[0] - 8.0).abs() < EPS); // 1*2 + 2*3 = 8
         assert!((r[1] - 18.0).abs() < EPS); // 3*2 + 4*3 = 18
     }
 
     #[test]
     fn matrix_matrix_mul() {
-        let a = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(2, 3, &[
-            1.0, 2.0, 3.0,
-            4.0, 5.0, 6.0,
-        ]));
-        let b = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(3, 2, &[
-            7.0, 8.0,
-            9.0, 10.0,
-            11.0, 12.0,
-        ]));
+        let a = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(
+            2,
+            3,
+            &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        ));
+        let b = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(
+            3,
+            2,
+            &[7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+        ));
         let c = a * b;
         assert_eq!(c.nrows(), 2);
         assert_eq!(c.ncols(), 2);
@@ -465,16 +512,18 @@ mod tests {
 
     #[test]
     fn try_inverse() {
-        let m = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(2, 2, &[
-            4.0, 7.0,
-            2.0, 6.0,
-        ]));
+        let m = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(
+            2,
+            2,
+            &[4.0, 7.0, 2.0, 6.0],
+        ));
         let inv = m.try_inverse().expect("should be invertible");
         // Identidad: m * inv ≈ I
-        let prod = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(2, 2, &[
-            4.0, 7.0,
-            2.0, 6.0,
-        ])) * inv;
+        let prod = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(
+            2,
+            2,
+            &[4.0, 7.0, 2.0, 6.0],
+        )) * inv;
         assert!((prod[(0, 0)] - 1.0).abs() < EPS);
         assert!((prod[(1, 1)] - 1.0).abs() < EPS);
         assert!((prod[(0, 1)] - 0.0).abs() < EPS);
@@ -483,10 +532,11 @@ mod tests {
 
     #[test]
     fn singular_values() {
-        let m = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(2, 2, &[
-            1.0, 0.0,
-            0.0, 2.0,
-        ]));
+        let m = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(
+            2,
+            2,
+            &[1.0, 0.0, 0.0, 2.0],
+        ));
         let sv = m.singular_values();
         assert_eq!(sv.len(), 2);
         assert!((sv[0] - 2.0).abs() < EPS);
@@ -495,10 +545,11 @@ mod tests {
 
     #[test]
     fn scalar_mul() {
-        let m = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(2, 2, &[
-            1.0, 2.0,
-            3.0, 4.0,
-        ]));
+        let m = DynamicMatrix::from(na::DMatrix::<f64>::from_row_slice(
+            2,
+            2,
+            &[1.0, 2.0, 3.0, 4.0],
+        ));
         let r = m * 2.0;
         assert!((r[(0, 0)] - 2.0).abs() < EPS);
         assert!((r[(1, 1)] - 8.0).abs() < EPS);

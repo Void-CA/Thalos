@@ -1,5 +1,5 @@
-use crate::prelude::*;
 use crate::models::manipulator_3dof::Manipulator3DOFSpec;
+use crate::prelude::*;
 
 fn setup() -> (NumericalJacobian, ForwardKinematics, FrameId) {
     let robot = Manipulator3DOFSpec::ideal().build();
@@ -43,7 +43,10 @@ fn predicts_small_motion_for_each_joint() {
             assert!(
                 (dx_pred[axis] - dx_actual[axis]).abs() < 1e-5,
                 "Joint {}, axis {}: predicted {}, actual {}",
-                joint_idx + 1, axis, dx_pred[axis], dx_actual[axis]
+                joint_idx + 1,
+                axis,
+                dx_pred[axis],
+                dx_actual[axis]
             );
         }
     }
@@ -66,7 +69,12 @@ fn velocity_matches_finite_difference() {
     ];
 
     let p_curr = fk.evaluate(&q).pose(&ee).unwrap().transform().translation;
-    let p_next = fk.evaluate(&q_next).pose(&ee).unwrap().transform().translation;
+    let p_next = fk
+        .evaluate(&q_next)
+        .pose(&ee)
+        .unwrap()
+        .transform()
+        .translation;
 
     let v_actual = [
         (p_next.x - p_curr.x) / dt,
@@ -78,7 +86,9 @@ fn velocity_matches_finite_difference() {
         assert!(
             (v_pred[axis] - v_actual[axis]).abs() < 1e-4,
             "Axis {}: predicted {}, actual {}",
-            axis, v_pred[axis], v_actual[axis]
+            axis,
+            v_pred[axis],
+            v_actual[axis]
         );
     }
 }
@@ -98,14 +108,29 @@ fn at_zero_config_only_xz_and_y_motion() {
 
     // Columna de q1 (eje Z): velocidad en Y
     assert!(j.linear()[(0, 0)].abs() < 1e-6, "dx/dq1 should be 0");
-    assert!(j.linear()[(1, 0)].abs() > 0.5, "dy/dq1 should be non-zero (l2+l3=2)");
+    assert!(
+        j.linear()[(1, 0)].abs() > 0.5,
+        "dy/dq1 should be non-zero (l2+l3=2)"
+    );
     assert!(j.linear()[(2, 0)].abs() < 1e-6, "dz/dq1 should be 0");
 
     // Columnas de q2 y q3 (eje Y): velocidad en Z
     for col in 1..3 {
-        assert!(j.linear()[(0, col)].abs() < 1e-6, "dx/dq{} should be 0", col + 1);
-        assert!(j.linear()[(1, col)].abs() < 1e-6, "dy/dq{} should be 0", col + 1);
-        assert!(j.linear()[(2, col)].abs() > 0.5, "dz/dq{} should be significant", col + 1);
+        assert!(
+            j.linear()[(0, col)].abs() < 1e-6,
+            "dx/dq{} should be 0",
+            col + 1
+        );
+        assert!(
+            j.linear()[(1, col)].abs() < 1e-6,
+            "dy/dq{} should be 0",
+            col + 1
+        );
+        assert!(
+            j.linear()[(2, col)].abs() > 0.5,
+            "dz/dq{} should be significant",
+            col + 1
+        );
     }
 }
 
@@ -136,7 +161,8 @@ fn vertical_arm_is_also_singular() {
         assert!(
             j.linear()[(axis, 0)].abs() < 1e-6,
             "d(axis {})/dq1 should be 0 when arm is vertical, got {}",
-            axis, j.linear()[(axis, 0)]
+            axis,
+            j.linear()[(axis, 0)]
         );
     }
 }
@@ -165,7 +191,9 @@ fn linearity_holds() {
         assert!(
             (jv_combined[axis] - jv_linear[axis]).abs() < 1e-10,
             "Linearity fails on axis {}: combined {}, linear {}",
-            axis, jv_combined[axis], jv_linear[axis]
+            axis,
+            jv_combined[axis],
+            jv_linear[axis]
         );
     }
 }
@@ -193,7 +221,12 @@ fn reconstruction_from_motion_at_multiple_configs() {
         ];
 
         let p_curr = fk.evaluate(&q).pose(&ee).unwrap().transform().translation;
-        let p_next = fk.evaluate(&q_next).pose(&ee).unwrap().transform().translation;
+        let p_next = fk
+            .evaluate(&q_next)
+            .pose(&ee)
+            .unwrap()
+            .transform()
+            .translation;
         let v_actual = [
             (p_next.x - p_curr.x) / dt,
             (p_next.y - p_curr.y) / dt,
@@ -205,7 +238,12 @@ fn reconstruction_from_motion_at_multiple_configs() {
             assert!(
                 error < 1e-4,
                 "q={:?}, q̇={:?}, axis {}: predicted {}, actual {}, error {}",
-                q, q_dot, axis, v_pred[axis], v_actual[axis], error
+                q,
+                q_dot,
+                axis,
+                v_pred[axis],
+                v_actual[axis],
+                error
             );
         }
     }
@@ -228,12 +266,14 @@ fn base_yaw_analytical_formula() {
     assert!(
         (j.linear()[(0, 0)] - (-t.y)).abs() < 1e-4,
         "dx/dq1 should be -y_ee = {}, got {}",
-        -t.y, j.linear()[(0, 0)]
+        -t.y,
+        j.linear()[(0, 0)]
     );
     assert!(
         (j.linear()[(1, 0)] - t.x).abs() < 1e-4,
         "dy/dq1 should be x_ee = {}, got {}",
-        t.x, j.linear()[(1, 0)]
+        t.x,
+        j.linear()[(1, 0)]
     );
     assert!(
         j.linear()[(2, 0)].abs() < 1e-6,

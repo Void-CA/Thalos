@@ -32,8 +32,10 @@ fn test_transpose_vs_dls_reachable() {
 
     println!(
         "  [REACHABLE] JT: {} iter, error={:.2e} | DLS: {} iter, error={:.2e} | ratio={:.3}",
-        r_jt.iterations, r_jt.final_error,
-        r_dls.iterations, r_dls.final_error,
+        r_jt.iterations,
+        r_jt.final_error,
+        r_dls.iterations,
+        r_dls.final_error,
         r_dls.iterations as f64 / r_jt.iterations as f64
     );
 }
@@ -72,8 +74,10 @@ fn test_transpose_vs_dls_singular() {
 
     println!(
         "  [SINGULAR] JT: {} iter, error={:.2e} | DLS: {} iter, error={:.2e} | ratio={:.3}",
-        r_jt.iterations, r_jt.final_error,
-        r_dls.iterations, r_dls.final_error,
+        r_jt.iterations,
+        r_jt.final_error,
+        r_dls.iterations,
+        r_dls.final_error,
         r_dls.iterations as f64 / r_jt.iterations as f64
     );
 }
@@ -87,10 +91,7 @@ fn test_transpose_vs_dls_unreachable() {
     let jt = JacobianTransposeSolver::new(fk.clone(), ee.clone(), 200, 1e-6, 0.5);
     let dls = DampedLeastSquaresSolver::new(fk, ee, 200, 1e-6, 0.1);
 
-    let targets = [
-        Vector3::new(3.0, 0.0, 0.0),
-        Vector3::new(0.0, 3.0, 0.0),
-    ];
+    let targets = [Vector3::new(3.0, 0.0, 0.0), Vector3::new(0.0, 3.0, 0.0)];
 
     for &target in &targets {
         let r_jt = jt.solve(&[0.5, 0.0], IKGoal::Position(target));
@@ -119,8 +120,8 @@ fn test_transpose_vs_dls_unreachable() {
         assert!(r_dls.final_error.is_finite(), "DLS error debe ser finito");
 
         // Errores en el mismo orden de magnitud
-        let ratio = r_jt.final_error.max(r_dls.final_error)
-            / r_jt.final_error.min(r_dls.final_error);
+        let ratio =
+            r_jt.final_error.max(r_dls.final_error) / r_jt.final_error.min(r_dls.final_error);
         assert!(
             ratio < 10.0,
             "Errores deben estar en el mismo orden: JT={:.2}, DLS={:.2}, ratio={:.2}",

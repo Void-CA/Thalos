@@ -1,8 +1,6 @@
 use thalos_math::{Quaternion, Transform3D, UnitQuaternion, UnitVector3, Vector3};
-fn main()  {
+fn main() {
     test_exam_rotate();
-        
-
 }
 
 // fn testquat(){
@@ -10,7 +8,6 @@ fn main()  {
 //         let q2 = Quaternion::new(-1.0 ,2.0, -1.0, 3.0);
 //         let q3 = Quaternion::new(3.0, 1.0, 2.0, -1.0);
 //         let q4 = Quaternion::new(1.0, -3.0, -2.0, 2.0);
-
 
 //         let q5 = q1 + q2;
 
@@ -58,17 +55,11 @@ fn main()  {
 fn test_exam_rotate() {
     let p = Vector3::new(1.58, 12.0, 16.0);
 
-    let R1 = UnitQuaternion::from_axis_angle(
-        UnitVector3::z_axis(),
-        67.0f64.to_radians(),
-    );
+    let R1 = UnitQuaternion::from_axis_angle(UnitVector3::z_axis(), 67.0f64.to_radians());
 
     println!("R1: {:}", R1);
 
-    let R2 = UnitQuaternion::from_axis_angle(
-        UnitVector3::y_axis(),
-        65.0f64.to_radians(),
-    );
+    let R2 = UnitQuaternion::from_axis_angle(UnitVector3::y_axis(), 65.0f64.to_radians());
 
     println!("R2: {:}", R2);
 

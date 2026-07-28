@@ -1,5 +1,5 @@
-use thalos_math::{Transform3D, Vector3};
 use crate::Material;
+use thalos_math::{Transform3D, Vector3};
 
 // ─── Primitive shapes ──────────────────────────────────────────
 
@@ -63,10 +63,22 @@ pub struct Mesh {
 /// Named-field variant — URDF-native representation.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Geometry {
-    Sphere { radius: f64 },
-    Box { width: f64, height: f64, depth: f64 },
-    Cylinder { radius: f64, height: f64 },
-    Mesh { filename: String, scale: Option<Vector3> },
+    Sphere {
+        radius: f64,
+    },
+    Box {
+        width: f64,
+        height: f64,
+        depth: f64,
+    },
+    Cylinder {
+        radius: f64,
+        height: f64,
+    },
+    Mesh {
+        filename: String,
+        scale: Option<Vector3>,
+    },
 }
 
 /// Geometry type used by the collision-detection system.

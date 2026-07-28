@@ -1,9 +1,6 @@
-use thalos_core::{
-    kinematics::forward::result::FKResult,
-    robot::serial_chain::SerialChain,
-};
+use thalos_core::{kinematics::forward::result::FKResult, robot::serial_chain::SerialChain};
 
-use crate::builder::{cylinder_between, SceneBuilder};
+use crate::builder::{SceneBuilder, cylinder_between};
 use crate::scene::VisualScene;
 
 /// Builder visual específico para el robot SCARA.
@@ -51,20 +48,32 @@ impl ScaraVisualBuilder {
         // ADR-0001: Z is vertical. Base height comes from Z component.
         let base_height = (t_base[2] - 0.0).abs();
         if base_height > 1e-6 {
-            scene.primitives.push(
-                cylinder_between("base_column", "world", [0.0, 0.0, 0.0], t_base, 0.08),
-            );
+            scene.primitives.push(cylinder_between(
+                "base_column",
+                "world",
+                [0.0, 0.0, 0.0],
+                t_base,
+                0.08,
+            ));
         }
 
         // 2. Link 1 — cilindro desde base frame hasta link_1 frame
-        scene.primitives.push(
-            cylinder_between("link_1_body", "world", t_base, t_link1, 0.045),
-        );
+        scene.primitives.push(cylinder_between(
+            "link_1_body",
+            "world",
+            t_base,
+            t_link1,
+            0.045,
+        ));
 
         // 3. Link 2 — cilindro desde link_1 hasta link_2
-        scene.primitives.push(
-            cylinder_between("link_2_body", "world", t_link1, t_link2, 0.035),
-        );
+        scene.primitives.push(cylinder_between(
+            "link_2_body",
+            "world",
+            t_link1,
+            t_link2,
+            0.035,
+        ));
 
         scene
     }

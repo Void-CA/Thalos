@@ -1,5 +1,5 @@
-use std::collections::HashSet;
 use crate::robot::link::LinkId;
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Default)]
 pub struct CollisionMatrix {

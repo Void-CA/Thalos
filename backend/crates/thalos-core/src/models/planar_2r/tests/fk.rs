@@ -1,5 +1,5 @@
-use crate::prelude::*;
 use crate::models::planar_2r::Planar2RSpec;
+use crate::prelude::*;
 
 // ─── ADR-0001 Z-up regression tests ──────────────────────────
 
@@ -16,7 +16,9 @@ fn zero_config_ee_in_z_up() {
     assert!(
         (t.x - 2.0).abs() < EPS && t.y.abs() < EPS && t.z.abs() < EPS,
         "Planar 2R Z-up regression: expected (2, 0, 0), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 }
 
@@ -31,225 +33,171 @@ fn first_joint_90_in_z_up() {
     assert!(
         t.x.abs() < EPS && (t.y - 2.0).abs() < EPS && t.z.abs() < EPS,
         "Planar 2R Rz(90°): expected (0, 2, 0), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 }
 
 // ─── Existing tests ──────────────────────────────────────────
 
 #[test]
-    fn returns_two_poses() {
+fn returns_two_poses() {
+    let robot = Planar2RSpec::ideal().build();
 
-        let robot = Planar2RSpec::ideal().build();
+    let fk = ForwardKinematics::new(robot);
 
-        let fk = ForwardKinematics::new(robot);
+    let result = fk.evaluate(&[0.0, 0.0]);
 
-        let result = fk.evaluate(&[0.0, 0.0]);
+    let frames: Vec<_> = result.frames().collect();
 
-        let frames: Vec<_> = result.frames().collect();
+    assert_eq!(
+        frames.len(),
+        3,
+        "Planar 2R should generate 3 poses, including world pose",
+    );
+}
+
+#[test]
+fn all_poses_are_global() {
+    let robot = Planar2RSpec::ideal().build();
+
+    let fk = ForwardKinematics::new(robot);
+
+    let result = fk.evaluate(&[0.0, 0.0]);
+
+    for frame in result.frames() {
+        let pose = result.pose(frame).unwrap();
+
+        assert!(pose.is_global(), "All poses should be global");
 
         assert_eq!(
-            frames.len(),
-            3,
-            "Planar 2R should generate 3 poses, including world pose",
+            pose.reference_id(),
+            FrameId::World,
+            "Reference frame should be World"
         );
     }
+}
 
-    #[test]
-    fn all_poses_are_global() {
+#[test]
+fn zero_configuration_places_end_effector_at_2_0_0() {
+    let robot = Planar2RSpec::ideal().build();
 
-        let robot = Planar2RSpec::ideal().build();
+    let end_effector = robot.segments.last().unwrap().child.clone();
 
-        let fk = ForwardKinematics::new(robot);
+    let fk = ForwardKinematics::new(robot);
 
-        let result = fk.evaluate(&[0.0, 0.0]);
+    let result = fk.evaluate(&[0.0, 0.0]);
 
-        for frame in result.frames() {
+    let pose = result.pose(&end_effector).unwrap();
 
-            let pose = result.pose(frame).unwrap();
+    let t = &pose.transform().translation;
 
-            assert!(
-                pose.is_global(),
-                "All poses should be global"
-            );
+    assert!(
+        (t.x - 2.0).abs() < EPS && t.y.abs() < EPS && t.z.abs() < EPS,
+        "End effector should be at (2, 0, 0), got ({}, {}, {})",
+        t.x,
+        t.y,
+        t.z
+    );
+}
 
-            assert_eq!(
-                pose.reference_id(),
-                FrameId::World,
-                "Reference frame should be World"
-            );
-        }
-    }
+#[test]
+fn first_joint_90_deg_places_end_effector_at_0_2_0() {
+    let robot = Planar2RSpec::ideal().build();
 
-    #[test]
-    fn zero_configuration_places_end_effector_at_2_0_0() {
+    let end_effector = robot.segments.last().unwrap().child.clone();
 
-        let robot = Planar2RSpec::ideal().build();
+    let fk = ForwardKinematics::new(robot);
 
-        let end_effector = robot
-            .segments
-            .last()
-            .unwrap()
-            .child
-            .clone();
+    let result = fk.evaluate(&[PI / 2.0, 0.0]);
 
-        let fk = ForwardKinematics::new(robot);
+    let pose = result.pose(&end_effector).unwrap();
 
-        let result = fk.evaluate(&[0.0, 0.0]);
+    let t = &pose.transform().translation;
 
-        let pose = result.pose(&end_effector).unwrap();
+    assert!(
+        t.x.abs() < EPS && (t.y - 2.0).abs() < EPS && t.z.abs() < EPS,
+        "End effector should be at (0, 2, 0), got ({}, {}, {})",
+        t.x,
+        t.y,
+        t.z
+    );
+}
 
-        let t = &pose.transform().translation;
+#[test]
+fn folded_configuration_places_end_effector_at_1_1_0() {
+    let robot = Planar2RSpec::ideal().build();
 
-        assert!(
-            (t.x - 2.0).abs() < EPS
-                && t.y.abs() < EPS
-                && t.z.abs() < EPS,
+    let end_effector = robot.segments.last().unwrap().child.clone();
 
-            "End effector should be at (2, 0, 0), got ({}, {}, {})",
+    let fk = ForwardKinematics::new(robot);
 
-            t.x,
-            t.y,
-            t.z
-        );
-    }
+    let result = fk.evaluate(&[PI / 2.0, -PI / 2.0]);
 
-    #[test]
-    fn first_joint_90_deg_places_end_effector_at_0_2_0() {
+    let pose = result.pose(&end_effector).unwrap();
 
-        let robot = Planar2RSpec::ideal().build();
+    let t = &pose.transform().translation;
 
-        let end_effector = robot
-            .segments
-            .last()
-            .unwrap()
-            .child
-            .clone();
+    assert!(
+        (t.x - 1.0).abs() < EPS && (t.y - 1.0).abs() < EPS && t.z.abs() < EPS,
+        "End effector should be at (1, 1, 0), got ({}, {}, {})",
+        t.x,
+        t.y,
+        t.z
+    );
+}
 
-        let fk = ForwardKinematics::new(robot);
+#[test]
+fn first_link_pose_is_correct_at_zero_configuration() {
+    let robot = Planar2RSpec::ideal().build();
 
-        let result = fk.evaluate(&[PI / 2.0, 0.0]);
+    let first_link = robot.segments.first().unwrap().child.clone();
 
-        let pose = result.pose(&end_effector).unwrap();
+    let fk = ForwardKinematics::new(robot);
 
-        let t = &pose.transform().translation;
+    let result = fk.evaluate(&[0.0, 0.0]);
 
-        assert!(
-            t.x.abs() < EPS
-                && (t.y - 2.0).abs() < EPS
-                && t.z.abs() < EPS,
+    let pose = result.pose(&first_link).unwrap();
 
-            "End effector should be at (0, 2, 0), got ({}, {}, {})",
+    let t = &pose.transform().translation;
 
-            t.x,
-            t.y,
-            t.z
-        );
-    }
+    assert!(
+        (t.x - 1.0).abs() < EPS && t.y.abs() < EPS && t.z.abs() < EPS,
+        "First link should be at (1, 0, 0), got ({}, {}, {})",
+        t.x,
+        t.y,
+        t.z
+    );
+}
 
-    #[test]
-    fn folded_configuration_places_end_effector_at_1_1_0() {
+#[test]
+fn second_joint_rotates_relative_to_first_joint() {
+    let robot = Planar2RSpec::ideal().build();
 
-        let robot = Planar2RSpec::ideal().build();
+    let end_effector = robot.segments.last().unwrap().child.clone();
 
-        let end_effector = robot
-            .segments
-            .last()
-            .unwrap()
-            .child
-            .clone();
+    let fk = ForwardKinematics::new(robot);
 
-        let fk = ForwardKinematics::new(robot);
+    // q1 = 0
+    // q2 = π/2
+    //
+    // link1 -> (1,0)
+    // link2 rotates locally upward
+    //
+    // expected = (1,1)
 
-        let result = fk.evaluate(&[PI / 2.0, -PI / 2.0]);
+    let result = fk.evaluate(&[0.0, PI / 2.0]);
 
-        let pose = result.pose(&end_effector).unwrap();
+    let pose = result.pose(&end_effector).unwrap();
 
-        let t = &pose.transform().translation;
+    let t = &pose.transform().translation;
 
-        assert!(
-            (t.x - 1.0).abs() < EPS
-                && (t.y - 1.0).abs() < EPS
-                && t.z.abs() < EPS,
-
-            "End effector should be at (1, 1, 0), got ({}, {}, {})",
-
-            t.x,
-            t.y,
-            t.z
-        );
-    }
-
-    #[test]
-    fn first_link_pose_is_correct_at_zero_configuration() {
-
-        let robot = Planar2RSpec::ideal().build();
-
-        let first_link = robot
-            .segments
-            .first()
-            .unwrap()
-            .child
-            .clone();
-
-        let fk = ForwardKinematics::new(robot);
-
-        let result = fk.evaluate(&[0.0, 0.0]);
-
-        let pose = result.pose(&first_link).unwrap();
-
-        let t = &pose.transform().translation;
-
-        assert!(
-            (t.x - 1.0).abs() < EPS
-                && t.y.abs() < EPS
-                && t.z.abs() < EPS,
-
-            "First link should be at (1, 0, 0), got ({}, {}, {})",
-
-            t.x,
-            t.y,
-            t.z
-        );
-    }
-
-    #[test]
-    fn second_joint_rotates_relative_to_first_joint() {
-
-        let robot = Planar2RSpec::ideal().build();
-
-        let end_effector = robot
-            .segments
-            .last()
-            .unwrap()
-            .child
-            .clone();
-
-        let fk = ForwardKinematics::new(robot);
-
-        // q1 = 0
-        // q2 = π/2
-        //
-        // link1 -> (1,0)
-        // link2 rotates locally upward
-        //
-        // expected = (1,1)
-
-        let result = fk.evaluate(&[0.0, PI / 2.0]);
-
-        let pose = result.pose(&end_effector).unwrap();
-
-        let t = &pose.transform().translation;
-
-        assert!(
-            (t.x - 1.0).abs() < EPS
-                && (t.y - 1.0).abs() < EPS
-                && t.z.abs() < EPS,
-
-            "End effector should be at (1, 1, 0), got ({}, {}, {})",
-
-            t.x,
-            t.y,
-            t.z
-        );
-    }
+    assert!(
+        (t.x - 1.0).abs() < EPS && (t.y - 1.0).abs() < EPS && t.z.abs() < EPS,
+        "End effector should be at (1, 1, 0), got ({}, {}, {})",
+        t.x,
+        t.y,
+        t.z
+    );
+}

@@ -3,10 +3,7 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 
 use thalos_core::{
-    kinematics::{
-        forward::result::FKResult,
-        inverse::result::IKResult,
-    },
+    kinematics::{forward::result::FKResult, inverse::result::IKResult},
     models::RobotModel,
     robot::serial_chain::SerialChain,
     robot::tool_frame::ToolFrame,

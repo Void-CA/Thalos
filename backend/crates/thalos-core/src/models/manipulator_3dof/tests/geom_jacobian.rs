@@ -1,5 +1,5 @@
-use crate::prelude::*;
 use crate::models::manipulator_3dof::Manipulator3DOFSpec;
+use crate::prelude::*;
 
 fn fresh_pair() -> (GeometricJacobian, NumericalJacobian) {
     let robot = Manipulator3DOFSpec::ideal().build();
@@ -24,7 +24,10 @@ fn geometric_matches_numerical_at_zero_config() {
             assert!(
                 (jg.linear[(r, c)] - jn.linear()[(r, c)]).abs() < 1e-5,
                 "Linear mismatch at ({},{}): geo={}, num={}",
-                r, c, jg.linear[(r, c)], jn.linear()[(r, c)]
+                r,
+                c,
+                jg.linear[(r, c)],
+                jn.linear()[(r, c)]
             );
         }
     }
@@ -50,7 +53,11 @@ fn geometric_matches_numerical_at_multiple_configs() {
                 assert!(
                     (jg.linear[(r, c)] - jn.linear()[(r, c)]).abs() < 1e-5,
                     "Linear mismatch at q={:?}, ({},{}): geo={}, num={}",
-                    q, r, c, jg.linear[(r, c)], jn.linear()[(r, c)]
+                    q,
+                    r,
+                    c,
+                    jg.linear[(r, c)],
+                    jn.linear()[(r, c)]
                 );
             }
         }
@@ -76,29 +83,74 @@ fn at_zero_config_analytical_values() {
     let j = geo.evaluate(&[0.0, 0.0, 0.0]);
 
     // Lineal
-    assert!(j.linear[(0, 0)].abs() < EPS, "dx/dq1 should be 0, got {}", j.linear[(0, 0)]);
-    assert!((j.linear[(1, 0)] - 2.0).abs() < EPS, "dy/dq1 should be 2, got {}", j.linear[(1, 0)]);
-    assert!(j.linear[(2, 0)].abs() < EPS, "dz/dq1 should be 0, got {}", j.linear[(2, 0)]);
+    assert!(
+        j.linear[(0, 0)].abs() < EPS,
+        "dx/dq1 should be 0, got {}",
+        j.linear[(0, 0)]
+    );
+    assert!(
+        (j.linear[(1, 0)] - 2.0).abs() < EPS,
+        "dy/dq1 should be 2, got {}",
+        j.linear[(1, 0)]
+    );
+    assert!(
+        j.linear[(2, 0)].abs() < EPS,
+        "dz/dq1 should be 0, got {}",
+        j.linear[(2, 0)]
+    );
 
-    assert!(j.linear[(0, 1)].abs() < EPS, "dx/dq2 should be 0, got {}", j.linear[(0, 1)]);
-    assert!(j.linear[(1, 1)].abs() < EPS, "dy/dq2 should be 0, got {}", j.linear[(1, 1)]);
-    assert!((j.linear[(2, 1)] - -2.0).abs() < EPS, "dz/dq2 should be -2, got {}", j.linear[(2, 1)]);
+    assert!(
+        j.linear[(0, 1)].abs() < EPS,
+        "dx/dq2 should be 0, got {}",
+        j.linear[(0, 1)]
+    );
+    assert!(
+        j.linear[(1, 1)].abs() < EPS,
+        "dy/dq2 should be 0, got {}",
+        j.linear[(1, 1)]
+    );
+    assert!(
+        (j.linear[(2, 1)] - -2.0).abs() < EPS,
+        "dz/dq2 should be -2, got {}",
+        j.linear[(2, 1)]
+    );
 
-    assert!(j.linear[(0, 2)].abs() < EPS, "dx/dq3 should be 0, got {}", j.linear[(0, 2)]);
-    assert!(j.linear[(1, 2)].abs() < EPS, "dy/dq3 should be 0, got {}", j.linear[(1, 2)]);
-    assert!((j.linear[(2, 2)] - -1.0).abs() < EPS, "dz/dq3 should be -1, got {}", j.linear[(2, 2)]);
+    assert!(
+        j.linear[(0, 2)].abs() < EPS,
+        "dx/dq3 should be 0, got {}",
+        j.linear[(0, 2)]
+    );
+    assert!(
+        j.linear[(1, 2)].abs() < EPS,
+        "dy/dq3 should be 0, got {}",
+        j.linear[(1, 2)]
+    );
+    assert!(
+        (j.linear[(2, 2)] - -1.0).abs() < EPS,
+        "dz/dq3 should be -1, got {}",
+        j.linear[(2, 2)]
+    );
 
     // Angular: cada joint aporta su eje en frame mundo
     // Joint 1 = Z → ω = (0, 0, 1)
-    assert!(j.angular[(0, 0)].abs() < EPS && j.angular[(1, 0)].abs() < EPS, "ωx,ωy/dq1 should be 0");
+    assert!(
+        j.angular[(0, 0)].abs() < EPS && j.angular[(1, 0)].abs() < EPS,
+        "ωx,ωy/dq1 should be 0"
+    );
     assert!((j.angular[(2, 0)] - 1.0).abs() < EPS, "ωz/dq1 should be 1");
 
     // Joint 2 = Y → ω = (0, 1, 0)
-    assert!(j.angular[(0, 1)].abs() < EPS && j.angular[(2, 1)].abs() < EPS, "ωx,ωz/dq2 should be 0");
+    assert!(
+        j.angular[(0, 1)].abs() < EPS && j.angular[(2, 1)].abs() < EPS,
+        "ωx,ωz/dq2 should be 0"
+    );
     assert!((j.angular[(1, 1)] - 1.0).abs() < EPS, "ωy/dq2 should be 1");
 
     // Joint 3 = Y → ω = (0, 1, 0)
-    assert!(j.angular[(0, 2)].abs() < EPS && j.angular[(2, 2)].abs() < EPS, "ωx,ωz/dq3 should be 0");
+    assert!(
+        j.angular[(0, 2)].abs() < EPS && j.angular[(2, 2)].abs() < EPS,
+        "ωx,ωz/dq3 should be 0"
+    );
     assert!((j.angular[(1, 2)] - 1.0).abs() < EPS, "ωy/dq3 should be 1");
 }
 
@@ -120,7 +172,8 @@ fn at_arm_vertical_analytical_values() {
         assert!(
             j.linear[(r, 0)].abs() < EPS,
             "J_v[r, 0] should be 0 (singular), got row {}: {}",
-            r, j.linear[(r, 0)]
+            r,
+            j.linear[(r, 0)]
         );
     }
     assert!((j.linear[(0, 1)] - 2.0).abs() < EPS, "dx/dq2 should be 2");
@@ -137,19 +190,31 @@ fn singularity_detected_via_jjt_determinant() {
     let j_sing = geo.evaluate(&[0.0, 0.0, 0.0]);
     let jjt_sing = &j_sing.linear * &j_sing.linear.transpose();
     let det_sing = jjt_sing.determinant();
-    assert!(det_sing.abs() < 1e-6, "Singular config should have det~0, got {}", det_sing);
+    assert!(
+        det_sing.abs() < 1e-6,
+        "Singular config should have det~0, got {}",
+        det_sing
+    );
 
     // Singular 2: q = (0, -π/2, 0) — brazo en -Y, q1 no genera vel lineal
     let j_vert = geo.evaluate(&[0.0, -PI / 2.0, 0.0]);
     let jjt_vert = &j_vert.linear * &j_vert.linear.transpose();
     let det_vert = jjt_vert.determinant();
-    assert!(det_vert.abs() < 1e-6, "Vertical config should be singular, got {}", det_vert);
+    assert!(
+        det_vert.abs() < 1e-6,
+        "Vertical config should be singular, got {}",
+        det_vert
+    );
 
     // No singular: q con todas las juntas contribuyendo
     let j_ok = geo.evaluate(&[PI / 4.0, -PI / 4.0, PI / 6.0]);
     let jjt_ok = &j_ok.linear * &j_ok.linear.transpose();
     let det_ok = jjt_ok.determinant();
-    assert!(det_ok.abs() > 1e-3, "Non-singular config should have det>0, got {}", det_ok);
+    assert!(
+        det_ok.abs() > 1e-3,
+        "Non-singular config should have det>0, got {}",
+        det_ok
+    );
 }
 
 #[test]
@@ -178,7 +243,12 @@ fn propagates_velocities_via_geometric_jacobian() {
 
     let ee = fk.robot().end_effector().clone();
     let p_curr = fk.evaluate(&q).pose(&ee).unwrap().transform().translation;
-    let p_next = fk.evaluate(&q_next).pose(&ee).unwrap().transform().translation;
+    let p_next = fk
+        .evaluate(&q_next)
+        .pose(&ee)
+        .unwrap()
+        .transform()
+        .translation;
     let v_actual = [
         (p_next.x - p_curr.x) / dt,
         (p_next.y - p_curr.y) / dt,
@@ -189,7 +259,9 @@ fn propagates_velocities_via_geometric_jacobian() {
         assert!(
             (v_pred[axis] - v_actual[axis]).abs() < 1e-4,
             "Axis {}: predicted {}, actual {}",
-            axis, v_pred[axis], v_actual[axis]
+            axis,
+            v_pred[axis],
+            v_actual[axis]
         );
     }
 }
@@ -210,15 +282,21 @@ fn angular_velocity_at_canonical_config() {
 
     assert!(
         (omega_pred[0] - expected_x).abs() < EPS,
-        "ωx: expected {}, got {}", expected_x, omega_pred[0]
+        "ωx: expected {}, got {}",
+        expected_x,
+        omega_pred[0]
     );
     assert!(
         (omega_pred[1] - expected_y).abs() < EPS,
-        "ωy: expected {}, got {}", expected_y, omega_pred[1]
+        "ωy: expected {}, got {}",
+        expected_y,
+        omega_pred[1]
     );
     assert!(
         (omega_pred[2] - expected_z).abs() < EPS,
-        "ωz: expected {}, got {}", expected_z, omega_pred[2]
+        "ωz: expected {}, got {}",
+        expected_z,
+        omega_pred[2]
     );
 }
 
@@ -244,7 +322,9 @@ fn angular_block_has_unit_axes() {
             assert!(
                 (norm_sq - 1.0).abs() < 1e-9,
                 "Angular column {} should be a unit vector at q={:?}, got |ω|² = {}",
-                col, q, norm_sq
+                col,
+                q,
+                norm_sq
             );
         }
     }

@@ -1,11 +1,8 @@
 use std::sync::Arc;
 
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 
-use thalos_core::kinematics::{
-    forward::ForwardKinematics,
-    inverse::JacobianTransposeSolver,
-};
+use thalos_core::kinematics::{forward::ForwardKinematics, inverse::JacobianTransposeSolver};
 use thalos_math::Vector3;
 use thalos_planning::{
     analysis::region::{RegionDetector, RegionDetectorConfig},
@@ -18,11 +15,7 @@ use thalos_planning::{
 };
 use thalos_runtime::{PlanAnalysisService, RuntimeSnapshot};
 
-use crate::app::{
-    error::ApiError,
-    prelude::*,
-    state::AppState,
-};
+use crate::app::{error::ApiError, prelude::*, state::AppState};
 use crate::features::repair::dto::*;
 
 fn build_repair_context(snapshot: &RuntimeSnapshot) -> RepairContext {

@@ -1,14 +1,14 @@
 use std::fs;
 
 use thalos_models::urdf::parser::parse_robot;
-use thalos_models::{JointKind, Geometry};
+use thalos_models::{Geometry, JointKind};
 
 const FIXTURE_PATH: &str = "tests/fixtures/ur5.urdf";
 
 #[test]
 fn parse_ur5_successfully() {
-    let source = fs::read_to_string(FIXTURE_PATH)
-        .expect("UR5 fixture file not found — run from crate root");
+    let source =
+        fs::read_to_string(FIXTURE_PATH).expect("UR5 fixture file not found — run from crate root");
 
     let robot = parse_robot(&source).expect("UR5 should parse without errors");
     assert_eq!(robot.name, "ur5");
@@ -22,8 +22,11 @@ fn ur5_link_count() {
     // base_link, shoulder_link, upper_arm_link, forearm_link,
     // wrist_1_link, wrist_2_link, wrist_3_link, ee_link, base,
     // tool0, world
-    assert_eq!(robot.links.len(), 11,
-        "expected 11 links (world → base_link → … → tool0 + auxiliary frames)");
+    assert_eq!(
+        robot.links.len(),
+        11,
+        "expected 11 links (world → base_link → … → tool0 + auxiliary frames)"
+    );
 }
 
 #[test]
@@ -31,8 +34,11 @@ fn ur5_joint_count() {
     let source = fs::read_to_string(FIXTURE_PATH).unwrap();
     let robot = parse_robot(&source).unwrap();
 
-    assert_eq!(robot.joints.len(), 10,
-        "expected 10 joints (6 revolute + 4 fixed: world, base_link-base, ee, tool0)");
+    assert_eq!(
+        robot.joints.len(),
+        10,
+        "expected 10 joints (6 revolute + 4 fixed: world, base_link-base, ee, tool0)"
+    );
 }
 
 #[test]
@@ -40,8 +46,10 @@ fn ur5_root_link_is_world() {
     let source = fs::read_to_string(FIXTURE_PATH).unwrap();
     let robot = parse_robot(&source).unwrap();
 
-    assert_eq!(robot.root_link, "world",
-        "world link is never a child of any joint → should be root");
+    assert_eq!(
+        robot.root_link, "world",
+        "world link is never a child of any joint → should be root"
+    );
 }
 
 #[test]
@@ -59,7 +67,9 @@ fn ur5_revolute_joints_have_axis_and_limits() {
     ];
 
     for name in &revolute_names {
-        let joint = robot.joints.get(*name)
+        let joint = robot
+            .joints
+            .get(*name)
             .unwrap_or_else(|| panic!("missing joint {name}"));
 
         assert_eq!(joint.kind, JointKind::Revolute, "{name} should be revolute");
@@ -81,7 +91,9 @@ fn ur5_fixed_joints_have_no_axis_or_limits() {
     ];
 
     for name in &fixed_names {
-        let joint = robot.joints.get(*name)
+        let joint = robot
+            .joints
+            .get(*name)
             .unwrap_or_else(|| panic!("missing joint {name}"));
 
         assert_eq!(joint.kind, JointKind::Fixed, "{name} should be fixed");
@@ -100,12 +112,14 @@ fn ur5_kinematic_chain_is_connected() {
         assert!(
             robot.links.contains_key(&joint.parent),
             "joint {} parent '{}' not found in links",
-            joint.name, joint.parent
+            joint.name,
+            joint.parent
         );
         assert!(
             robot.links.contains_key(&joint.child),
             "joint {} child '{}' not found in links",
-            joint.name, joint.child
+            joint.name,
+            joint.child
         );
     }
 }
@@ -117,8 +131,10 @@ fn ur5_shoulder_pan_origin_has_z_offset() {
 
     let joint = &robot.joints["shoulder_pan_joint"];
     // shoulder_pan origin: xyz="0 0 0.089159", rpy="0 0 0"
-    assert!((joint.origin.translation.z - 0.089159).abs() < 1e-6,
-        "shoulder_pan z-offset should be 0.089159");
+    assert!(
+        (joint.origin.translation.z - 0.089159).abs() < 1e-6,
+        "shoulder_pan z-offset should be 0.089159"
+    );
 }
 
 #[test]
@@ -148,12 +164,15 @@ fn ur5_shoulder_lift_rotation() {
     let a = actual.inner();
     let e = expected.inner();
     assert!(
-        (a.w - e.w).abs() < 1e-6 &&
-        (a.x - e.x).abs() < 1e-6 &&
-        (a.y - e.y).abs() < 1e-6 &&
-        (a.z - e.z).abs() < 1e-6,
+        (a.w - e.w).abs() < 1e-6
+            && (a.x - e.x).abs() < 1e-6
+            && (a.y - e.y).abs() < 1e-6
+            && (a.z - e.z).abs() < 1e-6,
         "shoulder_lift rotation mismatch: got ({},{},{},{})",
-        a.w, a.x, a.y, a.z
+        a.w,
+        a.x,
+        a.y,
+        a.z
     );
 }
 
@@ -164,8 +183,13 @@ fn ur5_inertial_data_exists() {
 
     // All structural links (not world, base, tool0, ee_link) should have inertial
     let structural_links = [
-        "base_link", "shoulder_link", "upper_arm_link",
-        "forearm_link", "wrist_1_link", "wrist_2_link", "wrist_3_link",
+        "base_link",
+        "shoulder_link",
+        "upper_arm_link",
+        "forearm_link",
+        "wrist_1_link",
+        "wrist_2_link",
+        "wrist_3_link",
     ];
     for name in &structural_links {
         let link = &robot.links[*name];
@@ -179,8 +203,11 @@ fn ur5_upper_arm_mass() {
     let robot = parse_robot(&source).unwrap();
 
     let inertial = robot.links["upper_arm_link"].inertial.as_ref().unwrap();
-    assert!((inertial.mass - 8.393).abs() < 1e-6,
-        "upper_arm mass should be 8.393, got {}", inertial.mass);
+    assert!(
+        (inertial.mass - 8.393).abs() < 1e-6,
+        "upper_arm mass should be 8.393, got {}",
+        inertial.mass
+    );
 }
 
 #[test]

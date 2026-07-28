@@ -10,9 +10,7 @@
 use serde::{Deserialize, Serialize};
 
 use thalos_core::{
-    kinematics::forward::ForwardKinematics,
-    prelude::Trajectory,
-    robot::serial_chain::SerialChain,
+    kinematics::forward::ForwardKinematics, prelude::Trajectory, robot::serial_chain::SerialChain,
     spatial::frame::FrameId,
 };
 

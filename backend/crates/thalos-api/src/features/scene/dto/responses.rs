@@ -24,7 +24,9 @@ pub struct VisualSceneDto {
 }
 
 /// 1 metro asumido cuando el backend no envía `reference_dimension`.
-fn default_ref_dim_dto() -> f64 { 1.0 }
+fn default_ref_dim_dto() -> f64 {
+    1.0
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FrameStyleDto {

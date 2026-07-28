@@ -193,7 +193,11 @@ pub mod tests {
             self.connected.load(Ordering::SeqCst)
         }
 
-        async fn execute(&mut self, _waypoints: Vec<Vec<f64>>, _duration: f64) -> Result<(), ControllerError> {
+        async fn execute(
+            &mut self,
+            _waypoints: Vec<Vec<f64>>,
+            _duration: f64,
+        ) -> Result<(), ControllerError> {
             if !self.connected.load(Ordering::SeqCst) {
                 return Err(ControllerError::NotConnected);
             }

@@ -1,9 +1,6 @@
 use std::f64::consts::PI;
 
-use thalos_core::{
-    kinematics::forward::ForwardKinematics,
-    models::planar_2r::Planar2RSpec,
-};
+use thalos_core::{kinematics::forward::ForwardKinematics, models::planar_2r::Planar2RSpec};
 use thalos_visual::{SceneBuilder, SceneDiff, VisualPrecision};
 
 #[test]
@@ -50,8 +47,14 @@ fn precision_canonicalizes_noise() {
         .find(|f| f.id == "link_1")
         .expect("link_1 frame expected");
 
-    assert_eq!(link_1.rotation[1], 0.0, "x should be exactly 0 after normalization");
-    assert_eq!(link_1.rotation[2], 0.0, "y should be exactly 0 after normalization");
+    assert_eq!(
+        link_1.rotation[1], 0.0,
+        "x should be exactly 0 after normalization"
+    );
+    assert_eq!(
+        link_1.rotation[2], 0.0,
+        "y should be exactly 0 after normalization"
+    );
     assert!(
         (link_1.rotation[0] - 0.707107).abs() < 1e-12,
         "w should be ~0.707107, got {}",
@@ -79,8 +82,14 @@ fn diff_detects_translation_and_rotation() {
     let diff = SceneDiff::between(&old, &new, 1e-6);
 
     assert!(diff.frames_added.is_empty(), "no frames should be added");
-    assert!(diff.frames_removed.is_empty(), "no frames should be removed");
-    assert!(!diff.changed_frames.is_empty(), "frames should have changed");
+    assert!(
+        diff.frames_removed.is_empty(),
+        "no frames should be removed"
+    );
+    assert!(
+        !diff.changed_frames.is_empty(),
+        "frames should have changed"
+    );
 
     let link_1 = diff
         .changed_frames
@@ -89,7 +98,10 @@ fn diff_detects_translation_and_rotation() {
         .expect("link_1 should have changed");
 
     assert!(link_1.translation_delta > 0.0, "link_1 should have moved");
-    assert!(link_1.rotation_angle_deg > 0.0, "link_1 should have rotated");
+    assert!(
+        link_1.rotation_angle_deg > 0.0,
+        "link_1 should have rotated"
+    );
 
     let link_2 = diff
         .changed_frames
@@ -113,7 +125,10 @@ fn diff_identical_scenes() {
 
     assert!(diff.frames_added.is_empty());
     assert!(diff.frames_removed.is_empty());
-    assert!(diff.changed_frames.is_empty(), "identical scenes should have no diff");
+    assert!(
+        diff.changed_frames.is_empty(),
+        "identical scenes should have no diff"
+    );
 }
 
 #[test]

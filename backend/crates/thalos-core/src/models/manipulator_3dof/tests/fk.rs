@@ -1,5 +1,5 @@
-use crate::prelude::*;
 use crate::models::manipulator_3dof::Manipulator3DOFSpec;
+use crate::prelude::*;
 
 fn ee_translation(fk: &ForwardKinematics, q: &[f64], ee: &FrameId) -> Vector3 {
     fk.evaluate(q)
@@ -29,7 +29,9 @@ fn zero_config_ee_in_z_up() {
     assert!(
         (t.x - 2.0).abs() < EPS && t.y.abs() < EPS && (t.z - 1.0).abs() < EPS,
         "Manipulator 3DOF Z-up regression: expected (2, 0, 1), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 }
 
@@ -39,7 +41,11 @@ fn zero_config_ee_in_z_up() {
 #[test]
 fn has_three_segments_and_three_joints() {
     let robot = Manipulator3DOFSpec::ideal().build();
-    assert_eq!(robot.segments.len(), 3, "Should have exactly three segments");
+    assert_eq!(
+        robot.segments.len(),
+        3,
+        "Should have exactly three segments"
+    );
     assert_eq!(robot.segments[0].joint.id(), 0);
     assert_eq!(robot.segments[1].joint.id(), 1);
     assert_eq!(robot.segments[2].joint.id(), 2);

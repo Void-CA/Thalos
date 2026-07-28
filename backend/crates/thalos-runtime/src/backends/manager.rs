@@ -71,9 +71,7 @@ impl BackendManager {
 
     /// Get the active controller for use.
     /// Returns `None` if no controller is connected.
-    pub async fn get_controller(
-        &self,
-    ) -> Option<Arc<RwLock<dyn RobotController + Send + Sync>>> {
+    pub async fn get_controller(&self) -> Option<Arc<RwLock<dyn RobotController + Send + Sync>>> {
         self.active.read().await.clone()
     }
 }

@@ -7,9 +7,7 @@
 use serde::{Deserialize, Serialize};
 
 use thalos_core::analysis::manipulability::ManipulabilityMetrics;
-use thalos_core::analysis::singularity::{
-    SingularityMetrics, SingularityState,
-};
+use thalos_core::analysis::singularity::{SingularityMetrics, SingularityState};
 use thalos_core::analysis::workspace::{
     BoundingBox, Reachability, WorkspaceMetrics, WorkspaceSample,
 };
@@ -30,8 +28,12 @@ pub struct SampleRequest {
     pub include_samples: bool,
 }
 
-fn default_samples() -> usize { 10_000 }
-fn default_tolerance() -> f64 { 1e-3 }
+fn default_samples() -> usize {
+    10_000
+}
+fn default_tolerance() -> f64 {
+    1e-3
+}
 
 #[derive(Debug, Deserialize)]
 pub struct ReachabilityRequest {
@@ -111,7 +113,9 @@ pub struct SingularityRequest {
     pub include_samples: bool,
 }
 
-fn default_near_singular_threshold() -> f64 { 100.0 }
+fn default_near_singular_threshold() -> f64 {
+    100.0
+}
 
 #[derive(Debug, Serialize)]
 pub struct SingularityResponse {
@@ -224,7 +228,9 @@ pub struct ManipulabilitySampleDto {
     pub isotropy: f64,
 }
 
-impl From<&thalos_core::analysis::manipulability::ManipulabilitySample> for ManipulabilitySampleDto {
+impl From<&thalos_core::analysis::manipulability::ManipulabilitySample>
+    for ManipulabilitySampleDto
+{
     fn from(s: &thalos_core::analysis::manipulability::ManipulabilitySample) -> Self {
         Self {
             position: PointDto {
@@ -241,8 +247,16 @@ impl From<&thalos_core::analysis::manipulability::ManipulabilitySample> for Mani
 impl From<BoundingBox> for BoundingBoxDto {
     fn from(bb: BoundingBox) -> Self {
         Self {
-            min: PointDto { x: bb.min.x, y: bb.min.y, z: bb.min.z },
-            max: PointDto { x: bb.max.x, y: bb.max.y, z: bb.max.z },
+            min: PointDto {
+                x: bb.min.x,
+                y: bb.min.y,
+                z: bb.min.z,
+            },
+            max: PointDto {
+                x: bb.max.x,
+                y: bb.max.y,
+                z: bb.max.z,
+            },
         }
     }
 }

@@ -1,17 +1,13 @@
 use super::*;
-use thalos_math::UnitQuaternion;
 use crate::spatial::pose::Pose;
-
+use thalos_math::UnitQuaternion;
 
 fn make_target_pose(ee: FrameId, q: &[f64]) -> Pose {
     let x = q[0].cos() + (q[0] + q[1]).cos();
     let y = q[0].sin() + (q[0] + q[1]).sin();
     let pos = Vector3::new(x, y, 0.0);
 
-    let rot = UnitQuaternion::from_axis_angle(
-        UnitVector3::z_axis(),
-        q[0] + q[1],
-    );
+    let rot = UnitQuaternion::from_axis_angle(UnitVector3::z_axis(), q[0] + q[1]);
 
     let transform = thalos_math::Transform3D {
         translation: pos,
@@ -24,10 +20,7 @@ fn make_target_pose(ee: FrameId, q: &[f64]) -> Pose {
 /// Error de orientación entre dos UnitQuaternions como ángulo absoluto.
 fn orientation_angle(a: &UnitQuaternion, b: &UnitQuaternion) -> f64 {
     let rel = *b * a.inverse();
-    let v_norm = Vector3::new(
-        rel.inner().x, rel.inner().y, rel.inner().z,
-    )
-    .magnitude();
+    let v_norm = Vector3::new(rel.inner().x, rel.inner().y, rel.inner().z).magnitude();
     let w = rel.inner().w.clamp(-1.0, 1.0);
     if v_norm < 1e-14 {
         0.0
@@ -67,10 +60,7 @@ fn dls_pose_ik_reaches_known_pose() {
 
     println!(
         "  DLS pose IK: {} iter, error final = {:.2e}, q = [{:.6}, {:.6}]",
-        result.iterations,
-        result.final_error,
-        result.q[0],
-        result.q[1]
+        result.iterations, result.final_error, result.q[0], result.q[1]
     );
 }
 
@@ -130,15 +120,11 @@ fn pose_faster_than_jt_from_singular() {
 
     let target_pose = make_target_pose(ee, &[PI / 3.0, PI / 6.0]);
 
-    let dls = DampedLeastSquaresSolver::new(
-        fk.clone(), ee.clone(), 500, 1e-6, 0.1,
-    );
+    let dls = DampedLeastSquaresSolver::new(fk.clone(), ee.clone(), 500, 1e-6, 0.1);
     let r_dls = dls.solve(&[0.0, 0.0], IKGoal::Pose(target_pose.clone()));
 
     // JT con α más chico para evitar overshoot en 6D
-    let jt = JacobianTransposeSolver::new(
-        fk, ee, 500, 1e-6, 0.1,
-    );
+    let jt = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.1);
     let r_jt = jt.solve(&[0.0, 0.0], IKGoal::Pose(target_pose));
 
     assert!(
@@ -157,8 +143,10 @@ fn pose_faster_than_jt_from_singular() {
 
     println!(
         "  [POSE] DLS: {} iter, error={:.2e} | JT: {} iter, error={:.2e} | ratio={:.3}",
-        r_dls.iterations, r_dls.final_error,
-        r_jt.iterations, r_jt.final_error,
+        r_dls.iterations,
+        r_dls.final_error,
+        r_jt.iterations,
+        r_jt.final_error,
         r_dls.iterations as f64 / r_jt.iterations as f64
     );
 }
@@ -183,24 +171,17 @@ fn pose_converges_where_position_ik_stagnates() {
     let pose_target = {
         let transform = thalos_math::Transform3D {
             translation: pos_target,
-            rotation: UnitQuaternion::from_axis_angle(
-                UnitVector3::z_axis(),
-                PI / 4.0,
-            ),
+            rotation: UnitQuaternion::from_axis_angle(UnitVector3::z_axis(), PI / 4.0),
         };
         Pose::new(FrameId::World, ee, transform)
     };
 
     // DLS con posición sola → se estanca (error radial puro)
-    let dls_pos = DampedLeastSquaresSolver::new(
-        fk.clone(), ee.clone(), 200, 1e-6, 0.1,
-    );
+    let dls_pos = DampedLeastSquaresSolver::new(fk.clone(), ee.clone(), 200, 1e-6, 0.1);
     let r_pos = dls_pos.solve(&[0.0, 0.0], IKGoal::Position(pos_target));
 
     // DLS con pose → converge (gradiente de orientación)
-    let dls_pose = DampedLeastSquaresSolver::new(
-        fk, ee, 500, 1e-6, 0.1,
-    );
+    let dls_pose = DampedLeastSquaresSolver::new(fk, ee, 500, 1e-6, 0.1);
     let r_pose = dls_pose.solve(&[0.0, 0.0], IKGoal::Pose(pose_target));
 
     println!(

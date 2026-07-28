@@ -1,40 +1,23 @@
 use axum::{
+    Json,
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 
 use crate::app::dto::ErrorResponse;
 
-
 pub enum ApiError {
-    NotFound {
-        message: String,
-    },
+    NotFound { message: String },
 
-    Validation {
-        message: String,
-        code: String,
-    },
+    Validation { message: String, code: String },
 
-    Conflict {
-        message: String,
-        code: String,
-    },
+    Conflict { message: String, code: String },
 
-    InvalidState {
-        message: String,
-        code: String,
-    },
+    InvalidState { message: String, code: String },
 
-    Unsupported {
-        message: String,
-        code: String,
-    },
+    Unsupported { message: String, code: String },
 
-    Internal {
-        message: String,
-    },
+    Internal { message: String },
 }
 
 impl IntoResponse for ApiError {

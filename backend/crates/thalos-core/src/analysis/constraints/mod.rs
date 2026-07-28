@@ -28,22 +28,18 @@
 use std::fmt;
 
 use crate::kinematics::forward::ForwardKinematics;
-use thalos_math::Vector3;
-use thalos_math::Dot;
 use crate::robot::serial_chain::SerialChain;
 use crate::robot::tool_frame::ToolFrame;
 use crate::spatial::frame::FrameId;
 use crate::trajectory::Trajectory;
+use thalos_math::Dot;
+use thalos_math::Vector3;
 
 /// Una restricción simbólica sobre una configuración robótica.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Constraint {
     /// Límite articular: un joint debe estar dentro de [min, max].
-    JointLimit {
-        joint: usize,
-        min: f64,
-        max: f64,
-    },
+    JointLimit { joint: usize, min: f64, max: f64 },
 
     /// Cono de orientación: un frame debe mantener su orientación dentro
     /// de un cono alrededor de un eje dado (en grados para la interfaz,
@@ -72,8 +68,15 @@ impl fmt::Display for Constraint {
             Constraint::JointLimit { joint, min, max } => {
                 write!(f, "JointLimit(j{}=[{:.3}, {:.3}])", joint, min, max)
             }
-            Constraint::OrientationCone { frame, half_angle, .. } => {
-                write!(f, "OrientationCone(frame={}, half={:.1}°)", frame, half_angle.to_degrees())
+            Constraint::OrientationCone {
+                frame, half_angle, ..
+            } => {
+                write!(
+                    f,
+                    "OrientationCone(frame={}, half={:.1}°)",
+                    frame,
+                    half_angle.to_degrees()
+                )
             }
             Constraint::CartesianBox { frame, .. } => {
                 write!(f, "CartesianBox(frame={})", frame)
@@ -160,7 +163,11 @@ impl ConstraintEvaluator for DefaultConstraintEvaluator {
                             }
                         }
                     }
-                    Constraint::OrientationCone { frame, axis, half_angle } => {
+                    Constraint::OrientationCone {
+                        frame,
+                        axis,
+                        half_angle,
+                    } => {
                         let pose = if let Some(tcp) = tcp {
                             fk_result.tcp_pose(tcp)
                         } else {
@@ -169,7 +176,8 @@ impl ConstraintEvaluator for DefaultConstraintEvaluator {
 
                         if let Some(pose) = pose {
                             let current_axis = pose.transform().rotation.rotate_vector(*axis);
-                            let cos_angle = (*axis).dot(current_axis) / (axis.magnitude() * current_axis.magnitude());
+                            let cos_angle = (*axis).dot(current_axis)
+                                / (axis.magnitude() * current_axis.magnitude());
                             let angle = cos_angle.clamp(-1.0, 1.0).acos();
                             if angle > *half_angle {
                                 violations.push(ConstraintViolation {
@@ -196,12 +204,24 @@ impl ConstraintEvaluator for DefaultConstraintEvaluator {
                         if let Some(pose) = pose {
                             let pos = pose.translation();
                             let mut mag = 0.0;
-                            if pos.x < min.x { mag += (min.x - pos.x).powi(2); }
-                            if pos.y < min.y { mag += (min.y - pos.y).powi(2); }
-                            if pos.z < min.z { mag += (min.z - pos.z).powi(2); }
-                            if pos.x > max.x { mag += (pos.x - max.x).powi(2); }
-                            if pos.y > max.y { mag += (pos.y - max.y).powi(2); }
-                            if pos.z > max.z { mag += (pos.z - max.z).powi(2); }
+                            if pos.x < min.x {
+                                mag += (min.x - pos.x).powi(2);
+                            }
+                            if pos.y < min.y {
+                                mag += (min.y - pos.y).powi(2);
+                            }
+                            if pos.z < min.z {
+                                mag += (min.z - pos.z).powi(2);
+                            }
+                            if pos.x > max.x {
+                                mag += (pos.x - max.x).powi(2);
+                            }
+                            if pos.y > max.y {
+                                mag += (pos.y - max.y).powi(2);
+                            }
+                            if pos.z > max.z {
+                                mag += (pos.z - max.z).powi(2);
+                            }
                             let magnitude = mag.sqrt();
 
                             if magnitude > 1e-9 {
@@ -218,10 +238,13 @@ impl ConstraintEvaluator for DefaultConstraintEvaluator {
                         }
                     }
                     Constraint::Composite(inner) => {
-                        let inner_violations = self.evaluate_trajectory(
-                            inner, trajectory, chain, fk, tcp,
+                        let inner_violations =
+                            self.evaluate_trajectory(inner, trajectory, chain, fk, tcp);
+                        violations.extend(
+                            inner_violations
+                                .into_iter()
+                                .filter(|v| v.waypoint == wp_idx),
                         );
-                        violations.extend(inner_violations.into_iter().filter(|v| v.waypoint == wp_idx));
                     }
                 }
             }
@@ -252,15 +275,25 @@ mod tests {
         let fk = ForwardKinematics::new(chain.clone());
         let traj = make_planar2r_trajectory();
         let constraints = vec![
-            Constraint::JointLimit { joint: 0, min: -2.0, max: 2.0 },
-            Constraint::JointLimit { joint: 1, min: -2.0, max: 2.0 },
+            Constraint::JointLimit {
+                joint: 0,
+                min: -2.0,
+                max: 2.0,
+            },
+            Constraint::JointLimit {
+                joint: 1,
+                min: -2.0,
+                max: 2.0,
+            },
         ];
 
         let evaluator = DefaultConstraintEvaluator;
-        let violations = evaluator.evaluate_trajectory(
-            &constraints, &traj, &chain, &fk, None,
+        let violations = evaluator.evaluate_trajectory(&constraints, &traj, &chain, &fk, None);
+        assert!(
+            violations.is_empty(),
+            "expected no violations, got {:?}",
+            violations
         );
-        assert!(violations.is_empty(), "expected no violations, got {:?}", violations);
     }
 
     #[test]
@@ -272,14 +305,14 @@ mod tests {
             TrajectoryPoint::new(vec![3.0, 0.0], 0.5), // joint 0 > 2.0
         ]);
 
-        let constraints = vec![
-            Constraint::JointLimit { joint: 0, min: -2.0, max: 2.0 },
-        ];
+        let constraints = vec![Constraint::JointLimit {
+            joint: 0,
+            min: -2.0,
+            max: 2.0,
+        }];
 
         let evaluator = DefaultConstraintEvaluator;
-        let violations = evaluator.evaluate_trajectory(
-            &constraints, &traj, &chain, &fk, None,
-        );
+        let violations = evaluator.evaluate_trajectory(&constraints, &traj, &chain, &fk, None);
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].waypoint, 1);
         assert!(violations[0].message.contains("above limit"));
@@ -294,17 +327,21 @@ mod tests {
             TrajectoryPoint::new(vec![3.0, 2.5], 0.5),
         ]);
 
-        let constraints = vec![
-            Constraint::Composite(vec![
-                Constraint::JointLimit { joint: 0, min: -2.0, max: 2.0 },
-                Constraint::JointLimit { joint: 1, min: -2.0, max: 2.0 },
-            ]),
-        ];
+        let constraints = vec![Constraint::Composite(vec![
+            Constraint::JointLimit {
+                joint: 0,
+                min: -2.0,
+                max: 2.0,
+            },
+            Constraint::JointLimit {
+                joint: 1,
+                min: -2.0,
+                max: 2.0,
+            },
+        ])];
 
         let evaluator = DefaultConstraintEvaluator;
-        let violations = evaluator.evaluate_trajectory(
-            &constraints, &traj, &chain, &fk, None,
-        );
+        let violations = evaluator.evaluate_trajectory(&constraints, &traj, &chain, &fk, None);
         assert_eq!(violations.len(), 2, "both joints violated at waypoint 1");
     }
 }

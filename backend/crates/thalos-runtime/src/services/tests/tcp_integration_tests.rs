@@ -22,9 +22,11 @@ use thalos_core::{
 };
 
 use crate::{
-    backends::{controller::simulation::SimulationController, manager::BackendManager, InternalBackend},
-    services::workspace::WorkspaceService,
     Command, RobotController, SceneService,
+    backends::{
+        InternalBackend, controller::simulation::SimulationController, manager::BackendManager,
+    },
+    services::workspace::WorkspaceService,
 };
 
 const ICEBOT_URDF: &str = r#"<?xml version="1.0"?>
@@ -119,9 +121,9 @@ async fn make_scara_service() -> SceneService {
 #[test]
 fn fk_tcp_pose_returns_composed_transformation() {
     // Use Icebot URDF which has tool0 frame
-    let robot = thalos_models::urdf::parser::parse_robot(ICEBOT_URDF)
-        .expect("icebot URDF should parse");
-    
+    let robot =
+        thalos_models::urdf::parser::parse_robot(ICEBOT_URDF).expect("icebot URDF should parse");
+
     // Use from_tip to explicitly select the end_effector (not tool0)
     let chain = thalos_core::robot::adapter::from_tip(&robot, "end_effector")
         .expect("icebot should produce a valid chain to end_effector");
@@ -132,7 +134,11 @@ fn fk_tcp_pose_returns_composed_transformation() {
     println!("End effector: {:?}", chain.end_effector);
 
     // Verify the chain has 4 actuated joints (no fixed joint included)
-    assert_eq!(chain.segments.len(), 4, "icebot chain to end_effector should have 4 segments");
+    assert_eq!(
+        chain.segments.len(),
+        4,
+        "icebot chain to end_effector should have 4 segments"
+    );
 
     // Now create a TCP at tool0 with the correct offset
     // The tool0 is 0.12m below the end_effector
@@ -151,7 +157,9 @@ fn fk_tcp_pose_returns_composed_transformation() {
     println!("Flange position: {:?}", flange_pos);
 
     // Get TCP position
-    let tcp_pos = result.tcp_position(&tcp).expect("TCP position should exist");
+    let tcp_pos = result
+        .tcp_position(&tcp)
+        .expect("TCP position should exist");
     println!("TCP position: {:?}", tcp_pos);
 
     // The TCP should be 0.12m below the flange in Z
@@ -171,7 +179,11 @@ fn fk_tcp_pose_returns_composed_transformation() {
 #[test]
 fn workspace_sampling_uses_tcp_position() {
     let chain = RobotRegistry::create_default(RobotModel::Scara);
-    let config = WorkspaceConfig { samples: 50, seed: 0, tolerance: 1e-3 };
+    let config = WorkspaceConfig {
+        samples: 50,
+        seed: 0,
+        tolerance: 1e-3,
+    };
 
     // Sample without TCP (flange)
     let ws_flange = WorkspaceService::sample_from_chain(&chain, config).unwrap();
@@ -238,7 +250,10 @@ fn jacobian_with_tcp_uses_tcp_position() {
         }
     }
 
-    assert!(has_difference, "Jacobian with TCP should differ from flange Jacobian");
+    assert!(
+        has_difference,
+        "Jacobian with TCP should differ from flange Jacobian"
+    );
 }
 
 /// Test 4: IK converges and TCP maintains correct offset.
@@ -274,8 +289,12 @@ async fn ik_converges_and_tcp_maintains_offset() {
     // Verify the TCP maintains the correct offset from the flange
     let fk_verify = ForwardKinematics::new(chain.clone());
     let result_verify = fk_verify.evaluate(&ik_result.q);
-    let flange_final = result_verify.ee_position().expect("flange position should exist");
-    let tcp_final = result_verify.tcp_position(&tcp).expect("TCP position should exist");
+    let flange_final = result_verify
+        .ee_position()
+        .expect("flange position should exist");
+    let tcp_final = result_verify
+        .tcp_position(&tcp)
+        .expect("TCP position should exist");
 
     // The TCP should be 0.12m below the flange
     let z_diff = flange_final.z - tcp_final.z;
@@ -309,7 +328,10 @@ async fn resolve_default_frame_returns_tcp_when_set() {
         *snapshot.chain.end_effector(),
         Transform3D::from_translation(Vector3::new(0.0, 0.0, -0.12)),
     );
-    service.execute(Command::SelectToolFrame(Some(tcp))).await.unwrap();
+    service
+        .execute(Command::SelectToolFrame(Some(tcp)))
+        .await
+        .unwrap();
 
     // Now resolve_default_frame should return the TCP base frame
     let snapshot = service.snapshot().await.unwrap();
@@ -321,7 +343,10 @@ async fn resolve_default_frame_returns_tcp_when_set() {
     );
 
     // Clear the TCP
-    service.execute(Command::SelectToolFrame(None)).await.unwrap();
+    service
+        .execute(Command::SelectToolFrame(None))
+        .await
+        .unwrap();
 
     // Now resolve_default_frame should return the end_effector again
     let snapshot = service.snapshot().await.unwrap();
@@ -344,34 +369,41 @@ async fn all_analyses_reference_same_tcp() {
         *snapshot.chain.end_effector(),
         Transform3D::from_translation(Vector3::new(0.0, 0.0, -0.12)),
     );
-    service.execute(Command::SelectToolFrame(Some(tcp.clone()))).await.unwrap();
+    service
+        .execute(Command::SelectToolFrame(Some(tcp.clone())))
+        .await
+        .unwrap();
 
     // Verify all analyses use the TCP
     let snapshot = service.snapshot().await.unwrap();
 
     // 1. resolve_default_frame returns TCP base frame
     let default_frame = snapshot.resolve_default_frame();
-    assert_eq!(default_frame, tcp.base_frame, "resolve_default_frame should return TCP base frame");
+    assert_eq!(
+        default_frame, tcp.base_frame,
+        "resolve_default_frame should return TCP base frame"
+    );
 
     // 2. FK.tcp_position returns the correct position
     let fk = ForwardKinematics::new(snapshot.chain.clone());
     let result = fk.evaluate(&snapshot.joints);
-    let tcp_pos = result.tcp_position(&tcp).expect("TCP position should exist");
+    let tcp_pos = result
+        .tcp_position(&tcp)
+        .expect("TCP position should exist");
 
     // 3. Workspace sampling uses TCP
-    let config = WorkspaceConfig { samples: 10, seed: 0, tolerance: 1e-3 };
-    let ws = WorkspaceService::sample_from_chain_with_tcp(
-        &snapshot.chain,
-        config,
-        Some(&tcp),
-    ).unwrap();
+    let config = WorkspaceConfig {
+        samples: 10,
+        seed: 0,
+        tolerance: 1e-3,
+    };
+    let ws =
+        WorkspaceService::sample_from_chain_with_tcp(&snapshot.chain, config, Some(&tcp)).unwrap();
     assert_eq!(ws.samples().len(), 10, "Workspace should have samples");
 
     // 4. Jacobian with TCP is correctly constructed
-    let jac = GeometricJacobian::with_tcp(
-        ForwardKinematics::new(snapshot.chain.clone()),
-        tcp.clone(),
-    );
+    let jac =
+        GeometricJacobian::with_tcp(ForwardKinematics::new(snapshot.chain.clone()), tcp.clone());
     let j = jac.evaluate(&snapshot.joints);
     assert_eq!(j.linear().nrows(), 3, "Jacobian should have 3 rows");
 

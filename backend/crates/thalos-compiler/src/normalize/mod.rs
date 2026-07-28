@@ -58,9 +58,7 @@ fn normalize_operation(
     resources: &Resources,
 ) -> Result<IrOperation, NormalizationError> {
     match op {
-        Operation::Home { id } => Ok(IrOperation::Home {
-            origin: id.clone(),
-        }),
+        Operation::Home { id } => Ok(IrOperation::Home { origin: id.clone() }),
         Operation::MoveTo {
             id,
             target,
@@ -78,11 +76,7 @@ fn normalize_operation(
                 profile: resolved_profile,
             })
         }
-        Operation::Follow {
-            id,
-            path,
-            profile,
-        } => {
+        Operation::Follow { id, path, profile } => {
             let path_def = resolve_path_def(path, resources)?;
             let resolved_profile = resolve_profile(profile.as_ref());
             let waypoints: Vec<ResolvedPose> = path_def
@@ -107,11 +101,7 @@ fn normalize_operation(
             origin: id.clone(),
             duration: *duration,
         }),
-        Operation::SetOutput {
-            id,
-            channel,
-            value,
-        } => {
+        Operation::SetOutput { id, channel, value } => {
             let output = resolve_output_def(channel, resources)?;
             Ok(IrOperation::SetOutput {
                 origin: id.clone(),
@@ -202,9 +192,9 @@ fn world_frame() -> ResolvedFrame {
 mod tests {
     use super::*;
     use std::time::Duration;
+    use thalos_document::operation::Operation;
     use thalos_document::operation::io::OutputValue;
     use thalos_document::operation::motion::MotionProfile;
-    use thalos_document::operation::Operation;
     use thalos_document::pose::Pose;
     use thalos_document::project::{Metadata, Project, Robot, Scene, Settings, Task};
     use thalos_document::resource::*;
@@ -448,7 +438,10 @@ mod tests {
                 assert_eq!(pose.frame.parent, "");
                 assert_eq!(
                     pose.frame.transform,
-                    [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+                    [
+                        1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0,
+                        1.0
+                    ]
                 );
             }
             _ => panic!("Expected IrOperation::MoveTo"),
@@ -485,7 +478,12 @@ mod tests {
     #[test]
     fn normalize_is_deterministic() {
         let mut project = minimal_project();
-        add_point(&mut project, "pt_01", [1.5, -0.5, 2.0], [0.0, 0.0, 0.0, 1.0]);
+        add_point(
+            &mut project,
+            "pt_01",
+            [1.5, -0.5, 2.0],
+            [0.0, 0.0, 0.0, 1.0],
+        );
         add_path(&mut project, "path_1", &["pt_01"]);
         project.tasks[0].operations = vec![
             Operation::Home {

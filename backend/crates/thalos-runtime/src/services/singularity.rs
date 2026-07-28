@@ -1,11 +1,11 @@
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 
 use thalos_core::analysis::singularity::{
     SingularityAnalysis, SingularityAnalyzer, SingularityConfig,
 };
 use thalos_core::analysis::workspace::{
-    sampler::WorkspaceSampler, WorkspaceConfig, WorkspaceError,
+    WorkspaceConfig, WorkspaceError, sampler::WorkspaceSampler,
 };
 use thalos_core::kinematics::forward::ForwardKinematics;
 use thalos_core::kinematics::jacobian::GeometricJacobian;
@@ -24,7 +24,9 @@ impl SingularityService {
         singularity_config: SingularityConfig,
     ) -> Result<SingularityAnalysis, RuntimeError> {
         if config.samples == 0 {
-            return Err(RuntimeError::Workspace(WorkspaceError::InvalidSampleCount(0)));
+            return Err(RuntimeError::Workspace(WorkspaceError::InvalidSampleCount(
+                0,
+            )));
         }
 
         let chain = RobotRegistry::create_default(model);
@@ -50,7 +52,9 @@ impl SingularityService {
         tcp: Option<&ToolFrame>,
     ) -> Result<SingularityAnalysis, RuntimeError> {
         if config.samples == 0 {
-            return Err(RuntimeError::Workspace(WorkspaceError::InvalidSampleCount(0)));
+            return Err(RuntimeError::Workspace(WorkspaceError::InvalidSampleCount(
+                0,
+            )));
         }
 
         let mut rng = StdRng::seed_from_u64(config.seed);

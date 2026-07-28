@@ -1,13 +1,13 @@
-pub mod precision;
 pub mod diff;
+pub mod precision;
 
 use serde::{Deserialize, Serialize};
 use thalos_core::robot::joint::JointId;
-use thalos_math::Transform3D;
 use thalos_core::spatial::frame::FrameId;
+use thalos_math::Transform3D;
 
+pub use diff::{ChangedFrame, SceneDiff};
 pub use precision::VisualPrecision;
-pub use diff::{SceneDiff, ChangedFrame};
 
 pub type VisualId = String;
 
@@ -43,7 +43,10 @@ impl VisualPrimitive {
             frame_id: frame_id.into(),
             translation: [0.0; 3],
             rotation: [1.0, 0.0, 0.0, 0.0],
-            geometry: PrimitiveGeometry::Cylinder { radius: 0.01, height: 0.01 },
+            geometry: PrimitiveGeometry::Cylinder {
+                radius: 0.01,
+                height: 0.01,
+            },
             color: None,
         }
     }
@@ -65,7 +68,11 @@ impl VisualPrimitive {
             frame_id: frame_id.into(),
             translation: [0.0; 3],
             rotation: [1.0, 0.0, 0.0, 0.0],
-            geometry: PrimitiveGeometry::Box { width: 0.01, height: 0.01, depth: 0.01 },
+            geometry: PrimitiveGeometry::Box {
+                width: 0.01,
+                height: 0.01,
+                depth: 0.01,
+            },
             color: None,
         }
     }
@@ -174,9 +181,9 @@ impl Default for FrameStyle {
             axis_radius: 0.006,
             origin_radius: 0.0,
             show_labels: false,
-            color_x: [1.0, 0.5, 0.0],   // naranja
-            color_y: [0.0, 0.8, 0.0],   // verde
-            color_z: [0.0, 0.5, 1.0],   // azul
+            color_x: [1.0, 0.5, 0.0], // naranja
+            color_y: [0.0, 0.8, 0.0], // verde
+            color_z: [0.0, 0.5, 1.0], // azul
         }
     }
 }

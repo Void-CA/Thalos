@@ -1,32 +1,28 @@
-
 use std::sync::Arc;
 
 use tokio::sync::RwLock;
 
 use crate::{
+    Command, RobotController, RuntimeSnapshot, SceneService,
     backends::{
-        controller::simulation::SimulationController,
-        manager::BackendManager,
-        InternalBackend,
+        InternalBackend, controller::simulation::SimulationController, manager::BackendManager,
     },
     commands::kinematics::KinematicsCommand,
     commands::motion::MotionCommands,
-    Command, RobotController, RuntimeSnapshot, SceneService,
 };
-use thalos_math::{Transform3D, UnitQuaternion, Vector3};
 use thalos_core::{
     models::RobotModel,
     prelude::IKGoal,
     spatial::{frame::FrameId, pose::Pose},
 };
+use thalos_math::{Transform3D, UnitQuaternion, Vector3};
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
 /// Create a SceneService with the given model and a BackendManager (simulation).
 async fn make_service(model: RobotModel) -> (SceneService, Arc<BackendManager>) {
-    let controller = Arc::new(RwLock::new(
-        SimulationController::new(model.metadata().dof),
-    )) as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let controller = Arc::new(RwLock::new(SimulationController::new(model.metadata().dof)))
+        as Arc<RwLock<dyn RobotController + Send + Sync>>;
     let manager = Arc::new(BackendManager::new());
     manager.set_active(controller).await.unwrap();
     let svc = SceneService::new(Box::new(InternalBackend), manager.clone(), model);
@@ -42,17 +38,21 @@ fn ee(snapshot: &RuntimeSnapshot) -> FrameId {
 /// is within `tol` of the expected `target` position.
 fn assert_ee_at(snapshot: &RuntimeSnapshot, target: Vector3, tol: f64) {
     let frame = ee(snapshot);
-    let pose = snapshot.fk_result.pose(&frame)
+    let pose = snapshot
+        .fk_result
+        .pose(&frame)
         .expect("end effector must exist in FK result");
     let pos = pose.translation();
     let error = (target - pos).magnitude();
     assert!(
         error < tol,
         "EE position error: {:.4} (tol {:.4})\n  expected: {:.4?}\n  actual:   {:.4?}",
-        error, tol, target, pos,
+        error,
+        tol,
+        target,
+        pos,
     );
 }
-
 
 // ─── SetJoints ────────────────────────────────────────────────────
 
@@ -61,12 +61,17 @@ async fn set_joints_updates_state_and_fk() {
     let (svc, _mgr) = make_service(RobotModel::Scara).await;
     let joints = vec![0.5, -0.3, 0.1, 0.0];
 
-    let snap = svc.execute(Command::SetJoints(joints.clone())).await.unwrap();
+    let snap = svc
+        .execute(Command::SetJoints(joints.clone()))
+        .await
+        .unwrap();
 
     assert_eq!(snap.joints, joints);
     assert_eq!(snap.robot, RobotModel::Scara);
     // FK must be valid after setting joints
-    let _pose = snap.fk_result.pose(&ee(&snap))
+    let _pose = snap
+        .fk_result
+        .pose(&ee(&snap))
         .expect("FK result must contain end effector");
 }
 
@@ -74,16 +79,20 @@ async fn set_joints_updates_state_and_fk() {
 // evalúa contra la cadena cinemática y paniquea si el tamaño de joints
 // no coincide. La validación de DOF es responsabilidad del caller.
 
-
 // ─── LoadRobot ────────────────────────────────────────────────────
 
 #[tokio::test]
 async fn load_robot_changes_model_and_resets_joints() {
     let (svc, _mgr) = make_service(RobotModel::Scara).await;
     // Set some joints first
-    svc.execute(Command::SetJoints(vec![1.0, 2.0, 3.0, 4.0])).await.unwrap();
+    svc.execute(Command::SetJoints(vec![1.0, 2.0, 3.0, 4.0]))
+        .await
+        .unwrap();
 
-    let snap = svc.execute(Command::LoadRobot(RobotModel::Planar3R)).await.unwrap();
+    let snap = svc
+        .execute(Command::LoadRobot(RobotModel::Planar3R))
+        .await
+        .unwrap();
 
     assert_eq!(snap.robot, RobotModel::Planar3R);
     assert_eq!(snap.joints.len(), 3, "Planar3R has 3 DOF");
@@ -95,8 +104,14 @@ async fn load_robot_changes_model_and_resets_joints() {
 async fn load_robot_twice_produces_independent_snapshots() {
     let (svc, _mgr) = make_service(RobotModel::Scara).await;
 
-    let snap1 = svc.execute(Command::LoadRobot(RobotModel::Planar2R)).await.unwrap();
-    let snap2 = svc.execute(Command::LoadRobot(RobotModel::Scara)).await.unwrap();
+    let snap1 = svc
+        .execute(Command::LoadRobot(RobotModel::Planar2R))
+        .await
+        .unwrap();
+    let snap2 = svc
+        .execute(Command::LoadRobot(RobotModel::Scara))
+        .await
+        .unwrap();
 
     assert_eq!(snap1.robot, RobotModel::Planar2R);
     assert_eq!(snap2.robot, RobotModel::Scara);
@@ -116,14 +131,18 @@ async fn load_robot_clears_active_plan() {
             max_acceleration: None,
             time_step: None,
         }))
-        .await.unwrap();
+        .await
+        .unwrap();
     assert!(
         snap.active_plan.is_some(),
         "plan must exist after PlanAndMoveJ",
     );
 
     // Load a different robot — plan must be cleared
-    let snap = svc.execute(Command::LoadRobot(RobotModel::Scara)).await.unwrap();
+    let snap = svc
+        .execute(Command::LoadRobot(RobotModel::Scara))
+        .await
+        .unwrap();
     assert!(
         snap.active_plan.is_none(),
         "active_plan must be None after LoadRobot",
@@ -132,7 +151,6 @@ async fn load_robot_clears_active_plan() {
     assert_eq!(snap.joints.len(), 4);
     assert!(snap.joints.iter().all(|&j| j == 0.0));
 }
-
 
 // ─── MoveToPosition (IK + FK round-trip) ──────────────────────────
 
@@ -146,10 +164,13 @@ async fn move_to_position_converges_scara() {
     // Well within SCARA workspace: r_xy = sqrt(0.6²+0.5²) = 0.78 > r_min (0.50)
     let target = Vector3::new(0.6, 0.5, 0.25);
 
-    let snap = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
-        frame: ee,
-        target,
-    })).await.unwrap();
+    let snap = svc
+        .execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
+            frame: ee,
+            target,
+        }))
+        .await
+        .unwrap();
 
     assert_ee_at(&snap, target, 0.01);
 }
@@ -170,7 +191,13 @@ async fn move_to_position_sequential() {
     let mut snap = svc.snapshot().await.unwrap();
     for &target in &targets {
         let ee = ee(&snap);
-        snap = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition { frame: ee, target })).await.unwrap();
+        snap = svc
+            .execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
+                frame: ee,
+                target,
+            }))
+            .await
+            .unwrap();
         assert_ee_at(&snap, target, 0.01);
     }
 }
@@ -184,26 +211,31 @@ async fn move_to_position_custom_frame() {
 
     // Use prismatic_frame (id 3): the first frame whose Z is affected by q3
     let target_frame = FrameId::Id(3);
-    let _initial = snap.fk_result.pose(&target_frame)
+    let _initial = snap
+        .fk_result
+        .pose(&target_frame)
         .expect("target frame must exist")
         .translation();
 
     // Target within canonical SCARA workspace
     let target = Vector3::new(0.7, 0.5, 0.25);
 
-    let snap = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
-        frame: target_frame,
-        target,
-    })).await.unwrap();
+    let snap = svc
+        .execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
+            frame: target_frame,
+            target,
+        }))
+        .await
+        .unwrap();
 
-    let final_pos = snap.fk_result.pose(&target_frame)
-        .unwrap()
-        .translation();
+    let final_pos = snap.fk_result.pose(&target_frame).unwrap().translation();
     let error = (target - final_pos).magnitude();
     assert!(
         error < 0.01,
         "frame position error: {:.4} (target {:.4?}, actual {:.4?})",
-        error, target, final_pos,
+        error,
+        target,
+        final_pos,
     );
 }
 
@@ -218,14 +250,16 @@ async fn move_to_position_nearby() {
     // Target cerca del EE inicial (1.8, 0, 0.5), bien dentro del workspace
     let target = Vector3::new(1.5, 0.3, 0.4);
 
-    let snap = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
-        frame: ee,
-        target,
-    })).await.unwrap();
+    let snap = svc
+        .execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
+            frame: ee,
+            target,
+        }))
+        .await
+        .unwrap();
 
     assert_ee_at(&snap, target, 0.01);
 }
-
 
 // ─── MoveToPose (IK + FK round-trip with orientation) ─────────────
 
@@ -249,10 +283,13 @@ async fn move_to_pose_converges_with_identity_rotation() {
         },
     );
 
-    let snap = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPose {
-        frame: ee_frame,
-        target: target_pose,
-    })).await.unwrap();
+    let snap = svc
+        .execute(Command::Kinematics(KinematicsCommand::MoveToPose {
+            frame: ee_frame,
+            target: target_pose,
+        }))
+        .await
+        .unwrap();
 
     assert_ee_at(&snap, target_pos, 0.01);
 }
@@ -277,14 +314,16 @@ async fn move_to_pose_3r_converges() {
         },
     );
 
-    let snap = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPose {
-        frame: ee_frame,
-        target: target_pose,
-    })).await.unwrap();
+    let snap = svc
+        .execute(Command::Kinematics(KinematicsCommand::MoveToPose {
+            frame: ee_frame,
+            target: target_pose,
+        }))
+        .await
+        .unwrap();
 
     assert_ee_at(&snap, target_pos, 0.01);
 }
-
 
 // ─── Snapshot consistency ─────────────────────────────────────────
 
@@ -296,10 +335,13 @@ async fn snapshot_after_ik_differs_from_initial() {
     let initial_joints = snap0.joints.clone();
 
     let target = Vector3::new(0.2, 0.6, 0.0);
-    let snap1 = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
-        frame: ee_frame,
-        target,
-    })).await.unwrap();
+    let snap1 = svc
+        .execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
+            frame: ee_frame,
+            target,
+        }))
+        .await
+        .unwrap();
 
     // Joints must have changed
     assert_ne!(snap1.joints, initial_joints);
@@ -315,17 +357,29 @@ async fn move_to_position_includes_ik_result() {
     let ee_frame = ee(&snap0);
 
     // Non-IK snapshot → ik_result is None
-    assert!(snap0.ik_result.is_none(), "snapshot() must not have ik_result");
+    assert!(
+        snap0.ik_result.is_none(),
+        "snapshot() must not have ik_result"
+    );
 
     let target = Vector3::new(0.6, 0.5, 0.25);
-    let snap1 = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
-        frame: ee_frame,
-        target,
-    })).await.unwrap();
+    let snap1 = svc
+        .execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
+            frame: ee_frame,
+            target,
+        }))
+        .await
+        .unwrap();
 
-    let ik = snap1.ik_result.as_ref()
+    let ik = snap1
+        .ik_result
+        .as_ref()
         .expect("IK command snapshot must have ik_result");
-    assert!(ik.status.is_converged(), "IK should converge: {:?}", ik.status);
+    assert!(
+        ik.status.is_converged(),
+        "IK should converge: {:?}",
+        ik.status
+    );
     assert!(ik.iterations > 0, "IK should run at least one iteration");
     assert!(ik.final_error.is_finite(), "final_error must be finite");
 }
@@ -341,7 +395,6 @@ async fn snapshot_is_deterministic() {
     assert_eq!(snap1.joints, snap2.joints);
 }
 
-
 // ─── SolveIK (no mutation) ────────────────────────────────────────
 
 #[tokio::test]
@@ -352,10 +405,16 @@ async fn solve_ik_returns_joints_without_mutating_state() {
     let initial_joints = snap0.joints.clone();
 
     let target = Vector3::new(0.6, 0.5, 0.25);
-    let (solved_joints, ik) = svc.solve_ik(ee_frame, IKGoal::Position(target)).await.unwrap();
+    let (solved_joints, ik) = svc
+        .solve_ik(ee_frame, IKGoal::Position(target))
+        .await
+        .unwrap();
 
     // Must return solved joints distinct from initial
-    assert_ne!(solved_joints, initial_joints, "solve_ik must propose new joints");
+    assert_ne!(
+        solved_joints, initial_joints,
+        "solve_ik must propose new joints"
+    );
     assert!(ik.status.is_converged(), "IK must converge");
 
     // State must NOT have changed
@@ -365,7 +424,6 @@ async fn solve_ik_returns_joints_without_mutating_state() {
         "solve_ik must NOT mutate runtime state",
     );
 }
-
 
 // ─── Edge cases ───────────────────────────────────────────────────
 
@@ -378,13 +436,18 @@ async fn move_to_position_unreachable_still_produces_valid_fk() {
     // Target far outside SCARA workspace
     let target = Vector3::new(10.0, 10.0, 0.0);
 
-    let snap = svc.execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
-        frame: ee_frame,
-        target,
-    })).await.unwrap();
+    let snap = svc
+        .execute(Command::Kinematics(KinematicsCommand::MoveToPosition {
+            frame: ee_frame,
+            target,
+        }))
+        .await
+        .unwrap();
 
     // Even if IK fails to converge, the snapshot must have valid FK
-    let pose = snap.fk_result.pose(&ee_frame)
+    let pose = snap
+        .fk_result
+        .pose(&ee_frame)
         .expect("end effector must exist after failed IK");
     let _pos = pose.translation();
 
@@ -393,7 +456,6 @@ async fn move_to_position_unreachable_still_produces_valid_fk() {
         assert!(j.is_finite(), "joint {} is not finite", j);
     }
 }
-
 
 // ─── PlanAndMoveJ (joint-space trajectory) ─────────────────────────
 
@@ -413,7 +475,8 @@ async fn plan_and_movej_stores_trajectory_in_snapshot() {
             max_acceleration: None,
             time_step: None,
         }))
-        .await.unwrap();
+        .await
+        .unwrap();
 
     let plan = snap
         .active_plan
@@ -447,9 +510,13 @@ async fn plan_and_movej_reaches_target_position() {
             max_acceleration: None,
             time_step: None,
         }))
-        .await.unwrap();
+        .await
+        .unwrap();
 
-    assert_eq!(snap.joints, target, "joints must match the target after PlanAndMoveJ");
+    assert_eq!(
+        snap.joints, target,
+        "joints must match the target after PlanAndMoveJ"
+    );
 }
 
 #[tokio::test]
@@ -464,7 +531,8 @@ async fn plan_and_movej_trajectory_starts_at_initial_position() {
             max_acceleration: None,
             time_step: None,
         }))
-        .await.unwrap();
+        .await
+        .unwrap();
 
     let plan = snap.active_plan.as_ref().unwrap();
     let first_waypoint = &plan.trajectory.waypoints()[0];
@@ -487,12 +555,12 @@ async fn plan_and_movej_with_velocity_param() {
             max_acceleration: Some(1.0),
             time_step: None,
         }))
-        .await.unwrap();
+        .await
+        .unwrap();
 
     assert_eq!(snap.joints, vec![0.5, -0.3]);
     assert!(snap.active_plan.is_some());
 }
-
 
 // ─── PlanAndMoveL (cartesian → joint-space trajectory) ─────────────
 
@@ -521,7 +589,8 @@ async fn plan_and_movel_stores_trajectory_in_snapshot() {
             time_step: None,
             cartesian_step: None,
         }))
-        .await.unwrap();
+        .await
+        .unwrap();
 
     let plan = snap
         .active_plan
@@ -553,7 +622,8 @@ async fn snapshot_includes_trajectory_after_plan_command() {
         max_acceleration: None,
         time_step: None,
     }))
-    .await.unwrap();
+    .await
+    .unwrap();
 
     let snap2 = svc.snapshot().await.unwrap();
     assert!(
@@ -579,20 +649,39 @@ async fn select_tool_frame_sets_active_tcp_in_snapshot() {
 
     // Initial state: active_tcp is None
     let snap1 = svc.snapshot().await.unwrap();
-    assert!(snap1.active_tcp.is_none(), "active_tcp should be None initially");
+    assert!(
+        snap1.active_tcp.is_none(),
+        "active_tcp should be None initially"
+    );
 
     // Set a TCP with identity transform
     let tcp = ToolFrame::identity(ee(&snap1));
-    let snap2 = svc.execute(Command::SelectToolFrame(Some(tcp))).await.unwrap();
+    let snap2 = svc
+        .execute(Command::SelectToolFrame(Some(tcp)))
+        .await
+        .unwrap();
 
-    assert!(snap2.active_tcp.is_some(), "active_tcp should be Some after SelectToolFrame");
+    assert!(
+        snap2.active_tcp.is_some(),
+        "active_tcp should be Some after SelectToolFrame"
+    );
     let active_tcp = snap2.active_tcp.as_ref().unwrap();
-    assert_eq!(active_tcp.base_frame, ee(&snap2), "TCP base_frame should match the requested frame");
-    assert!(!active_tcp.has_offset(), "TCP with identity transform should have no offset");
+    assert_eq!(
+        active_tcp.base_frame,
+        ee(&snap2),
+        "TCP base_frame should match the requested frame"
+    );
+    assert!(
+        !active_tcp.has_offset(),
+        "TCP with identity transform should have no offset"
+    );
 
     // Clear the TCP
     let snap3 = svc.execute(Command::SelectToolFrame(None)).await.unwrap();
-    assert!(snap3.active_tcp.is_none(), "active_tcp should be None after clearing");
+    assert!(
+        snap3.active_tcp.is_none(),
+        "active_tcp should be None after clearing"
+    );
 }
 
 #[tokio::test]
@@ -604,13 +693,21 @@ async fn select_tool_frame_with_offset_propagates_to_tick_delta() {
     // Set a TCP with a 12cm offset below the flange
     let offset = Transform3D::from_translation(Vector3::new(0.0, 0.0, -0.12));
     let tcp = ToolFrame::with_offset(ee(&svc.snapshot().await.unwrap()), offset);
-    svc.execute(Command::SelectToolFrame(Some(tcp))).await.unwrap();
+    svc.execute(Command::SelectToolFrame(Some(tcp)))
+        .await
+        .unwrap();
 
     // Verify TickDelta includes the active_tcp
     let delta = svc.tick_execution_delta(0.0).await.unwrap();
-    assert!(delta.active_tcp.is_some(), "TickDelta should include active_tcp");
+    assert!(
+        delta.active_tcp.is_some(),
+        "TickDelta should include active_tcp"
+    );
     let active_tcp = delta.active_tcp.as_ref().unwrap();
-    assert!(active_tcp.has_offset(), "TCP with non-identity transform should have offset");
+    assert!(
+        active_tcp.has_offset(),
+        "TCP with non-identity transform should have offset"
+    );
 }
 
 #[tokio::test]
@@ -621,12 +718,19 @@ async fn select_tool_frame_persists_across_multiple_commands() {
 
     // Set a TCP
     let tcp = ToolFrame::identity(ee(&svc.snapshot().await.unwrap()));
-    svc.execute(Command::SelectToolFrame(Some(tcp))).await.unwrap();
+    svc.execute(Command::SelectToolFrame(Some(tcp)))
+        .await
+        .unwrap();
 
     // Execute other commands — TCP should persist
-    svc.execute(Command::SetJoints(vec![0.5, -0.3, 0.1, 0.0])).await.unwrap();
+    svc.execute(Command::SetJoints(vec![0.5, -0.3, 0.1, 0.0]))
+        .await
+        .unwrap();
     let snap = svc.snapshot().await.unwrap();
-    assert!(snap.active_tcp.is_some(), "active_tcp should persist after SetJoints");
+    assert!(
+        snap.active_tcp.is_some(),
+        "active_tcp should persist after SetJoints"
+    );
 }
 
 #[tokio::test]
@@ -637,19 +741,28 @@ async fn select_tool_frame_clears_on_robot_change() {
 
     // Set a TCP
     let tcp = ToolFrame::identity(ee(&svc.snapshot().await.unwrap()));
-    svc.execute(Command::SelectToolFrame(Some(tcp))).await.unwrap();
+    svc.execute(Command::SelectToolFrame(Some(tcp)))
+        .await
+        .unwrap();
 
     let snap1 = svc.snapshot().await.unwrap();
     assert!(snap1.active_tcp.is_some(), "active_tcp should be set");
 
     // Load a different robot — TCP should be cleared
-    svc.execute(Command::LoadRobot(RobotModel::Planar3R)).await.unwrap();
+    svc.execute(Command::LoadRobot(RobotModel::Planar3R))
+        .await
+        .unwrap();
     let snap2 = svc.snapshot().await.unwrap();
-    assert!(snap2.active_tcp.is_none(), "active_tcp should be cleared after LoadRobot");
+    assert!(
+        snap2.active_tcp.is_none(),
+        "active_tcp should be cleared after LoadRobot"
+    );
 
     // Set TCP again and load URDF robot — TCP should be cleared again
     let tcp2 = ToolFrame::identity(ee(&snap2));
-    svc.execute(Command::SelectToolFrame(Some(tcp2))).await.unwrap();
+    svc.execute(Command::SelectToolFrame(Some(tcp2)))
+        .await
+        .unwrap();
     let snap3 = svc.snapshot().await.unwrap();
     assert!(snap3.active_tcp.is_some(), "active_tcp should be set again");
 
@@ -659,9 +772,14 @@ async fn select_tool_frame_clears_on_robot_change() {
         joints_meta: vec![],
         chain: thalos_core::robot::adapter::from_urdf(urdf).unwrap(),
         robot: thalos_models::urdf::parser::parse_robot(urdf).unwrap(),
-    }).await.unwrap();
+    })
+    .await
+    .unwrap();
     let snap4 = svc.snapshot().await.unwrap();
-    assert!(snap4.active_tcp.is_none(), "active_tcp should be cleared after LoadUrdfRobot");
+    assert!(
+        snap4.active_tcp.is_none(),
+        "active_tcp should be cleared after LoadUrdfRobot"
+    );
 }
 
 #[tokio::test]
@@ -673,10 +791,15 @@ async fn select_tool_frame_rejects_invalid_frame() {
 
     // Try to set a TCP with a non-existent frame ID
     let invalid_tcp = ToolFrame::identity(FrameId::Id(99999));
-    let result = svc.execute(Command::SelectToolFrame(Some(invalid_tcp))).await;
+    let result = svc
+        .execute(Command::SelectToolFrame(Some(invalid_tcp)))
+        .await;
 
-    assert!(result.is_err(), "SelectToolFrame should reject invalid frame ID");
-    
+    assert!(
+        result.is_err(),
+        "SelectToolFrame should reject invalid frame ID"
+    );
+
     // Verify the error type
     match result {
         Err(crate::RuntimeError::ToolFrameNotFound { frame_id }) => {
@@ -688,6 +811,8 @@ async fn select_tool_frame_rejects_invalid_frame() {
 
     // Verify TCP was not set
     let snap = svc.snapshot().await.unwrap();
-    assert!(snap.active_tcp.is_none(), "active_tcp should remain None after invalid selection");
+    assert!(
+        snap.active_tcp.is_none(),
+        "active_tcp should remain None after invalid selection"
+    );
 }
-

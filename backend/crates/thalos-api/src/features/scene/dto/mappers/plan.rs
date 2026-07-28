@@ -1,12 +1,9 @@
 // ── ActiveMotionPlan → ActivePlanDto ──
 
-use thalos_visual::{
-    TrajectoryVisualization, VisualMotionType, VisualWaypoint, WaypointType,
-};
+use thalos_visual::{TrajectoryVisualization, VisualMotionType, VisualWaypoint, WaypointType};
 
 use crate::features::scene::dto::{
-    ActivePlanDto, SegmentInfoDto, TrajectoryVisualizationDto, VisualWaypointDto,
-    WaypointTypeDto,
+    ActivePlanDto, SegmentInfoDto, TrajectoryVisualizationDto, VisualWaypointDto, WaypointTypeDto,
 };
 
 impl From<&thalos_runtime::ActiveMotionPlan> for ActivePlanDto {
@@ -26,12 +23,8 @@ impl From<&thalos_runtime::ActiveMotionPlan> for ActivePlanDto {
                     .enumerate()
                     .map(|(i, seg)| {
                         let motion_type = match &seg.source {
-                            thalos_core::motion::segment::MotionSegment::MoveJ { .. } => {
-                                "movej"
-                            }
-                            thalos_core::motion::segment::MotionSegment::MoveL { .. } => {
-                                "movel"
-                            }
+                            thalos_core::motion::segment::MotionSegment::MoveJ { .. } => "movej",
+                            thalos_core::motion::segment::MotionSegment::MoveL { .. } => "movel",
                         };
                         SegmentInfoDto {
                             segment_index: i,

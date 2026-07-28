@@ -7,27 +7,20 @@
 
 use std::sync::Arc;
 
-use axum::{
-    extract::State,
-    Json,
-};
+use axum::{Json, extract::State};
 
 use thalos_core::kinematics::forward::ForwardKinematics;
 use thalos_optimization::{
-    domain::{
-        JointLimits, OptimizationContext, PipelineConfig, TrajectoryOperator,
-    },
+    PlanMetrics,
+    domain::{JointLimits, OptimizationContext, PipelineConfig, TrajectoryOperator},
     operators::{
-        AdaptiveSampling, JointCenteringOperator, NullSpaceOptimization,
-        OrientationRelaxation, Retime,
+        AdaptiveSampling, JointCenteringOperator, NullSpaceOptimization, OrientationRelaxation,
+        Retime,
     },
     pipeline::OptimizationPipeline,
-    PlanMetrics,
 };
-use thalos_planning::analysis::region::{
-    RegionDetector, RegionDetectorConfig,
-};
-use thalos_runtime::{PlanAnalysisService};
+use thalos_planning::analysis::region::{RegionDetector, RegionDetectorConfig};
+use thalos_runtime::PlanAnalysisService;
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
@@ -52,17 +45,21 @@ mod mapper {
             warning_count: m.warning_count,
         });
 
-        let explanation = region.explanation.as_ref().map(|e| ExplanationDto {
-            cause: e.cause.clone(),
-            consequence: e.consequence.clone(),
-            recommended_strategies: e.recommended_strategies.clone(),
-            confidence: e.confidence,
-        }).unwrap_or(ExplanationDto {
-            cause: String::new(),
-            consequence: String::new(),
-            recommended_strategies: vec![],
-            confidence: 1.0,
-        });
+        let explanation = region
+            .explanation
+            .as_ref()
+            .map(|e| ExplanationDto {
+                cause: e.cause.clone(),
+                consequence: e.consequence.clone(),
+                recommended_strategies: e.recommended_strategies.clone(),
+                confidence: e.confidence,
+            })
+            .unwrap_or(ExplanationDto {
+                cause: String::new(),
+                consequence: String::new(),
+                recommended_strategies: vec![],
+                confidence: 1.0,
+            });
 
         ProblemRegionDto {
             id: region.id.0,
@@ -130,7 +127,12 @@ pub async fn analyze_plan(
             min_collision_distance: metrics.min_collision_distance,
             has_collisions: metrics.has_collisions,
         },
-        waypoints: result.analysis.waypoints.iter().map(WaypointAnalysisDto::from).collect(),
+        waypoints: result
+            .analysis
+            .waypoints
+            .iter()
+            .map(WaypointAnalysisDto::from)
+            .collect(),
         findings: findings.iter().map(FindingDto::from).collect(),
         recommendations: result
             .recommendations
@@ -146,7 +148,10 @@ pub async fn analyze_plan(
 
 /// Compute the minimum distance from any joint to its nearest mechanical
 /// limit across all waypoints.
-fn compute_min_joint_margin(traj: &thalos_core::trajectory::Trajectory, limits: &[(f64, f64)]) -> f64 {
+fn compute_min_joint_margin(
+    traj: &thalos_core::trajectory::Trajectory,
+    limits: &[(f64, f64)],
+) -> f64 {
     traj.waypoints()
         .iter()
         .flat_map(|wp| {
@@ -209,9 +214,7 @@ fn compute_max_segment_error(traj: &thalos_core::trajectory::Trajectory) -> f64 
 // ── Optimize handler ─────────────────────────────────────────
 
 /// POST /api/v1/plan/optimize
-pub async fn handle_optimize(
-    State(state): State<Arc<AppState>>,
-) -> ApiResult<OptimizeResponse> {
+pub async fn handle_optimize(State(state): State<Arc<AppState>>) -> ApiResult<OptimizeResponse> {
     let snapshot = state.services.scene.snapshot().await?;
 
     // 1. Get active plan trajectory
@@ -368,11 +371,7 @@ pub async fn handle_optimize(
                 "orientation_relaxation" => "Geometry",
                 _ => "Unknown",
             };
-            let status = if step.accepted {
-                "applied"
-            } else {
-                "failed"
-            };
+            let status = if step.accepted { "applied" } else { "failed" };
             OperatorAppliedDto {
                 id: step.operator_id.to_string(),
                 family: family.to_string(),

@@ -119,7 +119,11 @@ impl ExecutionSession {
             current_time,
             started_at: Some(Utc::now()),
             paused_at: None,
-            completed_at: if status.is_terminal() { Some(Utc::now()) } else { None },
+            completed_at: if status.is_terminal() {
+                Some(Utc::now())
+            } else {
+                None
+            },
         }
     }
 }

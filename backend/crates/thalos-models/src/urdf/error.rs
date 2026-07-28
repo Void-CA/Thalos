@@ -8,20 +8,11 @@ pub enum UrdfError {
     /// Invalid XML or I/O error.
     Xml(String),
     /// Required attribute is missing on an element.
-    MissingAttribute {
-        element: String,
-        attribute: String,
-    },
+    MissingAttribute { element: String, attribute: String },
     /// Required child element is missing.
-    MissingElement {
-        parent: String,
-        child: String,
-    },
+    MissingElement { parent: String, child: String },
     /// A numeric value could not be parsed.
-    ParseFloat {
-        value: String,
-        source: String,
-    },
+    ParseFloat { value: String, source: String },
     /// A space-separated tuple (xyz, rpy, rgba, …) has the wrong
     /// number of components.
     TupleLength {
@@ -50,7 +41,11 @@ impl fmt::Display for UrdfError {
             UrdfError::ParseFloat { value, source } => {
                 write!(f, "cannot parse float `{value}`: {source}")
             }
-            UrdfError::TupleLength { element, expected, got } => {
+            UrdfError::TupleLength {
+                element,
+                expected,
+                got,
+            } => {
                 write!(f, "<{element}>: expected {expected} values, got {got}")
             }
             UrdfError::UnknownJointType(t) => {

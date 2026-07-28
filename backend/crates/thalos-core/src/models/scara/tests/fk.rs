@@ -16,11 +16,11 @@ fn zero_config_ee_in_z_up() {
     let t = &ee.transform().translation;
 
     assert!(
-        (t.x - 2.0).abs() < EPS
-            && t.y.abs() < EPS
-            && t.z.abs() < EPS,
+        (t.x - 2.0).abs() < EPS && t.y.abs() < EPS && t.z.abs() < EPS,
         "SCARA Z-up regression: expected (2, 0, 0), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 }
 
@@ -36,21 +36,21 @@ fn prismatic_moves_ee_in_z() {
     let result = fk.evaluate(&[0.0, 0.0, 0.5, 0.0]);
     let t = result.ee_pose().unwrap().transform().translation;
     assert!(
-        (t.x - 2.0).abs() < EPS
-            && t.y.abs() < EPS
-            && (t.z - 0.5).abs() < EPS,
+        (t.x - 2.0).abs() < EPS && t.y.abs() < EPS && (t.z - 0.5).abs() < EPS,
         "SCARA prismatic in Z: expected (2, 0, 0.5), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 
     let result = fk.evaluate(&[0.0, 0.0, -1.0, 0.0]);
     let t = result.ee_pose().unwrap().transform().translation;
     assert!(
-        (t.x - 2.0).abs() < EPS
-            && t.y.abs() < EPS
-            && (t.z + 1.0).abs() < EPS,
+        (t.x - 2.0).abs() < EPS && t.y.abs() < EPS && (t.z + 1.0).abs() < EPS,
         "SCARA prismatic in Z: expected (2, 0, -1), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 }
 
@@ -64,11 +64,11 @@ fn first_joint_90_deg_in_z_up() {
     let t = result.ee_pose().unwrap().transform().translation;
 
     assert!(
-        t.x.abs() < EPS
-            && (t.y - 2.0).abs() < EPS
-            && t.z.abs() < EPS,
+        t.x.abs() < EPS && (t.y - 2.0).abs() < EPS && t.z.abs() < EPS,
         "SCARA Rz(90°) should give (0, 2, 0), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 }
 
@@ -82,11 +82,11 @@ fn folded_configuration_in_z_up() {
     let t = result.ee_pose().unwrap().transform().translation;
 
     assert!(
-        (t.x - 1.0).abs() < EPS
-            && (t.y - 1.0).abs() < EPS
-            && t.z.abs() < EPS,
+        (t.x - 1.0).abs() < EPS && (t.y - 1.0).abs() < EPS && t.z.abs() < EPS,
         "SCARA folded in Z-up: expected (1, 1, 0), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 }
 
@@ -101,7 +101,9 @@ fn wrist_rotation_in_z_up() {
     assert!(
         (t.x - 2.0).abs() < EPS && t.y.abs() < EPS && t.z.abs() < EPS,
         "SCARA wrist rotation should not move ee from (2, 0, 0), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 }
 
@@ -123,7 +125,12 @@ fn combined_motion_accumulates_correctly_in_z_up() {
             && (t.y - expected_y).abs() < EPS
             && (t.z - expected_z).abs() < EPS,
         "SCARA combined Z-up: expected ({:.4}, {:.4}, {:.4}), got ({:.4}, {:.4}, {:.4})",
-        expected_x, expected_y, expected_z, t.x, t.y, t.z
+        expected_x,
+        expected_y,
+        expected_z,
+        t.x,
+        t.y,
+        t.z
     );
 }
 
@@ -142,7 +149,7 @@ fn returns_six_poses() {
 
     assert_eq!(
         frames.len(),
-        6,  // 5 segmentos (1 fixed + 4 actuados) = 5 frames móviles + world frame
+        6, // 5 segmentos (1 fixed + 4 actuados) = 5 frames móviles + world frame
         "SCARA should generate exactly 6 poses (base + 4 joints + world pose)",
     );
 }
@@ -151,12 +158,7 @@ fn returns_six_poses() {
 fn zero_configuration_places_end_effector_at_2_0_0() {
     let robot = ScaraSpec::ideal().build();
 
-    let end_effector = robot
-        .segments
-        .last()
-        .unwrap()
-        .child
-        .clone();
+    let end_effector = robot.segments.last().unwrap().child.clone();
 
     let fk = ForwardKinematics::new(robot);
 
@@ -168,11 +170,11 @@ fn zero_configuration_places_end_effector_at_2_0_0() {
     let t = &pose.transform().translation;
 
     assert!(
-        (t.x - 2.0).abs() < EPS
-            && t.y.abs() < EPS
-            && t.z.abs() < EPS,
+        (t.x - 2.0).abs() < EPS && t.y.abs() < EPS && t.z.abs() < EPS,
         "SCARA at zero config should be at (2, 0, 0), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 }
 
@@ -180,12 +182,7 @@ fn zero_configuration_places_end_effector_at_2_0_0() {
 fn position_independent_of_wrist_rotation() {
     let robot = ScaraSpec::ideal().build();
 
-    let end_effector = robot
-        .segments
-        .last()
-        .unwrap()
-        .child
-        .clone();
+    let end_effector = robot.segments.last().unwrap().child.clone();
 
     let fk = ForwardKinematics::new(robot);
 
@@ -208,7 +205,11 @@ fn position_independent_of_wrist_rotation() {
             && (t_base.y - t_rotated.y).abs() < EPS
             && (t_base.z - t_rotated.z).abs() < EPS,
         "Wrist rotation changed position: base ({}, {}, {}) vs rotated ({}, {}, {})",
-        t_base.x, t_base.y, t_base.z,
-        t_rotated.x, t_rotated.y, t_rotated.z
+        t_base.x,
+        t_base.y,
+        t_base.z,
+        t_rotated.x,
+        t_rotated.y,
+        t_rotated.z
     );
 }

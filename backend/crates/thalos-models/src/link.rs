@@ -1,5 +1,5 @@
+use crate::{Collision, Visual};
 use thalos_math::Transform3D;
-use crate::{Visual, Collision};
 
 /// Inertial properties of a link.
 ///

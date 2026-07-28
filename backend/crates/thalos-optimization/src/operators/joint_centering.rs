@@ -15,7 +15,7 @@ use thalos_core::{
 };
 
 use crate::{
-    domain::{context::OptimizationContext, operator::OperatorFamily, TrajectoryOperator},
+    domain::{TrajectoryOperator, context::OptimizationContext, operator::OperatorFamily},
     error::OptimizationError,
 };
 
@@ -193,9 +193,9 @@ mod tests {
     };
 
     use crate::{
+        PlanMetrics,
         domain::context::{JointLimits, PipelineConfig},
         domain::operator::OptimizationObjective,
-        PlanMetrics,
     };
 
     // ── Test helpers ──────────────────────────────────────
@@ -477,62 +477,90 @@ mod tests {
 
     #[test]
     fn constraint_query_forbids_position_modification_at_waypoint() {
-        use thalos_core::operation::{
-            ConstraintQuery,
-            precision::PrecisionLevel,
-        };
+        use thalos_core::operation::{ConstraintQuery, precision::PrecisionLevel};
 
         struct ForbidPositionAtOne {
             forbidden_index: usize,
         }
         impl ConstraintQuery for ForbidPositionAtOne {
-            fn can_relax_orientation(&self, _waypoint_index: usize, _max_angle: f64) -> bool { true }
+            fn can_relax_orientation(&self, _waypoint_index: usize, _max_angle: f64) -> bool {
+                true
+            }
             fn can_modify_position(&self, waypoint_index: usize) -> bool {
                 waypoint_index != self.forbidden_index
             }
-            fn max_position_error(&self, _waypoint_index: usize) -> Option<f64> { None }
-            fn max_velocity(&self, _waypoint_index: usize) -> Option<f64> { None }
-            fn required_precision(&self, _waypoint_index: usize) -> PrecisionLevel { PrecisionLevel::None }
+            fn max_position_error(&self, _waypoint_index: usize) -> Option<f64> {
+                None
+            }
+            fn max_velocity(&self, _waypoint_index: usize) -> Option<f64> {
+                None
+            }
+            fn required_precision(&self, _waypoint_index: usize) -> PrecisionLevel {
+                PrecisionLevel::None
+            }
         }
 
         let op = JointCenteringOperator::new(1.0);
         let robot = RobotRegistry::create_default(RobotModel::Planar2R);
         let traj = test_trajectory();
         let region = ProblemRegion::new(
-            RegionId(0), RegionKind::Constraint, RegionSeverity::Warning, 0..3,
+            RegionId(0),
+            RegionKind::Constraint,
+            RegionSeverity::Warning,
+            0..3,
         );
         let ctx = test_ctx();
         let constraint_query = ForbidPositionAtOne { forbidden_index: 1 };
 
-        let result = op.apply(&robot, &traj, &region, &ctx,
-            Some(&constraint_query as &dyn ConstraintQuery)).unwrap();
+        let result = op
+            .apply(
+                &robot,
+                &traj,
+                &region,
+                &ctx,
+                Some(&constraint_query as &dyn ConstraintQuery),
+            )
+            .unwrap();
         let waypoints = result.waypoints();
 
         // Waypoint 1 (forbidden) should be unchanged
-        assert_eq!(waypoints[1].joints(), &[0.0, 0.0],
-            "forbidden waypoint should remain unchanged");
+        assert_eq!(
+            waypoints[1].joints(),
+            &[0.0, 0.0],
+            "forbidden waypoint should remain unchanged"
+        );
         // Waypoint 0 and 2 (allowed) should be centered
-        assert!((waypoints[0].joints()[0] - 0.0).abs() < 1e-10,
-            "allowed waypoint should be centered");
-        assert_eq!(waypoints[3].joints(), &[2.0, 2.0],
-            "outside region should be unchanged");
+        assert!(
+            (waypoints[0].joints()[0] - 0.0).abs() < 1e-10,
+            "allowed waypoint should be centered"
+        );
+        assert_eq!(
+            waypoints[3].joints(),
+            &[2.0, 2.0],
+            "outside region should be unchanged"
+        );
     }
 
     #[test]
     fn required_precision_scales_centering_factor() {
-        use thalos_core::operation::{
-            ConstraintQuery,
-            precision::PrecisionLevel,
-        };
+        use thalos_core::operation::{ConstraintQuery, precision::PrecisionLevel};
 
         struct PrecisionControlledQuery {
             precision: PrecisionLevel,
         }
         impl ConstraintQuery for PrecisionControlledQuery {
-            fn can_relax_orientation(&self, _waypoint_index: usize, _max_angle: f64) -> bool { true }
-            fn can_modify_position(&self, _waypoint_index: usize) -> bool { true }
-            fn max_position_error(&self, _waypoint_index: usize) -> Option<f64> { None }
-            fn max_velocity(&self, _waypoint_index: usize) -> Option<f64> { None }
+            fn can_relax_orientation(&self, _waypoint_index: usize, _max_angle: f64) -> bool {
+                true
+            }
+            fn can_modify_position(&self, _waypoint_index: usize) -> bool {
+                true
+            }
+            fn max_position_error(&self, _waypoint_index: usize) -> Option<f64> {
+                None
+            }
+            fn max_velocity(&self, _waypoint_index: usize) -> Option<f64> {
+                None
+            }
             fn required_precision(&self, _waypoint_index: usize) -> PrecisionLevel {
                 self.precision
             }
@@ -544,7 +572,10 @@ mod tests {
             TrajectoryPoint::new(vec![1.5, -1.5], 1.0),
         ]);
         let region = ProblemRegion::new(
-            RegionId(0), RegionKind::Constraint, RegionSeverity::Warning, 0..2,
+            RegionId(0),
+            RegionKind::Constraint,
+            RegionSeverity::Warning,
+            0..2,
         );
         let center_ctx = || OptimizationContext {
             joint_limits: JointLimits {
@@ -559,23 +590,44 @@ mod tests {
 
         // Apply with Normal precision → full factor
         let op_normal = JointCenteringOperator::new(0.5);
-        let query_normal = PrecisionControlledQuery { precision: PrecisionLevel::Normal };
-        let result_normal = op_normal.apply(&robot, &traj, &region, &center_ctx(),
-            Some(&query_normal as &dyn ConstraintQuery)).unwrap();
+        let query_normal = PrecisionControlledQuery {
+            precision: PrecisionLevel::Normal,
+        };
+        let result_normal = op_normal
+            .apply(
+                &robot,
+                &traj,
+                &region,
+                &center_ctx(),
+                Some(&query_normal as &dyn ConstraintQuery),
+            )
+            .unwrap();
         let wp_normal = result_normal.waypoints()[0].joints();
         // factor=0.5, q=1.5, center=0.0 → q_new = 1.5 + (0.0-1.5)*0.5 = 0.75
         assert!((wp_normal[0] - 0.75).abs() < 1e-10);
 
         // Apply with Critical precision → reduced factor (= factor * 0.3 = 0.15)
         let op_critical = JointCenteringOperator::new(0.5);
-        let query_critical = PrecisionControlledQuery { precision: PrecisionLevel::Critical };
-        let result_critical = op_critical.apply(&robot, &traj, &region, &center_ctx(),
-            Some(&query_critical as &dyn ConstraintQuery)).unwrap();
+        let query_critical = PrecisionControlledQuery {
+            precision: PrecisionLevel::Critical,
+        };
+        let result_critical = op_critical
+            .apply(
+                &robot,
+                &traj,
+                &region,
+                &center_ctx(),
+                Some(&query_critical as &dyn ConstraintQuery),
+            )
+            .unwrap();
         let wp_critical = result_critical.waypoints()[0].joints();
         // With Critical, effective factor = 0.5 * 0.3 = 0.15
         // q_new = 1.5 + (0.0-1.5)*0.15 = 1.5 - 0.225 = 1.275
-        assert!((wp_critical[0] - 1.275).abs() < 1e-10,
-            "Critical precision should reduce centering: got {}", wp_critical[0]);
+        assert!(
+            (wp_critical[0] - 1.275).abs() < 1e-10,
+            "Critical precision should reduce centering: got {}",
+            wp_critical[0]
+        );
 
         // Critical displacement < Normal displacement
         let displacement_critical = (1.5 - wp_critical[0]).abs();
@@ -583,7 +635,8 @@ mod tests {
         assert!(
             displacement_critical < displacement_normal,
             "Critical precision should produce smaller displacement: critical={}, normal={}",
-            displacement_critical, displacement_normal
+            displacement_critical,
+            displacement_normal
         );
     }
 
@@ -600,8 +653,11 @@ mod tests {
         // With factor=1.0, all region waypoints should snap to center
         for wp in waypoints.iter().take(3) {
             for q in wp.joints() {
-                assert!((q - 0.0).abs() < 1e-10,
-                    "without constraints, should center fully: got {}", q);
+                assert!(
+                    (q - 0.0).abs() < 1e-10,
+                    "without constraints, should center fully: got {}",
+                    q
+                );
             }
         }
         // Outside region unchanged

@@ -1,5 +1,5 @@
-use crate::prelude::*;
 use crate::models::planar_3r::Planar3RSpec;
+use crate::prelude::*;
 
 // ─── ADR-0001 Z-up regression tests ──────────────────────────
 
@@ -15,7 +15,9 @@ fn zero_config_ee_in_z_up() {
     assert!(
         (t.x - 3.0).abs() < EPS && t.y.abs() < EPS && t.z.abs() < EPS,
         "Planar 3R Z-up regression: expected (3, 0, 0), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 }
 
@@ -30,7 +32,9 @@ fn first_joint_90_in_z_up() {
     assert!(
         t.x.abs() < EPS && (t.y - 3.0).abs() < EPS && t.z.abs() < EPS,
         "Planar 3R Rz(90°): expected (0, 3, 0), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 }
 
@@ -38,7 +42,6 @@ fn first_joint_90_in_z_up() {
 
 #[test]
 fn returns_three_poses() {
-
     let robot = Planar3RSpec::ideal().build();
 
     let fk = ForwardKinematics::new(robot);
@@ -56,15 +59,9 @@ fn returns_three_poses() {
 
 #[test]
 fn zero_configuration_places_end_effector_at_3_0_0() {
-
     let robot = Planar3RSpec::ideal().build();
 
-    let end_effector = robot
-        .segments
-        .last()
-        .unwrap()
-        .child
-        .clone();
+    let end_effector = robot.segments.last().unwrap().child.clone();
 
     let fk = ForwardKinematics::new(robot);
 
@@ -75,12 +72,8 @@ fn zero_configuration_places_end_effector_at_3_0_0() {
     let t = &pose.transform().translation;
 
     assert!(
-        (t.x - 3.0).abs() < EPS
-            && t.y.abs() < EPS
-            && t.z.abs() < EPS,
-
+        (t.x - 3.0).abs() < EPS && t.y.abs() < EPS && t.z.abs() < EPS,
         "End effector should be at (3, 0, 0), got ({}, {}, {})",
-
         t.x,
         t.y,
         t.z
@@ -89,15 +82,9 @@ fn zero_configuration_places_end_effector_at_3_0_0() {
 
 #[test]
 fn first_joint_90_deg_places_end_effector_at_0_3_0() {
-
     let robot = Planar3RSpec::ideal().build();
 
-    let end_effector = robot
-        .segments
-        .last()
-        .unwrap()
-        .child
-        .clone();
+    let end_effector = robot.segments.last().unwrap().child.clone();
 
     let fk = ForwardKinematics::new(robot);
 
@@ -108,12 +95,8 @@ fn first_joint_90_deg_places_end_effector_at_0_3_0() {
     let t = &pose.transform().translation;
 
     assert!(
-        t.x.abs() < EPS
-            && (t.y - 3.0).abs() < EPS
-            && t.z.abs() < EPS,
-
+        t.x.abs() < EPS && (t.y - 3.0).abs() < EPS && t.z.abs() < EPS,
         "End effector should be at (0, 3, 0), got ({}, {}, {})",
-
         t.x,
         t.y,
         t.z
@@ -122,15 +105,9 @@ fn first_joint_90_deg_places_end_effector_at_0_3_0() {
 
 #[test]
 fn folded_configuration_places_end_effector_at_2_1_0() {
-
     let robot = Planar3RSpec::ideal().build();
 
-    let end_effector = robot
-        .segments
-        .last()
-        .unwrap()
-        .child
-        .clone();
+    let end_effector = robot.segments.last().unwrap().child.clone();
 
     let fk = ForwardKinematics::new(robot);
 
@@ -142,23 +119,15 @@ fn folded_configuration_places_end_effector_at_2_1_0() {
     // link2 -> (1,1)
     // link3 -> (2,1)
 
-    let result = fk.evaluate(&[
-        PI / 2.0,
-        -PI / 2.0,
-        0.0
-    ]);
+    let result = fk.evaluate(&[PI / 2.0, -PI / 2.0, 0.0]);
 
     let pose = result.pose(&end_effector).unwrap();
 
     let t = &pose.transform().translation;
 
     assert!(
-        (t.x - 2.0).abs() < EPS
-            && (t.y - 1.0).abs() < EPS
-            && t.z.abs() < EPS,
-
+        (t.x - 2.0).abs() < EPS && (t.y - 1.0).abs() < EPS && t.z.abs() < EPS,
         "End effector should be at (2, 1, 0), got ({}, {}, {})",
-
         t.x,
         t.y,
         t.z
@@ -167,15 +136,9 @@ fn folded_configuration_places_end_effector_at_2_1_0() {
 
 #[test]
 fn third_joint_rotates_relative_to_second_joint() {
-
     let robot = Planar3RSpec::ideal().build();
 
-    let end_effector = robot
-        .segments
-        .last()
-        .unwrap()
-        .child
-        .clone();
+    let end_effector = robot.segments.last().unwrap().child.clone();
 
     let fk = ForwardKinematics::new(robot);
 
@@ -189,23 +152,15 @@ fn third_joint_rotates_relative_to_second_joint() {
     //
     // expected = (2,1)
 
-    let result = fk.evaluate(&[
-        0.0,
-        0.0,
-        PI / 2.0
-    ]);
+    let result = fk.evaluate(&[0.0, 0.0, PI / 2.0]);
 
     let pose = result.pose(&end_effector).unwrap();
 
     let t = &pose.transform().translation;
 
     assert!(
-        (t.x - 2.0).abs() < EPS
-            && (t.y - 1.0).abs() < EPS
-            && t.z.abs() < EPS,
-
+        (t.x - 2.0).abs() < EPS && (t.y - 1.0).abs() < EPS && t.z.abs() < EPS,
         "End effector should be at (2, 1, 0), got ({}, {}, {})",
-
         t.x,
         t.y,
         t.z
@@ -214,15 +169,9 @@ fn third_joint_rotates_relative_to_second_joint() {
 
 #[test]
 fn all_joint_rotations_accumulate_correctly() {
-
     let robot = Planar3RSpec::ideal().build();
 
-    let end_effector = robot
-        .segments
-        .last()
-        .unwrap()
-        .child
-        .clone();
+    let end_effector = robot.segments.last().unwrap().child.clone();
 
     let fk = ForwardKinematics::new(robot);
 
@@ -234,23 +183,15 @@ fn all_joint_rotations_accumulate_correctly() {
     // link2 -> (-1,1)
     // link3 -> (-2,1)
 
-    let result = fk.evaluate(&[
-        PI / 2.0,
-        PI / 2.0,
-        0.0
-    ]);
+    let result = fk.evaluate(&[PI / 2.0, PI / 2.0, 0.0]);
 
     let pose = result.pose(&end_effector).unwrap();
 
     let t = &pose.transform().translation;
 
     assert!(
-        (t.x + 2.0).abs() < EPS
-            && (t.y - 1.0).abs() < EPS
-            && t.z.abs() < EPS,
-
+        (t.x + 2.0).abs() < EPS && (t.y - 1.0).abs() < EPS && t.z.abs() < EPS,
         "End effector should be at (-2, 1, 0), got ({}, {}, {})",
-
         t.x,
         t.y,
         t.z

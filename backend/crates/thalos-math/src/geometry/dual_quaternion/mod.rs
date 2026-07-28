@@ -1,6 +1,6 @@
+pub mod adapters;
 pub mod model;
 pub mod ops;
-pub mod adapters;
 
 #[cfg(test)]
 pub mod exercises;

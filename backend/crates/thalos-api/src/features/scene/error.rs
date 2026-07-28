@@ -20,9 +20,7 @@ impl From<RuntimeError> for ApiError {
                 code: code.into(),
             },
             RuntimeError::JointCountMismatch { expected, received } => ApiError::Validation {
-                message: format!(
-                    "joint count mismatch: expected {expected}, got {received}"
-                ),
+                message: format!("joint count mismatch: expected {expected}, got {received}"),
                 code: code.into(),
             },
             RuntimeError::ToolFrameNotFound { frame_id } => ApiError::Validation {

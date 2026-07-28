@@ -1,12 +1,12 @@
-pub mod segment;
 pub mod expansion;
-pub mod target;
 pub mod instruction;
+pub mod segment;
+pub mod target;
 
 use serde::{Deserialize, Serialize};
 
-pub use target::*;
 pub use instruction::*;
+pub use target::*;
 
 /// A complete motion program — the bytecode of the platform.
 ///
@@ -37,8 +37,8 @@ pub struct MotionMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::motion::target::*;
     use crate::ids::OperationId;
+    use crate::motion::target::*;
     use std::time::Duration;
 
     /// Build a canonical 4-instruction sequence for order tests.
@@ -156,4 +156,3 @@ mod tests {
         assert_eq!(metadata.source_project, "thalos-demo");
     }
 }
-

@@ -53,7 +53,9 @@ mod tests {
         let frame = ResolvedFrame {
             name: "base".into(),
             parent: "world".into(),
-            transform: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            transform: [
+                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+            ],
         };
         let pose = ResolvedPose {
             position: [0.5, 0.0, 0.3],
@@ -73,7 +75,9 @@ mod tests {
             frame: ResolvedFrame {
                 name: "tool0".into(),
                 parent: "base".into(),
-                transform: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.5, 0.0, 0.0, 1.0],
+                transform: [
+                    1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.5, 0.0, 0.0, 1.0,
+                ],
             },
         };
         let json = serde_json::to_string(&original).expect("serialize");
@@ -88,7 +92,9 @@ mod tests {
         let frame = ResolvedFrame {
             name: "tool0".into(),
             parent: "base".into(),
-            transform: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            transform: [
+                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+            ],
         };
         assert_eq!(frame.name, "tool0");
         assert_eq!(frame.parent, "base");
@@ -100,7 +106,9 @@ mod tests {
         let original = ResolvedFrame {
             name: "base_link".into(),
             parent: "world".into(),
-            transform: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            transform: [
+                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+            ],
         };
         let json = serde_json::to_string(&original).expect("serialize");
         let deserialized: ResolvedFrame = serde_json::from_str(&json).expect("deserialize");

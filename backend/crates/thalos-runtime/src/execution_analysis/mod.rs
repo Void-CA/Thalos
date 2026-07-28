@@ -85,8 +85,7 @@ impl ExecutionAnalyzer {
                 message: format!(
                     "Global tracking RMSE {:.4} rad exceeds threshold {:.4} rad. \
                      The robot did not follow the planned path closely.",
-                    metrics.global_rmse,
-                    self.thresholds.global_rmse_warning,
+                    metrics.global_rmse, self.thresholds.global_rmse_warning,
                 ),
                 value: Some(metrics.global_rmse),
                 threshold: Some(self.thresholds.global_rmse_warning),
@@ -102,8 +101,7 @@ impl ExecutionAnalyzer {
                 message: format!(
                     "Maximum tracking error {:.4} rad exceeds spike threshold {:.4} rad. \
                      A sharp deviation occurred during execution.",
-                    metrics.global_max_error,
-                    self.thresholds.max_error_spike,
+                    metrics.global_max_error, self.thresholds.max_error_spike,
                 ),
                 value: Some(metrics.global_max_error),
                 threshold: Some(self.thresholds.max_error_spike),
@@ -159,8 +157,8 @@ mod tests {
     use super::*;
     use crate::comparison::compare;
     use crate::motion_trace::{MotionSample, MotionTrace};
-    use crate::telemetry::{ExecutionSample, ExecutionTrace, TraceMetadata};
     use crate::session::ExecutionSource;
+    use crate::telemetry::{ExecutionSample, ExecutionTrace, TraceMetadata};
     use std::time::Duration;
 
     fn make_perfect_trace() -> (MotionTrace, ExecutionTrace) {
@@ -294,7 +292,11 @@ mod tests {
         );
 
         // Should produce at least 2 findings
-        assert!(findings.len() >= 2, "Expected >= 2 findings, got {}", findings.len());
+        assert!(
+            findings.len() >= 2,
+            "Expected >= 2 findings, got {}",
+            findings.len()
+        );
     }
 
     #[test]

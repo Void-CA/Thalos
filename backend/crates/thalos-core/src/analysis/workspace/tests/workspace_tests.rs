@@ -8,8 +8,8 @@
 //! - The position == FK(q) invariant (R2)
 
 use crate::analysis::workspace::{Workspace, WorkspaceConfig, WorkspaceSample};
-use thalos_math::Vector3;
 use crate::models::RobotModel;
+use thalos_math::Vector3;
 
 // ─── from_samples: rejection ────────────────────────────────────────────
 
@@ -18,10 +18,7 @@ fn from_samples_rejects_empty_input() {
     let empty: Vec<WorkspaceSample> = vec![];
     let result = Workspace::from_samples(empty);
     assert!(result.is_err(), "empty input must fail");
-    assert_eq!(
-        result.unwrap_err().to_string(),
-        "workspace is empty",
-    );
+    assert_eq!(result.unwrap_err().to_string(), "workspace is empty",);
 }
 
 // ─── from_samples: bounds derivation (R3) ───────────────────────────────
@@ -29,24 +26,42 @@ fn from_samples_rejects_empty_input() {
 #[test]
 fn from_samples_bounds_enclose_all_positions() {
     let samples = vec![
-        WorkspaceSample { q: vec![0.0], position: Vector3::new(-1.0, -2.0, -3.0) },
-        WorkspaceSample { q: vec![0.0], position: Vector3::new( 1.0,  2.0,  3.0) },
-        WorkspaceSample { q: vec![0.0], position: Vector3::new( 0.0,  0.0,  0.0) },
+        WorkspaceSample {
+            q: vec![0.0],
+            position: Vector3::new(-1.0, -2.0, -3.0),
+        },
+        WorkspaceSample {
+            q: vec![0.0],
+            position: Vector3::new(1.0, 2.0, 3.0),
+        },
+        WorkspaceSample {
+            q: vec![0.0],
+            position: Vector3::new(0.0, 0.0, 0.0),
+        },
     ];
 
     let ws = Workspace::from_samples(samples).unwrap();
     let bb = ws.bounds();
 
     assert_eq!(bb.min, Vector3::new(-1.0, -2.0, -3.0));
-    assert_eq!(bb.max, Vector3::new( 1.0,  2.0,  3.0));
+    assert_eq!(bb.max, Vector3::new(1.0, 2.0, 3.0));
 }
 
 #[test]
 fn from_samples_centroid_is_arithmetic_mean() {
     let samples = vec![
-        WorkspaceSample { q: vec![0.0], position: Vector3::new(0.0, 0.0, 0.0) },
-        WorkspaceSample { q: vec![0.0], position: Vector3::new(2.0, 4.0, 6.0) },
-        WorkspaceSample { q: vec![0.0], position: Vector3::new(4.0, 8.0, 12.0) },
+        WorkspaceSample {
+            q: vec![0.0],
+            position: Vector3::new(0.0, 0.0, 0.0),
+        },
+        WorkspaceSample {
+            q: vec![0.0],
+            position: Vector3::new(2.0, 4.0, 6.0),
+        },
+        WorkspaceSample {
+            q: vec![0.0],
+            position: Vector3::new(4.0, 8.0, 12.0),
+        },
     ];
 
     let ws = Workspace::from_samples(samples).unwrap();
@@ -58,9 +73,18 @@ fn from_samples_centroid_is_arithmetic_mean() {
 #[test]
 fn from_samples_max_reach_is_max_euclidean_distance() {
     let samples = vec![
-        WorkspaceSample { q: vec![0.0], position: Vector3::new(1.0, 0.0, 0.0) }, // |p| = 1
-        WorkspaceSample { q: vec![0.0], position: Vector3::new(0.0, 5.0, 0.0) }, // |p| = 5
-        WorkspaceSample { q: vec![0.0], position: Vector3::new(2.0, 2.0, 0.0) }, // |p| = 2*sqrt(2) ≈ 2.83
+        WorkspaceSample {
+            q: vec![0.0],
+            position: Vector3::new(1.0, 0.0, 0.0),
+        }, // |p| = 1
+        WorkspaceSample {
+            q: vec![0.0],
+            position: Vector3::new(0.0, 5.0, 0.0),
+        }, // |p| = 5
+        WorkspaceSample {
+            q: vec![0.0],
+            position: Vector3::new(2.0, 2.0, 0.0),
+        }, // |p| = 2*sqrt(2) ≈ 2.83
     ];
 
     let ws = Workspace::from_samples(samples).unwrap();
@@ -88,8 +112,14 @@ fn from_samples_sample_count_matches_input() {
 fn from_samples_bounding_volume_is_aabb_volume() {
     // 2x4x6 = 48
     let samples = vec![
-        WorkspaceSample { q: vec![0.0], position: Vector3::new(0.0, 0.0, 0.0) },
-        WorkspaceSample { q: vec![0.0], position: Vector3::new(2.0, 4.0, 6.0) },
+        WorkspaceSample {
+            q: vec![0.0],
+            position: Vector3::new(0.0, 0.0, 0.0),
+        },
+        WorkspaceSample {
+            q: vec![0.0],
+            position: Vector3::new(2.0, 4.0, 6.0),
+        },
     ];
 
     let ws = Workspace::from_samples(samples).unwrap();
@@ -109,7 +139,11 @@ fn workspace_config_default_is_sensible() {
 
 #[test]
 fn workspace_config_supports_copy() {
-    let c = WorkspaceConfig { samples: 5_000, seed: 7, tolerance: 1e-6 };
+    let c = WorkspaceConfig {
+        samples: 5_000,
+        seed: 7,
+        tolerance: 1e-6,
+    };
     let c2 = c; // Copy
     assert_eq!(c.samples, c2.samples);
     assert_eq!(c.seed, c2.seed);
@@ -120,10 +154,15 @@ fn workspace_config_supports_copy() {
 #[test]
 fn workspace_samples_iterator_returns_references() {
     use crate::analysis::workspace::types::WorkspaceKey;
-    let _k = WorkspaceKey { robot_id: RobotModel::Scara, samples: 1, seed: 0 };
-    let samples = vec![
-        WorkspaceSample { q: vec![0.0], position: Vector3::new(0.0, 0.0, 0.0) },
-    ];
+    let _k = WorkspaceKey {
+        robot_id: RobotModel::Scara,
+        samples: 1,
+        seed: 0,
+    };
+    let samples = vec![WorkspaceSample {
+        q: vec![0.0],
+        position: Vector3::new(0.0, 0.0, 0.0),
+    }];
     let ws = Workspace::from_samples(samples).unwrap();
 
     // samples() returns &[WorkspaceSample], iterate by reference

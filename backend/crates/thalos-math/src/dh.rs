@@ -71,10 +71,22 @@ pub fn compute_a_matrix(dh: &DHParameter) -> Matrix4x4 {
 
     Matrix4x4 {
         m: [
-            c_theta, -s_theta * c_alpha, s_theta * s_alpha, dh.a * c_theta,
-            s_theta, c_theta * c_alpha, -c_theta * s_alpha, dh.a * s_theta,
-            0.0, s_alpha, c_alpha, dh.d,
-            0.0, 0.0, 0.0, 1.0,
+            c_theta,
+            -s_theta * c_alpha,
+            s_theta * s_alpha,
+            dh.a * c_theta,
+            s_theta,
+            c_theta * c_alpha,
+            -c_theta * s_alpha,
+            dh.a * s_theta,
+            0.0,
+            s_alpha,
+            c_alpha,
+            dh.d,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
         ],
     }
 }
@@ -179,7 +191,10 @@ impl fmt::Display for DHSolution {
         writeln!(f, "{}", "═".repeat(60))?;
         writeln!(f, "  TABLA DH  (convención estándar / Craig)")?;
         writeln!(f, "{}", "═".repeat(60))?;
-        writeln!(f, " i │   αᵢ [rad]   │   aᵢ        │   dᵢ        │   θᵢ [rad]")?;
+        writeln!(
+            f,
+            " i │   αᵢ [rad]   │   aᵢ        │   dᵢ        │   θᵢ [rad]"
+        )?;
         writeln!(f, "{}", "─".repeat(60))?;
         for (i, p) in self.table.iter().enumerate() {
             writeln!(
@@ -323,9 +338,7 @@ mod tests {
     use std::f64::consts::{FRAC_PI_2, PI};
 
     fn approx_matrix(a: &Matrix4x4, b: &Matrix4x4, tol: f64) -> bool {
-        a.m.iter()
-            .zip(b.m.iter())
-            .all(|(x, y)| (x - y).abs() < tol)
+        a.m.iter().zip(b.m.iter()).all(|(x, y)| (x - y).abs() < tol)
     }
 
     // ─── compute_a_matrix ────────────────────────────────────────
@@ -339,10 +352,7 @@ mod tests {
         // Rot_z: cos90=0, sin90=1
         let expected = Matrix4x4 {
             m: [
-                0.0, -1.0, 0.0, 0.0,
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, 1.0, 0.0,
-                0.0, 0.0, 0.0, 1.0,
+                0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
             ],
         };
         assert!(approx_matrix(&a, &expected, EPS));
@@ -356,10 +366,7 @@ mod tests {
 
         let expected = Matrix4x4 {
             m: [
-                1.0, 0.0, 0.0, 0.5,
-                0.0, 1.0, 0.0, 0.0,
-                0.0, 0.0, 1.0, 0.0,
-                0.0, 0.0, 0.0, 1.0,
+                1.0, 0.0, 0.0, 0.5, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
             ],
         };
         assert!(approx_matrix(&a, &expected, EPS));
@@ -374,10 +381,7 @@ mod tests {
         // Rot_x(90°): cos90=0, sin90=1
         let expected = Matrix4x4 {
             m: [
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, -1.0, 0.0,
-                0.0, 1.0, 0.0, 0.0,
-                0.0, 0.0, 0.0, 1.0,
+                1.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
             ],
         };
         assert!(approx_matrix(&a, &expected, EPS));
@@ -389,7 +393,11 @@ mod tests {
     fn solver_empty_table_returns_identity() {
         let solver = DHSolver::new(vec![]);
         let sol = solver.solve();
-        assert!(approx_matrix(&sol.final_transform, &Matrix4x4::identity(), EPS));
+        assert!(approx_matrix(
+            &sol.final_transform,
+            &Matrix4x4::identity(),
+            EPS
+        ));
         assert!(sol.a_matrices.is_empty());
         assert!(sol.intermediates.is_empty());
     }
@@ -431,8 +439,18 @@ mod tests {
         let expected_x = l1 * t1.cos() + l2 * (t1 + t2).cos();
         let expected_y = l1 * t1.sin() + l2 * (t1 + t2).sin();
 
-        assert!((p.x - expected_x).abs() < EPS, "x: {} != {}", p.x, expected_x);
-        assert!((p.y - expected_y).abs() < EPS, "y: {} != {}", p.y, expected_y);
+        assert!(
+            (p.x - expected_x).abs() < EPS,
+            "x: {} != {}",
+            p.x,
+            expected_x
+        );
+        assert!(
+            (p.y - expected_y).abs() < EPS,
+            "y: {} != {}",
+            p.y,
+            expected_y
+        );
         assert!((p.z - 0.0).abs() < EPS, "z: {} != 0", p.z);
     }
 
@@ -464,7 +482,11 @@ mod tests {
         let sol = solver.solve();
 
         // intermediate[0] == A₁
-        assert!(approx_matrix(&sol.intermediates[0], &sol.a_matrices[0], EPS));
+        assert!(approx_matrix(
+            &sol.intermediates[0],
+            &sol.a_matrices[0],
+            EPS
+        ));
 
         // intermediate[1] == A₁·A₂
         let expected = sol.a_matrices[0].mul(&sol.a_matrices[1]);

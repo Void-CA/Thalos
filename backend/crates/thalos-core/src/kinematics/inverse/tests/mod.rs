@@ -4,9 +4,9 @@ pub mod jt;
 pub mod pose;
 pub mod singularity;
 
-use crate::prelude::*;
-use crate::kinematics::inverse::solvers::JacobianTransposeSolver;
 use crate::kinematics::inverse::result::IKStatus;
+use crate::kinematics::inverse::solvers::JacobianTransposeSolver;
+use crate::prelude::*;
 use std::f64::consts::PI;
 
 // ─── Helpers ───────────────────────────────────────────────────────────
@@ -25,7 +25,10 @@ fn build_1dof_arm(length: f64) -> (ForwardKinematics, FrameId) {
         Transform3D::identity(),
     ));
 
-    let link = Link::new(0, Transform3D::from_translation(Vector3::new(length, 0.0, 0.0)));
+    let link = Link::new(
+        0,
+        Transform3D::from_translation(Vector3::new(length, 0.0, 0.0)),
+    );
 
     builder.add_segment(Segment::new(FrameId::World, ee.clone(), joint, link));
     builder.set_end_effector(ee.clone());
@@ -49,8 +52,16 @@ fn build_2dof_planar_arm() -> (ForwardKinematics, FrameId) {
         JointLimits::new(-PI, PI),
         Transform3D::identity(),
     ));
-    let link1 = Link::new(0, Transform3D::from_translation(Vector3::new(1.0, 0.0, 0.0)));
-    builder.add_segment(Segment::new(FrameId::World, shoulder.clone(), joint1, link1));
+    let link1 = Link::new(
+        0,
+        Transform3D::from_translation(Vector3::new(1.0, 0.0, 0.0)),
+    );
+    builder.add_segment(Segment::new(
+        FrameId::World,
+        shoulder.clone(),
+        joint1,
+        link1,
+    ));
 
     // Segmento 2: shoulder → ee
     let joint2 = JointType::Revolute(RevoluteJoint::new(
@@ -59,7 +70,10 @@ fn build_2dof_planar_arm() -> (ForwardKinematics, FrameId) {
         JointLimits::new(-PI, PI),
         Transform3D::identity(),
     ));
-    let link2 = Link::new(1, Transform3D::from_translation(Vector3::new(1.0, 0.0, 0.0)));
+    let link2 = Link::new(
+        1,
+        Transform3D::from_translation(Vector3::new(1.0, 0.0, 0.0)),
+    );
     builder.add_segment(Segment::new(shoulder, ee.clone(), joint2, link2));
 
     builder.set_end_effector(ee.clone());

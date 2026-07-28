@@ -80,7 +80,10 @@ mod tests {
                 rank: 1,
                 singular_values: vec![],
             },
-            manipulability: ManipulabilityReport { yoshikawa, isotropy },
+            manipulability: ManipulabilityReport {
+                yoshikawa,
+                isotropy,
+            },
         }
     }
 

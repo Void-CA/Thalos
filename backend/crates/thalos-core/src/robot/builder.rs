@@ -1,14 +1,7 @@
 use crate::robot::error::RobotBuilderError;
-use crate::robot::{
-    serial_chain::SerialChain,
-    segment::Segment,
-};
+use crate::robot::{segment::Segment, serial_chain::SerialChain};
 
-use crate::spatial::frame::{
-    Frame,
-    FrameId,
-    FrameRegistry,
-};
+use crate::spatial::frame::{Frame, FrameId, FrameRegistry};
 
 pub struct SerialChainBuilder {
     segments: Vec<Segment>,
@@ -47,40 +40,31 @@ impl SerialChainBuilder {
     }
 
     pub fn build(self) -> Result<SerialChain, RobotBuilderError> {
-
         // Validar que todos los frames existan
         for segment in &self.segments {
-
             if segment.parent != FrameId::World {
                 if !self.frames.contains(&segment.parent) {
-                    return Err(RobotBuilderError::FrameNotFound(
-                        segment.parent
-                    ));
+                    return Err(RobotBuilderError::FrameNotFound(segment.parent));
                 }
             }
 
             if !self.frames.contains(&segment.child) {
-                return Err(RobotBuilderError::FrameNotFound(
-                    segment.child
-                ));
+                return Err(RobotBuilderError::FrameNotFound(segment.child));
             }
         }
 
-        let end_effector = self.end_effector
+        let end_effector = self
+            .end_effector
             .ok_or_else(|| RobotBuilderError::EndEffectorNotDefined)?;
 
         if !self.frames.contains(&end_effector) {
-            return Err(RobotBuilderError::FrameNotFound(
-                end_effector
-            ));
+            return Err(RobotBuilderError::FrameNotFound(end_effector));
         }
 
-        Ok(
-            SerialChain {
+        Ok(SerialChain {
             segments: self.segments,
             frames: self.frames,
             end_effector,
-            }
-        )
+        })
     }
 }

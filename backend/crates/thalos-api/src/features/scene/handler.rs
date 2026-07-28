@@ -1,20 +1,12 @@
 use std::sync::Arc;
 
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
+use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use thalos_models::urdf::parser::parse_robot;
 
 use thalos_core::{
-    kinematics::{
-        forward::ForwardKinematics,
-        inverse::DampedLeastSquaresSolver,
-    },
+    kinematics::{forward::ForwardKinematics, inverse::DampedLeastSquaresSolver},
     models::RobotModel,
     robot::{adapter, state::RobotState},
 };
@@ -25,11 +17,11 @@ use thalos_planning::{
         planner::PlanningContext,
     },
 };
-use thalos_runtime::{snapshots::scene::JointMeta, Command};
-use thalos_visual::{
-    map_visuals, SceneBuilder, SceneDiff, SceneValidator, ScaraVisualBuilder, VisualScene,
-};
+use thalos_runtime::{Command, snapshots::scene::JointMeta};
 use thalos_visual::validator::SceneError;
+use thalos_visual::{
+    ScaraVisualBuilder, SceneBuilder, SceneDiff, SceneValidator, VisualScene, map_visuals,
+};
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
@@ -37,7 +29,6 @@ use crate::features::scene::dto::mappers::delta::to_delta_response;
 use crate::features::scene::dto::mappers::runtime::build_plan_dto;
 use crate::features::scene::dto::requests::{SeekRequest, TickRequest};
 use crate::features::scene::dto::*;
-
 
 /// Build a VisualScene from a RuntimeSnapshot.
 pub(crate) fn build_visual_scene(snapshot: &thalos_runtime::RuntimeSnapshot) -> VisualScene {
@@ -67,7 +58,6 @@ pub(crate) fn build_visual_scene(snapshot: &thalos_runtime::RuntimeSnapshot) -> 
     }
 }
 
-
 /// Build an API response from a RuntimeSnapshot.
 pub(crate) fn to_api_response(snapshot: &thalos_runtime::RuntimeSnapshot) -> RuntimeStateResponse {
     let scene: VisualSceneDto = build_visual_scene(snapshot).into();
@@ -75,9 +65,7 @@ pub(crate) fn to_api_response(snapshot: &thalos_runtime::RuntimeSnapshot) -> Run
     RuntimeStateResponse::from_snapshot(snapshot, scene, plan)
 }
 
-pub async fn get_scene(
-    State(state): State<Arc<AppState>>,
-) -> ApiResult<RuntimeStateResponse> {
+pub async fn get_scene(State(state): State<Arc<AppState>>) -> ApiResult<RuntimeStateResponse> {
     let snapshot = state.services.scene.snapshot().await?;
     Ok(Json(to_api_response(&snapshot)))
 }
@@ -89,7 +77,8 @@ pub async fn set_joints(
     let snapshot = state
         .services
         .scene
-        .execute(Command::SetJoints(payload.joint_angles)).await?;
+        .execute(Command::SetJoints(payload.joint_angles))
+        .await?;
 
     Ok(Json(to_api_response(&snapshot)))
 }
@@ -107,19 +96,15 @@ pub async fn load_robot_from_urdf(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<LoadUrdfRobotRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
-    let robot = parse_robot(&payload.urdf_source).map_err(|e| {
-        ApiError::Validation {
-            message: format!("Invalid URDF: {e}"),
-            code: "invalid_urdf".into(),
-        }
+    let robot = parse_robot(&payload.urdf_source).map_err(|e| ApiError::Validation {
+        message: format!("Invalid URDF: {e}"),
+        code: "invalid_urdf".into(),
     })?;
 
     let name = robot.name.clone();
-    let chain = adapter::auto(&robot).map_err(|e| {
-        ApiError::Validation {
-            message: format!("Cannot build chain: {e}"),
-            code: "urdf_chain_error".into(),
-        }
+    let chain = adapter::auto(&robot).map_err(|e| ApiError::Validation {
+        message: format!("Cannot build chain: {e}"),
+        code: "urdf_chain_error".into(),
     })?;
 
     // Build joint metadata from parsed URDF joints.
@@ -173,7 +158,6 @@ pub async fn move_to_pose(
     Ok(Json(to_api_response(&snapshot)))
 }
 
-
 // ─── Motion program ──────────────────────────────────────────────────────
 
 const IK_MAX_ITERS: usize = 500;
@@ -201,7 +185,8 @@ pub async fn preview_plan(
         }
 
         let fk = ForwardKinematics::new(snapshot.chain.clone());
-        let solver = DampedLeastSquaresSolver::new(fk, default_frame, IK_MAX_ITERS, IK_TOLERANCE, IK_LAMBDA);
+        let solver =
+            DampedLeastSquaresSolver::new(fk, default_frame, IK_MAX_ITERS, IK_TOLERANCE, IK_LAMBDA);
         let robot_state = RobotState::new(snapshot.joints.clone());
         let ctx = PlanningContext {
             robot: &snapshot.chain,
@@ -210,7 +195,8 @@ pub async fn preview_plan(
             tcp: snapshot.active_tcp.as_ref(),
         };
         let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
-        compiler.compile(&program, &ctx)
+        compiler
+            .compile(&program, &ctx)
             .map_err(|err: CompileError| ApiError::Validation {
                 message: err.to_string(),
                 code: format!("segment_{}_failed", err.segment_index),
@@ -222,7 +208,6 @@ pub async fn preview_plan(
     let snapshot = state.services.scene.schedule_program(compiled).await?;
     Ok(Json(to_api_response(&snapshot)))
 }
-
 
 // ─── Execution control ────────────────────────────────────────────────────
 
@@ -274,10 +259,13 @@ pub async fn seek_execution(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<SeekRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
-    let snapshot = state.services.scene.seek_execution(payload.position).await?;
+    let snapshot = state
+        .services
+        .scene
+        .seek_execution(payload.position)
+        .await?;
     Ok(Json(to_api_response(&snapshot)))
 }
-
 
 // ─── Execution tick ───────────────────────────────────────────────────────
 
@@ -297,7 +285,6 @@ pub async fn tick_execution(
     let delta = state.services.scene.tick_execution_delta(dt).await?;
     Ok(Json(to_delta_response(&delta)))
 }
-
 
 // ─── Solve IK (no mutation) ──────────────────────────────────────────────
 
@@ -339,7 +326,8 @@ pub async fn execute_ik(
     let snapshot = state
         .services
         .scene
-        .execute(Command::SetJoints(payload.joint_angles)).await?;
+        .execute(Command::SetJoints(payload.joint_angles))
+        .await?;
     Ok(Json(to_api_response(&snapshot)))
 }
 
@@ -350,13 +338,15 @@ fn scene_error_to_response(err: &SceneError) -> (StatusCode, Json<Value>) {
         SceneError::DuplicateId { id } => ("DUPLICATE_ID", json!({ "frame": id })),
         SceneError::BrokenTopology { frame: _ } => ("BROKEN_TOPOLOGY", json!({})),
         SceneError::NonFiniteValue { frame } => ("NON_FINITE_VALUE", json!({ "frame": frame })),
-        SceneError::InvalidQuaternion { frame, norm } => {
-            ("INVALID_QUATERNION", json!({ "frame": frame, "norm": norm }))
-        }
+        SceneError::InvalidQuaternion { frame, norm } => (
+            "INVALID_QUATERNION",
+            json!({ "frame": frame, "norm": norm }),
+        ),
         SceneError::OrphanLink { index } => ("ORPHAN_LINK", json!({ "index": index })),
-        SceneError::TwistsMismatch { expected, found } => {
-            ("TWISTS_MISMATCH", json!({ "expected": expected, "found": found }))
-        }
+        SceneError::TwistsMismatch { expected, found } => (
+            "TWISTS_MISMATCH",
+            json!({ "expected": expected, "found": found }),
+        ),
     };
 
     let mut body = json!({

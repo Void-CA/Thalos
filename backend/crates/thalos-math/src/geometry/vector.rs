@@ -1,5 +1,8 @@
+use crate::{
+    MathError, constants,
+    traits::{Cross, Dot},
+};
 use std::ops::{Add, Mul, Sub};
-use crate::{constants, traits::{Cross, Dot}, MathError};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vector3 {
@@ -14,7 +17,11 @@ impl Vector3 {
     }
 
     pub fn zero() -> Self {
-        Self { x: 0.0, y: 0.0, z: 0.0 }
+        Self {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }
     }
 
     pub fn magnitude(&self) -> f64 {
@@ -38,15 +45,27 @@ impl Vector3 {
     }
 
     pub fn z_axis() -> Self {
-        Self { x: 0.0, y: 0.0, z: 1.0 }
+        Self {
+            x: 0.0,
+            y: 0.0,
+            z: 1.0,
+        }
     }
 
     pub fn y_axis() -> Self {
-        Self { x: 0.0, y: 1.0, z: 0.0 }
+        Self {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+        }
     }
 
     pub fn x_axis() -> Self {
-        Self { x: 1.0, y: 0.0, z: 0.0 }
+        Self {
+            x: 1.0,
+            y: 0.0,
+            z: 0.0,
+        }
     }
 }
 

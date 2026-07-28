@@ -1,6 +1,6 @@
+use super::{CollisionBody, EntityId};
 use crate::kinematics::forward::result::FKResult;
 use crate::robot::serial_chain::SerialChain;
-use super::{CollisionBody, EntityId};
 pub struct CollisionBodyBuilder;
 
 impl CollisionBodyBuilder {

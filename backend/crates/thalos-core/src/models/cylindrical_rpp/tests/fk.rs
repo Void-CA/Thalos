@@ -15,7 +15,9 @@ fn zero_config_ee_at_origin() {
     assert!(
         t.x.abs() < EPS && t.y.abs() < EPS && t.z.abs() < EPS,
         "Cylindrical RPP at zero config: expected (0, 0, 0), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 }
 
@@ -33,7 +35,9 @@ fn prismatic_z_moves_ee_vertically() {
     assert!(
         t.x.abs() < EPS && t.y.abs() < EPS && (t.z - 0.5).abs() < EPS,
         "Cylindrical RPP Pz(0.5): expected (0, 0, 0.5), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 }
 
@@ -51,7 +55,9 @@ fn prismatic_x_moves_ee_radially() {
     assert!(
         (t.x - 1.0).abs() < EPS && t.y.abs() < EPS && t.z.abs() < EPS,
         "Cylindrical RPP Px(1.0): expected (1, 0, 0), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 }
 
@@ -69,6 +75,8 @@ fn azimuth_rotates_in_xy() {
     assert!(
         t.x.abs() < EPS && (t.y - 1.0).abs() < EPS && t.z.abs() < EPS,
         "Cylindrical RPP Rz(90°) with Px(1): expected (0, 1, 0), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 }

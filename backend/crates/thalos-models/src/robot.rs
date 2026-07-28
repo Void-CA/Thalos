@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use crate::{Joint, Link, Material};
+use std::collections::HashMap;
 
 /// A complete robot description.
 ///

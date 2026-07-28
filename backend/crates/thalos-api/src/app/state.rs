@@ -4,12 +4,10 @@ use tokio::sync::RwLock;
 
 use thalos_core::models::RobotModel;
 use thalos_runtime::{
-    backends::{
-        controller::simulation::SimulationController,
-        manager::BackendManager,
-        InternalBackend,
-    },
     RobotController, SceneService, SessionManager,
+    backends::{
+        InternalBackend, controller::simulation::SimulationController, manager::BackendManager,
+    },
 };
 
 use crate::features::repair::session_handler::SessionServiceState;
@@ -32,9 +30,9 @@ pub type SharedState = Arc<AppState>;
 pub async fn new_default_state() -> SharedState {
     let backend = Box::new(InternalBackend);
 
-    let controller = Arc::new(RwLock::new(
-        SimulationController::new(RobotModel::Planar2R.metadata().dof),
-    )) as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let controller = Arc::new(RwLock::new(SimulationController::new(
+        RobotModel::Planar2R.metadata().dof,
+    ))) as Arc<RwLock<dyn RobotController + Send + Sync>>;
 
     let manager = Arc::new(BackendManager::new());
     manager

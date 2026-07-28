@@ -1,5 +1,5 @@
-use thalos_math::constants::PI;
 use crate::robot::joint::{JointInfo, JointKind, JointLimits};
+use thalos_math::constants::PI;
 
 /// Spec de un robot planar 2R.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -11,7 +11,11 @@ pub struct Planar2RSpec {
 
 impl Planar2RSpec {
     pub const fn new(l1: f64, l2: f64, joint_limits: [JointLimits; 2]) -> Self {
-        Self { l1, l2, joint_limits }
+        Self {
+            l1,
+            l2,
+            joint_limits,
+        }
     }
 
     /// Robot ideal: dos revolutos con rango completo.
@@ -19,10 +23,7 @@ impl Planar2RSpec {
         Self {
             l1: 1.0,
             l2: 1.0,
-            joint_limits: [
-                JointLimits::new(-PI, PI),
-                JointLimits::new(-PI, PI),
-            ],
+            joint_limits: [JointLimits::new(-PI, PI), JointLimits::new(-PI, PI)],
         }
     }
 
@@ -34,8 +35,16 @@ impl Planar2RSpec {
     pub const fn joints(&self) -> [JointInfo; 2] {
         let [j1, j2] = self.joint_limits;
         [
-            JointInfo { name: "joint_1", kind: JointKind::Revolute, limits: Some(j1) },
-            JointInfo { name: "joint_2", kind: JointKind::Revolute, limits: Some(j2) },
+            JointInfo {
+                name: "joint_1",
+                kind: JointKind::Revolute,
+                limits: Some(j1),
+            },
+            JointInfo {
+                name: "joint_2",
+                kind: JointKind::Revolute,
+                limits: Some(j2),
+            },
         ]
     }
 }

@@ -29,8 +29,8 @@
 
 use std::collections::HashMap;
 
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 use crate::link::Link;
 use crate::material::Material;
@@ -137,10 +137,7 @@ pub fn parse_robot(source: &str) -> Result<Robot, UrdfError> {
             .unwrap_or_else(|| links[0].name.clone())
     };
 
-    let mut robot = Robot::new(
-        robot_name.unwrap_or_else(|| "robot".to_string()),
-        root_link,
-    );
+    let mut robot = Robot::new(robot_name.unwrap_or_else(|| "robot".to_string()), root_link);
 
     for link in links {
         robot.add_link(link);

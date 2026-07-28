@@ -102,7 +102,10 @@ impl MotionTrace {
 
     /// Duración total de la traza (timestamp del último sample).
     pub fn duration(&self) -> Duration {
-        self.samples.last().map(|s| s.timestamp).unwrap_or(Duration::ZERO)
+        self.samples
+            .last()
+            .map(|s| s.timestamp)
+            .unwrap_or(Duration::ZERO)
     }
 
     /// Cantidad de muestras.
@@ -133,8 +136,18 @@ impl MotionTrace {
 
             for s in &self.samples {
                 let t = s.timestamp.as_secs_f64();
-                let j = s.joints.iter().map(|v| format!("{:.6}", v)).collect::<Vec<_>>().join(",");
-                let v = s.velocities.iter().map(|v| format!("{:.6}", v)).collect::<Vec<_>>().join(",");
+                let j = s
+                    .joints
+                    .iter()
+                    .map(|v| format!("{:.6}", v))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let v = s
+                    .velocities
+                    .iter()
+                    .map(|v| format!("{:.6}", v))
+                    .collect::<Vec<_>>()
+                    .join(",");
                 if v.is_empty() {
                     csv.push_str(&format!("{},{},{:.4}\n", t, j, s.progress));
                 } else {
@@ -150,7 +163,9 @@ impl MotionTrace {
         self.samples
             .iter()
             .filter_map(|s| {
-                s.joints.get(joint_index).map(|&pos| (s.timestamp.as_secs_f64(), pos))
+                s.joints
+                    .get(joint_index)
+                    .map(|&pos| (s.timestamp.as_secs_f64(), pos))
             })
             .collect()
     }

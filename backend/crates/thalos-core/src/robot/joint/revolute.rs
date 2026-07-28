@@ -1,11 +1,11 @@
 use crate::robot::joint::joint::{JointId, JointLimits};
-use thalos_math::{Transform3D, UnitVector3, UnitQuaternion};
+use thalos_math::{Transform3D, UnitQuaternion, UnitVector3};
 #[derive(Debug, Clone)]
 pub struct RevoluteJoint {
     pub id: JointId,
     pub axis: UnitVector3,
     pub limits: JointLimits,
-    pub origin: Transform3D
+    pub origin: Transform3D,
 }
 
 impl RevoluteJoint {
@@ -14,7 +14,7 @@ impl RevoluteJoint {
             id,
             axis,
             limits,
-            origin
+            origin,
         }
     }
 

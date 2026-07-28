@@ -1,7 +1,7 @@
 use std::fs;
 
-use thalos_models::urdf::parser::parse_robot;
 use thalos_models::JointKind;
+use thalos_models::urdf::parser::parse_robot;
 
 const FIXTURE_PATH: &str = "tests/fixtures/scara.urdf";
 
@@ -20,8 +20,11 @@ fn scara_link_count() {
     let robot = parse_robot(&source).unwrap();
 
     // world, base_link, link_1, link_2, link_3, tool0
-    assert_eq!(robot.links.len(), 6,
-        "expected 6 links (world → base_link → link_1 → link_2 → link_3 → tool0)");
+    assert_eq!(
+        robot.links.len(),
+        6,
+        "expected 6 links (world → base_link → link_1 → link_2 → link_3 → tool0)"
+    );
 }
 
 #[test]
@@ -29,8 +32,11 @@ fn scara_joint_count() {
     let source = fs::read_to_string(FIXTURE_PATH).unwrap();
     let robot = parse_robot(&source).unwrap();
 
-    assert_eq!(robot.joints.len(), 5,
-        "expected 5 joints (base_joint + 4 actuated)");
+    assert_eq!(
+        robot.joints.len(),
+        5,
+        "expected 5 joints (base_joint + 4 actuated)"
+    );
 }
 
 #[test]
@@ -38,8 +44,10 @@ fn scara_root_link_is_world() {
     let source = fs::read_to_string(FIXTURE_PATH).unwrap();
     let robot = parse_robot(&source).unwrap();
 
-    assert_eq!(robot.root_link, "world",
-        "world link is never a child of any joint → should be root");
+    assert_eq!(
+        robot.root_link, "world",
+        "world link is never a child of any joint → should be root"
+    );
 }
 
 #[test]
@@ -93,10 +101,16 @@ fn scara_prismatic_joint_has_proper_limits() {
 
     let j3 = &robot.joints["joint_3"];
     let limits = j3.limits.expect("prismatic joint must have limits");
-    assert!((limits.min - (-0.5)).abs() < 1e-6,
-        "joint_3 lower limit should be -0.5, got {}", limits.min);
-    assert!(limits.max.abs() < 1e-6,
-        "joint_3 upper limit should be 0.0, got {}", limits.max);
+    assert!(
+        (limits.min - (-0.5)).abs() < 1e-6,
+        "joint_3 lower limit should be -0.5, got {}",
+        limits.min
+    );
+    assert!(
+        limits.max.abs() < 1e-6,
+        "joint_3 upper limit should be 0.0, got {}",
+        limits.max
+    );
 }
 
 #[test]
@@ -105,6 +119,9 @@ fn scara_base_joint_has_z_origin() {
     let robot = parse_robot(&source).unwrap();
 
     let bj = &robot.joints["base_joint"];
-    assert!((bj.origin.translation.z - 0.5).abs() < 1e-6,
-        "base_joint z-offset should be 0.5, got {}", bj.origin.translation.z);
+    assert!(
+        (bj.origin.translation.z - 0.5).abs() < 1e-6,
+        "base_joint z-offset should be 0.5, got {}",
+        bj.origin.translation.z
+    );
 }

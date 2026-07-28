@@ -3,5 +3,5 @@ pub mod comparison;
 pub mod metrics;
 
 pub use alignment::Alignment;
-pub use comparison::{compare, PlanExecutionComparison};
+pub use comparison::{PlanExecutionComparison, compare};
 pub use metrics::ComparisonMetrics;

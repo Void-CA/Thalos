@@ -6,10 +6,10 @@
 //! or optimization.
 
 pub mod errors;
-pub mod traits;
-pub mod scara;
 pub mod registry;
+pub mod scara;
+pub mod traits;
 
 pub use errors::LoweringError;
-pub use traits::LoweringBackend;
 pub use scara::ScaraLowering;
+pub use traits::LoweringBackend;

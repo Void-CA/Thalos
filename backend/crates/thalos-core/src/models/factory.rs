@@ -88,9 +88,7 @@ impl RobotModel {
             RobotModel::Manipulator6DOF => {
                 RobotSpec::Manipulator6DOF(manipulator_6dof::DEFAULT_SPEC)
             }
-            RobotModel::CylindricalRPP => {
-                RobotSpec::CylindricalRPP(cylindrical_rpp::DEFAULT_SPEC)
-            }
+            RobotModel::CylindricalRPP => RobotSpec::CylindricalRPP(cylindrical_rpp::DEFAULT_SPEC),
             RobotModel::SphericalPolarRRP => {
                 RobotSpec::SphericalPolarRRP(spherical_polar_rrp::DEFAULT_SPEC)
             }

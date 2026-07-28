@@ -60,24 +60,24 @@ fn classify(report: &SingularityReport, config: &SingularityConfig) -> Singulari
 mod tests {
     use super::*;
     use crate::analysis::workspace::{WorkspaceConfig, WorkspaceSampler};
-    use crate::kinematics::jacobian::GeometricJacobian;
     use crate::kinematics::forward::ForwardKinematics;
-    use thalos_math::Vector3;
+    use crate::kinematics::jacobian::GeometricJacobian;
     use crate::robot::serial_chain::SerialChain;
+    use thalos_math::Vector3;
 
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
     /// Build a simple planar 2R chain for testing.
     fn build_planar_2r() -> (SerialChain, GeometricJacobian) {
-        use std::f64::consts::PI;
-        use crate::robot::joint::*;
-        use crate::robot::segment::Segment;
-        use crate::robot::link::Link;
         use crate::robot::builder::SerialChainBuilder;
+        use crate::robot::joint::*;
+        use crate::robot::link::Link;
+        use crate::robot::segment::Segment;
         use crate::spatial::frame::FrameId;
-        use thalos_math::UnitVector3;
+        use std::f64::consts::PI;
         use thalos_math::Transform3D;
+        use thalos_math::UnitVector3;
 
         let mut builder = SerialChainBuilder::new();
 
@@ -91,8 +91,16 @@ mod tests {
             JointLimits::new(-PI, PI),
             Transform3D::identity(),
         ));
-        let link1 = Link::new(0, Transform3D::from_translation(Vector3::new(1.0, 0.0, 0.0)));
-        builder.add_segment(Segment::new(FrameId::World, shoulder.clone(), joint1, link1));
+        let link1 = Link::new(
+            0,
+            Transform3D::from_translation(Vector3::new(1.0, 0.0, 0.0)),
+        );
+        builder.add_segment(Segment::new(
+            FrameId::World,
+            shoulder.clone(),
+            joint1,
+            link1,
+        ));
 
         // Segment 2: shoulder → ee
         let joint2 = JointType::Revolute(RevoluteJoint::new(
@@ -101,7 +109,10 @@ mod tests {
             JointLimits::new(-PI, PI),
             Transform3D::identity(),
         ));
-        let link2 = Link::new(1, Transform3D::from_translation(Vector3::new(1.0, 0.0, 0.0)));
+        let link2 = Link::new(
+            1,
+            Transform3D::from_translation(Vector3::new(1.0, 0.0, 0.0)),
+        );
         builder.add_segment(Segment::new(shoulder, ee.clone(), joint2, link2));
 
         builder.set_end_effector(ee.clone());
@@ -133,7 +144,8 @@ mod tests {
             tolerance: 0.001,
         };
         let mut rng = StdRng::seed_from_u64(config.seed);
-        let workspace = sampler.sample(&chain, config, &mut rng)
+        let workspace = sampler
+            .sample(&chain, config, &mut rng)
             .expect("sampling failed");
 
         let singularity_config = SingularityConfig::default();
@@ -165,79 +177,87 @@ mod tests {
     }
 
     #[test]
-fn detect_known_planar_2r_singularity() {
-    let (_chain, jac) = build_planar_2r();
+    fn detect_known_planar_2r_singularity() {
+        let (_chain, jac) = build_planar_2r();
 
-    let q = vec![0.0, 0.0];
+        let q = vec![0.0, 0.0];
 
-    let jacobian = jac.evaluate(&q);
-    let report = SingularityReport::analyze(&jacobian);
+        let jacobian = jac.evaluate(&q);
+        let report = SingularityReport::analyze(&jacobian);
 
-    println!("rank = {}", report.rank);
-    println!("cond = {}", report.condition_number);
-    println!("sv = {:?}", report.singular_values);
+        println!("rank = {}", report.rank);
+        println!("cond = {}", report.condition_number);
+        println!("sv = {:?}", report.singular_values);
 
-    assert_eq!(report.rank, 1);
+        assert_eq!(report.rank, 1);
 
-    assert!(
-        report.condition_number.is_infinite(),
-        "expected infinite condition number, got {}",
-        report.condition_number
-    );
+        assert!(
+            report.condition_number.is_infinite(),
+            "expected infinite condition number, got {}",
+            report.condition_number
+        );
 
-    let state = classify(
-        &report,
-        &SingularityConfig::default(),
-    );
+        let state = classify(&report, &SingularityConfig::default());
 
-    assert_eq!(state, SingularityState::Singular);
-}
-
-#[test]
-fn analyze_icebot_urdf_pipeline() {
-    // Load the icebot URDF and verify the full pipeline
-    // (FK → workspace sampling → singularity analysis) does not panic.
-    let src = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../../docs/robot/icebot.urdf"
-    ));
-    let robot = thalos_models::urdf::parser::parse_robot(src)
-        .expect("icebot URDF should parse");
-    let chain = crate::robot::adapter::auto(&robot)
-        .expect("icebot should produce a valid chain");
-
-    // Verify the chain structure
-    // Icebot has 4 actuated joints + 1 fixed joint (tcp_joint for tool0 frame)
-    assert_eq!(chain.segments.len(), 5, "icebot has 5 segments (4 actuated + 1 fixed)");
-    assert_eq!(chain.dof_count(), 4, "icebot has 4 DOF (3 rev + 1 prism)");
-
-    // FK with zero config
-    let fk = ForwardKinematics::new(chain.clone());
-    let q = vec![0.0; chain.dof_count()];
-    let fk_result = fk.evaluate(&q);
-    assert!(fk_result.ee_position().is_some(), "FK should produce an EE position");
-
-    // Workspace sampling
-    let config = WorkspaceConfig { samples: 50, seed: 42, tolerance: 0.001 };
-    let mut rng = StdRng::seed_from_u64(config.seed);
-    let ws = WorkspaceSampler
-        .sample(&chain, config, &mut rng)
-        .expect("workspace sampling should succeed");
-    assert_eq!(ws.samples().len(), 50);
-
-    // Verify all q vectors have correct length
-    for s in ws.samples() {
-        assert_eq!(s.q.len(), 4, "each sample q should have 4 elements (DOF)");
+        assert_eq!(state, SingularityState::Singular);
     }
 
-    // Singularity analysis
-    let jac = GeometricJacobian::new(
-        ForwardKinematics::new(chain.clone()),
-        chain.end_effector.clone(),
-    );
-    let singularity_config = SingularityConfig::default();
-    let analysis = SingularityAnalyzer::analyze(&ws, &jac, &singularity_config);
-    assert_eq!(analysis.samples.len(), 50);
-    assert_eq!(analysis.metrics.total_samples, 50);
-}
+    #[test]
+    fn analyze_icebot_urdf_pipeline() {
+        // Load the icebot URDF and verify the full pipeline
+        // (FK → workspace sampling → singularity analysis) does not panic.
+        let src = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../docs/robot/icebot.urdf"
+        ));
+        let robot =
+            thalos_models::urdf::parser::parse_robot(src).expect("icebot URDF should parse");
+        let chain =
+            crate::robot::adapter::auto(&robot).expect("icebot should produce a valid chain");
+
+        // Verify the chain structure
+        // Icebot has 4 actuated joints + 1 fixed joint (tcp_joint for tool0 frame)
+        assert_eq!(
+            chain.segments.len(),
+            5,
+            "icebot has 5 segments (4 actuated + 1 fixed)"
+        );
+        assert_eq!(chain.dof_count(), 4, "icebot has 4 DOF (3 rev + 1 prism)");
+
+        // FK with zero config
+        let fk = ForwardKinematics::new(chain.clone());
+        let q = vec![0.0; chain.dof_count()];
+        let fk_result = fk.evaluate(&q);
+        assert!(
+            fk_result.ee_position().is_some(),
+            "FK should produce an EE position"
+        );
+
+        // Workspace sampling
+        let config = WorkspaceConfig {
+            samples: 50,
+            seed: 42,
+            tolerance: 0.001,
+        };
+        let mut rng = StdRng::seed_from_u64(config.seed);
+        let ws = WorkspaceSampler
+            .sample(&chain, config, &mut rng)
+            .expect("workspace sampling should succeed");
+        assert_eq!(ws.samples().len(), 50);
+
+        // Verify all q vectors have correct length
+        for s in ws.samples() {
+            assert_eq!(s.q.len(), 4, "each sample q should have 4 elements (DOF)");
+        }
+
+        // Singularity analysis
+        let jac = GeometricJacobian::new(
+            ForwardKinematics::new(chain.clone()),
+            chain.end_effector.clone(),
+        );
+        let singularity_config = SingularityConfig::default();
+        let analysis = SingularityAnalyzer::analyze(&ws, &jac, &singularity_config);
+        assert_eq!(analysis.samples.len(), 50);
+        assert_eq!(analysis.metrics.total_samples, 50);
+    }
 }

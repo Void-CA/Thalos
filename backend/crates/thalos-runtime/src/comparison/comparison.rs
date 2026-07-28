@@ -2,8 +2,8 @@
 
 use serde::Serialize;
 
-use super::alignment::{align, Alignment, AlignedPair};
-use super::metrics::{compute_metrics, ComparisonMetrics};
+use super::alignment::{AlignedPair, Alignment, align};
+use super::metrics::{ComparisonMetrics, compute_metrics};
 use crate::motion_trace::MotionTrace;
 use crate::telemetry::ExecutionTrace;
 
@@ -58,8 +58,8 @@ pub fn compare(
 mod tests {
     use super::*;
     use crate::motion_trace::MotionSample;
-    use crate::telemetry::{ExecutionSample, TraceMetadata};
     use crate::session::ExecutionSource;
+    use crate::telemetry::{ExecutionSample, TraceMetadata};
     use std::time::Duration;
 
     fn plan_samples() -> Vec<MotionSample> {

@@ -30,7 +30,11 @@ pub struct CollisionPair {
 
 impl CollisionPair {
     pub fn new(a: EntityId, b: EntityId, collision_type: CollisionType) -> Self {
-        Self { a, b, collision_type }
+        Self {
+            a,
+            b,
+            collision_type,
+        }
     }
 }
 

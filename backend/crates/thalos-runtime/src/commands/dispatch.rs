@@ -9,14 +9,10 @@ use thalos_core::{
 use thalos_models::Robot;
 
 use crate::{
-    commands::{
-        handler::ExecutableCommand,
-        kinematics::KinematicsCommand,
-        motion::MotionCommands,
-    },
+    RuntimeError,
+    commands::{handler::ExecutableCommand, kinematics::KinematicsCommand, motion::MotionCommands},
     snapshots::scene::JointMeta,
     state::robot::SceneRuntime,
-    RuntimeError,
 };
 
 /// Placeholder model used for URDF-imported robots.
@@ -71,13 +67,15 @@ impl ExecutableCommand for Command {
                 runtime.active_tcp = None; // Clear TCP when changing robot
                 Ok(None)
             }
-            Command::LoadUrdfRobot { name, joints_meta, chain, robot } => {
+            Command::LoadUrdfRobot {
+                name,
+                joints_meta,
+                chain,
+                robot,
+            } => {
                 let dof = chain.dof_count();
-                runtime.active_robot = ActiveRobot::new(
-                    URDF_PLACEHOLDER,
-                    chain.clone(),
-                    vec![0.0; dof],
-                );
+                runtime.active_robot =
+                    ActiveRobot::new(URDF_PLACEHOLDER, chain.clone(), vec![0.0; dof]);
                 runtime.robot_name = name.clone();
                 runtime.joints_meta = joints_meta.clone();
                 runtime.robot_source = Some(robot.clone());

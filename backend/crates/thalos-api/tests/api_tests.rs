@@ -1,9 +1,9 @@
 use axum::{
+    Router,
     body::Body,
     http::{self, Request, StatusCode},
-    Router,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tower::ServiceExt;
 
 use thalos_api::{app_router, new_default_state};
@@ -50,8 +50,14 @@ async fn get_scene_returns_wrapped_scene() {
     let body = body.expect("response must be valid JSON");
 
     // response is wrapped: { scene: VisualScene, generated_at }
-    assert!(body.get("scene").is_some(), "response must contain 'scene' wrapper");
-    assert!(body.get("generated_at").is_some(), "response must contain 'generated_at'");
+    assert!(
+        body.get("scene").is_some(),
+        "response must contain 'scene' wrapper"
+    );
+    assert!(
+        body.get("generated_at").is_some(),
+        "response must contain 'generated_at'"
+    );
 
     let scene = &body["scene"];
     assert!(scene.get("frames").is_some(), "scene must contain frames");
@@ -73,8 +79,14 @@ async fn from_fk_returns_wrapped_scene() {
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
 
-    assert!(body.get("scene").is_some(), "response must contain 'scene' wrapper");
-    assert!(body.get("generated_at").is_some(), "response must contain 'generated_at'");
+    assert!(
+        body.get("scene").is_some(),
+        "response must contain 'scene' wrapper"
+    );
+    assert!(
+        body.get("generated_at").is_some(),
+        "response must contain 'generated_at'"
+    );
 
     let scene = &body["scene"];
     assert!(scene.get("frames").is_some());
@@ -106,7 +118,10 @@ async fn from_fk_rejects_missing_field() {
         Some(json!({"state": [0.5, 0.3]})),
     )
     .await;
-    assert!(status.is_client_error(), "missing joint_angles should be rejected");
+    assert!(
+        status.is_client_error(),
+        "missing joint_angles should be rejected"
+    );
 }
 
 // ── Validation tests ──
@@ -151,7 +166,10 @@ async fn validate_invalid_scene() {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     let body = body.expect("response must be valid JSON");
     // validate returns ErrorResponse on failure (not ValidateResponse)
-    assert!(body.get("code").is_some(), "error response must contain 'code'");
+    assert!(
+        body.get("code").is_some(),
+        "error response must contain 'code'"
+    );
     assert_eq!(body["code"], "MISSING_WORLD");
     assert!(body["error"].as_str().unwrap().contains("world"));
 }
@@ -215,7 +233,10 @@ async fn diff_different_scenes() {
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
     let changed = body["changed_frames"].as_array().unwrap();
-    assert!(!changed.is_empty(), "different configurations should produce changes");
+    assert!(
+        !changed.is_empty(),
+        "different configurations should produce changes"
+    );
 }
 
 // ── Error mapping tests ──
@@ -432,16 +453,28 @@ async fn get_robot_scara_returns_joints() {
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
 
-    let joints = body["joints"].as_array().expect("response must contain 'joints' array");
+    let joints = body["joints"]
+        .as_array()
+        .expect("response must contain 'joints' array");
     assert_eq!(joints.len(), 4, "SCARA should have 4 joints");
 
     let first = &joints[0];
     assert!(first.get("name").is_some(), "each joint must have a name");
     assert!(first.get("kind").is_some(), "each joint must have a kind");
-    assert!(first.get("min").is_some(), "each joint must have min (may be null)");
-    assert!(first.get("max").is_some(), "each joint must have max (may be null)");
+    assert!(
+        first.get("min").is_some(),
+        "each joint must have min (may be null)"
+    );
+    assert!(
+        first.get("max").is_some(),
+        "each joint must have max (may be null)"
+    );
 
-    assert_eq!(body["dof"].as_u64().unwrap() as usize, joints.len(), "dof must equal joints.len()");
+    assert_eq!(
+        body["dof"].as_u64().unwrap() as usize,
+        joints.len(),
+        "dof must equal joints.len()"
+    );
 }
 
 #[tokio::test]
@@ -451,9 +484,15 @@ async fn get_robot_planar_2r_returns_joints() {
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
 
-    let joints = body["joints"].as_array().expect("response must contain 'joints' array");
+    let joints = body["joints"]
+        .as_array()
+        .expect("response must contain 'joints' array");
     assert_eq!(joints.len(), 2, "Planar2R should have 2 joints");
-    assert_eq!(body["dof"].as_u64().unwrap() as usize, joints.len(), "dof must equal joints.len()");
+    assert_eq!(
+        body["dof"].as_u64().unwrap() as usize,
+        joints.len(),
+        "dof must equal joints.len()"
+    );
 }
 
 #[tokio::test]
@@ -463,21 +502,39 @@ async fn get_robot_planar_3r_returns_joints() {
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
 
-    let joints = body["joints"].as_array().expect("response must contain 'joints' array");
+    let joints = body["joints"]
+        .as_array()
+        .expect("response must contain 'joints' array");
     assert_eq!(joints.len(), 3, "Planar3R should have 3 joints");
-    assert_eq!(body["dof"].as_u64().unwrap() as usize, joints.len(), "dof must equal joints.len()");
+    assert_eq!(
+        body["dof"].as_u64().unwrap() as usize,
+        joints.len(),
+        "dof must equal joints.len()"
+    );
 }
 
 #[tokio::test]
 async fn get_robot_single_revolute_returns_joints() {
     let app = test_app().await;
-    let (status, body) = get_json(app, http::Method::GET, "/api/v1/robots/single_revolute", None).await;
+    let (status, body) = get_json(
+        app,
+        http::Method::GET,
+        "/api/v1/robots/single_revolute",
+        None,
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
 
-    let joints = body["joints"].as_array().expect("response must contain 'joints' array");
+    let joints = body["joints"]
+        .as_array()
+        .expect("response must contain 'joints' array");
     assert_eq!(joints.len(), 1, "SingleRevolute should have 1 joint");
-    assert_eq!(body["dof"].as_u64().unwrap() as usize, joints.len(), "dof must equal joints.len()");
+    assert_eq!(
+        body["dof"].as_u64().unwrap() as usize,
+        joints.len(),
+        "dof must equal joints.len()"
+    );
 }
 
 #[tokio::test]
@@ -490,9 +547,16 @@ async fn list_robots_returns_all_with_joints() {
     assert_eq!(robots.len(), 8, "should have 8 robots");
 
     for robot in robots {
-        let joints = robot["joints"].as_array().expect("each robot must have joints array");
+        let joints = robot["joints"]
+            .as_array()
+            .expect("each robot must have joints array");
         let dof = robot["dof"].as_u64().unwrap() as usize;
-        assert_eq!(dof, joints.len(), "dof must equal joints.len() for {}", robot["id"]);
+        assert_eq!(
+            dof,
+            joints.len(),
+            "dof must equal joints.len() for {}",
+            robot["id"]
+        );
     }
 }
 
@@ -552,7 +616,10 @@ async fn workspace_sample_scara_returns_metrics_and_bounds() {
     assert!(bounds.get("max").is_some());
 
     // Samples should NOT be present by default
-    assert!(body.get("samples").is_none(), "samples must be absent by default");
+    assert!(
+        body.get("samples").is_none(),
+        "samples must be absent by default"
+    );
 }
 
 // 5.9: POST /workspace/sample with include_samples: true
@@ -576,14 +643,19 @@ async fn workspace_sample_include_samples_returns_samples() {
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
 
-    let samples = body.get("samples").expect("must contain samples when include_samples=true");
+    let samples = body
+        .get("samples")
+        .expect("must contain samples when include_samples=true");
     let arr = samples.as_array().unwrap();
     assert_eq!(arr.len(), 10, "must have 10 samples");
 
     // Each sample must have q and position
     for sample in arr {
         assert!(sample.get("q").is_some(), "sample must have q");
-        assert!(sample.get("position").is_some(), "sample must have position");
+        assert!(
+            sample.get("position").is_some(),
+            "sample must have position"
+        );
         let q = sample["q"].as_array().unwrap();
         assert_eq!(q.len(), 2, "planar_2r has 2 DOF");
     }
@@ -607,7 +679,10 @@ async fn workspace_reachability_inside_returns_reachable() {
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
 
-    assert_eq!(body["reachable"], true, "Scara test point (0.7, 0, 0.5) should be reachable");
+    assert_eq!(
+        body["reachable"], true,
+        "Scara test point (0.7, 0, 0.5) should be reachable"
+    );
     assert_eq!(body["nearest_distance"], 0.0);
 }
 
@@ -676,7 +751,9 @@ async fn movej_accepts_valid_request() {
     .await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
-    let plan = body["active_plan"].as_object().expect("active_plan must be present");
+    let plan = body["active_plan"]
+        .as_object()
+        .expect("active_plan must be present");
     assert_eq!(plan["state"], "Completed");
     assert_eq!(plan["motion_type"], "movej");
     assert_eq!(body["joints"], json!([1.0, 0.5]));
@@ -696,7 +773,9 @@ async fn movej_accepts_minimal_request() {
     .await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
-    let plan = body["active_plan"].as_object().expect("active_plan must be present");
+    let plan = body["active_plan"]
+        .as_object()
+        .expect("active_plan must be present");
     assert_eq!(plan["state"], "Completed");
     assert_eq!(plan["motion_type"], "movej");
     assert_eq!(body["joints"], json!([0.5, -0.3]));
@@ -762,7 +841,9 @@ async fn movel_accepts_valid_request() {
     .await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
-    let plan = body["active_plan"].as_object().expect("active_plan must be present");
+    let plan = body["active_plan"]
+        .as_object()
+        .expect("active_plan must be present");
     assert_eq!(plan["state"], "Completed");
     assert_eq!(plan["motion_type"], "movel");
 }
@@ -789,7 +870,9 @@ async fn movel_accepts_with_frame_id() {
     .await;
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
-    let plan = body["active_plan"].as_object().expect("active_plan must be present");
+    let plan = body["active_plan"]
+        .as_object()
+        .expect("active_plan must be present");
     assert_eq!(plan["state"], "Completed");
     assert_eq!(plan["motion_type"], "movel");
 }
@@ -835,7 +918,9 @@ async fn movel_with_unreachable_target_still_returns_accepted() {
     // The endpoint still accepts the request — IK failure is not an HTTP error
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
-    let plan = body["active_plan"].as_object().expect("active_plan must be present");
+    let plan = body["active_plan"]
+        .as_object()
+        .expect("active_plan must be present");
     assert_eq!(plan["state"], "Completed");
     assert_eq!(plan["motion_type"], "movel");
     // Joints should be finite (no NaN from failed IK)
@@ -905,7 +990,8 @@ async fn execute_plan_with_two_segments_returns_correct_segment_ranges() {
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
 
-    let plan = body["active_plan"].as_object()
+    let plan = body["active_plan"]
+        .as_object()
         .expect("active_plan must be present");
 
     // ── Plan metadata ──
@@ -913,19 +999,35 @@ async fn execute_plan_with_two_segments_returns_correct_segment_ranges() {
     assert_eq!(plan["motion_type"], "program");
 
     // ── Segments ──
-    let segments = plan["segments"].as_array()
+    let segments = plan["segments"]
+        .as_array()
         .expect("segments must be an array");
-    assert_eq!(segments.len(), 2, "expected 2 segments, got {}", segments.len());
+    assert_eq!(
+        segments.len(),
+        2,
+        "expected 2 segments, got {}",
+        segments.len()
+    );
 
     // Each segment must have valid numeric waypoint ranges
     for (i, seg) in segments.iter().enumerate() {
-        let ws = seg["waypoint_start"].as_u64().expect("waypoint_start must be u64");
-        let we = seg["waypoint_end"].as_u64().expect("waypoint_end must be u64");
+        let ws = seg["waypoint_start"]
+            .as_u64()
+            .expect("waypoint_start must be u64");
+        let we = seg["waypoint_end"]
+            .as_u64()
+            .expect("waypoint_end must be u64");
         let ts = seg["time_start"].as_f64().expect("time_start must be f64");
         let te = seg["time_end"].as_f64().expect("time_end must be f64");
 
-        assert!(we > ws, "segment {i}: waypoint_end ({we}) must be > waypoint_start ({ws})");
-        assert!(te >= ts, "segment {i}: time_end ({te}) must be >= time_start ({ts})");
+        assert!(
+            we > ws,
+            "segment {i}: waypoint_end ({we}) must be > waypoint_start ({ws})"
+        );
+        assert!(
+            te >= ts,
+            "segment {i}: time_end ({te}) must be >= time_start ({ts})"
+        );
         assert_eq!(seg["segment_index"], i, "segment {i}: index mismatch");
         assert_eq!(seg["motion_type"], "movej", "segment {i}: motion_type");
     }
@@ -943,9 +1045,11 @@ async fn execute_plan_with_two_segments_returns_correct_segment_ranges() {
     );
 
     // ── Visualization ──
-    let vis = plan["visualization"].as_object()
+    let vis = plan["visualization"]
+        .as_object()
         .expect("visualization must be present");
-    let waypoints = vis["waypoints"].as_array()
+    let waypoints = vis["waypoints"]
+        .as_array()
         .expect("waypoints must be an array");
 
     // Total waypoint count = segment 0 end (which equals segment 1 end)
@@ -958,8 +1062,13 @@ async fn execute_plan_with_two_segments_returns_correct_segment_ranges() {
 
     // Waypoints must have positions
     for (i, wp) in waypoints.iter().enumerate() {
-        let pos = wp["position"].as_array().expect("waypoint must have position array");
-        assert!(pos.len() >= 2, "waypoint {i}: position must have at least 2 elements");
+        let pos = wp["position"]
+            .as_array()
+            .expect("waypoint must have position array");
+        assert!(
+            pos.len() >= 2,
+            "waypoint {i}: position must have at least 2 elements"
+        );
     }
 
     // Verify end effector position changes between waypoints (different segments)
@@ -978,15 +1087,18 @@ async fn execute_plan_with_two_segments_returns_correct_segment_ranges() {
 
     // ── Joints must NOT change (plan is Created, not executed) ──
     assert_eq!(
-        body["joints"], json!([0.0, 0.0]),
+        body["joints"],
+        json!([0.0, 0.0]),
         "robot joints must remain at initial position when plan is Created (not executed)"
     );
 
     // Verify the first waypoint's joints are at START position, not the final target
     let first_joints = &waypoints[0]["joints"];
     assert_eq!(
-        first_joints, &json!([0.0, 0.0]),
-        "first visualization waypoint must match start position, got {:?}", first_joints
+        first_joints,
+        &json!([0.0, 0.0]),
+        "first visualization waypoint must match start position, got {:?}",
+        first_joints
     );
 }
 
@@ -995,7 +1107,7 @@ async fn execute_plan_with_two_segments_returns_correct_segment_ranges() {
 #[tokio::test]
 async fn select_tool_frame_sets_active_tcp() {
     let app = test_app().await;
-    
+
     // Load Scara robot first
     let (status, body) = get_json(
         app.clone(),
@@ -1005,17 +1117,17 @@ async fn select_tool_frame_sets_active_tcp() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    
+
     // Get the end effector frame ID from the scene
     let scene = &body.unwrap()["scene"];
     let frames = scene["frames"].as_array().unwrap();
     // Find the end effector frame (last frame in the chain)
     let ee_frame = frames.last().unwrap();
     let ee_frame_id = ee_frame["id"].as_str().unwrap();
-    
+
     // Parse the frame ID as u64 (assuming it's numeric)
     let frame_id: u64 = ee_frame_id.parse().unwrap_or(0);
-    
+
     // Select the TCP with an offset
     let (status, body) = get_json(
         app.clone(),
@@ -1028,17 +1140,17 @@ async fn select_tool_frame_sets_active_tcp() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    
+
     let body = body.expect("response must be valid JSON");
-    
+
     // Verify active_tcp is set
     let active_tcp = body["active_tcp"].as_object();
     assert!(active_tcp.is_some(), "active_tcp should be set");
-    
+
     let tcp = active_tcp.unwrap();
     assert_eq!(tcp["base_frame_id"].as_u64().unwrap(), frame_id);
     assert!(tcp["offset"].is_array(), "offset should be present");
-    
+
     let offset = tcp["offset"].as_array().unwrap();
     assert_eq!(offset.len(), 3);
     assert!((offset[0].as_f64().unwrap() - 0.0).abs() < 1e-6);
@@ -1049,7 +1161,7 @@ async fn select_tool_frame_sets_active_tcp() {
 #[tokio::test]
 async fn select_tool_frame_clears_tcp() {
     let app = test_app().await;
-    
+
     // Load Scara robot
     let (status, _) = get_json(
         app.clone(),
@@ -1059,7 +1171,7 @@ async fn select_tool_frame_clears_tcp() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    
+
     // Set a TCP first
     let (status, _) = get_json(
         app.clone(),
@@ -1072,7 +1184,7 @@ async fn select_tool_frame_clears_tcp() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    
+
     // Clear the TCP
     let (status, body) = get_json(
         app.clone(),
@@ -1084,12 +1196,11 @@ async fn select_tool_frame_clears_tcp() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    
+
     let body = body.expect("response must be valid JSON");
-    
+
     // Verify active_tcp is null/absent
-    assert!(body["active_tcp"].is_null(), 
-            "active_tcp should be cleared");
+    assert!(body["active_tcp"].is_null(), "active_tcp should be cleared");
 }
 
 // ── E2E: Full pipeline integration test ──
@@ -1107,7 +1218,11 @@ async fn e2e_full_pipeline() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "load_robot should succeed");
-    let robot_joints = body.as_ref().and_then(|b| b["joints"].as_array()).map(|a| a.len()).unwrap_or(0);
+    let robot_joints = body
+        .as_ref()
+        .and_then(|b| b["joints"].as_array())
+        .map(|a| a.len())
+        .unwrap_or(0);
     assert_eq!(robot_joints, 4, "Scara should have 4 joints");
 
     // 2. Compile and preview a MoveJ plan
@@ -1121,11 +1236,15 @@ async fn e2e_full_pipeline() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "preview_plan should succeed");
-    let plan_state = body.as_ref()
+    let plan_state = body
+        .as_ref()
         .and_then(|b| b["active_plan"]["state"].as_str())
         .unwrap_or("")
         .to_string();
-    assert_eq!(plan_state, "Created", "plan should be Created after preview");
+    assert_eq!(
+        plan_state, "Created",
+        "plan should be Created after preview"
+    );
 
     // 3. Start execution
     let (status, body) = get_json(
@@ -1136,7 +1255,8 @@ async fn e2e_full_pipeline() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "start_execution should succeed");
-    let plan_state = body.as_ref()
+    let plan_state = body
+        .as_ref()
         .and_then(|b| b["active_plan"]["state"].as_str())
         .unwrap_or("")
         .to_string();
@@ -1163,7 +1283,8 @@ async fn e2e_full_pipeline() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "pause should succeed");
-    let plan_state = body.as_ref()
+    let plan_state = body
+        .as_ref()
         .and_then(|b| b["active_plan"]["state"].as_str())
         .unwrap_or("")
         .to_string();
@@ -1177,11 +1298,15 @@ async fn e2e_full_pipeline() {
         Some(json!({"dt": 0.05})),
     )
     .await;
-    let state_after_paused_tick = body.as_ref()
+    let state_after_paused_tick = body
+        .as_ref()
         .and_then(|b| b["execution"]["status"].as_str())
         .unwrap_or("")
         .to_string();
-    assert_eq!(state_after_paused_tick, "Paused", "should stay paused after tick");
+    assert_eq!(
+        state_after_paused_tick, "Paused",
+        "should stay paused after tick"
+    );
 
     // 7. Resume execution
     let (status, _) = get_json(
@@ -1203,7 +1328,8 @@ async fn e2e_full_pipeline() {
         )
         .await;
         assert_eq!(s, StatusCode::OK, "tick should succeed");
-        let status = body.as_ref()
+        let status = body
+            .as_ref()
             .and_then(|b| b["execution"]["status"].as_str())
             .unwrap_or("");
         if status == "Completed" {
@@ -1219,7 +1345,8 @@ async fn e2e_full_pipeline() {
         Some(json!({"dt": 0.05})),
     )
     .await;
-    let final_status = body.as_ref()
+    let final_status = body
+        .as_ref()
         .and_then(|b| b["execution"]["status"].as_str())
         .unwrap_or("");
     assert_eq!(final_status, "Completed", "execution should complete");
@@ -1237,15 +1364,19 @@ async fn e2e_full_pipeline() {
     assert!(summary.is_some(), "analyze should return summary");
     let score = summary.and_then(|s| s["score"].as_u64()).unwrap_or(0);
     assert!(score > 0 || score == 0, "score should be a valid number");
-    let findings = body.as_ref()
+    let findings = body
+        .as_ref()
         .and_then(|b| b["findings"].as_array())
         .map(|a| a.len())
         .unwrap_or(0);
     assert!(findings > 0, "analyze should return at least one finding");
-    let recommendations = body.as_ref()
+    let recommendations = body
+        .as_ref()
         .and_then(|b| b["recommendations"].as_array())
         .map(|a| a.len())
         .unwrap_or(0);
-    assert!(recommendations > 0, "analyze should return at least one recommendation");
+    assert!(
+        recommendations > 0,
+        "analyze should return at least one recommendation"
+    );
 }
-

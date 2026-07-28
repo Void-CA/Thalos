@@ -25,10 +25,7 @@ impl Matrix4x4 {
     pub fn identity() -> Self {
         Self {
             m: [
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 1.0, 0.0, 0.0,
-                0.0, 0.0, 1.0, 0.0,
-                0.0, 0.0, 0.0, 1.0,
+                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
             ],
         }
     }
@@ -44,10 +41,22 @@ impl Matrix4x4 {
     pub fn from_rp(rotation: [[f64; 3]; 3], translation: Vector3) -> Self {
         Self {
             m: [
-                rotation[0][0], rotation[0][1], rotation[0][2], translation.x,
-                rotation[1][0], rotation[1][1], rotation[1][2], translation.y,
-                rotation[2][0], rotation[2][1], rotation[2][2], translation.z,
-                0.0, 0.0, 0.0, 1.0,
+                rotation[0][0],
+                rotation[0][1],
+                rotation[0][2],
+                translation.x,
+                rotation[1][0],
+                rotation[1][1],
+                rotation[1][2],
+                translation.y,
+                rotation[2][0],
+                rotation[2][1],
+                rotation[2][2],
+                translation.z,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
             ],
         }
     }

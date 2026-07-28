@@ -8,8 +8,8 @@ use crate::kinematics::forward::ForwardKinematics;
 use crate::models::{RobotModel, RobotRegistry};
 use crate::prelude::{WorkspaceConfig, WorkspaceSampler};
 use crate::robot::serial_chain::SerialChain;
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 
 // ─── R1: determinism ────────────────────────────────────────────────────
 
@@ -18,7 +18,11 @@ fn sampler_same_seed_produces_identical_samples() {
     let mut rng_a = StdRng::seed_from_u64(42);
     let mut rng_b = StdRng::seed_from_u64(42);
 
-    let config = WorkspaceConfig { samples: 100, seed: 42, tolerance: 1e-3 };
+    let config = WorkspaceConfig {
+        samples: 100,
+        seed: 42,
+        tolerance: 1e-3,
+    };
     let chain = RobotRegistry::create_default(RobotModel::Scara);
 
     let ws_a = WorkspaceSampler.sample(&chain, config, &mut rng_a).unwrap();
@@ -39,15 +43,25 @@ fn sampler_different_seeds_produce_different_samples() {
     let mut rng_a = StdRng::seed_from_u64(0);
     let mut rng_b = StdRng::seed_from_u64(1);
 
-    let config = WorkspaceConfig { samples: 50, seed: 0, tolerance: 1e-3 };
+    let config = WorkspaceConfig {
+        samples: 50,
+        seed: 0,
+        tolerance: 1e-3,
+    };
     let chain = RobotRegistry::create_default(RobotModel::Scara);
 
     let ws_a = WorkspaceSampler.sample(&chain, config, &mut rng_a).unwrap();
     let ws_b = WorkspaceSampler.sample(&chain, config, &mut rng_b).unwrap();
 
-    let any_different = ws_a.samples().iter().zip(ws_b.samples().iter())
+    let any_different = ws_a
+        .samples()
+        .iter()
+        .zip(ws_b.samples().iter())
         .any(|(a, b)| a.q != b.q);
-    assert!(any_different, "different seeds must produce different q vectors");
+    assert!(
+        any_different,
+        "different seeds must produce different q vectors"
+    );
 }
 
 // ─── R2: position == FK(chain, q).ee_position() ──────────────────────────
@@ -55,20 +69,29 @@ fn sampler_different_seeds_produce_different_samples() {
 #[test]
 fn sampler_position_matches_forward_kinematics() {
     let mut rng = StdRng::seed_from_u64(7);
-    let config = WorkspaceConfig { samples: 20, seed: 7, tolerance: 1e-3 };
+    let config = WorkspaceConfig {
+        samples: 20,
+        seed: 7,
+        tolerance: 1e-3,
+    };
     let chain = RobotRegistry::create_default(RobotModel::Scara);
     let fk = ForwardKinematics::new(chain.clone());
 
     let ws = WorkspaceSampler.sample(&chain, config, &mut rng).unwrap();
 
     for sample in ws.samples() {
-        let fk_pos = fk.evaluate(&sample.q).ee_position().expect("EE pose must exist");
+        let fk_pos = fk
+            .evaluate(&sample.q)
+            .ee_position()
+            .expect("EE pose must exist");
         assert!(
             (fk_pos.x - sample.position.x).abs() < 1e-9
-            && (fk_pos.y - sample.position.y).abs() < 1e-9
-            && (fk_pos.z - sample.position.z).abs() < 1e-9,
+                && (fk_pos.y - sample.position.y).abs() < 1e-9
+                && (fk_pos.z - sample.position.z).abs() < 1e-9,
             "sample.position {:?} != FK(q).ee_position() {:?} for q={:?}",
-            sample.position, fk_pos, sample.q,
+            sample.position,
+            fk_pos,
+            sample.q,
         );
     }
 }
@@ -89,10 +112,15 @@ fn sampler_works_for_every_robot_model() {
 
     for model in models {
         let mut rng = StdRng::seed_from_u64(0);
-        let config = WorkspaceConfig { samples: 30, seed: 0, tolerance: 1e-3 };
+        let config = WorkspaceConfig {
+            samples: 30,
+            seed: 0,
+            tolerance: 1e-3,
+        };
         let chain = RobotRegistry::create_default(model);
 
-        let ws = WorkspaceSampler.sample(&chain, config, &mut rng)
+        let ws = WorkspaceSampler
+            .sample(&chain, config, &mut rng)
             .unwrap_or_else(|e| panic!("sampler failed for {:?}: {}", model, e));
 
         assert_eq!(ws.samples().len(), 30, "{:?}: sample count", model);
@@ -109,14 +137,22 @@ fn sampler_works_for_every_robot_model() {
 #[test]
 fn sampler_does_not_mutate_input_chain() {
     let mut rng = StdRng::seed_from_u64(0);
-    let config = WorkspaceConfig { samples: 10, seed: 0, tolerance: 1e-3 };
+    let config = WorkspaceConfig {
+        samples: 10,
+        seed: 0,
+        tolerance: 1e-3,
+    };
     let chain = RobotRegistry::create_default(RobotModel::Planar2R);
     let chain_snapshot_before = chain.clone();
 
     let _ = WorkspaceSampler.sample(&chain, config, &mut rng).unwrap();
     // The chain's segment data must be unchanged
     assert_eq!(chain.segments.len(), chain_snapshot_before.segments.len());
-    for (a, b) in chain.segments.iter().zip(chain_snapshot_before.segments.iter()) {
+    for (a, b) in chain
+        .segments
+        .iter()
+        .zip(chain_snapshot_before.segments.iter())
+    {
         assert_eq!(a.parent, b.parent);
         assert_eq!(a.child, b.child);
     }
@@ -127,7 +163,11 @@ fn sampler_does_not_mutate_input_chain() {
 #[test]
 fn sample_q_length_matches_robot_dof() {
     let mut rng = StdRng::seed_from_u64(0);
-    let config = WorkspaceConfig { samples: 5, seed: 0, tolerance: 1e-3 };
+    let config = WorkspaceConfig {
+        samples: 5,
+        seed: 0,
+        tolerance: 1e-3,
+    };
     let chain = RobotRegistry::create_default(RobotModel::Planar2R); // 2 DOF
 
     let ws = WorkspaceSampler.sample(&chain, config, &mut rng).unwrap();
@@ -141,7 +181,11 @@ fn sample_q_length_matches_robot_dof() {
 #[test]
 fn sampler_rejects_zero_samples() {
     let mut rng = StdRng::seed_from_u64(0);
-    let config = WorkspaceConfig { samples: 0, seed: 0, tolerance: 1e-3 };
+    let config = WorkspaceConfig {
+        samples: 0,
+        seed: 0,
+        tolerance: 1e-3,
+    };
     let chain = RobotRegistry::create_default(RobotModel::Scara);
 
     let result = WorkspaceSampler.sample(&chain, config, &mut rng);
@@ -157,7 +201,11 @@ fn sampler_rejects_zero_samples() {
 #[test]
 fn sampler_q_values_within_joint_limits() {
     let mut rng = StdRng::seed_from_u64(0);
-    let config = WorkspaceConfig { samples: 200, seed: 0, tolerance: 1e-3 };
+    let config = WorkspaceConfig {
+        samples: 200,
+        seed: 0,
+        tolerance: 1e-3,
+    };
     let chain: SerialChain = RobotRegistry::create_default(RobotModel::Scara);
 
     let ws = WorkspaceSampler.sample(&chain, config, &mut rng).unwrap();

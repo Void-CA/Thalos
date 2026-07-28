@@ -66,7 +66,11 @@ pub fn cylinder_between(
         return VisualPrimitive::cylinder(id, frame_id);
     }
 
-    let midpoint = [(from[0] + to[0]) / 2.0, (from[1] + to[1]) / 2.0, (from[2] + to[2]) / 2.0];
+    let midpoint = [
+        (from[0] + to[0]) / 2.0,
+        (from[1] + to[1]) / 2.0,
+        (from[2] + to[2]) / 2.0,
+    ];
     let rotation = align_y_to([dx / height, dy / height, dz / height]);
 
     VisualPrimitive {
@@ -134,10 +138,14 @@ impl SceneBuilder {
             .max(0.01);
 
         // 2. Determine frame style: explicit override or auto-scaled
-        let style = self.frame_style.clone()
+        let style = self
+            .frame_style
+            .clone()
             .unwrap_or_else(|| FrameStyle::scaled_by(ref_dim));
 
-        let world_pose = fk.pose(&FrameId::World).expect("FKResult must contain world frame");
+        let world_pose = fk
+            .pose(&FrameId::World)
+            .expect("FKResult must contain world frame");
         frames.push(VisualFrame {
             id: self.resolve_visual_id(&FrameId::World),
             parent: None,
@@ -148,7 +156,9 @@ impl SceneBuilder {
 
         for segment in &self.chain.segments {
             let child_pose = fk.pose(&segment.child).expect("Child frame pose not found");
-            let parent_pose = fk.pose(&segment.parent).expect("Parent frame pose not found");
+            let parent_pose = fk
+                .pose(&segment.parent)
+                .expect("Parent frame pose not found");
 
             frames.push(VisualFrame {
                 id: self.resolve_visual_id(&segment.child),
@@ -232,7 +242,9 @@ impl SceneBuilder {
         let mut col = 0;
         for segment in self.chain.segments.iter() {
             // Fixed joints no contribuyen al Jacobiano
-            if segment.joint.dof() == 0 { continue; }
+            if segment.joint.dof() == 0 {
+                continue;
+            }
 
             let parent_pose = fk.pose(&segment.parent).expect("Parent pose not found");
             let joint_transform = parent_pose.transform().compose(segment.joint.origin());

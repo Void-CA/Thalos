@@ -27,22 +27,10 @@ impl ManipulabilityReport {
     pub fn compute(singularity: &SingularityReport) -> Self {
         let yoshikawa: f64 = singularity.singular_values.iter().product();
 
-        let max_sv = singularity
-            .singular_values
-            .first()
-            .copied()
-            .unwrap_or(0.0);
-        let min_sv = singularity
-            .singular_values
-            .last()
-            .copied()
-            .unwrap_or(0.0);
+        let max_sv = singularity.singular_values.first().copied().unwrap_or(0.0);
+        let min_sv = singularity.singular_values.last().copied().unwrap_or(0.0);
 
-        let isotropy = if max_sv > 0.0 {
-            min_sv / max_sv
-        } else {
-            0.0
-        };
+        let isotropy = if max_sv > 0.0 { min_sv / max_sv } else { 0.0 };
 
         Self {
             yoshikawa,

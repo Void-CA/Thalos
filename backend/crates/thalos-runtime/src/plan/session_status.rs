@@ -10,7 +10,10 @@ pub enum SessionStatus {
 
 impl SessionStatus {
     pub fn is_terminal(&self) -> bool {
-        matches!(self, SessionStatus::Completed | SessionStatus::Cancelled | SessionStatus::Failed)
+        matches!(
+            self,
+            SessionStatus::Completed | SessionStatus::Cancelled | SessionStatus::Failed
+        )
     }
 
     pub fn is_active(&self) -> bool {

@@ -15,4 +15,3 @@ impl From<LinkId> for EntityId {
         EntityId::Link(id)
     }
 }
-

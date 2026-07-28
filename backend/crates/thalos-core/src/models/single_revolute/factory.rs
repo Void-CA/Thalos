@@ -4,9 +4,12 @@ pub fn create_single_revolute(l: f64, limits_j1: JointLimits) -> SerialChain {
     let mut builder = SerialChainBuilder::new();
     let link_1_frame = builder.create_frame("link_1");
 
-    let joint1 = JointType::Revolute(
-        RevoluteJoint::new(0, UnitVector3::z_axis(), limits_j1, Transform3D::identity())
-    );
+    let joint1 = JointType::Revolute(RevoluteJoint::new(
+        0,
+        UnitVector3::z_axis(),
+        limits_j1,
+        Transform3D::identity(),
+    ));
     let link1 = Link {
         id: 0,
         transform: Transform3D::from_translation(Vector3::new(l, 0.0, 0.0)),
@@ -42,13 +45,20 @@ mod tests {
     #[test]
     fn parent_is_world() {
         let robot = build_robot();
-        assert_eq!(robot.segments[0].parent, FrameId::World, "Segment parent should be World");
+        assert_eq!(
+            robot.segments[0].parent,
+            FrameId::World,
+            "Segment parent should be World"
+        );
     }
 
     #[test]
     fn child_frame_exists_in_registry() {
         let robot = build_robot();
-        assert!(robot.frames.get(&robot.segments[0].child).is_some(), "Child frame should exist");
+        assert!(
+            robot.frames.get(&robot.segments[0].child).is_some(),
+            "Child frame should exist"
+        );
     }
 
     #[test]
@@ -75,7 +85,9 @@ mod tests {
         assert!(
             (t.x - 1.0).abs() < EPS && t.y.abs() < EPS && t.z.abs() < EPS,
             "Link translation should be (1,0,0), got ({},{},{})",
-            t.x, t.y, t.z
+            t.x,
+            t.y,
+            t.z
         );
     }
 

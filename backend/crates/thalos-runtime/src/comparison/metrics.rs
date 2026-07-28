@@ -90,14 +90,22 @@ pub fn compute_metrics(pairs: &[AlignedPair]) -> ComparisonMetrics {
     let (max_te, avg_te) = if tracking_errors.is_empty() {
         (None, None)
     } else {
-        let max = tracking_errors.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let max = tracking_errors
+            .iter()
+            .cloned()
+            .fold(f64::NEG_INFINITY, f64::max);
         let avg = tracking_errors.iter().sum::<f64>() / tracking_errors.len() as f64;
         (Some(max), Some(avg))
     };
 
     // Desviación de velocidad
     let max_vel_dev: Vec<f64> = if !pairs[0].planned_velocities.is_empty() {
-        (0..dof.min(pairs[0].planned_velocities.len().min(pairs[0].actual_velocities.len())))
+        (0..dof.min(
+            pairs[0]
+                .planned_velocities
+                .len()
+                .min(pairs[0].actual_velocities.len()),
+        ))
             .map(|j| {
                 pairs
                     .iter()

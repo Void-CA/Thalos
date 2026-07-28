@@ -1,5 +1,5 @@
-use thalos_math::Transform3D;
 use super::{CollisionGeometry, EntityId};
+use thalos_math::Transform3D;
 
 #[derive(Debug, Clone)]
 pub struct CollisionBody {
@@ -9,7 +9,11 @@ pub struct CollisionBody {
 }
 
 impl CollisionBody {
-    pub fn new(entity: impl Into<EntityId>, geometry: CollisionGeometry, pose: Transform3D) -> Self {
+    pub fn new(
+        entity: impl Into<EntityId>,
+        geometry: CollisionGeometry,
+        pose: Transform3D,
+    ) -> Self {
         Self {
             entity: entity.into(),
             geometry,

@@ -33,9 +33,7 @@ pub struct IrProgram {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum IrOperation {
     /// Return robot to configured home position.
-    Home {
-        origin: OperationId,
-    },
+    Home { origin: OperationId },
     /// Move to a target pose with a concrete motion profile.
     MoveTo {
         origin: OperationId,
@@ -109,7 +107,10 @@ mod tests {
                 frame: ResolvedFrame {
                     name: "base".into(),
                     parent: "world".into(),
-                    transform: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+                    transform: [
+                        1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0,
+                        1.0,
+                    ],
                 },
             },
             profile: ResolvedProfile {
@@ -129,7 +130,9 @@ mod tests {
             frame: ResolvedFrame {
                 name: "base".into(),
                 parent: "world".into(),
-                transform: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+                transform: [
+                    1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+                ],
             },
         };
         let op = IrOperation::Follow {
@@ -196,17 +199,15 @@ mod tests {
                 },
                 IrOperation::Follow {
                     origin: OperationId("op_3".into()),
-                    waypoints: vec![
-                        ResolvedPose {
-                            position: [0.0, 0.0, 0.0],
-                            orientation: [0.0, 0.0, 0.0, 1.0],
-                            frame: ResolvedFrame {
-                                name: "base".into(),
-                                parent: "world".into(),
-                                transform: IDENTITY_4X4,
-                            },
+                    waypoints: vec![ResolvedPose {
+                        position: [0.0, 0.0, 0.0],
+                        orientation: [0.0, 0.0, 0.0, 1.0],
+                        frame: ResolvedFrame {
+                            name: "base".into(),
+                            parent: "world".into(),
+                            transform: IDENTITY_4X4,
                         },
-                    ],
+                    }],
                     profile: ResolvedProfile {
                         name: "fast".into(),
                         velocity: 2.0,
@@ -236,10 +237,7 @@ mod tests {
     }
 
     const IDENTITY_4X4: [f64; 16] = [
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 1.0, 0.0,
-        0.0, 0.0, 0.0, 1.0,
+        1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
     ];
 
     #[test]
@@ -334,11 +332,15 @@ mod tests {
         };
 
         // Prove each variant holds concrete (resolved) data by extracting values
-        assert!(matches!(home, IrOperation::Home { origin } if origin == OperationId("op_1".into())));
-        assert!(matches!(move_to, IrOperation::MoveTo { origin, pose, profile }
+        assert!(
+            matches!(home, IrOperation::Home { origin } if origin == OperationId("op_1".into()))
+        );
+        assert!(
+            matches!(move_to, IrOperation::MoveTo { origin, pose, profile }
             if origin == OperationId("op_2".into())
             && pose.position[0] == 1.0
-            && profile.name == "default"));
+            && profile.name == "default")
+        );
         assert!(matches!(wait, IrOperation::Wait { origin, duration }
             if origin == OperationId("op_4".into())
             && duration == Duration::from_secs(1)));
@@ -388,13 +390,11 @@ mod tests {
     fn ir_follow_has_at_least_one_waypoint() {
         let op = IrOperation::Follow {
             origin: OperationId("op_11".into()),
-            waypoints: vec![
-                ResolvedPose {
-                    position: [0.0, 0.0, 0.0],
-                    orientation: [0.0, 0.0, 0.0, 1.0],
-                    frame: make_frame("base", "world"),
-                },
-            ],
+            waypoints: vec![ResolvedPose {
+                position: [0.0, 0.0, 0.0],
+                orientation: [0.0, 0.0, 0.0, 1.0],
+                frame: make_frame("base", "world"),
+            }],
             profile: make_profile("default", 1.0, 2.0),
         };
         match op {
@@ -452,33 +452,50 @@ mod tests {
     fn ir_all_variants_preserve_origin() {
         // Every IrOperation variant retains the originating OperationId for traceability.
         let cases: Vec<(IrOperation, &str)> = vec![
-            (IrOperation::Home { origin: OperationId("op_1".into()) }, "op_1"),
-            (IrOperation::MoveTo {
-                origin: OperationId("op_2".into()),
-                pose: ResolvedPose {
-                    position: [0.0; 3],
-                    orientation: [0.0, 0.0, 0.0, 1.0],
-                    frame: make_frame("base", "world"),
+            (
+                IrOperation::Home {
+                    origin: OperationId("op_1".into()),
                 },
-                profile: make_profile("default", 1.0, 2.0),
-            }, "op_2"),
-            (IrOperation::Follow {
-                origin: OperationId("op_3".into()),
-                waypoints: vec![],
-                profile: make_profile("default", 1.0, 2.0),
-            }, "op_3"),
-            (IrOperation::Wait {
-                origin: OperationId("op_4".into()),
-                duration: Duration::ZERO,
-            }, "op_4"),
-            (IrOperation::SetOutput {
-                origin: OperationId("op_5".into()),
-                channel: ResolvedOutput {
-                    name: "Ch".into(),
-                    channel_type: "digital".into(),
+                "op_1",
+            ),
+            (
+                IrOperation::MoveTo {
+                    origin: OperationId("op_2".into()),
+                    pose: ResolvedPose {
+                        position: [0.0; 3],
+                        orientation: [0.0, 0.0, 0.0, 1.0],
+                        frame: make_frame("base", "world"),
+                    },
+                    profile: make_profile("default", 1.0, 2.0),
                 },
-                value: OutputValue::Bool(true),
-            }, "op_5"),
+                "op_2",
+            ),
+            (
+                IrOperation::Follow {
+                    origin: OperationId("op_3".into()),
+                    waypoints: vec![],
+                    profile: make_profile("default", 1.0, 2.0),
+                },
+                "op_3",
+            ),
+            (
+                IrOperation::Wait {
+                    origin: OperationId("op_4".into()),
+                    duration: Duration::ZERO,
+                },
+                "op_4",
+            ),
+            (
+                IrOperation::SetOutput {
+                    origin: OperationId("op_5".into()),
+                    channel: ResolvedOutput {
+                        name: "Ch".into(),
+                        channel_type: "digital".into(),
+                    },
+                    value: OutputValue::Bool(true),
+                },
+                "op_5",
+            ),
         ];
 
         for (i, (op, expected)) in cases.iter().enumerate() {

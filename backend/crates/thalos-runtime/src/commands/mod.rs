@@ -1,6 +1,6 @@
 pub mod dispatch;
-pub mod motion;
-pub mod kinematics;
 pub mod handler;
+pub mod kinematics;
+pub mod motion;
 
 pub use dispatch::Command;

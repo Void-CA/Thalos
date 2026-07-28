@@ -67,9 +67,10 @@ impl HardwareBackend {
 impl ExecutionBackend for HardwareBackend {
     async fn connect(&mut self) -> Result<(), ControllerError> {
         let mut transport = self.transport.write().await;
-        transport.connect().await.map_err(|e| {
-            ControllerError::NotConnected
-        })?;
+        transport
+            .connect()
+            .await
+            .map_err(|e| ControllerError::NotConnected)?;
         self.connected.store(true, Ordering::SeqCst);
         // Mark state as connected
         if let Ok(mut state) = self.state.write() {

@@ -56,14 +56,12 @@ impl Transform3D {
     }
 }
 
-
 impl std::fmt::Display for Transform3D {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Traslation:(\n  {}],\n  {}\n)", 
-            self.translation,
-            self.rotation
+            "Traslation:(\n  {}],\n  {}\n)",
+            self.translation, self.rotation
         )
     }
 }

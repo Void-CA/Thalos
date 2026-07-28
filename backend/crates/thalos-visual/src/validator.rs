@@ -20,10 +20,18 @@ impl std::fmt::Display for SceneError {
             SceneError::MissingWorld => write!(f, "scene must contain a 'world' frame"),
             SceneError::MissingFrame(id) => write!(f, "parent frame '{}' not found in scene", id),
             SceneError::DuplicateId { id } => write!(f, "duplicate frame id '{}'", id),
-            SceneError::BrokenTopology { frame } => write!(f, "topology error involving frame '{}'", frame),
-            SceneError::NonFiniteValue { frame } => write!(f, "non-finite value in frame '{}'", frame),
+            SceneError::BrokenTopology { frame } => {
+                write!(f, "topology error involving frame '{}'", frame)
+            }
+            SceneError::NonFiniteValue { frame } => {
+                write!(f, "non-finite value in frame '{}'", frame)
+            }
             SceneError::InvalidQuaternion { frame, norm } => {
-                write!(f, "quaternion norm in frame '{}' is {} (expected 1.0)", frame, norm)
+                write!(
+                    f,
+                    "quaternion norm in frame '{}' is {} (expected 1.0)",
+                    frame, norm
+                )
             }
             SceneError::OrphanLink { index } => write!(f, "orphan link at index {}", index),
             SceneError::TwistsMismatch { expected, found } => {
@@ -72,7 +80,9 @@ impl SceneValidator {
         let mut seen = HashSet::new();
         for frame in &scene.frames {
             if !seen.insert(&frame.id) {
-                return Err(SceneError::DuplicateId { id: frame.id.clone() });
+                return Err(SceneError::DuplicateId {
+                    id: frame.id.clone(),
+                });
             }
         }
         Ok(())
@@ -99,7 +109,9 @@ impl SceneValidator {
             let mut current: Option<&str> = Some(&frame.id);
             while let Some(id) = current {
                 if !visited.insert(id) {
-                    return Err(SceneError::BrokenTopology { frame: frame.id.clone() });
+                    return Err(SceneError::BrokenTopology {
+                        frame: frame.id.clone(),
+                    });
                 }
                 current = by_id.get(id).and_then(|f| f.parent.as_deref());
             }
@@ -131,7 +143,9 @@ impl SceneValidator {
 
         for frame in &scene.frames {
             if !reachable.contains(frame.id.as_str()) {
-                return Err(SceneError::BrokenTopology { frame: frame.id.clone() });
+                return Err(SceneError::BrokenTopology {
+                    frame: frame.id.clone(),
+                });
             }
         }
         Ok(())
@@ -141,24 +155,32 @@ impl SceneValidator {
         for frame in &scene.frames {
             for &v in &frame.translation {
                 if !v.is_finite() {
-                    return Err(SceneError::NonFiniteValue { frame: frame.id.clone() });
+                    return Err(SceneError::NonFiniteValue {
+                        frame: frame.id.clone(),
+                    });
                 }
             }
             for &v in &frame.rotation {
                 if !v.is_finite() {
-                    return Err(SceneError::NonFiniteValue { frame: frame.id.clone() });
+                    return Err(SceneError::NonFiniteValue {
+                        frame: frame.id.clone(),
+                    });
                 }
             }
         }
         for (i, axis) in scene.joint_axes.iter().enumerate() {
             for &v in &axis.origin {
                 if !v.is_finite() {
-                    return Err(SceneError::NonFiniteValue { frame: format!("joint_axis[{}]", i) });
+                    return Err(SceneError::NonFiniteValue {
+                        frame: format!("joint_axis[{}]", i),
+                    });
                 }
             }
             for &v in &axis.axis {
                 if !v.is_finite() {
-                    return Err(SceneError::NonFiniteValue { frame: format!("joint_axis[{}]", i) });
+                    return Err(SceneError::NonFiniteValue {
+                        frame: format!("joint_axis[{}]", i),
+                    });
                 }
             }
         }
@@ -212,7 +234,10 @@ impl SceneValidator {
         let n_axes = scene.joint_axes.len();
         let n_twists = scene.twists.len();
         if n_twists > 0 && n_twists != n_axes {
-            return Err(SceneError::TwistsMismatch { expected: n_axes, found: n_twists });
+            return Err(SceneError::TwistsMismatch {
+                expected: n_axes,
+                found: n_twists,
+            });
         }
         Ok(())
     }

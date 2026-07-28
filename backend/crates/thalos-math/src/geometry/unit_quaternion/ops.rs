@@ -6,9 +6,7 @@ impl Mul for UnitQuaternion {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self {
-        Self {
-            q: self.q * rhs.q,
-        }
+        Self { q: self.q * rhs.q }
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::{Vector3, MathError};
+use crate::{MathError, Vector3};
 use std::ops::Deref;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -12,7 +12,10 @@ impl UnitVector3 {
     /// Create a UnitVector3 by normalizing, returning a default if the
     /// input is a zero vector (instead of an error).
     pub fn new_normalize(vector: Vector3) -> Self {
-        vector.normalized().map(Self).unwrap_or_else(|_| Self(Vector3::new(1.0, 0.0, 0.0)))
+        vector
+            .normalized()
+            .map(Self)
+            .unwrap_or_else(|_| Self(Vector3::new(1.0, 0.0, 0.0)))
     }
 
     pub fn into_inner(self) -> Vector3 {
@@ -39,7 +42,6 @@ impl Deref for UnitVector3 {
         &self.0
     }
 }
-
 
 impl std::fmt::Display for UnitVector3 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

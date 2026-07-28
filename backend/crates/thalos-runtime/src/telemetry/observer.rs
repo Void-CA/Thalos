@@ -49,8 +49,7 @@ impl ExecutionObserver for ExecutionRecorder {
     fn on_execution_started(&mut self, timestamp: Duration) {
         if !self.started {
             self.started = true;
-            self.trace
-                .push_event(ExecutionEvent::Started { timestamp });
+            self.trace.push_event(ExecutionEvent::Started { timestamp });
         }
     }
 
@@ -73,11 +72,18 @@ impl ExecutionObserver for ExecutionRecorder {
     }
 
     fn on_execution_finished(&mut self, timestamp: Duration) {
-        self.trace.push_event(if self.trace.events.iter().any(|e| matches!(e, ExecutionEvent::Cancelled { .. })) {
-            ExecutionEvent::Cancelled { timestamp }
-        } else {
-            ExecutionEvent::Completed { timestamp }
-        });
+        self.trace.push_event(
+            if self
+                .trace
+                .events
+                .iter()
+                .any(|e| matches!(e, ExecutionEvent::Cancelled { .. }))
+            {
+                ExecutionEvent::Cancelled { timestamp }
+            } else {
+                ExecutionEvent::Completed { timestamp }
+            },
+        );
     }
 
     fn trace(&self) -> Option<ExecutionTrace> {

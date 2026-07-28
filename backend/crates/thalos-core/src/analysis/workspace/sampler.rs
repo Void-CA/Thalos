@@ -13,10 +13,10 @@ use crate::robot::joint::JointLimits;
 use crate::robot::serial_chain::SerialChain;
 use crate::robot::tool_frame::ToolFrame;
 
+use super::WorkspaceConfig;
 use super::error::WorkspaceError;
 use super::types::WorkspaceSample;
 use super::workspace::Workspace;
-use super::WorkspaceConfig;
 
 pub struct WorkspaceSampler;
 
@@ -55,16 +55,16 @@ impl WorkspaceSampler {
 
         let mut samples = Vec::with_capacity(config.samples);
 
-        let n_dof: usize = chain.segments.iter()
-            .map(|s| s.joint.dof())
-            .sum();
+        let n_dof: usize = chain.segments.iter().map(|s| s.joint.dof()).sum();
 
         for _ in 0..config.samples {
             // Sample a random q within each joint's limits (R6).
             // Fixed joints no se samplean (no contribuyen DOF).
             let mut q = Vec::with_capacity(n_dof);
             for segment in &chain.segments {
-                if segment.joint.dof() == 0 { continue; }
+                if segment.joint.dof() == 0 {
+                    continue;
+                }
                 let limits = segment.joint.limits();
                 let q_i = uniform_within(rng, limits);
                 q.push(q_i);
@@ -75,12 +75,14 @@ impl WorkspaceSampler {
             // untouched (D14 immutability of input).
             let fk = crate::kinematics::forward::ForwardKinematics::new(chain.clone());
             let result = fk.evaluate(&q);
-            
+
             let position = if let Some(tcp) = tcp {
-                result.tcp_position(tcp)
+                result
+                    .tcp_position(tcp)
                     .ok_or_else(|| WorkspaceError::EmptyWorkspace)?
             } else {
-                result.ee_position()
+                result
+                    .ee_position()
                     .ok_or_else(|| WorkspaceError::EmptyWorkspace)?
             };
 
@@ -90,7 +92,6 @@ impl WorkspaceSampler {
         Workspace::from_samples(samples)
     }
 }
-
 
 fn uniform_within<R: Rng>(rng: &mut R, limits: JointLimits) -> f64 {
     if !limits.enabled {

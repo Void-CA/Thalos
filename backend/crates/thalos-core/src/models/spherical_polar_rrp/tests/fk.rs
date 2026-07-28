@@ -15,7 +15,9 @@ fn zero_config_ee_at_origin() {
     assert!(
         t.x.abs() < EPS && t.y.abs() < EPS && t.z.abs() < EPS,
         "Spherical polar RRP at zero config: expected (0, 0, 0), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 }
 
@@ -33,7 +35,9 @@ fn radial_extension_in_x() {
     assert!(
         (t.x - 1.0).abs() < EPS && t.y.abs() < EPS && t.z.abs() < EPS,
         "Spherical polar Px(1.0): expected (1, 0, 0), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 }
 
@@ -51,7 +55,9 @@ fn azimuth_rotates_in_xy() {
     assert!(
         t.x.abs() < EPS && (t.y - 1.0).abs() < EPS && t.z.abs() < EPS,
         "Spherical polar Rz(90°) with Px(1): expected (0, 1, 0), got ({}, {}, {})",
-        t.x, t.y, t.z
+        t.x,
+        t.y,
+        t.z
     );
 }
 
@@ -72,10 +78,12 @@ fn polar_tilt_moves_ee_in_xz() {
     let expected_z = -(PI / 4.0).sin();
 
     assert!(
-        (t.x - expected_x).abs() < EPS
-            && t.y.abs() < EPS
-            && (t.z - expected_z).abs() < EPS,
+        (t.x - expected_x).abs() < EPS && t.y.abs() < EPS && (t.z - expected_z).abs() < EPS,
         "Spherical polar Ry(45°) with Px(1): expected ({:.4}, 0, {:.4}), got ({:.4}, {:.4}, {:.4})",
-        expected_x, expected_z, t.x, t.y, t.z
+        expected_x,
+        expected_z,
+        t.x,
+        t.y,
+        t.z
     );
 }

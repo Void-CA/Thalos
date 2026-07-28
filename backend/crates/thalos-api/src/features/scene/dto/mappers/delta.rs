@@ -9,26 +9,30 @@ use super::super::{ExecutionDto, ExecutionStatusDto, RuntimeDelta, TransformUpda
 pub fn to_delta_response(delta: &TickDelta) -> RuntimeDelta {
     let transforms = build_transform_updates(&delta.chain, &delta.fk_result);
 
-    let execution = delta.execution.as_ref().map(|exe| {
-        let status = match exe.status {
-            thalos_runtime::SessionStatus::Ready => ExecutionStatusDto::Ready,
-            thalos_runtime::SessionStatus::Running => ExecutionStatusDto::Running,
-            thalos_runtime::SessionStatus::Paused => ExecutionStatusDto::Paused,
-            thalos_runtime::SessionStatus::Completed => ExecutionStatusDto::Completed,
-            thalos_runtime::SessionStatus::Cancelled => ExecutionStatusDto::Cancelled,
-            thalos_runtime::SessionStatus::Failed => ExecutionStatusDto::Failed,
-        };
+    let execution = delta
+        .execution
+        .as_ref()
+        .map(|exe| {
+            let status = match exe.status {
+                thalos_runtime::SessionStatus::Ready => ExecutionStatusDto::Ready,
+                thalos_runtime::SessionStatus::Running => ExecutionStatusDto::Running,
+                thalos_runtime::SessionStatus::Paused => ExecutionStatusDto::Paused,
+                thalos_runtime::SessionStatus::Completed => ExecutionStatusDto::Completed,
+                thalos_runtime::SessionStatus::Cancelled => ExecutionStatusDto::Cancelled,
+                thalos_runtime::SessionStatus::Failed => ExecutionStatusDto::Failed,
+            };
 
-        ExecutionDto {
-            status,
-            progress: exe.progress(delta.plan_duration),
-            elapsed_secs: exe.current_time,
-        }
-    }).unwrap_or(ExecutionDto {
-        status: ExecutionStatusDto::Idle,
-        progress: 0.0,
-        elapsed_secs: 0.0,
-    });
+            ExecutionDto {
+                status,
+                progress: exe.progress(delta.plan_duration),
+                elapsed_secs: exe.current_time,
+            }
+        })
+        .unwrap_or(ExecutionDto {
+            status: ExecutionStatusDto::Idle,
+            progress: 0.0,
+            elapsed_secs: 0.0,
+        });
 
     RuntimeDelta {
         joints: delta.joints.clone(),
@@ -51,7 +55,9 @@ fn build_transform_updates(chain: &SerialChain, fk: &FKResult) -> Vec<TransformU
 
     // ── Frame transforms (pose directa del FK) ──
     for frame_id in fk.frames() {
-        let Some(pose) = fk.pose(frame_id) else { continue; };
+        let Some(pose) = fk.pose(frame_id) else {
+            continue;
+        };
         let tx = pose.transform();
 
         let visual_id = match frame_id {
@@ -66,7 +72,12 @@ fn build_transform_updates(chain: &SerialChain, fk: &FKResult) -> Vec<TransformU
         transforms.push(TransformUpdate {
             id: visual_id,
             translation: [tx.translation.x, tx.translation.y, tx.translation.z],
-            rotation: [tx.rotation.inner().w, tx.rotation.inner().x, tx.rotation.inner().y, tx.rotation.inner().z],
+            rotation: [
+                tx.rotation.inner().w,
+                tx.rotation.inner().x,
+                tx.rotation.inner().y,
+                tx.rotation.inner().z,
+            ],
             scale: [1.0, 1.0, 1.0],
         });
     }
@@ -77,8 +88,12 @@ fn build_transform_updates(chain: &SerialChain, fk: &FKResult) -> Vec<TransformU
             continue;
         }
 
-        let Some(child_pose) = fk.pose(&segment.child) else { continue; };
-        let Some(parent_pose) = fk.pose(&segment.parent) else { continue; };
+        let Some(child_pose) = fk.pose(&segment.child) else {
+            continue;
+        };
+        let Some(parent_pose) = fk.pose(&segment.parent) else {
+            continue;
+        };
 
         let start = parent_pose.translation();
         let end = child_pose.translation();
@@ -91,7 +106,11 @@ fn build_transform_updates(chain: &SerialChain, fk: &FKResult) -> Vec<TransformU
             continue;
         }
 
-        let midpoint = [(start.x + end.x) / 2.0, (start.y + end.y) / 2.0, (start.z + end.z) / 2.0];
+        let midpoint = [
+            (start.x + end.x) / 2.0,
+            (start.y + end.y) / 2.0,
+            (start.z + end.z) / 2.0,
+        ];
         let dir = [dx / len, dy / len, dz / len];
         let rotation = align_y_to(dir);
 
@@ -110,11 +129,17 @@ fn build_transform_updates(chain: &SerialChain, fk: &FKResult) -> Vec<TransformU
 /// alinearse con `direction`. El eje Y es el default de CylinderGeometry en
 /// Three.js — esta rotación permite que un cilindro apunte en cualquier dirección.
 fn align_y_to(direction: [f64; 3]) -> [f64; 4] {
-    let norm = (direction[0] * direction[0] + direction[1] * direction[1] + direction[2] * direction[2]).sqrt();
+    let norm =
+        (direction[0] * direction[0] + direction[1] * direction[1] + direction[2] * direction[2])
+            .sqrt();
     if norm < 1e-15 {
         return [1.0, 0.0, 0.0, 0.0];
     }
-    let dir = [direction[0] / norm, direction[1] / norm, direction[2] / norm];
+    let dir = [
+        direction[0] / norm,
+        direction[1] / norm,
+        direction[2] / norm,
+    ];
 
     let y = [0.0, 1.0, 0.0];
     let dot = y[0] * dir[0] + y[1] * dir[1] + y[2] * dir[2];
@@ -132,7 +157,11 @@ fn align_y_to(direction: [f64; 3]) -> [f64; 4] {
         y[0] * dir[1] - y[1] * dir[0],
     ];
     let axis_norm = (axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]).sqrt();
-    let axis = [axis[0] / axis_norm, axis[1] / axis_norm, axis[2] / axis_norm];
+    let axis = [
+        axis[0] / axis_norm,
+        axis[1] / axis_norm,
+        axis[2] / axis_norm,
+    ];
 
     let half = dot.acos() / 2.0;
     let s = half.sin();

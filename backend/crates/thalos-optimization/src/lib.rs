@@ -27,9 +27,9 @@ pub use thalos_core::evaluation::PlanMetrics;
 
 // Convenience re-exports from domain
 pub use domain::{
-    Invariant, JointLimits, OperatorAssessment, OperatorFamily, OperatorScore,
-    OptimizationContext, OptimizationObjective, OptimizationReport, OptimizationStep,
-    PipelineConfig, Reason, TrajectoryOperator,
+    Invariant, JointLimits, OperatorAssessment, OperatorFamily, OperatorScore, OptimizationContext,
+    OptimizationObjective, OptimizationReport, OptimizationStep, PipelineConfig, Reason,
+    TrajectoryOperator,
 };
 pub use error::OptimizationError;
 
@@ -38,8 +38,8 @@ pub use temporal::{extract_velocity_limits, min_segment_duration};
 
 // Re-exports from pipeline
 pub use pipeline::{
-    AcceptanceEvaluation, AcceptancePolicy, OptimizationPipeline, OptimizationResult,
-    OperatorSelector,
+    AcceptanceEvaluation, AcceptancePolicy, OperatorSelector, OptimizationPipeline,
+    OptimizationResult,
 };
 
 #[cfg(test)]
@@ -124,9 +124,7 @@ mod tests {
     fn trajectory_operator_apply_returns_ok() {
         let op = MockOperator;
         let robot = RobotRegistry::create_default(RobotModel::Planar2R);
-        let traj = Trajectory::new(vec![
-            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
-        ]);
+        let traj = Trajectory::new(vec![TrajectoryPoint::new(vec![0.0, 0.0], 0.0)]);
         let region = ProblemRegion::new(
             RegionId(0),
             RegionKind::Singularity,
@@ -162,11 +160,13 @@ mod tests {
     #[test]
     fn re_export_plan_metrics() {
         let _metrics = PlanMetrics::new(
-            0.0, 0,
+            0.0,
+            0,
             thalos_core::evaluation::ManipulabilityMetrics::new(0.0, 0.0, 0, 0),
             thalos_core::evaluation::JointSafetyMetrics::new(1.0, 0.0, 0),
             thalos_core::evaluation::CollisionMetrics::new(1.0, 0, 0),
-            0.0, 0.0,
+            0.0,
+            0.0,
         );
     }
 
@@ -207,11 +207,13 @@ mod tests {
 
     fn test_metrics() -> PlanMetrics {
         PlanMetrics::new(
-            0.0, 0,
+            0.0,
+            0,
             thalos_core::evaluation::ManipulabilityMetrics::new(0.0, 0.0, 0, 0),
             thalos_core::evaluation::JointSafetyMetrics::new(1.0, 0.0, 0),
             thalos_core::evaluation::CollisionMetrics::new(1.0, 0, 0),
-            0.0, 0.0,
+            0.0,
+            0.0,
         )
     }
 
@@ -470,8 +472,8 @@ mod tests {
         let metrics = test_metrics();
         let ctx = test_ctx();
 
-        let op = ScoreMock::new("failing_op", OperatorFamily::Temporal, 1.0, 1.0, 1.0)
-            .with_failure();
+        let op =
+            ScoreMock::new("failing_op", OperatorFamily::Temporal, 1.0, 1.0, 1.0).with_failure();
         let operators: [&dyn TrajectoryOperator; 1] = [&op];
 
         let result = pipeline
@@ -497,10 +499,9 @@ mod tests {
         let metrics = test_metrics();
         let ctx = test_ctx();
 
-        let fail_op = ScoreMock::new("fails", OperatorFamily::Geometry, 0.9, 0.8, 1.0)
-            .with_failure();
-        let succeed_op =
-            ScoreMock::new("succeeds", OperatorFamily::JointSpace, 0.5, 0.5, 1.0);
+        let fail_op =
+            ScoreMock::new("fails", OperatorFamily::Geometry, 0.9, 0.8, 1.0).with_failure();
+        let succeed_op = ScoreMock::new("succeeds", OperatorFamily::JointSpace, 0.5, 0.5, 1.0);
         // fail_op has higher score, so it's tried first
         let operators: [&dyn TrajectoryOperator; 2] = [&succeed_op, &fail_op];
 
@@ -529,8 +530,13 @@ mod tests {
         let high_score_fails =
             ScoreMock::new("high_score_fails", OperatorFamily::Geometry, 0.9, 0.9, 1.0)
                 .with_failure();
-        let low_score_succeeds =
-            ScoreMock::new("low_score_succeeds", OperatorFamily::JointSpace, 0.3, 0.3, 1.0);
+        let low_score_succeeds = ScoreMock::new(
+            "low_score_succeeds",
+            OperatorFamily::JointSpace,
+            0.3,
+            0.3,
+            1.0,
+        );
 
         let operators: [&dyn TrajectoryOperator; 2] = [&low_score_succeeds, &high_score_fails];
 

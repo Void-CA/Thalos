@@ -69,7 +69,12 @@ impl RegionMetrics {
         Self {
             waypoint_count: total,
             average_value: match (self.average_value, other.average_value) {
-                (Some(a), Some(b)) => Some(weighted_avg(a, b, self.waypoint_count, other.waypoint_count)),
+                (Some(a), Some(b)) => Some(weighted_avg(
+                    a,
+                    b,
+                    self.waypoint_count,
+                    other.waypoint_count,
+                )),
                 (Some(a), None) => Some(a),
                 (None, Some(b)) => Some(b),
                 (None, None) => None,

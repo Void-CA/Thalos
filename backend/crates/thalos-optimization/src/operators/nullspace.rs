@@ -40,9 +40,9 @@ use thalos_math::DynamicVector;
 
 use crate::{
     domain::{
+        TrajectoryOperator,
         context::OptimizationContext,
         operator::{Invariant, OperatorFamily, OptimizationObjective},
-        TrajectoryOperator,
     },
     error::OptimizationError,
 };
@@ -115,9 +115,7 @@ impl TrajectoryOperator for NullSpaceOptimization {
             return 0.0;
         }
         match region.kind {
-            RegionKind::Constraint
-            | RegionKind::Singularity
-            | RegionKind::LowManipulability => 0.8,
+            RegionKind::Constraint | RegionKind::Singularity | RegionKind::LowManipulability => 0.8,
             _ => 0.5,
         }
     }
@@ -265,13 +263,13 @@ impl TrajectoryOperator for NullSpaceOptimization {
 
 #[cfg(test)]
 pub(crate) mod test_helpers {
+    use crate::domain::context::{OptimizationContext, PipelineConfig};
     use thalos_core::prelude::*;
     use thalos_core::{
         analysis::region::{ProblemRegion, RegionId, RegionKind, RegionSeverity},
         robot::serial_chain::SerialChain,
-    trajectory::{Trajectory, TrajectoryPoint},
+        trajectory::{Trajectory, TrajectoryPoint},
     };
-    use crate::domain::context::{OptimizationContext, PipelineConfig};
 
     // Re-import the joint JointLimits (with `new` constructor) rather
     // than the context-level JointLimits (struct-literal only).
@@ -326,7 +324,12 @@ pub(crate) mod test_helpers {
     pub fn ctx_with_limits(limits: &[(f64, f64)]) -> OptimizationContext {
         let (lower, upper): (Vec<f64>, Vec<f64>) = limits.iter().cloned().unzip();
         OptimizationContext {
-            joint_limits: crate::domain::context::JointLimits { lower, upper, velocity: None, acceleration: None },
+            joint_limits: crate::domain::context::JointLimits {
+                lower,
+                upper,
+                velocity: None,
+                acceleration: None,
+            },
             config: PipelineConfig::default(),
             tool_frame: None,
         }
@@ -380,32 +383,67 @@ pub(crate) mod test_helpers {
         builder.add_segment(Segment::new(
             FrameId::World,
             f1.clone(),
-            JointType::Revolute(RevoluteJoint::new(0, UnitVector3::z_axis(), limits, Transform3D::identity())),
+            JointType::Revolute(RevoluteJoint::new(
+                0,
+                UnitVector3::z_axis(),
+                limits,
+                Transform3D::identity(),
+            )),
             make_link(0),
         ));
         builder.add_segment(Segment::new(
-            f1, f2.clone(),
-            JointType::Revolute(RevoluteJoint::new(1, UnitVector3::y_axis(), limits, Transform3D::identity())),
+            f1,
+            f2.clone(),
+            JointType::Revolute(RevoluteJoint::new(
+                1,
+                UnitVector3::y_axis(),
+                limits,
+                Transform3D::identity(),
+            )),
             make_link(1),
         ));
         builder.add_segment(Segment::new(
-            f2, f3.clone(),
-            JointType::Revolute(RevoluteJoint::new(2, UnitVector3::z_axis(), limits, Transform3D::identity())),
+            f2,
+            f3.clone(),
+            JointType::Revolute(RevoluteJoint::new(
+                2,
+                UnitVector3::z_axis(),
+                limits,
+                Transform3D::identity(),
+            )),
             make_link(2),
         ));
         builder.add_segment(Segment::new(
-            f3, f4.clone(),
-            JointType::Revolute(RevoluteJoint::new(3, UnitVector3::y_axis(), limits, Transform3D::identity())),
+            f3,
+            f4.clone(),
+            JointType::Revolute(RevoluteJoint::new(
+                3,
+                UnitVector3::y_axis(),
+                limits,
+                Transform3D::identity(),
+            )),
             make_link(3),
         ));
         builder.add_segment(Segment::new(
-            f4, f5.clone(),
-            JointType::Revolute(RevoluteJoint::new(4, UnitVector3::z_axis(), limits, Transform3D::identity())),
+            f4,
+            f5.clone(),
+            JointType::Revolute(RevoluteJoint::new(
+                4,
+                UnitVector3::z_axis(),
+                limits,
+                Transform3D::identity(),
+            )),
             make_link(4),
         ));
         builder.add_segment(Segment::new(
-            f5, f6.clone(),
-            JointType::Revolute(RevoluteJoint::new(5, UnitVector3::y_axis(), limits, Transform3D::identity())),
+            f5,
+            f6.clone(),
+            JointType::Revolute(RevoluteJoint::new(
+                5,
+                UnitVector3::y_axis(),
+                limits,
+                Transform3D::identity(),
+            )),
             make_link(5),
         ));
 
@@ -437,9 +475,9 @@ mod unit_tests {
     use super::*;
     use thalos_core::{
         analysis::region::RegionKind,
-        evaluation::{JointSafetyMetrics, PlanMetrics, ManipulabilityMetrics, CollisionMetrics},
+        evaluation::{CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics, PlanMetrics},
         models::{RobotModel, RobotRegistry},
-        prelude::{Trajectory, TrajectoryPoint, PI},
+        prelude::{PI, Trajectory, TrajectoryPoint},
     };
 
     // ── 2.1 Struct + defaults ─────────────────────────────
@@ -560,17 +598,21 @@ mod unit_tests {
         // FK position before
         let before = fk_position(&robot, &q_nominal);
 
-        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx, None).unwrap();
+        let result = op
+            .apply(
+                &robot,
+                &traj,
+                &region(0..2, RegionKind::Constraint),
+                &ctx,
+                None,
+            )
+            .unwrap();
         let after = fk_position(&robot, result.waypoints()[0].joints());
 
         let dx = (after - before).magnitude();
         // SVD + pseudo-inverse introduce numerical errors at the
         // micron level — 1e-4 is well within practical requirements.
-        assert!(
-            dx < 1e-4,
-            "TCP position deviation {:.2e} exceeds 1e-4",
-            dx
-        );
+        assert!(dx < 1e-4, "TCP position deviation {:.2e} exceeds 1e-4", dx);
     }
 
     // ── 3.2 Joint-centering direction ─────────────────────
@@ -586,7 +628,13 @@ mod unit_tests {
             TrajectoryPoint::new(vec![0.5, -0.3, 0.2, 0.0], 0.0),
             TrajectoryPoint::new(vec![0.5, -0.3, 0.2, 0.0], 1.0),
         ]);
-        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx, None);
+        let result = op.apply(
+            &robot,
+            &traj,
+            &region(0..2, RegionKind::Constraint),
+            &ctx,
+            None,
+        );
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(result.len(), traj.len());
@@ -605,7 +653,15 @@ mod unit_tests {
             TrajectoryPoint::new(vec![PI, 0.0, 0.0], 0.0),
             TrajectoryPoint::new(vec![PI, 0.0, 0.0], 1.0),
         ]);
-        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx, None).unwrap();
+        let result = op
+            .apply(
+                &robot,
+                &traj,
+                &region(0..2, RegionKind::Constraint),
+                &ctx,
+                None,
+            )
+            .unwrap();
         let clamped = result.waypoints()[0].joints();
 
         // Joint 0 at PI — should be clamped at PI or less, never above
@@ -670,7 +726,13 @@ mod unit_tests {
             TrajectoryPoint::new(vec![0.5, -0.3], 0.0),
             TrajectoryPoint::new(vec![0.5, -0.3], 1.0),
         ]);
-        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx, None);
+        let result = op.apply(
+            &robot,
+            &traj,
+            &region(0..2, RegionKind::Constraint),
+            &ctx,
+            None,
+        );
         assert!(result.is_ok(), "non-redundant robot should not error");
         assert_eq!(result.unwrap().len(), traj.len());
     }
@@ -726,7 +788,15 @@ mod unit_tests {
             TrajectoryPoint::new(vec![0.5, -0.3, 0.1], 0.0),
             TrajectoryPoint::new(vec![0.5, -0.3, 0.2], 1.0),
         ]);
-        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx, None).unwrap();
+        let result = op
+            .apply(
+                &robot,
+                &traj,
+                &region(0..2, RegionKind::Constraint),
+                &ctx,
+                None,
+            )
+            .unwrap();
         assert_eq!(result.len(), traj.len());
         for (orig, res) in traj.waypoints().iter().zip(result.waypoints().iter()) {
             assert_eq!(orig.joints(), res.joints());
@@ -748,7 +818,15 @@ mod unit_tests {
             TrajectoryPoint::new(vec![3.0, 0.0, 0.0], 3.0),
         ]);
         // Region covers middle two waypoints only
-        let result = op.apply(&robot, &traj, &region(1..3, RegionKind::Constraint), &ctx, None).unwrap();
+        let result = op
+            .apply(
+                &robot,
+                &traj,
+                &region(1..3, RegionKind::Constraint),
+                &ctx,
+                None,
+            )
+            .unwrap();
         // First and last waypoints should be byte-identical
         assert_eq!(result.waypoints()[0].joints(), traj.waypoints()[0].joints());
         assert_eq!(result.waypoints()[3].joints(), traj.waypoints()[3].joints());
@@ -766,7 +844,15 @@ mod unit_tests {
             TrajectoryPoint::new(vec![0.0, 0.0, 0.0], 0.0),
             TrajectoryPoint::new(vec![1.0, 0.0, 0.0], 1.0),
         ]);
-        let result = op.apply(&robot, &traj, &region(0..2, RegionKind::Constraint), &ctx, None).unwrap();
+        let result = op
+            .apply(
+                &robot,
+                &traj,
+                &region(0..2, RegionKind::Constraint),
+                &ctx,
+                None,
+            )
+            .unwrap();
         for (orig, res) in traj.waypoints().iter().zip(result.waypoints().iter()) {
             assert!(
                 (orig.timestamp() - res.timestamp()).abs() < 1e-10,
@@ -775,332 +861,370 @@ mod unit_tests {
                 res.timestamp()
             );
         }
-}
-
-// ── Integration tests ───────────────────────────────────────
-
-#[cfg(test)]
-mod integration_tests {
-    use super::test_helpers::ctx_with_limits;
-    use super::*;
-    use crate::domain::operator::OptimizationObjective;
-    use crate::operators::JointCenteringOperator;
-    use thalos_core::{
-        analysis::region::{RegionId, RegionKind, RegionSeverity},
-        evaluation::{JointSafetyMetrics, PlanMetrics, ManipulabilityMetrics, CollisionMetrics},
-        models::{RobotModel, RobotRegistry},
-        prelude::*,
-    };
-
-    fn robot() -> SerialChain {
-        RobotRegistry::create_default(RobotModel::Planar2R)
     }
 
-    fn region_2wp(kind: RegionKind) -> ProblemRegion {
-        ProblemRegion::new(RegionId(0), kind, RegionSeverity::Warning, 0..2)
-    }
+    // ── Integration tests ───────────────────────────────────────
 
-    fn ctx_2r() -> OptimizationContext {
-        ctx_with_limits(&[(-PI, PI), (-PI, PI)])
-    }
-
-    fn metrics() -> PlanMetrics {
-        PlanMetrics::new(
-            0.0,
-            0,
-            ManipulabilityMetrics::new(0.0, 0.0, 0, 0),
-            JointSafetyMetrics::new(1.0, 0.0, 0),
-            CollisionMetrics::new(1.0, 0, 0),
-            0.0,
-            0.0,
-        )
-    }
-
-    // ── 3.6 Pipeline integration ──────────────────────────
-
-    #[test]
-    fn nullspace_and_joint_centering_no_conflict() {
-        // Apply both operators sequentially. Both improve joint
-        // margins but through different mechanisms.
-        let traj = Trajectory::new(vec![
-            TrajectoryPoint::new(vec![1.0, 1.0], 0.0),
-            TrajectoryPoint::new(vec![1.0, 1.0], 1.0),
-        ]);
-
-        let ns = NullSpaceOptimization::new(0.3, 1e-6, 0.1);
-        let jc = JointCenteringOperator::new(0.3);
-
-        let ctx = ctx_2r();
-        let r = region_2wp(RegionKind::Constraint);
-
-        // Apply NullSpaceOptimization first (no-op for Planar2R)
-        let after_ns = ns.apply(&robot(), &traj, &r, &ctx, None).unwrap();
-        assert_eq!(after_ns.len(), traj.len());
-
-        // Then apply JointCenteringOperator
-        let after_jc = jc.apply(&robot(), &after_ns, &r, &ctx, None).unwrap();
-        assert_eq!(after_jc.len(), traj.len());
-
-        // Joints should be closer to center after both operators
-        let original_sum: f64 = traj.waypoints()[0].joints().iter().map(|q| q.abs()).sum();
-        let final_sum: f64 = after_jc.waypoints()[0].joints().iter().map(|q| q.abs()).sum();
-        assert!(
-            final_sum <= original_sum + 1e-10,
-            "joint-centering should decrease |q| sum: {:.4} → {:.4}",
-            original_sum,
-            final_sum
-        );
-    }
-
-    #[test]
-    fn operators_are_composable() {
-        let ns = NullSpaceOptimization::new(0.3, 1e-6, 0.1);
-        let jc = JointCenteringOperator::new(0.3);
-
-        assert_eq!(ns.family(), jc.family());
-        assert_eq!(ns.objective(), OptimizationObjective::Feasibility);
-        assert_eq!(jc.objective(), OptimizationObjective::Feasibility);
-    }
-
-    #[test]
-    fn estimate_and_cost_methods_work() {
-        let op = NullSpaceOptimization::new(0.3, 1e-6, 0.1);
-        let r = region_2wp(RegionKind::Constraint);
-        let m = metrics();
-
-        let improvement = op.estimate_improvement(&r, &m);
-        assert!((0.0..=1.0).contains(&improvement));
-
-        let cost = op.estimate_cost();
-        assert!((0.0..=1.0).contains(&cost));
-
-        let applicability = op.applicability(&r);
-        assert!((0.0..=1.0).contains(&applicability));
-    }
-}
-
-// ── Benchmarks ──────────────────────────────────────────────
-
-#[cfg(test)]
-mod benchmarks {
-    use super::test_helpers::planar_4r;
-    use super::*;
-    use thalos_core::{
-        analysis::region::{RegionId, RegionKind, RegionSeverity},
-        prelude::TrajectoryPoint,
-    };
-    // ── 3.7 Benchmark: null-space correction on redundant robot ──
-
-    /// Verify that NullSpaceOptimization produces a non-zero
-    /// correction on a redundant planar 4R robot while preserving
-    /// the TCP position.
-    ///
-    /// Uses moderate operator parameters (factor=0.5, dt=0.3) and
-    /// verifies:
-    ///   1. Joints are modified (non-zero null-space correction)
-    ///   2. TCP position is preserved within SVD precision
-    #[test]
-    fn benchmark_nullspace_correction_on_redundant_robot() {
-        use crate::domain::context::OptimizationContext;
-
-        let robot = planar_4r();
-        // Moderate settings: factor=0.5, dt=0.3
-        let op = NullSpaceOptimization::new(0.5, 1e-6, 0.3);
-        let limits: Vec<(f64, f64)> = vec![(-2.0, 2.0); 4];
-        let (lower, upper): (Vec<f64>, Vec<f64>) =
-            limits.iter().cloned().unzip();
-        let ctx = OptimizationContext {
-            joint_limits: crate::domain::context::JointLimits { lower, upper, velocity: None, acceleration: None },
-            config: crate::PipelineConfig::default(),
-            tool_frame: None,
+    #[cfg(test)]
+    mod integration_tests {
+        use super::test_helpers::ctx_with_limits;
+        use super::*;
+        use crate::domain::operator::OptimizationObjective;
+        use crate::operators::JointCenteringOperator;
+        use thalos_core::{
+            analysis::region::{RegionId, RegionKind, RegionSeverity},
+            evaluation::{
+                CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics, PlanMetrics,
+            },
+            models::{RobotModel, RobotRegistry},
+            prelude::*,
         };
 
-        // Asymmetrical configuration — all joints off centre.
-        let q = vec![1.5, 1.2, -1.3, -1.0];
-        let traj = Trajectory::new(vec![
-            TrajectoryPoint::new(q.clone(), 0.0),
-            TrajectoryPoint::new(vec![1.5, 1.2, -1.3, -1.0], 1.0),
-        ]);
-        let region = ProblemRegion::new(
-            RegionId(0),
-            RegionKind::Singularity,
-            RegionSeverity::Warning,
-            0..2,
-        );
+        fn robot() -> SerialChain {
+            RobotRegistry::create_default(RobotModel::Planar2R)
+        }
 
-        // Debug: verify the null-space property directly.
-        let fk = ForwardKinematics::new(robot.clone());
-        let js = GeometricJacobian::new(fk.clone(), robot.end_effector().clone());
-        let j = js.evaluate(&q);
-        let j_full = j.full();
-        let j_plus = j_full.pseudo_inverse(1e-6).expect("pinv");
-        let z: Vec<f64> = q.iter().map(|qj| (0.0 - qj) * 0.5).collect();
-        let z_vec = DynamicVector::from_column_slice(&z);
-        let jz = &j_full * &z_vec;
-        let j_plus_jz = &j_plus * &jz;
-        let nz = z_vec - j_plus_jz;
+        fn region_2wp(kind: RegionKind) -> ProblemRegion {
+            ProblemRegion::new(RegionId(0), kind, RegionSeverity::Warning, 0..2)
+        }
 
-        // Verify J·N·z ≈ 0 (core null-space property)
-        let j_nz = &j_full * &nz;
-        let residual: f64 = j_nz.as_slice().iter()
-            .map(|v| v.powi(2)).sum::<f64>().sqrt();
-        eprintln!("[DEBUG] |J·N·z| = {:.6e}", residual);
-        eprintln!("[DEBUG] |N·z|   = {:.6e}", nz.as_slice().iter()
-            .map(|v| v.powi(2)).sum::<f64>().sqrt());
+        fn ctx_2r() -> OptimizationContext {
+            ctx_with_limits(&[(-PI, PI), (-PI, PI)])
+        }
 
-        let before_pos = fk.evaluate(&q).ee_position()
-            .expect("EE position");
+        fn metrics() -> PlanMetrics {
+            PlanMetrics::new(
+                0.0,
+                0,
+                ManipulabilityMetrics::new(0.0, 0.0, 0, 0),
+                JointSafetyMetrics::new(1.0, 0.0, 0),
+                CollisionMetrics::new(1.0, 0, 0),
+                0.0,
+                0.0,
+            )
+        }
 
-        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
-        assert_eq!(result.len(), traj.len());
+        // ── 3.6 Pipeline integration ──────────────────────────
 
-        let q_after = result.waypoints()[0].joints();
+        #[test]
+        fn nullspace_and_joint_centering_no_conflict() {
+            // Apply both operators sequentially. Both improve joint
+            // margins but through different mechanisms.
+            let traj = Trajectory::new(vec![
+                TrajectoryPoint::new(vec![1.0, 1.0], 0.0),
+                TrajectoryPoint::new(vec![1.0, 1.0], 1.0),
+            ]);
 
-        // 1. Joints changed (non-zero null-space correction)
-        let diff: f64 = q.iter()
-            .zip(q_after.iter())
-            .map(|(a, b)| (a - b).powi(2))
-            .sum::<f64>()
-            .sqrt();
-        assert!(
-            diff > 1e-10,
-            "null-space correction should modify joints, diff = {:.2e}",
-            diff
-        );
+            let ns = NullSpaceOptimization::new(0.3, 1e-6, 0.1);
+            let jc = JointCenteringOperator::new(0.3);
 
-        // 2. TCP position preserved.
-        // J·N·z ≈ 0 holds to machine precision (verified above).
-        // The finite step q' - q = N·z·dt introduces a second-order
-        // FK deviation O(|N·z·dt|²) — this is expected for any
-        // finite-step null-space method. With |N·z·dt| ≈ 0.025 rad,
-        // the second-order deviation is ≈ 0.0003 on a 4 m arm.
-        let after_pos = fk.evaluate(q_after).ee_position()
-            .expect("EE position");
-        let pos_diff = (after_pos - before_pos).magnitude();
-        assert!(
-            pos_diff < 5e-4,
-            "TCP deviation {:.2e} exceeds 5e-4 (O(|N·z·dt|²) expected)",
-            pos_diff
-        );
+            let ctx = ctx_2r();
+            let r = region_2wp(RegionKind::Constraint);
 
-        println!("\n═══ Benchmark: NullSpaceOptimization ────────────");
-        println!("  |N·z|:            {:.6e}",
-            nz.as_slice().iter().map(|v| v.powi(2)).sum::<f64>().sqrt());
-        println!("  |J·N·z|:          {:.6e}", residual);
-        println!("  Joint diff:       {:.6e}", diff);
-        println!("  TCP deviation:    {:.6e}", pos_diff);
-        println!("  Joints:           {:?} → {:?}", q, q_after);
-        println!("────────────────────────────────────────────\n");
+            // Apply NullSpaceOptimization first (no-op for Planar2R)
+            let after_ns = ns.apply(&robot(), &traj, &r, &ctx, None).unwrap();
+            assert_eq!(after_ns.len(), traj.len());
+
+            // Then apply JointCenteringOperator
+            let after_jc = jc.apply(&robot(), &after_ns, &r, &ctx, None).unwrap();
+            assert_eq!(after_jc.len(), traj.len());
+
+            // Joints should be closer to center after both operators
+            let original_sum: f64 = traj.waypoints()[0].joints().iter().map(|q| q.abs()).sum();
+            let final_sum: f64 = after_jc.waypoints()[0]
+                .joints()
+                .iter()
+                .map(|q| q.abs())
+                .sum();
+            assert!(
+                final_sum <= original_sum + 1e-10,
+                "joint-centering should decrease |q| sum: {:.4} → {:.4}",
+                original_sum,
+                final_sum
+            );
+        }
+
+        #[test]
+        fn operators_are_composable() {
+            let ns = NullSpaceOptimization::new(0.3, 1e-6, 0.1);
+            let jc = JointCenteringOperator::new(0.3);
+
+            assert_eq!(ns.family(), jc.family());
+            assert_eq!(ns.objective(), OptimizationObjective::Feasibility);
+            assert_eq!(jc.objective(), OptimizationObjective::Feasibility);
+        }
+
+        #[test]
+        fn estimate_and_cost_methods_work() {
+            let op = NullSpaceOptimization::new(0.3, 1e-6, 0.1);
+            let r = region_2wp(RegionKind::Constraint);
+            let m = metrics();
+
+            let improvement = op.estimate_improvement(&r, &m);
+            assert!((0.0..=1.0).contains(&improvement));
+
+            let cost = op.estimate_cost();
+            assert!((0.0..=1.0).contains(&cost));
+
+            let applicability = op.applicability(&r);
+            assert!((0.0..=1.0).contains(&applicability));
+        }
     }
 
-    /// Benchmark: verify null-space correction improves joint margin.
-    ///
-    /// Uses a Planar4R robot with joints closer to one limit than the other.
-    /// The secondary objective z = (q_center - q) · factor should move joints
-    /// toward center, increasing the minimum distance to the nearest joint limit.
-    ///
-    /// This validates that the optimization direction (z) is aligned with the
-    /// declared objective of improving joint margin.
-    #[test]
-    fn benchmark_joint_margin_improvement() {
-        use crate::domain::context::OptimizationContext;
+    // ── Benchmarks ──────────────────────────────────────────────
 
-        let robot = planar_4r();
-        // Use conservative settings — smaller step to isolate direction
-        let op = NullSpaceOptimization::new(0.3, 1e-6, 0.1);
-        let limits: Vec<(f64, f64)> = vec![(-2.0, 2.0); 4];
-        let (lower, upper): (Vec<f64>, Vec<f64>) =
-            limits.iter().cloned().unzip();
-        let ctx = OptimizationContext {
-            joint_limits: crate::domain::context::JointLimits { lower, upper, velocity: None, acceleration: None },
-            config: crate::PipelineConfig::default(),
-            tool_frame: None,
+    #[cfg(test)]
+    mod benchmarks {
+        use super::test_helpers::planar_4r;
+        use super::*;
+        use thalos_core::{
+            analysis::region::{RegionId, RegionKind, RegionSeverity},
+            prelude::TrajectoryPoint,
         };
+        // ── 3.7 Benchmark: null-space correction on redundant robot ──
 
-        // Asymmetric config: different joints at different distances from limits
-        // Joint 0 near upper limit (1.8 of 2.0), joints 1-3 in various positions
-        // This avoids symmetric degeneracy where null space is orthogonal to centering
-        let q = vec![1.8, 0.5, -0.3, -1.2];
-        let traj = Trajectory::new(vec![
-            TrajectoryPoint::new(q.clone(), 0.0),
-            TrajectoryPoint::new(q.clone(), 1.0),
-        ]);
-        let region = ProblemRegion::new(
-            RegionId(0),
-            RegionKind::Singularity,
-            RegionSeverity::Warning,
-            0..2,
-        );
+        /// Verify that NullSpaceOptimization produces a non-zero
+        /// correction on a redundant planar 4R robot while preserving
+        /// the TCP position.
+        ///
+        /// Uses moderate operator parameters (factor=0.5, dt=0.3) and
+        /// verifies:
+        ///   1. Joints are modified (non-zero null-space correction)
+        ///   2. TCP position is preserved within SVD precision
+        #[test]
+        fn benchmark_nullspace_correction_on_redundant_robot() {
+            use crate::domain::context::OptimizationContext;
 
-        // Compute before: min distance to nearest joint limit
-        let before_margin = q.iter()
-            .zip(limits.iter())
-            .map(|(qj, (lo, hi))| (qj - lo).min(hi - qj))
-            .fold(f64::MAX, |a, b| a.min(b));
+            let robot = planar_4r();
+            // Moderate settings: factor=0.5, dt=0.3
+            let op = NullSpaceOptimization::new(0.5, 1e-6, 0.3);
+            let limits: Vec<(f64, f64)> = vec![(-2.0, 2.0); 4];
+            let (lower, upper): (Vec<f64>, Vec<f64>) = limits.iter().cloned().unzip();
+            let ctx = OptimizationContext {
+                joint_limits: crate::domain::context::JointLimits {
+                    lower,
+                    upper,
+                    velocity: None,
+                    acceleration: None,
+                },
+                config: crate::PipelineConfig::default(),
+                tool_frame: None,
+            };
 
-        let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
-        let q_after = result.waypoints()[0].joints();
+            // Asymmetrical configuration — all joints off centre.
+            let q = vec![1.5, 1.2, -1.3, -1.0];
+            let traj = Trajectory::new(vec![
+                TrajectoryPoint::new(q.clone(), 0.0),
+                TrajectoryPoint::new(vec![1.5, 1.2, -1.3, -1.0], 1.0),
+            ]);
+            let region = ProblemRegion::new(
+                RegionId(0),
+                RegionKind::Singularity,
+                RegionSeverity::Warning,
+                0..2,
+            );
 
-        // Compute after: min distance to nearest joint limit
-        let after_margin = q_after.iter()
-            .zip(limits.iter())
-            .map(|(qj, (lo, hi))| (qj - lo).min(hi - qj))
-            .fold(f64::MAX, |a, b| a.min(b));
+            // Debug: verify the null-space property directly.
+            let fk = ForwardKinematics::new(robot.clone());
+            let js = GeometricJacobian::new(fk.clone(), robot.end_effector().clone());
+            let j = js.evaluate(&q);
+            let j_full = j.full();
+            let j_plus = j_full.pseudo_inverse(1e-6).expect("pinv");
+            let z: Vec<f64> = q.iter().map(|qj| (0.0 - qj) * 0.5).collect();
+            let z_vec = DynamicVector::from_column_slice(&z);
+            let jz = &j_full * &z_vec;
+            let j_plus_jz = &j_plus * &jz;
+            let nz = z_vec - j_plus_jz;
 
-        let improvement = if before_margin > 0.0 {
-            (after_margin - before_margin) / before_margin * 100.0
-        } else {
-            0.0
-        };
+            // Verify J·N·z ≈ 0 (core null-space property)
+            let j_nz = &j_full * &nz;
+            let residual: f64 = j_nz
+                .as_slice()
+                .iter()
+                .map(|v| v.powi(2))
+                .sum::<f64>()
+                .sqrt();
+            eprintln!("[DEBUG] |J·N·z| = {:.6e}", residual);
+            eprintln!(
+                "[DEBUG] |N·z|   = {:.6e}",
+                nz.as_slice().iter().map(|v| v.powi(2)).sum::<f64>().sqrt()
+            );
 
-        // Verify joints moved toward center (not away) for joints near limits
-        let center = vec![0.0; 4];
-        let moved_toward_center: bool = q.iter()
-            .zip(q_after.iter())
-            .zip(center.iter())
-            .all(|((q_before, q_after), center)| {
-                let dist_before = (q_before - center).abs();
-                let dist_after = (q_after - center).abs();
-                dist_after <= dist_before + 1e-6  // monotonic toward center (allow floating point)
-            });
+            let before_pos = fk.evaluate(&q).ee_position().expect("EE position");
 
-        // Verify the worst joint (closest to limit) improved specifically
-        let worst_before_idx = q.iter()
-            .zip(limits.iter())
-            .map(|(qj, (lo, hi))| (qj - lo).min(hi - qj))
-            .enumerate()
-            .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-            .map(|(i, _)| i);
+            let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
+            assert_eq!(result.len(), traj.len());
 
-        let worst_improved = worst_before_idx.map(|idx| {
-            let (lo, hi) = limits[idx];
-            let margin_before = (q[idx] - lo).min(hi - q[idx]);
-            let margin_after = (q_after[idx] - lo).min(hi - q_after[idx]);
-            margin_after > margin_before + 1e-8
-        }).unwrap_or(false);
+            let q_after = result.waypoints()[0].joints();
 
-        // Note: null-space projection does NOT move all joints toward center simultaneously.
-        // The projected vector N·z = z - J⁺·J·z depends on the Jacobian's current configuration.
-        // Some joints may move slightly away from center to compensate.
-        // The key invariant is that the TCP path is preserved and the worst joint improves.
+            // 1. Joints changed (non-zero null-space correction)
+            let diff: f64 = q
+                .iter()
+                .zip(q_after.iter())
+                .map(|(a, b)| (a - b).powi(2))
+                .sum::<f64>()
+                .sqrt();
+            assert!(
+                diff > 1e-10,
+                "null-space correction should modify joints, diff = {:.2e}",
+                diff
+            );
 
-        println!("\n═══ Benchmark: Joint Margin Improvement ─────────");
-        println!("  Joints:        {:?}", q);
-        println!("  After:         {:?}", q_after);
-        println!("  Worst joint:   joint #{}", worst_before_idx.unwrap_or(999));
-        println!("  Before margin: {:.6}", before_margin);
-        println!("  After margin:  {:.6}", after_margin);
-        println!("  Improvement:   {:+.1}%", improvement);
-        println!("  Worst improved: {}", if worst_improved { "✅" } else { "⚠️ not on this config" });
-        println!("────────────────────────────────────────────\n");
+            // 2. TCP position preserved.
+            // J·N·z ≈ 0 holds to machine precision (verified above).
+            // The finite step q' - q = N·z·dt introduces a second-order
+            // FK deviation O(|N·z·dt|²) — this is expected for any
+            // finite-step null-space method. With |N·z·dt| ≈ 0.025 rad,
+            // the second-order deviation is ≈ 0.0003 on a 4 m arm.
+            let after_pos = fk.evaluate(q_after).ee_position().expect("EE position");
+            let pos_diff = (after_pos - before_pos).magnitude();
+            assert!(
+                pos_diff < 5e-4,
+                "TCP deviation {:.2e} exceeds 5e-4 (O(|N·z·dt|²) expected)",
+                pos_diff
+            );
 
-        // The worst joint (closest to limit) should improve
-        // Individual joints may move toward or away from center depending on
-        // the null-space orientation — only the aggregate margin and TCP
-        // preservation are guaranteed invariants.
-        assert!(worst_improved,
-            "The joint closest to its limit should improve, got joint #{}: {}",
-            worst_before_idx.unwrap_or(999), before_margin);
-    }
+            println!("\n═══ Benchmark: NullSpaceOptimization ────────────");
+            println!(
+                "  |N·z|:            {:.6e}",
+                nz.as_slice().iter().map(|v| v.powi(2)).sum::<f64>().sqrt()
+            );
+            println!("  |J·N·z|:          {:.6e}", residual);
+            println!("  Joint diff:       {:.6e}", diff);
+            println!("  TCP deviation:    {:.6e}", pos_diff);
+            println!("  Joints:           {:?} → {:?}", q, q_after);
+            println!("────────────────────────────────────────────\n");
+        }
+
+        /// Benchmark: verify null-space correction improves joint margin.
+        ///
+        /// Uses a Planar4R robot with joints closer to one limit than the other.
+        /// The secondary objective z = (q_center - q) · factor should move joints
+        /// toward center, increasing the minimum distance to the nearest joint limit.
+        ///
+        /// This validates that the optimization direction (z) is aligned with the
+        /// declared objective of improving joint margin.
+        #[test]
+        fn benchmark_joint_margin_improvement() {
+            use crate::domain::context::OptimizationContext;
+
+            let robot = planar_4r();
+            // Use conservative settings — smaller step to isolate direction
+            let op = NullSpaceOptimization::new(0.3, 1e-6, 0.1);
+            let limits: Vec<(f64, f64)> = vec![(-2.0, 2.0); 4];
+            let (lower, upper): (Vec<f64>, Vec<f64>) = limits.iter().cloned().unzip();
+            let ctx = OptimizationContext {
+                joint_limits: crate::domain::context::JointLimits {
+                    lower,
+                    upper,
+                    velocity: None,
+                    acceleration: None,
+                },
+                config: crate::PipelineConfig::default(),
+                tool_frame: None,
+            };
+
+            // Asymmetric config: different joints at different distances from limits
+            // Joint 0 near upper limit (1.8 of 2.0), joints 1-3 in various positions
+            // This avoids symmetric degeneracy where null space is orthogonal to centering
+            let q = vec![1.8, 0.5, -0.3, -1.2];
+            let traj = Trajectory::new(vec![
+                TrajectoryPoint::new(q.clone(), 0.0),
+                TrajectoryPoint::new(q.clone(), 1.0),
+            ]);
+            let region = ProblemRegion::new(
+                RegionId(0),
+                RegionKind::Singularity,
+                RegionSeverity::Warning,
+                0..2,
+            );
+
+            // Compute before: min distance to nearest joint limit
+            let before_margin = q
+                .iter()
+                .zip(limits.iter())
+                .map(|(qj, (lo, hi))| (qj - lo).min(hi - qj))
+                .fold(f64::MAX, |a, b| a.min(b));
+
+            let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
+            let q_after = result.waypoints()[0].joints();
+
+            // Compute after: min distance to nearest joint limit
+            let after_margin = q_after
+                .iter()
+                .zip(limits.iter())
+                .map(|(qj, (lo, hi))| (qj - lo).min(hi - qj))
+                .fold(f64::MAX, |a, b| a.min(b));
+
+            let improvement = if before_margin > 0.0 {
+                (after_margin - before_margin) / before_margin * 100.0
+            } else {
+                0.0
+            };
+
+            // Verify joints moved toward center (not away) for joints near limits
+            let center = vec![0.0; 4];
+            let moved_toward_center: bool = q.iter().zip(q_after.iter()).zip(center.iter()).all(
+                |((q_before, q_after), center)| {
+                    let dist_before = (q_before - center).abs();
+                    let dist_after = (q_after - center).abs();
+                    dist_after <= dist_before + 1e-6 // monotonic toward center (allow floating point)
+                },
+            );
+
+            // Verify the worst joint (closest to limit) improved specifically
+            let worst_before_idx = q
+                .iter()
+                .zip(limits.iter())
+                .map(|(qj, (lo, hi))| (qj - lo).min(hi - qj))
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
+                .map(|(i, _)| i);
+
+            let worst_improved = worst_before_idx
+                .map(|idx| {
+                    let (lo, hi) = limits[idx];
+                    let margin_before = (q[idx] - lo).min(hi - q[idx]);
+                    let margin_after = (q_after[idx] - lo).min(hi - q_after[idx]);
+                    margin_after > margin_before + 1e-8
+                })
+                .unwrap_or(false);
+
+            // Note: null-space projection does NOT move all joints toward center simultaneously.
+            // The projected vector N·z = z - J⁺·J·z depends on the Jacobian's current configuration.
+            // Some joints may move slightly away from center to compensate.
+            // The key invariant is that the TCP path is preserved and the worst joint improves.
+
+            println!("\n═══ Benchmark: Joint Margin Improvement ─────────");
+            println!("  Joints:        {:?}", q);
+            println!("  After:         {:?}", q_after);
+            println!(
+                "  Worst joint:   joint #{}",
+                worst_before_idx.unwrap_or(999)
+            );
+            println!("  Before margin: {:.6}", before_margin);
+            println!("  After margin:  {:.6}", after_margin);
+            println!("  Improvement:   {:+.1}%", improvement);
+            println!(
+                "  Worst improved: {}",
+                if worst_improved {
+                    "✅"
+                } else {
+                    "⚠️ not on this config"
+                }
+            );
+            println!("────────────────────────────────────────────\n");
+
+            // The worst joint (closest to limit) should improve
+            // Individual joints may move toward or away from center depending on
+            // the null-space orientation — only the aggregate margin and TCP
+            // preservation are guaranteed invariants.
+            assert!(
+                worst_improved,
+                "The joint closest to its limit should improve, got joint #{}: {}",
+                worst_before_idx.unwrap_or(999),
+                before_margin
+            );
+        }
     }
 }

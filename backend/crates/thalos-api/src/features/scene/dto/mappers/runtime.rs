@@ -2,7 +2,10 @@ use thalos_core::kinematics::inverse::result::IKResult;
 
 use crate::features::robots::dto::{JointMetadataDto, RobotMetadataDto};
 
-use super::super::{ActivePlanDto, ExecutionDto, ExecutionStatusDto, IkResultDto, RuntimeStateResponse, ToolFrameDto, VisualSceneDto};
+use super::super::{
+    ActivePlanDto, ExecutionDto, ExecutionStatusDto, IkResultDto, RuntimeStateResponse,
+    ToolFrameDto, VisualSceneDto,
+};
 
 impl From<IKResult> for IkResultDto {
     fn from(ik: IKResult) -> Self {
@@ -34,7 +37,6 @@ impl From<&thalos_core::robot::tool_frame::ToolFrame> for ToolFrameDto {
         }
     }
 }
-
 
 impl RuntimeStateResponse {
     pub fn from_snapshot(
@@ -68,12 +70,10 @@ impl RuntimeStateResponse {
             robot,
             joints: snapshot.joints.clone(),
             scene,
-            ik_result: snapshot.ik_result.as_ref().map(|ik| {
-                IkResultDto {
-                    status: format!("{:?}", ik.status),
-                    iterations: ik.iterations,
-                    final_error: ik.final_error,
-                }
+            ik_result: snapshot.ik_result.as_ref().map(|ik| IkResultDto {
+                status: format!("{:?}", ik.status),
+                iterations: ik.iterations,
+                final_error: ik.final_error,
             }),
             active_plan,
             active_tcp: snapshot.active_tcp.as_ref().map(ToolFrameDto::from),
@@ -102,11 +102,10 @@ impl RuntimeStateResponse {
 ///
 /// Derives the plan state from the execution session when available,
 /// falling back to the plan's own state for single-shot commands (MoveJ/MoveL).
-pub fn build_plan_dto(
-    snapshot: &thalos_runtime::RuntimeSnapshot,
-) -> Option<ActivePlanDto> {
+pub fn build_plan_dto(snapshot: &thalos_runtime::RuntimeSnapshot) -> Option<ActivePlanDto> {
     let plan = snapshot.active_plan.as_ref()?;
-    let mut dto = ActivePlanDto::with_visualization(plan, &snapshot.chain, snapshot.active_tcp.as_ref());
+    let mut dto =
+        ActivePlanDto::with_visualization(plan, &snapshot.chain, snapshot.active_tcp.as_ref());
 
     // If there's an execution session, override the plan state with the
     // session's status so the frontend sees the correct execution state.

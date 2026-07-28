@@ -9,9 +9,9 @@ use std::time::Duration;
 use thalos_core::ids::OperationId;
 use thalos_core::motion::{MotionPose, MotionProfile, OutputChannel, OutputValue};
 
-use crate::ir::{IrOperation, IrProgram};
-use super::analysis::{AnalysisResult, ConstraintSet};
 use super::CompilationOptions;
+use super::analysis::{AnalysisResult, ConstraintSet};
+use crate::ir::{IrOperation, IrProgram};
 use thalos_document::diagnostic::Diagnostic;
 
 // ---------------------------------------------------------------------------
@@ -207,10 +207,7 @@ impl PlanningStage {
             ));
         }
 
-        ir.operations
-            .iter()
-            .map(op_to_planned)
-            .collect()
+        ir.operations.iter().map(op_to_planned).collect()
     }
 }
 
@@ -224,7 +221,11 @@ fn op_to_planned(op: &IrOperation) -> PlannedOperation {
         IrOperation::Home { origin } => PlannedOperation::Home {
             origin: origin.clone(),
         },
-        IrOperation::MoveTo { origin, pose, profile } => PlannedOperation::MoveTo {
+        IrOperation::MoveTo {
+            origin,
+            pose,
+            profile,
+        } => PlannedOperation::MoveTo {
             origin: origin.clone(),
             strategy: MotionStrategy::Joint,
             pose: resolved_pose_to_motion_pose(pose),
@@ -288,7 +289,9 @@ fn resolved_pose_to_motion_pose(pose: &crate::ir::types::ResolvedPose) -> Motion
 }
 
 /// Convert an IR `ResolvedProfile` to a core `MotionProfile`.
-fn resolved_profile_to_motion_profile(profile: &crate::ir::types::ResolvedProfile) -> MotionProfile {
+fn resolved_profile_to_motion_profile(
+    profile: &crate::ir::types::ResolvedProfile,
+) -> MotionProfile {
     MotionProfile {
         max_velocity: profile.velocity,
         max_acceleration: profile.acceleration,
@@ -353,7 +356,9 @@ mod tests {
             frame: crate::ir::ResolvedFrame {
                 name: "base".into(),
                 parent: "world".into(),
-                transform: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+                transform: [
+                    1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+                ],
             },
         }
     }
@@ -400,10 +405,7 @@ mod tests {
 
     #[test]
     fn version_construction() {
-        let v = Version {
-            major: 0,
-            minor: 1,
-        };
+        let v = Version { major: 0, minor: 1 };
         assert_eq!(v.major, 0);
         assert_eq!(v.minor, 1);
     }
@@ -651,10 +653,7 @@ mod tests {
     #[test]
     fn metadata_construction() {
         let meta = PlanMetadata {
-            pipeline_version: Version {
-                major: 0,
-                minor: 1,
-            },
+            pipeline_version: Version { major: 0, minor: 1 },
             execution_time: Duration::from_millis(42),
             compilation_options: default_options(),
             diagnostics: vec![Diagnostic::warning("W001", "test warning", "pipeline")],

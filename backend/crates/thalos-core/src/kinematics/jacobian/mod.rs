@@ -1,11 +1,11 @@
-pub mod jacobian;
-pub mod numerical;
 pub mod geom;
-pub mod singularity;
+pub mod jacobian;
 pub mod manipulability;
+pub mod numerical;
+pub mod singularity;
 
-pub use jacobian::{JacobianSolver, Jacobian};
-pub use numerical::NumericalJacobian;
 pub use geom::GeometricJacobian;
-pub use singularity::SingularityReport;
+pub use jacobian::{Jacobian, JacobianSolver};
 pub use manipulability::ManipulabilityReport;
+pub use numerical::NumericalJacobian;
+pub use singularity::SingularityReport;

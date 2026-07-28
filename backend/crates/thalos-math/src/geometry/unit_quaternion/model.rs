@@ -1,5 +1,5 @@
-use crate::{constants, MathError, Quaternion, UnitVector3, Vector3};
 use crate::traits::Cross;
+use crate::{MathError, Quaternion, UnitVector3, Vector3, constants};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UnitQuaternion {
@@ -200,17 +200,34 @@ impl UnitQuaternion {
 
     pub fn to_rotation_matrix(&self) -> [[f64; 3]; 3] {
         let (w, x, y, z) = (self.q.w, self.q.x, self.q.y, self.q.z);
-        let w2 = w * w; let x2 = x * x; let y2 = y * y; let z2 = z * z;
+        let w2 = w * w;
+        let x2 = x * x;
+        let y2 = y * y;
+        let z2 = z * z;
         [
-            [w2 + x2 - y2 - z2, 2.0 * (x * y - w * z), 2.0 * (x * z + w * y)],
-            [2.0 * (x * y + w * z), w2 - x2 + y2 - z2, 2.0 * (y * z - w * x)],
-            [2.0 * (x * z - w * y), 2.0 * (y * z + w * x), w2 - x2 - y2 + z2],
+            [
+                w2 + x2 - y2 - z2,
+                2.0 * (x * y - w * z),
+                2.0 * (x * z + w * y),
+            ],
+            [
+                2.0 * (x * y + w * z),
+                w2 - x2 + y2 - z2,
+                2.0 * (y * z - w * x),
+            ],
+            [
+                2.0 * (x * z - w * y),
+                2.0 * (y * z + w * x),
+                w2 - x2 - y2 + z2,
+            ],
         ]
     }
 
     pub fn slerp(&self, other: &Self, t: f64) -> Self {
-        let dot = self.q.w * other.q.w + self.q.x * other.q.x
-            + self.q.y * other.q.y + self.q.z * other.q.z;
+        let dot = self.q.w * other.q.w
+            + self.q.x * other.q.x
+            + self.q.y * other.q.y
+            + self.q.z * other.q.z;
         let dot = dot.clamp(-1.0, 1.0);
 
         if dot > 0.9999 {
@@ -221,7 +238,9 @@ impl UnitQuaternion {
                 self.q.z + t * (other.q.z - self.q.z),
             );
             let norm = q.norm();
-            return Self { q: Quaternion::new(q.w / norm, q.x / norm, q.y / norm, q.z / norm) };
+            return Self {
+                q: Quaternion::new(q.w / norm, q.x / norm, q.y / norm, q.z / norm),
+            };
         }
 
         let theta = dot.acos();
@@ -284,10 +303,12 @@ impl UnitQuaternion {
     }
 }
 
-
-
 impl std::fmt::Display for UnitQuaternion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "UQ({}, {}, {}, {})", self.q.w, self.q.x, self.q.y, self.q.z)
+        write!(
+            f,
+            "UQ({}, {}, {}, {})",
+            self.q.w, self.q.x, self.q.y, self.q.z
+        )
     }
 }

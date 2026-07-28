@@ -70,7 +70,15 @@ impl From<PrimitiveGeometry> for PrimitiveGeometryDto {
         match g {
             PrimitiveGeometry::Cylinder { radius, height } => Self::Cylinder { radius, height },
             PrimitiveGeometry::Sphere { radius } => Self::Sphere { radius },
-            PrimitiveGeometry::Box { width, height, depth } => Self::Box { width, height, depth },
+            PrimitiveGeometry::Box {
+                width,
+                height,
+                depth,
+            } => Self::Box {
+                width,
+                height,
+                depth,
+            },
         }
     }
 }
@@ -120,7 +128,6 @@ impl From<SceneDiff> for SceneDiffDto {
         }
     }
 }
-
 
 // ── DTO → Domain conversions ──
 
@@ -184,7 +191,15 @@ impl From<PrimitiveGeometryDto> for PrimitiveGeometry {
         match g {
             PrimitiveGeometryDto::Cylinder { radius, height } => Self::Cylinder { radius, height },
             PrimitiveGeometryDto::Sphere { radius } => Self::Sphere { radius },
-            PrimitiveGeometryDto::Box { width, height, depth } => Self::Box { width, height, depth },
+            PrimitiveGeometryDto::Box {
+                width,
+                height,
+                depth,
+            } => Self::Box {
+                width,
+                height,
+                depth,
+            },
         }
     }
 }

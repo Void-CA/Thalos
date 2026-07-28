@@ -48,10 +48,7 @@ impl SingularityReport {
         // det(JᵀJ) = ∏ σᵢ² para TODOS los valores singulares
         // (incluyendo ceros, que hacen el producto = 0 si hay
         // deficiencia de rango). Para n×n es exactamente det(JᵀJ).
-        let det_jtj: f64 = singular_values
-            .iter()
-            .map(|s| s * s)
-            .product();
+        let det_jtj: f64 = singular_values.iter().map(|s| s * s).product();
 
         Self {
             det_jtj,

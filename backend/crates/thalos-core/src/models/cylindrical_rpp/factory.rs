@@ -14,12 +14,15 @@ pub fn create_cylindrical_rpp(
 
     let link_1_frame = builder.create_frame("link_1");
     let link_2_frame = builder.create_frame("link_2");
-    let ee_frame    = builder.create_frame("ee");
+    let ee_frame = builder.create_frame("ee");
 
     // Joint 1 — Revolute en Z (azimut θ)
-    let joint1 = JointType::Revolute(
-        RevoluteJoint::new(0, UnitVector3::z_axis(), limits_j1, Transform3D::identity()),
-    );
+    let joint1 = JointType::Revolute(RevoluteJoint::new(
+        0,
+        UnitVector3::z_axis(),
+        limits_j1,
+        Transform3D::identity(),
+    ));
     let link1 = Link {
         id: 0,
         transform: Transform3D::from_translation(Vector3::new(0.0, 0.0, l1)),
@@ -33,9 +36,12 @@ pub fn create_cylindrical_rpp(
     });
 
     // Joint 2 — Prismatic en Z (elevación z)
-    let joint2 = JointType::Prismatic(
-        PrismaticJoint::new(1, UnitVector3::z_axis(), limits_j2, Transform3D::identity()),
-    );
+    let joint2 = JointType::Prismatic(PrismaticJoint::new(
+        1,
+        UnitVector3::z_axis(),
+        limits_j2,
+        Transform3D::identity(),
+    ));
     let link2 = Link {
         id: 1,
         transform: Transform3D::identity(),
@@ -49,9 +55,12 @@ pub fn create_cylindrical_rpp(
     });
 
     // Joint 3 — Prismatic en X (extensión radial r)
-    let joint3 = JointType::Prismatic(
-        PrismaticJoint::new(2, UnitVector3::x_axis(), limits_j3, Transform3D::identity()),
-    );
+    let joint3 = JointType::Prismatic(PrismaticJoint::new(
+        2,
+        UnitVector3::x_axis(),
+        limits_j3,
+        Transform3D::identity(),
+    ));
     let link3 = Link {
         id: 2,
         transform: Transform3D::identity(),

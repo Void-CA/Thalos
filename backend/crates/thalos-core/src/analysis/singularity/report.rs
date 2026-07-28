@@ -13,7 +13,6 @@ pub enum SingularityState {
     Singular,
 }
 
-
 #[derive(Debug, Clone)]
 pub struct SingularitySample {
     pub q: Vec<f64>,
@@ -59,12 +58,7 @@ fn aggregate(samples: &[SingularitySample]) -> SingularityMetrics {
         }
 
         let cond = s.analysis.condition_number;
-        let sigma_min = s
-            .analysis
-            .singular_values
-            .last()
-            .copied()
-            .unwrap_or(0.0);
+        let sigma_min = s.analysis.singular_values.last().copied().unwrap_or(0.0);
 
         // Only accumulate finite condition numbers for average
         if cond.is_finite() {
@@ -106,11 +100,7 @@ fn aggregate(samples: &[SingularitySample]) -> SingularityMetrics {
         near_singular_count: near,
         normal_count: normal,
         avg_condition_number: avg_cond,
-        min_condition_number: if min_cond == f64::MAX {
-            0.0
-        } else {
-            min_cond
-        },
+        min_condition_number: if min_cond == f64::MAX { 0.0 } else { min_cond },
         max_condition_number: max_cond,
         avg_sigma_min,
     }
@@ -124,7 +114,10 @@ impl SingularityAnalysis {
         Self { samples, metrics }
     }
 
-    pub fn classify_report(report: &SingularityReport, config: &SingularityConfig) -> SingularityState {
+    pub fn classify_report(
+        report: &SingularityReport,
+        config: &SingularityConfig,
+    ) -> SingularityState {
         classify(report, config)
     }
 }

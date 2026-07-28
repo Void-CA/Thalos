@@ -1,9 +1,6 @@
 use std::sync::Arc;
 
-use axum::{
-    routing::get,
-    Router,
-};
+use axum::{Router, routing::get};
 
 use crate::{AppState, features::robots::handler};
 

@@ -153,11 +153,7 @@ fn visual_material() {
         </robot>
     "#;
     let robot = parse_robot(source).unwrap();
-    let mat = robot.links["base"]
-        .visual[0]
-        .material
-        .as_ref()
-        .unwrap();
+    let mat = robot.links["base"].visual[0].material.as_ref().unwrap();
     assert_eq!(mat.name, "");
     let color = mat.color.unwrap();
     assert!((color.r - 1.0).abs() < 1e-6);
@@ -189,10 +185,7 @@ fn multiple_joint_types() {
             "#
         );
         let robot = parse_robot(&source).unwrap();
-        assert_eq!(
-            robot.joints["j"].kind, expected,
-            "mismatch for {type_str}"
-        );
+        assert_eq!(robot.joints["j"].kind, expected, "mismatch for {type_str}");
     }
 }
 

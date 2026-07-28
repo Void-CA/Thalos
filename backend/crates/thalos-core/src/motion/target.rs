@@ -6,7 +6,6 @@
 ///
 /// All types derive `Serialize`/`Deserialize` for JSON round-tripping, and
 /// `Debug`/`Clone`/`PartialEq` for testability and compiler-pass compatibility.
-
 use serde::{Deserialize, Serialize};
 
 /// A robot-independent pose suitable for motion targeting.
@@ -347,7 +346,10 @@ mod tests {
         });
 
         let json = serde_json::to_string(&target).expect("serialize");
-        assert!(json.contains(r#""type":"pose""#), "JSON should use internally-tagged type: {json}");
+        assert!(
+            json.contains(r#""type":"pose""#),
+            "JSON should use internally-tagged type: {json}"
+        );
         let decoded: MotionTarget = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(target, decoded);
     }

@@ -9,12 +9,8 @@ pub enum MathError {
     ZeroQuaternionNormalization,
 
     #[error("Cannot invert a quaternion with near-zero norm (norm² = {norm_sq})")]
-    ZeroQuaternionInverse {
-        norm_sq: f64,
-    },
+    ZeroQuaternionInverse { norm_sq: f64 },
 
     #[error("Quaternion is not unit: norm² = {norm_sq}, expected ≈ 1")]
-    QuaternionNotUnit {
-        norm_sq: f64,
-    },
+    QuaternionNotUnit { norm_sq: f64 },
 }

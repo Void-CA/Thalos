@@ -34,7 +34,10 @@ fn result_exposes_metadata() {
     );
 
     // Por defecto no hay historial
-    assert!(result.error_history.is_none(), "Historial debe ser None por defecto");
+    assert!(
+        result.error_history.is_none(),
+        "Historial debe ser None por defecto"
+    );
 }
 
 // ─── Error history ────────────────────────────────────────────────────
@@ -43,8 +46,7 @@ fn result_exposes_metadata() {
 #[test]
 fn error_history_is_recorded() {
     let (fk, ee) = build_2dof_planar_arm();
-    let solver = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5)
-        .with_history(true);
+    let solver = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5).with_history(true);
 
     let q0 = vec![0.0, 0.0];
     let target = Vector3::new(1.0, 1.0, 0.0);
@@ -91,8 +93,16 @@ fn two_dof_planar_arm_known_solution() {
     let target = Vector3::new(1.0, 1.0, 0.0);
     let result = solver.solve(&q0, IKGoal::Position(target));
 
-    println!("  q1 = {:.6} rad ({:.2}°)", result.q[0], result.q[0].to_degrees());
-    println!("  q2 = {:.6} rad ({:.2}°)", result.q[1], result.q[1].to_degrees());
+    println!(
+        "  q1 = {:.6} rad ({:.2}°)",
+        result.q[0],
+        result.q[0].to_degrees()
+    );
+    println!(
+        "  q2 = {:.6} rad ({:.2}°)",
+        result.q[1],
+        result.q[1].to_degrees()
+    );
 
     assert!(
         result.q[0].abs() < 1e-2,
@@ -121,8 +131,14 @@ fn fk_ik_consistency() {
     let reached = fk_result.ee_position().unwrap();
     let final_error = (target - reached).magnitude();
 
-    println!("  target  = ({:.4}, {:.4}, {:.4})", target.x, target.y, target.z);
-    println!("  reached = ({:.4}, {:.4}, {:.4})", reached.x, reached.y, reached.z);
+    println!(
+        "  target  = ({:.4}, {:.4}, {:.4})",
+        target.x, target.y, target.z
+    );
+    println!(
+        "  reached = ({:.4}, {:.4}, {:.4})",
+        reached.x, reached.y, reached.z
+    );
     println!("  final error = {:.2e}", final_error);
 
     assert!(
@@ -142,7 +158,11 @@ fn one_dof_reaches_known_target() {
     let target = Vector3::new(0.0, 1.0, 0.0);
     let result = solver.solve(&q0, IKGoal::Position(target));
 
-    println!("  θ = {:.6} rad ({:.2}°)", result.q[0], result.q[0].to_degrees());
+    println!(
+        "  θ = {:.6} rad ({:.2}°)",
+        result.q[0],
+        result.q[0].to_degrees()
+    );
 
     assert!(
         (result.q[0] - PI / 2.0).abs() < 1e-3,
@@ -191,7 +211,15 @@ fn jacobian_matches_numerical() {
                     diff < tolerance,
                     "Jacobiano mismatch en q = [{:.3}, {:.3}]: \
                         J_geom[{}][{}] = {:.6}, J_num[{}][{}] = {:.6}, diff = {:.2e}",
-                    q[0], q[1], i, j, g, i, j, n, diff
+                    q[0],
+                    q[1],
+                    i,
+                    j,
+                    g,
+                    i,
+                    j,
+                    n,
+                    diff
                 );
             }
         }
@@ -238,12 +266,7 @@ fn unreachable_target_returns_max_iterations() {
 
     // Sin NaN ni Inf
     for (i, &q_val) in result.q.iter().enumerate() {
-        assert!(
-            q_val.is_finite(),
-            "q[{}] debe ser finito, got {}",
-            i,
-            q_val
-        );
+        assert!(q_val.is_finite(), "q[{}] debe ser finito, got {}", i, q_val);
     }
 }
 
@@ -309,13 +332,7 @@ fn unreachable_target_does_not_explode() {
 
     for q0 in &start_configs {
         for &target in &targets {
-            let solver = JacobianTransposeSolver::new(
-                fk.clone(),
-                ee.clone(),
-                200,
-                1e-6,
-                0.5,
-            );
+            let solver = JacobianTransposeSolver::new(fk.clone(), ee.clone(), 200, 1e-6, 0.5);
             let result = solver.solve(q0, IKGoal::Position(target));
 
             assert_eq!(
@@ -328,7 +345,10 @@ fn unreachable_target_does_not_explode() {
                 assert!(
                     q_val.is_finite(),
                     "q debe ser finito para q0={:?}, target=({},{}), got {}",
-                    q0, target.x, target.y, q_val
+                    q0,
+                    target.x,
+                    target.y,
+                    q_val
                 );
             }
 
@@ -361,14 +381,18 @@ fn singular_radial_error_blocks_convergence() {
 
     println!(
         "  singular (q=[0,0]):       {} iter, error = {:.2e}, q = [{:.4}, {:.4}], status={:?}",
-        result_singular.iterations, result_singular.final_error,
-        result_singular.q[0], result_singular.q[1],
+        result_singular.iterations,
+        result_singular.final_error,
+        result_singular.q[0],
+        result_singular.q[1],
         result_singular.status
     );
     println!(
         "  no-singular (q=[π/4,π/4]): {} iter, error = {:.2e}, q = [{:.4}, {:.4}], status={:?}",
-        result_nonsingular.iterations, result_nonsingular.final_error,
-        result_nonsingular.q[0], result_nonsingular.q[1],
+        result_nonsingular.iterations,
+        result_nonsingular.final_error,
+        result_nonsingular.q[0],
+        result_nonsingular.q[1],
         result_nonsingular.status
     );
 
@@ -397,8 +421,7 @@ fn singular_radial_error_blocks_convergence() {
 #[test]
 fn singular_config_error_history_monotonic() {
     let (fk, ee) = build_2dof_planar_arm();
-    let solver = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5)
-        .with_history(true);
+    let solver = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5).with_history(true);
 
     let target = Vector3::new(1.2, 0.5, 0.0);
     let result = solver.solve(&[0.0, 0.0], IKGoal::Position(target));
@@ -433,8 +456,7 @@ fn singular_config_error_history_monotonic() {
 #[test]
 fn singular_config_no_oscillation() {
     let (fk, ee) = build_2dof_planar_arm();
-    let solver = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5)
-        .with_history(true);
+    let solver = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5).with_history(true);
 
     let target = Vector3::new(1.2, 0.5, 0.0);
     let result = solver.solve(&[0.0, 0.0], IKGoal::Position(target));
@@ -450,10 +472,7 @@ fn singular_config_no_oscillation() {
         .expect("with_history(true) debe registrar historial");
 
     // diff[i] = error[i] - error[i+1] (positivo porque error decrece)
-    let diffs: Vec<f64> = history
-        .windows(2)
-        .map(|w| w[0] - w[1])
-        .collect();
+    let diffs: Vec<f64> = history.windows(2).map(|w| w[0] - w[1]).collect();
 
     assert!(
         diffs.len() >= 10,

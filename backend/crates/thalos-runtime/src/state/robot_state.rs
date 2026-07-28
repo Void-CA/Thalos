@@ -16,19 +16,37 @@ pub enum ConnectionState {
 /// Error de robot reportado por el backend físico.
 #[derive(Clone, Debug, PartialEq)]
 pub enum RobotError {
-    MotorOverheated { motor_id: usize, temperature: f64 },
-    EncoderDisconnected { joint: usize },
+    MotorOverheated {
+        motor_id: usize,
+        temperature: f64,
+    },
+    EncoderDisconnected {
+        joint: usize,
+    },
     EmergencyStop,
-    LowBattery { voltage: f64 },
+    LowBattery {
+        voltage: f64,
+    },
     CommunicationTimeout,
-    JointLimitViolation { joint: usize, value: f64, limit: f64 },
-    VelocityLimitExceeded { joint: usize, velocity: f64, limit: f64 },
+    JointLimitViolation {
+        joint: usize,
+        value: f64,
+        limit: f64,
+    },
+    VelocityLimitExceeded {
+        joint: usize,
+        velocity: f64,
+        limit: f64,
+    },
 }
 
 impl std::fmt::Display for RobotError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RobotError::MotorOverheated { motor_id, temperature } => {
+            RobotError::MotorOverheated {
+                motor_id,
+                temperature,
+            } => {
                 write!(f, "Motor {} overheated ({:.1}°C)", motor_id, temperature)
             }
             RobotError::EncoderDisconnected { joint } => {
@@ -39,11 +57,27 @@ impl std::fmt::Display for RobotError {
                 write!(f, "Low battery ({:.2}V)", voltage)
             }
             RobotError::CommunicationTimeout => write!(f, "Communication timeout"),
-            RobotError::JointLimitViolation { joint, value, limit } => {
-                write!(f, "Joint {} limit violation: {} (limit: {})", joint, value, limit)
+            RobotError::JointLimitViolation {
+                joint,
+                value,
+                limit,
+            } => {
+                write!(
+                    f,
+                    "Joint {} limit violation: {} (limit: {})",
+                    joint, value, limit
+                )
             }
-            RobotError::VelocityLimitExceeded { joint, velocity, limit } => {
-                write!(f, "Joint {} velocity exceeded: {} (limit: {})", joint, velocity, limit)
+            RobotError::VelocityLimitExceeded {
+                joint,
+                velocity,
+                limit,
+            } => {
+                write!(
+                    f,
+                    "Joint {} velocity exceeded: {} (limit: {})",
+                    joint, velocity, limit
+                )
             }
         }
     }
@@ -70,7 +104,10 @@ pub struct RobotState {
 
 impl RobotState {
     pub fn new(state: Self) -> Self {
-        Self { revision: 1, ..state }
+        Self {
+            revision: 1,
+            ..state
+        }
     }
 }
 

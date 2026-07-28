@@ -212,8 +212,7 @@ mod tests {
 
         for instr in &instructions {
             let json = serde_json::to_string(instr).expect("serialize");
-            let decoded: MotionInstruction =
-                serde_json::from_str(&json).expect("deserialize");
+            let decoded: MotionInstruction = serde_json::from_str(&json).expect("deserialize");
             assert_eq!(*instr, decoded, "round-trip failed for {instr:?}");
         }
     }
@@ -221,7 +220,7 @@ mod tests {
     #[test]
     fn serde_internally_tagged_type_tags() {
         let move_j = MotionInstruction::MoveJ {
-                origin: OperationId("1".to_string()),
+            origin: OperationId("1".to_string()),
             target: MotionTarget::Pose(MotionPose {
                 position: [0.0, 0.0, 0.0],
                 orientation: [0.0, 0.0, 0.0, 1.0],
@@ -302,12 +301,14 @@ mod tests {
 
         // Round-trip
         let json = serde_json::to_string(&original).expect("serialize");
-        let decoded: MotionInstruction =
-            serde_json::from_str(&json).expect("deserialize");
+        let decoded: MotionInstruction = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(original, decoded, "Round-trip should preserve equality");
 
         // Clone after round-trip
         let decoded_clone = decoded.clone();
-        assert_eq!(decoded, decoded_clone, "Clone after round-trip should preserve equality");
+        assert_eq!(
+            decoded, decoded_clone,
+            "Clone after round-trip should preserve equality"
+        );
     }
 }

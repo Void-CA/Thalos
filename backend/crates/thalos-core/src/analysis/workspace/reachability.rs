@@ -17,7 +17,11 @@ impl fmt::Display for Reachability {
         match self {
             Self::Reachable => write!(f, "reachable"),
             Self::OutOfWorkspace { nearest_distance } => {
-                write!(f, "out of workspace (nearest distance: {})", nearest_distance)
+                write!(
+                    f,
+                    "out of workspace (nearest distance: {})",
+                    nearest_distance
+                )
             }
         }
     }

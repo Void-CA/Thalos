@@ -44,7 +44,10 @@ impl ToolFrame {
 
     /// Create a TCP with a non-identity offset from the base frame.
     pub fn with_offset(base_frame: FrameId, transform: Transform3D) -> Self {
-        Self { base_frame, transform }
+        Self {
+            base_frame,
+            transform,
+        }
     }
 
     /// Check if this TCP has a non-identity offset.
@@ -79,17 +82,14 @@ mod tests {
     use super::*;
     use crate::kinematics::forward::result::FKResult;
     use crate::spatial::pose::Pose;
-    use thalos_math::Vector3;
     use std::collections::HashMap;
+    use thalos_math::Vector3;
 
     fn make_fk_result(frame_id: u64, translation: Vector3) -> FKResult {
         let mut poses = HashMap::new();
         let frame = FrameId::new(frame_id);
         let transform = Transform3D::from_translation(translation);
-        poses.insert(
-            frame.clone(),
-            Pose::new(FrameId::World, frame, transform),
-        );
+        poses.insert(frame.clone(), Pose::new(FrameId::World, frame, transform));
         FKResult::new(poses, FrameId::new(frame_id))
     }
 

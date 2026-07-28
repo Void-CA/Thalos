@@ -52,10 +52,7 @@ pub struct Alignment {
 /// Estrategia: para cada sample del plan, interpola linealmente la
 /// ejecución en el mismo timestamp. Así ambos quedan con la misma
 /// referencia temporal.
-pub fn align(
-    plan_samples: &[MotionSample],
-    exec_samples: &[ExecutionSample],
-) -> Alignment {
+pub fn align(plan_samples: &[MotionSample], exec_samples: &[ExecutionSample]) -> Alignment {
     if plan_samples.is_empty() || exec_samples.is_empty() {
         return Alignment {
             pairs: vec![],

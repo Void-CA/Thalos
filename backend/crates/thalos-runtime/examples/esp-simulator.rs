@@ -1,7 +1,7 @@
 //! ESP Simulator — fake firmware para probar HardwareBackend sin un robot real.
 //!
 //! Simula un ESP32 conectado por TCP/serial:
-//! - Recibe comandos `CMD MOVEJ <j1>...` 
+//! - Recibe comandos `CMD MOVEJ <j1>...`
 //! - Responde con `STATE <j1>...`
 //! - Simula latencia, pérdida de paquetes y errores
 //!
@@ -35,7 +35,11 @@ fn handle_command(line: &str) -> String {
     match parts[0] {
         "CMD" => match parts[1] {
             "MOVEJ" => {
-                let joints: Vec<&str> = parts[2..].iter().take_while(|s| !s.starts_with('V')).copied().collect();
+                let joints: Vec<&str> = parts[2..]
+                    .iter()
+                    .take_while(|s| !s.starts_with('V'))
+                    .copied()
+                    .collect();
                 if joints.is_empty() {
                     return "ERROR missing joints\n".to_string();
                 }

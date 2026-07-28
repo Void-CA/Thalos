@@ -1,15 +1,18 @@
-use thalos_core::{kinematics::{
-    forward::ForwardKinematics,
-    inverse::{DampedLeastSquaresSolver, IKGoal, IKResult, IKSolver},
-}, prelude::Trajectory};
-use thalos_core::spatial::frame::FrameId;
 use thalos_core::robot::tool_frame::ToolFrame;
+use thalos_core::spatial::frame::FrameId;
+use thalos_core::{
+    kinematics::{
+        forward::ForwardKinematics,
+        inverse::{DampedLeastSquaresSolver, IKGoal, IKResult, IKSolver},
+    },
+    prelude::Trajectory,
+};
 use thalos_models::Robot;
 use thalos_planning::motion::program::CompiledPlan;
 
-pub use thalos_core::prelude::ActiveRobot;
-use crate::snapshots::scene::JointMeta;
 use crate::error::RuntimeError;
+use crate::snapshots::scene::JointMeta;
+pub use thalos_core::prelude::ActiveRobot;
 
 use crate::plan::{ActiveMotionPlan, MotionType};
 
@@ -79,14 +82,26 @@ impl SceneRuntime {
 
     // ── Single-shot plan setters (MoveJ / MoveL) ──
 
-    pub fn set_completed_plan(&mut self, trajectory: impl Into<Trajectory>, motion_type: MotionType) {
+    pub fn set_completed_plan(
+        &mut self,
+        trajectory: impl Into<Trajectory>,
+        motion_type: MotionType,
+    ) {
         let tid = self.next_plan_id();
-        self.active_plan = Some(ActiveMotionPlan::completed(tid, trajectory.into(), motion_type));
+        self.active_plan = Some(ActiveMotionPlan::completed(
+            tid,
+            trajectory.into(),
+            motion_type,
+        ));
     }
 
     pub fn set_created_plan(&mut self, trajectory: impl Into<Trajectory>, motion_type: MotionType) {
         let tid = self.next_plan_id();
-        self.active_plan = Some(ActiveMotionPlan::created(tid, trajectory.into(), motion_type));
+        self.active_plan = Some(ActiveMotionPlan::created(
+            tid,
+            trajectory.into(),
+            motion_type,
+        ));
     }
 
     // ── Multi-segment program (Preview / Execution) ──
@@ -120,7 +135,13 @@ impl SceneRuntime {
     pub fn select_tool_frame(&mut self, tool_frame: Option<ToolFrame>) -> Result<(), RuntimeError> {
         if let Some(tcp) = &tool_frame {
             // Validate that the frame exists in the chain
-            if self.active_robot.chain.frames.get(&tcp.base_frame).is_none() {
+            if self
+                .active_robot
+                .chain
+                .frames
+                .get(&tcp.base_frame)
+                .is_none()
+            {
                 return Err(RuntimeError::ToolFrameNotFound {
                     frame_id: match tcp.base_frame {
                         FrameId::Id(id) => id,

@@ -6,15 +6,15 @@
 //! 3. Genera recomendaciones
 //! 4. Retorna el resultado
 
+use thalos_collision::NaiveCollisionChecker;
 use thalos_core::{
     analysis::constraints::{Constraint, DefaultConstraintEvaluator},
     collision::CollisionMatrix,
     robot::{serial_chain::SerialChain, tool_frame::ToolFrame},
 };
-use thalos_collision::NaiveCollisionChecker;
 use thalos_planning::{
-    analysis::{PlanAnalysis, TrajectoryAnalyzer},
     advisor::{PlanAdvisor, Recommendation},
+    analysis::{PlanAnalysis, TrajectoryAnalyzer},
     finding::Finding,
 };
 
@@ -59,8 +59,8 @@ impl PlanAnalysisService {
         let matrix = CollisionMatrix::new();
         let evaluator = DefaultConstraintEvaluator;
 
-        let mut analyzer = TrajectoryAnalyzer::new(chain, tcp)
-            .with_collision_checker(&checker, &matrix);
+        let mut analyzer =
+            TrajectoryAnalyzer::new(chain, tcp).with_collision_checker(&checker, &matrix);
 
         if let Some(c) = constraints {
             analyzer = analyzer.with_constraints(c, &evaluator);

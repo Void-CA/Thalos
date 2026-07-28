@@ -28,7 +28,9 @@ pub struct SessionManager {
 impl SessionManager {
     /// Crear un SessionManager con persistencia en el directorio por defecto.
     pub fn new() -> Self {
-        let base = dirs_next().unwrap_or_else(|| PathBuf::from(".")).join(THALOS_DIR);
+        let base = dirs_next()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(THALOS_DIR);
         Self::with_path(base)
     }
 
@@ -83,12 +85,21 @@ impl SessionManager {
 
     /// Marcar sesión como completada y guardar el trace.
     pub async fn complete(&self, id: u64, trace: MotionTrace) -> Option<SessionData> {
-        self.complete_with_status(id, trace, SessionStatus::Completed).await
+        self.complete_with_status(id, trace, SessionStatus::Completed)
+            .await
     }
 
     /// Marcar sesión con un estado terminal específico y guardar el trace.
-    pub async fn complete_with_status(&self, id: u64, trace: MotionTrace, status: SessionStatus) -> Option<SessionData> {
-        debug_assert!(status.is_terminal(), "complete_with_status requires terminal status");
+    pub async fn complete_with_status(
+        &self,
+        id: u64,
+        trace: MotionTrace,
+        status: SessionStatus,
+    ) -> Option<SessionData> {
+        debug_assert!(
+            status.is_terminal(),
+            "complete_with_status requires terminal status"
+        );
         let mut sessions = self.sessions.write().await;
         if let Some(session) = sessions.iter_mut().find(|s| s.id == id) {
             session.status = status;
@@ -126,7 +137,10 @@ impl SessionManager {
     /// Obtener el trace de una sesión.
     pub async fn get_trace(&self, id: u64) -> Option<MotionTrace> {
         let traces = self.traces.read().await;
-        traces.iter().find(|(sid, _)| *sid == id).map(|(_, t)| t.clone())
+        traces
+            .iter()
+            .find(|(sid, _)| *sid == id)
+            .map(|(_, t)| t.clone())
     }
 
     /// Obtener sesión + trace.
@@ -155,7 +169,10 @@ impl SessionManager {
 
     /// Obtener el `ExecutionTrace` de una sesión desde disco.
     pub async fn get_execution_trace(&self, id: u64) -> Option<ExecutionTrace> {
-        let path = self.base_path.join(format!("{:06}", id)).join("execution_trace.json");
+        let path = self
+            .base_path
+            .join(format!("{:06}", id))
+            .join("execution_trace.json");
         let content = tokio::fs::read_to_string(path).await.ok()?;
         serde_json::from_str(&content).ok()
     }
@@ -186,7 +203,11 @@ impl SessionManager {
         tokio::fs::write(path, json).await
     }
 
-    async fn save_trace_to_disk(&self, id: u64, _session: &SessionData) -> Result<(), std::io::Error> {
+    async fn save_trace_to_disk(
+        &self,
+        id: u64,
+        _session: &SessionData,
+    ) -> Result<(), std::io::Error> {
         let traces = self.traces.read().await;
         if let Some((_, trace)) = traces.iter().find(|(sid, _)| *sid == id) {
             let dir = self.base_path.join(format!("{:06}", id));
@@ -223,7 +244,9 @@ impl SessionManager {
 
     /// Cargar un trace desde disco (para importación).
     pub async fn load_trace_from_file(path: &str) -> Result<MotionTrace, String> {
-        let content = tokio::fs::read_to_string(path).await.map_err(|e| e.to_string())?;
+        let content = tokio::fs::read_to_string(path)
+            .await
+            .map_err(|e| e.to_string())?;
         serde_json::from_str(&content).map_err(|e| e.to_string())
     }
 }
@@ -301,7 +324,13 @@ mod tests {
     async fn complete_with_trace() {
         let manager = SessionManager::with_path(tmp_path());
         let session = manager
-            .register(ExecutionSource::Hardware, "plan-2".into(), 1.0, 2, "robot".into())
+            .register(
+                ExecutionSource::Hardware,
+                "plan-2".into(),
+                1.0,
+                2,
+                "robot".into(),
+            )
             .await;
         let trace = sample_trace();
 

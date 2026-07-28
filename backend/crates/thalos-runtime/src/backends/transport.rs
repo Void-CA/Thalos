@@ -145,12 +145,14 @@ impl FakeTransport {
 #[async_trait]
 impl Transport for FakeTransport {
     async fn connect(&mut self) -> Result<(), TransportError> {
-        self.connected.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.connected
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         Ok(())
     }
 
     async fn disconnect(&mut self) -> Result<(), TransportError> {
-        self.connected.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.connected
+            .store(false, std::sync::atomic::Ordering::SeqCst);
         Ok(())
     }
 

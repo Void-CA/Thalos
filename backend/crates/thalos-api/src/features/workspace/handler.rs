@@ -6,27 +6,25 @@
 
 use std::sync::Arc;
 
-use axum::{
-    extract::State,
-    Json,
-};
+use axum::{Json, extract::State};
 
 use thalos_core::analysis::workspace::WorkspaceConfig;
-use thalos_math::Vector3;
 use thalos_core::models::RobotModel;
-use thalos_runtime::{ManipulabilityService as RuntimeManipulabilityService, SingularityService as RuntimeSingularityService, WorkspaceService as RuntimeWorkspaceService};
+use thalos_math::Vector3;
+use thalos_runtime::{
+    ManipulabilityService as RuntimeManipulabilityService,
+    SingularityService as RuntimeSingularityService, WorkspaceService as RuntimeWorkspaceService,
+};
 
 use thalos_core::analysis::singularity::SingularityConfig;
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
 use crate::features::workspace::dto::{
-    ActiveAnalysisRequest, ActiveAnalysisResponse, ActiveSampleRequest,
-    ActiveSingularityRequest,
-    ManipulabilityRequest, ManipulabilityResponse, ManipulabilitySampleDto,
-    ReachabilityDto, ReachabilityRequest, SampleRequest,
-    SingularityRequest, SingularityResponse, SingularitySampleDto,
-    WorkspaceDto, WorkspaceSampleDto, BoundingBoxDto,
+    ActiveAnalysisRequest, ActiveAnalysisResponse, ActiveSampleRequest, ActiveSingularityRequest,
+    BoundingBoxDto, ManipulabilityRequest, ManipulabilityResponse, ManipulabilitySampleDto,
+    ReachabilityDto, ReachabilityRequest, SampleRequest, SingularityRequest, SingularityResponse,
+    SingularitySampleDto, WorkspaceDto, WorkspaceSampleDto,
 };
 
 /// POST /api/v1/workspace/sample
@@ -34,10 +32,9 @@ pub async fn sample(
     State(_state): State<Arc<AppState>>,
     Json(req): Json<SampleRequest>,
 ) -> ApiResult<WorkspaceDto> {
-    let model = RobotModel::from_id(&req.robot_id)
-        .map_err(|_| ApiError::NotFound {
-            message: format!("Robot '{}' not found", req.robot_id),
-        })?;
+    let model = RobotModel::from_id(&req.robot_id).map_err(|_| ApiError::NotFound {
+        message: format!("Robot '{}' not found", req.robot_id),
+    })?;
 
     let config = WorkspaceConfig {
         samples: req.samples,
@@ -86,10 +83,9 @@ pub async fn singularity(
     State(_state): State<Arc<AppState>>,
     Json(req): Json<SingularityRequest>,
 ) -> ApiResult<SingularityResponse> {
-    let model = RobotModel::from_id(&req.robot_id)
-        .map_err(|_| ApiError::NotFound {
-            message: format!("Robot '{}' not found", req.robot_id),
-        })?;
+    let model = RobotModel::from_id(&req.robot_id).map_err(|_| ApiError::NotFound {
+        message: format!("Robot '{}' not found", req.robot_id),
+    })?;
 
     let config = thalos_core::analysis::workspace::WorkspaceConfig {
         samples: req.samples,
@@ -104,7 +100,13 @@ pub async fn singularity(
     let analysis = RuntimeSingularityService::analyze(model, config, singularity_config)?;
 
     let samples = if req.include_samples {
-        Some(analysis.samples.iter().map(SingularitySampleDto::from).collect())
+        Some(
+            analysis
+                .samples
+                .iter()
+                .map(SingularitySampleDto::from)
+                .collect(),
+        )
     } else {
         None
     };
@@ -120,10 +122,9 @@ pub async fn manipulability(
     State(_state): State<Arc<AppState>>,
     Json(req): Json<ManipulabilityRequest>,
 ) -> ApiResult<ManipulabilityResponse> {
-    let model = RobotModel::from_id(&req.robot_id)
-        .map_err(|_| ApiError::NotFound {
-            message: format!("Robot '{}' not found", req.robot_id),
-        })?;
+    let model = RobotModel::from_id(&req.robot_id).map_err(|_| ApiError::NotFound {
+        message: format!("Robot '{}' not found", req.robot_id),
+    })?;
 
     let config = thalos_core::analysis::workspace::WorkspaceConfig {
         samples: req.samples,
@@ -134,7 +135,13 @@ pub async fn manipulability(
     let analysis = RuntimeManipulabilityService::analyze(model, config)?;
 
     let samples = if req.include_samples {
-        Some(analysis.samples.iter().map(ManipulabilitySampleDto::from).collect())
+        Some(
+            analysis
+                .samples
+                .iter()
+                .map(ManipulabilitySampleDto::from)
+                .collect(),
+        )
     } else {
         None
     };
@@ -238,21 +245,32 @@ pub async fn analyze_active(
         singularity_config,
         snapshot.active_tcp.as_ref(),
     )?;
-    let manipulability =
-        RuntimeManipulabilityService::analyze_from_chain_with_tcp(
-            &snapshot.chain,
-            config,
-            snapshot.active_tcp.as_ref(),
-        )?;
+    let manipulability = RuntimeManipulabilityService::analyze_from_chain_with_tcp(
+        &snapshot.chain,
+        config,
+        snapshot.active_tcp.as_ref(),
+    )?;
 
     let singularity_samples = if req.include_samples {
-        Some(singularity.samples.iter().map(SingularitySampleDto::from).collect())
+        Some(
+            singularity
+                .samples
+                .iter()
+                .map(SingularitySampleDto::from)
+                .collect(),
+        )
     } else {
         None
     };
 
     let manipulability_samples = if req.include_samples {
-        Some(manipulability.samples.iter().map(ManipulabilitySampleDto::from).collect())
+        Some(
+            manipulability
+                .samples
+                .iter()
+                .map(ManipulabilitySampleDto::from)
+                .collect(),
+        )
     } else {
         None
     };
@@ -286,16 +304,21 @@ pub async fn singularity_active(
         near_singular_condition_threshold: req.near_singular_condition_threshold,
     };
 
-    let analysis =
-        RuntimeSingularityService::analyze_from_chain_with_tcp(
-            &snapshot.chain,
-            config,
-            singularity_config,
-            snapshot.active_tcp.as_ref(),
-        )?;
+    let analysis = RuntimeSingularityService::analyze_from_chain_with_tcp(
+        &snapshot.chain,
+        config,
+        singularity_config,
+        snapshot.active_tcp.as_ref(),
+    )?;
 
     let samples = if req.include_samples {
-        Some(analysis.samples.iter().map(SingularitySampleDto::from).collect())
+        Some(
+            analysis
+                .samples
+                .iter()
+                .map(SingularitySampleDto::from)
+                .collect(),
+        )
     } else {
         None
     };
@@ -321,15 +344,20 @@ pub async fn manipulability_active(
         tolerance: req.tolerance,
     };
 
-    let analysis =
-        RuntimeManipulabilityService::analyze_from_chain_with_tcp(
-            &snapshot.chain,
-            config,
-            snapshot.active_tcp.as_ref(),
-        )?;
+    let analysis = RuntimeManipulabilityService::analyze_from_chain_with_tcp(
+        &snapshot.chain,
+        config,
+        snapshot.active_tcp.as_ref(),
+    )?;
 
     let samples = if req.include_samples {
-        Some(analysis.samples.iter().map(ManipulabilitySampleDto::from).collect())
+        Some(
+            analysis
+                .samples
+                .iter()
+                .map(ManipulabilitySampleDto::from)
+                .collect(),
+        )
     } else {
         None
     };

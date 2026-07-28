@@ -17,9 +17,7 @@ pub struct Scene {
 impl Scene {
     /// Crea un Scene vacío, sin robots.
     pub fn new() -> Self {
-        Self {
-            robots: Vec::new(),
-        }
+        Self { robots: Vec::new() }
     }
 
     /// Agrega una instancia de robot al Scene.
@@ -55,8 +53,8 @@ impl Scene {
 mod tests {
     use super::*;
     use crate::models::factory::{RobotModel, RobotRegistry};
-    use thalos_math::Transform3D;
     use std::sync::Arc;
+    use thalos_math::Transform3D;
 
     fn dummy_robot(id: u32, name: &str) -> RobotInstance {
         let model = RobotRegistry::create_default(RobotModel::Planar3R);

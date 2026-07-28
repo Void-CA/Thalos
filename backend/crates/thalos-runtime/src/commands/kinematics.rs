@@ -5,14 +5,8 @@ use crate::{RuntimeError, commands::handler::ExecutableCommand, state::robot::Sc
 
 #[derive(Debug, Clone)]
 pub enum KinematicsCommand {
-    MoveToPosition {
-        frame: FrameId,
-        target: Vector3,
-    },
-    MoveToPose {
-        frame: FrameId,
-        target: Pose,
-    },
+    MoveToPosition { frame: FrameId, target: Vector3 },
+    MoveToPose { frame: FrameId, target: Pose },
 }
 
 impl ExecutableCommand for KinematicsCommand {

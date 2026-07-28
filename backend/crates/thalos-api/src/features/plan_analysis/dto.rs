@@ -61,7 +61,12 @@ pub struct SummaryDto {
 
 impl SummaryDto {
     /// Construye un resumen a partir de findings y métricas.
-    pub fn from_analysis(findings: &[Finding], has_collisions: bool, avg_manipulability: Option<f64>, singular_count: usize) -> Self {
+    pub fn from_analysis(
+        findings: &[Finding],
+        has_collisions: bool,
+        avg_manipulability: Option<f64>,
+        singular_count: usize,
+    ) -> Self {
         let has_error = findings.iter().any(|f| f.severity == Severity::Error);
         let has_warning = findings.iter().any(|f| f.severity == Severity::Warning);
 
@@ -75,14 +80,27 @@ impl SummaryDto {
 
         // Score 0-100: penaliza por errores y warnings
         let mut score = 100u32;
-        if has_collisions { score = score.saturating_sub(40); }
-        if singular_count > 0 { score = score.saturating_sub(20 * singular_count as u32).saturating_sub(0); }
-        if let Some(avg) = avg_manipulability {
-            if avg < 0.3 { score = score.saturating_sub(15); }
-            else if avg < 0.5 { score = score.saturating_sub(5); }
+        if has_collisions {
+            score = score.saturating_sub(40);
         }
-        if has_error { score = score.saturating_sub(10); }
-        if has_warning { score = score.saturating_sub(5); }
+        if singular_count > 0 {
+            score = score
+                .saturating_sub(20 * singular_count as u32)
+                .saturating_sub(0);
+        }
+        if let Some(avg) = avg_manipulability {
+            if avg < 0.3 {
+                score = score.saturating_sub(15);
+            } else if avg < 0.5 {
+                score = score.saturating_sub(5);
+            }
+        }
+        if has_error {
+            score = score.saturating_sub(10);
+        }
+        if has_warning {
+            score = score.saturating_sub(5);
+        }
 
         let grade = if score >= 90 {
             "Excellent"
@@ -102,7 +120,12 @@ impl SummaryDto {
             _ => "Trajectory is valid. No issues detected.".to_string(),
         };
 
-        Self { status: status.to_string(), score, grade: grade.to_string(), message }
+        Self {
+            status: status.to_string(),
+            score,
+            grade: grade.to_string(),
+            message,
+        }
     }
 }
 
@@ -253,9 +276,13 @@ impl From<&WaypointAnalysis> for WaypointAnalysisDto {
         };
 
         let singularity_state = wp.singularity.as_ref().map(|s| {
-            if s.condition_number > 200.0 { "singular" }
-            else if s.condition_number > 50.0 { "near" }
-            else { "normal" }
+            if s.condition_number > 200.0 {
+                "singular"
+            } else if s.condition_number > 50.0 {
+                "near"
+            } else {
+                "normal"
+            }
         });
 
         Self {

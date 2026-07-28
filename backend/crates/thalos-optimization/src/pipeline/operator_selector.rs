@@ -1,4 +1,4 @@
-use crate::domain::{score, OperatorAssessment, OperatorScore, TrajectoryOperator};
+use crate::domain::{OperatorAssessment, OperatorScore, TrajectoryOperator, score};
 use thalos_core::{analysis::region::ProblemRegion, evaluation::PlanMetrics};
 
 /// Selects and ranks trajectory operators by their composite score

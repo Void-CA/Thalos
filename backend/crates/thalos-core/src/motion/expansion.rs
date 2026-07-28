@@ -1,6 +1,6 @@
+use crate::ids::OperationId;
 use crate::motion::segment::MotionSegment;
 use crate::operation::motion_node::{MotionNode, MotionRole};
-use crate::ids::OperationId;
 use crate::operation::operation::Operation;
 use crate::spatial::frame::FrameId;
 use crate::spatial::pose::Pose;
@@ -35,7 +35,9 @@ fn move_to_pose(target_pose: Pose, id: OperationId, role: MotionRole) -> MotionN
 /// Environment and Gripper models exist.
 pub fn expand_operation(op: &Operation) -> Vec<MotionNode> {
     match op {
-        Operation::Pick { id, target_pose, .. } => {
+        Operation::Pick {
+            id, target_pose, ..
+        } => {
             vec![
                 move_to_pose(target_pose.clone(), id.clone(), MotionRole::Approach),
                 move_to_pose(target_pose.clone(), id.clone(), MotionRole::Execution),
@@ -44,7 +46,9 @@ pub fn expand_operation(op: &Operation) -> Vec<MotionNode> {
                 move_to_pose(target_pose.clone(), id.clone(), MotionRole::Departure),
             ]
         }
-        Operation::Place { id, target_pose, .. } => {
+        Operation::Place {
+            id, target_pose, ..
+        } => {
             vec![
                 move_to_pose(target_pose.clone(), id.clone(), MotionRole::Approach),
                 move_to_pose(target_pose.clone(), id.clone(), MotionRole::Execution),
@@ -52,8 +56,14 @@ pub fn expand_operation(op: &Operation) -> Vec<MotionNode> {
                 move_to_pose(target_pose.clone(), id.clone(), MotionRole::Departure),
             ]
         }
-        Operation::Transit { id, target_pose, .. } => {
-            vec![move_to_pose(target_pose.clone(), id.clone(), MotionRole::Transit)]
+        Operation::Transit {
+            id, target_pose, ..
+        } => {
+            vec![move_to_pose(
+                target_pose.clone(),
+                id.clone(),
+                MotionRole::Transit,
+            )]
         }
     }
 }
@@ -66,11 +76,7 @@ mod tests {
     use thalos_math::Transform3D;
 
     fn sample_pose() -> Pose {
-        Pose::new(
-            FrameId::World,
-            FrameId::Id(1),
-            Transform3D::identity(),
-        )
+        Pose::new(FrameId::World, FrameId::Id(1), Transform3D::identity())
     }
 
     fn make_pick(id: u64, pose: Pose) -> Operation {
@@ -110,11 +116,31 @@ mod tests {
     fn pick_nodes_have_correct_roles_in_order() {
         let op = make_pick(1, sample_pose());
         let nodes = expand_operation(&op);
-        assert_eq!(nodes[0].role, MotionRole::Approach, "Node 0 should be Approach");
-        assert_eq!(nodes[1].role, MotionRole::Execution, "Node 1 should be Execution (Descend)");
-        assert_eq!(nodes[2].role, MotionRole::Interaction, "Node 2 should be Interaction (CloseGripper)");
-        assert_eq!(nodes[3].role, MotionRole::Departure, "Node 3 should be Departure (Lift)");
-        assert_eq!(nodes[4].role, MotionRole::Departure, "Node 4 should be Departure (Retreat)");
+        assert_eq!(
+            nodes[0].role,
+            MotionRole::Approach,
+            "Node 0 should be Approach"
+        );
+        assert_eq!(
+            nodes[1].role,
+            MotionRole::Execution,
+            "Node 1 should be Execution (Descend)"
+        );
+        assert_eq!(
+            nodes[2].role,
+            MotionRole::Interaction,
+            "Node 2 should be Interaction (CloseGripper)"
+        );
+        assert_eq!(
+            nodes[3].role,
+            MotionRole::Departure,
+            "Node 3 should be Departure (Lift)"
+        );
+        assert_eq!(
+            nodes[4].role,
+            MotionRole::Departure,
+            "Node 4 should be Departure (Retreat)"
+        );
     }
 
     #[test]
@@ -179,10 +205,26 @@ mod tests {
     fn place_nodes_have_correct_roles_in_order() {
         let op = make_place(1, sample_pose());
         let nodes = expand_operation(&op);
-        assert_eq!(nodes[0].role, MotionRole::Approach, "Node 0 should be Approach");
-        assert_eq!(nodes[1].role, MotionRole::Execution, "Node 1 should be Execution (Descend)");
-        assert_eq!(nodes[2].role, MotionRole::Interaction, "Node 2 should be Interaction (OpenGripper)");
-        assert_eq!(nodes[3].role, MotionRole::Departure, "Node 3 should be Departure (Retreat)");
+        assert_eq!(
+            nodes[0].role,
+            MotionRole::Approach,
+            "Node 0 should be Approach"
+        );
+        assert_eq!(
+            nodes[1].role,
+            MotionRole::Execution,
+            "Node 1 should be Execution (Descend)"
+        );
+        assert_eq!(
+            nodes[2].role,
+            MotionRole::Interaction,
+            "Node 2 should be Interaction (OpenGripper)"
+        );
+        assert_eq!(
+            nodes[3].role,
+            MotionRole::Departure,
+            "Node 3 should be Departure (Retreat)"
+        );
     }
 
     #[test]
@@ -212,7 +254,11 @@ mod tests {
     fn transit_node_has_transit_role() {
         let op = make_transit(99, sample_pose());
         let nodes = expand_operation(&op);
-        assert_eq!(nodes[0].role, MotionRole::Transit, "Transit node should have Transit role");
+        assert_eq!(
+            nodes[0].role,
+            MotionRole::Transit,
+            "Transit node should have Transit role"
+        );
     }
 
     #[test]

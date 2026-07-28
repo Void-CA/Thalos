@@ -1,5 +1,5 @@
-use crate::spatial::{frame::FrameId, pose::Pose};
 use crate::robot::tool_frame::ToolFrame;
+use crate::spatial::{frame::FrameId, pose::Pose};
 use std::collections::HashMap;
 use thalos_math::Vector3;
 

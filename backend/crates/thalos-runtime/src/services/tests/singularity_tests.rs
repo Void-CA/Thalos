@@ -13,12 +13,8 @@ fn analyze_returns_valid_metrics() {
     };
     let singularity_config = SingularityConfig::default();
 
-    let analysis = SingularityService::analyze(
-        RobotModel::Planar2R,
-        config,
-        singularity_config,
-    )
-    .expect("analysis must succeed");
+    let analysis = SingularityService::analyze(RobotModel::Planar2R, config, singularity_config)
+        .expect("analysis must succeed");
 
     assert_eq!(analysis.metrics.total_samples, 200);
     assert_eq!(analysis.samples.len(), 200);
@@ -37,11 +33,8 @@ fn analyze_rejects_zero_samples() {
         seed: 0,
         tolerance: 1e-3,
     };
-    let result = SingularityService::analyze(
-        RobotModel::Planar2R,
-        config,
-        SingularityConfig::default(),
-    );
+    let result =
+        SingularityService::analyze(RobotModel::Planar2R, config, SingularityConfig::default());
     assert!(result.is_err());
 }
 

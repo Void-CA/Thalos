@@ -1,5 +1,5 @@
-use crate::motion::segment::MotionSegment;
 use crate::ids::OperationId;
+use crate::motion::segment::MotionSegment;
 
 /// A motion primitive with provenance metadata.
 ///

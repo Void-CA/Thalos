@@ -2,30 +2,22 @@ use std::sync::Arc;
 
 use tokio::sync::RwLock;
 
-use thalos_core::analysis::workspace::{
-    Workspace, WorkspaceConfig, WorkspaceError,
-};
-use thalos_math::Vector3;
+use thalos_core::analysis::workspace::{Workspace, WorkspaceConfig, WorkspaceError};
 use thalos_core::models::RobotModel;
+use thalos_math::Vector3;
 
 use crate::backends::{
-    controller::simulation::SimulationController,
-    manager::BackendManager,
-    InternalBackend,
+    InternalBackend, controller::simulation::SimulationController, manager::BackendManager,
 };
 use crate::error::RuntimeError;
-use crate::{RobotController, SceneService};
 use crate::services::workspace::WorkspaceService;
+use crate::{RobotController, SceneService};
 
 // ─── 4.2: sample returns Arc<Workspace> ────────────────────────────────
 
 #[test]
 fn sample_returns_arc_workspace() {
-    let ws = WorkspaceService::sample(
-        RobotModel::Scara,
-        WorkspaceConfig::default(),
-    )
-    .unwrap();
+    let ws = WorkspaceService::sample(RobotModel::Scara, WorkspaceConfig::default()).unwrap();
 
     // Must be Arc<Workspace>
     let _: Arc<Workspace> = ws;
@@ -35,7 +27,11 @@ fn sample_returns_arc_workspace() {
 fn sample_produces_valid_metrics() {
     let ws = WorkspaceService::sample(
         RobotModel::Scara,
-        WorkspaceConfig { samples: 100, seed: 0, tolerance: 1e-3 },
+        WorkspaceConfig {
+            samples: 100,
+            seed: 0,
+            tolerance: 1e-3,
+        },
     )
     .unwrap();
 
@@ -51,20 +47,31 @@ fn sample_produces_valid_metrics() {
 fn query_returns_reachable_for_center() {
     let ws = WorkspaceService::sample(
         RobotModel::Scara,
-        WorkspaceConfig { samples: 500, seed: 0, tolerance: 1e-3 },
+        WorkspaceConfig {
+            samples: 500,
+            seed: 0,
+            tolerance: 1e-3,
+        },
     )
     .unwrap();
 
     // Point well within canonical SCARA workspace (r_min ≈ 0.50)
     let result = WorkspaceService::query(&ws, &Vector3::new(0.7, 0.5, 0.25), 0.5).unwrap();
-    assert!(matches!(result, thalos_core::analysis::workspace::Reachability::Reachable));
+    assert!(matches!(
+        result,
+        thalos_core::analysis::workspace::Reachability::Reachable
+    ));
 }
 
 #[test]
 fn query_returns_out_of_workspace_for_distant_point() {
     let ws = WorkspaceService::sample(
         RobotModel::Scara,
-        WorkspaceConfig { samples: 500, seed: 0, tolerance: 1e-3 },
+        WorkspaceConfig {
+            samples: 500,
+            seed: 0,
+            tolerance: 1e-3,
+        },
     )
     .unwrap();
 
@@ -79,7 +86,11 @@ fn query_returns_out_of_workspace_for_distant_point() {
 fn query_validates_nan_point() {
     let ws = WorkspaceService::sample(
         RobotModel::Scara,
-        WorkspaceConfig { samples: 10, seed: 0, tolerance: 1e-3 },
+        WorkspaceConfig {
+            samples: 10,
+            seed: 0,
+            tolerance: 1e-3,
+        },
     )
     .unwrap();
 
@@ -91,7 +102,11 @@ fn query_validates_nan_point() {
 
 #[test]
 fn same_seed_produces_identical_workspaces() {
-    let config = WorkspaceConfig { samples: 200, seed: 42, tolerance: 1e-3 };
+    let config = WorkspaceConfig {
+        samples: 200,
+        seed: 42,
+        tolerance: 1e-3,
+    };
 
     let ws_a = WorkspaceService::sample(RobotModel::Scara, config).unwrap();
     let ws_b = WorkspaceService::sample(RobotModel::Scara, config).unwrap();
@@ -107,9 +122,9 @@ fn same_seed_produces_identical_workspaces() {
 
 #[tokio::test]
 async fn sample_does_not_mutate_scene_service_state() {
-    let controller = Arc::new(RwLock::new(
-        SimulationController::new(RobotModel::Scara.metadata().dof),
-    )) as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let controller = Arc::new(RwLock::new(SimulationController::new(
+        RobotModel::Scara.metadata().dof,
+    ))) as Arc<RwLock<dyn RobotController + Send + Sync>>;
     let manager = Arc::new(BackendManager::new());
     manager.set_active(controller).await.unwrap();
     let scene = SceneService::new(Box::new(InternalBackend), manager, RobotModel::Scara);
@@ -117,7 +132,11 @@ async fn sample_does_not_mutate_scene_service_state() {
 
     let _ws = WorkspaceService::sample(
         RobotModel::Scara,
-        WorkspaceConfig { samples: 100, seed: 0, tolerance: 1e-3 },
+        WorkspaceConfig {
+            samples: 100,
+            seed: 0,
+            tolerance: 1e-3,
+        },
     )
     .unwrap();
 
@@ -133,13 +152,20 @@ async fn sample_does_not_mutate_scene_service_state() {
 
 #[test]
 fn sample_rejects_zero_samples() {
-    let config = WorkspaceConfig { samples: 0, seed: 0, tolerance: 1e-3 };
+    let config = WorkspaceConfig {
+        samples: 0,
+        seed: 0,
+        tolerance: 1e-3,
+    };
     let result = WorkspaceService::sample(RobotModel::Scara, config);
     assert!(result.is_err());
     // Must be RuntimeError wrapping WorkspaceError
     match result.unwrap_err() {
         RuntimeError::Workspace(WorkspaceError::InvalidSampleCount(0)) => {} // ok
-        other => panic!("expected RuntimeError::Workspace(InvalidSampleCount), got {:?}", other),
+        other => panic!(
+            "expected RuntimeError::Workspace(InvalidSampleCount), got {:?}",
+            other
+        ),
     }
 }
 
@@ -150,13 +176,17 @@ fn sample_rejects_zero_samples() {
 
 #[test]
 fn sample_with_tcp_uses_tcp_position() {
-    use thalos_core::robot::tool_frame::ToolFrame;
-    use thalos_core::robot::serial_chain::SerialChain;
     use thalos_core::models::RobotRegistry;
+    use thalos_core::robot::serial_chain::SerialChain;
+    use thalos_core::robot::tool_frame::ToolFrame;
     use thalos_math::Transform3D;
 
     let chain = RobotRegistry::create_default(RobotModel::Scara);
-    let config = WorkspaceConfig { samples: 50, seed: 0, tolerance: 1e-3 };
+    let config = WorkspaceConfig {
+        samples: 50,
+        seed: 0,
+        tolerance: 1e-3,
+    };
 
     // Sample without TCP (flange)
     let ws_flange = WorkspaceService::sample_from_chain(&chain, config).unwrap();

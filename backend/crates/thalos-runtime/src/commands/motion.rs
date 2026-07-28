@@ -1,9 +1,7 @@
 use thalos_core::{
     kinematics::{
         forward::ForwardKinematics,
-        inverse::{
-            DampedLeastSquaresSolver, IKGoal, IKResult, IKSolver,
-        },
+        inverse::{DampedLeastSquaresSolver, IKGoal, IKResult, IKSolver},
     },
     prelude::RobotState,
     robot::{serial_chain::SerialChain, tool_frame::ToolFrame},
@@ -13,11 +11,11 @@ use thalos_core::{
 
 use thalos_planning::{
     goal::{
-        GoalMetadata, GoalResolver, GoalResolverConfig, PlanningAssessment,
-        PlanningPolicy, ValidatedGoal,
+        GoalMetadata, GoalResolver, GoalResolverConfig, PlanningAssessment, PlanningPolicy,
+        ValidatedGoal,
     },
-    motion::planner::{SegmentPlanner, PlanningContext},
     motion::move_j::{MoveJConfig, MoveJPlanner},
+    motion::planner::{PlanningContext, SegmentPlanner},
 };
 
 use crate::plan::MotionType;

@@ -103,10 +103,8 @@ impl RobotGraph {
 
         let mut link_name: Vec<String> = Vec::with_capacity(n_links);
         let mut joint_name: Vec<String> = Vec::with_capacity(n_joints);
-        let mut link_index: HashMap<String, LinkId> =
-            HashMap::with_capacity(n_links);
-        let mut joint_index: HashMap<String, JointId> =
-            HashMap::with_capacity(n_joints);
+        let mut link_index: HashMap<String, LinkId> = HashMap::with_capacity(n_links);
+        let mut joint_index: HashMap<String, JointId> = HashMap::with_capacity(n_joints);
         let mut children: Vec<Vec<LinkId>> = Vec::with_capacity(n_links);
         let mut parent: Vec<Option<LinkId>> = Vec::with_capacity(n_links);
         let mut parent_joint: Vec<Option<JointId>> = Vec::with_capacity(n_links);
@@ -248,9 +246,7 @@ impl RobotGraph {
     /// (BFS + alphabetical joint name). The returned path is therefore
     /// deterministic for the same input.
     pub fn path(&self, root: LinkId, target: LinkId) -> Option<Path> {
-        if root >= self.link_count() as LinkId
-            || target >= self.link_count() as LinkId
-        {
+        if root >= self.link_count() as LinkId || target >= self.link_count() as LinkId {
             return None;
         }
 
@@ -340,9 +336,9 @@ impl RobotGraph {
 mod tests {
     use super::*;
     use crate::{
+        Robot,
         joint::{Joint, JointKind, JointLimits},
         link::Link,
-        Robot,
     };
     use thalos_math::Transform3D;
 

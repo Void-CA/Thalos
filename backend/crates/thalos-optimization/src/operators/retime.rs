@@ -35,9 +35,9 @@ use thalos_core::{
 
 use crate::{
     domain::{
+        TrajectoryOperator,
         context::OptimizationContext,
         operator::{Invariant, OperatorFamily, OptimizationObjective},
-        TrajectoryOperator,
     },
     error::OptimizationError,
     temporal,
@@ -163,8 +163,7 @@ impl TrajectoryOperator for Retime {
         // Store original timestamps separately — we need the original dt
         // for each segment as the baseline for min_segment_duration, even
         // after forward-propagating previous stretches.
-        let original_timestamps: Vec<f64> =
-            region_wps.iter().map(|wp| wp.timestamp()).collect();
+        let original_timestamps: Vec<f64> = region_wps.iter().map(|wp| wp.timestamp()).collect();
         let mut new_timestamps = original_timestamps.clone();
 
         // Stretch each segment independently, forward-propagating timestamps
@@ -218,7 +217,12 @@ mod unit_tests {
     // ── Test helpers ──────────────────────────────────────
 
     fn velocity_region(range: std::ops::Range<usize>) -> ProblemRegion {
-        ProblemRegion::new(RegionId(0), RegionKind::Velocity, RegionSeverity::Warning, range)
+        ProblemRegion::new(
+            RegionId(0),
+            RegionKind::Velocity,
+            RegionSeverity::Warning,
+            range,
+        )
     }
 
     fn two_wp_velocity_region() -> ProblemRegion {
@@ -270,15 +274,24 @@ mod unit_tests {
         let region = three_wp_velocity_region();
         let ctx = ctx_with_velocity(vec![0.5, 0.5]);
 
-        let original_joints: Vec<Vec<f64>> =
-            traj.waypoints().iter().map(|wp| wp.joints().to_vec()).collect();
+        let original_joints: Vec<Vec<f64>> = traj
+            .waypoints()
+            .iter()
+            .map(|wp| wp.joints().to_vec())
+            .collect();
 
         let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
 
-        let result_joints: Vec<Vec<f64>> =
-            result.waypoints().iter().map(|wp| wp.joints().to_vec()).collect();
+        let result_joints: Vec<Vec<f64>> = result
+            .waypoints()
+            .iter()
+            .map(|wp| wp.joints().to_vec())
+            .collect();
 
-        assert_eq!(original_joints, result_joints, "joint values must be byte-identical");
+        assert_eq!(
+            original_joints, result_joints,
+            "joint values must be byte-identical"
+        );
     }
 
     // ── 3. Timestamps increase ────────────────────────────
@@ -438,14 +451,12 @@ mod unit_tests {
         // Waypoint 0 outside region → fully unchanged
         assert_eq!(result.waypoints()[0].joints(), original_wps[0].joints());
         assert!(
-            (result.waypoints()[0].timestamp() - original_wps[0].timestamp()).abs()
-                < f64::EPSILON
+            (result.waypoints()[0].timestamp() - original_wps[0].timestamp()).abs() < f64::EPSILON
         );
         // Waypoint 3 outside region → fully unchanged
         assert_eq!(result.waypoints()[3].joints(), original_wps[3].joints());
         assert!(
-            (result.waypoints()[3].timestamp() - original_wps[3].timestamp()).abs()
-                < f64::EPSILON
+            (result.waypoints()[3].timestamp() - original_wps[3].timestamp()).abs() < f64::EPSILON
         );
         // Inside region: wp1 (index 0 in region) timestamp preserved,
         // wp2 (index 1 in region) timestamp stretched

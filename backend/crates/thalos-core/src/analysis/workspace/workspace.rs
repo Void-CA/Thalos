@@ -50,18 +50,36 @@ impl Workspace {
         for s in &samples {
             let p = s.position;
             // min / max
-            if p.x < min.x { min.x = p.x; }
-            if p.y < min.y { min.y = p.y; }
-            if p.z < min.z { min.z = p.z; }
-            if p.x > max.x { max.x = p.x; }
-            if p.y > max.y { max.y = p.y; }
-            if p.z > max.z { max.z = p.z; }
+            if p.x < min.x {
+                min.x = p.x;
+            }
+            if p.y < min.y {
+                min.y = p.y;
+            }
+            if p.z < min.z {
+                min.z = p.z;
+            }
+            if p.x > max.x {
+                max.x = p.x;
+            }
+            if p.y > max.y {
+                max.y = p.y;
+            }
+            if p.z > max.z {
+                max.z = p.z;
+            }
             // sum for centroid
-            sum.x += p.x; sum.y += p.y; sum.z += p.z;
+            sum.x += p.x;
+            sum.y += p.y;
+            sum.z += p.z;
             // reach
             let r = p.magnitude();
-            if r > max_reach { max_reach = r; }
-            if r < min_reach { min_reach = r; }
+            if r > max_reach {
+                max_reach = r;
+            }
+            if r < min_reach {
+                min_reach = r;
+            }
         }
 
         let n = samples.len() as f64;

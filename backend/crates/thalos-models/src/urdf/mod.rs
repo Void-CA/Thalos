@@ -4,8 +4,8 @@
 //! [`parser`] module for usage.
 
 pub mod attr;
-pub mod error;
 pub mod elements;
+pub mod error;
 pub mod parser;
 
 // Re-export for convenient access.

@@ -1,19 +1,20 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State},
     Json,
+    extract::{Path, State},
 };
 use serde::Serialize;
 use serde_json::Value;
 
 use thalos_runtime::{
+    ExecutionAnalyzer, ExecutionSource, ExecutionTrace, MotionTrace, TraceAnalyzer,
     backends::{
         controller::RobotController,
         playback::interpolator::{Interpolator, LinearInterpolator, NearestSampleInterpolator},
         replay::ReplayBackend,
     },
-    comparison, ExecutionAnalyzer, ExecutionSource, ExecutionTrace, MotionTrace, TraceAnalyzer,
+    comparison,
 };
 
 use thalos_planning::finding::Finding;
@@ -26,9 +27,7 @@ use crate::features::scene::handler::to_api_response;
 use crate::features::session::dto::*;
 
 /// Listar todas las sesiones.
-pub async fn list_sessions(
-    State(state): State<Arc<AppState>>,
-) -> ApiResult<Vec<SessionResponse>> {
+pub async fn list_sessions(State(state): State<Arc<AppState>>) -> ApiResult<Vec<SessionResponse>> {
     let sessions = state.services.sessions.list().await;
     let response: Vec<SessionResponse> = sessions.into_iter().map(|s| s.into()).collect();
     Ok(Json(response))
@@ -39,11 +38,14 @@ pub async fn get_session(
     State(state): State<Arc<AppState>>,
     Path(id): Path<u64>,
 ) -> ApiResult<SessionResponse> {
-    let session = state.services.sessions.get(id).await.ok_or_else(|| {
-        ApiError::NotFound {
+    let session = state
+        .services
+        .sessions
+        .get(id)
+        .await
+        .ok_or_else(|| ApiError::NotFound {
             message: format!("Session {} not found", id),
-        }
-    })?;
+        })?;
     Ok(Json(session.into()))
 }
 
@@ -52,11 +54,14 @@ pub async fn get_trace(
     State(state): State<Arc<AppState>>,
     Path(id): Path<u64>,
 ) -> Result<Json<Value>, ApiError> {
-    let trace = state.services.sessions.get_trace(id).await.ok_or_else(|| {
-        ApiError::NotFound {
+    let trace = state
+        .services
+        .sessions
+        .get_trace(id)
+        .await
+        .ok_or_else(|| ApiError::NotFound {
             message: format!("Trace for session {} not found", id),
-        }
-    })?;
+        })?;
     let json = serde_json::to_value(&trace).map_err(|e| ApiError::Internal {
         message: e.to_string(),
     })?;
@@ -105,14 +110,15 @@ pub async fn compare_plan_execution(
     Path(id): Path<u64>,
 ) -> Result<Json<comparison::PlanExecutionComparison>, ApiError> {
     // Obtener MotionTrace (plan) — usando el trace original de la sesión
-    let motion_trace = state
-        .services
-        .sessions
-        .get_trace(id)
-        .await
-        .ok_or_else(|| ApiError::NotFound {
-            message: format!("MotionTrace for session {} not found", id),
-        })?;
+    let motion_trace =
+        state
+            .services
+            .sessions
+            .get_trace(id)
+            .await
+            .ok_or_else(|| ApiError::NotFound {
+                message: format!("MotionTrace for session {} not found", id),
+            })?;
 
     // Obtener ExecutionTrace (ejecución)
     let exec_trace = state
@@ -164,11 +170,14 @@ pub async fn get_session_summary(
     Path(id): Path<u64>,
 ) -> Result<Json<SessionSummary>, ApiError> {
     let (session, trace) = {
-        let swt = state.services.sessions.get_with_trace(id).await.ok_or_else(|| {
-            ApiError::NotFound {
+        let swt = state
+            .services
+            .sessions
+            .get_with_trace(id)
+            .await
+            .ok_or_else(|| ApiError::NotFound {
                 message: format!("Session {} not found", id),
-            }
-        })?;
+            })?;
         (swt.session, swt.trace)
     };
 
@@ -197,7 +206,8 @@ pub async fn get_session_summary(
                     samples
                         .windows(2)
                         .filter_map(|w| {
-                            let dt = (w[1].timestamp.as_secs_f64() - w[0].timestamp.as_secs_f64()).max(1e-6);
+                            let dt = (w[1].timestamp.as_secs_f64() - w[0].timestamp.as_secs_f64())
+                                .max(1e-6);
                             let dv = (w[1].joints[j] - w[0].joints[j]).abs();
                             Some(dv / dt)
                         })
@@ -212,7 +222,8 @@ pub async fn get_session_summary(
                 let total: f64 = samples
                     .windows(2)
                     .map(|w| {
-                        let dt = (w[1].timestamp.as_secs_f64() - w[0].timestamp.as_secs_f64()).max(1e-6);
+                        let dt =
+                            (w[1].timestamp.as_secs_f64() - w[0].timestamp.as_secs_f64()).max(1e-6);
                         (w[1].joints[j] - w[0].joints[j]).abs()
                     })
                     .sum();
@@ -224,8 +235,7 @@ pub async fn get_session_summary(
         let path_len: f64 = samples
             .windows(2)
             .map(|w| {
-                w[1]
-                    .joints
+                w[1].joints
                     .iter()
                     .zip(&w[0].joints)
                     .map(|(a, b)| (a - b).powi(2))
@@ -257,15 +267,15 @@ pub async fn export_trace_csv(
     State(state): State<Arc<AppState>>,
     Path(id): Path<u64>,
 ) -> Result<(axum::http::StatusCode, String), ApiError> {
-    let trace = state.services.sessions.get_trace(id).await.ok_or_else(|| {
-        ApiError::NotFound {
+    let trace = state
+        .services
+        .sessions
+        .get_trace(id)
+        .await
+        .ok_or_else(|| ApiError::NotFound {
             message: format!("Trace for session {} not found", id),
-        }
-    })?;
-    Ok((
-        axum::http::StatusCode::OK,
-        trace.to_csv(),
-    ))
+        })?;
+    Ok((axum::http::StatusCode::OK, trace.to_csv()))
 }
 
 /// Iniciar replay de una sesión.
@@ -287,9 +297,10 @@ pub async fn start_replay(
         _ => Box::new(LinearInterpolator::new()),
     };
 
-    let replay = Arc::new(tokio::sync::RwLock::new(
-        ReplayBackend::with_interpolator(trace, interpolator),
-    )) as Arc<tokio::sync::RwLock<dyn RobotController + Send + Sync>>;
+    let replay = Arc::new(tokio::sync::RwLock::new(ReplayBackend::with_interpolator(
+        trace,
+        interpolator,
+    ))) as Arc<tokio::sync::RwLock<dyn RobotController + Send + Sync>>;
 
     state
         .services
@@ -300,11 +311,14 @@ pub async fn start_replay(
             message: e.to_string(),
         })?;
 
-    let snapshot = state.services.scene.snapshot().await.map_err(|e| {
-        ApiError::Internal {
+    let snapshot = state
+        .services
+        .scene
+        .snapshot()
+        .await
+        .map_err(|e| ApiError::Internal {
             message: e.to_string(),
-        }
-    })?;
+        })?;
 
     Ok(Json(to_api_response(&snapshot)))
 }
@@ -314,12 +328,11 @@ pub async fn import_trace(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<ImportRequest>,
 ) -> ApiResult<SessionResponse> {
-    let trace: MotionTrace = serde_json::from_str(&payload.trace_json).map_err(|e| {
-        ApiError::Validation {
+    let trace: MotionTrace =
+        serde_json::from_str(&payload.trace_json).map_err(|e| ApiError::Validation {
             message: format!("Invalid trace JSON: {}", e),
             code: "invalid_trace".into(),
-        }
-    })?;
+        })?;
 
     let session = state
         .services
@@ -349,14 +362,15 @@ pub async fn get_session_comparison(
     State(state): State<Arc<AppState>>,
     Path(id): Path<u64>,
 ) -> Result<Json<SessionComparisonResponse>, ApiError> {
-    let motion_trace = state
-        .services
-        .sessions
-        .get_trace(id)
-        .await
-        .ok_or_else(|| ApiError::NotFound {
-            message: format!("MotionTrace for session {} not found", id),
-        })?;
+    let motion_trace =
+        state
+            .services
+            .sessions
+            .get_trace(id)
+            .await
+            .ok_or_else(|| ApiError::NotFound {
+                message: format!("MotionTrace for session {} not found", id),
+            })?;
 
     let exec_trace = state
         .services

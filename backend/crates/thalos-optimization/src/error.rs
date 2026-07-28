@@ -30,7 +30,11 @@ impl fmt::Display for OptimizationError {
                 write!(f, "no applicable operator found for region")
             }
             OptimizationError::MaxIterationsReached(max) => {
-                write!(f, "maximum iterations ({}) reached without convergence", max)
+                write!(
+                    f,
+                    "maximum iterations ({}) reached without convergence",
+                    max
+                )
             }
             OptimizationError::Kinematics(msg) => {
                 write!(f, "kinematics error: {}", msg)

@@ -1,10 +1,10 @@
+use crate::{
+    kinematics::forward::result::FKResult,
+    robot::serial_chain::SerialChain,
+    spatial::{frame::FrameId, pose::Pose},
+};
 use std::collections::HashMap;
 use thalos_math::Transform3D;
-use crate::{
-    kinematics::forward::result::FKResult, 
-    robot::serial_chain::SerialChain, 
-    spatial::{frame::FrameId, pose::Pose}
-};
 
 #[derive(Clone)]
 pub struct ForwardKinematics {
@@ -28,28 +28,27 @@ impl ForwardKinematics {
             q.len(),
             self.chain.dof_count(),
             self.chain.segments.len(),
-            self.chain.segments.iter().filter(|s| s.joint.dof() > 0).count(),
+            self.chain
+                .segments
+                .iter()
+                .filter(|s| s.joint.dof() > 0)
+                .count(),
         );
         let mut t = Transform3D::identity();
 
         let mut poses = HashMap::new();
 
         let world = FrameId::World;
-        
+
         // World pose explícita
         poses.insert(
             world.clone(),
-            Pose::new(
-                world.clone(),
-                world.clone(),
-                Transform3D::identity(),
-            ),
+            Pose::new(world.clone(), world.clone(), Transform3D::identity()),
         );
 
         let mut q_idx = 0;
 
         for segment in &self.chain.segments {
-
             // joint local origin
             t = t.compose(segment.joint.origin());
 
@@ -67,16 +66,11 @@ impl ForwardKinematics {
             // store global pose of child frame
             poses.insert(
                 segment.child.clone(),
-                Pose::new(
-                    world.clone(),
-                    segment.child.clone(),
-                    t.clone(),
-                ),
+                Pose::new(world.clone(), segment.child.clone(), t.clone()),
             );
         }
 
         let end_effector = *self.chain.end_effector();
         FKResult::new(poses, end_effector)
     }
-
 }

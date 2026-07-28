@@ -138,8 +138,8 @@ mod tests {
         CartesianSample, ExecutionPlan, ExecutionSegment, JointSample,
     };
 
-    use crate::backends::controller::tests::MockController;
     use crate::backends::controller::RobotController;
+    use crate::backends::controller::tests::MockController;
 
     use super::*;
 

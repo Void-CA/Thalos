@@ -1,18 +1,16 @@
 use crate::{
+    ProblemRegion, RegionId, RegionKind, RegionSeverity,
     domain::{
         OptimizationContext, OptimizationReport, OptimizationStep, PipelineConfig,
         TrajectoryOperator,
     },
     error::OptimizationError,
     pipeline::{
-        acceptance::AcceptancePolicy, trajectory_composer::compose_trajectory, OperatorSelector,
+        OperatorSelector, acceptance::AcceptancePolicy, trajectory_composer::compose_trajectory,
     },
-    ProblemRegion, RegionId, RegionKind, RegionSeverity,
 };
 use thalos_core::{
-    evaluation::PlanMetrics,
-    operation::ConstraintQuery,
-    robot::serial_chain::SerialChain,
+    evaluation::PlanMetrics, operation::ConstraintQuery, robot::serial_chain::SerialChain,
     trajectory::Trajectory,
 };
 
@@ -132,10 +130,7 @@ impl OptimizationPipeline {
                                 improvement: 0.0,
                                 accepted: false,
                                 iteration: 0,
-                                rejection_reason: Some(format!(
-                                    "rejected: {}",
-                                    evaluation.reason
-                                )),
+                                rejection_reason: Some(format!("rejected: {}", evaluation.reason)),
                             });
                         }
                     }

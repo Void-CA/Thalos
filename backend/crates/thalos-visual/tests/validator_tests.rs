@@ -1,12 +1,7 @@
 use std::f64::consts::PI;
 
-use thalos_core::{
-    kinematics::forward::ForwardKinematics,
-    models::planar_2r::Planar2RSpec,
-};
-use thalos_visual::{
-    SceneBuilder, SceneError, SceneValidator, VisualScene,
-};
+use thalos_core::{kinematics::forward::ForwardKinematics, models::planar_2r::Planar2RSpec};
+use thalos_visual::{SceneBuilder, SceneError, SceneValidator, VisualScene};
 
 #[test]
 fn valid_scene_passes() {
@@ -24,10 +19,7 @@ fn missing_world_fails() {
     let scene = VisualScene::default();
 
     let validator = SceneValidator::default();
-    assert_eq!(
-        validator.validate(&scene),
-        Err(SceneError::MissingWorld)
-    );
+    assert_eq!(validator.validate(&scene), Err(SceneError::MissingWorld));
 }
 
 #[test]
@@ -35,8 +27,18 @@ fn duplicate_ids_fail() {
     let scene = VisualScene {
         frames: vec![
             frame("world", None, [0.0; 3], [1.0, 0.0, 0.0, 0.0]),
-            frame("link_1", Some("world"), [1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
-            frame("link_1", Some("world"), [2.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
+            frame(
+                "link_1",
+                Some("world"),
+                [1.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0],
+            ),
+            frame(
+                "link_1",
+                Some("world"),
+                [2.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0],
+            ),
         ],
         ..Default::default()
     };
@@ -44,7 +46,9 @@ fn duplicate_ids_fail() {
     let validator = SceneValidator::default();
     assert_eq!(
         validator.validate(&scene),
-        Err(SceneError::DuplicateId { id: "link_1".into() })
+        Err(SceneError::DuplicateId {
+            id: "link_1".into()
+        })
     );
 }
 
@@ -53,7 +57,12 @@ fn missing_parent_fails() {
     let scene = VisualScene {
         frames: vec![
             frame("world", None, [0.0; 3], [1.0, 0.0, 0.0, 0.0]),
-            frame("link_1", Some("phantom"), [1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
+            frame(
+                "link_1",
+                Some("phantom"),
+                [1.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0],
+            ),
         ],
         ..Default::default()
     };
@@ -107,7 +116,12 @@ fn nan_value_detected() {
     let scene = VisualScene {
         frames: vec![
             frame("world", None, [0.0; 3], [1.0, 0.0, 0.0, 0.0]),
-            frame("link_1", Some("world"), [f64::NAN, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
+            frame(
+                "link_1",
+                Some("world"),
+                [f64::NAN, 0.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0],
+            ),
         ],
         ..Default::default()
     };
@@ -115,7 +129,9 @@ fn nan_value_detected() {
     let validator = SceneValidator::default();
     assert_eq!(
         validator.validate(&scene),
-        Err(SceneError::NonFiniteValue { frame: "link_1".into() })
+        Err(SceneError::NonFiniteValue {
+            frame: "link_1".into()
+        })
     );
 }
 
@@ -124,7 +140,12 @@ fn invalid_quaternion_detected() {
     let scene = VisualScene {
         frames: vec![
             frame("world", None, [0.0; 3], [1.0, 0.0, 0.0, 0.0]),
-            frame("link_1", Some("world"), [1.0, 0.0, 0.0], [5.0, 0.0, 0.0, 0.0]),
+            frame(
+                "link_1",
+                Some("world"),
+                [1.0, 0.0, 0.0],
+                [5.0, 0.0, 0.0, 0.0],
+            ),
         ],
         ..Default::default()
     };
@@ -135,7 +156,11 @@ fn invalid_quaternion_detected() {
     match result.unwrap_err() {
         SceneError::InvalidQuaternion { frame, norm } => {
             assert_eq!(frame, "link_1");
-            assert!((norm - 5.0).abs() < 1e-10, "norm should be ~5.0, got {}", norm);
+            assert!(
+                (norm - 5.0).abs() < 1e-10,
+                "norm should be ~5.0, got {}",
+                norm
+            );
         }
         other => panic!("expected InvalidQuaternion, got {:?}", other),
     }
@@ -146,7 +171,12 @@ fn orphan_link_detected() {
     let scene = VisualScene {
         frames: vec![
             frame("world", None, [0.0; 3], [1.0, 0.0, 0.0, 0.0]),
-            frame("link_1", Some("world"), [1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
+            frame(
+                "link_1",
+                Some("world"),
+                [1.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0],
+            ),
         ],
         links: vec![
             link(0, [0.0, 0.0, 0.0], [1.0, 0.0, 0.0]),

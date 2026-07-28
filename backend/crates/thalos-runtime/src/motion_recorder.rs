@@ -122,10 +122,7 @@ mod tests {
     #[test]
     fn recorder_with_target_waypoints() {
         let mut recorder = MotionRecorder::new();
-        recorder.set_target_waypoints(vec![
-            vec![0.0, 0.0],
-            vec![1.0, 0.5],
-        ]);
+        recorder.set_target_waypoints(vec![vec![0.0, 0.0], vec![1.0, 0.5]]);
         recorder.start(Duration::from_secs_f64(2.0));
 
         let state = RobotState {

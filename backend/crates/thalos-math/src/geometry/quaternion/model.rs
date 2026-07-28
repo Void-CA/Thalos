@@ -1,5 +1,5 @@
+use crate::{MathError, constants};
 use std::ops::{Add, Mul, Sub};
-use crate::{constants, MathError};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Quaternion {
@@ -15,14 +15,16 @@ impl Quaternion {
     }
 
     pub fn identity() -> Self {
-        Self { w: 1.0, x: 0.0, y: 0.0, z: 0.0 }
+        Self {
+            w: 1.0,
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }
     }
 
     pub fn norm_squared(&self) -> f64 {
-        self.w * self.w
-            + self.x * self.x
-            + self.y * self.y
-            + self.z * self.z
+        self.w * self.w + self.x * self.x + self.y * self.y + self.z * self.z
     }
 
     pub fn norm(&self) -> f64 {
@@ -126,6 +128,10 @@ impl Sub for Quaternion {
 
 impl std::fmt::Display for Quaternion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        return write!(f, "({:.4}, {:.4}i, {:.4}j, {:.4}k)", self.w, self.x, self.y, self.z);
+        return write!(
+            f,
+            "({:.4}, {:.4}i, {:.4}j, {:.4}k)",
+            self.w, self.x, self.y, self.z
+        );
     }
 }

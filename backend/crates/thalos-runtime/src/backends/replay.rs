@@ -211,7 +211,9 @@ mod tests {
     #[tokio::test]
     async fn connect_and_read_initial_state() {
         let mut backend = ReplayBackend::new(sample_trace());
-        RobotController::connect(&mut backend).await.expect("connect");
+        RobotController::connect(&mut backend)
+            .await
+            .expect("connect");
         assert!(RobotController::is_connected(&backend));
 
         let state = backend.robot_state().await;
@@ -221,7 +223,9 @@ mod tests {
     #[tokio::test]
     async fn advance_updates_position() {
         let mut backend = ReplayBackend::new(sample_trace());
-        RobotController::connect(&mut backend).await.expect("connect");
+        RobotController::connect(&mut backend)
+            .await
+            .expect("connect");
 
         backend.advance(0.5).await.expect("advance");
         let state = backend.robot_state().await;
@@ -231,7 +235,9 @@ mod tests {
     #[tokio::test]
     async fn pause_and_resume() {
         let mut backend = ReplayBackend::new(sample_trace());
-        RobotController::connect(&mut backend).await.expect("connect");
+        RobotController::connect(&mut backend)
+            .await
+            .expect("connect");
 
         backend.advance(0.3).await.expect("advance");
         RobotController::pause(&mut backend).await.expect("pause");
@@ -248,7 +254,9 @@ mod tests {
     #[tokio::test]
     async fn stop_resets_to_beginning() {
         let mut backend = ReplayBackend::new(sample_trace());
-        RobotController::connect(&mut backend).await.expect("connect");
+        RobotController::connect(&mut backend)
+            .await
+            .expect("connect");
 
         backend.advance(0.7).await.expect("advance");
         RobotController::stop(&mut backend).await.expect("stop");

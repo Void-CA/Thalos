@@ -16,9 +16,12 @@ pub fn create_manipulator_3dof(
 
     // ADR-0001: Z-up canonical.
     // Joint 1 — yaw de base, eje Z (vertical)
-    let joint1 = JointType::Revolute(
-        RevoluteJoint::new(0, UnitVector3::z_axis(), limits_j1, Transform3D::identity()),
-    );
+    let joint1 = JointType::Revolute(RevoluteJoint::new(
+        0,
+        UnitVector3::z_axis(),
+        limits_j1,
+        Transform3D::identity(),
+    ));
     let link1 = Link {
         id: 0,
         transform: Transform3D::from_translation(Vector3::new(0.0, 0.0, l1)),
@@ -32,9 +35,12 @@ pub fn create_manipulator_3dof(
     });
 
     // Joint 2 — hombro, eje Y (horizontal pitch)
-    let joint2 = JointType::Revolute(
-        RevoluteJoint::new(1, UnitVector3::y_axis(), limits_j2, Transform3D::identity()),
-    );
+    let joint2 = JointType::Revolute(RevoluteJoint::new(
+        1,
+        UnitVector3::y_axis(),
+        limits_j2,
+        Transform3D::identity(),
+    ));
     let link2 = Link {
         id: 1,
         transform: Transform3D::from_translation(Vector3::new(l2, 0.0, 0.0)),
@@ -48,9 +54,12 @@ pub fn create_manipulator_3dof(
     });
 
     // Joint 3 — codo, eje Y (horizontal pitch, paralelo a joint 2)
-    let joint3 = JointType::Revolute(
-        RevoluteJoint::new(2, UnitVector3::y_axis(), limits_j3, Transform3D::identity()),
-    );
+    let joint3 = JointType::Revolute(RevoluteJoint::new(
+        2,
+        UnitVector3::y_axis(),
+        limits_j3,
+        Transform3D::identity(),
+    ));
     let link3 = Link {
         id: 2,
         transform: Transform3D::from_translation(Vector3::new(l3, 0.0, 0.0)),

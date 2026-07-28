@@ -100,7 +100,6 @@ pub enum ContinueMode {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Override;
 
-
 // ---------------------------------------------------------------------------
 // Policy: StrictPolicy
 // ---------------------------------------------------------------------------
@@ -155,11 +154,11 @@ pub struct DevelopmentPolicy;
 impl DevelopmentPolicy {
     /// Log warnings to stderr.
     fn log_warnings(diagnostics: &[Diagnostic]) {
-        for d in diagnostics.iter().filter(|d| d.severity == Severity::Warning) {
-            eprintln!(
-                "[Warning] {}: {} (at {})",
-                d.code, d.message, d.span
-            );
+        for d in diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Warning)
+        {
+            eprintln!("[Warning] {}: {} (at {})", d.code, d.message, d.span);
             if let Some(ref help) = d.help {
                 eprintln!("  help: {help}");
             }
@@ -343,7 +342,10 @@ mod tests {
         match decision {
             CompilationDecision::Abort { reason } => {
                 assert!(!reason.is_empty(), "Abort reason must be non-empty");
-                assert!(reason.contains("type mismatch"), "reason should mention the error");
+                assert!(
+                    reason.contains("type mismatch"),
+                    "reason should mention the error"
+                );
             }
             other => panic!("Expected Abort, got {other:?}"),
         }
@@ -363,8 +365,14 @@ mod tests {
 
         match decision {
             CompilationDecision::Abort { reason } => {
-                assert!(reason.contains("E001"), "reason should contain first error code");
-                assert!(reason.contains("E002"), "reason should contain second error code");
+                assert!(
+                    reason.contains("E001"),
+                    "reason should contain first error code"
+                );
+                assert!(
+                    reason.contains("E002"),
+                    "reason should contain second error code"
+                );
             }
             other => panic!("Expected Abort, got {other:?}"),
         }
@@ -381,9 +389,7 @@ mod tests {
 
         assert_eq!(
             decision,
-            CompilationDecision::Compile {
-                overrides: vec![]
-            },
+            CompilationDecision::Compile { overrides: vec![] },
             "StrictPolicy should compile with warnings only"
         );
     }
@@ -399,9 +405,7 @@ mod tests {
 
         assert_eq!(
             decision,
-            CompilationDecision::Compile {
-                overrides: vec![]
-            },
+            CompilationDecision::Compile { overrides: vec![] },
             "StrictPolicy with no diagnostics should Compile"
         );
     }
@@ -439,9 +443,7 @@ mod tests {
 
         assert_eq!(
             decision,
-            CompilationDecision::Compile {
-                overrides: vec![]
-            },
+            CompilationDecision::Compile { overrides: vec![] },
             "DevelopmentPolicy should Compile with warnings only"
         );
     }
@@ -494,9 +496,7 @@ mod tests {
 
         assert_eq!(
             decision,
-            CompilationDecision::Compile {
-                overrides: vec![]
-            },
+            CompilationDecision::Compile { overrides: vec![] },
             "DemoPolicy should Compile with no errors"
         );
     }
@@ -517,7 +517,10 @@ mod tests {
         match decision {
             CompilationDecision::Abort { reason } => {
                 assert!(!reason.is_empty(), "Abort reason must be non-empty");
-                assert!(reason.contains("unused import"), "reason should mention the warning");
+                assert!(
+                    reason.contains("unused import"),
+                    "reason should mention the warning"
+                );
             }
             other => panic!("Expected Abort, got {other:?}"),
         }
@@ -551,9 +554,7 @@ mod tests {
 
         assert_eq!(
             decision,
-            CompilationDecision::Compile {
-                overrides: vec![]
-            },
+            CompilationDecision::Compile { overrides: vec![] },
             "CIValidationPolicy with no diagnostics should Compile"
         );
     }
@@ -648,9 +649,7 @@ mod tests {
 
     #[test]
     fn compilation_decision_is_clone_and_debug() {
-        let a = CompilationDecision::Compile {
-            overrides: vec![],
-        };
+        let a = CompilationDecision::Compile { overrides: vec![] };
         let b = a.clone();
         assert_eq!(a, b);
         let _ = format!("{a:?}");

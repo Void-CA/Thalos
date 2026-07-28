@@ -1,42 +1,44 @@
+pub mod backends;
+pub mod commands;
+pub mod comparison;
+pub mod error;
+pub mod execution_analysis;
+pub mod execution_boundary;
 pub mod motion_recorder;
 pub mod motion_trace;
 pub mod plan;
 pub mod robot_command;
-pub mod session;
-pub mod state;
 pub mod services;
-pub mod telemetry;
-pub mod commands;
-pub mod backends;
-pub mod comparison;
-pub mod execution_analysis;
-pub mod execution_boundary;
+pub mod session;
 pub mod snapshots;
-pub mod error;
+pub mod state;
+pub mod telemetry;
 
-pub use commands::dispatch::Command;
-pub use error::{ControllerError, RuntimeError};
 pub use backends::controller::{BackendCapabilities, RobotController};
 pub use backends::execution::ExecutionBackend;
+pub use commands::dispatch::Command;
+pub use error::{ControllerError, RuntimeError};
+pub use execution_analysis::{ExecutionAnalyzer, ExecutionThresholds};
+pub use execution_boundary::{
+    ExecutionAdapter, ExecutionCommand, ExecutionError, ExecutionReport, ExecutionSegmentBoundary,
+    ExecutionStatus,
+};
 pub use motion_trace::{MotionSample, MotionTrace};
-pub use robot_command::RobotCommand;
 pub use plan::{ActiveMotionPlan, ExecutionSession, MotionType, PlanState, SessionStatus};
-pub use session::{ExecutionSource, SessionData, SessionManager, SessionWithTrace};
-pub use telemetry::{ExecutionEvent, ExecutionObserver, ExecutionRecorder, ExecutionSample, ExecutionStatistics, ExecutionTrace, TraceAnalyzer, TraceMetadata};
+pub use robot_command::RobotCommand;
+pub use services::manipulability::ManipulabilityService;
+pub use services::plan_analysis::{PlanAnalysisResult, PlanAnalysisService};
 pub use services::scene::SceneService;
 pub use services::singularity::SingularityService;
 pub use services::workspace::WorkspaceService;
-pub use services::manipulability::ManipulabilityService;
-pub use services::plan_analysis::{PlanAnalysisResult, PlanAnalysisService};
+pub use session::{ExecutionSource, SessionData, SessionManager, SessionWithTrace};
 pub use snapshots::scene::RuntimeSnapshot;
 pub use snapshots::scene::TickDelta;
-pub use state::robot_state::{RobotState, MotionState, JointState, CartesianState, DeviceState, ExecutionState, Diagnostics, MotionMode, ConnectionState, RobotError};
-pub use execution_analysis::{ExecutionAnalyzer, ExecutionThresholds};
-pub use execution_boundary::{
-    ExecutionAdapter,
-    ExecutionCommand,
-    ExecutionSegmentBoundary,
-    ExecutionReport,
-    ExecutionStatus,
-    ExecutionError,
+pub use state::robot_state::{
+    CartesianState, ConnectionState, DeviceState, Diagnostics, ExecutionState, JointState,
+    MotionMode, MotionState, RobotError, RobotState,
+};
+pub use telemetry::{
+    ExecutionEvent, ExecutionObserver, ExecutionRecorder, ExecutionSample, ExecutionStatistics,
+    ExecutionTrace, TraceAnalyzer, TraceMetadata,
 };

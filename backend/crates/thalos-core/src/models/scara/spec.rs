@@ -1,6 +1,4 @@
-
 use crate::prelude::*;
-
 
 /// Spec completa de un robot SCARA.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -14,13 +12,13 @@ pub struct ScaraSpec {
 }
 
 impl ScaraSpec {
-    pub const fn new(
-        base_height: f64,
-        a1: f64,
-        a2: f64,
-        joint_limits: [JointLimits; 4],
-    ) -> Self {
-        Self { base_height, a1, a2, joint_limits }
+    pub const fn new(base_height: f64, a1: f64, a2: f64, joint_limits: [JointLimits; 4]) -> Self {
+        Self {
+            base_height,
+            a1,
+            a2,
+            joint_limits,
+        }
     }
 
     /// Robot ideal: rangos completos, geometría redonda.
@@ -63,10 +61,26 @@ impl ScaraSpec {
     pub const fn joints(&self) -> [JointInfo; 4] {
         let [j1, j2, j3, j4] = self.joint_limits;
         [
-            JointInfo { name: "joint_1", kind: JointKind::Revolute, limits: Some(j1) },
-            JointInfo { name: "joint_2", kind: JointKind::Revolute, limits: Some(j2) },
-            JointInfo { name: "joint_3", kind: JointKind::Prismatic, limits: Some(j3) },
-            JointInfo { name: "joint_4", kind: JointKind::Revolute, limits: Some(j4) },
+            JointInfo {
+                name: "joint_1",
+                kind: JointKind::Revolute,
+                limits: Some(j1),
+            },
+            JointInfo {
+                name: "joint_2",
+                kind: JointKind::Revolute,
+                limits: Some(j2),
+            },
+            JointInfo {
+                name: "joint_3",
+                kind: JointKind::Prismatic,
+                limits: Some(j3),
+            },
+            JointInfo {
+                name: "joint_4",
+                kind: JointKind::Revolute,
+                limits: Some(j4),
+            },
         ]
     }
 }

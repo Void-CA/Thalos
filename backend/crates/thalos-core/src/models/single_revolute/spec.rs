@@ -1,5 +1,5 @@
-use thalos_math::constants::PI;
 use crate::robot::joint::{JointInfo, JointKind, JointLimits};
+use thalos_math::constants::PI;
 
 /// Spec de un robot SingleRevolute.
 ///
@@ -19,9 +19,7 @@ impl SingleRevoluteSpec {
     pub const fn ideal() -> Self {
         Self {
             l: 1.0,
-            joint_limits: [
-                JointLimits::new(-PI, PI),
-            ],
+            joint_limits: [JointLimits::new(-PI, PI)],
         }
     }
 
@@ -32,9 +30,11 @@ impl SingleRevoluteSpec {
 
     pub const fn joints(&self) -> [JointInfo; 1] {
         let [j1] = self.joint_limits;
-        [
-            JointInfo { name: "joint_1", kind: JointKind::Revolute, limits: Some(j1) },
-        ]
+        [JointInfo {
+            name: "joint_1",
+            kind: JointKind::Revolute,
+            limits: Some(j1),
+        }]
     }
 }
 

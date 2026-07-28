@@ -1,6 +1,6 @@
-use std::ops::Mul;
-use crate::Quaternion;
 use super::model::DualQuaternion;
+use crate::Quaternion;
+use std::ops::Mul;
 
 impl Mul for DualQuaternion {
     type Output = Self;
@@ -34,10 +34,7 @@ mod tests {
 
     #[test]
     fn multiplication_with_identity() {
-        let dq = DualQuaternion::from_rotation_translation(
-            Quaternion::identity(),
-            [1.0, 2.0, 3.0],
-        );
+        let dq = DualQuaternion::from_rotation_translation(Quaternion::identity(), [1.0, 2.0, 3.0]);
         let id = DualQuaternion::identity();
         let r = dq * id;
         let t = r.translation();

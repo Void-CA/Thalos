@@ -11,7 +11,11 @@ pub struct Pose {
 
 impl Pose {
     pub fn new(reference: FrameId, target: FrameId, transform: Transform3D) -> Self {
-        Self { reference, target, transform }
+        Self {
+            reference,
+            target,
+            transform,
+        }
     }
 
     pub fn reference_id(&self) -> FrameId {
@@ -33,5 +37,4 @@ impl Pose {
     pub fn translation(&self) -> Vector3 {
         self.transform.translation
     }
-
 }

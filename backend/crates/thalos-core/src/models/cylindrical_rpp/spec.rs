@@ -1,5 +1,5 @@
-use thalos_math::constants::PI;
 use crate::robot::joint::{JointInfo, JointKind, JointLimits};
+use thalos_math::constants::PI;
 
 /// Spec de un robot cilíndrico RPP (Revolute + Prismatic + Prismatic).
 ///
@@ -39,9 +39,21 @@ impl CylindricalRPPSpec {
     pub const fn joints(&self) -> [JointInfo; 3] {
         let [j1, j2, j3] = self.joint_limits;
         [
-            JointInfo { name: "joint_1", kind: JointKind::Revolute, limits: Some(j1) },
-            JointInfo { name: "joint_2", kind: JointKind::Prismatic, limits: Some(j2) },
-            JointInfo { name: "joint_3", kind: JointKind::Prismatic, limits: Some(j3) },
+            JointInfo {
+                name: "joint_1",
+                kind: JointKind::Revolute,
+                limits: Some(j1),
+            },
+            JointInfo {
+                name: "joint_2",
+                kind: JointKind::Prismatic,
+                limits: Some(j2),
+            },
+            JointInfo {
+                name: "joint_3",
+                kind: JointKind::Prismatic,
+                limits: Some(j3),
+            },
         ]
     }
 }

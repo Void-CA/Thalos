@@ -61,8 +61,7 @@ impl TraceAnalyzer {
         let path_length: f64 = samples
             .windows(2)
             .map(|w| {
-                w[1]
-                    .joints
+                w[1].joints
                     .iter()
                     .zip(&w[0].joints)
                     .map(|(a, b)| (a - b).powi(2))
@@ -101,10 +100,7 @@ impl TraceAnalyzer {
         };
 
         // Tracking error (estimado de velocidades si no hay field directo)
-        let errors: Vec<f64> = samples
-            .iter()
-            .filter_map(|s| s.tracking_error)
-            .collect();
+        let errors: Vec<f64> = samples.iter().filter_map(|s| s.tracking_error).collect();
 
         let (max_tracking_err, avg_tracking_err) = if errors.is_empty() {
             (None, None)
@@ -118,7 +114,12 @@ impl TraceAnalyzer {
         let waypoints_completed = trace
             .events
             .iter()
-            .filter(|e| matches!(e, crate::telemetry::event::ExecutionEvent::WaypointReached { .. }))
+            .filter(|e| {
+                matches!(
+                    e,
+                    crate::telemetry::event::ExecutionEvent::WaypointReached { .. }
+                )
+            })
             .count();
 
         ExecutionStatistics {
@@ -140,8 +141,8 @@ impl TraceAnalyzer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::telemetry::trace::{ExecutionSample, TraceMetadata};
     use crate::session::ExecutionSource;
+    use crate::telemetry::trace::{ExecutionSample, TraceMetadata};
     use std::time::Duration;
 
     fn sample_trace() -> ExecutionTrace {

@@ -4,23 +4,14 @@ pub trait JacobianSolver {
     fn evaluate(&self, q: &[f64]) -> Jacobian;
 }
 
-
 pub struct Jacobian {
     pub linear: DynamicMatrix,
     pub angular: DynamicMatrix,
 }
 
 impl Jacobian {
-
-    pub fn new(
-        linear: DynamicMatrix,
-        angular: DynamicMatrix,
-    ) -> Self {
-
-        Self {
-            linear,
-            angular,
-        }
+    pub fn new(linear: DynamicMatrix, angular: DynamicMatrix) -> Self {
+        Self { linear, angular }
     }
 
     pub fn linear(&self) -> &DynamicMatrix {
@@ -30,7 +21,7 @@ impl Jacobian {
     pub fn position(&self) -> &DynamicMatrix {
         &self.linear
     }
-    
+
     pub fn angular(&self) -> &DynamicMatrix {
         &self.angular
     }

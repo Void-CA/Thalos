@@ -163,7 +163,9 @@ mod tests {
     use crate::pipeline::{MotionStrategy, PlanMetadata, Version};
     use std::time::Duration;
     use thalos_core::ids::OperationId;
-    use thalos_core::motion::{MotionInstruction, MotionPose, MotionProfile, OutputChannel, OutputValue};
+    use thalos_core::motion::{
+        MotionInstruction, MotionPose, MotionProfile, OutputChannel, OutputValue,
+    };
 
     // ------------------------------------------------------------------
     // Helpers
@@ -179,10 +181,7 @@ mod tests {
 
     fn dummy_metadata() -> PlanMetadata {
         PlanMetadata {
-            pipeline_version: Version {
-                major: 0,
-                minor: 1,
-            },
+            pipeline_version: Version { major: 0, minor: 1 },
             execution_time: Duration::ZERO,
             compilation_options: crate::pipeline::CompilationOptions {
                 policy_mode: crate::pipeline::PolicyMode::Strict,
@@ -409,13 +408,7 @@ mod tests {
         let ops = vec![PlannedOperation::Follow {
             origin: OperationId("op_08".into()),
             strategy: MotionStrategy::Linear,
-            waypoints: vec![
-                wp.clone(),
-                wp.clone(),
-                wp.clone(),
-                wp.clone(),
-                wp.clone(),
-            ],
+            waypoints: vec![wp.clone(), wp.clone(), wp.clone(), wp.clone(), wp.clone()],
             profile: dummy_profile(),
         }];
         let result = lower_once(ops, Some(dummy_home_pose()));
@@ -548,10 +541,7 @@ mod tests {
 
         match result {
             Err(LoweringError::InvalidHomePose(msg)) => {
-                assert!(
-                    !msg.is_empty(),
-                    "error message should not be empty"
-                );
+                assert!(!msg.is_empty(), "error message should not be empty");
                 assert!(
                     msg.contains("op_01"),
                     "error should mention the operation ID"
@@ -571,7 +561,9 @@ mod tests {
         let program = make_program(ops, None);
         let backend = ScaraLowering;
 
-        let result = backend.lower(&program).expect("empty program should not error");
+        let result = backend
+            .lower(&program)
+            .expect("empty program should not error");
 
         assert!(
             result.instructions.is_empty(),
@@ -642,7 +634,7 @@ mod tests {
     fn full_pipeline_lowering_produces_valid_motion_program() {
         use crate::ir::{IrOperation, IrProgram};
         use crate::pipeline::policy::StrictPolicy;
-        use crate::pipeline::{run_pipeline, CompilationOptions, PolicyMode};
+        use crate::pipeline::{CompilationOptions, PolicyMode, run_pipeline};
         use thalos_document::id::OperationId;
         use thalos_document::operation::io::OutputValue as DocOutputValue;
         use thalos_document::project::Metadata as ProjectMetadata;
@@ -694,8 +686,7 @@ mod tests {
             policy_mode: PolicyMode::Strict,
         };
         let policy = StrictPolicy;
-        let mut planned = run_pipeline(ir, &policy, options)
-            .expect("pipeline should succeed");
+        let mut planned = run_pipeline(ir, &policy, options).expect("pipeline should succeed");
         planned.home_pose = Some(dummy_home_pose());
 
         // Lower to MotionProgram
@@ -735,10 +726,7 @@ mod tests {
             "instruction[5]: expected Delay (Wait)"
         );
         assert!(
-            matches!(
-                &motion.instructions[6],
-                MotionInstruction::SetOutput { .. }
-            ),
+            matches!(&motion.instructions[6], MotionInstruction::SetOutput { .. }),
             "instruction[6]: expected SetOutput"
         );
 

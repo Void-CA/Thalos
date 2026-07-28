@@ -56,7 +56,11 @@ mod tests {
     }
 
     impl MockConstraintQuery {
-        fn new(orientation_allowed: bool, position_allowed: bool, precision: PrecisionLevel) -> Self {
+        fn new(
+            orientation_allowed: bool,
+            position_allowed: bool,
+            precision: PrecisionLevel,
+        ) -> Self {
             Self {
                 orientation_allowed,
                 position_allowed,

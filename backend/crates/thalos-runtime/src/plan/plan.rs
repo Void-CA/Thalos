@@ -20,7 +20,6 @@ pub struct ActiveMotionPlan {
 }
 
 impl ActiveMotionPlan {
-
     pub fn completed(
         plan_id: impl Into<String>,
         trajectory: Trajectory,
@@ -39,10 +38,7 @@ impl ActiveMotionPlan {
         }
     }
 
-    pub fn from_compiled_plan(
-        plan_id: impl Into<String>,
-        compiled: CompiledPlan,
-    ) -> Self {
+    pub fn from_compiled_plan(plan_id: impl Into<String>, compiled: CompiledPlan) -> Self {
         let segments = Some(compiled.segments.clone());
         Self {
             plan_id: plan_id.into(),

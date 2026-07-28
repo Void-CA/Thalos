@@ -65,7 +65,9 @@ async fn execute_load_robot_changes_robot() {
 async fn execute_load_robot_planar_3r() {
     let service = new_service();
 
-    let result = service.execute(Command::LoadRobot(RobotModel::Planar3R)).await;
+    let result = service
+        .execute(Command::LoadRobot(RobotModel::Planar3R))
+        .await;
     assert!(result.is_ok(), "Planar3R is a valid robot model");
 
     let snapshot = result.unwrap();

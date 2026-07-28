@@ -1,8 +1,5 @@
-
-
-use thalos_math::Vector3;
 use crate::models::RobotModel;
-
+use thalos_math::Vector3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorkspaceSample {
@@ -16,7 +13,6 @@ pub struct BoundingBox {
     pub min: Vector3,
     pub max: Vector3,
 }
-
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorkspaceMetrics {

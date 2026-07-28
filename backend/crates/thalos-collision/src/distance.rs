@@ -49,12 +49,7 @@ pub fn geometries_distance(
 }
 
 /// Distance between two spheres: `||c₁ - c₂|| - (r₁ + r₂)`.
-fn sphere_sphere_distance(
-    r1: f64,
-    pose1: &Transform3D,
-    r2: f64,
-    pose2: &Transform3D,
-) -> f64 {
+fn sphere_sphere_distance(r1: f64, pose1: &Transform3D, r2: f64, pose2: &Transform3D) -> f64 {
     let delta = pose1.translation - pose2.translation;
     let center_dist = delta.magnitude();
     center_dist - (r1 + r2)
@@ -143,11 +138,7 @@ fn obb_axes(rotation: &thalos_math::UnitQuaternion) -> [Vector3; 3] {
 }
 
 /// Projection radius of an OBB onto an axis: Σ|h_i · (axis · axis_i)|.
-fn obb_projection_radius(
-    axes: &[Vector3; 3],
-    half_extents: Vector3,
-    test_axis: &Vector3,
-) -> f64 {
+fn obb_projection_radius(axes: &[Vector3; 3], half_extents: Vector3, test_axis: &Vector3) -> f64 {
     half_extents.x * axes[0].dot(*test_axis).abs()
         + half_extents.y * axes[1].dot(*test_axis).abs()
         + half_extents.z * axes[2].dot(*test_axis).abs()
@@ -176,7 +167,12 @@ mod tests {
     use super::*;
     use thalos_core::collision::{Box3D, Sphere};
 
-    fn dist(geo_a: CollisionGeometry, pose_a: Transform3D, geo_b: CollisionGeometry, pose_b: Transform3D) -> f64 {
+    fn dist(
+        geo_a: CollisionGeometry,
+        pose_a: Transform3D,
+        geo_b: CollisionGeometry,
+        pose_b: Transform3D,
+    ) -> f64 {
         geometries_distance(&geo_a, &pose_a, &geo_b, &pose_b)
     }
 
@@ -184,7 +180,12 @@ mod tests {
     fn sphere_sphere_separated() {
         let a = CollisionGeometry::Sphere(Sphere::new(1.0));
         let b = CollisionGeometry::Sphere(Sphere::new(1.0));
-        let d = dist(a, Transform3D::identity(), b, Transform3D::from_translation(Vector3::new(4.0, 0.0, 0.0)));
+        let d = dist(
+            a,
+            Transform3D::identity(),
+            b,
+            Transform3D::from_translation(Vector3::new(4.0, 0.0, 0.0)),
+        );
         assert!((d - 2.0).abs() < 1e-9, "expected 2.0, got {}", d);
     }
 
@@ -192,7 +193,12 @@ mod tests {
     fn sphere_sphere_touching() {
         let a = CollisionGeometry::Sphere(Sphere::new(1.0));
         let b = CollisionGeometry::Sphere(Sphere::new(1.0));
-        let d = dist(a, Transform3D::identity(), b, Transform3D::from_translation(Vector3::new(2.0, 0.0, 0.0)));
+        let d = dist(
+            a,
+            Transform3D::identity(),
+            b,
+            Transform3D::from_translation(Vector3::new(2.0, 0.0, 0.0)),
+        );
         assert!(d.abs() < 1e-9, "expected ~0, got {}", d);
     }
 
@@ -200,7 +206,12 @@ mod tests {
     fn sphere_sphere_intersecting() {
         let a = CollisionGeometry::Sphere(Sphere::new(1.0));
         let b = CollisionGeometry::Sphere(Sphere::new(1.0));
-        let d = dist(a, Transform3D::identity(), b, Transform3D::from_translation(Vector3::new(1.5, 0.0, 0.0)));
+        let d = dist(
+            a,
+            Transform3D::identity(),
+            b,
+            Transform3D::from_translation(Vector3::new(1.5, 0.0, 0.0)),
+        );
         assert!(d < 0.0, "expected negative, got {}", d);
     }
 
@@ -208,7 +219,12 @@ mod tests {
     fn sphere_box_separated() {
         let s = CollisionGeometry::Sphere(Sphere::new(0.5));
         let b = CollisionGeometry::Box(Box3D::new(1.0, 1.0, 1.0));
-        let d = dist(s, Transform3D::from_translation(Vector3::new(3.0, 0.0, 0.0)), b, Transform3D::identity());
+        let d = dist(
+            s,
+            Transform3D::from_translation(Vector3::new(3.0, 0.0, 0.0)),
+            b,
+            Transform3D::identity(),
+        );
         assert!(d > 1.0, "expected separation > 1.0, got {}", d);
     }
 
@@ -218,7 +234,12 @@ mod tests {
         let b = CollisionGeometry::Box(Box3D::new(1.0, 1.0, 1.0));
         // Box extends from -0.5 to 0.5 on each axis, sphere center at (1.0, 0, 0)
         // distance = 1.0 - 0.5 - 0.5 = 0.0
-        let d = dist(s, Transform3D::from_translation(Vector3::new(1.0, 0.0, 0.0)), b, Transform3D::identity());
+        let d = dist(
+            s,
+            Transform3D::from_translation(Vector3::new(1.0, 0.0, 0.0)),
+            b,
+            Transform3D::identity(),
+        );
         assert!(d.abs() < 1e-9, "expected ~0, got {}", d);
     }
 }

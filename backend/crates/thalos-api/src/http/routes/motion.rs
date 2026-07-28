@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::{routing::post, Router};
+use axum::{Router, routing::post};
 
 use crate::app::state::AppState;
 use crate::features::motion::handler;

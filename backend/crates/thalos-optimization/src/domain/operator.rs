@@ -1,9 +1,6 @@
 use thalos_core::{
-    analysis::region::ProblemRegion,
-    evaluation::PlanMetrics,
-    operation::ConstraintQuery,
-    robot::serial_chain::SerialChain,
-    trajectory::Trajectory,
+    analysis::region::ProblemRegion, evaluation::PlanMetrics, operation::ConstraintQuery,
+    robot::serial_chain::SerialChain, trajectory::Trajectory,
 };
 
 use super::context::OptimizationContext;
@@ -230,25 +227,49 @@ mod tests {
 
     #[test]
     fn invariant_preserve_cartesian_path_is_distinct() {
-        assert_ne!(Invariant::PreserveCartesianPath, Invariant::PreserveExistingWaypoints);
+        assert_ne!(
+            Invariant::PreserveCartesianPath,
+            Invariant::PreserveExistingWaypoints
+        );
         assert_ne!(Invariant::PreserveCartesianPath, Invariant::PreserveStart);
         assert_ne!(Invariant::PreserveCartesianPath, Invariant::PreserveEnd);
     }
 
     #[test]
     fn invariant_preserve_position_path_is_distinct() {
-        assert_ne!(Invariant::PreservePositionPath, Invariant::PreserveCartesianPath);
-        assert_ne!(Invariant::PreservePositionPath, Invariant::PreserveExistingWaypoints);
+        assert_ne!(
+            Invariant::PreservePositionPath,
+            Invariant::PreserveCartesianPath
+        );
+        assert_ne!(
+            Invariant::PreservePositionPath,
+            Invariant::PreserveExistingWaypoints
+        );
         assert_ne!(Invariant::PreservePositionPath, Invariant::PreserveStart);
         assert_ne!(Invariant::PreservePositionPath, Invariant::PreserveEnd);
     }
 
     #[test]
     fn optimization_objective_manipulability_is_distinct() {
-        assert_ne!(OptimizationObjective::Manipulability, OptimizationObjective::Continuity);
-        assert_ne!(OptimizationObjective::Manipulability, OptimizationObjective::Safety);
-        assert_ne!(OptimizationObjective::Manipulability, OptimizationObjective::Efficiency);
-        assert_ne!(OptimizationObjective::Manipulability, OptimizationObjective::Feasibility);
-        assert_ne!(OptimizationObjective::Manipulability, OptimizationObjective::Smoothness);
+        assert_ne!(
+            OptimizationObjective::Manipulability,
+            OptimizationObjective::Continuity
+        );
+        assert_ne!(
+            OptimizationObjective::Manipulability,
+            OptimizationObjective::Safety
+        );
+        assert_ne!(
+            OptimizationObjective::Manipulability,
+            OptimizationObjective::Efficiency
+        );
+        assert_ne!(
+            OptimizationObjective::Manipulability,
+            OptimizationObjective::Feasibility
+        );
+        assert_ne!(
+            OptimizationObjective::Manipulability,
+            OptimizationObjective::Smoothness
+        );
     }
 }

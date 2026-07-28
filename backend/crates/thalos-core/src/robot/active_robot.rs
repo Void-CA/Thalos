@@ -17,6 +17,10 @@ pub struct ActiveRobot {
 
 impl ActiveRobot {
     pub fn new(model: RobotModel, chain: SerialChain, joints: Vec<f64>) -> Self {
-        Self { model, chain, joints }
+        Self {
+            model,
+            chain,
+            joints,
+        }
     }
 }

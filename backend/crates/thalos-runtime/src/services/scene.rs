@@ -4,8 +4,8 @@ use tokio::sync::RwLock;
 
 use thalos_core::{
     kinematics::{
-        forward::{result::FKResult, ForwardKinematics},
-        inverse::{result::IKResult, DampedLeastSquaresSolver, IKGoal, IKSolver},
+        forward::{ForwardKinematics, result::FKResult},
+        inverse::{DampedLeastSquaresSolver, IKGoal, IKSolver, result::IKResult},
     },
     models::{RobotModel, RobotRegistry},
     robot::serial_chain::SerialChain,
@@ -13,12 +13,12 @@ use thalos_core::{
 };
 use thalos_planning::motion::program::CompiledPlan;
 
-use crate::backends::controller::simulation::SimulationController;
-use crate::backends::controller::RobotController;
-use crate::backends::manager::BackendManager;
 use crate::backends::RobotBackend;
-use crate::commands::handler::ExecutableCommand;
+use crate::backends::controller::RobotController;
+use crate::backends::controller::simulation::SimulationController;
+use crate::backends::manager::BackendManager;
 use crate::commands::Command;
+use crate::commands::handler::ExecutableCommand;
 use crate::error::RuntimeError;
 use crate::motion_recorder::MotionRecorder;
 use crate::motion_trace::MotionTrace;
@@ -26,9 +26,7 @@ use crate::plan::{PlanState, SessionStatus};
 use crate::session::{ExecutionSource, SessionManager};
 use crate::snapshots::{RuntimeSnapshot, TickDelta};
 use crate::state::robot::{ActiveRobot, SceneRuntime};
-use crate::telemetry::{
-    ExecutionObserver, ExecutionRecorder, TraceMetadata,
-};
+use crate::telemetry::{ExecutionObserver, ExecutionRecorder, TraceMetadata};
 
 use std::time::Duration;
 
@@ -45,7 +43,9 @@ const IK_MAX_ITERS: usize = 500;
 const IK_TOLERANCE: f64 = 1e-6;
 const IK_LAMBDA: f64 = 0.1;
 
-fn session_from_state(state: &Arc<crate::state::robot_state::RobotState>) -> Option<crate::plan::ExecutionSession> {
+fn session_from_state(
+    state: &Arc<crate::state::robot_state::RobotState>,
+) -> Option<crate::plan::ExecutionSession> {
     use crate::state::robot_state::MotionMode;
     let progress = state.execution.progress;
     let status = match state.motion.mode {
@@ -73,12 +73,7 @@ impl SceneService {
         manager: Arc<BackendManager>,
         model: RobotModel,
     ) -> Self {
-        Self::with_session_manager(
-            backend,
-            manager,
-            model,
-            Arc::new(SessionManager::new()),
-        )
+        Self::with_session_manager(backend, manager, model, Arc::new(SessionManager::new()))
     }
 
     pub fn with_session_manager(
@@ -107,10 +102,7 @@ impl SceneService {
         fk.evaluate(joints)
     }
 
-    fn build_snapshot(
-        runtime: &SceneRuntime,
-        ik_result: Option<IKResult>,
-    ) -> RuntimeSnapshot {
+    fn build_snapshot(runtime: &SceneRuntime, ik_result: Option<IKResult>) -> RuntimeSnapshot {
         let fk_result = Self::compute_fk(&runtime.active_robot.chain, &runtime.active_robot.joints);
 
         RuntimeSnapshot {
@@ -153,7 +145,7 @@ impl SceneService {
                     SessionStatus::Completed => plan.state = PlanState::Completed,
                     SessionStatus::Cancelled => plan.state = PlanState::Cancelled,
                     SessionStatus::Failed => plan.state = PlanState::Failed,
-                    SessionStatus::Ready => {},
+                    SessionStatus::Ready => {}
                 }
             }
         }
@@ -195,9 +187,8 @@ impl SceneService {
                 let rt = self.runtime.read().await;
                 rt.active_robot.chain.dof_count()
             };
-            let new_ctrl = Arc::new(RwLock::new(
-                SimulationController::new(dof),
-            )) as Arc<RwLock<dyn RobotController + Send + Sync>>;
+            let new_ctrl = Arc::new(RwLock::new(SimulationController::new(dof)))
+                as Arc<RwLock<dyn RobotController + Send + Sync>>;
             // Silently replace — the manager handles disconnection
             let _ = self.manager.replace_controller(new_ctrl).await;
         }
@@ -213,7 +204,8 @@ impl SceneService {
     ) -> Result<(Vec<f64>, IKResult), RuntimeError> {
         let runtime = self.runtime.read().await;
         let fk = ForwardKinematics::new(runtime.active_robot.chain.clone());
-        let solver = DampedLeastSquaresSolver::new(fk, frame, IK_MAX_ITERS, IK_TOLERANCE, IK_LAMBDA);
+        let solver =
+            DampedLeastSquaresSolver::new(fk, frame, IK_MAX_ITERS, IK_TOLERANCE, IK_LAMBDA);
         let q0 = runtime.active_robot.joints.clone();
         let result = solver.solve(&q0, goal);
         Ok((result.q.clone(), result))
@@ -222,7 +214,10 @@ impl SceneService {
     // ── Program management ──
 
     /// Compile and store a motion program for preview.
-    pub async fn schedule_program(&self, compiled: CompiledPlan) -> Result<RuntimeSnapshot, RuntimeError> {
+    pub async fn schedule_program(
+        &self,
+        compiled: CompiledPlan,
+    ) -> Result<RuntimeSnapshot, RuntimeError> {
         {
             let mut runtime = self.runtime.write().await;
             runtime.schedule_plan(compiled);
@@ -237,12 +232,20 @@ impl SceneService {
     fn trajectory_to_waypoints(runtime: &SceneRuntime) -> (Vec<Vec<f64>>, f64) {
         if let Some(ref plan) = runtime.scheduled_plan {
             let traj = &plan.merged_trajectory;
-            let wps: Vec<Vec<f64>> = traj.waypoints().iter().map(|w| w.joints().to_vec()).collect();
+            let wps: Vec<Vec<f64>> = traj
+                .waypoints()
+                .iter()
+                .map(|w| w.joints().to_vec())
+                .collect();
             return (wps, traj.duration());
         }
         if let Some(ref plan) = runtime.active_plan {
             let traj = &plan.trajectory;
-            let wps: Vec<Vec<f64>> = traj.waypoints().iter().map(|w| w.joints().to_vec()).collect();
+            let wps: Vec<Vec<f64>> = traj
+                .waypoints()
+                .iter()
+                .map(|w| w.joints().to_vec())
+                .collect();
             return (wps, traj.duration());
         }
         (Vec::new(), 0.0)
@@ -275,7 +278,13 @@ impl SceneService {
             let robot_name_for_session = robot_name.clone();
             let session = self
                 .sessions
-                .register(source.clone(), "plan-exec".into(), duration, joint_count, robot_name_for_session)
+                .register(
+                    source.clone(),
+                    "plan-exec".into(),
+                    duration,
+                    joint_count,
+                    robot_name_for_session,
+                )
                 .await;
 
             let mut recorder = MotionRecorder::new();
@@ -316,9 +325,13 @@ impl SceneService {
     pub async fn seek_execution(&self, position: f64) -> Result<RuntimeSnapshot, RuntimeError> {
         if let Some(ctrl) = self.manager.get_controller().await {
             let ctrl_guard = ctrl.read().await;
-            ctrl_guard.seek(position).await.map_err(|e| {
-                RuntimeError::JointCountMismatch { expected: 0, received: 0 }
-            })?;
+            ctrl_guard
+                .seek(position)
+                .await
+                .map_err(|e| RuntimeError::JointCountMismatch {
+                    expected: 0,
+                    received: 0,
+                })?;
             drop(ctrl_guard);
             return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
         }
@@ -357,7 +370,8 @@ impl SceneService {
                 c.stop().await?;
             }
             // Finalize recording as Cancelled if active
-            self.finalize_recording(Some(crate::plan::SessionStatus::Cancelled)).await;
+            self.finalize_recording(Some(crate::plan::SessionStatus::Cancelled))
+                .await;
             return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
         }
         let runtime = self.runtime.read().await;
@@ -366,7 +380,8 @@ impl SceneService {
 
     pub async fn reset_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
         // Finalize any active recording as Cancelled first
-        self.finalize_recording(Some(crate::plan::SessionStatus::Cancelled)).await;
+        self.finalize_recording(Some(crate::plan::SessionStatus::Cancelled))
+            .await;
 
         // Reset the plan state to Created (without starting execution)
         {
@@ -395,7 +410,10 @@ impl SceneService {
             rec.execution_recorder.on_execution_finished(ts);
             let exec_trace = rec.execution_recorder.trace();
             let status = terminal_status.unwrap_or(crate::plan::SessionStatus::Completed);
-            let _ = self.sessions.complete_with_status(rec.session_id, trace, status).await;
+            let _ = self
+                .sessions
+                .complete_with_status(rec.session_id, trace, status)
+                .await;
             if let Some(et) = exec_trace {
                 self.sessions.save_execution_trace(rec.session_id, et).await;
             }
@@ -432,9 +450,10 @@ impl SceneService {
             let mut recording = self.recording.write().await;
             if let Some(ref mut rec_state) = *recording {
                 let timestamp = {
-                    let elapsed = rec_state.start_time + std::time::Duration::from_secs_f64(
-                        state.execution.progress * plan_duration.max(1.0),
-                    );
+                    let elapsed = rec_state.start_time
+                        + std::time::Duration::from_secs_f64(
+                            state.execution.progress * plan_duration.max(1.0),
+                        );
                     elapsed
                 };
                 rec_state.recorder.record(timestamp, &state);
@@ -442,21 +461,29 @@ impl SceneService {
 
                 // Check if execution completed — finalize recording
                 if state.execution.progress >= 1.0
-                    || matches!(state.motion.mode, crate::state::robot_state::MotionMode::Idle)
+                    || matches!(
+                        state.motion.mode,
+                        crate::state::robot_state::MotionMode::Idle
+                    )
                 {
                     let trace = rec_state.recorder.stop();
-                    rec_state.execution_recorder.on_execution_finished(timestamp);
+                    rec_state
+                        .execution_recorder
+                        .on_execution_finished(timestamp);
                     let exec_trace = rec_state.execution_recorder.trace();
                     self.sessions.complete(rec_state.session_id, trace).await;
                     if let Some(et) = exec_trace {
-                        self.sessions.save_execution_trace(rec_state.session_id, et).await;
+                        self.sessions
+                            .save_execution_trace(rec_state.session_id, et)
+                            .await;
                     }
                     *recording = None;
                 }
             }
             drop(recording);
 
-            let fk_result = Self::compute_fk(&runtime.active_robot.chain, &runtime.active_robot.joints);
+            let fk_result =
+                Self::compute_fk(&runtime.active_robot.chain, &runtime.active_robot.joints);
 
             return Ok(TickDelta::from_robot_state(
                 &state,

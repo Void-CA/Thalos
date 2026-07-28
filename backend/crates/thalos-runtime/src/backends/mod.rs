@@ -1,7 +1,7 @@
-mod internal;
 pub mod controller;
 pub mod execution;
 pub mod hardware;
+mod internal;
 pub mod manager;
 pub mod playback;
 pub mod replay;

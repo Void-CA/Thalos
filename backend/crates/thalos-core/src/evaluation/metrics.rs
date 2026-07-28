@@ -158,11 +158,13 @@ mod tests {
     #[test]
     fn plan_metrics_new() {
         let m = PlanMetrics::new(
-            1.5, 100,
+            1.5,
+            100,
             ManipulabilityMetrics::new(0.1, 0.5, 2, 0),
             JointSafetyMetrics::new(0.3, 0.7, 0),
             CollisionMetrics::new(0.05, 0, 1),
-            0.8, 1.2,
+            0.8,
+            1.2,
         );
         assert!((m.length - 1.5).abs() < 1e-10);
         assert_eq!(m.waypoint_count, 100);

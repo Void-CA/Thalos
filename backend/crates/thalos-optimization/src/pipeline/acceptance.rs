@@ -105,8 +105,10 @@ impl AcceptancePolicy {
         let cand_seg_err = max_segment_error(candidate);
 
         // 2. Compute joint margin
-        let cur_margin = min_joint_margin(current, &ctx.joint_limits.lower, &ctx.joint_limits.upper);
-        let cand_margin = min_joint_margin(candidate, &ctx.joint_limits.lower, &ctx.joint_limits.upper);
+        let cur_margin =
+            min_joint_margin(current, &ctx.joint_limits.lower, &ctx.joint_limits.upper);
+        let cand_margin =
+            min_joint_margin(candidate, &ctx.joint_limits.lower, &ctx.joint_limits.upper);
 
         // 3. Compute waypoint count ratio
         let cur_len = current.len().max(1);
@@ -150,8 +152,7 @@ impl AcceptancePolicy {
         if count_ratio > self.max_waypoint_count_ratio {
             reasons.push(format!(
                 "waypoints {:.0}× (limit {:.0}×)",
-                count_ratio,
-                self.max_waypoint_count_ratio,
+                count_ratio, self.max_waypoint_count_ratio,
             ));
         }
 
@@ -313,9 +314,7 @@ mod tests {
     #[test]
     fn zero_margin_current_does_not_panic() {
         // Both current and candidate have zero margin → should accept
-        let traj = Trajectory::new(vec![
-            TrajectoryPoint::new(vec![-2.0, 2.0], 0.0),
-        ]);
+        let traj = Trajectory::new(vec![TrajectoryPoint::new(vec![-2.0, 2.0], 0.0)]);
         let ctx = OptimizationContext {
             joint_limits: JointLimits {
                 lower: vec![-2.0, -2.0],

@@ -25,10 +25,7 @@ fn converges_reachable_target() {
         "Error final ({:.2e}) debe estar cerca de la tolerancia (1e-6)",
         result.final_error
     );
-    assert!(
-        result.iterations > 0,
-        "Debe haber al menos 1 iteración"
-    );
+    assert!(result.iterations > 0, "Debe haber al menos 1 iteración");
     assert!(
         result.iterations < 500,
         "No debe agotar max_iters: {}",
@@ -77,15 +74,11 @@ fn faster_than_jt_from_singular() {
     let target = Vector3::new(1.2, 0.5, 0.0);
 
     // DLS
-    let dls = DampedLeastSquaresSolver::new(
-        fk.clone(), ee.clone(), 500, 1e-6, 0.1,
-    );
+    let dls = DampedLeastSquaresSolver::new(fk.clone(), ee.clone(), 500, 1e-6, 0.1);
     let r_dls = dls.solve(&[0.0, 0.0], IKGoal::Position(target));
 
     // JT
-    let jt = JacobianTransposeSolver::new(
-        fk, ee, 500, 1e-6, 0.5,
-    );
+    let jt = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5);
     let r_jt = jt.solve(&[0.0, 0.0], IKGoal::Position(target));
 
     assert!(
@@ -109,8 +102,7 @@ fn faster_than_jt_from_singular() {
 
     println!(
         "  DLS: {} iter, error = {:.2e} | JT: {} iter, error = {:.2e} | λ = 0.1",
-        r_dls.iterations, r_dls.final_error,
-        r_jt.iterations, r_jt.final_error
+        r_dls.iterations, r_dls.final_error, r_jt.iterations, r_jt.final_error
     );
 }
 
@@ -137,11 +129,7 @@ fn unreachable_target_no_nan() {
         );
 
         for &q_val in &result.q {
-            assert!(
-                q_val.is_finite(),
-                "q debe ser finito, got {}",
-                q_val
-            );
+            assert!(q_val.is_finite(), "q debe ser finito, got {}", q_val);
         }
 
         assert!(
@@ -156,8 +144,7 @@ fn unreachable_target_no_nan() {
 #[test]
 fn error_history() {
     let (fk, ee) = build_2dof_planar_arm();
-    let solver = DampedLeastSquaresSolver::new(fk, ee, 500, 1e-6, 0.1)
-        .with_history(true);
+    let solver = DampedLeastSquaresSolver::new(fk, ee, 500, 1e-6, 0.1).with_history(true);
 
     let target = Vector3::new(1.0, 1.0, 0.0);
     let result = solver.solve(&[0.0, 0.0], IKGoal::Position(target));

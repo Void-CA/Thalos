@@ -40,12 +40,7 @@ fn sphere_vs_sphere(r1: f64, pose1: &Transform3D, r2: f64, pose2: &Transform3D) 
 
 // ─── Box-Box (SAT) ──────────────────────────────────────────────
 
-fn box_vs_box(
-    he_a: Vector3,
-    pose_a: &Transform3D,
-    he_b: Vector3,
-    pose_b: &Transform3D,
-) -> bool {
+fn box_vs_box(he_a: Vector3, pose_a: &Transform3D, he_b: Vector3, pose_b: &Transform3D) -> bool {
     let axes_a = obb_axes(&pose_a.rotation);
     let axes_b = obb_axes(&pose_b.rotation);
 
@@ -75,11 +70,7 @@ fn obb_axes(rotation: &thalos_math::UnitQuaternion) -> [Vector3; 3] {
 /// Radio de proyección de un OBB sobre un eje.
 ///
 /// Equivale a: Σ |half_extents[i] · dot(axis_i, test_axis)|
-fn obb_projection_radius(
-    axes: &[Vector3; 3],
-    half_extents: Vector3,
-    test_axis: &Vector3,
-) -> f64 {
+fn obb_projection_radius(axes: &[Vector3; 3], half_extents: Vector3, test_axis: &Vector3) -> f64 {
     let h = half_extents;
     h.x * axes[0].dot(*test_axis).abs()
         + h.y * axes[1].dot(*test_axis).abs()
@@ -141,7 +132,12 @@ mod tests {
     use super::*;
     use thalos_core::collision::{Box3D, Sphere};
 
-    fn check(geo_a: CollisionGeometry, pose_a: Transform3D, geo_b: CollisionGeometry, pose_b: Transform3D) -> bool {
+    fn check(
+        geo_a: CollisionGeometry,
+        pose_a: Transform3D,
+        geo_b: CollisionGeometry,
+        pose_b: Transform3D,
+    ) -> bool {
         geometries_intersect(&geo_a, &pose_a, &geo_b, &pose_b)
     }
 
@@ -150,8 +146,10 @@ mod tests {
         let a = CollisionGeometry::Sphere(Sphere::new(1.0));
         let b = CollisionGeometry::Sphere(Sphere::new(1.0));
         assert!(!check(
-            a, Transform3D::identity(),
-            b, Transform3D::from_translation(Vector3::new(3.0, 0.0, 0.0)),
+            a,
+            Transform3D::identity(),
+            b,
+            Transform3D::from_translation(Vector3::new(3.0, 0.0, 0.0)),
         ));
     }
 
@@ -160,8 +158,10 @@ mod tests {
         let a = CollisionGeometry::Sphere(Sphere::new(1.0));
         let b = CollisionGeometry::Sphere(Sphere::new(1.0));
         assert!(check(
-            a, Transform3D::identity(),
-            b, Transform3D::from_translation(Vector3::new(1.5, 0.0, 0.0)),
+            a,
+            Transform3D::identity(),
+            b,
+            Transform3D::from_translation(Vector3::new(1.5, 0.0, 0.0)),
         ));
     }
 
@@ -170,8 +170,10 @@ mod tests {
         let a = CollisionGeometry::Box(Box3D::new(1.0, 1.0, 1.0));
         let b = CollisionGeometry::Box(Box3D::new(1.0, 1.0, 1.0));
         assert!(!check(
-            a, Transform3D::identity(),
-            b, Transform3D::from_translation(Vector3::new(2.0, 0.0, 0.0)),
+            a,
+            Transform3D::identity(),
+            b,
+            Transform3D::from_translation(Vector3::new(2.0, 0.0, 0.0)),
         ));
     }
 
@@ -180,8 +182,10 @@ mod tests {
         let a = CollisionGeometry::Box(Box3D::new(2.0, 2.0, 2.0));
         let b = CollisionGeometry::Box(Box3D::new(2.0, 2.0, 2.0));
         assert!(check(
-            a, Transform3D::identity(),
-            b, Transform3D::from_translation(Vector3::new(1.0, 0.0, 0.0)),
+            a,
+            Transform3D::identity(),
+            b,
+            Transform3D::from_translation(Vector3::new(1.0, 0.0, 0.0)),
         ));
     }
 
@@ -209,8 +213,10 @@ mod tests {
     fn cylinder_pair_returns_false() {
         let cyl = CollisionGeometry::Cylinder(thalos_core::collision::Cylinder::new(1.0, 2.0));
         assert!(!check(
-            cyl.clone(), Transform3D::identity(),
-            cyl, Transform3D::from_translation(Vector3::new(0.0, 0.0, 0.0)),
+            cyl.clone(),
+            Transform3D::identity(),
+            cyl,
+            Transform3D::from_translation(Vector3::new(0.0, 0.0, 0.0)),
         ));
     }
 }

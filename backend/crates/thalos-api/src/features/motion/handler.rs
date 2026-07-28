@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 
-use thalos_runtime::{commands::motion::MotionCommands, Command};
+use thalos_runtime::{Command, commands::motion::MotionCommands};
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
@@ -28,7 +28,8 @@ pub async fn movej(
             max_velocity: payload.velocity,
             max_acceleration: payload.acceleration,
             time_step: None,
-        })).await?;
+        }))
+        .await?;
 
     Ok(Json(to_api_response(&snapshot)))
 }
@@ -49,16 +50,18 @@ pub async fn movel(
         .map_or(default_frame, thalos_core::spatial::frame::FrameId::Id);
     let target_pose = payload.target.to_pose(frame);
 
-    let snapshot = state.services.scene.execute(Command::Motion(
-        MotionCommands::PlanAndMoveL {
+    let snapshot = state
+        .services
+        .scene
+        .execute(Command::Motion(MotionCommands::PlanAndMoveL {
             frame,
             target_pose,
             max_velocity: payload.velocity,
             max_acceleration: payload.acceleration,
             time_step: None,
             cartesian_step: None,
-        },
-    )).await?;
+        }))
+        .await?;
 
     Ok(Json(to_api_response(&snapshot)))
 }

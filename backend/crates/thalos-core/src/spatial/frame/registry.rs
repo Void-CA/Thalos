@@ -1,4 +1,4 @@
-use crate::spatial::frame::{FrameId, Frame};
+use crate::spatial::frame::{Frame, FrameId};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -9,17 +9,17 @@ pub struct FrameRegistry {
 
 impl FrameRegistry {
     pub fn new() -> Self {
-        Self { frames: HashMap::new(), next_id: 0 }
+        Self {
+            frames: HashMap::new(),
+            next_id: 0,
+        }
     }
 
     pub fn create(&mut self, name: &str) -> FrameId {
         let id = FrameId::new(self.next_id);
         self.next_id += 1;
 
-        let frame = Frame::new(
-            id.clone(), 
-            name.to_string()
-        );
+        let frame = Frame::new(id.clone(), name.to_string());
 
         self.frames.insert(id.clone(), frame);
 
@@ -49,5 +49,4 @@ impl FrameRegistry {
             .find(|(_, f)| f.name() == name)
             .map(|(id, _)| *id)
     }
-
 }

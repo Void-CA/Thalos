@@ -41,18 +41,18 @@ impl ManipulabilityAnalyzer {
 mod tests {
     use super::*;
     use crate::analysis::workspace::{WorkspaceConfig, WorkspaceSampler};
-    use crate::kinematics::jacobian::GeometricJacobian;
     use crate::kinematics::forward::ForwardKinematics;
-    use thalos_math::{Vector3, UnitVector3, Transform3D};
+    use crate::kinematics::jacobian::GeometricJacobian;
     use crate::robot::builder::SerialChainBuilder;
     use crate::robot::joint::*;
     use crate::robot::link::Link;
     use crate::robot::segment::Segment;
     use crate::robot::serial_chain::SerialChain;
     use crate::spatial::frame::FrameId;
-    use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
     use std::f64::consts::PI;
+    use thalos_math::{Transform3D, UnitVector3, Vector3};
 
     fn build_planar_2r() -> (SerialChain, GeometricJacobian) {
         let mut builder = SerialChainBuilder::new();
@@ -60,15 +60,32 @@ mod tests {
         let ee = builder.create_frame("ee");
 
         let joint1 = JointType::Revolute(RevoluteJoint::new(
-            0, UnitVector3::z_axis(), JointLimits::new(-PI, PI), Transform3D::identity(),
+            0,
+            UnitVector3::z_axis(),
+            JointLimits::new(-PI, PI),
+            Transform3D::identity(),
         ));
-        let link1 = Link::new(0, Transform3D::from_translation(Vector3::new(1.0, 0.0, 0.0)));
-        builder.add_segment(Segment::new(FrameId::World, shoulder.clone(), joint1, link1));
+        let link1 = Link::new(
+            0,
+            Transform3D::from_translation(Vector3::new(1.0, 0.0, 0.0)),
+        );
+        builder.add_segment(Segment::new(
+            FrameId::World,
+            shoulder.clone(),
+            joint1,
+            link1,
+        ));
 
         let joint2 = JointType::Revolute(RevoluteJoint::new(
-            1, UnitVector3::z_axis(), JointLimits::new(-PI, PI), Transform3D::identity(),
+            1,
+            UnitVector3::z_axis(),
+            JointLimits::new(-PI, PI),
+            Transform3D::identity(),
         ));
-        let link2 = Link::new(1, Transform3D::from_translation(Vector3::new(1.0, 0.0, 0.0)));
+        let link2 = Link::new(
+            1,
+            Transform3D::from_translation(Vector3::new(1.0, 0.0, 0.0)),
+        );
         builder.add_segment(Segment::new(shoulder, ee.clone(), joint2, link2));
 
         builder.set_end_effector(ee.clone());
@@ -83,7 +100,15 @@ mod tests {
         let (chain, jac) = build_planar_2r();
         let mut rng = StdRng::seed_from_u64(42);
         let ws = WorkspaceSampler
-            .sample(&chain, WorkspaceConfig { samples: 100, seed: 42, tolerance: 1e-3 }, &mut rng)
+            .sample(
+                &chain,
+                WorkspaceConfig {
+                    samples: 100,
+                    seed: 42,
+                    tolerance: 1e-3,
+                },
+                &mut rng,
+            )
             .expect("sampling failed");
 
         let analysis = ManipulabilityAnalyzer::analyze(&ws, &jac);

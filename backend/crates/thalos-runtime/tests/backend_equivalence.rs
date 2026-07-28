@@ -99,7 +99,11 @@ async fn movej_with_velocity_matching_positions() {
 
     let telemetry = format!(
         "STATE {}",
-        target.iter().map(|j| format!("{:.6}", j)).collect::<Vec<_>>().join(" ")
+        target
+            .iter()
+            .map(|j| format!("{:.6}", j))
+            .collect::<Vec<_>>()
+            .join(" ")
     );
 
     let fake = FakeTransport::new();
@@ -176,7 +180,11 @@ async fn multiple_commands_preserve_equivalence() {
         // Inyectar telemetría para HW
         let telemetry = format!(
             "STATE {}",
-            target.iter().map(|j| format!("{:.6}", j)).collect::<Vec<_>>().join(" ")
+            target
+                .iter()
+                .map(|j| format!("{:.6}", j))
+                .collect::<Vec<_>>()
+                .join(" ")
         );
 
         // Necesitamos un FakeTransport nuevo por iteración porque
@@ -206,7 +214,8 @@ async fn multiple_commands_preserve_equivalence() {
 
         assert_eq!(
             sim_state.joints.positions, hw_state.joints.positions,
-            "Fallo en posición {:?}", target
+            "Fallo en posición {:?}",
+            target
         );
     }
 }

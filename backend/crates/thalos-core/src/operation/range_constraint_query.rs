@@ -380,10 +380,7 @@ mod tests {
 
     #[test]
     fn query_respects_range_boundaries_exactly() {
-        let ranges = vec![
-            (0..5, pick_constraints()),
-            (5..9, place_constraints()),
-        ];
+        let ranges = vec![(0..5, pick_constraints()), (5..9, place_constraints())];
         let query = RangeConstraintQuery::new(ranges);
 
         // Waypoint 4 is the last Pick index

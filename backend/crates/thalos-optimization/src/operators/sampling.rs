@@ -35,9 +35,9 @@ use thalos_core::{
 
 use crate::{
     domain::{
+        TrajectoryOperator,
         context::OptimizationContext,
         operator::{Invariant, OperatorFamily, OptimizationObjective},
-        TrajectoryOperator,
     },
     error::OptimizationError,
 };
@@ -246,9 +246,7 @@ impl TrajectoryOperator for AdaptiveSampling {
                 };
 
                 // Compare: higher error is worse
-                if error > worst_error
-                    || (error == worst_error && curvature > worst_curvature)
-                {
+                if error > worst_error || (error == worst_error && curvature > worst_curvature) {
                     worst_idx = i;
                     worst_error = error;
                     worst_curvature = curvature;
@@ -256,9 +254,7 @@ impl TrajectoryOperator for AdaptiveSampling {
             }
 
             // Termination: the worst segment is within both thresholds
-            if worst_error <= self.error_threshold
-                && worst_curvature <= self.curvature_threshold
-            {
+            if worst_error <= self.error_threshold && worst_curvature <= self.curvature_threshold {
                 break;
             }
 
@@ -361,7 +357,12 @@ mod unit_tests {
         let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
         // Initial error ≈ 14.14 > 8.0 → insert (1 waypoint added)
         // Sub-segment errors ≈ 7.07 < 8.0 → stop
-        assert_eq!(result.len(), 3, "expected 1 insertion, got {}", result.len());
+        assert_eq!(
+            result.len(),
+            3,
+            "expected 1 insertion, got {}",
+            result.len()
+        );
     }
 
     // ── 4. Low-error segment ──────────────────────────────
@@ -478,20 +479,20 @@ mod unit_tests {
         let region = three_waypoint_region();
         let ctx = test_ctx();
 
-        let original_joints: Vec<Vec<f64>> =
-            traj.waypoints().iter().map(|wp| wp.joints().to_vec()).collect();
+        let original_joints: Vec<Vec<f64>> = traj
+            .waypoints()
+            .iter()
+            .map(|wp| wp.joints().to_vec())
+            .collect();
 
         let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
 
         // All original waypoints should appear in order in the output
-        let result_joints: Vec<&[f64]> =
-            result.waypoints().iter().map(|wp| wp.joints()).collect();
+        let result_joints: Vec<&[f64]> = result.waypoints().iter().map(|wp| wp.joints()).collect();
 
         let mut result_idx = 0;
         for orig in &original_joints {
-            while result_idx < result_joints.len()
-                && result_joints[result_idx] != orig.as_slice()
-            {
+            while result_idx < result_joints.len() && result_joints[result_idx] != orig.as_slice() {
                 result_idx += 1;
             }
             assert!(
@@ -550,7 +551,11 @@ mod unit_tests {
         let ctx = test_ctx();
 
         let result = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
-        assert_eq!(result.len(), traj.len(), "expected no-op for dense trajectory");
+        assert_eq!(
+            result.len(),
+            traj.len(),
+            "expected no-op for dense trajectory"
+        );
         for (orig, res) in traj.waypoints().iter().zip(result.waypoints().iter()) {
             assert_eq!(orig.joints(), res.joints());
         }
@@ -716,7 +721,14 @@ mod benchmarks {
         println!("  Waypoints:          {} → {}", before_count, after_count);
         println!("  Max segment error:  {:.4} → {:.4}", before_max, after_max);
         println!("  Reduction:          {:.1}%", reduction_pct);
-        println!("  Result:             {}", if reduction_pct >= 30.0 { "✅ PASS" } else { "❌ FAIL" });
+        println!(
+            "  Result:             {}",
+            if reduction_pct >= 30.0 {
+                "✅ PASS"
+            } else {
+                "❌ FAIL"
+            }
+        );
         println!("────────────────────────────────────────────\n");
 
         // The operator guarantees all segments are below error_threshold.
@@ -766,8 +778,16 @@ mod benchmarks {
         let after_count = result.len();
 
         println!("\n═══ Benchmark: Dense trajectory ────────────────");
-        println!("  Waypoints:     {} → {} ({})", before_count, after_count,
-            if before_count == after_count { "unchanged ✅" } else { "CHANGED ❌" });
+        println!(
+            "  Waypoints:     {} → {} ({})",
+            before_count,
+            after_count,
+            if before_count == after_count {
+                "unchanged ✅"
+            } else {
+                "CHANGED ❌"
+            }
+        );
         println!("────────────────────────────────────────────\n");
 
         // Dense trajectory should remain unchanged (already well-sampled)
@@ -788,14 +808,12 @@ mod benchmarks {
 mod integration_tests {
     use super::*;
     use crate::{
-        pipeline::{compose_trajectory, BlendPolicy},
         PlanMetrics,
+        pipeline::{BlendPolicy, compose_trajectory},
     };
     use thalos_core::{
         analysis::region::{RegionId, RegionKind, RegionSeverity},
-        evaluation::{
-            CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics,
-        },
+        evaluation::{CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics},
         models::{RobotModel, RobotRegistry},
     };
 
@@ -906,7 +924,9 @@ mod integration_tests {
             RegionSeverity::Warning,
             0..first.len(),
         );
-        let second = op.apply(&robot, &first, &second_region, &ctx, None).unwrap();
+        let second = op
+            .apply(&robot, &first, &second_region, &ctx, None)
+            .unwrap();
 
         // After first pass, all errors should be below threshold
         // so second pass should not add new waypoints
@@ -945,5 +965,3 @@ mod integration_tests {
         assert!(op.invariants().is_empty());
     }
 }
-
-

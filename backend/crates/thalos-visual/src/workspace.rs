@@ -35,10 +35,7 @@ impl WorkspaceVisual {
     /// - Wireframe is derived from `Workspace::bounds()` (AABB).
     /// - Point cloud is derived from `Workspace::samples()` positions.
     /// - `robot_scene` is an optional overlay (e.g., the current robot pose).
-    pub fn from_workspace(
-        ws: &Workspace,
-        robot_scene: Option<VisualScene>,
-    ) -> Self {
+    pub fn from_workspace(ws: &Workspace, robot_scene: Option<VisualScene>) -> Self {
         let bb = ws.bounds();
 
         Self {
@@ -84,15 +81,28 @@ impl BoundsWireframe {
         let (z0, z1) = (self.min[2], self.max[2]);
 
         // 8 corners
-        let c0 = [x0, y0, z0]; let c1 = [x1, y0, z0];
-        let c2 = [x0, y1, z0]; let c3 = [x1, y1, z0];
-        let c4 = [x0, y0, z1]; let c5 = [x1, y0, z1];
-        let c6 = [x0, y1, z1]; let c7 = [x1, y1, z1];
+        let c0 = [x0, y0, z0];
+        let c1 = [x1, y0, z0];
+        let c2 = [x0, y1, z0];
+        let c3 = [x1, y1, z0];
+        let c4 = [x0, y0, z1];
+        let c5 = [x1, y0, z1];
+        let c6 = [x0, y1, z1];
+        let c7 = [x1, y1, z1];
 
         [
-            (c0, c1), (c2, c3), (c4, c5), (c6, c7),  // X edges
-            (c0, c2), (c1, c3), (c4, c6), (c5, c7),  // Y edges
-            (c0, c4), (c1, c5), (c2, c6), (c3, c7),  // Z edges
+            (c0, c1),
+            (c2, c3),
+            (c4, c5),
+            (c6, c7), // X edges
+            (c0, c2),
+            (c1, c3),
+            (c4, c6),
+            (c5, c7), // Y edges
+            (c0, c4),
+            (c1, c5),
+            (c2, c6),
+            (c3, c7), // Z edges
         ]
     }
 }
@@ -113,9 +123,7 @@ pub struct SamplePointCloud {
 impl SamplePointCloud {
     /// Build from an iterator of `Vector3` positions.
     pub fn from_positions(positions: impl Iterator<Item = Vector3>) -> Self {
-        let points: Vec<[f64; 3]> = positions
-            .map(|p| [p.x, p.y, p.z])
-            .collect();
+        let points: Vec<[f64; 3]> = positions.map(|p| [p.x, p.y, p.z]).collect();
         let count = points.len();
         Self { points, count }
     }
@@ -128,17 +136,19 @@ impl SamplePointCloud {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use thalos_core::analysis::workspace::{
-        sampler::WorkspaceSampler, WorkspaceConfig,
-    };
-    use thalos_core::models::{RobotModel, RobotRegistry};
-    use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
+    use thalos_core::analysis::workspace::{WorkspaceConfig, sampler::WorkspaceSampler};
+    use thalos_core::models::{RobotModel, RobotRegistry};
 
     fn sample_workspace(model: RobotModel, samples: usize, seed: u64) -> Workspace {
         let mut rng = StdRng::seed_from_u64(seed);
         let chain = RobotRegistry::create_default(model);
-        let config = WorkspaceConfig { samples, seed, tolerance: 1e-3 };
+        let config = WorkspaceConfig {
+            samples,
+            seed,
+            tolerance: 1e-3,
+        };
         WorkspaceSampler
             .sample(&chain, config, &mut rng)
             .expect("sampling must succeed")

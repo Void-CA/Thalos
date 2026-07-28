@@ -1,5 +1,6 @@
 use serde::Deserialize;
 
+use thalos_core::motion::segment::MotionSegment;
 use thalos_core::{
     kinematics::inverse::IKGoal,
     models::{RobotModel, RobotModelError},
@@ -7,9 +8,8 @@ use thalos_core::{
 };
 use thalos_math::{Quaternion, Transform3D, UnitQuaternion, Vector3};
 use thalos_planning::motion::program::MotionProgram;
-use thalos_core::motion::segment::MotionSegment;
-use thalos_runtime::commands::kinematics::KinematicsCommand;
 use thalos_runtime::Command;
+use thalos_runtime::commands::kinematics::KinematicsCommand;
 
 use super::responses::VisualSceneDto;
 
@@ -215,15 +215,11 @@ impl SelectToolFrameRequest {
             Some(frame_id) => {
                 let base_frame = FrameId::Id(frame_id);
                 let transform = match self.offset {
-                    Some([x, y, z]) => {
-                        Transform3D::from_translation(Vector3::new(x, y, z))
-                    }
+                    Some([x, y, z]) => Transform3D::from_translation(Vector3::new(x, y, z)),
                     None => Transform3D::identity(),
                 };
-                let tcp = thalos_core::robot::tool_frame::ToolFrame::with_offset(
-                    base_frame,
-                    transform,
-                );
+                let tcp =
+                    thalos_core::robot::tool_frame::ToolFrame::with_offset(base_frame, transform);
                 Command::SelectToolFrame(Some(tcp))
             }
             None => Command::SelectToolFrame(None),
@@ -231,11 +227,9 @@ impl SelectToolFrameRequest {
     }
 }
 
-
 fn default_epsilon() -> f64 {
     1e-6
 }
-
 
 // ── DTO → Command conversions ──
 
@@ -297,9 +291,7 @@ impl PoseTargetDto {
                 UnitQuaternion::new(q.normalize_or_identity())
                     .unwrap_or_else(|_| UnitQuaternion::identity())
             }
-            RotationDto::Ypr { roll, pitch, yaw } => {
-                UnitQuaternion::from_euler(roll, pitch, yaw)
-            }
+            RotationDto::Ypr { roll, pitch, yaw } => UnitQuaternion::from_euler(roll, pitch, yaw),
         };
 
         let transform = Transform3D {

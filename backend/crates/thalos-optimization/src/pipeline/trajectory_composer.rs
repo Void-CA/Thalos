@@ -190,11 +190,11 @@ mod tests {
         let orig = simple_traj();
         // modified: only waypoints 1 and 2 centered to 0.0
         let modd = Trajectory::new(vec![
-            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),  // unchanged
-            TrajectoryPoint::new(vec![0.0, 0.0], 1.0),  // centered
-            TrajectoryPoint::new(vec![0.0, 0.0], 2.0),  // centered
-            TrajectoryPoint::new(vec![3.0, 3.0], 3.0),  // unchanged
-            TrajectoryPoint::new(vec![4.0, 4.0], 4.0),  // unchanged
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0), // unchanged
+            TrajectoryPoint::new(vec![0.0, 0.0], 1.0), // centered
+            TrajectoryPoint::new(vec![0.0, 0.0], 2.0), // centered
+            TrajectoryPoint::new(vec![3.0, 3.0], 3.0), // unchanged
+            TrajectoryPoint::new(vec![4.0, 4.0], 4.0), // unchanged
         ]);
         // range 1..3, window=2 → entry blend at idx 0,1 blends with target=modified[1]
         // Entry: idx 0 blends orig[0]→target[0]=0.0, t=(0-(-1))/2 = clamped→0 → alpha=0 → stays 0.0
@@ -237,7 +237,12 @@ mod tests {
         // At i=1 (t=1/3), Linear and SmoothStep should differ
         let r_val = r.waypoints()[1].joints()[0];
         let s_val = s.waypoints()[1].joints()[0];
-        assert!((r_val - s_val).abs() > 1e-6, "policies should produce different blends at t=0.333: Linear={}, SmoothStep={}", r_val, s_val);
+        assert!(
+            (r_val - s_val).abs() > 1e-6,
+            "policies should produce different blends at t=0.333: Linear={}, SmoothStep={}",
+            r_val,
+            s_val
+        );
     }
 
     #[test]

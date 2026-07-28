@@ -14,6 +14,6 @@ pub mod optimization_pipeline;
 pub mod trajectory_composer;
 
 pub use acceptance::{AcceptanceEvaluation, AcceptancePolicy};
-pub use optimization_pipeline::{OptimizationPipeline, OptimizationResult};
 pub use operator_selector::OperatorSelector;
-pub use trajectory_composer::{compose_trajectory, BlendPolicy};
+pub use optimization_pipeline::{OptimizationPipeline, OptimizationResult};
+pub use trajectory_composer::{BlendPolicy, compose_trajectory};

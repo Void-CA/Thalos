@@ -13,7 +13,11 @@ pub fn compute_score(applicability: f32, improvement: f32, cost: f32) -> f32 {
 /// Rank a slice of `OperatorScore`-bearing items by their `composite` score
 /// in descending order (highest score first).
 pub fn rank_by_score(scores: &mut [OperatorScore]) {
-    scores.sort_by(|a, b| b.composite.partial_cmp(&a.composite).unwrap_or(std::cmp::Ordering::Equal));
+    scores.sort_by(|a, b| {
+        b.composite
+            .partial_cmp(&a.composite)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 }
 
 #[cfg(test)]

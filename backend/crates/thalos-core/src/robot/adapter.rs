@@ -1,11 +1,9 @@
 use std::collections::HashMap;
+use thalos_models::Robot as ModelRobot;
 use thalos_models::urdf::UrdfError;
 use thalos_models::urdf::parser::parse_robot;
-use thalos_models::Robot as ModelRobot;
 
-use crate::robot::joint::{
-    FixedJoint, JointType, PrismaticJoint, RevoluteJoint, JointLimits,
-};
+use crate::robot::joint::{FixedJoint, JointLimits, JointType, PrismaticJoint, RevoluteJoint};
 use crate::robot::link::Link as CoreLink;
 use crate::robot::segment::Segment;
 use crate::robot::serial_chain::SerialChain;
@@ -18,20 +16,10 @@ use thalos_math::Transform3D;
 pub enum AdapterError {
     EmptyRobot,
     NoJoints,
-    MissingLink {
-        joint: String,
-        link: String,
-    },
-    UnsupportedJointKind {
-        joint: String,
-        kind: String,
-    },
-    MissingAxis {
-        joint: String,
-    },
-    MissingLimits {
-        joint: String,
-    },
+    MissingLink { joint: String, link: String },
+    UnsupportedJointKind { joint: String, kind: String },
+    MissingAxis { joint: String },
+    MissingLimits { joint: String },
     Parse(String),
 }
 
@@ -108,13 +96,12 @@ pub fn from_robot(robot: &ModelRobot) -> Result<SerialChain, AdapterError> {
                 joint: joint.name.clone(),
                 link: joint.parent.clone(),
             })?;
-        let child_id = link_ids
-            .get(joint.child.as_str())
-            .copied()
-            .ok_or_else(|| AdapterError::MissingLink {
+        let child_id = link_ids.get(joint.child.as_str()).copied().ok_or_else(|| {
+            AdapterError::MissingLink {
                 joint: joint.name.clone(),
                 link: joint.child.clone(),
-            })?;
+            }
+        })?;
 
         // Primer segmento: parent es World en vez del link root.
         // El FK evaluador solo almacena segment.child + World en su mapa de poses;
@@ -133,15 +120,17 @@ pub fn from_robot(robot: &ModelRobot) -> Result<SerialChain, AdapterError> {
         // TODO: map models Link collision geometry → core CollisionGeometry
         // when we add collision support.
 
-        segments.push(Segment::new(parent_frame, child_frame, joint_type, core_link));
+        segments.push(Segment::new(
+            parent_frame,
+            child_frame,
+            joint_type,
+            core_link,
+        ));
     }
 
     // End effector = child frame of the last joint in BFS order.
     let last_joint = ordered.last().unwrap();
-    let ee_id = link_ids
-        .get(last_joint.child.as_str())
-        .copied()
-        .unwrap();
+    let ee_id = link_ids.get(last_joint.child.as_str()).copied().unwrap();
     let end_effector = FrameId::new(ee_id as u64);
 
     Ok(SerialChain {
@@ -155,12 +144,12 @@ pub fn from_tip(robot: &ModelRobot, target_name: &str) -> Result<SerialChain, Ad
 
     let graph = RobotGraph::from_robot(robot);
 
-    let target_id = graph.link_id(target_name).ok_or_else(|| {
-        AdapterError::MissingLink {
+    let target_id = graph
+        .link_id(target_name)
+        .ok_or_else(|| AdapterError::MissingLink {
             joint: "(path)".into(),
             link: target_name.into(),
-        }
-    })?;
+        })?;
 
     let path = graph.path(graph.root, target_id).ok_or_else(|| {
         AdapterError::Parse(format!(
@@ -196,15 +185,21 @@ pub fn from_tip(robot: &ModelRobot, target_name: &str) -> Result<SerialChain, Ad
         let child_frame = FrameId::new(child_link as u64);
 
         let j_name = graph.joint_name(joint_id).unwrap_or("unknown");
-        let model_joint = robot.joints.get(j_name).ok_or_else(|| {
-            AdapterError::Parse(format!("joint '{}' not found in robot", j_name))
-        })?;
+        let model_joint = robot
+            .joints
+            .get(j_name)
+            .ok_or_else(|| AdapterError::Parse(format!("joint '{}' not found in robot", j_name)))?;
 
         let joint_type = build_joint_type(model_joint, &mut joint_counter)?;
 
         let core_link = CoreLink::new(child_link, Transform3D::identity());
 
-        segments.push(Segment::new(parent_frame, child_frame, joint_type, core_link));
+        segments.push(Segment::new(
+            parent_frame,
+            child_frame,
+            joint_type,
+            core_link,
+        ));
     }
 
     let end_effector = FrameId::new(target_id as u64);
@@ -229,15 +224,17 @@ pub fn auto(robot: &ModelRobot) -> Result<SerialChain, AdapterError> {
     // Fall back to the leaf with the most actuated joints.
     let best = {
         let named = leaves.iter().find(|&&leaf| {
-            graph.link_name(leaf).map_or(false, |name| {
-                name == "tool0" || name == "tcp"
-            })
+            graph
+                .link_name(leaf)
+                .map_or(false, |name| name == "tool0" || name == "tcp")
         });
         match named {
             Some(&id) => id,
-            None => leaves.iter()
+            None => leaves
+                .iter()
                 .max_by_key(|&&leaf| {
-                    graph.path(graph.root, leaf)
+                    graph
+                        .path(graph.root, leaf)
                         .map(|p| (graph.actuated_count(&p, robot), p.joints.len()))
                         .unwrap_or((0, 0))
                 })
@@ -263,11 +260,9 @@ pub(crate) fn build_joint_type(
 
     match joint.kind {
         thalos_models::JointKind::Revolute | thalos_models::JointKind::Continuous => {
-            let axis = joint
-                .axis
-                .ok_or_else(|| AdapterError::MissingAxis {
-                    joint: joint.name.clone(),
-                })?;
+            let axis = joint.axis.ok_or_else(|| AdapterError::MissingAxis {
+                joint: joint.name.clone(),
+            })?;
             // Continuous joints without an explicit <limit> have no
             // mechanical bounds — mark the limits as disabled so
             // validators and IK solvers know to skip enforcement.
@@ -278,22 +273,20 @@ pub(crate) fn build_joint_type(
             } else {
                 limits
             };
-            Ok(JointType::Revolute(RevoluteJoint::new(id, axis, limits, origin)))
+            Ok(JointType::Revolute(RevoluteJoint::new(
+                id, axis, limits, origin,
+            )))
         }
         thalos_models::JointKind::Prismatic => {
-            let axis = joint
-                .axis
-                .ok_or_else(|| AdapterError::MissingAxis {
-                    joint: joint.name.clone(),
-                })?;
+            let axis = joint.axis.ok_or_else(|| AdapterError::MissingAxis {
+                joint: joint.name.clone(),
+            })?;
             let dir = axis; // prismatic direction
             Ok(JointType::Prismatic(PrismaticJoint::new(
                 id, dir, limits, origin,
             )))
         }
-        thalos_models::JointKind::Fixed => {
-            Ok(JointType::Fixed(FixedJoint::new(origin)))
-        }
+        thalos_models::JointKind::Fixed => Ok(JointType::Fixed(FixedJoint::new(origin))),
         ref other => Err(AdapterError::UnsupportedJointKind {
             joint: joint.name.clone(),
             kind: other.to_string(),

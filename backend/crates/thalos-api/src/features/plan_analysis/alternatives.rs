@@ -8,10 +8,7 @@
 
 use std::sync::Arc;
 
-use axum::{
-    extract::State,
-    Json,
-};
+use axum::{Json, extract::State};
 use serde::Serialize;
 
 use thalos_planning::{
@@ -71,7 +68,9 @@ pub struct MetricBreakdownItem {
 }
 
 /// Constructor de repair context desde snapshot.
-fn build_repair_context(snapshot: &RuntimeSnapshot) -> thalos_planning::repair::context::RepairContext {
+fn build_repair_context(
+    snapshot: &RuntimeSnapshot,
+) -> thalos_planning::repair::context::RepairContext {
     use std::sync::Arc as _Arc;
     let chain = _Arc::new(snapshot.chain.clone());
     let tcp_frame = snapshot
@@ -79,10 +78,7 @@ fn build_repair_context(snapshot: &RuntimeSnapshot) -> thalos_planning::repair::
         .as_ref()
         .map(|tcp| tcp.base_frame.clone())
         .unwrap_or_else(|| chain.end_effector().clone());
-    use thalos_core::kinematics::{
-        forward::ForwardKinematics,
-        inverse::JacobianTransposeSolver,
-    };
+    use thalos_core::kinematics::{forward::ForwardKinematics, inverse::JacobianTransposeSolver};
     let fk = ForwardKinematics::new((*chain).clone());
     let solver = JacobianTransposeSolver::new(fk, tcp_frame.clone(), 100, 1e-4, 0.3);
     thalos_planning::repair::context::RepairContext {
@@ -98,8 +94,12 @@ fn to_legacy_candidate(
     rank: usize,
 ) -> RankedAlternativeDto {
     let eval = candidate.evaluation.as_ref();
-    let score = eval.map(|e| e.metrics_after.manipulability.average).unwrap_or(0.0);
-    let original_score = eval.map(|e| e.metrics_before.manipulability.average).unwrap_or(0.0);
+    let score = eval
+        .map(|e| e.metrics_after.manipulability.average)
+        .unwrap_or(0.0);
+    let original_score = eval
+        .map(|e| e.metrics_before.manipulability.average)
+        .unwrap_or(0.0);
     let delta_score = original_score - score;
     let improvement_percent = if original_score > 0.0 {
         (delta_score / original_score) * 100.0
@@ -149,14 +149,14 @@ pub async fn analyze_alternatives(
     let findings = &result.findings;
 
     // Detectar regiones (M8.1)
-    let detector = thalos_planning::analysis::region::RegionDetector::new(
-        Default::default(),
-    );
+    let detector = thalos_planning::analysis::region::RegionDetector::new(Default::default());
     let report = detector.detect(findings);
 
     // RepairPlanner con estrategias
     let strategies: Vec<Box<dyn RepairStrategy>> = vec![
-        Box::new(LiftTcpStrategy::new(thalos_math::Vector3::new(0.0, 0.0, 0.01))),
+        Box::new(LiftTcpStrategy::new(thalos_math::Vector3::new(
+            0.0, 0.0, 0.01,
+        ))),
         Box::new(RotateToolStrategy::new(0.1)),
         Box::new(SplitSegment::new(2)),
     ];
@@ -209,4 +209,3 @@ pub async fn regenerate_from_execution(
     // Versión legacy: ignora session_id, delega a analyze_alternatives
     analyze_alternatives(State(state)).await
 }
-

@@ -3,13 +3,13 @@
 //! All benchmarks use a pre-sampled `Workspace` so setup time is NOT
 //! included in the measurement (only `is_reachable()` execution).
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use rand::rngs::StdRng;
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 
 use thalos_core::analysis::workspace::{WorkspaceConfig, WorkspaceSampler};
-use thalos_math::Vector3;
 use thalos_core::models::factory::{RobotModel, RobotRegistry};
+use thalos_math::Vector3;
 
 /// Build a sampled workspace for reachability bench setup.
 fn scara_workspace_10k() -> thalos_core::analysis::workspace::Workspace {

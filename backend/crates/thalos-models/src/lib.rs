@@ -19,17 +19,17 @@
 //! | `graph`     | `RobotGraph`, `Path`, `LinkId`, `JointId`    |
 //! | `urdf`      | URDF parser and exporter (future)            |
 
-pub mod robot;
-pub mod link;
-pub mod joint;
 pub mod geometry;
-pub mod material;
 pub mod graph;
+pub mod joint;
+pub mod link;
+pub mod material;
+pub mod robot;
 pub mod urdf;
 
-pub use robot::Robot;
-pub use link::{Link, Inertial};
+pub use geometry::{Box3D, Collision, CollisionGeometry, Cylinder, Geometry, Mesh, Sphere, Visual};
+pub use graph::{JointId, LinkId, Path, RobotGraph};
 pub use joint::{Joint, JointKind, JointLimits};
-pub use geometry::{Geometry, Visual, Collision, CollisionGeometry, Sphere, Box3D, Cylinder, Mesh};
-pub use material::{Material, Color};
-pub use graph::{RobotGraph, Path, LinkId, JointId};
+pub use link::{Inertial, Link};
+pub use material::{Color, Material};
+pub use robot::Robot;
