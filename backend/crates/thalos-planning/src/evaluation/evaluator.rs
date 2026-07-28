@@ -1,11 +1,11 @@
 use thalos_core::trajectory::Trajectory;
 
 use crate::analysis::WaypointAnalysis;
+use crate::evaluation::PlanScore;
 use crate::evaluation::cost::CostFunction;
 use crate::evaluation::metrics::{
     CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics, PlanMetrics,
 };
-use crate::evaluation::PlanScore;
 
 /// Convierte análisis de waypoints en métricas agregadas y puntajes.
 ///
@@ -31,8 +31,7 @@ impl PlanEvaluator {
         let length: f64 = waypoints
             .windows(2)
             .map(|w| {
-                w[1]
-                    .joints
+                w[1].joints
                     .iter()
                     .zip(&w[0].joints)
                     .map(|(a, b)| (a - b).powi(2))
@@ -127,7 +126,10 @@ impl PlanEvaluator {
 
         let near_miss_count = waypoints
             .iter()
-            .filter(|w| w.min_collision_distance.is_some_and(|d| d >= 0.0 && d < 0.05))
+            .filter(|w| {
+                w.min_collision_distance
+                    .is_some_and(|d| d >= 0.0 && d < 0.05)
+            })
             .count();
 
         // ── Suavidad (jerk acumulado entre waypoints consecutivos) ──
@@ -158,8 +160,7 @@ impl PlanEvaluator {
         let orientation_change: f64 = waypoints
             .windows(2)
             .map(|w| {
-                w[1]
-                    .joints
+                w[1].joints
                     .iter()
                     .zip(&w[0].joints)
                     .map(|(a, b)| (a - b).abs())
@@ -194,7 +195,9 @@ impl PlanEvaluator {
             return PlanMetrics {
                 length: 0.0,
                 waypoint_count: 0,
-                manipulability: crate::evaluation::metrics::ManipulabilityMetrics::new(0.0, 0.0, 0, 0),
+                manipulability: crate::evaluation::metrics::ManipulabilityMetrics::new(
+                    0.0, 0.0, 0, 0,
+                ),
                 joint_safety: crate::evaluation::metrics::JointSafetyMetrics::new(1.0, 0.0, 0),
                 collision: crate::evaluation::metrics::CollisionMetrics::new(f64::MAX, 0, 0),
                 smoothness: 0.0,
@@ -206,8 +209,7 @@ impl PlanEvaluator {
         let length: f64 = wps
             .windows(2)
             .map(|w| {
-                w[1]
-                    .joints()
+                w[1].joints()
                     .iter()
                     .zip(w[0].joints())
                     .map(|(a, b)| (a - b).powi(2))
@@ -242,7 +244,11 @@ impl PlanEvaluator {
 
         let violation_count = wps
             .iter()
-            .filter(|wp| wp.joints().iter().any(|&q| q.abs() > std::f64::consts::PI - 0.01))
+            .filter(|wp| {
+                wp.joints()
+                    .iter()
+                    .any(|&q| q.abs() > std::f64::consts::PI - 0.01)
+            })
             .count();
 
         // Smoothness
@@ -270,8 +276,7 @@ impl PlanEvaluator {
         let orientation_change: f64 = wps
             .windows(2)
             .map(|w| {
-                w[1]
-                    .joints()
+                w[1].joints()
                     .iter()
                     .zip(w[0].joints())
                     .map(|(a, b)| (a - b).abs())
@@ -296,10 +301,7 @@ impl PlanEvaluator {
     }
 
     /// Evaluar un conjunto de waypoints y producir un puntaje.
-    pub fn evaluate(
-        waypoints: &[WaypointAnalysis],
-        cost_function: &CostFunction,
-    ) -> PlanScore {
+    pub fn evaluate(waypoints: &[WaypointAnalysis], cost_function: &CostFunction) -> PlanScore {
         let metrics = Self::compute_metrics(waypoints);
         cost_function.score(&metrics)
     }
@@ -310,8 +312,7 @@ mod tests {
     use super::*;
     use crate::analysis::WaypointAnalysis;
     use thalos_core::kinematics::jacobian::{
-        manipulability::ManipulabilityReport,
-        singularity::SingularityReport,
+        manipulability::ManipulabilityReport, singularity::SingularityReport,
     };
 
     fn sample_waypoints() -> Vec<WaypointAnalysis> {
@@ -384,8 +385,8 @@ mod tests {
 
     #[test]
     fn cost_function_custom_weights() {
-        use std::collections::HashMap;
         use crate::evaluation::metrics::MetricKind;
+        use std::collections::HashMap;
         let wps = sample_waypoints();
         let mut weights = HashMap::new();
         weights.insert(MetricKind::PathLength, 1.0);

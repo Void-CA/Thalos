@@ -115,11 +115,7 @@ mod tests {
     use thalos_core::analysis::region::RegionId;
     use thalos_optimization::domain::OptimizationStep;
 
-    fn make_step(
-        region_id: usize,
-        operator_id: &'static str,
-        accepted: bool,
-    ) -> OptimizationStep {
+    fn make_step(region_id: usize, operator_id: &'static str, accepted: bool) -> OptimizationStep {
         OptimizationStep {
             region_id: RegionId(region_id),
             operator_id,
@@ -164,9 +160,7 @@ mod tests {
     #[test]
     fn rejected_steps_map_to_rejected() {
         let report = OptimizationReport {
-            steps: vec![
-                make_step(0, "joint_centering", false),
-            ],
+            steps: vec![make_step(0, "joint_centering", false)],
             final_trajectory: None,
             total_improvement: 0.0,
         };
@@ -179,9 +173,7 @@ mod tests {
     #[test]
     fn none_operator_id_maps_to_failed() {
         let report = OptimizationReport {
-            steps: vec![
-                make_step(0, "none", false),
-            ],
+            steps: vec![make_step(0, "none", false)],
             final_trajectory: None,
             total_improvement: 0.0,
         };
@@ -244,9 +236,7 @@ mod tests {
     #[should_panic(expected = "Expected at least 3 applied operators")]
     fn assert_min_operators_applied_fails() {
         let report = OptimizationReport {
-            steps: vec![
-                make_step(0, "joint_centering", true),
-            ],
+            steps: vec![make_step(0, "joint_centering", true)],
             final_trajectory: None,
             total_improvement: 0.0,
         };

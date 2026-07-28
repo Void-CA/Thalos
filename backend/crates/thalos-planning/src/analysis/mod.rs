@@ -11,14 +11,14 @@
 pub mod domain;
 pub mod region;
 
+use thalos_collision::distance::geometries_distance;
 use thalos_core::{
     analysis::constraints::{Constraint, ConstraintEvaluator, ConstraintViolation},
     collision::{CollisionBodyBuilder, CollisionChecker, CollisionMatrix, EntityId},
     kinematics::{
         forward::ForwardKinematics,
         jacobian::{
-            GeometricJacobian, JacobianSolver,
-            manipulability::ManipulabilityReport,
+            GeometricJacobian, JacobianSolver, manipulability::ManipulabilityReport,
             singularity::SingularityReport,
         },
     },
@@ -26,11 +26,10 @@ use thalos_core::{
     spatial::frame::FrameId,
     trajectory::Trajectory,
 };
-use thalos_collision::distance::geometries_distance;
 
+use crate::analysis::domain::{ProblemRegion, RegionMetrics, RegionSeverity};
 use crate::error::PlanningError;
 use crate::finding::{Finding, FindingKind, Severity};
-use crate::analysis::domain::{ProblemRegion, RegionMetrics, RegionSeverity};
 
 // ─── Data types ───────────────────────────────────────────────────
 
@@ -105,25 +104,35 @@ impl WaypointAnalysis {
     pub fn severity(&self) -> AnalysisSeverity {
         // Colisión
         if let Some(d) = self.min_collision_distance {
-            if d < 0.0 { return AnalysisSeverity::Critical; }
+            if d < 0.0 {
+                return AnalysisSeverity::Critical;
+            }
         }
 
         // Singularidad
         if let Some(s) = &self.singularity {
             // Condition number alto → cerca de singularidad.
             // Umbrales típicos: < 50 normal, 50-200 near, > 200 singular.
-            if s.condition_number > 200.0 { return AnalysisSeverity::Critical; }
-            if s.condition_number > 50.0 { return AnalysisSeverity::Warning; }
+            if s.condition_number > 200.0 {
+                return AnalysisSeverity::Critical;
+            }
+            if s.condition_number > 50.0 {
+                return AnalysisSeverity::Warning;
+            }
         }
 
         // Manipulabilidad
         if let Some(m) = &self.manipulability {
-            if m.yoshikawa < 0.3 { return AnalysisSeverity::Warning; }
+            if m.yoshikawa < 0.3 {
+                return AnalysisSeverity::Warning;
+            }
         }
 
         // Clearance bajo
         if let Some(d) = self.min_collision_distance {
-            if d < 0.01 { return AnalysisSeverity::Warning; }
+            if d < 0.01 {
+                return AnalysisSeverity::Warning;
+            }
         }
 
         AnalysisSeverity::Good
@@ -192,13 +201,21 @@ impl<'a> TrajectoryAnalyzer<'a> {
         }
     }
 
-    pub fn with_collision_checker(mut self, checker: &'a dyn CollisionChecker, matrix: &'a CollisionMatrix) -> Self {
+    pub fn with_collision_checker(
+        mut self,
+        checker: &'a dyn CollisionChecker,
+        matrix: &'a CollisionMatrix,
+    ) -> Self {
         self.collision_checker = Some(checker);
         self.collision_matrix = Some(matrix);
         self
     }
 
-    pub fn with_constraints(mut self, constraints: &'a [Constraint], evaluator: &'a dyn ConstraintEvaluator) -> Self {
+    pub fn with_constraints(
+        mut self,
+        constraints: &'a [Constraint],
+        evaluator: &'a dyn ConstraintEvaluator,
+    ) -> Self {
         self.constraints = Some(constraints);
         self.constraint_evaluator = Some(evaluator);
         self
@@ -220,10 +237,8 @@ impl<'a> TrajectoryAnalyzer<'a> {
             let fk_result = self.fk.evaluate(&q);
 
             // Jacobiano + singularidad
-            let jacobian_solver = GeometricJacobian::new(
-                self.fk.clone(),
-                self.end_effector.clone(),
-            );
+            let jacobian_solver =
+                GeometricJacobian::new(self.fk.clone(), self.end_effector.clone());
             let jacobian = jacobian_solver.evaluate(&q);
             let singularity = SingularityReport::analyze(&jacobian);
             let manipulability = ManipulabilityReport::compute(&singularity);
@@ -253,7 +268,9 @@ impl<'a> TrajectoryAnalyzer<'a> {
                 let mut min_dist = f64::MAX;
                 for i in 0..bodies.len() {
                     for j in (i + 1)..bodies.len() {
-                        if let (EntityId::Link(la), EntityId::Link(lb)) = (&bodies[i].entity, &bodies[j].entity) {
+                        if let (EntityId::Link(la), EntityId::Link(lb)) =
+                            (&bodies[i].entity, &bodies[j].entity)
+                        {
                             if matrix.is_ignored(*la, *lb) {
                                 continue;
                             }
@@ -300,7 +317,13 @@ impl<'a> TrajectoryAnalyzer<'a> {
         // Constraints
         let constraint_violations = if let Some(constraints) = self.constraints {
             if let Some(evaluator) = self.constraint_evaluator {
-                evaluator.evaluate_trajectory(constraints, trajectory, self.chain, &self.fk, self.tcp)
+                evaluator.evaluate_trajectory(
+                    constraints,
+                    trajectory,
+                    self.chain,
+                    &self.fk,
+                    self.tcp,
+                )
             } else {
                 vec![]
             }
@@ -330,7 +353,11 @@ impl<'a> TrajectoryAnalyzer<'a> {
             },
             min_collision_waypoint: min_coll_wp,
             has_collisions: abs_min_collision < 0.0 || abs_min_collision < 1e-9,
-            first_collision_waypoint: if abs_min_collision < 0.0 { min_coll_wp } else { None },
+            first_collision_waypoint: if abs_min_collision < 0.0 {
+                min_coll_wp
+            } else {
+                None
+            },
         };
 
         // Findings — hechos objetivos derivados del análisis
@@ -341,7 +368,8 @@ impl<'a> TrajectoryAnalyzer<'a> {
             let manip_threshold = 0.3;
             if avg < manip_threshold {
                 // Encontrar el waypoint con manipulabilidad mínima
-                if let Some(worst) = waypoints.iter()
+                if let Some(worst) = waypoints
+                    .iter()
                     .filter_map(|w| w.manipulability.as_ref().map(|m| (w.index, m.yoshikawa)))
                     .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
                 {
@@ -349,7 +377,10 @@ impl<'a> TrajectoryAnalyzer<'a> {
                         kind: FindingKind::LowManipulability,
                         severity: Severity::Warning,
                         waypoint: Some(worst.0),
-                        message: format!("Low manipulability ({:.3}) at waypoint {}", worst.1, worst.0),
+                        message: format!(
+                            "Low manipulability ({:.3}) at waypoint {}",
+                            worst.1, worst.0
+                        ),
                         value: Some(worst.1),
                         threshold: Some(manip_threshold),
                     });
@@ -365,7 +396,10 @@ impl<'a> TrajectoryAnalyzer<'a> {
                         kind: FindingKind::Singularity,
                         severity: Severity::Error,
                         waypoint: Some(wp.index),
-                        message: format!("Singularity at waypoint {} (condition number: {:.1})", wp.index, sr.condition_number),
+                        message: format!(
+                            "Singularity at waypoint {} (condition number: {:.1})",
+                            wp.index, sr.condition_number
+                        ),
                         value: Some(sr.condition_number),
                         threshold: Some(1000.0),
                     });
@@ -374,7 +408,10 @@ impl<'a> TrajectoryAnalyzer<'a> {
                         kind: FindingKind::NearSingularity,
                         severity: Severity::Warning,
                         waypoint: Some(wp.index),
-                        message: format!("Near singularity at waypoint {} (condition number: {:.1})", wp.index, sr.condition_number),
+                        message: format!(
+                            "Near singularity at waypoint {} (condition number: {:.1})",
+                            wp.index, sr.condition_number
+                        ),
                         value: Some(sr.condition_number),
                         threshold: Some(100.0),
                     });
@@ -388,10 +425,13 @@ impl<'a> TrajectoryAnalyzer<'a> {
                 kind: FindingKind::Collision,
                 severity: Severity::Error,
                 waypoint: metrics.first_collision_waypoint,
-                    message: format!(
-                        "Collision at waypoint {}",
-                        metrics.first_collision_waypoint.map(|i| i.to_string()).unwrap_or_else(|| "unknown".to_string()),
-                    ),
+                message: format!(
+                    "Collision at waypoint {}",
+                    metrics
+                        .first_collision_waypoint
+                        .map(|i| i.to_string())
+                        .unwrap_or_else(|| "unknown".to_string()),
+                ),
                 value: metrics.min_collision_distance,
                 threshold: Some(0.0),
             });
@@ -432,11 +472,11 @@ impl<'a> TrajectoryAnalyzer<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use thalos_collision::NaiveCollisionChecker;
     use thalos_core::{
         models::{RobotModel, RobotRegistry},
         trajectory::TrajectoryPoint,
     };
-    use thalos_collision::NaiveCollisionChecker;
 
     fn make_simple_trajectory() -> Trajectory {
         Trajectory::new(vec![
@@ -474,8 +514,8 @@ mod tests {
         let checker = NaiveCollisionChecker;
         let matrix = CollisionMatrix::new();
         let traj = make_simple_trajectory();
-        let analyzer = TrajectoryAnalyzer::new(&chain, None)
-            .with_collision_checker(&checker, &matrix);
+        let analyzer =
+            TrajectoryAnalyzer::new(&chain, None).with_collision_checker(&checker, &matrix);
 
         let analysis = analyzer.analyze(&traj).expect("analysis failed");
         // Planar2R links are separated — should be no collisions
@@ -497,9 +537,12 @@ mod tests {
         let analysis = analyzer.analyze(&traj).expect("analysis failed");
 
         // Should have no findings
-        assert!(analysis.findings.is_empty(),
+        assert!(
+            analysis.findings.is_empty(),
             "Expected no findings for perfect plan, got {}: {:?}",
-            analysis.findings.len(), analysis.findings);
+            analysis.findings.len(),
+            analysis.findings
+        );
         assert!(analysis.metrics.avg_manipulability.unwrap_or(0.0) > 0.3);
     }
 
@@ -517,18 +560,26 @@ mod tests {
         let analysis = analyzer.analyze(&traj).expect("analysis failed");
 
         // Should have findings (low manipulability or near-singularity)
-        assert!(!analysis.findings.is_empty(),
-            "Expected findings for low-manipulability plan");
+        assert!(
+            !analysis.findings.is_empty(),
+            "Expected findings for low-manipulability plan"
+        );
 
-        let has_low_manip = analysis.findings.iter()
+        let has_low_manip = analysis
+            .findings
+            .iter()
             .any(|f| matches!(f.kind, FindingKind::LowManipulability));
-        let has_near_sing = analysis.findings.iter()
+        let has_near_sing = analysis
+            .findings
+            .iter()
             .any(|f| matches!(f.kind, FindingKind::NearSingularity));
 
         // Either finding is valid here — both indicate a problem
-        assert!(has_low_manip || has_near_sing,
+        assert!(
+            has_low_manip || has_near_sing,
             "Expected LowManipulability or NearSingularity finding, got: {:?}",
-            analysis.findings.iter().map(|f| f.kind).collect::<Vec<_>>());
+            analysis.findings.iter().map(|f| f.kind).collect::<Vec<_>>()
+        );
     }
 
     // ─── Scenario 3: Singularity ─────────────────────────────────
@@ -537,20 +588,24 @@ mod tests {
     fn scenario_singularity_generates_error() {
         // Arm fully extended along X → singular configuration
         let chain = RobotRegistry::create_default(RobotModel::Planar2R);
-        let traj = Trajectory::new(vec![
-            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
-        ]);
+        let traj = Trajectory::new(vec![TrajectoryPoint::new(vec![0.0, 0.0], 0.0)]);
         let analyzer = TrajectoryAnalyzer::new(&chain, None);
         let analysis = analyzer.analyze(&traj).expect("analysis failed");
 
         // At q = [0, 0] the arm is fully extended → singular
         // Should have at least a NearSingularity or Singularity finding
-        let has_singularity = analysis.findings.iter()
-            .any(|f| matches!(f.kind, FindingKind::Singularity | FindingKind::NearSingularity));
+        let has_singularity = analysis.findings.iter().any(|f| {
+            matches!(
+                f.kind,
+                FindingKind::Singularity | FindingKind::NearSingularity
+            )
+        });
 
-        assert!(has_singularity,
+        assert!(
+            has_singularity,
             "Expected Singularity or NearSingularity finding for fully-extended arm, got: {:?}",
-            analysis.findings.iter().map(|f| f.kind).collect::<Vec<_>>());
+            analysis.findings.iter().map(|f| f.kind).collect::<Vec<_>>()
+        );
     }
 
     // ─── Scenario 5: Multiple problems ────────────────────────────
@@ -560,9 +615,9 @@ mod tests {
         // Mix of good and bad waypoints
         let chain = RobotRegistry::create_default(RobotModel::Planar2R);
         let traj = Trajectory::new(vec![
-            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),    // singular
-            TrajectoryPoint::new(vec![0.5, 0.05], 0.5),    // low manipulability
-            TrajectoryPoint::new(vec![0.5, 1.57], 1.0),    // good
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),  // singular
+            TrajectoryPoint::new(vec![0.5, 0.05], 0.5), // low manipulability
+            TrajectoryPoint::new(vec![0.5, 1.57], 1.0), // good
         ]);
         let analyzer = TrajectoryAnalyzer::new(&chain, None);
         let analysis = analyzer.analyze(&traj).expect("analysis failed");
@@ -572,8 +627,14 @@ mod tests {
         // Should have at least 2 findings (one per problem waypoint)
         assert!(analysis.findings.len() >= 1);
         // At least one finding from the singular waypoint
-        let sing_findings = analysis.findings.iter()
-            .filter(|f| matches!(f.kind, FindingKind::Singularity | FindingKind::NearSingularity | FindingKind::LowManipulability));
+        let sing_findings = analysis.findings.iter().filter(|f| {
+            matches!(
+                f.kind,
+                FindingKind::Singularity
+                    | FindingKind::NearSingularity
+                    | FindingKind::LowManipulability
+            )
+        });
         assert!(sing_findings.count() >= 1);
     }
 
@@ -596,9 +657,11 @@ mod tests {
         if !analysis.findings.is_empty() {
             // If there are findings, verify they produce recommendations
             let recommendations = advisor.advise(&analysis.findings);
-            assert!(!recommendations.is_empty(),
+            assert!(
+                !recommendations.is_empty(),
                 "Findings should produce recommendations. Findings: {:?}",
-                analysis.findings);
+                analysis.findings
+            );
         } else {
             // No findings → empty recommendations
             let recommendations = advisor.advise(&analysis.findings);

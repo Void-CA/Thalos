@@ -1,4 +1,4 @@
-pub mod types;
 pub mod traits;
-pub use types::*;
+pub mod types;
 pub use traits::RepairStrategy;
+pub use types::*;

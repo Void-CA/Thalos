@@ -14,16 +14,14 @@
 //! - `TrajectoryKnowledge`: regiones, score, estadísticas (por plan)
 //! - `RepairKnowledge`: candidatos, delta, historial (efímero)
 
-pub mod types;
-pub mod metrics;
 pub mod explain;
+pub mod metrics;
 pub mod traits;
+pub mod types;
 
-pub use types::{ProblemRegion, RegionEvidence, RegionId, RegionKind, RegionSeverity};
-pub use metrics::{RegionBoundary, RegionMetrics};
 pub use explain::RegionExplanation;
-pub use traits::{
-    RegionDetector, RepairCapability, StrategyKind,
-};
+pub use metrics::{RegionBoundary, RegionMetrics};
+pub use traits::{RegionDetector, RepairCapability, StrategyKind};
+pub use types::{ProblemRegion, RegionEvidence, RegionId, RegionKind, RegionSeverity};
 
 // Los tipos de knowledge han migrado a `crate::knowledge::domain` (M8.3).

@@ -8,13 +8,13 @@
 //!
 //! El pipeline es DETERMINISTA: misma entrada → mismas regiones.
 
-use crate::analysis::domain::{
-    metrics::RegionMetrics, types::*, ProblemRegion, RegionEvidence, RegionExplanation,
-    RegionId, RegionKind, RegionSeverity,
-};
-use crate::knowledge::provider::PlanningKnowledgeProvider;
 use crate::analysis::AnalysisReport;
+use crate::analysis::domain::{
+    ProblemRegion, RegionEvidence, RegionExplanation, RegionId, RegionKind, RegionSeverity,
+    metrics::RegionMetrics, types::*,
+};
 use crate::finding::{Finding, FindingKind};
+use crate::knowledge::provider::PlanningKnowledgeProvider;
 
 // ─── Config ──────────────────────────────────────────────────────────
 
@@ -152,7 +152,10 @@ impl RegionDetector {
         }
 
         // Consultar manipulabilidad
-        if knowledge.manipulability_at(&mid_joints).map_or(false, |v| v < 0.1) {
+        if knowledge
+            .manipulability_at(&mid_joints)
+            .map_or(false, |v| v < 0.1)
+        {
             region.evidence.push(RegionEvidence {
                 source: "PlanningKnowledge".to_string(),
                 reason: "Known low-manipulability region".to_string(),
@@ -167,12 +170,14 @@ impl RegionDetector {
     fn normalize(&self, findings: &[Finding]) -> Vec<NormalizedFinding> {
         let mut sorted: Vec<NormalizedFinding> = findings
             .iter()
-            .filter_map(|f| f.waypoint.map(|wp| NormalizedFinding {
-                waypoint: wp,
-                kind: f.kind,
-                severity: f.severity,
-                value: f.value,
-            }))
+            .filter_map(|f| {
+                f.waypoint.map(|wp| NormalizedFinding {
+                    waypoint: wp,
+                    kind: f.kind,
+                    severity: f.severity,
+                    value: f.value,
+                })
+            })
             .collect();
 
         sorted.sort_by(|a, b| a.waypoint.cmp(&b.waypoint));
@@ -200,7 +205,9 @@ impl RegionDetector {
 
         for finding in &normalized[1..] {
             let same_kind = finding.kind == current_kind;
-            let distance = finding.waypoint.saturating_sub(current_end.saturating_sub(1));
+            let distance = finding
+                .waypoint
+                .saturating_sub(current_end.saturating_sub(1));
 
             if same_kind && distance <= self.config.gap_threshold {
                 // Extender región actual
@@ -287,17 +294,45 @@ impl RegionDetector {
         }
 
         let strategies = match region_kind {
-            RegionKind::Collision => vec!["Lift TCP".into(), "Insert waypoint".into(), "Adjust approach angle".into()],
-            RegionKind::Singularity => vec!["Switch IK solver".into(), "Lift TCP".into(), "Adjust path".into()],
-            RegionKind::LowManipulability => vec!["Switch IK solver".into(), "Lift TCP".into(), "Insert waypoint".into()],
-            RegionKind::Constraint => vec!["Adjust joint range".into(), "Insert intermediate waypoint".into()],
-            RegionKind::Velocity => vec!["Reduce speed".into(), "Adjust acceleration profile".into()],
-            RegionKind::Tracking => vec!["Increase sample rate".into(), "Adjust tracking parameters".into()],
+            RegionKind::Collision => vec![
+                "Lift TCP".into(),
+                "Insert waypoint".into(),
+                "Adjust approach angle".into(),
+            ],
+            RegionKind::Singularity => vec![
+                "Switch IK solver".into(),
+                "Lift TCP".into(),
+                "Adjust path".into(),
+            ],
+            RegionKind::LowManipulability => vec![
+                "Switch IK solver".into(),
+                "Lift TCP".into(),
+                "Insert waypoint".into(),
+            ],
+            RegionKind::Constraint => vec![
+                "Adjust joint range".into(),
+                "Insert intermediate waypoint".into(),
+            ],
+            RegionKind::Velocity => {
+                vec!["Reduce speed".into(), "Adjust acceleration profile".into()]
+            }
+            RegionKind::Tracking => vec![
+                "Increase sample rate".into(),
+                "Adjust tracking parameters".into(),
+            ],
         };
 
         let explanation = RegionExplanation {
-            cause: format!("{} region detected at waypoints {}–{}", region_kind.name(), range.start, range.end.saturating_sub(1)),
-            consequence: format!("{} findings, {} errors, {} warnings", metrics.waypoint_count, metrics.error_count, metrics.warning_count),
+            cause: format!(
+                "{} region detected at waypoints {}–{}",
+                region_kind.name(),
+                range.start,
+                range.end.saturating_sub(1)
+            ),
+            consequence: format!(
+                "{} findings, {} errors, {} warnings",
+                metrics.waypoint_count, metrics.error_count, metrics.warning_count
+            ),
             recommended_strategies: strategies,
             confidence: 1.0,
         };
@@ -320,7 +355,9 @@ impl RegionDetector {
             FindingKind::Collision | FindingKind::CollisionNear => RegionKind::Collision,
             FindingKind::Singularity => RegionKind::Singularity,
             FindingKind::NearSingularity => RegionKind::Singularity, // near-singular es una singularidad incipiente
-            FindingKind::LowManipulability | FindingKind::IkSuggestion => RegionKind::LowManipulability,
+            FindingKind::LowManipulability | FindingKind::IkSuggestion => {
+                RegionKind::LowManipulability
+            }
             FindingKind::TrackingError
             | FindingKind::TrackingSpike
             | FindingKind::JointDeviation => RegionKind::Tracking,
@@ -467,9 +504,7 @@ mod tests {
 
     #[test]
     fn test_ignore_singletons() {
-        let findings = vec![
-            make_finding(5, FindingKind::Singularity, Severity::Error),
-        ];
+        let findings = vec![make_finding(5, FindingKind::Singularity, Severity::Error)];
         let mut config = RegionDetectorConfig::default();
         config.ignore_singletons = true;
         config.minimum_region_size = 2;
@@ -480,9 +515,7 @@ mod tests {
 
     #[test]
     fn test_findings_preserved() {
-        let findings = vec![
-            make_finding(5, FindingKind::Singularity, Severity::Error),
-        ];
+        let findings = vec![make_finding(5, FindingKind::Singularity, Severity::Error)];
         let detector = RegionDetector::new(RegionDetectorConfig::default());
         let report = detector.detect(&findings);
         assert_eq!(report.findings.len(), 1);
@@ -497,7 +530,11 @@ mod tests {
             .collect();
         let detector = RegionDetector::new(RegionDetectorConfig::default());
         let report = detector.detect(&findings);
-        assert_eq!(report.problem_regions.len(), 1, "80 singularities → 1 region");
+        assert_eq!(
+            report.problem_regions.len(),
+            1,
+            "80 singularities → 1 region"
+        );
         assert_eq!(report.problem_regions[0].waypoint_count(), 80);
         assert_eq!(report.problem_regions[0].kind, RegionKind::Singularity);
         assert_eq!(report.problem_regions[0].waypoint_range, 147..227);

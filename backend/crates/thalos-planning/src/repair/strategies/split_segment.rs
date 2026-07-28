@@ -106,11 +106,15 @@ impl RepairStrategy for SplitSegment {
 
         // Smoothness: lower is better → positive delta when after < before
         let smooth_before = metrics_before.smoothness.max(0.001);
-        let smooth_pct = ((metrics_before.smoothness - metrics_after.smoothness) / smooth_before) * 100.0;
+        let smooth_pct =
+            ((metrics_before.smoothness - metrics_after.smoothness) / smooth_before) * 100.0;
 
         // Manipulability: higher is better
         let manip_before = metrics_before.manipulability.average.max(0.001);
-        let manip_pct = ((metrics_after.manipulability.average - metrics_before.manipulability.average) / manip_before) * 100.0;
+        let manip_pct = ((metrics_after.manipulability.average
+            - metrics_before.manipulability.average)
+            / manip_before)
+            * 100.0;
 
         // Composite score: weighted average
         let improvement = smooth_pct * 0.7 + manip_pct.max(0.0) * 0.3;
@@ -122,8 +126,7 @@ impl RepairStrategy for SplitSegment {
             improvement,
         };
 
-        vec![RepairCandidate::new(StrategyKind::SplitSegment, delta)
-            .with_evaluation(evaluation)]
+        vec![RepairCandidate::new(StrategyKind::SplitSegment, delta).with_evaluation(evaluation)]
     }
 }
 
@@ -153,9 +156,19 @@ mod tests {
     #[test]
     fn test_split_segment_applies_to_any_region() {
         let strategy = SplitSegment::new(1);
-        let small = ProblemRegion::new(RegionId(0), RegionKind::Singularity, RegionSeverity::Warning, 0..2);
+        let small = ProblemRegion::new(
+            RegionId(0),
+            RegionKind::Singularity,
+            RegionSeverity::Warning,
+            0..2,
+        );
         assert!(strategy.applies_to(&small));
-        let single = ProblemRegion::new(RegionId(0), RegionKind::Singularity, RegionSeverity::Warning, 0..1);
+        let single = ProblemRegion::new(
+            RegionId(0),
+            RegionKind::Singularity,
+            RegionSeverity::Warning,
+            0..1,
+        );
         assert!(!strategy.applies_to(&single)); // 0..1 tiene 1 waypoint
     }
 

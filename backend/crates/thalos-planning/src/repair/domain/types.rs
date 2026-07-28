@@ -171,7 +171,6 @@ impl std::fmt::Display for RepairError {
     }
 }
 
-
 /// Estado de un plan de reparación para una región.
 #[derive(Debug, Clone, PartialEq)]
 pub enum RepairPlanStatus {
@@ -204,7 +203,7 @@ impl std::error::Error for RepairError {}
 #[cfg(test)]
 mod tests {
     use super::*;
-use crate::analysis::domain::{ProblemRegion, RegionId};
+    use crate::analysis::domain::{ProblemRegion, RegionId};
     use crate::evaluation::metrics::{CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics};
 
     fn default_metrics() -> PlanMetrics {
@@ -263,8 +262,7 @@ use crate::analysis::domain::{ProblemRegion, RegionId};
             score_delta: 0.15,
             improvement: 0.15,
         };
-        let candidate = RepairCandidate::new(StrategyKind::LiftTcp, delta)
-            .with_evaluation(eval);
+        let candidate = RepairCandidate::new(StrategyKind::LiftTcp, delta).with_evaluation(eval);
         assert!(candidate.evaluation.is_some());
     }
 

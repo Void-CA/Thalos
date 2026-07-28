@@ -3,7 +3,9 @@
 //! Siempre disponible. No requiere sampling.
 //! `knowledge().workspace` es siempre `None`.
 
-use crate::knowledge::domain::{ConfigurationRegion, JointLimit, PlanningKnowledge, RobotKnowledge, SingularityZone};
+use crate::knowledge::domain::{
+    ConfigurationRegion, JointLimit, PlanningKnowledge, RobotKnowledge, SingularityZone,
+};
 use crate::knowledge::provider::PlanningKnowledgeProvider;
 use thalos_core::robot::serial_chain::SerialChain;
 use thalos_math::Transform3D;
@@ -22,7 +24,10 @@ impl StaticRobotKnowledge {
             .filter(|s| s.joint.dof() > 0)
             .map(|s| {
                 let l = s.joint.limits();
-                JointLimit { min: l.min, max: l.max }
+                JointLimit {
+                    min: l.min,
+                    max: l.max,
+                }
             })
             .collect();
 

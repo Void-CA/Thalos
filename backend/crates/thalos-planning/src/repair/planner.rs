@@ -28,7 +28,9 @@ use crate::{
 ///
 /// No depende del robot — las capacidades cinemáticas se inyectan
 /// via `RepairContext` en `plan()`.
-#[deprecated(note = "Use TrajectoryOptimizer + OptimizationPipeline from thalos-optimization instead. RepairPlanner will be removed after M10.")]
+#[deprecated(
+    note = "Use TrajectoryOptimizer + OptimizationPipeline from thalos-optimization instead. RepairPlanner will be removed after M10."
+)]
 pub struct RepairPlanner {
     strategies: Vec<Box<dyn RepairStrategy>>,
     evaluator: EvaluationPipeline,
@@ -77,7 +79,9 @@ impl RepairPlanner {
                         rp.candidates.sort_by(|a, b| {
                             let score_a = self.strategy_score(&a.strategy, &rp.recommendations);
                             let score_b = self.strategy_score(&b.strategy, &rp.recommendations);
-                            score_b.partial_cmp(&score_a).unwrap_or(std::cmp::Ordering::Equal)
+                            score_b
+                                .partial_cmp(&score_a)
+                                .unwrap_or(std::cmp::Ordering::Equal)
                         });
                     }
                 }
@@ -101,7 +105,7 @@ impl RepairPlanner {
 
         if applicable.is_empty() {
             return RepairPlan {
-                recommendations: vec![] ,
+                recommendations: vec![],
                 region: region.clone(),
                 candidates: vec![],
                 recommended: None,
@@ -117,7 +121,7 @@ impl RepairPlanner {
 
         if candidates.is_empty() {
             return RepairPlan {
-                recommendations: vec![] ,
+                recommendations: vec![],
                 region: region.clone(),
                 candidates: vec![],
                 recommended: None,
@@ -131,20 +135,31 @@ impl RepairPlanner {
         for candidate in &mut candidates {
             // TODO: usar EvaluationPipeline completo con métricas reales
             if candidate.evaluation.is_none() {
-                let _ = self.evaluator.evaluate(candidate, &crate::evaluation::metrics::PlanMetrics {
-                    length: 0.0,
-                    waypoint_count: 0,
-                    manipulability: crate::evaluation::metrics::ManipulabilityMetrics {
-                        min: 0.0, average: 0.0, near_singular_count: 0, singular_count: 0,
+                let _ = self.evaluator.evaluate(
+                    candidate,
+                    &crate::evaluation::metrics::PlanMetrics {
+                        length: 0.0,
+                        waypoint_count: 0,
+                        manipulability: crate::evaluation::metrics::ManipulabilityMetrics {
+                            min: 0.0,
+                            average: 0.0,
+                            near_singular_count: 0,
+                            singular_count: 0,
+                        },
+                        joint_safety: crate::evaluation::metrics::JointSafetyMetrics {
+                            min_margin: 0.0,
+                            avg_max_utilization: 0.0,
+                            violation_count: 0,
+                        },
+                        collision: crate::evaluation::metrics::CollisionMetrics {
+                            min_distance: 0.0,
+                            collision_count: 0,
+                            near_miss_count: 0,
+                        },
+                        smoothness: 0.0,
+                        orientation_change: 0.0,
                     },
-                    joint_safety: crate::evaluation::metrics::JointSafetyMetrics {
-                        min_margin: 0.0, avg_max_utilization: 0.0, violation_count: 0,
-                    },
-                    collision: crate::evaluation::metrics::CollisionMetrics {
-                        min_distance: 0.0, collision_count: 0, near_miss_count: 0,
-                    },
-                    smoothness: 0.0, orientation_change: 0.0,
-                });
+                );
             }
         }
 
@@ -152,10 +167,21 @@ impl RepairPlanner {
         candidates.sort_by(|a, b| {
             let imp_a = a.evaluation.as_ref().map(|e| e.improvement).unwrap_or(-1.0);
             let imp_b = b.evaluation.as_ref().map(|e| e.improvement).unwrap_or(-1.0);
-            imp_b.partial_cmp(&imp_a).unwrap_or(std::cmp::Ordering::Equal)
+            imp_b
+                .partial_cmp(&imp_a)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
-        let recommended = if candidates.first().map(|c| c.evaluation.as_ref().map(|e| e.improvement > 0.0).unwrap_or(false)).unwrap_or(false) {
+        let recommended = if candidates
+            .first()
+            .map(|c| {
+                c.evaluation
+                    .as_ref()
+                    .map(|e| e.improvement > 0.0)
+                    .unwrap_or(false)
+            })
+            .unwrap_or(false)
+        {
             Some(0)
         } else {
             None
@@ -181,11 +207,15 @@ impl RepairPlanner {
         // Evaluar LiftTcp
         let mut lift_score = 0.5;
         let mut lift_reasons = Vec::new();
-        if knowledge.nearby_singularity(&vec![0.0; region.waypoint_range.len()]).is_some() {
+        if knowledge
+            .nearby_singularity(&vec![0.0; region.waypoint_range.len()])
+            .is_some()
+        {
             lift_score += 0.3;
             lift_reasons.push(RecommendationReason::NearKnownSingularity);
         }
-        if knowledge.manipulability_at(&vec![0.0; region.waypoint_range.len()])
+        if knowledge
+            .manipulability_at(&vec![0.0; region.waypoint_range.len()])
             .map_or(false, |v| v < 0.2)
         {
             lift_score += 0.2;
@@ -223,7 +253,11 @@ impl RepairPlanner {
             reasons: split_reasons,
         });
 
-        recs.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        recs.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         recs
     }
 
@@ -245,16 +279,29 @@ impl RepairPlanner {
 mod tests {
     use super::*;
     use crate::analysis::domain::{RegionId, RegionKind, RegionSeverity};
-    use crate::repair::domain::types::{StrategyKind, RepairCandidate, PlanDelta};
-    use thalos_core::trajectory::Trajectory;
+    use crate::repair::domain::types::{PlanDelta, RepairCandidate, StrategyKind};
     use std::sync::Arc as _Arc;
+    use thalos_core::trajectory::Trajectory;
 
     struct TestStrategy;
     impl RepairStrategy for TestStrategy {
-        fn kind(&self) -> StrategyKind { StrategyKind::LiftTcp }
-        fn applies_to(&self, r: &ProblemRegion) -> bool { r.kind == RegionKind::Singularity }
-        fn generate(&self, _ctx: &RepairContext, _plan: &CompiledPlan, region: &ProblemRegion) -> Vec<RepairCandidate> {
-            if let Ok(delta) = PlanDelta::new(region.id, region.waypoint_range.clone(), Trajectory::new(vec![])) {
+        fn kind(&self) -> StrategyKind {
+            StrategyKind::LiftTcp
+        }
+        fn applies_to(&self, r: &ProblemRegion) -> bool {
+            r.kind == RegionKind::Singularity
+        }
+        fn generate(
+            &self,
+            _ctx: &RepairContext,
+            _plan: &CompiledPlan,
+            region: &ProblemRegion,
+        ) -> Vec<RepairCandidate> {
+            if let Ok(delta) = PlanDelta::new(
+                region.id,
+                region.waypoint_range.clone(),
+                Trajectory::new(vec![]),
+            ) {
                 vec![RepairCandidate::new(StrategyKind::LiftTcp, delta)]
             } else {
                 vec![]
@@ -267,15 +314,14 @@ mod tests {
         let planner = RepairPlanner::new(vec![]);
         let plan = CompiledPlan::new(Trajectory::new(vec![]), vec![]);
         // Context not used for empty regions — create a dummy one
-        use thalos_core::models::{RobotModel, RobotRegistry};
         use crate::repair::context::RepairContext;
+        use thalos_core::models::{RobotModel, RobotRegistry};
         let chain = std::sync::Arc::new(RobotRegistry::create_default(RobotModel::Planar2R));
         let frame = chain.end_effector().clone();
-        use thalos_core::kinematics::{
-            forward::ForwardKinematics,
-            inverse::JacobianTransposeSolver,
-        };
         use std::sync::Arc as _Arc;
+        use thalos_core::kinematics::{
+            forward::ForwardKinematics, inverse::JacobianTransposeSolver,
+        };
         let fk = ForwardKinematics::new((*chain).clone());
         let solver = JacobianTransposeSolver::new(fk, frame.clone(), 50, 1e-3, 0.5);
         let ctx = RepairContext {

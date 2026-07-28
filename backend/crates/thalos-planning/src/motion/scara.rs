@@ -3,12 +3,10 @@ use std::time::Duration;
 use thalos_core::{
     kinematics::{
         forward::ForwardKinematics,
-        inverse::{IKGoal, IKStatus, IKSolver, JacobianTransposeSolver},
+        inverse::{IKGoal, IKSolver, IKStatus, JacobianTransposeSolver},
     },
     models::RobotModel,
-    motion::{
-        MotionInstruction, MotionProgram, MotionTarget, OutputChannel, OutputValue,
-    },
+    motion::{MotionInstruction, MotionProgram, MotionTarget, OutputChannel, OutputValue},
     robot::serial_chain::SerialChain,
     spatial::{frame::FrameId, pose::Pose},
 };
@@ -18,9 +16,7 @@ use crate::{
     error::PlanningError,
     interpolate::{cartesian, joint},
     motion::{
-        execution::{
-            CartesianSample, ExecutionPlan, ExecutionSegment, JointSample, PlanMetadata,
-        },
+        execution::{CartesianSample, ExecutionPlan, ExecutionSegment, JointSample, PlanMetadata},
         planner::{InterpolationConfig, JointState, MotionPlanner, PlanningCtx},
     },
 };
@@ -37,9 +33,7 @@ impl ScaraPlanner {
     }
 
     /// Resolve a `MotionTarget` to a pose, handling different target types.
-    fn resolve_target_pose(
-        target: &MotionTarget,
-    ) -> Result<Pose, PlanningError> {
+    fn resolve_target_pose(target: &MotionTarget) -> Result<Pose, PlanningError> {
         match target {
             MotionTarget::Pose(mp) => {
                 let transform = Transform3D::identity();
@@ -122,8 +116,11 @@ impl ScaraPlanner {
         let end_transform = target_pose.transform().clone();
 
         // Cartesian linear interpolation
-        let cart_waypoints =
-            cartesian::linear_path(&start_transform, &end_transform, interpolation.cartesian_step);
+        let cart_waypoints = cartesian::linear_path(
+            &start_transform,
+            &end_transform,
+            interpolation.cartesian_step,
+        );
 
         let n = cart_waypoints.len();
         if n == 0 {
@@ -194,9 +191,7 @@ impl ScaraPlanner {
     }
 
     /// Plan a Delay instruction: Pause segment.
-    fn plan_delay(
-        duration: Duration,
-    ) -> ExecutionSegment {
+    fn plan_delay(duration: Duration) -> ExecutionSegment {
         ExecutionSegment::Pause { duration }
     }
 
@@ -260,13 +255,7 @@ impl MotionPlanner for ScaraPlanner {
 
         // Build an IKSolver for the chain
         let fk = ForwardKinematics::new(chain.clone());
-        let ik_solver = JacobianTransposeSolver::new(
-            fk,
-            FrameId::Id(0),
-            5000,
-            1e-4,
-            0.1,
-        );
+        let ik_solver = JacobianTransposeSolver::new(fk, FrameId::Id(0), 5000, 1e-4, 0.1);
 
         let mut segments: Vec<ExecutionSegment> = Vec::with_capacity(program.instructions.len());
         let mut current_joints = context.initial_state.clone();
@@ -274,7 +263,9 @@ impl MotionPlanner for ScaraPlanner {
 
         for instruction in &program.instructions {
             let segment = match instruction {
-                MotionInstruction::MoveJ { target, profile, .. } => {
+                MotionInstruction::MoveJ {
+                    target, profile, ..
+                } => {
                     let seg = Self::plan_move_j(
                         &mut current_joints,
                         target,
@@ -291,7 +282,9 @@ impl MotionPlanner for ScaraPlanner {
                     }
                     seg
                 }
-                MotionInstruction::MoveL { target, profile, .. } => {
+                MotionInstruction::MoveL {
+                    target, profile, ..
+                } => {
                     let seg = Self::plan_move_l(
                         &mut current_joints,
                         target,
@@ -312,9 +305,7 @@ impl MotionPlanner for ScaraPlanner {
                     cumulative_time += *duration;
                     seg
                 }
-                MotionInstruction::SetOutput {
-                    channel, value, ..
-                } => {
+                MotionInstruction::SetOutput { channel, value, .. } => {
                     // Absolute time for Output
                     Self::plan_set_output(cumulative_time, channel, value)
                     // Note: SetOutput does NOT advance cumulative_time
@@ -333,12 +324,12 @@ impl MotionPlanner for ScaraPlanner {
 mod tests {
     use super::*;
     use crate::motion::execution::JointState;
+    use thalos_core::ids::OperationId;
     use thalos_core::{
         kinematics::inverse::{IKResult, IKSolver},
         motion::{MotionMetadata, MotionPose, MotionProfile},
         robot::state::RobotState,
     };
-    use thalos_core::ids::OperationId;
 
     /// A no-op IK solver that returns q0 as the converged solution.
     struct NoopIKSolver;

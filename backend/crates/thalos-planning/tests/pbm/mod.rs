@@ -18,8 +18,8 @@ pub mod report;
 pub mod scenarios;
 
 pub use metrics::{
-    assert_improvements, compare_metrics, ExpectedImprovement, ImprovementDirection, MetricDelta,
-    MetricKind,
+    ExpectedImprovement, ImprovementDirection, MetricDelta, MetricKind, assert_improvements,
+    compare_metrics,
 };
 pub use report::{OperatorEntry, OperatorStatus, PipelineReport};
 
@@ -29,18 +29,18 @@ use thalos_core::{
     trajectory::Trajectory,
 };
 use thalos_optimization::{
+    TrajectoryOperator,
     domain::{JointLimits, OptimizationContext, PipelineConfig},
     operators::{
         AdaptiveSampling, JointCenteringOperator, NullSpaceOptimization, OrientationRelaxation,
         Retime,
     },
     pipeline::OptimizationPipeline,
-    TrajectoryOperator,
 };
 use thalos_planning::{
     analysis::{
-        region::{RegionDetector, RegionDetectorConfig},
         TrajectoryAnalyzer,
+        region::{RegionDetector, RegionDetectorConfig},
     },
     evaluation::PlanEvaluator,
 };
@@ -115,12 +115,9 @@ pub fn run_scenario(scenario: &dyn BenchmarkScenario) -> PipelineReport {
     let analyzer = if cons.is_empty() {
         TrajectoryAnalyzer::new(&chain, None)
     } else {
-        TrajectoryAnalyzer::new(&chain, None)
-            .with_constraints(&cons, &evaluator)
+        TrajectoryAnalyzer::new(&chain, None).with_constraints(&cons, &evaluator)
     };
-    let analysis_before = analyzer
-        .analyze(&traj)
-        .expect("before-analysis failed");
+    let analysis_before = analyzer.analyze(&traj).expect("before-analysis failed");
     let metrics_before = PlanEvaluator::compute_metrics(&analysis_before.waypoints);
 
     // ── 3. Detect problem regions ─────────────────────────
@@ -155,21 +152,21 @@ pub fn run_scenario(scenario: &dyn BenchmarkScenario) -> PipelineReport {
     let jc = JointCenteringOperator::new(JointCenteringOperator::DEFAULT_FACTOR);
     let ns = NullSpaceOptimization::new(
         NullSpaceOptimization::DEFAULT_FACTOR,
-        1e-6,  // tolerance
-        0.1,   // dt
+        1e-6, // tolerance
+        0.1,  // dt
     );
     let retime = Retime::new(Retime::DEFAULT_VELOCITY, Retime::DEFAULT_MAX_DURATION_SCALE);
     let sampling = AdaptiveSampling::new(
-        500,   // max_points
-        0.5,   // error_threshold
-        0.3,   // curvature_threshold
-        0.01,  // min_segment_length
+        500,  // max_points
+        0.5,  // error_threshold
+        0.3,  // curvature_threshold
+        0.01, // min_segment_length
     );
     let orient = OrientationRelaxation::new(
-        0.1,   // max_angle
-        1e-6,  // tolerance
-        0.1,   // dt
-        1e-4,  // position_tolerance
+        0.1,  // max_angle
+        1e-6, // tolerance
+        0.1,  // dt
+        1e-4, // position_tolerance
     );
 
     let operators: [&dyn TrajectoryOperator; 5] = [&jc, &ns, &retime, &sampling, &orient];
@@ -190,12 +187,7 @@ pub fn run_scenario(scenario: &dyn BenchmarkScenario) -> PipelineReport {
     let report = PipelineReport::from_optimization_report(&result.report, regions_detected);
 
     // ── 9. Assert expected improvements ───────────────────
-    let deltas = compare_metrics(
-        &metrics_before,
-        &metrics_after,
-        &traj,
-        &result.trajectory,
-    );
+    let deltas = compare_metrics(&metrics_before, &metrics_after, &traj, &result.trajectory);
     assert_improvements(&scenario.expected_improvements(), &deltas);
 
     report
@@ -259,10 +251,18 @@ mod tests {
     fn validate_scenario_rejects_empty_expected_improvements() {
         struct EmptyScenario;
         impl BenchmarkScenario for EmptyScenario {
-            fn name(&self) -> &'static str { "empty" }
-            fn robot_model(&self) -> RobotModel { RobotModel::Planar2R }
-            fn trajectory(&self) -> Trajectory { Trajectory::new(vec![]) }
-            fn expected_improvements(&self) -> Vec<ExpectedImprovement> { vec![] }
+            fn name(&self) -> &'static str {
+                "empty"
+            }
+            fn robot_model(&self) -> RobotModel {
+                RobotModel::Planar2R
+            }
+            fn trajectory(&self) -> Trajectory {
+                Trajectory::new(vec![])
+            }
+            fn expected_improvements(&self) -> Vec<ExpectedImprovement> {
+                vec![]
+            }
         }
 
         let s = EmptyScenario;

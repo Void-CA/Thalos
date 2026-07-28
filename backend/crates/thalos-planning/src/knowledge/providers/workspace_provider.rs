@@ -47,14 +47,11 @@ impl PlanningKnowledgeProvider for WorkspaceKnowledgeProvider {
         }
         // Nearest-neighbor query por posición
         let pos = pose.translation;
-        let nearest = map
-            .samples
-            .iter()
-            .min_by(|a, b| {
-                dist2(a.position, pos)
-                    .partial_cmp(&dist2(b.position, pos))
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })?;
+        let nearest = map.samples.iter().min_by(|a, b| {
+            dist2(a.position, pos)
+                .partial_cmp(&dist2(b.position, pos))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })?;
         Some(if nearest.reachable { 1.0 } else { 0.0 })
     }
 
@@ -76,14 +73,11 @@ impl PlanningKnowledgeProvider for WorkspaceKnowledgeProvider {
     }
 
     fn preferred_configuration(&self, _joints: &[f64]) -> Option<&ConfigurationRegion> {
-        self.workspace
-            .preferred_configs
-            .iter()
-            .max_by(|a, b| {
-                a.manipulability_score
-                    .partial_cmp(&b.manipulability_score)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
+        self.workspace.preferred_configs.iter().max_by(|a, b| {
+            a.manipulability_score
+                .partial_cmp(&b.manipulability_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
     }
 }
 

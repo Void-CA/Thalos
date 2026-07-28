@@ -52,10 +52,7 @@ impl PlanningPolicy {
             PlanningDecision::AcceptedWithWarnings
         };
 
-        PlanningAssessment {
-            decision,
-            warnings,
-        }
+        PlanningAssessment { decision, warnings }
     }
 
     fn check_metric(

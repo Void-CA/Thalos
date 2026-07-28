@@ -26,7 +26,8 @@ pub struct CostFunction {
 impl CostFunction {
     /// Crear con pesos por defecto.
     pub fn defaults() -> Self {
-        let weights: HashMap<MetricKind, f64> = MetricKind::all_with_defaults().into_iter().collect();
+        let weights: HashMap<MetricKind, f64> =
+            MetricKind::all_with_defaults().into_iter().collect();
         Self { weights }
     }
 

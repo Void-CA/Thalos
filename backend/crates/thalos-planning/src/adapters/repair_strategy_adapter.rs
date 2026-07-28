@@ -7,23 +7,18 @@
 
 use std::sync::Arc;
 
-use thalos_core::{
-    kinematics::inverse::IKSolver,
-    robot::serial_chain::SerialChain,
-    trajectory::Trajectory,
-};
 use thalos_core::operation::ConstraintQuery;
+use thalos_core::{
+    kinematics::inverse::IKSolver, robot::serial_chain::SerialChain, trajectory::Trajectory,
+};
 use thalos_optimization::{
-    domain::operator::OperatorFamily, error::OptimizationError, OptimizationContext, PlanMetrics,
-    ProblemRegion, TrajectoryOperator,
+    OptimizationContext, PlanMetrics, ProblemRegion, TrajectoryOperator,
+    domain::operator::OperatorFamily, error::OptimizationError,
 };
 
 use crate::{
     motion::program::CompiledPlan,
-    repair::{
-        context::RepairContext,
-        domain::RepairStrategy,
-    },
+    repair::{context::RepairContext, domain::RepairStrategy},
 };
 
 /// Wraps a [`RepairStrategy`] to conform to the [`TrajectoryOperator`] interface.
@@ -123,8 +118,8 @@ mod tests {
         repair::{
             context::RepairContext,
             domain::{
-                types::{PlanDelta, StrategyKind},
                 RepairCandidate,
+                types::{PlanDelta, StrategyKind},
             },
         },
     };

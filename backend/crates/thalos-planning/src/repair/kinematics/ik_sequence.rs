@@ -31,9 +31,9 @@ pub fn solve_translation_offset(
     for wp in wps {
         let q = wp.joints().to_vec();
         let fk_result = fk.evaluate(&q);
-        let current = fk_result.ee_pose().ok_or_else(|| {
-            RepairError::IkFailure("FK returned no pose".into())
-        })?;
+        let current = fk_result
+            .ee_pose()
+            .ok_or_else(|| RepairError::IkFailure("FK returned no pose".into()))?;
 
         let new_trans = current.translation() + offset;
         let target = Pose::new(
@@ -75,9 +75,9 @@ pub fn solve_rotation_offset(
     for wp in wps {
         let q = wp.joints().to_vec();
         let fk_result = fk.evaluate(&q);
-        let current = fk_result.ee_pose().ok_or_else(|| {
-            RepairError::IkFailure("FK returned no pose".into())
-        })?;
+        let current = fk_result
+            .ee_pose()
+            .ok_or_else(|| RepairError::IkFailure("FK returned no pose".into()))?;
 
         // Componer rotación: rotación actual * rotación delta (TCP-local)
         let new_rot = current.transform().rotation * delta_rot;

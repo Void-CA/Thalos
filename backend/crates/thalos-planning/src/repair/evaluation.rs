@@ -8,9 +8,7 @@
 //! Este pipeline es un respaldo para candidatos sin evaluación propia.
 
 use crate::evaluation::metrics::{ManipulabilityMetrics, PlanMetrics};
-use crate::repair::domain::{
-    types::{RepairCandidate, RepairEvaluation, RepairError, RepairResult},
-};
+use crate::repair::domain::types::{RepairCandidate, RepairError, RepairEvaluation, RepairResult};
 
 /// Pipeline de evaluación de candidatos de reparación.
 pub struct EvaluationPipeline;
@@ -85,11 +83,9 @@ impl EvaluationPipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::evaluation::metrics::{
-        CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics,
-    };
-    use crate::repair::domain::types::{PlanDelta, StrategyKind};
     use crate::analysis::domain::RegionId;
+    use crate::evaluation::metrics::{CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics};
+    use crate::repair::domain::types::{PlanDelta, StrategyKind};
     use thalos_core::trajectory::Trajectory;
 
     fn base_metrics() -> PlanMetrics {
@@ -140,7 +136,9 @@ mod tests {
         let eval = candidate.evaluation.unwrap();
         // With base manipulability 0.3, improvement should be ~15%
         assert!(eval.improvement > 0.0);
-        assert!(eval.metrics_after.manipulability.average > eval.metrics_before.manipulability.average);
+        assert!(
+            eval.metrics_after.manipulability.average > eval.metrics_before.manipulability.average
+        );
     }
 
     #[test]

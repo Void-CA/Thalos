@@ -174,12 +174,10 @@ mod tests {
 
     #[test]
     fn cartesian_trajectory_parallel_vectors_equal_length() {
-        let samples = vec![
-            CartesianSample {
-                time: Duration::ZERO,
-                pose: Transform3D::identity(),
-            },
-        ];
+        let samples = vec![CartesianSample {
+            time: Duration::ZERO,
+            pose: Transform3D::identity(),
+        }];
         let resolved = vec![vec![0.0, 0.0]];
         let seg = ExecutionSegment::CartesianTrajectory {
             samples: samples.clone(),

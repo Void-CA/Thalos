@@ -4,8 +4,8 @@
 //! - `RobotKnowledge`: datos estáticos del robot (permanente)
 //! - `WorkspaceKnowledge`: datos derivados del workspace (por sesión)
 
-use thalos_core::spatial::frame::FrameId;
 use crate::analysis::domain::RegionSeverity;
+use thalos_core::spatial::frame::FrameId;
 
 /// Conocimiento completo disponible para planificación.
 #[derive(Debug, Clone)]
@@ -57,7 +57,8 @@ impl SingularityZone {
         if q.len() != self.center.len() {
             return false;
         }
-        let dist: f64 = q.iter()
+        let dist: f64 = q
+            .iter()
             .zip(&self.center)
             .map(|(a, b)| (a - b).powi(2))
             .sum::<f64>()

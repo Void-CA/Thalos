@@ -77,7 +77,8 @@ impl RepairStrategy for RotateToolStrategy {
         let metrics_after = PlanEvaluator::compute_metrics_from_joints(&delta.replacement);
         let manip_pct = if metrics_before.manipulability.average > 0.001 {
             ((metrics_after.manipulability.average - metrics_before.manipulability.average)
-                / metrics_before.manipulability.average) * 100.0
+                / metrics_before.manipulability.average)
+                * 100.0
         } else {
             metrics_after.manipulability.average * 100.0
         };
@@ -90,8 +91,7 @@ impl RepairStrategy for RotateToolStrategy {
             improvement,
         };
 
-        vec![RepairCandidate::new(StrategyKind::RotateTool, delta)
-            .with_evaluation(evaluation)]
+        vec![RepairCandidate::new(StrategyKind::RotateTool, delta).with_evaluation(evaluation)]
     }
 }
 

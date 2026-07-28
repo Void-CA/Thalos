@@ -103,7 +103,8 @@ impl PlanAdvisor {
                     },
                     Recommendation {
                         kind: SuggestionKind::Waypoint,
-                        message: "Add an intermediate waypoint in the low-manipulability region.".to_string(),
+                        message: "Add an intermediate waypoint in the low-manipulability region."
+                            .to_string(),
                         impact: Impact::Medium,
                         waypoint: finding.waypoint,
                     },
@@ -123,7 +124,8 @@ impl PlanAdvisor {
                     },
                     Recommendation {
                         kind: SuggestionKind::Velocity,
-                        message: "Reducir velocidad máxima evita problemas near-singular.".to_string(),
+                        message: "Reducir velocidad máxima evita problemas near-singular."
+                            .to_string(),
                         impact: Impact::Medium,
                         waypoint: finding.waypoint,
                     },
@@ -231,7 +233,10 @@ mod tests {
         let advisor = PlanAdvisor;
         let recs = advisor.advise(&findings);
         assert_eq!(recs.len(), 2);
-        assert!(recs.iter().any(|r| r.kind == SuggestionKind::Manipulability));
+        assert!(
+            recs.iter()
+                .any(|r| r.kind == SuggestionKind::Manipulability)
+        );
         assert!(recs.iter().any(|r| r.kind == SuggestionKind::Waypoint));
     }
 

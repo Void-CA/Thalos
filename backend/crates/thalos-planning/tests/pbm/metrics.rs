@@ -3,10 +3,7 @@
 //! Defines benchmark-specific metric kinds (distinct from production `MetricKind`)
 //! and functions to compare before/after metrics and assert expected improvements.
 
-use thalos_core::{
-    evaluation::PlanMetrics,
-    trajectory::Trajectory,
-};
+use thalos_core::{evaluation::PlanMetrics, trajectory::Trajectory};
 
 /// Benchmark-specific metric identifiers.
 ///
@@ -157,8 +154,7 @@ fn compute_max_segment_error(trajectory: &Trajectory) -> f64 {
     }
     wps.windows(2)
         .map(|w| {
-            w[0]
-                .joints()
+            w[0].joints()
                 .iter()
                 .zip(w[1].joints().iter())
                 .map(|(a, b)| (b - a).powi(2))
@@ -209,7 +205,11 @@ pub fn assert_improvements(expected: &[ExpectedImprovement], deltas: &[MetricDel
             exp.operator_id,
             delta.before,
             delta.after,
-            if delta.after > delta.before { "increase" } else { "decrease" },
+            if delta.after > delta.before {
+                "increase"
+            } else {
+                "decrease"
+            },
         );
     }
 }
@@ -228,12 +228,12 @@ mod tests {
         orientation_change: f64,
     ) -> PlanMetrics {
         PlanMetrics::new(
-            0.0,                                       // length
-            0,                                         // waypoint_count
+            0.0, // length
+            0,   // waypoint_count
             ManipulabilityMetrics::new(0.0, manipulability_avg, 0, 0),
             JointSafetyMetrics::new(joint_margin, 0.0, 0),
             CollisionMetrics::new(1.0, 0, 0),
-            0.0,                                       // smoothness
+            0.0, // smoothness
             orientation_change,
         )
     }
@@ -256,11 +256,17 @@ mod tests {
         let deltas = compare_metrics(&metrics, &metrics, &traj, &traj);
 
         // JointMargin, Manipulability unchanged
-        let margin = deltas.iter().find(|d| d.metric == MetricKind::JointMargin).unwrap();
+        let margin = deltas
+            .iter()
+            .find(|d| d.metric == MetricKind::JointMargin)
+            .unwrap();
         assert!((margin.before - margin.after).abs() < 1e-12);
         assert!(!margin.improved);
 
-        let manip = deltas.iter().find(|d| d.metric == MetricKind::Manipulability).unwrap();
+        let manip = deltas
+            .iter()
+            .find(|d| d.metric == MetricKind::Manipulability)
+            .unwrap();
         assert!((manip.before - manip.after).abs() < 1e-12);
         assert!(!manip.improved);
     }
@@ -272,7 +278,10 @@ mod tests {
         let traj = simple_traj(vec![vec![0.0], vec![0.5]], 1.0);
         let deltas = compare_metrics(&before, &after, &traj, &traj);
 
-        let margin = deltas.iter().find(|d| d.metric == MetricKind::JointMargin).unwrap();
+        let margin = deltas
+            .iter()
+            .find(|d| d.metric == MetricKind::JointMargin)
+            .unwrap();
         assert!((margin.before - 0.15).abs() < 1e-12);
         assert!((margin.after - 0.45).abs() < 1e-12);
         assert!(margin.improved, "joint margin should show improvement");
@@ -285,8 +294,14 @@ mod tests {
         let traj = simple_traj(vec![vec![0.0], vec![0.5]], 1.0);
         let deltas = compare_metrics(&before, &after, &traj, &traj);
 
-        let manip = deltas.iter().find(|d| d.metric == MetricKind::Manipulability).unwrap();
-        assert!(!manip.improved, "manipulability degraded, should NOT be marked improved");
+        let manip = deltas
+            .iter()
+            .find(|d| d.metric == MetricKind::Manipulability)
+            .unwrap();
+        assert!(
+            !manip.improved,
+            "manipulability degraded, should NOT be marked improved"
+        );
     }
 
     #[test]
@@ -296,20 +311,32 @@ mod tests {
         let metrics = make_metrics(0.5, 0.4, 0.3);
         let deltas = compare_metrics(&metrics, &metrics, &traj_rough, &traj_smooth);
 
-        let seg = deltas.iter().find(|d| d.metric == MetricKind::MaxSegmentError).unwrap();
-        assert!(seg.before > seg.after, "rough trajectory should have higher segment error");
+        let seg = deltas
+            .iter()
+            .find(|d| d.metric == MetricKind::MaxSegmentError)
+            .unwrap();
+        assert!(
+            seg.before > seg.after,
+            "rough trajectory should have higher segment error"
+        );
         assert!(seg.improved);
     }
 
     #[test]
     fn compare_max_velocity_detects_reduction() {
-        let traj_fast = simple_traj(vec![vec![0.0], vec![5.0]], 0.1);  // dq/dt = 50
-        let traj_slow = simple_traj(vec![vec![0.0], vec![1.0]], 1.0);  // dq/dt = 1
+        let traj_fast = simple_traj(vec![vec![0.0], vec![5.0]], 0.1); // dq/dt = 50
+        let traj_slow = simple_traj(vec![vec![0.0], vec![1.0]], 1.0); // dq/dt = 1
         let metrics = make_metrics(0.5, 0.4, 0.3);
         let deltas = compare_metrics(&metrics, &metrics, &traj_fast, &traj_slow);
 
-        let vel = deltas.iter().find(|d| d.metric == MetricKind::MaxVelocity).unwrap();
-        assert!(vel.before > vel.after, "fast trajectory should have higher velocity");
+        let vel = deltas
+            .iter()
+            .find(|d| d.metric == MetricKind::MaxVelocity)
+            .unwrap();
+        assert!(
+            vel.before > vel.after,
+            "fast trajectory should have higher velocity"
+        );
         assert!(vel.improved);
     }
 
@@ -376,10 +403,7 @@ mod tests {
 
     #[test]
     fn max_segment_error_computes_largest_gap() {
-        let traj = simple_traj(
-            vec![vec![0.0, 0.0], vec![3.0, 4.0], vec![0.0, 0.0]],
-            1.0,
-        );
+        let traj = simple_traj(vec![vec![0.0, 0.0], vec![3.0, 4.0], vec![0.0, 0.0]], 1.0);
         // Segment 0→1: sqrt(3²+4²) = 5.0
         // Segment 1→2: sqrt(3²+4²) = 5.0
         let err = compute_max_segment_error(&traj);

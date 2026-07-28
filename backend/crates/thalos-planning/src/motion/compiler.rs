@@ -7,9 +7,7 @@ use thalos_core::{
 };
 
 use crate::error::{CompileError, PlanningError};
-use crate::goal::{
-    GoalResolver, GoalResolverConfig, JointGoal, ResolvedPoseGoal, ValidatedGoal,
-};
+use crate::goal::{GoalResolver, GoalResolverConfig, JointGoal, ResolvedPoseGoal, ValidatedGoal};
 use crate::motion::move_j::{MoveJConfig, MoveJPlanner};
 use crate::motion::move_l::{MoveLConfig, MoveLPlanner};
 use crate::motion::planner::{MotionPlanner, SegmentPlanner, SegmentPlanningContext};
@@ -68,8 +66,7 @@ impl MotionPlannerDispatcher for DefaultPlannerDispatcher {
                 max_acceleration,
             } => {
                 let resolver = GoalResolver::new(self.goal_resolver_config.clone());
-                let goal: ValidatedGoal<JointGoal> =
-                    resolver.resolve_joint(ctx, target)?;
+                let goal: ValidatedGoal<JointGoal> = resolver.resolve_joint(ctx, target)?;
 
                 let planner = MoveJPlanner::new(MoveJConfig {
                     max_velocity: max_velocity.unwrap_or(1.0),
@@ -186,7 +183,10 @@ impl PlanCompiler {
             segments.push(PlannedSegment {
                 source: segment.clone(),
                 trajectory,
-                waypoint_range: Range { start: start_idx, end: end_idx },
+                waypoint_range: Range {
+                    start: start_idx,
+                    end: end_idx,
+                },
                 time_range: Range {
                     start: time_offset,
                     end: time_offset + seg_duration,
@@ -225,8 +225,7 @@ impl PlanCompiler {
         }
 
         // 2. Extract segments and build a MotionProgram.
-        let segments: Vec<MotionSegment> =
-            all_nodes.into_iter().map(|n| n.segment).collect();
+        let segments: Vec<MotionSegment> = all_nodes.into_iter().map(|n| n.segment).collect();
         let program = MotionProgram::new(segments);
 
         // 4. Compile the program normally.
@@ -286,7 +285,11 @@ mod tests {
         fn new() -> Self {
             let chain = RobotRegistry::create_default(RobotModel::Planar2R);
             let state = RobotState::zero(chain.dof_count());
-            Self { chain, state, ik: NoopIKSolver }
+            Self {
+                chain,
+                state,
+                ik: NoopIKSolver,
+            }
         }
 
         fn ctx(&self) -> SegmentPlanningContext<'_> {
@@ -324,7 +327,9 @@ mod tests {
             max_acceleration: None,
         }]);
 
-        let plan = compiler.compile(&program, &h.ctx()).expect("compile failed");
+        let plan = compiler
+            .compile(&program, &h.ctx())
+            .expect("compile failed");
         assert!(!plan.merged_trajectory.is_empty());
         assert_eq!(plan.segments.len(), 1);
         assert_eq!(plan.waypoint_count, plan.merged_trajectory.len());
@@ -368,7 +373,9 @@ mod tests {
             },
         ]);
 
-        let plan = compiler.compile(&program, &h.ctx()).expect("compile failed");
+        let plan = compiler
+            .compile(&program, &h.ctx())
+            .expect("compile failed");
         assert_eq!(plan.segments.len(), 2);
         assert_eq!(plan.waypoint_count, plan.merged_trajectory.len());
 
@@ -399,16 +406,30 @@ mod tests {
         let h = TestHarness::new();
         let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
         let program = MotionProgram::new(vec![
-            MotionSegment::MoveJ { target: vec![1.0, 0.5], max_velocity: None, max_acceleration: None },
-            MotionSegment::MoveJ { target: vec![0.0, 1.0], max_velocity: None, max_acceleration: None },
+            MotionSegment::MoveJ {
+                target: vec![1.0, 0.5],
+                max_velocity: None,
+                max_acceleration: None,
+            },
+            MotionSegment::MoveJ {
+                target: vec![0.0, 1.0],
+                max_velocity: None,
+                max_acceleration: None,
+            },
         ]);
 
-        let plan = compiler.compile(&program, &h.ctx()).expect("compile failed");
+        let plan = compiler
+            .compile(&program, &h.ctx())
+            .expect("compile failed");
 
         let wps = plan.merged_trajectory.waypoints();
         // First waypoint must be the start position [0, 0], NOT the final target
-        assert_eq!(wps[0].joints(), &[0.0, 0.0],
-            "first waypoint must match start position, got {:?}", wps[0].joints());
+        assert_eq!(
+            wps[0].joints(),
+            &[0.0, 0.0],
+            "first waypoint must match start position, got {:?}",
+            wps[0].joints()
+        );
     }
 
     /// A dispatcher that always fails with `InvalidGoal`.
@@ -442,10 +463,15 @@ mod tests {
         ]);
 
         // Set state to something non-zero so the first segment also fails
-        let err = compiler.compile(&program, &h.ctx()).expect_err("should fail");
+        let err = compiler
+            .compile(&program, &h.ctx())
+            .expect_err("should fail");
         assert_eq!(err.segment_index, 0);
         assert_eq!(err.segment_1based(), 1);
-        assert_eq!(err.to_string(), "segment 1 failed: Invalid goal: always fails");
+        assert_eq!(
+            err.to_string(),
+            "segment 1 failed: Invalid goal: always fails"
+        );
     }
 
     #[test]
@@ -484,10 +510,15 @@ mod tests {
             },
         ]);
 
-        let err = compiler.compile(&program, &h.ctx()).expect_err("second segment should fail");
+        let err = compiler
+            .compile(&program, &h.ctx())
+            .expect_err("second segment should fail");
         assert_eq!(err.segment_index, 1);
         assert_eq!(err.segment_1based(), 2);
-        assert_eq!(err.to_string(), "segment 2 failed: Invalid goal: second segment fails");
+        assert_eq!(
+            err.to_string(),
+            "segment 2 failed: Invalid goal: second segment fails"
+        );
     }
 
     // ── 3.6 Integration: Operation → expand → compile → constraint query ──
@@ -502,9 +533,7 @@ mod tests {
     };
     use thalos_math::Transform3D;
     use thalos_optimization::{
-        domain::context::OptimizationContext,
-        operators::JointCenteringOperator,
-        TrajectoryOperator,
+        TrajectoryOperator, domain::context::OptimizationContext, operators::JointCenteringOperator,
     };
 
     fn sample_pose() -> Pose {
@@ -531,7 +560,9 @@ mod tests {
         };
         let ops = vec![make_pick(1, constraints)];
 
-        let result = compiler.compile_with_operations(&ops, &h.ctx()).expect("compile_with_operations failed");
+        let result = compiler
+            .compile_with_operations(&ops, &h.ctx())
+            .expect("compile_with_operations failed");
         let opc = result;
 
         // Should have a valid plan
@@ -542,13 +573,19 @@ mod tests {
         let total_wps = opc.plan.waypoint_count;
         for i in 0..total_wps {
             // Pick has tight position_tolerance → can_modify_position should be false
-            assert!(!opc.constraint_query.can_modify_position(i),
-                "waypoint {} should NOT allow position modification (tight tolerance)", i);
+            assert!(
+                !opc.constraint_query.can_modify_position(i),
+                "waypoint {} should NOT allow position modification (tight tolerance)",
+                i
+            );
         }
 
         // Orientation tolerance is 0.5°, do not allow relaxation > 0.5°
-        assert!(!opc.constraint_query.can_relax_orientation(0, 1.0_f64.to_radians()),
-            "should forbid relaxation beyond tolerance");
+        assert!(
+            !opc.constraint_query
+                .can_relax_orientation(0, 1.0_f64.to_radians()),
+            "should forbid relaxation beyond tolerance"
+        );
     }
 
     #[test]
@@ -564,22 +601,27 @@ mod tests {
         };
         let ops = vec![transit];
 
-        let result = compiler.compile_with_operations(&ops, &h.ctx()).expect("compile_with_operations failed");
+        let result = compiler
+            .compile_with_operations(&ops, &h.ctx())
+            .expect("compile_with_operations failed");
         let opc = result;
 
         assert_eq!(opc.plan.segments.len(), 1, "Transit expands to 1 segment");
         // Unconstrained transit should allow everything
-        assert!(opc.constraint_query.can_modify_position(0),
-            "unconstrained transit should allow position modification");
-        assert!(opc.constraint_query.can_relax_orientation(0, 10.0_f64.to_radians()),
-            "unconstrained transit should allow orientation relaxation");
+        assert!(
+            opc.constraint_query.can_modify_position(0),
+            "unconstrained transit should allow position modification"
+        );
+        assert!(
+            opc.constraint_query
+                .can_relax_orientation(0, 10.0_f64.to_radians()),
+            "unconstrained transit should allow orientation relaxation"
+        );
     }
 
     #[test]
     fn constraint_query_from_compiler_affects_optimization_operator() {
-        use thalos_core::analysis::region::{
-            ProblemRegion, RegionId, RegionKind, RegionSeverity,
-        };
+        use thalos_core::analysis::region::{ProblemRegion, RegionId, RegionKind, RegionSeverity};
         use thalos_core::models::{RobotModel, RobotRegistry};
 
         let h = TestHarness::new();
@@ -592,7 +634,9 @@ mod tests {
         };
         let ops = vec![make_pick(1, constraints)];
 
-        let plan = compiler.compile_with_operations(&ops, &h.ctx()).expect("compile_with_operations failed");
+        let plan = compiler
+            .compile_with_operations(&ops, &h.ctx())
+            .expect("compile_with_operations failed");
 
         // Use a Planar2R robot (same as TestHarness)
         let robot = RobotRegistry::create_default(RobotModel::Planar2R);
@@ -612,7 +656,9 @@ mod tests {
 
         // Full trajectory region
         let region = ProblemRegion::new(
-            RegionId(0), RegionKind::Constraint, RegionSeverity::Warning,
+            RegionId(0),
+            RegionKind::Constraint,
+            RegionSeverity::Warning,
             0..traj.len(),
         );
 
@@ -623,8 +669,15 @@ mod tests {
         let without_joints = without.waypoints()[0].joints().to_vec();
 
         // Apply WITH constraints → joints should NOT move (position_tolerance is tight)
-        let with = jc.apply(&robot, traj, &region, &opt_ctx,
-            Some(&plan.constraint_query as &dyn ConstraintQuery)).unwrap();
+        let with = jc
+            .apply(
+                &robot,
+                traj,
+                &region,
+                &opt_ctx,
+                Some(&plan.constraint_query as &dyn ConstraintQuery),
+            )
+            .unwrap();
         let with_joints = with.waypoints()[0].joints().to_vec();
 
         // Without constraints: joints moved toward center (not all-zero start)
@@ -633,9 +686,13 @@ mod tests {
 
         // Verify that with constraints, waypoints are preserved
         for (i, (&w, &o)) in with_joints.iter().zip(original_joints.iter()).enumerate() {
-            assert!((w - o).abs() < 1e-10,
+            assert!(
+                (w - o).abs() < 1e-10,
                 "constrained waypoint[{}] joint {} should match original (diff={})",
-                0, i, (w - o).abs());
+                0,
+                i,
+                (w - o).abs()
+            );
         }
     }
 }

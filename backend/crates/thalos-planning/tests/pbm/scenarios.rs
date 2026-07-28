@@ -71,8 +71,16 @@ impl super::BenchmarkScenario for JointLimitScenario {
 
     fn constraints(&self) -> Vec<Constraint> {
         vec![
-            Constraint::JointLimit { joint: 0, min: -2.0, max: 2.0 },
-            Constraint::JointLimit { joint: 1, min: -2.0, max: 2.0 },
+            Constraint::JointLimit {
+                joint: 0,
+                min: -2.0,
+                max: 2.0,
+            },
+            Constraint::JointLimit {
+                joint: 1,
+                min: -2.0,
+                max: 2.0,
+            },
         ]
     }
 
@@ -199,10 +207,7 @@ impl super::BenchmarkScenario for CoarseSamplingScenario {
         let pts: Vec<TrajectoryPoint> = (0..n)
             .map(|i| {
                 let t = (i as f64 / (n - 1) as f64) * 2.0 * PI;
-                TrajectoryPoint::new(
-                    vec![(t * 1.0).sin() * 1.5, (t * 2.0).sin() * 1.0],
-                    t,
-                )
+                TrajectoryPoint::new(vec![(t * 1.0).sin() * 1.5, (t * 2.0).sin() * 1.0], t)
             })
             .collect();
         Trajectory::new(pts)
@@ -253,8 +258,16 @@ impl super::BenchmarkScenario for OrientationConstraintScenario {
 
     fn constraints(&self) -> Vec<Constraint> {
         vec![
-            Constraint::JointLimit { joint: 0, min: -2.0, max: 2.0 },
-            Constraint::JointLimit { joint: 1, min: -2.0, max: 2.0 },
+            Constraint::JointLimit {
+                joint: 0,
+                min: -2.0,
+                max: 2.0,
+            },
+            Constraint::JointLimit {
+                joint: 1,
+                min: -2.0,
+                max: 2.0,
+            },
         ]
     }
 
@@ -310,8 +323,16 @@ impl super::BenchmarkScenario for MixedScenario {
 
     fn constraints(&self) -> Vec<Constraint> {
         vec![
-            Constraint::JointLimit { joint: 0, min: -2.0, max: 2.0 },
-            Constraint::JointLimit { joint: 1, min: -2.0, max: 2.0 },
+            Constraint::JointLimit {
+                joint: 0,
+                min: -2.0,
+                max: 2.0,
+            },
+            Constraint::JointLimit {
+                joint: 1,
+                min: -2.0,
+                max: 2.0,
+            },
         ]
     }
 

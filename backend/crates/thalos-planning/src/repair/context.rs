@@ -6,8 +6,7 @@
 use std::sync::Arc;
 
 use thalos_core::{
-    kinematics::inverse::solver::IKSolver,
-    robot::serial_chain::SerialChain,
+    kinematics::inverse::solver::IKSolver, robot::serial_chain::SerialChain,
     spatial::frame::FrameId,
 };
 

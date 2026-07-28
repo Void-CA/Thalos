@@ -62,10 +62,7 @@ pub struct CompiledPlan {
 }
 
 impl CompiledPlan {
-    pub fn new(
-        merged_trajectory: Trajectory,
-        segments: Vec<PlannedSegment>,
-    ) -> Self {
+    pub fn new(merged_trajectory: Trajectory, segments: Vec<PlannedSegment>) -> Self {
         let duration = merged_trajectory.duration();
         let waypoint_count = merged_trajectory.len();
         Self {

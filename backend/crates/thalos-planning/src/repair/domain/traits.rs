@@ -1,14 +1,16 @@
+use super::types::{RepairCandidate, StrategyKind};
 use crate::analysis::domain::ProblemRegion;
 use crate::motion::program::CompiledPlan;
 use crate::repair::context::RepairContext;
-use super::types::{RepairCandidate, StrategyKind};
 
 /// Contrato para estrategias de reparación.
 ///
 /// Cada estrategia propone candidatos. No evalúa ni aplica.
 /// La evaluación es responsabilidad de `EvaluationPipeline`.
 /// La aplicación es responsabilidad de `PlanMerger`.
-#[deprecated(note = "Use TrajectoryOperator from thalos-optimization instead. RepairStrategy will be removed after M10.")]
+#[deprecated(
+    note = "Use TrajectoryOperator from thalos-optimization instead. RepairStrategy will be removed after M10."
+)]
 pub trait RepairStrategy: Send + Sync {
     /// Identificador único del tipo de estrategia.
     fn kind(&self) -> StrategyKind;
@@ -32,30 +34,53 @@ pub trait RepairStrategy: Send + Sync {
 mod tests {
     use super::*;
     use crate::analysis::domain::{RegionId, RegionKind, RegionSeverity};
-    use crate::repair::domain::types::RepairCandidate;
     use crate::motion::program::CompiledPlan;
+    use crate::repair::domain::types::RepairCandidate;
     use thalos_core::trajectory::Trajectory;
 
     struct AcceptingStrategy;
     impl RepairStrategy for AcceptingStrategy {
-        fn kind(&self) -> StrategyKind { StrategyKind::LiftTcp }
-        fn applies_to(&self, _region: &ProblemRegion) -> bool { true }
-        fn generate(&self, _ctx: &RepairContext, _plan: &CompiledPlan, _region: &ProblemRegion) -> Vec<RepairCandidate> {
+        fn kind(&self) -> StrategyKind {
+            StrategyKind::LiftTcp
+        }
+        fn applies_to(&self, _region: &ProblemRegion) -> bool {
+            true
+        }
+        fn generate(
+            &self,
+            _ctx: &RepairContext,
+            _plan: &CompiledPlan,
+            _region: &ProblemRegion,
+        ) -> Vec<RepairCandidate> {
             vec![]
         }
     }
 
     struct RejectingStrategy;
     impl RepairStrategy for RejectingStrategy {
-        fn kind(&self) -> StrategyKind { StrategyKind::LiftTcp }
-        fn applies_to(&self, _region: &ProblemRegion) -> bool { false }
-        fn generate(&self, _ctx: &RepairContext, _plan: &CompiledPlan, _region: &ProblemRegion) -> Vec<RepairCandidate> {
+        fn kind(&self) -> StrategyKind {
+            StrategyKind::LiftTcp
+        }
+        fn applies_to(&self, _region: &ProblemRegion) -> bool {
+            false
+        }
+        fn generate(
+            &self,
+            _ctx: &RepairContext,
+            _plan: &CompiledPlan,
+            _region: &ProblemRegion,
+        ) -> Vec<RepairCandidate> {
             vec![]
         }
     }
 
     fn sample_region() -> ProblemRegion {
-        ProblemRegion::new(RegionId(0), RegionKind::Singularity, RegionSeverity::Critical, 10..20)
+        ProblemRegion::new(
+            RegionId(0),
+            RegionKind::Singularity,
+            RegionSeverity::Critical,
+            10..20,
+        )
     }
 
     #[test]

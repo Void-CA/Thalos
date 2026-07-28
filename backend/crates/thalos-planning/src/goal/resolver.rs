@@ -1,8 +1,8 @@
 use thalos_core::{
     kinematics::{
         forward::ForwardKinematics,
-        jacobian::{GeometricJacobian, JacobianSolver, ManipulabilityReport, SingularityReport},
         inverse::{IKGoal, IKStatus},
+        jacobian::{GeometricJacobian, JacobianSolver, ManipulabilityReport, SingularityReport},
     },
     spatial::pose::Pose,
 };
@@ -107,7 +107,10 @@ impl GoalResolver {
     /// policy metric is active. Avoids paying SVD cost when everything is `Ignore`.
     fn enrich_metadata(&self, ctx: &PlanningContext, q: &[f64], metadata: &mut GoalMetadata) {
         let active = !matches!(
-            (self.config.policy.singularity, self.config.policy.manipulability),
+            (
+                self.config.policy.singularity,
+                self.config.policy.manipulability
+            ),
             (MetricAction::Ignore, MetricAction::Ignore)
         );
 
@@ -119,11 +122,7 @@ impl GoalResolver {
         }
     }
 
-    fn validate_joint_limits(
-        &self,
-        ctx: &PlanningContext,
-        q: &[f64],
-    ) -> Result<(), PlanningError> {
+    fn validate_joint_limits(&self, ctx: &PlanningContext, q: &[f64]) -> Result<(), PlanningError> {
         let mut joint_idx = 0;
         for segment in &ctx.robot.segments {
             if segment.joint.dof() == 0 {

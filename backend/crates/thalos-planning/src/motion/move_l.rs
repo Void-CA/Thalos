@@ -10,7 +10,7 @@ use crate::{
     error::PlanningError,
     goal::{ResolvedPoseGoal, ValidatedGoal},
     interpolate::cartesian,
-    motion::planner::{SegmentPlanner, PlanningContext, PlanningResult},
+    motion::planner::{PlanningContext, PlanningResult, SegmentPlanner},
     trajectory::{Trajectory, TrajectoryPoint},
 };
 
@@ -73,11 +73,11 @@ impl SegmentPlanner for MoveLPlanner {
         let n = cartesian_waypoints.len();
         let mut trajectory = Trajectory::new(Vec::with_capacity(n));
 
-        let total_distance =
-            ((end_transform.translation.x - start_transform.translation.x).powi(2)
-                + (end_transform.translation.y - start_transform.translation.y).powi(2)
-                + (end_transform.translation.z - start_transform.translation.z).powi(2))
-            .sqrt();
+        let total_distance = ((end_transform.translation.x - start_transform.translation.x)
+            .powi(2)
+            + (end_transform.translation.y - start_transform.translation.y).powi(2)
+            + (end_transform.translation.z - start_transform.translation.z).powi(2))
+        .sqrt();
 
         let mut q_current = ctx.current_state.as_slice().to_vec();
 
@@ -94,9 +94,7 @@ impl SegmentPlanner for MoveLPlanner {
                     transform.clone(),
                 );
 
-                let ik_result = ctx
-                    .ik_solver
-                    .solve(&q_current, IKGoal::Pose(waypoint_pose));
+                let ik_result = ctx.ik_solver.solve(&q_current, IKGoal::Pose(waypoint_pose));
 
                 match ik_result.status {
                     IKStatus::Converged => {

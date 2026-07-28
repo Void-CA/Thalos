@@ -96,18 +96,38 @@ impl RepairSessionService {
 
         let revision = {
             let session = self.store.get_mut(&session_id).ok_or("session not found")?;
-            session.apply(region_id, strategy, candidate, new_plan, metrics_before, metrics_after)?
+            session.apply(
+                region_id,
+                strategy,
+                candidate,
+                new_plan,
+                metrics_before,
+                metrics_after,
+            )?
         };
 
         self.store.invalidate_session_previews(&session_id);
 
-        let session = self.store.get(&session_id).ok_or("session not found")?.clone();
-        Ok(ApplyResult { new_revision: revision, session })
+        let session = self
+            .store
+            .get(&session_id)
+            .ok_or("session not found")?
+            .clone();
+        Ok(ApplyResult {
+            new_revision: revision,
+            session,
+        })
     }
 
     /// Cierra una sesión.
     pub fn close_session(&mut self, session_id: SessionId) -> bool {
-        self.store.get_mut(&session_id).map(|s| { s.close(); true }).unwrap_or(false)
+        self.store
+            .get_mut(&session_id)
+            .map(|s| {
+                s.close();
+                true
+            })
+            .unwrap_or(false)
     }
 
     /// Descarta una sesión.

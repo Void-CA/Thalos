@@ -8,7 +8,7 @@ use std::sync::Arc;
 use thalos_core::{
     kinematics::{
         forward::ForwardKinematics,
-        inverse::{JacobianTransposeSolver, IKSolver},
+        inverse::{IKSolver, JacobianTransposeSolver},
     },
     models::manipulator_3dof::Manipulator3DOFSpec,
     robot::serial_chain::SerialChain,
@@ -16,9 +16,9 @@ use thalos_core::{
 };
 use thalos_math::Vector3;
 use thalos_optimization::{
+    TrajectoryOperator,
     domain::context::{JointLimits, OptimizationContext, PipelineConfig},
     operators::JointCenteringOperator,
-    TrajectoryOperator,
 };
 use thalos_planning::{
     adapters::RepairStrategyAdapter,
@@ -37,32 +37,57 @@ fn compute_metrics(traj: &Trajectory) -> PlanMetrics {
 }
 
 fn pct(before: f64, after: f64) -> String {
-    if before.abs() < 1e-12 { return "N/A".into(); }
+    if before.abs() < 1e-12 {
+        return "N/A".into();
+    }
     format!("{:+.1}%", (after - before) / before * 100.0)
 }
 
 fn make_ctx(chain: &SerialChain) -> OptimizationContext {
-    let lower: Vec<f64> = chain.segments.iter().map(|s| s.joint.limits().min).collect();
-    let upper: Vec<f64> = chain.segments.iter().map(|s| s.joint.limits().max).collect();
+    let lower: Vec<f64> = chain
+        .segments
+        .iter()
+        .map(|s| s.joint.limits().min)
+        .collect();
+    let upper: Vec<f64> = chain
+        .segments
+        .iter()
+        .map(|s| s.joint.limits().max)
+        .collect();
     OptimizationContext {
-        joint_limits: JointLimits { lower, upper, velocity: None, acceleration: None },
+        joint_limits: JointLimits {
+            lower,
+            upper,
+            velocity: None,
+            acceleration: None,
+        },
         config: PipelineConfig::default(),
         tool_frame: None,
     }
 }
 
-fn run_operator(name: &str, op: &dyn TrajectoryOperator, chain: &SerialChain,
-    traj: &Trajectory, region: &thalos_core::analysis::region::ProblemRegion,
-    before: &PlanMetrics, ctx: &OptimizationContext) {
+fn run_operator(
+    name: &str,
+    op: &dyn TrajectoryOperator,
+    chain: &SerialChain,
+    traj: &Trajectory,
+    region: &thalos_core::analysis::region::ProblemRegion,
+    before: &PlanMetrics,
+    ctx: &OptimizationContext,
+) {
     let result = op.apply(chain, traj, region, ctx, None);
     match result {
         Ok(new_traj) => {
             let m = compute_metrics(&new_traj);
-            println!("  ◉ {:<22} smooth={:.4} ({}), manip_avg={:.4} ({}), joint_margin={:.4} ({})",
+            println!(
+                "  ◉ {:<22} smooth={:.4} ({}), manip_avg={:.4} ({}), joint_margin={:.4} ({})",
                 name,
-                m.smoothness, pct(before.smoothness, m.smoothness),
-                m.manipulability.average, pct(before.manipulability.average, m.manipulability.average),
-                m.joint_safety.min_margin, pct(before.joint_safety.min_margin, m.joint_safety.min_margin),
+                m.smoothness,
+                pct(before.smoothness, m.smoothness),
+                m.manipulability.average,
+                pct(before.manipulability.average, m.manipulability.average),
+                m.joint_safety.min_margin,
+                pct(before.joint_safety.min_margin, m.joint_safety.min_margin),
             );
         }
         Err(e) => println!("  ✗ {:<22} {:?}", name, e),
@@ -75,14 +100,21 @@ fn trajectory_near_limits() -> Trajectory {
         let t = i as f64 * 0.1;
         let q2 = 2.8 + (i as f64 * 0.01);
         pts.push(TrajectoryPoint::new(
-            vec![0.5 + i as f64 * 0.02, q2.min(3.0), 0.3 + i as f64 * 0.01], t));
+            vec![0.5 + i as f64 * 0.02, q2.min(3.0), 0.3 + i as f64 * 0.01],
+            t,
+        ));
     }
     Trajectory::new(pts)
 }
 
 fn regions_near_limits() -> Vec<thalos_core::analysis::region::ProblemRegion> {
     use thalos_core::analysis::region::*;
-    vec![ProblemRegion::new(RegionId(0), RegionKind::Constraint, RegionSeverity::Warning, 10..25)]
+    vec![ProblemRegion::new(
+        RegionId(0),
+        RegionKind::Constraint,
+        RegionSeverity::Warning,
+        10..25,
+    )]
 }
 
 fn trajectory_near_singularity() -> Trajectory {
@@ -101,7 +133,12 @@ fn trajectory_near_singularity() -> Trajectory {
 
 fn regions_singularity() -> Vec<thalos_core::analysis::region::ProblemRegion> {
     use thalos_core::analysis::region::*;
-    vec![ProblemRegion::new(RegionId(0), RegionKind::Singularity, RegionSeverity::Critical, 10..20)]
+    vec![ProblemRegion::new(
+        RegionId(0),
+        RegionKind::Singularity,
+        RegionSeverity::Critical,
+        10..20,
+    )]
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -140,12 +177,17 @@ fn trajectory_sharp_bends() -> Trajectory {
 /// como proxy de "cambio brusco" (max joint velocity).
 fn max_joint_delta(traj: &Trajectory) -> f64 {
     let wps = traj.waypoints();
-    if wps.len() < 2 { return 0.0; }
+    if wps.len() < 2 {
+        return 0.0;
+    }
     (0..wps.len() - 1)
         .map(|i| {
             let a = wps[i].joints();
             let b = wps[i + 1].joints();
-            a.iter().zip(b.iter()).map(|(ai, bi)| (bi - ai).abs()).sum::<f64>()
+            a.iter()
+                .zip(b.iter())
+                .map(|(ai, bi)| (bi - ai).abs())
+                .sum::<f64>()
         })
         .fold(0.0, f64::max)
 }
@@ -162,13 +204,17 @@ fn benchmark_adaptive_sampling_baseline() {
     println!("  Trayectoria: 50 waypoints, cambio brusco en idx 15-25");
     println!("  Waypoints:   {}", traj.waypoints().len());
     println!("  Smoothness:  {:.4}", m.smoothness);
-    println!("  Max delta:   {:.4} rad (proxy de cambio brusco)", max_joint_delta(&traj));
+    println!(
+        "  Max delta:   {:.4} rad (proxy de cambio brusco)",
+        max_joint_delta(&traj)
+    );
 
     // SplitSegment baseline (uniforme, factor 2x)
     let chain = build_chain();
     let tcp = chain.end_effector().clone();
     let fk = ForwardKinematics::new(chain.clone());
-    let solver = Arc::new(JacobianTransposeSolver::new(fk, tcp, 5000, 1e-4, 0.1)) as Arc<dyn IKSolver>;
+    let solver =
+        Arc::new(JacobianTransposeSolver::new(fk, tcp, 5000, 1e-4, 0.1)) as Arc<dyn IKSolver>;
     let split = SplitSegment::new(2);
     let adapter = RepairStrategyAdapter::new(&split, solver.clone());
     let ctx = make_ctx(&chain);
@@ -183,9 +229,16 @@ fn benchmark_adaptive_sampling_baseline() {
         Ok(new_traj) => {
             let m2 = compute_metrics(&new_traj);
             println!("\n  SplitSegment(×2) — baseline uniforme:");
-            println!("    Waypoints:   {} (era {})", new_traj.waypoints().len(), traj.waypoints().len());
-            println!("    Smoothness:  {:.4} ({:+.1}%)", m2.smoothness,
-                (m2.smoothness - m.smoothness) / m.smoothness.max(1e-12) * 100.0);
+            println!(
+                "    Waypoints:   {} (era {})",
+                new_traj.waypoints().len(),
+                traj.waypoints().len()
+            );
+            println!(
+                "    Smoothness:  {:.4} ({:+.1}%)",
+                m2.smoothness,
+                (m2.smoothness - m.smoothness) / m.smoothness.max(1e-12) * 100.0
+            );
             println!("    Max delta:   {:.4}", max_joint_delta(&new_traj));
         }
         Err(e) => println!("\n  SplitSegment: {:?}", e),
@@ -201,7 +254,8 @@ fn benchmark_all_operators_on_3dof() {
     let chain = build_chain();
     let tcp = chain.end_effector().clone();
     let fk = ForwardKinematics::new(chain.clone());
-    let solver = Arc::new(JacobianTransposeSolver::new(fk, tcp, 5000, 1e-4, 0.1)) as Arc<dyn IKSolver>;
+    let solver =
+        Arc::new(JacobianTransposeSolver::new(fk, tcp, 5000, 1e-4, 0.1)) as Arc<dyn IKSolver>;
 
     println!("\n═══════════════════════════════════════════════════");
     println!("  BENCHMARK: Operadores en manipulador 3DOF");
@@ -211,50 +265,135 @@ fn benchmark_all_operators_on_3dof() {
     println!("─── TRAYECTORIA 1: Joints cerca del límite ───");
     let traj1 = trajectory_near_limits();
     let m1 = compute_metrics(&traj1);
-    println!("  Antes: smooth={:.4}, manip_avg={:.4}, joint_margin={:.4}",
-        m1.smoothness, m1.manipulability.average, m1.joint_safety.min_margin);
+    println!(
+        "  Antes: smooth={:.4}, manip_avg={:.4}, joint_margin={:.4}",
+        m1.smoothness, m1.manipulability.average, m1.joint_safety.min_margin
+    );
     let reg1 = &regions_near_limits()[0];
     let ctx = make_ctx(&chain);
-    println!("  Joint limits: {:?} to {:?}", ctx.joint_limits.lower, ctx.joint_limits.upper);
+    println!(
+        "  Joint limits: {:?} to {:?}",
+        ctx.joint_limits.lower, ctx.joint_limits.upper
+    );
 
-    run_operator("JointCentering(0.3)", &JointCenteringOperator::new(0.3), &chain, &traj1, reg1, &m1, &ctx);
-    run_operator("LiftTCP(1cm)", &RepairStrategyAdapter::new(&LiftTcpStrategy::new(Vector3::new(0.0, 0.0, 0.01)), solver.clone()), &chain, &traj1, reg1, &m1, &ctx);
-    run_operator("RotateTool(0.05)", &RepairStrategyAdapter::new(&RotateToolStrategy::new(0.05), solver.clone()), &chain, &traj1, reg1, &m1, &ctx);
-    run_operator("SplitSegment(x2)", &RepairStrategyAdapter::new(&SplitSegment::new(2), solver.clone()), &chain, &traj1, reg1, &m1, &ctx);
+    run_operator(
+        "JointCentering(0.3)",
+        &JointCenteringOperator::new(0.3),
+        &chain,
+        &traj1,
+        reg1,
+        &m1,
+        &ctx,
+    );
+    run_operator(
+        "LiftTCP(1cm)",
+        &RepairStrategyAdapter::new(
+            &LiftTcpStrategy::new(Vector3::new(0.0, 0.0, 0.01)),
+            solver.clone(),
+        ),
+        &chain,
+        &traj1,
+        reg1,
+        &m1,
+        &ctx,
+    );
+    run_operator(
+        "RotateTool(0.05)",
+        &RepairStrategyAdapter::new(&RotateToolStrategy::new(0.05), solver.clone()),
+        &chain,
+        &traj1,
+        reg1,
+        &m1,
+        &ctx,
+    );
+    run_operator(
+        "SplitSegment(x2)",
+        &RepairStrategyAdapter::new(&SplitSegment::new(2), solver.clone()),
+        &chain,
+        &traj1,
+        reg1,
+        &m1,
+        &ctx,
+    );
 
     // Trayectoria 2: Singularidad
     println!("\n─── TRAYECTORIA 2: Cerca de singularidad ───");
     let traj2 = trajectory_near_singularity();
     let m2 = compute_metrics(&traj2);
-    println!("  Antes: smooth={:.4}, manip_avg={:.4}", m2.smoothness, m2.manipulability.average);
+    println!(
+        "  Antes: smooth={:.4}, manip_avg={:.4}",
+        m2.smoothness, m2.manipulability.average
+    );
     let reg2 = &regions_singularity()[0];
 
-    run_operator("JointCentering(0.3)", &JointCenteringOperator::new(0.3), &chain, &traj2, reg2, &m2, &ctx);
-    run_operator("LiftTCP(1cm)", &RepairStrategyAdapter::new(&LiftTcpStrategy::new(Vector3::new(0.0, 0.0, 0.01)), solver.clone()), &chain, &traj2, reg2, &m2, &ctx);
-    run_operator("RotateTool(0.05)", &RepairStrategyAdapter::new(&RotateToolStrategy::new(0.05), solver.clone()), &chain, &traj2, reg2, &m2, &ctx);
-    run_operator("SplitSegment(x2)", &RepairStrategyAdapter::new(&SplitSegment::new(2), solver.clone()), &chain, &traj2, reg2, &m2, &ctx);
+    run_operator(
+        "JointCentering(0.3)",
+        &JointCenteringOperator::new(0.3),
+        &chain,
+        &traj2,
+        reg2,
+        &m2,
+        &ctx,
+    );
+    run_operator(
+        "LiftTCP(1cm)",
+        &RepairStrategyAdapter::new(
+            &LiftTcpStrategy::new(Vector3::new(0.0, 0.0, 0.01)),
+            solver.clone(),
+        ),
+        &chain,
+        &traj2,
+        reg2,
+        &m2,
+        &ctx,
+    );
+    run_operator(
+        "RotateTool(0.05)",
+        &RepairStrategyAdapter::new(&RotateToolStrategy::new(0.05), solver.clone()),
+        &chain,
+        &traj2,
+        reg2,
+        &m2,
+        &ctx,
+    );
+    run_operator(
+        "SplitSegment(x2)",
+        &RepairStrategyAdapter::new(&SplitSegment::new(2), solver.clone()),
+        &chain,
+        &traj2,
+        reg2,
+        &m2,
+        &ctx,
+    );
 
     // ═══ VALIDACIÓN: Pipeline + blending ═══
     println!("\n─── VALIDACIÓN: Pipeline (con blending) vs traj completa ───");
 
     // Helper to compute one pipeline result
-    let pipeline_jc = |label: &str, traj: &Trajectory, before: &PlanMetrics, regions: Vec<thalos_core::analysis::region::ProblemRegion>| {
-        let jc = JointCenteringOperator::new(0.3);
-        let opt = TrajectoryOptimizer::new(vec![Box::new(jc) as Box<dyn TrajectoryOperator>]);
-        match opt.optimize(&chain, traj, &regions, None) {
-            Ok(r) => {
-                if let Some(ft) = &r.final_trajectory {
-                    let m = compute_metrics(ft);
-                    println!("  Pipeline {}: smooth={:.4} ({}), joint_margin={:.4} ({})",
-                        label,
-                        m.smoothness, pct(before.smoothness, m.smoothness),
-                        m.joint_safety.min_margin, pct(before.joint_safety.min_margin, m.joint_safety.min_margin),
-                    );
+    let pipeline_jc =
+        |label: &str,
+         traj: &Trajectory,
+         before: &PlanMetrics,
+         regions: Vec<thalos_core::analysis::region::ProblemRegion>| {
+            let jc = JointCenteringOperator::new(0.3);
+            let opt = TrajectoryOptimizer::new(vec![Box::new(jc) as Box<dyn TrajectoryOperator>]);
+            match opt.optimize(&chain, traj, &regions, None) {
+                Ok(r) => {
+                    if let Some(ft) = &r.final_trajectory {
+                        let m = compute_metrics(ft);
+                        println!(
+                            "  Pipeline {}: smooth={:.4} ({}), joint_margin={:.4} ({})",
+                            label,
+                            m.smoothness,
+                            pct(before.smoothness, m.smoothness),
+                            m.joint_safety.min_margin,
+                            pct(before.joint_safety.min_margin, m.joint_safety.min_margin),
+                        );
+                    }
                 }
+                Err(e) => println!("  Pipeline {}: {:?}", label, e),
             }
-            Err(e) => println!("  Pipeline {}: {:?}", label, e),
-        }
-    };
+        };
     pipeline_jc("traj1", &traj1, &m1, regions_near_limits());
     pipeline_jc("traj2", &traj2, &m2, regions_singularity());
 
@@ -266,17 +405,36 @@ fn benchmark_all_operators_on_3dof() {
         thalos_core::analysis::region::RegionSeverity::Warning,
         0..traj1.waypoints().len(),
     );
-    run_operator("JC full traj1", &JointCenteringOperator::new(0.3), &chain, &traj1, &full1, &m1, &ctx);
+    run_operator(
+        "JC full traj1",
+        &JointCenteringOperator::new(0.3),
+        &chain,
+        &traj1,
+        &full1,
+        &m1,
+        &ctx,
+    );
     let full2 = thalos_core::analysis::region::ProblemRegion::new(
         thalos_core::analysis::region::RegionId(0),
         thalos_core::analysis::region::RegionKind::Singularity,
         thalos_core::analysis::region::RegionSeverity::Critical,
         0..traj2.waypoints().len(),
     );
-    run_operator("JC full traj2", &JointCenteringOperator::new(0.3), &chain, &traj2, &full2, &m2, &ctx);
+    run_operator(
+        "JC full traj2",
+        &JointCenteringOperator::new(0.3),
+        &chain,
+        &traj2,
+        &full2,
+        &m2,
+        &ctx,
+    );
 
     println!("\n─── TABLA RESUMEN ───");
-    println!("  {:<30}  {:>12}  {:>16}", "Caso", "Smooth Δ", "Joint Margin Δ");
+    println!(
+        "  {:<30}  {:>12}  {:>16}",
+        "Caso", "Smooth Δ", "Joint Margin Δ"
+    );
     println!("  {:-<30}  {:->12}  {:->16}", "", "", "");
 
     println!("\n═══════════════════════════════════════════════════");

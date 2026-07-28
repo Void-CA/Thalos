@@ -1,7 +1,7 @@
 mod pbm;
 
-use pbm::scenarios::*;
 use pbm::run_scenario;
+use pbm::scenarios::*;
 
 #[test]
 fn joint_limit_scenario() {

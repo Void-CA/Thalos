@@ -86,14 +86,16 @@ impl RepairStrategy for LiftTcpStrategy {
         let metrics_after = PlanEvaluator::compute_metrics_from_joints(&delta.replacement);
         let manip_pct = if metrics_before.manipulability.average > 0.001 {
             ((metrics_after.manipulability.average - metrics_before.manipulability.average)
-                / metrics_before.manipulability.average) * 100.0
+                / metrics_before.manipulability.average)
+                * 100.0
         } else {
             metrics_after.manipulability.average * 100.0
         };
 
         // Smoothness también mejora (lower is better)
         let smooth_pct = if metrics_before.smoothness > 0.001 {
-            ((metrics_before.smoothness - metrics_after.smoothness) / metrics_before.smoothness) * 100.0
+            ((metrics_before.smoothness - metrics_after.smoothness) / metrics_before.smoothness)
+                * 100.0
         } else {
             0.0
         };
@@ -136,8 +138,7 @@ mod tests {
         let chain = RobotRegistry::create_default(RobotModel::Planar2R);
         let frame = chain.end_effector().clone();
         use thalos_core::kinematics::{
-            forward::ForwardKinematics,
-            inverse::JacobianTransposeSolver,
+            forward::ForwardKinematics, inverse::JacobianTransposeSolver,
         };
         let fk = ForwardKinematics::new(chain.clone());
         let solver = JacobianTransposeSolver::new(fk, frame.clone(), 5000, 1e-4, 0.1);
@@ -188,7 +189,12 @@ mod tests {
         let strategy = LiftTcpStrategy::new(Vector3::new(0.0, 0.001, 0.0));
         let ctx = test_context();
         let plan = singularity_plan();
-        let region = ProblemRegion::new(RegionId(0), RegionKind::Singularity, RegionSeverity::Critical, 5..10);
+        let region = ProblemRegion::new(
+            RegionId(0),
+            RegionKind::Singularity,
+            RegionSeverity::Critical,
+            5..10,
+        );
         let _ = strategy.generate(&ctx, &plan, &region);
         // IK puede converger o no — el test pasa si no hay panic
     }
@@ -198,9 +204,17 @@ mod tests {
         let strategy = LiftTcpStrategy::new(Vector3::new(0.0, 5.0, 0.0));
         let ctx = test_context();
         let plan = singularity_plan();
-        let region = ProblemRegion::new(RegionId(0), RegionKind::Singularity, RegionSeverity::Critical, 5..10);
+        let region = ProblemRegion::new(
+            RegionId(0),
+            RegionKind::Singularity,
+            RegionSeverity::Critical,
+            5..10,
+        );
         let candidates = strategy.generate(&ctx, &plan, &region);
-        assert!(candidates.is_empty(), "Impossible offset should produce no candidates");
+        assert!(
+            candidates.is_empty(),
+            "Impossible offset should produce no candidates"
+        );
     }
 
     #[test]
@@ -208,8 +222,7 @@ mod tests {
         // Valida el pipeline infrastructure: extraer segmento, crear delta, merge
         let plan = singularity_plan();
         let segment = plan.extract_segment(5..10).expect("segment exists");
-        let delta = PlanDelta::new(RegionId(0), 5..10, segment)
-            .expect("valid delta");
+        let delta = PlanDelta::new(RegionId(0), 5..10, segment).expect("valid delta");
         let merged = crate::repair::merger::PlanMerger::apply(&plan, &delta)
             .expect("PlanMerger accepts self-replacement");
         assert_eq!(merged.merged_trajectory.len(), plan.merged_trajectory.len());

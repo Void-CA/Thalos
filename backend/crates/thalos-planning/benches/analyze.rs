@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 use thalos_core::{
     models::{RobotModel, RobotRegistry},
@@ -49,5 +49,10 @@ fn bench_analyze_1000(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_analyze_10, bench_analyze_100, bench_analyze_1000);
+criterion_group!(
+    benches,
+    bench_analyze_10,
+    bench_analyze_100,
+    bench_analyze_1000
+);
 criterion_main!(benches);

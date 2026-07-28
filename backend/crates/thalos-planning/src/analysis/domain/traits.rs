@@ -1,5 +1,5 @@
-use crate::analysis::domain::types::{ProblemRegion, RegionKind};
 use crate::analysis::PlanAnalysis;
+use crate::analysis::domain::types::{ProblemRegion, RegionKind};
 use crate::motion::program::CompiledPlan;
 
 /// Contrato para la detección de regiones problemáticas a partir del análisis de un plan.

@@ -15,26 +15,22 @@
 use std::sync::Arc;
 
 use thalos_core::{
-    evaluation::{
-        CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics, PlanMetrics,
-    },
-    kinematics::inverse::{IKSolver, IKGoal, IKResult, IKStatus},
+    evaluation::{CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics, PlanMetrics},
+    kinematics::inverse::{IKGoal, IKResult, IKSolver, IKStatus},
     operation::ConstraintQuery,
     robot::serial_chain::SerialChain,
     trajectory::Trajectory,
 };
 use thalos_optimization::{
     domain::{
-        JointLimits, OptimizationContext, OptimizationReport, PipelineConfig,
-        TrajectoryOperator,
+        JointLimits, OptimizationContext, OptimizationReport, PipelineConfig, TrajectoryOperator,
     },
     error::OptimizationError,
     pipeline::OptimizationPipeline,
 };
 
 use crate::{
-    adapters::RepairStrategyAdapter,
-    analysis::domain::ProblemRegion,
+    adapters::RepairStrategyAdapter, analysis::domain::ProblemRegion,
     repair::domain::traits::RepairStrategy,
 };
 
@@ -133,15 +129,14 @@ impl TrajectoryOptimizer {
         // 4. Wrap legacy strategies if an IK solver is provided.
         //    Declared before `all_ops` to ensure correct drop order
         //    (adapters outlive all_ops references).
-        let adapter_refs: Vec<RepairStrategyAdapter<'_>> =
-            if let Some(ref solver) = ik_solver {
-                self.legacy_strategies
-                    .iter()
-                    .map(|s| RepairStrategyAdapter::new(s.as_ref(), solver.clone()))
-                    .collect()
-            } else {
-                Vec::new()
-            };
+        let adapter_refs: Vec<RepairStrategyAdapter<'_>> = if let Some(ref solver) = ik_solver {
+            self.legacy_strategies
+                .iter()
+                .map(|s| RepairStrategyAdapter::new(s.as_ref(), solver.clone()))
+                .collect()
+        } else {
+            Vec::new()
+        };
 
         // 5. Combine all operator references into one slice
         let all_ops: Vec<&dyn TrajectoryOperator> = native_refs
@@ -151,14 +146,9 @@ impl TrajectoryOptimizer {
             .collect();
 
         // 6. Run the optimization pipeline
-        let result = self.pipeline.optimize(
-            &all_ops,
-            chain,
-            trajectory,
-            regions,
-            &metrics,
-            &ctx,
-        )?;
+        let result = self
+            .pipeline
+            .optimize(&all_ops, chain, trajectory, regions, &metrics, &ctx)?;
 
         Ok(result.report)
     }
@@ -425,10 +415,8 @@ mod tests {
         let strategy = AcceptingStrategy;
         let solver = Arc::new(DummySolver);
 
-        let optimizer = TrajectoryOptimizer::with_legacy_strategies(
-            vec![],
-            vec![Box::new(strategy)],
-        );
+        let optimizer =
+            TrajectoryOptimizer::with_legacy_strategies(vec![], vec![Box::new(strategy)]);
 
         let chain = test_chain();
         let traj = test_trajectory();
@@ -439,16 +427,17 @@ mod tests {
             .expect("optimize with legacy strategies should succeed");
 
         // The adapter should run and produce a step
-        assert!(!report.steps.is_empty(), "expected steps from legacy adapter");
+        assert!(
+            !report.steps.is_empty(),
+            "expected steps from legacy adapter"
+        );
     }
 
     #[test]
     fn legacy_strategies_skipped_when_no_ik_solver() {
         let strategy = AcceptingStrategy;
-        let optimizer = TrajectoryOptimizer::with_legacy_strategies(
-            vec![],
-            vec![Box::new(strategy)],
-        );
+        let optimizer =
+            TrajectoryOptimizer::with_legacy_strategies(vec![], vec![Box::new(strategy)]);
 
         let chain = test_chain();
         let traj = test_trajectory();

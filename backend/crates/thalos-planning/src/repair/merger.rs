@@ -76,7 +76,10 @@ impl PlanMerger {
         b: &thalos_core::trajectory::TrajectoryPoint,
     ) -> bool {
         a.joints().len() == b.joints().len()
-            && a.joints().iter().zip(b.joints()).all(|(x, y)| (x - y).abs() < 1e-6)
+            && a.joints()
+                .iter()
+                .zip(b.joints())
+                .all(|(x, y)| (x - y).abs() < 1e-6)
     }
 }
 
@@ -93,11 +96,7 @@ mod tests {
         CompiledPlan::new(Trajectory::new(points), vec![])
     }
 
-    fn make_delta(
-        region_id: RegionId,
-        range: std::ops::Range<usize>,
-        values: &[f64],
-    ) -> PlanDelta {
+    fn make_delta(region_id: RegionId, range: std::ops::Range<usize>, values: &[f64]) -> PlanDelta {
         let points: Vec<TrajectoryPoint> = values
             .iter()
             .enumerate()

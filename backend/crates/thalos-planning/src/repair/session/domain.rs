@@ -3,12 +3,10 @@
 //! La sesión coordina una interacción completa: analizar → elegir → aplicar → validar.
 //! `original_plan` es inmutable, `working_plan` es una caché coherente con la revisión actual.
 
+use crate::analysis::domain::RegionId;
 use crate::evaluation::metrics::PlanMetrics;
 use crate::motion::program::CompiledPlan;
-use crate::repair::domain::types::{
-    PlanDelta, RepairCandidate, RepairEvaluation, StrategyKind,
-};
-use crate::analysis::domain::RegionId;
+use crate::repair::domain::types::{PlanDelta, RepairCandidate, RepairEvaluation, StrategyKind};
 
 /// Identificador de revisión del plan.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -119,8 +117,8 @@ pub struct RepairPreview {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use thalos_core::trajectory::Trajectory;
     use crate::repair::domain::types::RepairCandidate;
+    use thalos_core::trajectory::Trajectory;
 
     fn empty_plan() -> CompiledPlan {
         CompiledPlan::new(Trajectory::new(vec![]), vec![])
@@ -129,11 +127,26 @@ mod tests {
     fn dummy_metrics() -> PlanMetrics {
         use crate::evaluation::metrics::*;
         PlanMetrics {
-            length: 0.0, waypoint_count: 0,
-            manipulability: ManipulabilityMetrics { min: 0.0, average: 0.0, near_singular_count: 0, singular_count: 0 },
-            joint_safety: JointSafetyMetrics { min_margin: 0.0, avg_max_utilization: 0.0, violation_count: 0 },
-            collision: CollisionMetrics { min_distance: 0.0, collision_count: 0, near_miss_count: 0 },
-            smoothness: 0.0, orientation_change: 0.0,
+            length: 0.0,
+            waypoint_count: 0,
+            manipulability: ManipulabilityMetrics {
+                min: 0.0,
+                average: 0.0,
+                near_singular_count: 0,
+                singular_count: 0,
+            },
+            joint_safety: JointSafetyMetrics {
+                min_margin: 0.0,
+                avg_max_utilization: 0.0,
+                violation_count: 0,
+            },
+            collision: CollisionMetrics {
+                min_distance: 0.0,
+                collision_count: 0,
+                near_miss_count: 0,
+            },
+            smoothness: 0.0,
+            orientation_change: 0.0,
         }
     }
 
@@ -151,16 +164,21 @@ mod tests {
         let candidate = RepairCandidate::new(
             crate::repair::domain::types::StrategyKind::LiftTcp,
             crate::repair::domain::types::PlanDelta::new(
-                crate::analysis::domain::RegionId(0), 0..10, Trajectory::new(vec![]),
-            ).unwrap(),
+                crate::analysis::domain::RegionId(0),
+                0..10,
+                Trajectory::new(vec![]),
+            )
+            .unwrap(),
         );
         s.apply(
             crate::analysis::domain::RegionId(0),
             crate::repair::domain::types::StrategyKind::LiftTcp,
             candidate,
             empty_plan(),
-            dm.clone(), dm.clone(),
-        ).unwrap();
+            dm.clone(),
+            dm.clone(),
+        )
+        .unwrap();
         assert_eq!(s.revision.0, 1);
         assert_eq!(s.history.len(), 1);
     }
@@ -173,19 +191,28 @@ mod tests {
         let candidate = RepairCandidate::new(
             crate::repair::domain::types::StrategyKind::LiftTcp,
             crate::repair::domain::types::PlanDelta::new(
-                crate::analysis::domain::RegionId(0), 0..10, Trajectory::new(vec![]),
-            ).unwrap(),
+                crate::analysis::domain::RegionId(0),
+                0..10,
+                Trajectory::new(vec![]),
+            )
+            .unwrap(),
         );
-        let new_plan = CompiledPlan::new(Trajectory::new(vec![
-            thalos_core::trajectory::TrajectoryPoint::new(vec![1.0], 0.0),
-        ]), vec![]);
+        let new_plan = CompiledPlan::new(
+            Trajectory::new(vec![thalos_core::trajectory::TrajectoryPoint::new(
+                vec![1.0],
+                0.0,
+            )]),
+            vec![],
+        );
         s.apply(
             crate::analysis::domain::RegionId(0),
             crate::repair::domain::types::StrategyKind::LiftTcp,
             candidate,
             new_plan,
-            dm.clone(), dm,
-        ).unwrap();
+            dm.clone(),
+            dm,
+        )
+        .unwrap();
         assert_eq!(s.original_plan.waypoint_count, original.waypoint_count);
         assert_eq!(s.working_plan.waypoint_count, 1);
     }
@@ -198,8 +225,11 @@ mod tests {
         let candidate = RepairCandidate::new(
             crate::repair::domain::types::StrategyKind::LiftTcp,
             crate::repair::domain::types::PlanDelta::new(
-                crate::analysis::domain::RegionId(0), 0..10, Trajectory::new(vec![]),
-            ).unwrap(),
+                crate::analysis::domain::RegionId(0),
+                0..10,
+                Trajectory::new(vec![]),
+            )
+            .unwrap(),
         );
         let dm2 = dummy_metrics();
         let result = s.apply(
@@ -207,7 +237,8 @@ mod tests {
             crate::repair::domain::types::StrategyKind::LiftTcp,
             candidate,
             empty_plan(),
-            dm, dm2,
+            dm,
+            dm2,
         );
         assert!(result.is_err());
     }
