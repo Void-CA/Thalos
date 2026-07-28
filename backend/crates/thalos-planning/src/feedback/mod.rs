@@ -11,3 +11,5 @@
 //! - `orchestrator` — coordination layer (PR 3): full feedback cycle
 
 pub mod finding;
+pub mod operator;
+pub mod operators;
