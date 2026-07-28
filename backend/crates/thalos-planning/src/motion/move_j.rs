@@ -1,7 +1,7 @@
 use crate::{
     goal::{JointGoal, ValidatedGoal},
     interpolate::joint,
-    motion::planner::{MotionPlanner, PlanningContext, PlanningResult},
+    motion::planner::{SegmentPlanner, PlanningContext, PlanningResult},
     trajectory::Trajectory,
 };
 
@@ -38,8 +38,8 @@ impl Default for MoveJPlanner {
     }
 }
 
-impl MotionPlanner for MoveJPlanner {
-    type Goal = JointGoal;
+impl SegmentPlanner for MoveJPlanner {
+    type Goal = ValidatedGoal<JointGoal>;
 
     fn plan(
         &self,

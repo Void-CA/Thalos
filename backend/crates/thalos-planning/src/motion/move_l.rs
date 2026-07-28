@@ -10,7 +10,7 @@ use crate::{
     error::PlanningError,
     goal::{ResolvedPoseGoal, ValidatedGoal},
     interpolate::cartesian,
-    motion::planner::{MotionPlanner, PlanningContext, PlanningResult},
+    motion::planner::{SegmentPlanner, PlanningContext, PlanningResult},
     trajectory::{Trajectory, TrajectoryPoint},
 };
 
@@ -49,8 +49,8 @@ impl Default for MoveLPlanner {
     }
 }
 
-impl MotionPlanner for MoveLPlanner {
-    type Goal = ResolvedPoseGoal;
+impl SegmentPlanner for MoveLPlanner {
+    type Goal = ValidatedGoal<ResolvedPoseGoal>;
 
     fn plan(
         &self,

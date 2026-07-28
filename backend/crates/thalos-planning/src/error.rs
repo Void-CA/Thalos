@@ -31,6 +31,19 @@ pub enum PlanningError {
     CollisionDetected {
         involved: (thalos_core::collision::EntityId, thalos_core::collision::EntityId),
     },
+
+    // ── Program-level planning errors ──────────────────────────────────
+
+    #[error("Motion program is empty (no instructions)")]
+    EmptyProgram,
+
+    #[error("Planning context is invalid: {0}")]
+    InvalidContext(String),
+
+    #[error("Inverse kinematics failed for pose index {pose_index}")]
+    IKFailure {
+        pose_index: usize,
+    },
 }
 
 impl From<&str> for PlanningError {

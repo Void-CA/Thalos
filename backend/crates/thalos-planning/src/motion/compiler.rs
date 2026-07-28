@@ -12,7 +12,7 @@ use crate::goal::{
 };
 use crate::motion::move_j::{MoveJConfig, MoveJPlanner};
 use crate::motion::move_l::{MoveLConfig, MoveLPlanner};
-use crate::motion::planner::{MotionPlanner, PlanningContext};
+use crate::motion::planner::{MotionPlanner, SegmentPlanner, SegmentPlanningContext};
 use crate::motion::program::{CompiledPlan, MotionProgram, PlannedSegment};
 
 /// Dispatches a `MotionSegment` to the appropriate `MotionPlanner`.
@@ -26,7 +26,7 @@ pub trait MotionPlannerDispatcher {
     fn plan_segment(
         &self,
         segment: &MotionSegment,
-        ctx: &PlanningContext,
+        ctx: &SegmentPlanningContext,
     ) -> Result<Trajectory, PlanningError>;
 }
 
@@ -59,7 +59,7 @@ impl MotionPlannerDispatcher for DefaultPlannerDispatcher {
     fn plan_segment(
         &self,
         segment: &MotionSegment,
-        ctx: &PlanningContext,
+        ctx: &SegmentPlanningContext,
     ) -> Result<Trajectory, PlanningError> {
         match segment {
             MotionSegment::MoveJ {
@@ -141,7 +141,7 @@ impl PlanCompiler {
     pub fn compile(
         &self,
         program: &MotionProgram,
-        ctx: &PlanningContext,
+        ctx: &SegmentPlanningContext,
     ) -> Result<CompiledPlan, CompileError> {
         let mut segments = Vec::with_capacity(program.segments.len());
         let mut all_waypoints: Vec<TrajectoryPoint> = Vec::new();
@@ -150,7 +150,7 @@ impl PlanCompiler {
 
         for (segment_index, segment) in program.segments.iter().enumerate() {
             let segment_state = RobotState::new(current_joints.clone());
-            let segment_ctx = PlanningContext {
+            let segment_ctx = SegmentPlanningContext {
                 robot: ctx.robot,
                 current_state: &segment_state,
                 ik_solver: ctx.ik_solver,
@@ -208,7 +208,7 @@ impl PlanCompiler {
     pub fn compile_with_operations(
         &self,
         operations: &[Operation],
-        ctx: &PlanningContext,
+        ctx: &SegmentPlanningContext,
     ) -> Result<OperationCompilation, CompileError> {
         // 1. Expand each operation to MotionNodes.
         let mut all_nodes: Vec<MotionNode> = Vec::new();
@@ -289,8 +289,8 @@ mod tests {
             Self { chain, state, ik: NoopIKSolver }
         }
 
-        fn ctx(&self) -> PlanningContext<'_> {
-            PlanningContext {
+        fn ctx(&self) -> SegmentPlanningContext<'_> {
+            SegmentPlanningContext {
                 robot: &self.chain,
                 current_state: &self.state,
                 ik_solver: &self.ik,
@@ -418,7 +418,7 @@ mod tests {
         fn plan_segment(
             &self,
             _segment: &MotionSegment,
-            _ctx: &PlanningContext,
+            _ctx: &SegmentPlanningContext,
         ) -> Result<Trajectory, PlanningError> {
             Err(PlanningError::InvalidGoal("always fails".into()))
         }
@@ -457,7 +457,7 @@ mod tests {
             fn plan_segment(
                 &self,
                 segment: &MotionSegment,
-                ctx: &PlanningContext,
+                ctx: &SegmentPlanningContext,
             ) -> Result<Trajectory, PlanningError> {
                 // Let the first segment through
                 match segment {
@@ -513,7 +513,7 @@ mod tests {
 
     fn make_pick(id: u64, constraints: OperationConstraints) -> CoreOperation {
         CoreOperation::Pick {
-            id: OperationId(id),
+            id: OperationId(id.to_string()),
             target_pose: sample_pose(),
             constraints,
         }
@@ -558,7 +558,7 @@ mod tests {
 
         // Transit has default (empty) constraints → no restrictions
         let transit = CoreOperation::Transit {
-            id: OperationId(2),
+            id: OperationId("2".to_string()),
             target_pose: sample_pose(),
             constraints: OperationConstraints::default(),
         };
