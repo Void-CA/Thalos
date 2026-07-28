@@ -85,6 +85,9 @@ impl RuntimeError {
                 PlanningError::InvalidGoal(_) => "invalid_goal",
                 PlanningError::UnreachableGoal { .. } => "unreachable_goal",
                 PlanningError::CollisionDetected { .. } => "collision_detected",
+                PlanningError::EmptyProgram => "empty_program",
+                PlanningError::InvalidContext(_) => "invalid_context",
+                PlanningError::IKFailure { .. } => "ik_failure",
             }
             RuntimeError::JointCountMismatch { expected, received } => "joint_count_mismatch",
             RuntimeError::ToolFrameNotFound { .. } => "tool_frame_not_found",

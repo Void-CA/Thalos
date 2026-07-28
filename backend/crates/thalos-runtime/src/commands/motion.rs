@@ -16,7 +16,7 @@ use thalos_planning::{
         GoalMetadata, GoalResolver, GoalResolverConfig, PlanningAssessment,
         PlanningPolicy, ValidatedGoal,
     },
-    motion::planner::{MotionPlanner, PlanningContext},
+    motion::planner::{SegmentPlanner, PlanningContext},
     motion::move_j::{MoveJConfig, MoveJPlanner},
 };
 
