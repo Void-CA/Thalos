@@ -13,8 +13,8 @@ use crate::ir::IrProgram;
 
 pub use analysis::{AnalysisResult, ConstraintSet};
 pub use planning::{
-    PlanMetadata, PlannedOperation, PlannedProgram, PipelineStage, StageResult, StageStatus,
-    Version,
+    MotionStrategy, PlanMetadata, PlannedOperation, PlannedProgram, PipelineStage, StageResult,
+    StageStatus, Version,
 };
 
 // ---------------------------------------------------------------------------
@@ -128,6 +128,7 @@ pub fn run_pipeline(
 
     Ok(PlannedProgram {
         operations,
+        home_pose: None,
         constraints: analysis_result.constraints,
         metadata,
     })
@@ -208,7 +209,10 @@ mod integration_tests {
             1,
             "planned operations should match IR operations"
         );
-        assert_eq!(program.operations[0].kind, "home");
+        assert!(
+            matches!(&program.operations[0], PlannedOperation::Home { origin } if origin.as_str() == "op_01"),
+            "expected Home variant with origin op_01"
+        );
         assert_eq!(
             program.metadata.stage_status.len(),
             3,
@@ -234,9 +238,9 @@ mod integration_tests {
         let program = result.unwrap();
 
         assert_eq!(program.operations.len(), 3);
-        assert_eq!(program.operations[0].origin.as_str(), "op_01");
-        assert_eq!(program.operations[1].origin.as_str(), "op_02");
-        assert_eq!(program.operations[2].origin.as_str(), "op_03");
+        assert!(matches!(&program.operations[0], PlannedOperation::Home { origin } if origin.as_str() == "op_01"));
+        assert!(matches!(&program.operations[1], PlannedOperation::Home { origin } if origin.as_str() == "op_02"));
+        assert!(matches!(&program.operations[2], PlannedOperation::Wait { origin, .. } if origin.as_str() == "op_03"));
     }
 
     #[test]

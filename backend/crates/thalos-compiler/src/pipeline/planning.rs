@@ -6,11 +6,13 @@
 
 use std::time::Duration;
 
+use thalos_core::ids::OperationId;
+use thalos_core::motion::{MotionPose, MotionProfile, OutputChannel, OutputValue};
+
 use crate::ir::{IrOperation, IrProgram};
 use super::analysis::{AnalysisResult, ConstraintSet};
 use super::CompilationOptions;
 use thalos_document::diagnostic::Diagnostic;
-use thalos_document::id::OperationId;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,6 +28,9 @@ pub struct PlanningStage;
 pub struct PlannedProgram {
     /// Ordered planned operations, one per post-policy IR operation.
     pub operations: Vec<PlannedOperation>,
+    /// Home pose for the robot — required by SCARA when lowering `Home` ops.
+    /// Set after planning by the pipeline or by the lowering layer.
+    pub home_pose: Option<MotionPose>,
     /// Bound constraints from the analysis stage.
     pub constraints: ConstraintSet,
     /// Pipeline execution metadata.
@@ -34,13 +39,68 @@ pub struct PlannedProgram {
 
 /// A single planned operation — the result of mapping one `IrOperation`
 /// through strategy selection.
+///
+/// Each variant carries the `origin: OperationId` for traceability back to the
+/// source IR operation. Motion operations include a `MotionStrategy` (Joint or
+/// Linear) assigned by the planner — lowering reads the strategy but never
+/// decides it.
 #[derive(Debug, Clone, PartialEq)]
-pub struct PlannedOperation {
-    /// The originating IR operation's `OperationId` for traceability.
-    pub origin: OperationId,
-    /// A human-readable label describing the kind of operation
-    /// (e.g. `"home"`, `"move_to"`, `"follow"`, `"wait"`, `"set_output"`).
-    pub kind: String,
+pub enum PlannedOperation {
+    /// Return the robot to its configured home position.
+    Home {
+        /// The originating IR operation's ID.
+        origin: OperationId,
+    },
+    /// Move to a target pose with a specific motion strategy.
+    MoveTo {
+        /// The originating IR operation's ID.
+        origin: OperationId,
+        /// Whether to execute as joint-space (MoveJ) or linear (MoveL).
+        strategy: MotionStrategy,
+        /// The target pose.
+        pose: MotionPose,
+        /// Motion profile (velocity/acceleration limits).
+        profile: MotionProfile,
+    },
+    /// Follow an ordered sequence of waypoints.
+    Follow {
+        /// The originating IR operation's ID.
+        origin: OperationId,
+        /// The motion strategy (always Linear for Follow in SCARA v1).
+        strategy: MotionStrategy,
+        /// Ordered waypoints (resolved poses with full frame metadata).
+        waypoints: Vec<crate::ir::types::ResolvedPose>,
+        /// Motion profile applied to all waypoints.
+        profile: MotionProfile,
+    },
+    /// Pause execution for a fixed duration.
+    Wait {
+        /// The originating IR operation's ID.
+        origin: OperationId,
+        /// How long to pause.
+        duration: Duration,
+    },
+    /// Set an output channel (digital/analog) to a typed value.
+    SetOutput {
+        /// The originating IR operation's ID.
+        origin: OperationId,
+        /// The output channel descriptor.
+        channel: OutputChannel,
+        /// The value to set.
+        value: OutputValue,
+    },
+}
+
+/// Motion execution strategy — assigned by the planner, consumed by lowering.
+///
+/// Joint moves each axis independently; Linear moves the TCP along a
+/// straight-line Cartesian path.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MotionStrategy {
+    /// Joint-space movement (MoveJ).
+    Joint,
+    /// Linear (Cartesian) movement (MoveL).
+    Linear,
 }
 
 /// Pipeline version identifier.
@@ -139,9 +199,10 @@ impl PlanningStage {
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Vec<PlannedOperation> {
         for op in &ir.operations {
+            let planned = op_to_planned(op);
             diagnostics.push(Diagnostic::warning(
                 "planning",
-                format!("planned operation {}", op_to_planned(op).origin),
+                format!("planned operation {}", origin_str(&planned)),
                 "pipeline",
             ));
         }
@@ -154,17 +215,96 @@ impl PlanningStage {
 }
 
 /// Map a single `IrOperation` to a `PlannedOperation`.
+///
+/// Strategy selection currently defaults to `MotionStrategy::Joint` for all
+/// motion operations. In a future iteration the planner will select the strategy
+/// based on analysis results (e.g. singularity proximity, collision risk).
 fn op_to_planned(op: &IrOperation) -> PlannedOperation {
-    let (origin, kind) = match op {
-        IrOperation::Home { origin } => (origin.clone(), "home"),
-        IrOperation::MoveTo { origin, .. } => (origin.clone(), "move_to"),
-        IrOperation::Follow { origin, .. } => (origin.clone(), "follow"),
-        IrOperation::Wait { origin, .. } => (origin.clone(), "wait"),
-        IrOperation::SetOutput { origin, .. } => (origin.clone(), "set_output"),
-    };
-    PlannedOperation {
-        origin,
-        kind: kind.to_string(),
+    match op {
+        IrOperation::Home { origin } => PlannedOperation::Home {
+            origin: origin.clone(),
+        },
+        IrOperation::MoveTo { origin, pose, profile } => PlannedOperation::MoveTo {
+            origin: origin.clone(),
+            strategy: MotionStrategy::Joint,
+            pose: resolved_pose_to_motion_pose(pose),
+            profile: resolved_profile_to_motion_profile(profile),
+        },
+        IrOperation::Follow {
+            origin,
+            waypoints,
+            profile,
+        } => PlannedOperation::Follow {
+            origin: origin.clone(),
+            strategy: MotionStrategy::Joint,
+            waypoints: waypoints.clone(),
+            profile: resolved_profile_to_motion_profile(profile),
+        },
+        IrOperation::Wait { origin, duration } => PlannedOperation::Wait {
+            origin: origin.clone(),
+            duration: *duration,
+        },
+        IrOperation::SetOutput {
+            origin,
+            channel,
+            value,
+        } => PlannedOperation::SetOutput {
+            origin: origin.clone(),
+            channel: OutputChannel {
+                name: channel.name.clone(),
+                channel_type: channel.channel_type.clone(),
+            },
+            value: doc_output_value_to_core(value),
+        },
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Accessor helpers
+// ---------------------------------------------------------------------------
+
+/// Extract the origin from any `PlannedOperation` variant.
+pub fn origin_str(op: &PlannedOperation) -> &str {
+    match op {
+        PlannedOperation::Home { origin }
+        | PlannedOperation::MoveTo { origin, .. }
+        | PlannedOperation::Follow { origin, .. }
+        | PlannedOperation::Wait { origin, .. }
+        | PlannedOperation::SetOutput { origin, .. } => origin.as_str(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Conversion helpers
+// ---------------------------------------------------------------------------
+
+/// Convert an IR `ResolvedPose` to a core `MotionPose`.
+fn resolved_pose_to_motion_pose(pose: &crate::ir::types::ResolvedPose) -> MotionPose {
+    MotionPose {
+        position: pose.position,
+        orientation: pose.orientation,
+        frame: pose.frame.name.clone(),
+    }
+}
+
+/// Convert an IR `ResolvedProfile` to a core `MotionProfile`.
+fn resolved_profile_to_motion_profile(profile: &crate::ir::types::ResolvedProfile) -> MotionProfile {
+    MotionProfile {
+        max_velocity: profile.velocity,
+        max_acceleration: profile.acceleration,
+        max_jerk: None,
+    }
+}
+
+/// Convert a document-level `OutputValue` to a core `OutputValue`.
+///
+/// Both types share the same variants (`Bool`, `Integer`, `Float`), so the
+/// mapping is direct.
+fn doc_output_value_to_core(value: &thalos_document::operation::io::OutputValue) -> OutputValue {
+    match value {
+        thalos_document::operation::io::OutputValue::Bool(v) => OutputValue::Bool(*v),
+        thalos_document::operation::io::OutputValue::Integer(v) => OutputValue::Integer(*v),
+        thalos_document::operation::io::OutputValue::Float(v) => OutputValue::Float(*v),
     }
 }
 
@@ -206,8 +346,56 @@ mod tests {
         }
     }
 
+    fn sample_pose() -> crate::ir::ResolvedPose {
+        crate::ir::ResolvedPose {
+            position: [0.0; 3],
+            orientation: [0.0, 0.0, 0.0, 1.0],
+            frame: crate::ir::ResolvedFrame {
+                name: "base".into(),
+                parent: "world".into(),
+                transform: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            },
+        }
+    }
+
+    fn sample_profile() -> crate::ir::ResolvedProfile {
+        crate::ir::ResolvedProfile {
+            name: "default".into(),
+            velocity: 1.0,
+            acceleration: 2.0,
+        }
+    }
+
+    fn default_options() -> CompilationOptions {
+        CompilationOptions {
+            policy_mode: super::super::PolicyMode::Strict,
+        }
+    }
+
+    /// Helper: extract origin from any `PlannedOperation` variant.
+    fn op_origin(op: &PlannedOperation) -> &OperationId {
+        match op {
+            PlannedOperation::Home { origin }
+            | PlannedOperation::MoveTo { origin, .. }
+            | PlannedOperation::Follow { origin, .. }
+            | PlannedOperation::Wait { origin, .. }
+            | PlannedOperation::SetOutput { origin, .. } => origin,
+        }
+    }
+
+    /// Helper: return a human-readable label for a `PlannedOperation` variant.
+    fn op_kind(op: &PlannedOperation) -> &'static str {
+        match op {
+            PlannedOperation::Home { .. } => "home",
+            PlannedOperation::MoveTo { .. } => "move_to",
+            PlannedOperation::Follow { .. } => "follow",
+            PlannedOperation::Wait { .. } => "wait",
+            PlannedOperation::SetOutput { .. } => "set_output",
+        }
+    }
+
     // ------------------------------------------------------------------
-    // 2.6 — Structural: type construction, field assertions
+    // Structural: type construction, field assertions
     // ------------------------------------------------------------------
 
     #[test]
@@ -221,41 +409,87 @@ mod tests {
     }
 
     #[test]
-    fn planned_operation_construction() {
-        let op = PlannedOperation {
+    fn planned_operation_enum_variants_construct() {
+        // Prove all 5 variants are constructible.
+        let home = PlannedOperation::Home {
             origin: OperationId("op_01".into()),
-            kind: "home".into(),
         };
-        assert_eq!(op.origin.as_str(), "op_01");
-        assert_eq!(op.kind, "home");
+        let move_to = PlannedOperation::MoveTo {
+            origin: OperationId("op_02".into()),
+            strategy: MotionStrategy::Joint,
+            pose: MotionPose {
+                position: [0.0; 3],
+                orientation: [0.0, 0.0, 0.0, 1.0],
+                frame: "world".into(),
+            },
+            profile: MotionProfile {
+                max_velocity: 1.0,
+                max_acceleration: 2.0,
+                max_jerk: None,
+            },
+        };
+        let follow = PlannedOperation::Follow {
+            origin: OperationId("op_03".into()),
+            strategy: MotionStrategy::Joint,
+            waypoints: vec![],
+            profile: MotionProfile {
+                max_velocity: 1.0,
+                max_acceleration: 2.0,
+                max_jerk: None,
+            },
+        };
+        let wait = PlannedOperation::Wait {
+            origin: OperationId("op_04".into()),
+            duration: Duration::from_secs(1),
+        };
+        let set_output = PlannedOperation::SetOutput {
+            origin: OperationId("op_05".into()),
+            channel: OutputChannel {
+                name: "gripper".into(),
+                channel_type: "digital".into(),
+            },
+            value: OutputValue::Bool(true),
+        };
+
+        assert_eq!(op_kind(&home), "home");
+        assert_eq!(op_kind(&move_to), "move_to");
+        assert_eq!(op_kind(&follow), "follow");
+        assert_eq!(op_kind(&wait), "wait");
+        assert_eq!(op_kind(&set_output), "set_output");
+        assert_eq!(op_origin(&home).as_str(), "op_01");
+        assert_eq!(op_origin(&move_to).as_str(), "op_02");
+        assert_eq!(op_origin(&follow).as_str(), "op_03");
+        assert_eq!(op_origin(&wait).as_str(), "op_04");
+        assert_eq!(op_origin(&set_output).as_str(), "op_05");
     }
 
     #[test]
-    fn planned_program_construction() {
-        let ops = vec![PlannedOperation {
+    fn planned_program_construction_with_home_pose() {
+        let ops = vec![PlannedOperation::Home {
             origin: OperationId("op_01".into()),
-            kind: "home".into(),
         }];
+        let home_pose = Some(MotionPose {
+            position: [0.0, 0.0, 0.0],
+            orientation: [0.0, 0.0, 0.0, 1.0],
+            frame: "world".into(),
+        });
         let constraints = ConstraintSet { items: vec![] };
         let metadata = PlanMetadata {
-            pipeline_version: Version {
-                major: 0,
-                minor: 1,
-            },
+            pipeline_version: Version { major: 0, minor: 1 },
             execution_time: Duration::ZERO,
-            compilation_options: CompilationOptions {
-                policy_mode: super::super::PolicyMode::Strict,
-            },
+            compilation_options: default_options(),
             diagnostics: vec![],
             stage_status: vec![],
         };
         let program = PlannedProgram {
-            operations: ops.clone(),
+            operations: ops,
+            home_pose: home_pose.clone(),
             constraints,
             metadata,
         };
         assert_eq!(program.operations.len(), 1);
-        assert_eq!(program.operations[0].kind, "home");
+        assert_eq!(program.home_pose, home_pose);
+        assert_eq!(op_kind(&program.operations[0]), "home");
     }
 
     #[test]
@@ -267,7 +501,7 @@ mod tests {
         );
         assert_eq!(sr.stage, PipelineStage::Policy);
         assert_eq!(sr.status, StageStatus::Success);
-        let _ = sr.duration; // Duration is always non-negative by construction.
+        let _ = sr.duration;
     }
 
     #[test]
@@ -307,7 +541,7 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // 2.6 — Behavioral: one-to-one ops mapping, metadata construction
+    // Behavioral: one-to-one ops mapping, metadata construction
     // ------------------------------------------------------------------
 
     #[test]
@@ -340,20 +574,8 @@ mod tests {
             },
             IrOperation::MoveTo {
                 origin: OperationId("op_02".into()),
-                pose: crate::ir::ResolvedPose {
-                    position: [0.0; 3],
-                    orientation: [0.0, 0.0, 0.0, 1.0],
-                    frame: crate::ir::ResolvedFrame {
-                        name: "base".into(),
-                        parent: "world".into(),
-                        transform: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
-                    },
-                },
-                profile: crate::ir::ResolvedProfile {
-                    name: "default".into(),
-                    velocity: 1.0,
-                    acceleration: 2.0,
-                },
+                pose: sample_pose(),
+                profile: sample_profile(),
             },
             IrOperation::Wait {
                 origin: OperationId("op_03".into()),
@@ -365,12 +587,12 @@ mod tests {
         let ops = execute(&ir, &analysis, &mut diags);
 
         assert_eq!(ops.len(), 3);
-        assert_eq!(ops[0].origin.as_str(), "op_01");
-        assert_eq!(ops[1].origin.as_str(), "op_02");
-        assert_eq!(ops[2].origin.as_str(), "op_03");
-        assert_eq!(ops[0].kind, "home");
-        assert_eq!(ops[1].kind, "move_to");
-        assert_eq!(ops[2].kind, "wait");
+        assert_eq!(op_origin(&ops[0]).as_str(), "op_01");
+        assert_eq!(op_origin(&ops[1]).as_str(), "op_02");
+        assert_eq!(op_origin(&ops[2]).as_str(), "op_03");
+        assert_eq!(op_kind(&ops[0]), "home");
+        assert_eq!(op_kind(&ops[1]), "move_to");
+        assert_eq!(op_kind(&ops[2]), "wait");
     }
 
     #[test]
@@ -393,37 +615,13 @@ mod tests {
             },
             IrOperation::MoveTo {
                 origin: OperationId("op_02".into()),
-                pose: crate::ir::ResolvedPose {
-                    position: [0.0; 3],
-                    orientation: [0.0, 0.0, 0.0, 1.0],
-                    frame: crate::ir::ResolvedFrame {
-                        name: "base".into(),
-                        parent: "world".into(),
-                        transform: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
-                    },
-                },
-                profile: crate::ir::ResolvedProfile {
-                    name: "default".into(),
-                    velocity: 1.0,
-                    acceleration: 2.0,
-                },
+                pose: sample_pose(),
+                profile: sample_profile(),
             },
             IrOperation::Follow {
                 origin: OperationId("op_03".into()),
-                waypoints: vec![crate::ir::ResolvedPose {
-                    position: [0.0; 3],
-                    orientation: [0.0, 0.0, 0.0, 1.0],
-                    frame: crate::ir::ResolvedFrame {
-                        name: "base".into(),
-                        parent: "world".into(),
-                        transform: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
-                    },
-                }],
-                profile: crate::ir::ResolvedProfile {
-                    name: "default".into(),
-                    velocity: 1.0,
-                    acceleration: 2.0,
-                },
+                waypoints: vec![sample_pose()],
+                profile: sample_profile(),
             },
             IrOperation::Wait {
                 origin: OperationId("op_04".into()),
@@ -443,11 +641,11 @@ mod tests {
         let ops = execute(&ir, &analysis, &mut diags);
 
         assert_eq!(ops.len(), 5);
-        assert_eq!(ops[0].kind, "home");
-        assert_eq!(ops[1].kind, "move_to");
-        assert_eq!(ops[2].kind, "follow");
-        assert_eq!(ops[3].kind, "wait");
-        assert_eq!(ops[4].kind, "set_output");
+        assert_eq!(op_kind(&ops[0]), "home");
+        assert_eq!(op_kind(&ops[1]), "move_to");
+        assert_eq!(op_kind(&ops[2]), "follow");
+        assert_eq!(op_kind(&ops[3]), "wait");
+        assert_eq!(op_kind(&ops[4]), "set_output");
     }
 
     #[test]
@@ -458,9 +656,7 @@ mod tests {
                 minor: 1,
             },
             execution_time: Duration::from_millis(42),
-            compilation_options: CompilationOptions {
-                policy_mode: super::super::PolicyMode::Strict,
-            },
+            compilation_options: default_options(),
             diagnostics: vec![Diagnostic::warning("W001", "test warning", "pipeline")],
             stage_status: vec![StageResult::new(
                 PipelineStage::Policy,
@@ -481,14 +677,9 @@ mod tests {
     #[test]
     fn plan_metadata_is_clone_and_debug() {
         let a = PlanMetadata {
-            pipeline_version: Version {
-                major: 0,
-                minor: 1,
-            },
+            pipeline_version: Version { major: 0, minor: 1 },
             execution_time: Duration::ZERO,
-            compilation_options: CompilationOptions {
-                policy_mode: super::super::PolicyMode::Strict,
-            },
+            compilation_options: default_options(),
             diagnostics: vec![],
             stage_status: vec![],
         };
