@@ -29,7 +29,12 @@ id_newtype!(PointId);
 id_newtype!(PathId);
 id_newtype!(FrameId);
 id_newtype!(OutputId);
-id_newtype!(OperationId);
+
+/// Re-export the unified `OperationId` from `thalos_core`.
+///
+/// Single source of truth — all crates use the same `OperationId(String)` type,
+/// eliminating conversion at crate boundaries.
+pub use thalos_core::ids::OperationId;
 
 #[cfg(test)]
 mod tests {

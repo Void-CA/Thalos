@@ -6,3 +6,6 @@ pub mod prelude;
 pub mod project;
 pub mod resource;
 pub mod validation;
+
+/// Re-export the unified `OperationId` from `thalos_core`.
+pub use thalos_core::ids::OperationId;
