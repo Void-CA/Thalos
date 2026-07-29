@@ -492,3 +492,65 @@ fn two_picks_produce_eight_instructions() {
         _ => panic!(),
     }
 }
+
+// =========================================================================
+// 6. Task Script → SemanticProgram integration
+// =========================================================================
+
+#[test]
+fn task_script_parses_to_semantic_program() {
+    let script = "\
+# Assemble bolt
+pick bolt tool=gripper-1
+wait 500ms
+place bolt at tray
+home";
+
+    let program = thalos_semantic::script::parse(script).expect("parse");
+    assert_eq!(program.operations.len(), 4);
+    assert!(matches!(program.operations[0], SemanticOperation::Pick(_)));
+    assert!(matches!(program.operations[1], SemanticOperation::Wait(_)));
+    assert!(matches!(program.operations[2], SemanticOperation::Place(_)));
+    assert!(matches!(program.operations[3], SemanticOperation::Home(_)));
+}
+
+#[test]
+fn task_script_round_trips_through_lowering() {
+    let script = "\
+pick bolt
+wait 500ms
+home";
+
+    let program = thalos_semantic::script::parse(script).expect("parse");
+    assert_eq!(program.operations.len(), 3);
+
+    // Lower and verify structure
+    use std::collections::HashMap;
+    use thalos_semantic::knowledge::SceneKnowledgeProvider;
+    use thalos_semantic::lowering::context::LoweringContext;
+    use thalos_semantic::lowering::SemanticLowering;
+    use thalos_core::motion::MotionProfile;
+
+    let provider = SceneKnowledgeProvider::new(
+        HashMap::from([(
+            ObjectId("bolt".into()),
+            sample_pose(0.5, 0.0, 0.0),
+        )]),
+        HashMap::new(),
+        Some(sample_pose(0.0, 0.0, 0.0)),
+    );
+
+    let ctx = LoweringContext {
+        provider: &provider,
+        default_tool: None,
+        default_profile: MotionProfile {
+            max_velocity: 1.0,
+            max_acceleration: 0.5,
+            max_jerk: None,
+        },
+    };
+
+    let motion = SemanticLowering::lower(&program, &ctx).expect("lower");
+    // Pick(4) + Wait(1) + Home(1) = 6
+    assert_eq!(motion.instructions.len(), 6);
+}

@@ -28,4 +28,5 @@ pub mod lowering;
 pub mod operation;
 pub mod program;
 pub mod resource;
+pub mod script;
 pub mod validation;

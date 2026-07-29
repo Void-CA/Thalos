@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 
 const PERSPECTIVE_LABELS: Record<string, string> = {
   robot: 'Robot',
+  task: 'Task',
   planning: 'Planning',
   analysis: 'Analysis',
   execution: 'Execution',

@@ -8,6 +8,7 @@ import { useSceneRobotSync } from '@/features/viewport/synchronization/use-scene
 import { TOOLS_BY_PERSPECTIVE } from '@/features/viewport/components/tools-registry'
 import { PlanningWorkspace } from '@/features/planning/workspace'
 import { AnalysisWorkspace } from '@/features/analysis/workspace'
+import { SemanticWorkspace } from '@/features/semantic/semantic-workspace'
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
 
 /**
@@ -128,6 +129,16 @@ export function AppShell() {
                 ◀
               </button>
             )}
+          </div>
+        )}
+
+        {/* ── Task sidebar (380px) + viewport al lado ── */}
+        {perspective === 'task' && (
+          <div
+            className="flex-shrink-0 border-r border-border bg-sidebar overflow-y-auto"
+            style={{ width: 380 }}
+          >
+            <SemanticWorkspace />
           </div>
         )}
 

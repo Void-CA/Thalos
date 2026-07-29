@@ -1,13 +1,13 @@
 import { create } from 'zustand'
 
-export type Perspective = 'robot' | 'planning' | 'analysis' | 'execution' | 'sessions' | 'knowledge'
+export type Perspective = 'robot' | 'task' | 'planning' | 'analysis' | 'execution' | 'sessions' | 'knowledge'
 
 const STORAGE_KEY = 'thalos-perspective'
 
 function getStored(): Perspective | null {
   try {
     const v = localStorage.getItem(STORAGE_KEY)
-    if (v && ['robot', 'planning', 'analysis', 'execution', 'sessions', 'knowledge'].includes(v)) {
+    if (v && ['robot', 'task', 'planning', 'analysis', 'execution', 'sessions', 'knowledge'].includes(v)) {
       return v as Perspective
     }
   } catch { /* noop */ }
@@ -24,7 +24,7 @@ interface PerspectiveState {
   cycle: () => void
 }
 
-const ORDER: Perspective[] = ['robot', 'planning', 'execution', 'knowledge', 'sessions']
+const ORDER: Perspective[] = ['robot', 'task', 'planning', 'execution', 'knowledge', 'sessions']
 
 export const usePerspectiveStore = create<PerspectiveState>((set) => ({
   perspective: getStored() ?? 'robot',
