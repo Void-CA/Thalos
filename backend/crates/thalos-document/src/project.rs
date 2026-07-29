@@ -2,6 +2,7 @@ use crate::operation::Operation;
 use crate::operation::motion::MotionProfile;
 use crate::resource::Resources;
 use serde::{Deserialize, Serialize};
+use thalos_semantic::program::SemanticProgram;
 
 // ---------------------------------------------------------------------------
 // Root document types — Project is the top-level task document.
@@ -41,13 +42,78 @@ pub struct Settings {
     pub default_profile: MotionProfile,
 }
 
-/// A single task — a named, ordered collection of operations.
+/// The kind of a task — either geometric (existing DSL) or semantic (task-level).
+///
+/// A task is one or the other, never both. The variant determines which
+/// compiler pipeline processes it: `Geometric` → `thalos-compiler`,
+/// `Semantic` → `thalos-semantic` (SemanticLowering).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TaskKind {
+    /// A task defined with geometric operations (MoveJ, MoveL, etc.).
+    Geometric {
+        /// Ordered list of operations composing this task.
+        operations: Vec<Operation>,
+    },
+    /// A task defined with semantic operations (Pick, Place, MoveTo, etc.).
+    Semantic {
+        /// The semantic program — a sequence of task-level operations.
+        program: SemanticProgram,
+    },
+}
+
+/// A single task — a named, ordered collection of operations or a semantic program.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Task {
     /// Unique task identifier within the project.
     pub id: String,
-    /// Ordered list of operations composing this task.
-    pub operations: Vec<Operation>,
+    /// The kind of this task — geometric or semantic.
+    #[serde(flatten)]
+    pub kind: TaskKind,
+}
+
+impl Task {
+    /// Create a new geometric task.
+    pub fn geometric(id: impl Into<String>, operations: Vec<Operation>) -> Self {
+        Self {
+            id: id.into(),
+            kind: TaskKind::Geometric { operations },
+        }
+    }
+
+    /// Create a new semantic task.
+    pub fn semantic(id: impl Into<String>, program: SemanticProgram) -> Self {
+        Self {
+            id: id.into(),
+            kind: TaskKind::Semantic { program },
+        }
+    }
+
+    /// Number of operations in this task (across both variants).
+    pub fn operation_count(&self) -> usize {
+        match &self.kind {
+            TaskKind::Geometric { operations } => operations.len(),
+            TaskKind::Semantic { program } => program.operations.len(),
+        }
+    }
+}
+
+impl TaskKind {
+    /// Access the geometric operations, if this is a `Geometric` variant.
+    pub fn geometric_operations(&self) -> Option<&[Operation]> {
+        match self {
+            TaskKind::Geometric { operations } => Some(operations),
+            TaskKind::Semantic { .. } => None,
+        }
+    }
+
+    /// Mutable access to the geometric operations, if this is a `Geometric` variant.
+    pub fn geometric_operations_mut(&mut self) -> Option<&mut Vec<Operation>> {
+        match self {
+            TaskKind::Geometric { operations } => Some(operations),
+            TaskKind::Semantic { .. } => None,
+        }
+    }
 }
 
 /// Root task document — the top-level serializable model.
@@ -112,12 +178,17 @@ mod tests {
                 paths: vec![],
                 frames: vec![],
                 outputs: vec![],
+                objects: vec![],
+                locations: vec![],
+                tools: vec![],
             },
             tasks: vec![Task {
                 id: "task_1".to_string(),
-                operations: vec![Operation::Home {
-                    id: OperationId("op_1".to_string()),
-                }],
+                kind: TaskKind::Geometric {
+                    operations: vec![Operation::Home {
+                        id: OperationId("op_1".to_string()),
+                    }],
+                },
             }],
             settings: Settings {
                 default_profile: MotionProfile::Default,
@@ -152,19 +223,28 @@ mod tests {
                 paths: vec![],
                 frames: vec![],
                 outputs: vec![],
+                objects: vec![],
+                locations: vec![],
+                tools: vec![],
             },
             tasks: vec![
                 Task {
                     id: "first".to_string(),
-                    operations: vec![],
+                    kind: TaskKind::Geometric {
+                        operations: vec![],
+                    },
                 },
                 Task {
                     id: "second".to_string(),
-                    operations: vec![],
+                    kind: TaskKind::Geometric {
+                        operations: vec![],
+                    },
                 },
                 Task {
                     id: "third".to_string(),
-                    operations: vec![],
+                    kind: TaskKind::Geometric {
+                        operations: vec![],
+                    },
                 },
             ],
             settings: Settings {
@@ -210,34 +290,39 @@ mod tests {
                     name: "Gripper".to_string(),
                     channel_type: "digital".to_string(),
                 }],
+                objects: vec![],
+                locations: vec![],
+                tools: vec![],
             },
             tasks: vec![Task {
                 id: "main".to_string(),
-                operations: vec![
-                    Operation::Home {
-                        id: OperationId("op_1".to_string()),
-                    },
-                    Operation::MoveTo {
-                        id: OperationId("op_2".to_string()),
-                        target: PointId("pt_01".to_string()),
-                        profile: None,
-                    },
-                    Operation::Wait {
-                        id: OperationId("op_3".to_string()),
-                        duration: Duration::from_millis(500),
-                    },
-                    Operation::SetOutput {
-                        id: OperationId("op_4".to_string()),
-                        channel: OutputId("gripper".to_string()),
-                        value: OutputValue::Bool(true),
-                    },
-                ],
+                kind: TaskKind::Geometric {
+                    operations: vec![
+                        Operation::Home {
+                            id: OperationId("op_1".to_string()),
+                        },
+                        Operation::MoveTo {
+                            id: OperationId("op_2".to_string()),
+                            target: PointId("pt_01".to_string()),
+                            profile: None,
+                        },
+                        Operation::Wait {
+                            id: OperationId("op_3".to_string()),
+                            duration: Duration::from_millis(500),
+                        },
+                        Operation::SetOutput {
+                            id: OperationId("op_4".to_string()),
+                            channel: OutputId("gripper".to_string()),
+                            value: OutputValue::Bool(true),
+                        },
+                    ],
+                },
             }],
             settings: Settings {
                 default_profile: MotionProfile::Default,
             },
         };
-        assert_eq!(project.tasks[0].operations.len(), 4);
+        assert_eq!(project.tasks[0].operation_count(), 4);
     }
 
     // --- Project serde round-trip ---
@@ -269,13 +354,16 @@ mod tests {
                 paths: vec![],
                 frames: vec![],
                 outputs: vec![],
+                objects: vec![],
+                locations: vec![],
+                tools: vec![],
             },
-            tasks: vec![Task {
-                id: "main".to_string(),
-                operations: vec![Operation::Home {
+            tasks: vec![Task::geometric(
+                "main",
+                vec![Operation::Home {
                     id: OperationId("op_1".to_string()),
                 }],
-            }],
+            )],
             settings: Settings {
                 default_profile: MotionProfile::Default,
             },
@@ -289,6 +377,34 @@ mod tests {
         assert!(json.contains(r#""settings""#));
         let deserialized: Project = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(original, deserialized);
+    }
+
+    // --- Semantic task round-trip ---
+
+    #[test]
+    fn semantic_task_serde_round_trip() {
+        use thalos_semantic::{
+            operation::{HomeOp, SemanticOperation, WaitOp},
+            resource::{ObjectId as SemObjId, ToolId as SemToolId},
+        };
+        use std::time::Duration;
+
+        let program = thalos_semantic::program::SemanticProgram::new(vec![
+            SemanticOperation::Wait(WaitOp {
+                origin: OperationId("op_1".to_string()),
+                duration: Duration::from_secs(1),
+            }),
+            SemanticOperation::Home(HomeOp {
+                origin: OperationId("op_2".to_string()),
+            }),
+        ]);
+
+        let task = Task::semantic("sem-task-1", program);
+        let json = serde_json::to_string(&task).expect("serialize");
+        assert!(json.contains(r#""kind":"semantic""#));
+        let deserialized: Task = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(task, deserialized);
+        assert_eq!(deserialized.operation_count(), 2);
     }
 
     // --- Clone and Debug ---
@@ -313,6 +429,9 @@ mod tests {
                 paths: vec![],
                 frames: vec![],
                 outputs: vec![],
+                objects: vec![],
+                locations: vec![],
+                tools: vec![],
             },
             tasks: vec![],
             settings: Settings {

@@ -58,7 +58,11 @@ pub fn validate_semantic(project: &Project) -> Vec<Diagnostic> {
 
     // Check each operation's references and profile.
     for task in &project.tasks {
-        for op in &task.operations {
+        let operations = match &task.kind {
+            crate::project::TaskKind::Geometric { operations } => operations,
+            crate::project::TaskKind::Semantic { .. } => continue,
+        };
+        for op in operations {
             match op {
                 Operation::MoveTo {
                     id,
@@ -174,15 +178,18 @@ mod tests {
                     name: "Gripper".to_string(),
                     channel_type: "digital".to_string(),
                 }],
+                objects: vec![],
+                locations: vec![],
+                tools: vec![],
             },
-            tasks: vec![Task {
-                id: "main".to_string(),
-                operations: vec![Operation::MoveTo {
+            tasks: vec![Task::geometric(
+                "main",
+                vec![Operation::MoveTo {
                     id: OperationId("op_1".to_string()),
                     target: PointId("pt_01".to_string()),
                     profile: None,
                 }],
-            }],
+            )],
             settings: Settings {
                 default_profile: MotionProfile::Default,
             },
@@ -194,7 +201,7 @@ mod tests {
     #[test]
     fn dangling_point_id_produces_diagnostic() {
         let mut project = project_with_resources();
-        project.tasks[0].operations[0] = Operation::MoveTo {
+        project.tasks[0].kind.geometric_operations_mut().unwrap()[0] = Operation::MoveTo {
             id: OperationId("op_1".to_string()),
             target: PointId("pt_99".to_string()),
             profile: None,
@@ -209,7 +216,7 @@ mod tests {
     #[test]
     fn dangling_path_id_produces_diagnostic() {
         let mut project = project_with_resources();
-        project.tasks[0].operations[0] = Operation::Follow {
+        project.tasks[0].kind.geometric_operations_mut().unwrap()[0] = Operation::Follow {
             id: OperationId("op_1".to_string()),
             path: PathId("path_99".to_string()),
             profile: None,
@@ -222,7 +229,7 @@ mod tests {
     #[test]
     fn dangling_output_id_produces_diagnostic() {
         let mut project = project_with_resources();
-        project.tasks[0].operations[0] = Operation::SetOutput {
+        project.tasks[0].kind.geometric_operations_mut().unwrap()[0] = Operation::SetOutput {
             id: OperationId("op_1".to_string()),
             channel: OutputId("nonexistent".to_string()),
             value: OutputValue::Bool(true),
@@ -251,7 +258,7 @@ mod tests {
     #[test]
     fn unknown_profile_name_produces_warning() {
         let mut project = project_with_resources();
-        project.tasks[0].operations[0] = Operation::MoveTo {
+        project.tasks[0].kind.geometric_operations_mut().unwrap()[0] = Operation::MoveTo {
             id: OperationId("op_1".to_string()),
             target: PointId("pt_01".to_string()),
             profile: Some(MotionProfile::Named("turbo".to_string())),
@@ -277,7 +284,7 @@ mod tests {
     #[test]
     fn multiple_dangling_refs_collect_many_diagnostics() {
         let mut project = project_with_resources();
-        project.tasks[0].operations = vec![
+        *project.tasks[0].kind.geometric_operations_mut().unwrap() = vec![
             Operation::MoveTo {
                 id: OperationId("op_1".to_string()),
                 target: PointId("pt_missing_1".to_string()),

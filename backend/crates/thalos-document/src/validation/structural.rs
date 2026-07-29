@@ -36,7 +36,11 @@ pub fn validate_structural(project: &Project) -> Result<ValidatedProject, Struct
     // Check all operation IDs for duplicates
     let mut seen_ids: Vec<&str> = Vec::new();
     for task in &project.tasks {
-        for op in &task.operations {
+        let operations = match &task.kind {
+            crate::project::TaskKind::Geometric { operations } => operations,
+            crate::project::TaskKind::Semantic { .. } => continue,
+        };
+        for op in operations {
             let op_id = op.id();
             if seen_ids.contains(&op_id.as_str()) {
                 return Err(StructuralError::DuplicateOperationId(op_id.to_string()));
@@ -107,13 +111,16 @@ mod tests {
                 paths: vec![],
                 frames: vec![],
                 outputs: vec![],
+                objects: vec![],
+                locations: vec![],
+                tools: vec![],
             },
-            tasks: vec![Task {
-                id: "main".to_string(),
-                operations: vec![Operation::Home {
+            tasks: vec![Task::geometric(
+                "main",
+                vec![Operation::Home {
                     id: OperationId("op_1".to_string()),
                 }],
-            }],
+            )],
             settings: Settings {
                 default_profile: MotionProfile::Default,
             },
@@ -125,9 +132,11 @@ mod tests {
     #[test]
     fn duplicate_operation_ids_rejected() {
         let mut project = valid_project();
-        project.tasks[0].operations.push(Operation::Home {
-            id: OperationId("op_1".to_string()),
-        });
+        if let crate::project::TaskKind::Geometric { ref mut operations } = project.tasks[0].kind {
+            operations.push(Operation::Home {
+                id: OperationId("op_1".to_string()),
+            });
+        }
         let result = validate_structural(&project);
         assert_eq!(
             result,
@@ -140,9 +149,11 @@ mod tests {
     #[test]
     fn empty_operation_id_rejected() {
         let mut project = valid_project();
-        project.tasks[0].operations[0] = Operation::Home {
-            id: OperationId("".to_string()),
-        };
+        if let crate::project::TaskKind::Geometric { ref mut operations } = project.tasks[0].kind {
+            operations[0] = Operation::Home {
+                id: OperationId("".to_string()),
+            };
+        }
         let result = validate_structural(&project);
         assert_eq!(result, Err(StructuralError::EmptyId));
     }
@@ -206,10 +217,13 @@ mod tests {
                     name: "Gripper".to_string(),
                     channel_type: "digital".to_string(),
                 }],
+                objects: vec![],
+                locations: vec![],
+                tools: vec![],
             },
-            tasks: vec![Task {
-                id: "main".to_string(),
-                operations: vec![
+            tasks: vec![Task::geometric(
+                "main",
+                vec![
                     Operation::Home {
                         id: OperationId("op_1".to_string()),
                     },
@@ -233,7 +247,7 @@ mod tests {
                         value: OutputValue::Bool(true),
                     },
                 ],
-            }],
+            )],
             settings: Settings {
                 default_profile: MotionProfile::Default,
             },

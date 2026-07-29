@@ -54,6 +54,7 @@
   "tasks": [
     {
       "id": "main",
+      "kind": "geometric",
       "operations": [
         {
           "type": "home",

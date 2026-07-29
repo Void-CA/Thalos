@@ -3,7 +3,7 @@ use crate::ir::*;
 use thalos_document::id::*;
 use thalos_document::operation::Operation;
 use thalos_document::operation::motion::MotionProfile;
-use thalos_document::project::Project;
+use thalos_document::project::{Project, TaskKind};
 use thalos_document::resource::Resources;
 use thalos_document::validation::ValidatedProject;
 
@@ -36,7 +36,11 @@ pub fn normalize(
     let mut operations = Vec::new();
 
     for task in &project.tasks {
-        for op in &task.operations {
+        let task_ops = match &task.kind {
+            thalos_document::project::TaskKind::Geometric { operations } => operations,
+            thalos_document::project::TaskKind::Semantic { .. } => continue,
+        };
+        for op in task_ops {
             let ir_op = normalize_operation(op, &project.resources)?;
             operations.push(ir_op);
         }
@@ -223,11 +227,14 @@ mod tests {
                 paths: vec![],
                 frames: vec![],
                 outputs: vec![],
+                objects: vec![],
+                locations: vec![],
+                tools: vec![],
             },
-            tasks: vec![Task {
-                id: "task_1".into(),
-                operations: vec![],
-            }],
+            tasks: vec![Task::geometric(
+                "task_1",
+                vec![],
+            )],
             settings: Settings {
                 default_profile: MotionProfile::Default,
             },
@@ -269,7 +276,7 @@ mod tests {
     fn move_to_resolves_point_id_to_concrete_pose() {
         let mut project = minimal_project();
         add_point(&mut project, "pt_01", [1.0, 2.0, 3.0], [0.0, 0.0, 0.0, 1.0]);
-        project.tasks[0].operations.push(Operation::MoveTo {
+        project.tasks[0].kind.geometric_operations_mut().unwrap().push(Operation::MoveTo {
             id: OperationId("op_1".into()),
             target: PointId("pt_01".into()),
             profile: None,
@@ -308,7 +315,7 @@ mod tests {
         add_point(&mut project, "pt_02", [1.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]);
         add_point(&mut project, "pt_03", [2.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]);
         add_path(&mut project, "weld_path", &["pt_01", "pt_02", "pt_03"]);
-        project.tasks[0].operations.push(Operation::Follow {
+        project.tasks[0].kind.geometric_operations_mut().unwrap().push(Operation::Follow {
             id: OperationId("op_2".into()),
             path: PathId("weld_path".into()),
             profile: None,
@@ -342,7 +349,7 @@ mod tests {
     #[test]
     fn home_retains_operation_id() {
         let mut project = minimal_project();
-        project.tasks[0].operations.push(Operation::Home {
+        project.tasks[0].kind.geometric_operations_mut().unwrap().push(Operation::Home {
             id: OperationId("op_42".into()),
         });
 
@@ -369,7 +376,7 @@ mod tests {
         add_path(&mut project, "path_1", &["pt_01"]);
         add_output(&mut project, "gripper", "digital");
 
-        project.tasks[0].operations = vec![
+        *project.tasks[0].kind.geometric_operations_mut().unwrap() = vec![
             Operation::Home {
                 id: OperationId("op_1".into()),
             },
@@ -420,7 +427,7 @@ mod tests {
     fn default_profile_applied_when_none() {
         let mut project = minimal_project();
         add_point(&mut project, "pt_01", [0.5, 0.0, 0.3], [0.0, 0.0, 0.0, 1.0]);
-        project.tasks[0].operations.push(Operation::MoveTo {
+        project.tasks[0].kind.geometric_operations_mut().unwrap().push(Operation::MoveTo {
             id: OperationId("op_1".into()),
             target: PointId("pt_01".into()),
             profile: None,
@@ -452,7 +459,7 @@ mod tests {
     fn named_profile_resolves_to_concrete_limits() {
         let mut project = minimal_project();
         add_point(&mut project, "pt_01", [0.0; 3], [0.0, 0.0, 0.0, 1.0]);
-        project.tasks[0].operations.push(Operation::MoveTo {
+        project.tasks[0].kind.geometric_operations_mut().unwrap().push(Operation::MoveTo {
             id: OperationId("op_1".into()),
             target: PointId("pt_01".into()),
             profile: Some(MotionProfile::Named("slow".into())),
@@ -485,7 +492,7 @@ mod tests {
             [0.0, 0.0, 0.0, 1.0],
         );
         add_path(&mut project, "path_1", &["pt_01"]);
-        project.tasks[0].operations = vec![
+        *project.tasks[0].kind.geometric_operations_mut().unwrap() = vec![
             Operation::Home {
                 id: OperationId("op_1".into()),
             },
@@ -516,7 +523,7 @@ mod tests {
     #[test]
     fn unresolved_point_returns_error() {
         let mut project = minimal_project();
-        project.tasks[0].operations.push(Operation::MoveTo {
+        project.tasks[0].kind.geometric_operations_mut().unwrap().push(Operation::MoveTo {
             id: OperationId("op_1".into()),
             target: PointId("pt_999".into()),
             profile: None,
@@ -536,7 +543,7 @@ mod tests {
     #[test]
     fn unresolved_path_returns_error() {
         let mut project = minimal_project();
-        project.tasks[0].operations.push(Operation::Follow {
+        project.tasks[0].kind.geometric_operations_mut().unwrap().push(Operation::Follow {
             id: OperationId("op_1".into()),
             path: PathId("path_404".into()),
             profile: None,
@@ -557,7 +564,7 @@ mod tests {
     fn empty_path_returns_error() {
         let mut project = minimal_project();
         add_path(&mut project, "empty_path", &[]);
-        project.tasks[0].operations.push(Operation::Follow {
+        project.tasks[0].kind.geometric_operations_mut().unwrap().push(Operation::Follow {
             id: OperationId("op_1".into()),
             path: PathId("empty_path".into()),
             profile: None,
@@ -577,7 +584,7 @@ mod tests {
     #[test]
     fn unresolved_output_returns_error() {
         let mut project = minimal_project();
-        project.tasks[0].operations.push(Operation::SetOutput {
+        project.tasks[0].kind.geometric_operations_mut().unwrap().push(Operation::SetOutput {
             id: OperationId("op_1".into()),
             channel: OutputId("no_such_output".into()),
             value: OutputValue::Bool(false),
@@ -607,7 +614,7 @@ mod tests {
         add_path(&mut project, "weld", &["pt_01", "pt_02"]);
         add_output(&mut project, "gripper", "digital");
 
-        project.tasks[0].operations = vec![
+        *project.tasks[0].kind.geometric_operations_mut().unwrap() = vec![
             Operation::Home {
                 id: OperationId("op_1".into()),
             },
@@ -664,7 +671,7 @@ mod tests {
     fn move_to_with_explicit_profile_default() {
         let mut project = minimal_project();
         add_point(&mut project, "pt_01", [0.0; 3], [0.0, 0.0, 0.0, 1.0]);
-        project.tasks[0].operations.push(Operation::MoveTo {
+        project.tasks[0].kind.geometric_operations_mut().unwrap().push(Operation::MoveTo {
             id: OperationId("op_1".into()),
             target: PointId("pt_01".into()),
             profile: Some(MotionProfile::Default),
@@ -686,17 +693,18 @@ mod tests {
     fn multiple_tasks_operations_in_document_order() {
         let mut project = minimal_project();
         add_point(&mut project, "pt_01", [0.0; 3], [0.0, 0.0, 0.0, 1.0]);
-        project.tasks[0].operations.push(Operation::Home {
+        project.tasks[0].kind.geometric_operations_mut().unwrap().push(Operation::Home {
             id: OperationId("op_1".into()),
         });
-        project.tasks.push(Task {
-            id: "task_2".into(),
-            operations: vec![Operation::MoveTo {
+        project.tasks.push(Task::geometric(
+            "task_2",
+            vec![Operation::MoveTo {
                 id: OperationId("op_2".into()),
                 target: PointId("pt_01".into()),
                 profile: None,
-            }],
-        });
+            },
+        ]),
+        );
 
         let proof = validate_structural(&project).expect("valid structural");
         let program = normalize(&project, &proof).expect("normalize");
@@ -721,7 +729,7 @@ mod tests {
     #[test]
     fn program_metadata_preserved() {
         let mut project = minimal_project();
-        project.tasks[0].operations.push(Operation::Home {
+        project.tasks[0].kind.geometric_operations_mut().unwrap().push(Operation::Home {
             id: OperationId("op_1".into()),
         });
 

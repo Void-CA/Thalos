@@ -59,10 +59,13 @@ fn full_project() -> Project {
                     channel_type: "analog".to_string(),
                 },
             ],
+            objects: vec![],
+            locations: vec![],
+            tools: vec![],
         },
-        tasks: vec![Task {
-            id: "main".to_string(),
-            operations: vec![
+        tasks: vec![Task::geometric(
+            "main",
+            vec![
                 Operation::Home {
                     id: OperationId("op_1".to_string()),
                 },
@@ -91,7 +94,7 @@ fn full_project() -> Project {
                     value: OutputValue::Float(0.75),
                 },
             ],
-        }],
+        )],
         settings: Settings {
             default_profile: MotionProfile::Default,
         },
@@ -148,33 +151,18 @@ fn forward_compat_deserialize_v1_fixture() {
     // Verify tasks
     assert_eq!(project.tasks.len(), 1);
     assert_eq!(project.tasks[0].id, "main");
-    assert_eq!(project.tasks[0].operations.len(), 6);
+    assert_eq!(project.tasks[0].operation_count(), 6);
 
-    // Verify each operation type
-    assert!(matches!(
-        project.tasks[0].operations[0],
-        Operation::Home { .. }
-    ));
-    assert!(matches!(
-        project.tasks[0].operations[1],
-        Operation::MoveTo { .. }
-    ));
-    assert!(matches!(
-        project.tasks[0].operations[2],
-        Operation::MoveTo { .. }
-    ));
-    assert!(matches!(
-        project.tasks[0].operations[3],
-        Operation::Wait { .. }
-    ));
-    assert!(matches!(
-        project.tasks[0].operations[4],
-        Operation::SetOutput { .. }
-    ));
-    assert!(matches!(
-        project.tasks[0].operations[5],
-        Operation::SetOutput { .. }
-    ));
+    let ops = project.tasks[0]
+        .kind
+        .geometric_operations()
+        .expect("fixture should be geometric");
+    assert!(matches!(ops[0], Operation::Home { .. }));
+    assert!(matches!(ops[1], Operation::MoveTo { .. }));
+    assert!(matches!(ops[2], Operation::MoveTo { .. }));
+    assert!(matches!(ops[3], Operation::Wait { .. }));
+    assert!(matches!(ops[4], Operation::SetOutput { .. }));
+    assert!(matches!(ops[5], Operation::SetOutput { .. }));
 
     // Verify settings
     assert_eq!(

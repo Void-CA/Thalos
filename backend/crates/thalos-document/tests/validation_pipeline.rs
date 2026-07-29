@@ -36,15 +36,18 @@ fn valid_project() -> Project {
             paths: vec![],
             frames: vec![],
             outputs: vec![],
+            objects: vec![],
+            locations: vec![],
+            tools: vec![],
         },
-        tasks: vec![Task {
-            id: "main".to_string(),
-            operations: vec![Operation::MoveTo {
+        tasks: vec![Task::geometric(
+            "main",
+            vec![Operation::MoveTo {
                 id: OperationId("op_1".to_string()),
                 target: PointId("pt_01".to_string()),
                 profile: None,
             }],
-        }],
+        )],
         settings: Settings {
             default_profile: MotionProfile::Default,
         },
@@ -59,7 +62,8 @@ fn valid_project() -> Project {
 fn corrupt_duplicate_ids_skips_semantic() {
     let mut project = valid_project();
     // Add a duplicate operation ID
-    project.tasks[0].operations.push(Operation::Home {
+    let ops = project.tasks[0].kind.geometric_operations_mut().expect("geometric task");
+    ops.push(Operation::Home {
         id: OperationId("op_1".to_string()),
     });
 
@@ -82,14 +86,15 @@ fn corrupt_duplicate_ids_skips_semantic() {
 #[test]
 fn valid_structure_with_bad_refs_produces_diagnostics() {
     let mut project = valid_project();
+    let ops = project.tasks[0].kind.geometric_operations_mut().expect("geometric task");
     // Change target to a non-existent point
-    project.tasks[0].operations[0] = Operation::MoveTo {
+    ops[0] = Operation::MoveTo {
         id: OperationId("op_1".to_string()),
         target: PointId("pt_99".to_string()),
         profile: None,
     };
     // Add a Follow with non-existent path
-    project.tasks[0].operations.push(Operation::Follow {
+    ops.push(Operation::Follow {
         id: OperationId("op_2".to_string()),
         path: PathId("path_99".to_string()),
         profile: None,
