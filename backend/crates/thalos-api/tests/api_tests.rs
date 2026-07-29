@@ -1380,3 +1380,157 @@ async fn e2e_full_pipeline() {
         "analyze should return at least one recommendation"
     );
 }
+
+// =========================================================================
+// Semantic compile endpoint
+// =========================================================================
+
+#[tokio::test]
+async fn semantic_compile_wait_home_returns_ok() {
+    let app = test_app().await;
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/semantic/compile",
+        Some(json!({
+            "operations": [
+                {"type": "wait", "duration_secs": 0.5},
+                {"type": "home"}
+            ]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response body");
+    assert_eq!(body["status"], "ok");
+    assert!(body["execution_plan"]["segment_count"].as_u64().unwrap_or(0) > 0);
+    assert!(body["execution_plan"]["duration_ms"].as_u64().unwrap_or(0) > 0);
+}
+
+#[tokio::test]
+async fn semantic_compile_two_waits_sums_duration() {
+    let app = test_app().await;
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/semantic/compile",
+        Some(json!({
+            "operations": [
+                {"type": "wait", "duration_secs": 1.0},
+                {"type": "wait", "duration_secs": 2.0}
+            ]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response body");
+    assert_eq!(body["status"], "ok");
+    // Two waits should sum: 1s + 2s >= 2999ms (allowing small rounding)
+    let ms = body["execution_plan"]["duration_ms"].as_u64().unwrap_or(0);
+    assert!(ms >= 2990, "expected ~3000ms, got {ms}");
+    assert_eq!(body["execution_plan"]["segment_count"], 2);
+}
+
+#[tokio::test]
+async fn semantic_compile_place_without_pick_returns_422() {
+    let app = test_app().await;
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/semantic/compile",
+        Some(json!({
+            "operations": [
+                {"type": "place", "object": "bolt", "destination": "tray"}
+            ]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let body = body.expect("response body");
+    assert_eq!(body["code"], "semantic_validation_error");
+}
+
+#[tokio::test]
+async fn semantic_compile_unknown_object_returns_422() {
+    let app = test_app().await;
+    let (status, _body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/semantic/compile",
+        Some(json!({
+            "operations": [
+                {"type": "pick", "object": "nonexistent"},
+                {"type": "home"}
+            ]
+        })),
+    )
+    .await;
+    // Pick with no configured grasp plan → knowledge error → 422
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn semantic_compile_malformed_json_returns_422() {
+    let app = test_app().await;
+    let req = Request::builder()
+        .method(http::Method::POST)
+        .uri("/api/v1/semantic/compile")
+        .header("content-type", "application/json")
+        .body(Body::from(r#"{"operations": [{"type": "wait"}]"#)) // missing closing brace
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    // Malformed JSON → axum rejects before handler → 400 or 422
+    assert!(resp.status().is_client_error());
+}
+
+#[tokio::test]
+async fn semantic_compile_unknown_operation_type_returns_422() {
+    let app = test_app().await;
+    let (status, _body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/semantic/compile",
+        Some(json!({
+            "operations": [
+                {"type": "jump", "height": 10}
+            ]
+        })),
+    )
+    .await;
+    // Unknown tag → serde rejection → 422
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn semantic_compile_empty_operations_returns_422() {
+    let app = test_app().await;
+    let (status, _body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/semantic/compile",
+        Some(json!({"operations": []})),
+    )
+    .await;
+    // Empty program → ScaraPlanner rejects → 422
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn semantic_compile_home_alone_returns_ok() {
+    let app = test_app().await;
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/semantic/compile",
+        Some(json!({
+            "operations": [{"type": "home"}]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response body");
+    assert_eq!(body["status"], "ok");
+    assert_eq!(body["execution_plan"]["segment_count"], 1);
+}
+
+

@@ -106,8 +106,7 @@ impl ExecutionPlan {
                 ExecutionSegment::Pause { duration } => *duration,
                 ExecutionSegment::Output { at_time, .. } => *at_time,
             })
-            .max()
-            .unwrap_or(Duration::ZERO);
+            .sum::<Duration>();
 
         Self {
             segments,

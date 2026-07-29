@@ -28,17 +28,59 @@ pub enum SemanticOpDto {
     Home,
 }
 
+/// A pose definition for a resource.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PoseDto {
+    pub position: [f64; 3],
+    pub orientation: [f64; 4],
+}
+
+/// A semantic resource definition.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ResourcePoseDto {
+    pub id: String,
+    pub pose: PoseDto,
+}
+
 /// Request body for compiling a semantic task.
 #[derive(Debug, Clone, Deserialize)]
 pub struct CompileRequest {
     pub operations: Vec<SemanticOpDto>,
+    /// Optional resource definitions. If omitted, all resources resolve to origin.
+    #[serde(default)]
+    pub objects: Vec<ResourcePoseDto>,
+    #[serde(default)]
+    pub locations: Vec<ResourcePoseDto>,
+    /// Optional home pose. If omitted, uses origin.
+    pub home_pose: Option<PoseDto>,
 }
 
-/// Response from compiling a semantic task.
+/// Summary of the generated execution plan.
+#[derive(Debug, Clone, Serialize)]
+pub struct ExecutionPlanSummary {
+    pub segment_count: usize,
+    pub duration_ms: u64,
+}
+
+/// Validation diagnostics from the pipeline.
+#[derive(Debug, Clone, Serialize)]
+pub struct ValidationSummary {
+    pub errors: Vec<String>,
+    pub warnings: Vec<String>,
+}
+
+/// Processing metadata.
+#[derive(Debug, Clone, Serialize)]
+pub struct CompileMetadata {
+    pub instruction_count: usize,
+    pub planning_time_ms: u64,
+}
+
+/// Successful response from compiling a semantic task.
 #[derive(Debug, Clone, Serialize)]
 pub struct CompileResponse {
     pub status: String,
-    pub segment_count: usize,
-    pub duration_ms: u64,
-    pub warnings: Vec<String>,
+    pub execution_plan: ExecutionPlanSummary,
+    pub validation: ValidationSummary,
+    pub metadata: CompileMetadata,
 }
