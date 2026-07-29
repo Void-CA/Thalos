@@ -1410,6 +1410,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "thalos_semantic"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thalos_core",
+ "thiserror",
+]
+
+[[package]]
 name = "thalos_visual"
 version = "0.1.0"
 dependencies = [
