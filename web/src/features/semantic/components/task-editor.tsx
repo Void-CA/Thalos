@@ -1,7 +1,8 @@
 import { Play, Plus, RotateCcw } from 'lucide-react'
 import { useSemanticEditor } from '../store'
+import { useSceneStore } from '../scene-store'
 import { OperationRow } from './operation-row'
-import { compileSemantic } from '../api'
+import { compileSemantic, CompileError } from '../api'
 
 export function TaskEditor() {
   const {
@@ -19,14 +20,24 @@ export function TaskEditor() {
     reset,
   } = useSemanticEditor()
 
+  const resources = useSceneStore((s) => s.toResourcePayload)
+
   const handleCompile = async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await compileSemantic({ operations })
+      const payload = {
+        operations,
+        ...resources(),
+      }
+      const res = await compileSemantic(payload)
       setResult(res)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Compilation failed')
+      if (err instanceof CompileError) {
+        setError(err.code ? `[${err.code}] ${err.message}` : err.message)
+      } else {
+        setError(err instanceof Error ? err.message : 'Compilation failed')
+      }
     }
   }
 
@@ -73,7 +84,8 @@ export function TaskEditor() {
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {operations.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-8">
-            No operations. Click "Add" to start building your task program.
+            No operations. Define resources in Scene, then click "Add" to
+            start building your task.
           </p>
         ) : (
           operations.map((op, i) => (

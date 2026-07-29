@@ -34,15 +34,19 @@ id_newtype!(OutputId);
 // Semantic resource identifiers
 // ---------------------------------------------------------------------------
 
-id_newtype!(ObjectId);
-id_newtype!(LocationId);
-id_newtype!(ToolId);
-
 /// Re-export the unified `OperationId` from `thalos_core`.
 ///
 /// Single source of truth — all crates use the same `OperationId(String)` type,
 /// eliminating conversion at crate boundaries.
 pub use thalos_core::ids::OperationId;
+
+// ---------------------------------------------------------------------------
+// Unified semantic resource identifiers — re-exported from thalos_core
+// ---------------------------------------------------------------------------
+
+/// Single source of truth — all crates use the same type, eliminating
+/// conversion at crate boundaries.
+pub use thalos_core::ids::{ObjectId, LocationId, ToolId, TaskDocumentId};
 
 #[cfg(test)]
 mod tests {
@@ -169,5 +173,44 @@ mod tests {
         let b = a.clone();
         assert_eq!(a, b);
         let _ = format!("{:?}", a);
+    }
+
+    // --- Cross-crate type identity ---
+    //
+    // These compile only if the re-exported type IS the same type as
+    // the upstream definition — assignment without conversion is the proof.
+
+    #[test]
+    fn object_id_is_same_across_crates() {
+        // thalos_document::id::ObjectId re-exports thalos_core::ids::ObjectId,
+        // so assignment between them requires no conversion.
+        let _: thalos_core::ids::ObjectId = {
+            let id = ObjectId("test".to_string());
+            id
+        };
+    }
+
+    #[test]
+    fn location_id_is_same_across_crates() {
+        let _: thalos_core::ids::LocationId = {
+            let id = LocationId("test".to_string());
+            id
+        };
+    }
+
+    #[test]
+    fn tool_id_is_same_across_crates() {
+        let _: thalos_core::ids::ToolId = {
+            let id = ToolId("test".to_string());
+            id
+        };
+    }
+
+    #[test]
+    fn task_document_id_is_same_across_crates() {
+        let _: thalos_core::ids::TaskDocumentId = {
+            let id = TaskDocumentId("test".to_string());
+            id
+        };
     }
 }

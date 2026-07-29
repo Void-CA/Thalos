@@ -1,5 +1,6 @@
 import { GripVertical, Trash2 } from 'lucide-react'
 import type { SemanticOp } from '../types'
+import { useSceneStore } from '../scene-store'
 
 interface OperationRowProps {
   op: SemanticOp
@@ -28,6 +29,10 @@ export function OperationRow({
   onMoveUp,
   onMoveDown,
 }: OperationRowProps) {
+  const objects = useSceneStore((s) => s.objects)
+  const locations = useSceneStore((s) => s.locations)
+  const tools = useSceneStore((s) => s.tools)
+
   const update = (partial: Partial<SemanticOp>) => onChange(index, partial)
 
   return (
@@ -71,28 +76,45 @@ export function OperationRow({
 
       {/* Dynamic fields */}
       <div className="flex flex-wrap gap-2 flex-1">
+        {/* Pick / Place: object selector */}
         {(op.type === 'pick' || op.type === 'place') && (
-          <input
-            type="text"
-            placeholder="Object"
+          <select
             value={op.object ?? ''}
             onChange={(e) => update({ object: e.target.value })}
             className="px-2 py-1.5 text-xs rounded-md border border-border bg-background
-                       text-foreground placeholder:text-muted-foreground/50 w-24
-                       focus:outline-none focus:ring-1 focus:ring-ring"
-          />
+                       text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+          >
+            <option value="" disabled>
+              Object…
+            </option>
+            {objects.map((obj) => (
+              <option key={obj.id} value={obj.id}>
+                {obj.name}
+              </option>
+            ))}
+          </select>
         )}
+
+        {/* Place / MoveTo: location selector */}
         {(op.type === 'place' || op.type === 'move_to') && (
-          <input
-            type="text"
-            placeholder="Destination"
+          <select
             value={op.destination ?? ''}
             onChange={(e) => update({ destination: e.target.value })}
             className="px-2 py-1.5 text-xs rounded-md border border-border bg-background
-                       text-foreground placeholder:text-muted-foreground/50 w-24
-                       focus:outline-none focus:ring-1 focus:ring-ring"
-          />
+                       text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+          >
+            <option value="" disabled>
+              {op.type === 'place' ? 'Destination…' : 'Location…'}
+            </option>
+            {locations.map((loc) => (
+              <option key={loc.id} value={loc.id}>
+                {loc.name}
+              </option>
+            ))}
+          </select>
         )}
+
+        {/* Wait: duration */}
         {op.type === 'wait' && (
           <input
             type="number"
@@ -106,16 +128,22 @@ export function OperationRow({
                        focus:outline-none focus:ring-1 focus:ring-ring"
           />
         )}
+
+        {/* Tool selector (not for home/wait) */}
         {op.type !== 'home' && op.type !== 'wait' && (
-          <input
-            type="text"
-            placeholder="Tool (optional)"
+          <select
             value={op.tool ?? ''}
             onChange={(e) => update({ tool: e.target.value || undefined })}
             className="px-2 py-1.5 text-xs rounded-md border border-border bg-background
-                       text-foreground placeholder:text-muted-foreground/50 w-24
-                       focus:outline-none focus:ring-1 focus:ring-ring"
-          />
+                       text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+          >
+            <option value="">No tool</option>
+            {tools.map((tool) => (
+              <option key={tool.id} value={tool.id}>
+                {tool.name}
+              </option>
+            ))}
+          </select>
         )}
       </div>
 

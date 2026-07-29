@@ -1,25 +1,10 @@
-use serde::{Deserialize, Serialize};
-
-/// Logical identifier for an object in the semantic program.
-///
-/// String-backed for JSON readability. Contains no geometry or pose data —
-/// it identifies *what*, not *where*.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ObjectId(pub String);
-
-/// Logical identifier for a location in the semantic program.
-///
-/// String-backed for JSON readability. A `LocationId` resolves to a pose
-/// through the `KnowledgeProvider` during lowering — it is NOT a pose itself.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct LocationId(pub String);
-
-/// Logical identifier for a tool in the semantic program.
-///
-/// String-backed for JSON readability. When omitted on an operation, the
-/// lowerer selects a default tool from the `LoweringContext`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ToolId(pub String);
+// ---------------------------------------------------------------------------
+// Unified semantic resource identifiers — re-exported from thalos_core
+//
+// Single source of truth — all crates use the exact same id types across
+// crate boundaries, eliminating conversion at every boundary.
+// ---------------------------------------------------------------------------
+pub use thalos_core::ids::{ObjectId, LocationId, ToolId, TaskDocumentId};
 
 #[cfg(test)]
 mod tests {

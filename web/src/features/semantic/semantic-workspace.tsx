@@ -1,35 +1,38 @@
-import { FlaskConical, FileCode } from 'lucide-react'
+import { FlaskConical, FileCode, Package } from 'lucide-react'
 import { TaskEditor } from './components/task-editor'
+import { SceneEditor } from './components/scene-editor'
 import { useSemanticEditor } from './store'
 
 /**
- * SemanticWorkspace — layout del workspace Task.
+ * SemanticWorkspace — contenedor del workspace Task.
  *
- * Contenedor fino: toolbar superior, editor en el centro,
- * panel de compilación al pie (cuando hay resultado).
+ * Split vertical: Scene resources (top) + Task Editor (center) + Compilation (bottom).
  */
 export function SemanticWorkspace() {
   const result = useSemanticEditor((s) => s.result)
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border/50 bg-card/10">
-        <FileCode className="size-3.5 text-muted-foreground" />
-        <span className="text-xs font-medium text-foreground">Task Program</span>
-        <span className="text-[10px] text-muted-foreground ml-auto">
-          {result
-            ? `${result.metadata.instruction_count} instr · ${result.execution_plan.segment_count} seg · ${result.execution_plan.duration_ms} ms`
-            : '—'}
-        </span>
-      </div>
+      {/* ── Scene resources (collapsible) ── */}
+      <details className="border-b border-border/50 group" open>
+        <summary className="flex items-center gap-2 px-3 py-1.5 cursor-pointer
+                           hover:bg-accent/20 text-xs font-medium text-foreground
+                           [&::-webkit-details-marker]:hidden select-none">
+          <Package className="size-3.5 text-muted-foreground" />
+          <span>Scene</span>
+          <span className="text-[10px] text-muted-foreground ml-auto">click to toggle</span>
+        </summary>
+        <div className="max-h-48 overflow-y-auto border-t border-border/30">
+          <SceneEditor />
+        </div>
+      </details>
 
-      {/* Editor */}
+      {/* ── Task Editor ── */}
       <div className="flex-1 overflow-hidden">
         <TaskEditor />
       </div>
 
-      {/* Compilation result footer */}
+      {/* ── Compilation result footer ── */}
       {result && (
         <div className="border-t border-border/50 bg-card/5">
           <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border/30">
