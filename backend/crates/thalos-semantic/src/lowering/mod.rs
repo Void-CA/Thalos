@@ -4,8 +4,6 @@ use thalos_core::motion::{
     MotionInstruction, MotionMetadata, MotionProgram, MotionTarget,
 };
 
-use thalos_core::ids::OperationId;
-
 use crate::{
     knowledge::{GraspPlan, LoweringError, PlacementPlan},
     operation::{HomeOp, MoveToOp, PickOp, PlaceOp, SemanticOperation, WaitOp},
@@ -66,9 +64,9 @@ impl SemanticLowering {
                 SemanticOperation::Wait(wait) => {
                     Self::emit_wait(&mut instructions, wait);
                 }
-                SemanticOperation::Home(_) => {
+                SemanticOperation::Home(home) => {
                     let pose = ctx.provider.home_pose()?;
-                    Self::emit_home(&mut instructions, &pose, ctx);
+                    Self::emit_home(&mut instructions, home, &pose, ctx);
                 }
             }
         }
@@ -182,11 +180,12 @@ impl SemanticLowering {
 
     fn emit_home(
         instructions: &mut Vec<MotionInstruction>,
+        home: &HomeOp,
         pose: &thalos_core::motion::MotionPose,
         ctx: &LoweringContext,
     ) {
         instructions.push(MotionInstruction::MoveJ {
-            origin: OperationId("home".to_string()),
+            origin: home.origin.clone(),
             target: MotionTarget::Pose(pose.clone()),
             profile: ctx.default_profile.clone(),
         });
@@ -197,6 +196,7 @@ impl SemanticLowering {
 mod tests {
     use super::*;
     use std::time::Duration;
+    use thalos_core::ids::OperationId;
     use thalos_core::motion::{MotionPose, MotionProfile};
 
     use crate::knowledge::MockKnowledgeProvider;
@@ -520,6 +520,26 @@ mod tests {
                 MotionInstruction::Delay { origin, .. } => origin,
             };
             assert_eq!(*inst_origin, origin);
+        }
+    }
+
+    #[test]
+    fn home_origin_propagates() {
+        let origin = OperationId("home-42".to_string());
+        let op = SemanticOperation::Home(HomeOp {
+            origin: origin.clone(),
+        });
+        let program = SemanticProgram::new(vec![op]);
+        let provider = sample_provider();
+        let ctx = sample_ctx(&provider);
+
+        let mp = SemanticLowering::lower(&program, &ctx).unwrap();
+        assert_eq!(mp.instructions.len(), 1);
+        match &mp.instructions[0] {
+            MotionInstruction::MoveJ { origin: o, .. } => {
+                assert_eq!(*o, origin, "Home MoveJ should carry the HomeOp origin");
+            }
+            other => panic!("Expected MoveJ, got {other:?}"),
         }
     }
 

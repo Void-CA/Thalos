@@ -1335,6 +1335,7 @@ dependencies = [
  "thalos-optimization",
  "thalos_core",
  "thalos_math",
+ "thalos_semantic",
  "thiserror",
 ]
 

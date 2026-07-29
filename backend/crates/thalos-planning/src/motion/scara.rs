@@ -10,7 +10,7 @@ use thalos_core::{
     robot::serial_chain::SerialChain,
     spatial::{frame::FrameId, pose::Pose},
 };
-use thalos_math::Transform3D;
+use thalos_math::{Quaternion, Transform3D, UnitQuaternion, Vector3};
 
 use crate::{
     error::PlanningError,
@@ -33,15 +33,25 @@ impl ScaraPlanner {
     }
 
     /// Resolve a `MotionTarget` to a pose, handling different target types.
-    fn resolve_target_pose(target: &MotionTarget) -> Result<Pose, PlanningError> {
+    ///
+    /// Uses the robot's end-effector frame from `SerialChain` to set the
+    /// target frame correctly on the output `Pose`, enabling the IK solver
+    /// to match frame identity during convergence.
+    fn resolve_target_pose(target: &MotionTarget, ee_frame: &FrameId) -> Result<Pose, PlanningError> {
         match target {
             MotionTarget::Pose(mp) => {
-                let transform = Transform3D::identity();
-                // TODO: map MotionPose → Pose properly when frame resolution is available.
-                // For v1, use identity transform and rely on IK to converge.
+                let translation = Vector3::new(mp.position[0], mp.position[1], mp.position[2]);
+                let quat =
+                    Quaternion::new(mp.orientation[0], mp.orientation[1], mp.orientation[2], mp.orientation[3]);
+                let rotation = UnitQuaternion::new(quat).map_err(|e| {
+                    PlanningError::InvalidContext(format!(
+                        "non-unit quaternion in MotionPose orientation: {e}"
+                    ))
+                })?;
+                let transform = Transform3D::from_translation_rotation(translation, rotation);
                 Ok(Pose::new(
-                    thalos_core::spatial::frame::FrameId::World,
-                    thalos_core::spatial::frame::FrameId::Id(0),
+                    FrameId::World,
+                    ee_frame.clone(),
                     transform,
                 ))
             }
@@ -57,7 +67,7 @@ impl ScaraPlanner {
         ik_solver: &dyn IKSolver,
         chain: &SerialChain,
     ) -> Result<ExecutionSegment, PlanningError> {
-        let target_pose = Self::resolve_target_pose(target)?;
+        let target_pose = Self::resolve_target_pose(target, chain.end_effector())?;
 
         // IK: current_joints → target_joints
         let ik_result = ik_solver.solve(current_joints, IKGoal::Pose(target_pose));
@@ -104,7 +114,7 @@ impl ScaraPlanner {
         ik_solver: &dyn IKSolver,
         chain: &SerialChain,
     ) -> Result<ExecutionSegment, PlanningError> {
-        let target_pose = Self::resolve_target_pose(target)?;
+        let target_pose = Self::resolve_target_pose(target, chain.end_effector())?;
 
         // Get current pose from FK
         let fk = ForwardKinematics::new(chain.clone());
@@ -253,9 +263,9 @@ impl MotionPlanner for ScaraPlanner {
             }
         };
 
-        // Build an IKSolver for the chain
+        // Build an IKSolver for the chain using the robot's actual EE frame
         let fk = ForwardKinematics::new(chain.clone());
-        let ik_solver = JacobianTransposeSolver::new(fk, FrameId::Id(0), 5000, 1e-4, 0.1);
+        let ik_solver = JacobianTransposeSolver::new(fk, *chain.end_effector(), 5000, 1e-4, 0.1);
 
         let mut segments: Vec<ExecutionSegment> = Vec::with_capacity(program.instructions.len());
         let mut current_joints = context.initial_state.clone();
