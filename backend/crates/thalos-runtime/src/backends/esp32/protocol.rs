@@ -398,10 +398,10 @@ impl Esp32Protocol {
 }
 
 // ═════════════════════════════════════════════════════════════════════
-// Test helpers (cfg(test) on the main impl block)
+// Test helpers — always compiled so integration tests can use them.
+// Assumes the inner transport IS a `FakeTransport`.
 // ═════════════════════════════════════════════════════════════════════
 
-#[cfg(test)]
 impl Esp32Protocol {
     /// Access the FakeTransport's sent commands for test assertions.
     ///

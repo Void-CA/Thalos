@@ -214,6 +214,37 @@ impl RobotController for Esp32Backend {
     }
 }
 
+// ── Test helpers (for integration tests; always available but test-only by contract) ──
+
+impl Esp32Backend {
+    /// Expose the protocol's sent commands for integration test verification.
+    ///
+    /// # Contract
+    ///
+    /// This method is intended for integration tests ONLY. It provides access
+    /// to the raw wire commands sent by the backend for verification purposes.
+    /// Production code MUST NOT depend on this method.
+    pub fn test_sent_commands(&self) -> Vec<Vec<u8>> {
+        self.protocol
+            .as_ref()
+            .map(|p| p.test_sent_commands())
+            .unwrap_or_default()
+    }
+
+    /// Expose the protocol for integration test response injection.
+    ///
+    /// # Contract
+    ///
+    /// This method is intended for integration tests ONLY. It allows
+    /// pre-loading response data into the underlying transport for
+    /// simulating firmware interactions.
+    pub fn test_inject_response(&self, data: Vec<u8>) {
+        if let Some(ref protocol) = self.protocol {
+            protocol.test_inject_response(data);
+        }
+    }
+}
+
 // ═════════════════════════════════════════════════════════════════════
 // TESTS
 // ═════════════════════════════════════════════════════════════════════
