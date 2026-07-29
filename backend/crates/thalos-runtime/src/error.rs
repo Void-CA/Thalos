@@ -19,6 +19,12 @@ pub enum ControllerError {
 
     #[error("operation timed out")]
     Timeout,
+
+    #[error("protocol error: {0}")]
+    Protocol(String),
+
+    #[error("invalid manifest: {0}")]
+    InvalidManifest(String),
 }
 
 impl ControllerError {
@@ -28,6 +34,8 @@ impl ControllerError {
             ControllerError::NotConnected => "not_connected",
             ControllerError::UnsupportedCapability => "unsupported_capability",
             ControllerError::Timeout => "timeout",
+            ControllerError::Protocol(_) => "protocol_error",
+            ControllerError::InvalidManifest(_) => "invalid_manifest",
         }
     }
 }
@@ -38,7 +46,9 @@ impl From<ControllerError> for RuntimeError {
             ControllerError::AlreadyConnected
             | ControllerError::NotConnected
             | ControllerError::UnsupportedCapability
-            | ControllerError::Timeout => RuntimeError::JointCountMismatch {
+            | ControllerError::Timeout
+            | ControllerError::Protocol(_)
+            | ControllerError::InvalidManifest(_) => RuntimeError::JointCountMismatch {
                 expected: 0,
                 received: 0,
             },

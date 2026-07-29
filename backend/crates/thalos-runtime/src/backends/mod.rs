@@ -1,4 +1,5 @@
 pub mod controller;
+pub mod esp32;
 pub mod execution;
 pub mod hardware;
 mod internal;
