@@ -12,6 +12,7 @@ thalos_visual = { path = "../thalos-visual" }
 thalos_runtime = { path = "../thalos-runtime" }
 thalos-collision = { path = "../thalos-collision" }
 thalos-optimization = { path = "../thalos-optimization" }
+thalos_semantic = { path = "../thalos-semantic" }
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }

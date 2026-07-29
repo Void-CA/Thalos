@@ -1355,6 +1355,7 @@ dependencies = [
  "thalos_math",
  "thalos_models",
  "thalos_runtime",
+ "thalos_semantic",
  "thalos_visual",
  "tokio",
  "tower",
