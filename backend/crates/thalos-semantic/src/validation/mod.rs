@@ -1,9 +1,11 @@
 use serde::{Deserialize, Serialize};
 use thalos_core::ids::OperationId;
 
+use crate::knowledge::KnowledgeProvider;
 use crate::program::SemanticProgram;
 
 mod level1;
+mod level2;
 
 /// Severity level for a validation diagnostic.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -73,11 +75,19 @@ pub fn validate(program: &SemanticProgram) -> ValidationResult {
 ///
 /// Level 2 requires a `KnowledgeProvider` to resolve resource references and
 /// is skipped if Level 1 produces errors.
-///
-/// **PR 1 stub**: Full Level 2 validation is implemented in PR 2 (Lowering +
-/// Knowledge). This function runs Level 1 only until `KnowledgeProvider` exists.
-pub fn validate_with_provider(program: &SemanticProgram) -> ValidationResult {
-    validate(program)
+pub fn validate_with_provider(
+    program: &SemanticProgram,
+    provider: &dyn KnowledgeProvider,
+) -> ValidationResult {
+    let mut result = validate(program);
+    if result.has_errors() {
+        // Level 1 already has errors — skip Level 2 validation
+        return result;
+    }
+    let l2 = level2::validate_level2(program, provider);
+    result.errors.extend(l2.errors);
+    result.warnings.extend(l2.warnings);
+    result
 }
 
 #[cfg(test)]
