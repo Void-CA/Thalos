@@ -49,6 +49,8 @@ pub struct Object {
     pub name: String,
     /// Optional semantic category (e.g. "screw", "housing", "tool").
     pub category: Option<String>,
+    /// The object's pose in the scene.
+    pub pose: Pose,
 }
 
 /// A logical location in the workspace (assembly station, bin, tray, etc.).
@@ -58,6 +60,8 @@ pub struct Location {
     pub name: String,
     /// Optional description of this location's purpose.
     pub description: Option<String>,
+    /// The location's pose in the scene.
+    pub pose: Pose,
 }
 
 /// A tool or end-effector that can be attached to the robot.
@@ -217,6 +221,10 @@ mod tests {
             id: ObjectId("bolt-01".to_string()),
             name: "M8 Bolt".to_string(),
             category: Some("fastener".to_string()),
+            pose: Pose {
+                position: [0.0; 3],
+                orientation: [0.0, 0.0, 0.0, 1.0],
+            },
         };
         assert_eq!(obj.id.as_str(), "bolt-01");
         assert_eq!(obj.name, "M8 Bolt");
@@ -228,6 +236,10 @@ mod tests {
             id: LocationId("tray-a".to_string()),
             name: "Tray A".to_string(),
             description: Some("Finished parts tray".to_string()),
+            pose: Pose {
+                position: [0.0; 3],
+                orientation: [0.0, 0.0, 0.0, 1.0],
+            },
         };
         assert_eq!(loc.name, "Tray A");
         assert!(loc.description.is_some());
@@ -249,6 +261,10 @@ mod tests {
             id: ObjectId("bolt".to_string()),
             name: "Bolt".to_string(),
             category: None,
+            pose: Pose {
+                position: [0.5, 0.0, 0.0],
+                orientation: [0.0, 0.0, 0.0, 1.0],
+            },
         };
         let json = serde_json::to_string(&obj).unwrap();
         let back: Object = serde_json::from_str(&json).unwrap();
