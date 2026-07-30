@@ -16,6 +16,7 @@ use thalos_semantic::{
     validation::validate,
 };
 use serde::Serialize;
+use tracing_subscriber::field::debug;
 
 use crate::app::state::AppState;
 use crate::features::semantic::{
@@ -52,50 +53,64 @@ pub async fn compile_semantic(
 }
 
 /// Compile + plan + load into scene runtime for execution.
+///
+/// El bloque síncrono (lowering + planning) queda aislado para que
+/// las referencias no-Send (`dyn KnowledgeProvider`) mueran antes
+/// del `.await` de schedule_program.
 pub async fn run_semantic(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<SemanticCompileRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    let task = payload.task;
-    let validation = validate(&task.program);
-    if !validation.errors.is_empty() {
-        let msgs: Vec<String> = validation.errors.iter()
-            .map(|d| format!("[{:?}] {} (op: {:?})", d.severity, d.message, d.origin)).collect();
-        return Err((StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({"error": msgs.join("; "), "code": "semantic_validation_error"}))));
-    }
-    let provider = task.scene.knowledge();
-    let ctx = LoweringContext {
-        provider: &provider, default_tool: None,
-        default_profile: MotionProfile { max_velocity: 1.0, max_acceleration: 0.5, max_jerk: None },
+    // ── Síncrono: validación, lowering, planning — todo muere antes del await ──
+    let (duration_secs, segment_count, waypoints_json, compiled) = {
+        let task = payload.task;
+        let validation = validate(&task.program);
+        if !validation.errors.is_empty() {
+            let msgs: Vec<String> = validation.errors.iter()
+                .map(|d| format!("[{:?}] {} (op: {:?})", d.severity, d.message, d.origin)).collect();
+            return Err((StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({"error": msgs.join("; "), "code": "semantic_validation_error"}))));
+        }
+        let provider = task.scene.knowledge();
+        let ctx = LoweringContext {
+            provider: &provider, default_tool: None,
+            default_profile: MotionProfile { max_velocity: 1.0, max_acceleration: 0.5, max_jerk: None },
+        };
+        let mp = SemanticLowering::lower(&task.program, &ctx)
+            .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({"error": format!("{e}"), "code": "lowering_error"}))))?;
+
+        let planner = ScaraPlanner::new();
+        let pctx = PlanningCtx {
+            initial_state: vec![0.0, 0.0, 0.0, 0.0], robot: RobotModel::Scara,
+            interpolation: InterpolationConfig::default(),
+        };
+        let ep = planner.plan(&mp, &pctx)
+            .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({"error": format!("{e}"), "code": "planning_error"}))))?;
+
+        let wps = extract_waypoints(&ep);
+        let wps_json: Vec<serde_json::Value> = wps.iter().map(|p| {
+            serde_json::json!({"time_secs": p.timestamp(), "joints": p.joints()})
+        }).collect();
+        let traj = Trajectory::new(wps);
+        let compiled = CompiledPlan::new(traj, vec![]);
+
+        (
+            ep.metadata.total_duration.as_secs_f64(),
+            ep.metadata.segment_count,
+            wps_json,
+            compiled,
+        )
     };
-    let mp = SemanticLowering::lower(&task.program, &ctx)
-        .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({"error": format!("{e}"), "code": "lowering_error"}))))?;
+    // provider, ctx, mp, ep, planner, pctx, task, wps — todos dropped
 
-    // Plan via ScaraPlanner
-    let planner = ScaraPlanner::new();
-    let pctx = PlanningCtx {
-        initial_state: vec![0.0, 0.0, 0.0, 0.0], robot: RobotModel::Scara,
-        interpolation: InterpolationConfig::default(),
-    };
-    let ep = planner.plan(&mp, &pctx)
-        .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({"error": format!("{e}"), "code": "planning_error"}))))?;
-
-    // Load into runtime (disabled: pending trait resolution)
-    // let wps = extract_waypoints(&ep);
-    // let traj = Trajectory::new(wps);
-    // let compiled = CompiledPlan::new(traj, vec![]);
-    // state.services.scene.schedule_program(compiled).await
-    //     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": format!("{e}"), "code": "runtime_error"}))))?;
-
-    let wps: Vec<serde_json::Value> = extract_waypoints(&ep).iter().map(|p| {
-        serde_json::json!({"time_secs": p.timestamp(), "joints": p.joints()})
-    }).collect();
+    // ── Asíncrono: schedulea en runtime ──
+    state.services.scene.schedule_program(compiled).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": format!("{e}"), "code": "runtime_error"}))))?;
 
     Ok(Json(serde_json::json!({
         "status": "ok",
-        "segment_count": ep.metadata.segment_count,
-        "duration_secs": ep.metadata.total_duration.as_secs_f64(),
-        "waypoints": wps,
+        "segment_count": segment_count,
+        "duration_secs": duration_secs,
+        "waypoints": waypoints_json,
     })))
 }
 

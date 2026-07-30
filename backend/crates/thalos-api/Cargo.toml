@@ -14,7 +14,7 @@ thalos-collision = { path = "../thalos-collision" }
 thalos-optimization = { path = "../thalos-optimization" }
 thalos_semantic = { path = "../thalos-semantic" }
 thalos-document = { path = "../thalos-document" }
-axum = "0.8"
+axum = {version = "0.8", features = ["macros"] }
 tokio = { version = "1", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }

@@ -6,9 +6,10 @@ import { DEFAULT_FRAME_STYLE } from '../types'
 import type { SceneFrame, SceneLink, ScenePrimitive } from '../types'
 import { AXIS_ORIGIN, LINK_COLOR, LINK_OPACITY } from '@/shared/tokens'
 
-/** Angular-style registry: frame ID → THREE.Group for syncTransforms */
+/** Angular-style registries for runtime transform sync */
 const frameGroups = new Map<string, THREE.Group>()
-const meshRegistry = new Map<string, THREE.Mesh>()
+/** Link mesh registry — actualizado desde RuntimeDelta.transforms en Path A */
+const linkMeshes = new Map<string, THREE.Mesh>()
 let prevJoints: number[] = []
 
 // SCARA canonical FK parameters
@@ -39,15 +40,27 @@ export function RobotModel() {
   const liveTransforms = useSceneStore(s => s.liveTransforms)
   if (!data) return null
 
-  // Per-frame: sync frame groups from liveTransforms (scene tick) or FK (local playback)
+  // Per-frame: sync frame groups + link meshes from liveTransforms (scene tick) or FK (local playback)
   useFrame(() => {
-    // Path A: scene tick → liveTransforms has frame transforms
+    // Path A: scene tick → liveTransforms has frame + link transforms
     if (liveTransforms.length > 0) {
       for (const tx of liveTransforms) {
-        const g = frameGroups.get(tx.id); if (!g) continue
-        g.position.set(tx.translation[0], tx.translation[1], tx.translation[2])
-        g.quaternion.set(tx.rotation[1], tx.rotation[2], tx.rotation[3], tx.rotation[0])
+        // Apply frame transforms (frameGroups)
+        const g = frameGroups.get(tx.id)
+        if (g) {
+          g.position.set(tx.translation[0], tx.translation[1], tx.translation[2])
+          g.quaternion.set(tx.rotation[1], tx.rotation[2], tx.rotation[3], tx.rotation[0])
+          continue
+        }
+        // Apply link transforms (linkMeshes) — scale encodes cylinder length
+        const m = linkMeshes.get(tx.id)
+        if (m) {
+          m.position.set(tx.translation[0], tx.translation[1], tx.translation[2])
+          m.quaternion.set(tx.rotation[1], tx.rotation[2], tx.rotation[3], tx.rotation[0])
+          m.scale.set(tx.scale[0], tx.scale[1], tx.scale[2])
+        }
       }
+
       return
     }
     // Path B: local playback from runtime.joints
@@ -120,6 +133,7 @@ function FrameComponent({ frame, children }: { frame: SceneFrame; children?: Rea
 
 function LinkComponent({ link, refDim }: { link: SceneLink; refDim: number }) {
   const radius = Math.max(refDim * 0.015, 0.003)
+  const meshRef = useRef<THREE.Mesh>(null)
   const mesh = useMemo(() => {
     const start = new THREE.Vector3(...link.start); const end = new THREE.Vector3(...link.end)
     const dir = new THREE.Vector3().subVectors(end, start); const len = dir.length()
@@ -128,8 +142,15 @@ function LinkComponent({ link, refDim }: { link: SceneLink; refDim: number }) {
     const up = new THREE.Vector3(0,1,0); const q = new THREE.Quaternion().setFromUnitVectors(up, dir.clone().normalize())
     return { position: mid, quaternion: q, length: len }
   }, [link.start, link.end])
+
+  // Register mesh for liveTransforms sync (Path A)
+  useEffect(() => {
+    if (meshRef.current) linkMeshes.set(link.id, meshRef.current)
+    return () => { linkMeshes.delete(link.id) }
+  }, [link.id])
+
   if (!mesh) return null
-  return (<mesh position={mesh.position} quaternion={mesh.quaternion} scale={[1, mesh.length, 1]}>
+  return (<mesh ref={meshRef} position={mesh.position} quaternion={mesh.quaternion} scale={[1, mesh.length, 1]}>
     <cylinderGeometry args={[radius, radius, 1, 8, 1]} /><meshStandardMaterial color={LINK_COLOR} transparent opacity={LINK_OPACITY} />
   </mesh>)
 }

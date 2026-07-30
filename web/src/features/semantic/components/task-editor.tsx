@@ -1,40 +1,9 @@
 import { Play, Plus, RotateCcw, Sparkles, Square } from 'lucide-react'
 import { useSemanticEditor } from '../store'
 import { useSceneStore } from '../scene-store'
-import { useSceneStore as useViewportStore } from '@/features/viewport/store'
+import { useExecutionStore } from '@/features/execution/execution-store'
 import { OperationRow } from './operation-row'
 import { compileSemantic, executeSemantic, CompileError } from '../api'
-
-let simTimer: ReturnType<typeof setInterval> | null = null
-let startTime = 0
-let simWaypoints: { time_secs: number; joints: number[] }[] = []
-let simDuration = 0
-let isSimulating = false
-
-async function tickSim() {
-  if (!isSimulating) return
-  const elapsed = (performance.now() - startTime) / 1000
-  let currentJoints: number[] = []
-  for (let i = simWaypoints.length - 1; i >= 0; i--) {
-    if (simWaypoints[i].time_secs <= elapsed) {
-      currentJoints = simWaypoints[i].joints; break
-    }
-  }
-  if (currentJoints.length === 0) return
-  // Call backend FK endpoint (same as FK Panel does)
-  try {
-    const res = await fetch('/api/v1/scene/joints', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ joint_angles: currentJoints }),
-    })
-    if (res.ok) {
-      const data = await res.json()
-      useViewportStore.getState().applyFkUpdate(data.scene, data.runtime, data.ikResult, data.activeTcp)
-    }
-  } catch {}
-  if (elapsed >= simDuration) isSimulating = false
-}
 
 export function TaskEditor() {
   const {
@@ -43,6 +12,9 @@ export function TaskEditor() {
     setResult, setLoading, setError, reset,
   } = useSemanticEditor()
   const toTaskDocument = useSceneStore((s) => s.toTaskDocument)
+
+  const execStatus = useExecutionStore(s => s.status)
+  const execProgress = useExecutionStore(s => s.progress)
 
   const makeOps = () => operations.map((op, i) => ({ ...op, origin: op.origin ?? `op_${i}` }))
 
@@ -59,22 +31,20 @@ export function TaskEditor() {
   const handleSimulate = async () => {
     setLoading(true); setError(null)
     try {
+      // 1. Compile semantic task → backend returns waypoints + schedules into runtime
       const data = await executeSemantic({ task: toTaskDocument(makeOps()) })
-      if (data.status !== 'ok') { setError('Execution failed'); return }
-      simWaypoints = (data as any).waypoints ?? []
-      simDuration = (data as any).duration_secs ?? 0
-      if (simWaypoints.length === 0) { setError('No waypoints'); return }
-      isSimulating = true; startTime = performance.now()
-      if (simTimer) clearInterval(simTimer)
-      simTimer = setInterval(tickSim, 50)
+      const result = data as any
+      if (result.status !== 'ok') { setError('Execution failed'); return }
+
+      // 2. Start execution — ExecutionStore handles tick loop + applyRuntimeDelta
+      await useExecutionStore.getState().start()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Simulation failed')
     } finally { setLoading(false) }
   }
 
   const handleStop = () => {
-    isSimulating = false
-    if (simTimer) { clearInterval(simTimer); simTimer = null }
+    useExecutionStore.getState().cancel()
   }
 
   const hasMissingFields = operations.some(
@@ -101,11 +71,11 @@ export function TaskEditor() {
           className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-md bg-green-600/20 text-green-500 hover:bg-green-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
           <Play className="size-3" /> Compile
         </button>
-        <button onClick={handleSimulate} disabled={!result || loading || isSimulating}
+        <button onClick={handleSimulate} disabled={!result || loading || execStatus === 'running'}
           className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-md bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
-          <Sparkles className="size-3" /> {isSimulating ? '▶ Running' : 'Simulate'}
+          <Sparkles className="size-3" /> {execStatus === 'running' ? '▶ Running' : 'Simulate'}
         </button>
-        <button onClick={handleStop} disabled={!isSimulating}
+        <button onClick={handleStop} disabled={execStatus !== 'running'}
           className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-red-400 hover:bg-red-950/20 disabled:opacity-30 cursor-pointer">
           <Square className="size-3" /> Stop
         </button>
@@ -127,16 +97,25 @@ export function TaskEditor() {
       {loading && <div className="px-3 py-2 text-xs text-muted-foreground border-t border-border/50">Processing...</div>}
       {error && <div className="px-3 py-2 text-xs text-red-400 bg-red-950/20 border-t border-red-900/30">{error}</div>}
 
-      {isSimulating && (
+      {execStatus === 'running' && (
         <div className="px-3 py-2 border-t border-border/50 bg-card/20">
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-purple-400 font-medium">▶ Simulating</span>
-            <span className="text-muted-foreground">{simWaypoints.length} waypoints · {simDuration.toFixed(1)}s</span>
+            <span className="text-purple-400 font-medium animate-pulse">▶ Executing</span>
+            <span className="text-muted-foreground">{(execProgress * 100).toFixed(0)}%</span>
           </div>
         </div>
       )}
 
-      {result && !isSimulating && (
+      {execStatus === 'completed' && (
+        <div className="px-3 py-2 border-t border-border/50 bg-card/20">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-green-500 font-medium">✓ Completed</span>
+            <span className="text-muted-foreground">{useExecutionStore.getState().elapsedSecs.toFixed(1)}s</span>
+          </div>
+        </div>
+      )}
+
+      {result && execStatus !== 'running' && execStatus !== 'completed' && (
         <div className="px-3 py-2 border-t border-border/50 space-y-1.5 bg-card/20">
           <span className="text-green-500 font-medium text-xs">✓ Compiled</span>
           <span className="text-muted-foreground text-xs ml-2">{result.metadata.instruction_count} instructions</span>
