@@ -1,5 +1,6 @@
 pub mod motion;
 pub mod plan;
+pub mod planning;
 pub mod repair;
 pub mod robots;
 pub mod scene;
