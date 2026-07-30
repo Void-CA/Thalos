@@ -13,129 +13,93 @@
 //!
 //! ```text
 //! Conectando a /dev/ttyUSB0...
-//! ✓ HELLO handshake: versión 1
-//! ✓ Manifest uploaded (3 samples, 2 DOF)
-//! ✓ Execute started
-//!   STATUS: RUNNING
-//!   STATUS: RUNNING
-//! ✓ Execution COMPLETED
+//!   >> HELLO 1
+//!   << HELLO 1 OK
+//!   ✓ Handshake OK
+//!   ...
+//!   ✓ Execution COMPLETED
 //! ```
 
 use std::env;
+use std::time::Duration;
 
-use thalos_runtime::backends::esp32::Esp32Backend;
 use thalos_runtime::backends::transport::{SerialTransport, Transport};
-use thalos_runtime::RobotController;
 
 #[tokio::main]
 async fn main() {
     let args: Vec<String> = env::args().collect();
     let port = args.get(1).map(|s| s.as_str()).unwrap_or("/dev/ttyUSB0");
+    let baud: u32 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(115200);
 
-    println!("Conectando a {}...", port);
+    println!("Conectando a {} ({} baud)...", port, baud);
 
-    // 1. Crear y conectar SerialTransport
-    let transport = SerialTransport::new(port, 115200);
-    let mut backend = Esp32Backend::new(Box::new(transport));
+    let mut t = SerialTransport::new(port, baud);
+    t.connect().await.expect("failed to open serial port");
+    println!("  ✓ Puerto abierto\n");
 
-    // El Esp32Backend no expone el handshake directamente — se hace
-    // internamente en connect(). Pero nosotros queremos ver el proceso.
-    // Usamos el protocolo directamente a través del transport.
-
-    // ── Opción A: Usar Esp32Backend (más alto nivel) ────────────────
-    println!("\n── Opción A: Esp32Backend ──\n");
-
-    // Necesitamos acceso al protocol para inyectar HELLO response...
-    // En su lugar, usemos el transport directamente (Opción B).
-
-    // ── Opción B: Usar Transport + protocolo manual ─────────────────
-    println!("\n── Opción B: Protocolo manual ──\n");
-
-    let mut transport = SerialTransport::new(port, 115200);
-    transport.connect().await.expect("connect");
-
-    // HELLO
-    transport.send(b"HELLO 1\n").await.expect("send HELLO");
-    let resp = transport.receive().await.expect("recv HELLO");
+    // ── Handshake ──────────────────────────────────────────────────────
+    t.send(b"HELLO 1\n").await.unwrap();
+    let resp = String::from_utf8_lossy(&t.receive().await.unwrap()).to_string();
     println!("  >> HELLO 1");
-    println!("  << {}", String::from_utf8_lossy(&resp).trim());
-    assert!(
-        String::from_utf8_lossy(&resp).contains("HELLO 1 OK"),
-        "handshake failed"
-    );
+    println!("  << {}", resp.trim());
+    assert!(resp.contains("HELLO 1 OK"), "Handshake falló: {resp}");
     println!("  ✓ Handshake OK\n");
 
-    // MANIFEST
-    transport
-        .send(b"MANIFEST 2 3 2000000\n")
-        .await
-        .expect("send MANIFEST");
-    let resp = transport.receive().await.expect("recv MANIFEST");
+    // ── Subir manifiesto: 2 DOF, 3 samples, 2 segundos ────────────────
+    t.send(b"MANIFEST 2 3 2000000\n").await.unwrap();
+    let resp = String::from_utf8_lossy(&t.receive().await.unwrap()).to_string();
     println!("  >> MANIFEST 2 3 2000000");
-    println!("  << {}", String::from_utf8_lossy(&resp).trim());
+    println!("  << {}", resp.trim());
 
-    // SEGMENT
-    transport
-        .send(b"SEGMENT 0 movej 0 3\n")
-        .await
-        .expect("send SEGMENT");
-    let resp = transport.receive().await.expect("recv SEGMENT");
+    t.send(b"SEGMENT 0 movej 0 3\n").await.unwrap();
+    let resp = String::from_utf8_lossy(&t.receive().await.unwrap()).to_string();
     println!("  >> SEGMENT 0 movej 0 3");
-    println!("  << {}", String::from_utf8_lossy(&resp).trim());
+    println!("  << {}", resp.trim());
 
-    // SAMPLES
-    let samples = [
-        "SAMPLE 0.0 0.0 0",
-        "SAMPLE 0.5 0.3 1000000",
-        "SAMPLE 1.0 0.5 1000000",
-    ];
-    for s in &samples {
-        transport.send(format!("{}\n", s).as_bytes()).await.unwrap();
-        let resp = transport.receive().await.unwrap();
-        println!("  >> {}", s);
-        println!("  << {}", String::from_utf8_lossy(&resp).trim());
+    for (i, (j0, j1, dt)) in [(0.0, 0.0, 0), (0.5, 0.3, 1_000_000), (1.0, 0.5, 1_000_000)]
+        .iter()
+        .enumerate()
+    {
+        let cmd = format!("SAMPLE {j0} {j1} {dt}\n");
+        t.send(cmd.as_bytes()).await.unwrap();
+        let resp = String::from_utf8_lossy(&t.receive().await.unwrap()).to_string();
+        println!("  >> SAMPLE {i}: {j0} {j1} dt={dt}");
+        println!("  << {}", resp.trim());
     }
 
-    // END_UPLOAD
-    transport.send(b"END_UPLOAD\n").await.unwrap();
-    let resp = transport.receive().await.unwrap();
+    t.send(b"END_UPLOAD\n").await.unwrap();
+    let resp = String::from_utf8_lossy(&t.receive().await.unwrap()).to_string();
     println!("  >> END_UPLOAD");
-    println!("  << {}", String::from_utf8_lossy(&resp).trim());
-    assert!(
-        String::from_utf8_lossy(&resp).contains("READY"),
-        "upload rejected: {}",
-        String::from_utf8_lossy(&resp)
-    );
-    println!("  ✓ Manifest uploaded\n");
+    println!("  << {}", resp.trim());
+    assert!(resp.contains("READY"), "Upload rechazado: {resp}");
+    println!("  ✓ Manifiesto listo (READY)\n");
 
-    // EXECUTE
-    transport.send(b"EXECUTE\n").await.unwrap();
-    let resp = transport.receive().await.unwrap();
+    // ── Ejecutar ───────────────────────────────────────────────────────
+    t.send(b"EXECUTE\n").await.unwrap();
+    let resp = String::from_utf8_lossy(&t.receive().await.unwrap()).to_string();
     println!("  >> EXECUTE");
-    println!("  << {}", String::from_utf8_lossy(&resp).trim());
-    println!("  ✓ Execute started\n");
+    println!("  << {}", resp.trim());
+    println!("  ✓ Ejecutando...\n");
 
-    // STATUS poll
+    // ── Monitorear ─────────────────────────────────────────────────────
     for i in 0..10 {
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        transport.send(b"STATUS\n").await.unwrap();
-        let resp = transport.receive().await.unwrap();
-        let status = String::from_utf8_lossy(&resp).trim().to_string();
-        println!("  STATUS poll {}: {}", i + 1, status);
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        t.send(b"STATUS\n").await.unwrap();
+        let resp = String::from_utf8_lossy(&t.receive().await.unwrap()).to_string();
+        println!("  STATUS [{}/10]: {}", i + 1, resp.trim());
 
-        if status.contains("COMPLETED") {
-            println!("\n  ✓ Execution COMPLETED");
+        if resp.contains("COMPLETED") {
+            println!("\n  ✓ Ejecución COMPLETADA");
             break;
         }
     }
 
-    // STOP
-    transport.send(b"STOP\n").await.unwrap();
-    let resp = transport.receive().await.unwrap();
+    // ── Limpiar ────────────────────────────────────────────────────────
+    t.send(b"STOP\n").await.unwrap();
+    let resp = String::from_utf8_lossy(&t.receive().await.unwrap()).to_string();
     println!("  >> STOP");
-    println!("  << {}", String::from_utf8_lossy(&resp).trim());
-    println!("  ✓ Done\n");
+    println!("  << {}", resp.trim());
 
-    transport.disconnect().await.unwrap();
-    println!("✅ Todo OK — ESP responde y ejecuta correctamente.");
+    t.disconnect().await.unwrap();
+    println!("\n✅ ESP conectado, handshake, upload, execute — todo OK.");
 }
