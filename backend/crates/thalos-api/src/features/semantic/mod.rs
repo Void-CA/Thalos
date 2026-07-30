@@ -32,10 +32,14 @@ pub struct CompileMetadata {
 }
 
 /// Successful response from compiling a semantic task.
+///
+/// Contains the `motion_program` that can be sent to `POST /planning/plan`
+/// for trajectory generation and viewport playback.
 #[derive(Debug, Clone, Serialize)]
 pub struct CompileResponse {
     pub status: String,
-    pub execution_plan: ExecutionPlanSummary,
     pub validation: ValidationSummary,
     pub metadata: CompileMetadata,
+    /// The generated `MotionProgram` — feed to `/planning/plan`.
+    pub motion_program: thalos_core::motion::MotionProgram,
 }

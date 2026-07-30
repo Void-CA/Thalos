@@ -17,8 +17,7 @@ use thalos_semantic::{
 use crate::app::error::ApiError;
 use crate::app::state::AppState;
 use crate::features::semantic::{
-    CompileMetadata, CompileResponse, ExecutionPlanSummary, SemanticCompileRequest,
-    ValidationSummary,
+    CompileMetadata, CompileResponse, SemanticCompileRequest, ValidationSummary,
 };
 
 /// Compile a semantic task program into an execution plan.
@@ -93,10 +92,6 @@ pub async fn compile_semantic(
 
     Ok(Json(CompileResponse {
         status: "ok".to_string(),
-        execution_plan: ExecutionPlanSummary {
-            segment_count: execution_plan.metadata.segment_count,
-            duration_ms: execution_plan.metadata.total_duration.as_millis() as u64,
-        },
         validation: ValidationSummary {
             errors: vec![],
             warnings,
@@ -105,5 +100,6 @@ pub async fn compile_semantic(
             instruction_count,
             planning_time_ms: elapsed.as_millis() as u64,
         },
+        motion_program,
     }))
 }
