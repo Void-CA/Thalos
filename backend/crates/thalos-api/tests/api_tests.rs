@@ -1525,8 +1525,10 @@ async fn semantic_compile_empty_operations_returns_422() {
         Some(task_doc_payload(json!([]))),
     )
     .await;
-    // Empty program → ScaraPlanner rejects → 422
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    // Empty program compiles to empty MotionProgram (planning is separate)
+    assert_eq!(status, StatusCode::OK);
+    let body = _body.expect("response body");
+    assert_eq!(body["motion_program"]["instructions"].as_array().map(|a| a.len()).unwrap_or(99), 0);
 }
 
 #[tokio::test]
@@ -1601,7 +1603,7 @@ async fn semantic_compile_with_task_document() {
         body["motion_program"]["instructions"].as_array().map(|a| a.len()).unwrap_or(0) > 0,
         "execution plan must have at least one segment"
     );
-
+}
 
 #[tokio::test]
 async fn semantic_compile_with_task_document_and_scene() {

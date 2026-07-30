@@ -119,6 +119,72 @@ impl Transport for TcpTransport {
     }
 }
 
+/// Transporte serial — conexión USB/UART a un ESP32 (o cualquier MCU).
+///
+/// Lee línea por línea usando un `BufReader` interno. La velocidad y
+/// configuración del puerto se definen en `new()`.
+pub struct SerialTransport {
+    port: String,
+    baud: u32,
+    stream: Option<tokio::sync::Mutex<tokio_serial::SerialStream>>,
+}
+
+impl SerialTransport {
+    /// Crear un nuevo transporte serial.
+    ///
+    /// `port` es el path al dispositivo (ej: `"/dev/ttyUSB0"`).
+    /// `baud` es la velocidad en baudios (ej: `115200`).
+    pub fn new(port: impl Into<String>, baud: u32) -> Self {
+        Self {
+            port: port.into(),
+            baud,
+            stream: None,
+        }
+    }
+}
+
+#[async_trait]
+impl Transport for SerialTransport {
+    async fn connect(&mut self) -> Result<(), TransportError> {
+        let builder = tokio_serial::new(&self.port, self.baud);
+        let port = tokio_serial::SerialStream::open(&builder)
+            .map_err(|e| TransportError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+        self.stream = Some(tokio::sync::Mutex::new(port));
+        Ok(())
+    }
+
+    async fn disconnect(&mut self) -> Result<(), TransportError> {
+        self.stream = None;
+        Ok(())
+    }
+
+    async fn send(&mut self, data: &[u8]) -> Result<(), TransportError> {
+        use tokio::io::AsyncWriteExt;
+        let stream = self.stream.as_ref().ok_or(TransportError::Disconnected)?;
+        let mut guard = stream.lock().await;
+        guard.write_all(data).await?;
+        guard.flush().await?;
+        Ok(())
+    }
+
+    async fn receive(&mut self) -> Result<Vec<u8>, TransportError> {
+        use tokio::io::AsyncBufReadExt;
+        let stream = self.stream.as_ref().ok_or(TransportError::Disconnected)?;
+        let mut guard = stream.lock().await;
+        let mut reader = tokio::io::BufReader::new(&mut *guard);
+        let mut line = String::new();
+        let n = reader.read_line(&mut line).await?;
+        if n == 0 {
+            return Err(TransportError::Disconnected);
+        }
+        // Strip trailing \r\n or \n (ESP firmware envía \r\n)
+        let trimmed = line.trim_end_matches('\n').trim_end_matches('\r');
+        let mut bytes = trimmed.to_string().into_bytes();
+        bytes.push(b'\n'); // restore single \n for protocol parser
+        Ok(bytes)
+    }
+}
+
 /// Transporte simulado — para tests sin hardware real.
 pub struct FakeTransport {
     sent: std::sync::Mutex<Vec<Vec<u8>>>,

@@ -4,26 +4,16 @@ import type { SceneData, RuntimeInfo, IkResult, IkTarget, ActivePlan, ToolFrame,
 export type TrajectoryColorMode = 'segment' | 'trajectory-quality' | 'manipulability' | 'singularity'
 export type TrajectoryViewMode = 'original' | 'optimized'
 
-/** Frame transform from FK computation, used by RobotModel for animation. */
-export interface FrameTransform {
-  id: string
-  translation: [number, number, number]
-  rotation: [number, number, number, number]
-}
-
 export interface SceneState {
   data: SceneData | null
   runtime: RuntimeInfo | null
   liveTransforms: ObjectTransform[]
-  frameTransforms: FrameTransform[]
   execution: ExecutionInfo | null
   ikResult: IkResult | null
   solvedQ: number[] | null
   ikTarget: IkTarget | null
   activePlan: ActivePlan | null
-  /// Optimized trajectory positions [[x,y,z], ...] for 3D overlay.
   optimizedPositions: number[][] | null
-  /// Mutually exclusive view: show original OR optimized, never both.
   trajectoryViewMode: TrajectoryViewMode
   activeTcp: ToolFrame | null
   loading: boolean
@@ -34,7 +24,7 @@ export interface SceneState {
 interface SceneActions {
   applyScene: (data: SceneData, runtime: RuntimeInfo, ikResult: IkResult | null, activePlan: ActivePlan | null, activeTcp: ToolFrame | null, execution: ExecutionInfo | null) => void
   applyFkUpdate: (data: SceneData, runtime: RuntimeInfo, ikResult: IkResult | null, activeTcp: ToolFrame | null) => void
-  applyRuntimeDelta: (joints: number[], transforms: ObjectTransform[], execution: ExecutionInfo, frameTransforms?: FrameTransform[]) => void
+  applyRuntimeDelta: (joints: number[], transforms: ObjectTransform[], execution: ExecutionInfo) => void
   setIkTarget: (target: IkTarget | null) => void
   setTrajectoryColorMode: (mode: TrajectoryColorMode) => void
   setTrajectoryViewMode: (mode: TrajectoryViewMode) => void
@@ -48,7 +38,6 @@ const INITIAL: SceneState = {
   data: null,
   runtime: null,
   liveTransforms: [],
-  frameTransforms: [],
   execution: null,
   ikResult: null,
   solvedQ: null,
@@ -78,10 +67,9 @@ export const useSceneStore = create<SceneState & SceneActions>((set) => ({
     loading: false, error: null,
   })),
 
-  applyRuntimeDelta: (joints, transforms, execution, frameTransforms) => set((state) => ({
+  applyRuntimeDelta: (joints, transforms, execution) => set((state) => ({
     runtime: state.runtime ? { ...state.runtime, joints } : state.runtime,
     liveTransforms: transforms, execution,
-    frameTransforms: frameTransforms ?? state.frameTransforms,
   })),
 
   setIkTarget: (target) => set({ ikTarget: target }),

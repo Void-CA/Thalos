@@ -10,13 +10,6 @@ pub struct SemanticCompileRequest {
     pub task: TaskDocument,
 }
 
-/// Summary of the generated execution plan.
-#[derive(Debug, Clone, Serialize)]
-pub struct ExecutionPlanSummary {
-    pub segment_count: usize,
-    pub duration_ms: u64,
-}
-
 /// Validation diagnostics from the pipeline.
 #[derive(Debug, Clone, Serialize)]
 pub struct ValidationSummary {
@@ -28,18 +21,23 @@ pub struct ValidationSummary {
 #[derive(Debug, Clone, Serialize)]
 pub struct CompileMetadata {
     pub instruction_count: usize,
-    pub planning_time_ms: u64,
 }
 
 /// Successful response from compiling a semantic task.
 ///
-/// Contains the `motion_program` that can be sent to `POST /planning/plan`
-/// for trajectory generation and viewport playback.
+/// Contains the `motion_program` — a `MotionProgram`.
 #[derive(Debug, Clone, Serialize)]
 pub struct CompileResponse {
     pub status: String,
     pub validation: ValidationSummary,
     pub metadata: CompileMetadata,
-    /// The generated `MotionProgram` — feed to `/planning/plan`.
     pub motion_program: thalos_core::motion::MotionProgram,
+}
+
+/// Response from running a semantic task (compile + load into scene runtime).
+#[derive(Debug, Clone, Serialize)]
+pub struct RunResponse {
+    pub status: String,
+    pub segment_count: usize,
+    pub duration_secs: f64,
 }

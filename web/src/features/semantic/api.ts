@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { CompileRequest, CompileResponse, PlanResponse } from './types'
+import type { CompileRequest, CompileResponse } from './types'
 
 const client = axios.create({ baseURL: '/api/v1' })
 
@@ -34,6 +34,12 @@ export async function compileSemantic(
       err instanceof Error ? err.message : 'Compilation failed',
     )
   }
+}
+
+/** POST /api/v1/semantic/run — compile + load into scene runtime for execution */
+export async function runSemantic(req: CompileRequest): Promise<{ segment_count: number; duration_secs: number }> {
+  const { data } = await client.post('/semantic/run', req)
+  return data
 }
 
 /** POST /api/v1/planning/plan — plan a MotionProgram into trajectory waypoints */

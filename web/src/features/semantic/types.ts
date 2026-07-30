@@ -63,17 +63,4 @@ export interface CompileResponse {
   }
 }
 
-/** A single waypoint in a planned trajectory */
-export interface Waypoint {
-  time_secs: number
-  joints: number[]
-}
 
-/** Response from POST /planning/plan */
-export interface PlanResponse {
-  status: string
-  waypoints: Waypoint[]
-  segment_count: number
-  total_duration_secs: number
-  robot_model: string
-}
