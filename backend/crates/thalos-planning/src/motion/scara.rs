@@ -70,7 +70,8 @@ impl ScaraPlanner {
         let target_pose = Self::resolve_target_pose(target, chain.end_effector())?;
 
         // IK: current_joints → target_joints
-        let ik_result = ik_solver.solve(current_joints, IKGoal::Pose(target_pose));
+        // MoveJ targets position only — orientation is resolved by the planner
+        let ik_result = ik_solver.solve(current_joints, IKGoal::Position(target_pose.translation()));
         let target_joints = match ik_result.status {
             IKStatus::Converged => ik_result.q,
             IKStatus::MaxIterations => {

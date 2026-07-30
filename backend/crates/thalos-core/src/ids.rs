@@ -8,6 +8,7 @@ use std::fmt;
 macro_rules! id_newtype {
     ($name:ident) => {
         #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+        #[serde(transparent)]
         pub struct $name(pub String);
 
         impl $name {

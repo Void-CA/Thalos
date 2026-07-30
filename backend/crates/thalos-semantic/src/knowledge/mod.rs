@@ -1,7 +1,6 @@
 pub mod grasp;
 pub mod mock;
 pub mod place;
-pub mod scene;
 
 use thiserror::Error;
 
@@ -11,7 +10,6 @@ use thalos_core::motion::MotionPose;
 pub use self::grasp::GraspPlan;
 pub use self::mock::MockKnowledgeProvider;
 pub use self::place::PlacementPlan;
-pub use self::scene::SceneKnowledgeProvider;
 
 /// Errors that can occur during semantic lowering and knowledge provider
 /// resolution.

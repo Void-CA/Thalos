@@ -525,20 +525,18 @@ home";
     assert_eq!(program.operations.len(), 3);
 
     // Lower and verify structure
-    use std::collections::HashMap;
-    use thalos_semantic::knowledge::SceneKnowledgeProvider;
     use thalos_semantic::lowering::context::LoweringContext;
     use thalos_semantic::lowering::SemanticLowering;
     use thalos_core::motion::MotionProfile;
 
-    let provider = SceneKnowledgeProvider::new(
-        HashMap::from([(
-            ObjectId("bolt".into()),
-            sample_pose(0.5, 0.0, 0.0),
-        )]),
-        HashMap::new(),
-        Some(sample_pose(0.0, 0.0, 0.0)),
-    );
+    let provider = MockKnowledgeProvider::new()
+        .with_grasp_ok(ObjectId("bolt".into()), GraspPlan {
+            grasp_frame: sample_pose(0.5, 0.0, 0.0),
+            approach_frame: sample_pose(0.55, 0.0, 0.0),
+            retreat_frame: sample_pose(0.45, 0.0, 0.0),
+            preferred_tool: None,
+        })
+        .with_home_pose(Ok(sample_pose(0.0, 0.0, 0.0)));
 
     let ctx = LoweringContext {
         provider: &provider,

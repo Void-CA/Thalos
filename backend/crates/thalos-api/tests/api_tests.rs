@@ -1385,6 +1385,31 @@ async fn e2e_full_pipeline() {
 // Semantic compile endpoint
 // =========================================================================
 
+/// Build a minimal TaskDocument JSON payload with the given operations.
+fn task_doc_payload(operations: Value) -> Value {
+    json!({
+        "task": {
+            "id": "test",
+            "metadata": {
+                "name": "test",
+                "version": 1,
+                "created_at": "",
+                "modified_at": ""
+            },
+            "scene": {
+                "objects": [],
+                "locations": [],
+                "tools": [],
+                // SCARA FK([0,0,0,0]) = [a1+a2, 0, base_height] = [1.8, 0.0, 0.5]
+                "home_pose": {"position": [1.8, 0.0, 0.5], "orientation": [0.0, 0.0, 0.0, 1.0]}
+            },
+            "program": {
+                "operations": operations
+            }
+        }
+    })
+}
+
 #[tokio::test]
 async fn semantic_compile_wait_home_returns_ok() {
     let app = test_app().await;
@@ -1392,12 +1417,10 @@ async fn semantic_compile_wait_home_returns_ok() {
         app,
         http::Method::POST,
         "/api/v1/semantic/compile",
-        Some(json!({
-            "operations": [
-                {"type": "wait", "duration_secs": 0.5},
-                {"type": "home"}
-            ]
-        })),
+        Some(task_doc_payload(json!([
+            {"type": "wait", "origin": "op_0", "duration": {"secs": 0, "nanos": 500000000}},
+            {"type": "home", "origin": "op_1"}
+        ]))),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -1414,12 +1437,10 @@ async fn semantic_compile_two_waits_sums_duration() {
         app,
         http::Method::POST,
         "/api/v1/semantic/compile",
-        Some(json!({
-            "operations": [
-                {"type": "wait", "duration_secs": 1.0},
-                {"type": "wait", "duration_secs": 2.0}
-            ]
-        })),
+        Some(task_doc_payload(json!([
+            {"type": "wait", "origin": "op_0", "duration": {"secs": 1, "nanos": 0}},
+            {"type": "wait", "origin": "op_1", "duration": {"secs": 2, "nanos": 0}}
+        ]))),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -1438,11 +1459,9 @@ async fn semantic_compile_place_without_pick_returns_422() {
         app,
         http::Method::POST,
         "/api/v1/semantic/compile",
-        Some(json!({
-            "operations": [
-                {"type": "place", "object": "bolt", "destination": "tray"}
-            ]
-        })),
+        Some(task_doc_payload(json!([
+            {"type": "place", "origin": "op_0", "object": "bolt", "destination": "tray", "tool": null}
+        ]))),
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
@@ -1457,12 +1476,10 @@ async fn semantic_compile_unknown_object_returns_422() {
         app,
         http::Method::POST,
         "/api/v1/semantic/compile",
-        Some(json!({
-            "operations": [
-                {"type": "pick", "object": "nonexistent"},
-                {"type": "home"}
-            ]
-        })),
+        Some(task_doc_payload(json!([
+            {"type": "pick", "origin": "op_0", "object": "nonexistent", "tool": null},
+            {"type": "home", "origin": "op_1"}
+        ]))),
     )
     .await;
     // Pick with no configured grasp plan → knowledge error → 422
@@ -1476,7 +1493,7 @@ async fn semantic_compile_malformed_json_returns_422() {
         .method(http::Method::POST)
         .uri("/api/v1/semantic/compile")
         .header("content-type", "application/json")
-        .body(Body::from(r#"{"operations": [{"type": "wait"}]"#)) // missing closing brace
+        .body(Body::from(r#"{"task": {"id": "test", "metadata": {"name": "test", "version": 1, "created_at": "", "modified_at": ""}, "scene": {"objects": [], "locations": [], "tools": [], "home_pose": {"position": [0,0,0], "orientation": [0,0,0,1]}}, "program": {"operations": [{"type": "wait"}]}}"#)) // missing closing brace
         .unwrap();
     let resp = app.oneshot(req).await.unwrap();
     // Malformed JSON → axum rejects before handler → 400 or 422
@@ -1490,11 +1507,9 @@ async fn semantic_compile_unknown_operation_type_returns_422() {
         app,
         http::Method::POST,
         "/api/v1/semantic/compile",
-        Some(json!({
-            "operations": [
-                {"type": "jump", "height": 10}
-            ]
-        })),
+        Some(task_doc_payload(json!([
+            {"type": "jump", "height": 10}
+        ]))),
     )
     .await;
     // Unknown tag → serde rejection → 422
@@ -1508,7 +1523,7 @@ async fn semantic_compile_empty_operations_returns_422() {
         app,
         http::Method::POST,
         "/api/v1/semantic/compile",
-        Some(json!({"operations": []})),
+        Some(task_doc_payload(json!([]))),
     )
     .await;
     // Empty program → ScaraPlanner rejects → 422
@@ -1522,15 +1537,118 @@ async fn semantic_compile_home_alone_returns_ok() {
         app,
         http::Method::POST,
         "/api/v1/semantic/compile",
-        Some(json!({
-            "operations": [{"type": "home"}]
-        })),
+        Some(task_doc_payload(json!([
+            {"type": "home", "origin": "op_0"}
+        ]))),
     )
     .await;
+    if status != StatusCode::OK {
+        eprintln!("DEBUG response body: {:?}", body);
+    }
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response body");
     assert_eq!(body["status"], "ok");
     assert_eq!(body["execution_plan"]["segment_count"], 1);
+}
+
+/// Integration test: POST TaskDocument-shaped JSON → compile → MotionProgram.
+///
+/// Verifies the full pipeline accepts a TaskDocument with scene resources
+/// (objects, locations, home pose) and a semantic program referencing those
+/// resources by ID.
+#[tokio::test]
+async fn semantic_compile_with_task_document() {
+    let app = test_app().await;
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/semantic/compile",
+        Some(json!({
+            "task": {
+                "id": "integration-test-1",
+                "metadata": {
+                    "name": "integration test",
+                    "version": 1,
+                    "created_at": "2026-07-29T00:00:00Z",
+                    "modified_at": "2026-07-29T00:00:00Z"
+                },
+                "scene": {
+                    "objects": [],
+                    "locations": [],
+                    "tools": [],
+                    "home_pose": {
+                        "position": [1.8, 0.0, 0.5],
+                        "orientation": [0.0, 0.0, 0.0, 1.0]
+                    }
+                },
+                "program": {
+                    "operations": [
+                        {
+                            "type": "wait",
+                            "origin": "op_0",
+                            "duration": {"secs": 0, "nanos": 500000000}
+                        },
+                        {
+                            "type": "home",
+                            "origin": "op_1"
+                        }
+                    ]
+                }
+            }
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "TaskDocument compile should succeed, got {:?}", body);
+    let body = body.expect("response body must be valid JSON");
+    assert_eq!(body["status"], "ok");
+    assert!(
+        body["execution_plan"]["segment_count"].as_u64().unwrap_or(0) > 0,
+        "execution plan must have at least one segment"
+    );
+    assert!(
+        body["execution_plan"]["duration_ms"].as_u64().unwrap_or(0) > 0,
+        "execution plan must have positive duration"
+    );
+}
+
+#[tokio::test]
+async fn semantic_compile_with_task_document_and_scene() {
+    // Test with a full TaskDocument including scene objects
+    let app = test_app().await;
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/semantic/compile",
+        Some(json!({
+            "task": {
+                "id": "test-1",
+                "metadata": { "name": "test", "version": 1, "created_at": "", "modified_at": "" },
+                "scene": {
+                    "objects": [
+                        {"id": "bolt", "name": "Bolt", "category": null, "pose": {"position": [1.0, 0.0, 1.0], "orientation": [0.0, 0.0, 0.0, 1.0]}}
+                    ],
+                    "locations": [
+                        {"id": "tray", "name": "Tray", "description": null, "pose": {"position": [1.5, 0.0, 0.5], "orientation": [0.0, 0.0, 0.0, 1.0]}}
+                    ],
+                    "tools": [],
+                    "home_pose": {"position": [1.8, 0.0, 0.5], "orientation": [0.0, 0.0, 0.0, 1.0]}
+                },
+                "program": {
+                    "operations": [
+                        {"type": "wait", "origin": "op_0", "duration": {"secs": 0, "nanos": 500000000}},
+                        {"type": "home", "origin": "op_1"}
+                    ]
+                }
+            }
+        })),
+    ).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response body must be valid JSON");
+    assert_eq!(body["status"], "ok");
+    assert!(
+        body["execution_plan"]["segment_count"].as_u64().unwrap_or(0) > 0,
+        "execution plan must have at least one segment"
+    );
 }
 
 

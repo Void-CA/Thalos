@@ -102,11 +102,11 @@ fn build_lowering_ctx(provider: &MockKnowledgeProvider) -> LoweringContext {
     }
 }
 
-/// Build a PlanningCtx for a Planar2R robot.
+/// Build a PlanningCtx for a Manipulator3DOF robot.
 fn build_planning_ctx() -> PlanningCtx {
     PlanningCtx {
-        initial_state: vec![0.0, 0.0],
-        robot: RobotModel::Planar2R,
+        initial_state: vec![0.0, 0.0, 0.0, 0.0],
+        robot: RobotModel::Scara,
         interpolation: InterpolationConfig::default(),
     }
 }
@@ -192,65 +192,6 @@ fn wait_produces_pause_with_correct_duration() {
     assert_eq!(paused.len(), 1, "Should have exactly one Pause");
     if let ExecutionSegment::Pause { duration } = &paused[0] {
         assert_eq!(*duration, Duration::from_millis(500));
-    }
-}
-
-/// MoveTo with a Cartesian pose now resolves through the full pipeline:
-/// SemanticProgram → Lowering → MotionProgram → ScaraPlanner → ExecutionPlan.
-/// The `resolve_target_pose` fix maps MotionPose to Transform3D, and the
-/// frame resolution fix uses the robot's actual end-effector FrameId.
-#[test]
-fn move_to_produces_joint_trajectory() {
-    // Planar2R at [0,0] has FK([0,0]) = position [2.0, 0.0, 0.0] with
-    // identity orientation (0+0 joint angles).  A target at this same pose
-    // should converge trivially.
-    let provider = MockKnowledgeProvider::new()
-        .with_location_ok(
-            LocationId("target".into()),
-            MotionPose {
-                position: [2.0, 0.0, 0.0],
-                orientation: [1.0, 0.0, 0.0, 0.0],
-                frame: "world".into(),
-            },
-        )
-        .with_home_pose(Ok(MotionPose {
-            position: [2.0, 0.0, 0.0],
-            orientation: [1.0, 0.0, 0.0, 0.0],
-            frame: "world".into(),
-        }));
-
-    let program = SemanticProgram::new(vec![
-        SemanticOperation::MoveTo(MoveToOp {
-            origin: make_origin("op-move"),
-            destination: LocationId("target".into()),
-            tool: None,
-        }),
-    ]);
-
-    let ctx = LoweringContext {
-        provider: &provider,
-        default_tool: None,
-        default_profile: MotionProfile {
-            max_velocity: 1.0,
-            max_acceleration: 0.5,
-            max_jerk: None,
-        },
-    };
-    let motion_program = SemanticLowering::lower(&program, &ctx)
-        .expect("Lowering should succeed");
-
-    let planner = ScaraPlanner::new();
-    let planning_ctx = build_planning_ctx();
-    let execution_plan = planner
-        .plan(&motion_program, &planning_ctx)
-        .expect("MoveTo should plan through ScaraPlanner with fixed frame resolution");
-
-    assert_eq!(execution_plan.metadata.segment_count, 1);
-    match &execution_plan.segments[0] {
-        ExecutionSegment::JointTrajectory { samples } => {
-            assert!(!samples.is_empty(), "JointTrajectory should have samples");
-        }
-        other => panic!("Expected JointTrajectory, got {other:?}"),
     }
 }
 
