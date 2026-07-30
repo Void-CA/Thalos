@@ -19,9 +19,21 @@ import { AXIS_ORIGIN, LINK_COLOR, LINK_OPACITY } from '@/shared/tokens'
  */
 export function RobotModel() {
   const data = useSceneStore(s => s.data)
+  const frameTransforms = useSceneStore(s => s.frameTransforms)
+  const runtime = useSceneStore(s => s.runtime)
   if (!data) return null
 
-  // Agrupar primitivas por frameId para anidarlas bajo su frame padre
+  // Build lookup for FK frame transforms
+  const ftMap = useMemo(() => {
+    const map = new Map<string, { translation: [number, number, number]; rotation: [number, number, number, number] }>()
+    for (const ft of frameTransforms) {
+      console.log(`[RobotModel] ft: ${ft.id} → [${ft.translation}]`)
+      map.set(ft.id, ft)
+    }
+    return map
+  }, [frameTransforms])
+
+  // Agrupar primitivas por frameId
   const primitivesByFrame = useMemo(() => {
     const map = new Map<string, ScenePrimitive[]>()
     for (const p of data.primitives) {
@@ -36,24 +48,34 @@ export function RobotModel() {
 
   return (
     <group>
-      {/* Links */}
+      {/* Links — fijos (se renderizan desde data) */}
       {data.links.map(link => (
         <LinkComponent key={link.id} link={link} refDim={data.referenceDimension} />
       ))}
 
-      {/* Frames con sus primitivas hijas */}
-      {data.frames.map(frame => {
-        const children = primitivesByFrame.get(frame.id)
-        return (
-          <FrameComponent key={frame.id} frame={frame}>
-            {children?.map(p => (
-              <PrimitiveComponent key={p.id} primitive={p} />
-            ))}
-          </FrameComponent>
-        )
-      })}
+      {/* Frames con sus ejes de coordenadas — estáticos */}
+      {data.frames.map(frame => (
+        <FrameComponent key={frame.id} frame={frame}>
+          {/* Primitivas: se renderizan con posición mundial = frame.FK + local offset */}
+          {primitivesByFrame.get(frame.id)?.map(p => {
+            const ft = ftMap.get(frame.id)
+            if (ft) {
+              // Computar world position from FK + local primitive offset
+              const localPos = new THREE.Vector3(...p.translation)
+              const localQuat = rustQuatToThree(p.rotation)
+              const fkPos = new THREE.Vector3(...ft.translation)
+              const fkQuat = rustQuatToThree(ft.rotation)
+              // World = FK world + (FK rotation * local offset)
+              const worldPos = localPos.clone().applyQuaternion(fkQuat).add(fkPos)
+              const worldQuat = fkQuat.clone().multiply(localQuat)
+              return <PrimitiveComponent key={p.id} primitive={p} worldPos={worldPos} worldQuat={worldQuat} />
+            }
+            return <PrimitiveComponent key={p.id} primitive={p} />
+          })}
+        </FrameComponent>
+      ))}
 
-      {/* Primitivas huérfanas (sin frame padre conocido) */}
+      {/* Primitivas huérfanas */}
       {data.primitives
         .filter(p => !frameIds.has(p.frameId))
         .map(p => (
@@ -78,6 +100,7 @@ function rustQuatToThree([w, x, y, z]: [number, number, number, number]): THREE.
 
 function FrameComponent({ frame, children }: FrameComponentProps) {
   const style = frame.style ?? DEFAULT_FRAME_STYLE
+  // Frame axes at static scene position (primitives use FK transforms separately)
   const pos = new THREE.Vector3(...frame.translation)
   const quat = rustQuatToThree(frame.rotation)
 
@@ -157,45 +180,33 @@ function LinkComponent({ link, refDim }: LinkComponentProps) {
 //  Primitive — geometría URDF (box, sphere, cylinder)
 // ═══════════════════════════════════════════════
 
-function PrimitiveComponent({ primitive }: { primitive: ScenePrimitive }) {
+interface PrimitiveProps {
+  primitive: ScenePrimitive
+  worldPos?: THREE.Vector3
+  worldQuat?: THREE.Quaternion
+}
+
+function PrimitiveComponent({ primitive, worldPos, worldQuat }: PrimitiveProps) {
   const geometry = useMemo(() => {
     switch (primitive.geometry.type) {
       case 'box':
-        return new THREE.BoxGeometry(
-          primitive.geometry.width,
-          primitive.geometry.height,
-          primitive.geometry.depth,
-        )
+        return new THREE.BoxGeometry(primitive.geometry.width, primitive.geometry.height, primitive.geometry.depth)
       case 'sphere':
         return new THREE.SphereGeometry(primitive.geometry.radius, 16, 16)
       case 'cylinder':
-        return new THREE.CylinderGeometry(
-          primitive.geometry.radius,
-          primitive.geometry.radius,
-          primitive.geometry.height,
-          16,
-          1,
-        )
+        return new THREE.CylinderGeometry(primitive.geometry.radius, primitive.geometry.radius, primitive.geometry.height, 16, 1)
     }
   }, [primitive.geometry])
 
-  const color = primitive.color
-    ? new THREE.Color(primitive.color[0], primitive.color[1], primitive.color[2])
-    : new THREE.Color(0xaaaaaa)
-
+  const color = primitive.color ? new THREE.Color(primitive.color[0], primitive.color[1], primitive.color[2]) : new THREE.Color(0xaaaaaa)
   const opacity = primitive.color?.[3] ?? 1
-  const pos = new THREE.Vector3(...primitive.translation)
-  const quat = rustQuatToThree(primitive.rotation)
+  // World transform from FK, otherwise local
+  const pos = worldPos ?? new THREE.Vector3(...primitive.translation)
+  const quat = worldQuat ?? rustQuatToThree(primitive.rotation)
 
   return (
     <mesh geometry={geometry} position={pos} quaternion={quat} frustumCulled={false}>
-      <meshStandardMaterial
-        color={color}
-        opacity={opacity}
-        transparent={opacity < 1}
-        roughness={0.6}
-        metalness={0.3}
-      />
+      <meshStandardMaterial color={color} opacity={opacity} transparent={opacity < 1} roughness={0.6} metalness={0.3} />
     </mesh>
   )
 }
