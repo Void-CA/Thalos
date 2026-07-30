@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
-import type { PoseDef, ResourcePose } from './types'
+import type { PoseDef, SceneContent, TaskDocument, DocMetadata } from './types'
 
 export interface SceneObject {
   id: string
@@ -38,15 +38,13 @@ interface SceneState {
 
   setHomePose: (pose: PoseDef) => void
 
-  /** Build resource payload for the compile request */
-  toResourcePayload: () => {
-    objects: ResourcePose[]
-    locations: ResourcePose[]
-    home_pose?: PoseDef
-  }
+  /** Build a TaskDocument from the current scene + operations */
+  toTaskDocument: (operations: import('./types').SemanticOp[]) => TaskDocument
 }
 
-const defaultPose: PoseDef = { position: [0, 0, 0], orientation: [0, 0, 0, 1] }
+// SCARA FK([0,0,0,0]) = [1.8, 0.0, 0.5]
+// Mantener home_pose en FK([0,0,0,0]) para que IK converja al inicio
+const defaultPose: PoseDef = { position: [1.8, 0.0, 0.5], orientation: [0, 0, 0, 1] }
 
 export const useSceneStore = create<SceneState>()(
   devtools(
@@ -82,12 +80,35 @@ export const useSceneStore = create<SceneState>()(
 
       setHomePose: (pose) => set({ homePose: pose }),
 
-      toResourcePayload: () => {
+      toTaskDocument: (operations) => {
         const s = get()
-        return {
-          objects: s.objects.map((o) => ({ id: o.id, pose: o.pose })),
-          locations: s.locations.map((l) => ({ id: l.id, pose: l.pose })),
+        const scene: SceneContent = {
+          objects: s.objects.map((o) => ({
+            id: o.id,
+            name: o.name,
+            pose: o.pose,
+            category: null,
+          })),
+          locations: s.locations.map((l) => ({
+            id: l.id,
+            name: l.name,
+            pose: l.pose,
+            description: null,
+          })),
+          tools: s.tools.map((t) => ({ id: t.id, name: t.name })),
           home_pose: s.homePose,
+        }
+        const metadata: DocMetadata = {
+          name: 'Task',
+          version: 1,
+          created_at: new Date().toISOString(),
+          modified_at: new Date().toISOString(),
+        }
+        return {
+          id: crypto.randomUUID?.() ?? `${Date.now()}`,
+          metadata,
+          scene,
+          program: { operations },
         }
       },
     }),

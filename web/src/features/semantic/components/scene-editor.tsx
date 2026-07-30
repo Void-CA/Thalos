@@ -35,7 +35,9 @@ export function SceneEditor() {
               addObject({
                 id: `obj-${nextSeq.obj}`,
                 name: `Object ${nextSeq.obj}`,
-                pose: { position: [0.5, 0, 0], orientation: [0, 0, 0, 1] },
+                // SCARA: base_height=0.5, J3 prismatic [-0.5,0.0]
+                // En reposo J3=0 → TCP Z=0.5. Approach offset +5cm = Z 0.45 (J3=-0.05) dentro del rango
+                pose: { position: [1.8, 0.0, 0.4], orientation: [0, 0, 0, 1] },
               })
             }
             className="text-muted-foreground hover:text-foreground cursor-pointer"

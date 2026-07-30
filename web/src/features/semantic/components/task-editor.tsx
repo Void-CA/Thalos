@@ -20,17 +20,16 @@ export function TaskEditor() {
     reset,
   } = useSemanticEditor()
 
-  const resources = useSceneStore((s) => s.toResourcePayload)
+  const toTaskDocument = useSceneStore((s) => s.toTaskDocument)
 
   const handleCompile = async () => {
     setLoading(true)
     setError(null)
     try {
-      const payload = {
-        operations,
-        ...resources(),
-      }
-      const res = await compileSemantic(payload)
+      // Add auto-generated origins for each operation
+      const ops = operations.map((op, i) => ({ ...op, origin: op.origin ?? `op_${i}` }))
+      const task = toTaskDocument(ops)
+      const res = await compileSemantic({ task })
       setResult(res)
     } catch (err) {
       if (err instanceof CompileError) {
@@ -41,7 +40,14 @@ export function TaskEditor() {
     }
   }
 
-  const canCompile = operations.length > 0 && !loading
+  const hasMissingFields = operations.some(
+    (op) =>
+      (op.type === 'pick' && !op.object) ||
+      (op.type === 'place' && (!op.object || !op.destination)) ||
+      (op.type === 'move_to' && !op.destination) ||
+      (op.type === 'wait' && (!op.duration_secs || op.duration_secs <= 0)),
+  )
+  const canCompile = operations.length > 0 && !loading && !hasMissingFields
 
   return (
     <div className="flex flex-col h-full overflow-hidden">

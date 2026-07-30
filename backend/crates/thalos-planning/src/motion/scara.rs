@@ -3,7 +3,7 @@ use std::time::Duration;
 use thalos_core::{
     kinematics::{
         forward::ForwardKinematics,
-        inverse::{IKGoal, IKSolver, IKStatus, JacobianTransposeSolver},
+        inverse::{DampedLeastSquaresSolver, IKGoal, IKSolver, IKStatus},
     },
     models::RobotModel,
     motion::{MotionInstruction, MotionProgram, MotionTarget, OutputChannel, OutputValue},
@@ -163,7 +163,7 @@ impl ScaraPlanner {
                     transform.clone(),
                 );
 
-                let ik_result = ik_solver.solve(&q_seed, IKGoal::Pose(waypoint_pose));
+                let ik_result = ik_solver.solve(&q_seed, IKGoal::Position(waypoint_pose.translation()));
                 match ik_result.status {
                     IKStatus::Converged => {
                         q_seed = ik_result.q;
@@ -266,7 +266,7 @@ impl MotionPlanner for ScaraPlanner {
 
         // Build an IKSolver for the chain using the robot's actual EE frame
         let fk = ForwardKinematics::new(chain.clone());
-        let ik_solver = JacobianTransposeSolver::new(fk, *chain.end_effector(), 5000, 1e-4, 0.1);
+        let ik_solver = DampedLeastSquaresSolver::new(fk, *chain.end_effector(), 1000, 1e-4, 0.1);
 
         let mut segments: Vec<ExecutionSegment> = Vec::with_capacity(program.instructions.len());
         let mut current_joints = context.initial_state.clone();

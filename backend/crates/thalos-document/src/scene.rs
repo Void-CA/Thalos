@@ -73,8 +73,8 @@ impl KnowledgeProvider for SceneKnowledge<'_> {
                 LoweringError::KnowledgeProvider(format!("unknown object '{}'", object.0))
             })?;
         let grasp_frame = pose_to_motion(&obj.pose);
-        let approach_frame = offset_pose(&grasp_frame, 0.05);
-        let retreat_frame = offset_pose(&grasp_frame, -0.05);
+        let approach_frame = offset_pose(&grasp_frame, 0.02);
+        let retreat_frame = offset_pose(&grasp_frame, 0.02);
         Ok(GraspPlan {
             grasp_frame,
             approach_frame,
@@ -100,8 +100,8 @@ impl KnowledgeProvider for SceneKnowledge<'_> {
                 ))
             })?;
         let drop_frame = pose_to_motion(&loc.pose);
-        let approach_frame = offset_pose(&drop_frame, 0.05);
-        let retreat_frame = offset_pose(&drop_frame, -0.05);
+        let approach_frame = offset_pose(&drop_frame, 0.02);
+        let retreat_frame = offset_pose(&drop_frame, 0.02);
         Ok(PlacementPlan {
             drop_frame,
             approach_frame,
@@ -225,8 +225,8 @@ mod tests {
             "approach should have positive Z offset"
         );
         assert!(
-            plan.retreat_frame.position[2] < 0.0,
-            "retreat should have negative Z offset"
+            plan.retreat_frame.position[2] > 0.0,
+            "Pick retreat should be above grasp (positive Z offset for SCARA)"
         );
     }
 
