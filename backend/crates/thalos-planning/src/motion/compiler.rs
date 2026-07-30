@@ -11,7 +11,7 @@ use crate::goal::{GoalResolver, GoalResolverConfig, JointGoal, ResolvedPoseGoal,
 use crate::motion::move_j::{MoveJConfig, MoveJPlanner};
 use crate::motion::move_l::{MoveLConfig, MoveLPlanner};
 use crate::motion::planner::{MotionPlanner, SegmentPlanner, SegmentPlanningContext};
-use crate::motion::program::{CompiledPlan, MotionProgram, PlannedSegment};
+use crate::motion::program::{CompiledPlan, PlannedSegment, PlanningProgram};
 
 /// Dispatches a `MotionSegment` to the appropriate `MotionPlanner`.
 ///
@@ -97,7 +97,7 @@ impl MotionPlannerDispatcher for DefaultPlannerDispatcher {
     }
 }
 
-/// Compiles a `MotionProgram` into a `CompiledPlan`.
+/// Compiles a `PlanningProgram` into a `CompiledPlan`.
 ///
 /// The compiler is a pure orchestrator:
 /// 1. Iterates segments in order
@@ -137,7 +137,7 @@ impl PlanCompiler {
     /// `CompiledPlan` is returned — the runtime is never modified.
     pub fn compile(
         &self,
-        program: &MotionProgram,
+        program: &PlanningProgram,
         ctx: &SegmentPlanningContext,
     ) -> Result<CompiledPlan, CompileError> {
         let mut segments = Vec::with_capacity(program.segments.len());
@@ -202,7 +202,7 @@ impl PlanCompiler {
 
     /// Compile a sequence of Operations into a plan with a built-in ConstraintQuery.
     ///
-    /// Expands each Operation into MotionNodes, builds a MotionProgram,
+    /// Expands each Operation into MotionNodes, builds a PlanningProgram,
     /// compiles it, and constructs a RangeConstraintQuery that maps each
     /// operation's waypoint range to its constraints.
     pub fn compile_with_operations(
@@ -224,9 +224,9 @@ impl PlanCompiler {
             all_nodes.extend(expansion);
         }
 
-        // 2. Extract segments and build a MotionProgram.
+        // 2. Extract segments and build a PlanningProgram.
         let segments: Vec<MotionSegment> = all_nodes.into_iter().map(|n| n.segment).collect();
-        let program = MotionProgram::new(segments);
+        let program = PlanningProgram::new(segments);
 
         // 4. Compile the program normally.
         let plan = self.compile(&program, ctx)?;
@@ -306,7 +306,7 @@ mod tests {
     fn compile_empty_program() {
         let h = TestHarness::new();
         let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
-        let program = MotionProgram::new(vec![]);
+        let program = PlanningProgram::new(vec![]);
 
         let result = compiler.compile(&program, &h.ctx());
         assert!(result.is_ok());
@@ -321,7 +321,7 @@ mod tests {
     fn compile_single_movej() {
         let h = TestHarness::new();
         let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
-        let program = MotionProgram::new(vec![MotionSegment::MoveJ {
+        let program = PlanningProgram::new(vec![MotionSegment::MoveJ {
             target: vec![1.0, 1.0],
             max_velocity: None,
             max_acceleration: None,
@@ -360,7 +360,7 @@ mod tests {
     fn compile_two_movej_segments() {
         let h = TestHarness::new();
         let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
-        let program = MotionProgram::new(vec![
+        let program = PlanningProgram::new(vec![
             MotionSegment::MoveJ {
                 target: vec![1.0, 0.5],
                 max_velocity: None,
@@ -405,7 +405,7 @@ mod tests {
     fn compile_two_movej_first_waypoint_matches_start_state() {
         let h = TestHarness::new();
         let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
-        let program = MotionProgram::new(vec![
+        let program = PlanningProgram::new(vec![
             MotionSegment::MoveJ {
                 target: vec![1.0, 0.5],
                 max_velocity: None,
@@ -449,7 +449,7 @@ mod tests {
     fn compile_fails_atomically_on_segment_error() {
         let h = TestHarness::new();
         let compiler = PlanCompiler::new(Box::new(FailingDispatcher));
-        let program = MotionProgram::new(vec![
+        let program = PlanningProgram::new(vec![
             MotionSegment::MoveJ {
                 target: vec![0.5, 0.5],
                 max_velocity: None,
@@ -497,7 +497,7 @@ mod tests {
 
         let h = TestHarness::new();
         let compiler = PlanCompiler::new(Box::new(FailingSecondDispatcher));
-        let program = MotionProgram::new(vec![
+        let program = PlanningProgram::new(vec![
             MotionSegment::MoveJ {
                 target: vec![0.5, 0.5],
                 max_velocity: None,

@@ -4,22 +4,26 @@ use thalos_core::prelude::Trajectory;
 
 use thalos_core::motion::segment::MotionSegment;
 
-/// A motion program: an ordered sequence of movement commands.
+/// A planning program: an ordered sequence of movement commands.
 ///
 /// This is the *input* to the planning system. The `PlanCompiler` transforms
 /// it into a `CompiledPlan`. The name reflects the long-term role: a program
 /// may eventually include waits, tool changes, IO, and subroutines — just
 /// like industrial robot controllers.
 #[derive(Debug, Clone)]
-pub struct MotionProgram {
+pub struct PlanningProgram {
     pub segments: Vec<MotionSegment>,
 }
 
-impl MotionProgram {
+impl PlanningProgram {
     pub fn new(segments: Vec<MotionSegment>) -> Self {
         Self { segments }
     }
 }
+
+/// Deprecated alias — use `PlanningProgram` instead.
+#[deprecated(note = "Renamed to PlanningProgram")]
+pub type MotionProgram = PlanningProgram;
 
 /// A single segment after planning.
 ///
@@ -38,7 +42,7 @@ pub struct PlannedSegment {
     pub time_range: Range<f64>,
 }
 
-/// The result of compiling a `MotionProgram`.
+/// The result of compiling a `PlanningProgram`.
 ///
 /// This is the *output* of the planning subsystem. The runtime consumes
 /// `merged_trajectory` for execution; the segment metadata enables
@@ -112,6 +116,20 @@ mod tests {
         let plan = sample_plan();
         assert!(plan.extract_segment(90..110).is_none());
         assert!(plan.extract_segment(100..110).is_none());
+    }
+
+    // ── Phase 2, Task 2.1 + 2.2: PlanningProgram rename + deprecated alias ──
+
+    #[allow(deprecated)]
+    #[test]
+    fn motion_program_alias_resolves_to_planning_program() {
+        // Verify the deprecated alias is the same type as the new name.
+        let via_new = PlanningProgram::new(vec![]);
+        let via_old = MotionProgram::new(vec![]);
+        // Type compatibility: can pass one where the other is expected.
+        fn takes_planning(_p: PlanningProgram) {}
+        takes_planning(via_new);
+        takes_planning(via_old);
     }
 
     #[test]

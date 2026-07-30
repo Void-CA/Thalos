@@ -12,6 +12,7 @@ pub mod knowledge;
 pub mod motion;
 pub mod optimizer;
 pub mod repair;
+pub mod resolver;
 pub mod trajectory;
 
 // Re-export key optimization types for use by API crate consumers

@@ -2,7 +2,7 @@
 //!
 //! This is the coordination layer (PR 3) of the feedback loop. It receives:
 //!
-//! - A [`PlanExecutor`] for compiling and executing `MotionProgram`s.
+//! - A [`PlanExecutor`] for compiling and executing `PlanningProgram`s.
 //! - A registry of [`IntentionOperator`]s for transforming problematic segments.
 //!
 //! The orchestrator never implements analysis, transformation, or comparison
@@ -15,7 +15,7 @@
 //! 3. If no findings → [`Verdict::NoActionNeeded`]
 //! 4. Find first-applicable operator (no ranking)
 //! 5. Apply operator → [`TransformationCandidate`]
-//! 6. Build new `MotionProgram` with substituted segments
+//! 6. Build new `PlanningProgram` with substituted segments
 //! 7. Re-execute
 //! 8. Compare: [`Verdict::from_comparison`]
 //!
@@ -30,7 +30,7 @@ use thalos_core::motion::segment::MotionSegment;
 
 use crate::feedback::finding::{ExecutionFinding, TraceSnapshot, analyze_trace};
 use crate::feedback::operator::IntentionOperator;
-use crate::motion::program::MotionProgram;
+use crate::motion::program::PlanningProgram;
 
 // ============================================================================
 // Verdict
@@ -102,7 +102,7 @@ impl Verdict {
 pub struct TransformationCandidate {
     /// Human-readable name of the operator that produced this result.
     pub operator_name: &'static str,
-    /// Index of the segment being replaced in the original `MotionProgram`.
+    /// Index of the segment being replaced in the original `PlanningProgram`.
     pub segment_id: usize,
     /// The replacement segments produced by the operator.
     pub replacement_segments: Vec<MotionSegment>,
@@ -137,7 +137,7 @@ impl std::error::Error for FeedbackError {}
 // PlanExecutor trait
 // ============================================================================
 
-/// Abstracts compilation and execution of a [`MotionProgram`].
+/// Abstracts compilation and execution of a [`PlanningProgram`].
 ///
 /// The implementation handles `PlanCompiler` internally — the orchestrator
 /// only coordinates the cycle. This trait decouples the feedback loop from
@@ -153,11 +153,11 @@ impl std::error::Error for FeedbackError {}
 /// Currently synchronous. A real executor backed by `thalos-runtime` would
 /// be async; the signature can be changed when that implementation exists.
 pub trait PlanExecutor: Send + Sync {
-    /// Compile and execute a `MotionProgram`.
+    /// Compile and execute a `PlanningProgram`.
     ///
     /// Returns a [`TraceSnapshot`] with per-segment metrics. Errors are
     /// reported via [`FeedbackError::ExecutionFailed`].
-    fn execute_program(&self, program: &MotionProgram) -> Result<TraceSnapshot, FeedbackError>;
+    fn execute_program(&self, program: &PlanningProgram) -> Result<TraceSnapshot, FeedbackError>;
 }
 
 // ============================================================================
@@ -179,21 +179,21 @@ fn select_operator<'a>(
         .map(|op| op.as_ref())
 }
 
-/// Builds a new [`MotionProgram`] by replacing one segment with alternatives.
+/// Builds a new [`PlanningProgram`] by replacing one segment with alternatives.
 ///
 /// The original segment at `candidate.segment_id` is removed and replaced
 /// with `candidate.replacement_segments`. The replacement vec may have any
 /// length (one-to-one, one-to-many, or one-to-zero).
 fn build_modified_program(
-    original: &MotionProgram,
+    original: &PlanningProgram,
     candidate: &TransformationCandidate,
-) -> MotionProgram {
+) -> PlanningProgram {
     let mut segments = original.segments.clone();
     let _ = segments.splice(
         candidate.segment_id..=candidate.segment_id,
         candidate.replacement_segments.clone(),
     );
-    MotionProgram::new(segments)
+    PlanningProgram::new(segments)
 }
 
 // ============================================================================
@@ -236,10 +236,10 @@ impl FeedbackOrchestrator {
     /// 3. If no findings → return [`Verdict::NoActionNeeded`] early.
     /// 4. Find the first-applicable operator (no ranking).
     /// 5. Apply the operator → [`TransformationCandidate`].
-    /// 6. Build a modified `MotionProgram` with substituted segments.
+    /// 6. Build a modified `PlanningProgram` with substituted segments.
     /// 7. Re-execute the modified program.
     /// 8. Compare original vs new trace → return [`Verdict`].
-    pub fn run(&self, program: &MotionProgram) -> Result<Verdict, FeedbackError> {
+    pub fn run(&self, program: &PlanningProgram) -> Result<Verdict, FeedbackError> {
         // 1. Execute original program
         let original_trace = self.executor.execute_program(program)?;
 
@@ -271,7 +271,7 @@ impl FeedbackOrchestrator {
             replacement_segments,
         };
 
-        // 6. Build new MotionProgram with substituted segments
+        // 6. Build new PlanningProgram with substituted segments
         let new_program = build_modified_program(program, &candidate);
 
         // 7. Re-execute
@@ -321,7 +321,7 @@ mod tests {
     impl PlanExecutor for MockExecutor {
         fn execute_program(
             &self,
-            _program: &MotionProgram,
+            _program: &PlanningProgram,
         ) -> Result<TraceSnapshot, FeedbackError> {
             let mut results = self.results.lock().expect("mock executor lock");
             #[allow(clippy::panic)]
@@ -591,7 +591,7 @@ mod tests {
 
         let orch = FeedbackOrchestrator::new(Box::new(executor), vec![Box::new(operator)]);
 
-        let program = MotionProgram::new(vec![segment]);
+        let program = PlanningProgram::new(vec![segment]);
         let verdict = orch.run(&program).expect("run should succeed");
 
         match verdict {
@@ -632,7 +632,7 @@ mod tests {
         // No operators needed since we never reach transformation
         let orch = FeedbackOrchestrator::new(Box::new(executor), vec![]);
 
-        let program = MotionProgram::new(vec![make_move_l()]);
+        let program = PlanningProgram::new(vec![make_move_l()]);
         let verdict = orch.run(&program).expect("run should succeed");
 
         assert_eq!(verdict, Verdict::NoActionNeeded);
@@ -657,7 +657,7 @@ mod tests {
         let executor = MockExecutor::new(vec![Ok(clean_trace)]);
         let orch = FeedbackOrchestrator::new(Box::new(executor), vec![]);
 
-        let program = MotionProgram::new(vec![make_move_l(), make_move_l(), make_move_l()]);
+        let program = PlanningProgram::new(vec![make_move_l(), make_move_l(), make_move_l()]);
         let verdict = orch.run(&program).expect("run should succeed");
 
         assert_eq!(verdict, Verdict::NoActionNeeded);
@@ -691,7 +691,7 @@ mod tests {
 
         let orch = FeedbackOrchestrator::new(Box::new(executor), vec![Box::new(operator)]);
 
-        let program = MotionProgram::new(vec![segment]);
+        let program = PlanningProgram::new(vec![segment]);
         let verdict = orch.run(&program).expect("run should succeed");
 
         match verdict {
@@ -764,7 +764,7 @@ mod tests {
 
         let orch = FeedbackOrchestrator::new(Box::new(executor), vec![Box::new(operator)]);
 
-        let program = MotionProgram::new(vec![seg1, seg2, seg3]);
+        let program = PlanningProgram::new(vec![seg1, seg2, seg3]);
         let verdict = orch.run(&program).expect("integration run should succeed");
 
         match verdict {
@@ -817,7 +817,7 @@ mod tests {
             vec![Box::new(op_noop), Box::new(op_fixer)],
         );
 
-        let program = MotionProgram::new(vec![segment]);
+        let program = PlanningProgram::new(vec![segment]);
         let verdict = orch.run(&program);
 
         assert!(verdict.is_ok(), "expected Ok when second operator applies");
@@ -837,7 +837,7 @@ mod tests {
 
         let orch = FeedbackOrchestrator::new(Box::new(executor), vec![Box::new(operator)]);
 
-        let program = MotionProgram::new(vec![make_move_l()]);
+        let program = PlanningProgram::new(vec![make_move_l()]);
         let result = orch.run(&program);
 
         assert!(result.is_err(), "expected error when no operator applies");

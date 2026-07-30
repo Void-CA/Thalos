@@ -3,6 +3,7 @@ import type {
   RuntimeStateResponse,
   SolveIKResponse,
   PoseTargetDto,
+  RuntimeDelta,
 } from './scene-api.types'
 
 export const sceneApi = {
@@ -69,4 +70,8 @@ export const sceneApi = {
 
   resetExecution: () =>
     apiClient.post<RuntimeStateResponse>('/scene/motion/reset').then(r => r.data),
+
+  /** Tick execution by dt seconds — returns RuntimeDelta with joints + transforms. */
+  tickExecution: (dt: number) =>
+    apiClient.post<RuntimeDelta>('/scene/motion/tick', { dt }).then(r => r.data),
 }

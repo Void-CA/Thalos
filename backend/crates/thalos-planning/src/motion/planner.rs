@@ -1,7 +1,7 @@
 use thalos_core::{
+    execution::program::ExecutionProgram,
     kinematics::inverse::IKSolver,
     models::RobotModel,
-    motion::MotionProgram,
     robot::{serial_chain::SerialChain, state::RobotState, tool_frame::ToolFrame},
 };
 
@@ -81,13 +81,13 @@ pub trait SegmentPlanner {
 
 /// New program-level motion planner trait.
 ///
-/// Consumes a complete `MotionProgram` and produces a single `ExecutionPlan`.
+/// Consumes a complete `ExecutionProgram` and produces a single `ExecutionPlan`.
 /// Object-safe: no associated types, no generic parameters.
 pub trait MotionPlanner {
     /// Plan a complete motion program into an execution plan.
     fn plan(
         &self,
-        program: &MotionProgram,
+        program: &ExecutionProgram,
         context: &PlanningCtx,
     ) -> Result<ExecutionPlan, PlanningError>;
 }

@@ -1,12 +1,13 @@
 use std::time::Duration;
 
 use thalos_core::{
+    execution::program::{ExecutionInstruction, ExecutionProgram},
     kinematics::{
         forward::ForwardKinematics,
         inverse::{DampedLeastSquaresSolver, IKGoal, IKSolver, IKStatus},
     },
     models::RobotModel,
-    motion::{MotionInstruction, MotionProgram, MotionTarget, OutputChannel, OutputValue},
+    motion::target::{MotionTarget, OutputChannel, OutputValue},
     robot::serial_chain::SerialChain,
     spatial::{frame::FrameId, pose::Pose},
 };
@@ -21,7 +22,7 @@ use crate::{
     },
 };
 
-/// A planner for SCARA-class robots that maps `MotionProgram` to `ExecutionPlan`.
+/// A planner for SCARA-class robots that maps `ExecutionProgram` to `ExecutionPlan`.
 ///
 /// Implements the `MotionPlanner` trait using IK seeding, trapezoidal velocity
 /// profiles, and linear Cartesian interpolation per the trajectory-planner spec.
@@ -229,7 +230,7 @@ impl Default for ScaraPlanner {
 impl MotionPlanner for ScaraPlanner {
     fn plan(
         &self,
-        program: &MotionProgram,
+        program: &ExecutionProgram,
         context: &PlanningCtx,
     ) -> Result<ExecutionPlan, PlanningError> {
         if program.instructions.is_empty() {
@@ -274,7 +275,7 @@ impl MotionPlanner for ScaraPlanner {
 
         for instruction in &program.instructions {
             let segment = match instruction {
-                MotionInstruction::MoveJ {
+                ExecutionInstruction::MoveJ {
                     target, profile, ..
                 } => {
                     let seg = Self::plan_move_j(
@@ -293,7 +294,7 @@ impl MotionPlanner for ScaraPlanner {
                     }
                     seg
                 }
-                MotionInstruction::MoveL {
+                ExecutionInstruction::MoveL {
                     target, profile, ..
                 } => {
                     let seg = Self::plan_move_l(
@@ -311,12 +312,12 @@ impl MotionPlanner for ScaraPlanner {
                     }
                     seg
                 }
-                MotionInstruction::Delay { duration, .. } => {
+                ExecutionInstruction::Delay { duration, .. } => {
                     let seg = Self::plan_delay(*duration);
                     cumulative_time += *duration;
                     seg
                 }
-                MotionInstruction::SetOutput { channel, value, .. } => {
+                ExecutionInstruction::SetOutput { channel, value, .. } => {
                     // Absolute time for Output
                     Self::plan_set_output(cumulative_time, channel, value)
                     // Note: SetOutput does NOT advance cumulative_time
@@ -337,8 +338,9 @@ mod tests {
     use crate::motion::execution::JointState;
     use thalos_core::ids::OperationId;
     use thalos_core::{
+        execution::program::ExecutionMetadata,
         kinematics::inverse::{IKResult, IKSolver},
-        motion::{MotionMetadata, MotionPose, MotionProfile},
+        motion::target::{MotionPose, MotionProfile},
         robot::state::RobotState,
     };
 
@@ -425,9 +427,9 @@ mod tests {
     #[test]
     fn empty_program_returns_empty_program_error() {
         let planner = ScaraPlanner::new();
-        let program = MotionProgram {
+        let program = ExecutionProgram {
             instructions: vec![],
-            metadata: MotionMetadata {
+            metadata: ExecutionMetadata {
                 schema_version: 1,
                 source_project: "test".into(),
             },
@@ -458,12 +460,12 @@ mod tests {
     #[test]
     fn plan_metadata_matches_robot_model() {
         let planner = ScaraPlanner::new();
-        let program = MotionProgram {
-            instructions: vec![MotionInstruction::Delay {
+        let program = ExecutionProgram {
+            instructions: vec![ExecutionInstruction::Delay {
                 origin: OperationId("1".to_string()),
                 duration: Duration::from_millis(100),
             }],
-            metadata: MotionMetadata {
+            metadata: ExecutionMetadata {
                 schema_version: 1,
                 source_project: "test".into(),
             },

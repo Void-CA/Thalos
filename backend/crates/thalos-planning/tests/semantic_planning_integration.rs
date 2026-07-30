@@ -1,6 +1,6 @@
 //! Integration test: SemanticProgram → ScaraPlanner → ExecutionPlan.
 //!
-//! Validates the architectural claim that `thalos_core::MotionProgram` is the
+//! Validates the architectural claim that `thalos_core::ExecutionProgram` is the
 //! stable IR between semantic intent and geometric planning:
 //!
 //! ```text
@@ -8,7 +8,7 @@
 //!     ↓
 //! SemanticLowering  (+ MockKnowledgeProvider)
 //!     ↓
-//! core::MotionProgram
+//! core::ExecutionProgram
 //!     ↓
 //! ScaraPlanner::plan()
 //!     ↓
@@ -31,7 +31,7 @@
 
 use std::time::Duration;
 
-use thalos_core::motion::{MotionPose, MotionProfile};
+use thalos_core::motion::target::{MotionPose, MotionProfile};
 use thalos_core::ids::OperationId;
 use thalos_core::models::RobotModel;
 use thalos_planning::motion::{
@@ -117,7 +117,7 @@ fn build_planning_ctx() -> PlanningCtx {
 
 /// Pipeline: mixed semantic operations → valid ExecutionPlan.
 ///
-/// Proves that `thalos_core::MotionProgram` is a stable IR that both
+/// Proves that `thalos_core::ExecutionProgram` is a stable IR that both
 /// producers (SemanticLowering) and consumers (ScaraPlanner) can agree on.
 ///
 /// NOTE: MoveTo and Home with Cartesian poses trigger IK in the ScaraPlanner.
@@ -204,10 +204,10 @@ fn empty_semantic_program_rejected_by_planner() {
     let ctx = build_lowering_ctx(&provider);
 
     let motion_program = SemanticLowering::lower(&program, &ctx)
-        .expect("Empty program should lower to empty MotionProgram");
+        .expect("Empty program should lower to empty ExecutionProgram");
     assert!(
         motion_program.instructions.is_empty(),
-        "Empty SemanticProgram should produce empty MotionProgram"
+        "Empty SemanticProgram should produce empty ExecutionProgram"
     );
 
     let planner = ScaraPlanner::new();
@@ -216,6 +216,6 @@ fn empty_semantic_program_rejected_by_planner() {
 
     assert!(
         result.is_err(),
-        "ScaraPlanner should reject empty MotionProgram"
+        "ScaraPlanner should reject empty ExecutionProgram"
     );
 }
