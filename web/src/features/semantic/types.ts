@@ -52,19 +52,28 @@ export interface CompileRequest {
   task: TaskDocument
 }
 
-/** Response from a successful compile */
+/** Response from compile — includes the MotionProgram for the planning endpoint */
 export interface CompileResponse {
   status: string
-  execution_plan: {
-    segment_count: number
-    duration_ms: number
+  validation: { errors: string[]; warnings: string[] }
+  metadata: { instruction_count: number; planning_time_ms: number }
+  motion_program: {
+    instructions: unknown[]
+    metadata: { schema_version: number; source_project: string }
   }
-  validation: {
-    errors: string[]
-    warnings: string[]
-  }
-  metadata: {
-    instruction_count: number
-    planning_time_ms: number
-  }
+}
+
+/** A single waypoint in a planned trajectory */
+export interface Waypoint {
+  time_secs: number
+  joints: number[]
+}
+
+/** Response from POST /planning/plan */
+export interface PlanResponse {
+  status: string
+  waypoints: Waypoint[]
+  segment_count: number
+  total_duration_secs: number
+  robot_model: string
 }

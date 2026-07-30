@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { CompileRequest, CompileResponse } from './types'
+import type { CompileRequest, CompileResponse, PlanResponse } from './types'
 
 const client = axios.create({ baseURL: '/api/v1' })
 
@@ -34,4 +34,12 @@ export async function compileSemantic(
       err instanceof Error ? err.message : 'Compilation failed',
     )
   }
+}
+
+/** POST /api/v1/planning/plan — plan a MotionProgram into trajectory waypoints */
+export async function planMotion(
+  motionProgram: CompileResponse['motion_program'],
+): Promise<PlanResponse> {
+  const { data } = await client.post<PlanResponse>('/planning/plan', motionProgram)
+  return data
 }
