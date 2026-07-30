@@ -1,20 +1,21 @@
 pub mod context;
 
-use thalos_core::motion::{
-    MotionInstruction, MotionMetadata, MotionProgram, MotionTarget,
+use thalos_core::execution::program::{
+    ExecutionInstruction, ExecutionMetadata, ExecutionProgram,
 };
+use thalos_core::motion::MotionTarget;
 
 use crate::{
     knowledge::{GraspPlan, LoweringError, PlacementPlan},
     operation::{HomeOp, MoveToOp, PickOp, PlaceOp, SemanticOperation, WaitOp},
     program::SemanticProgram,
-    resource::{ToolId},
+    resource::ToolId,
 };
 
 use self::context::LoweringContext;
 
-/// The lowering engine that converts a validated `SemanticProgram` into a
-/// `MotionProgram` by resolving semantic resource IDs through the
+/// The lowering engine that converts a validated `SemanticProgram` into an
+/// `ExecutionProgram` by resolving semantic resource IDs through the
 /// `KnowledgeProvider`.
 ///
 /// Lowering is a pure function — same inputs always produce the same output.
@@ -22,10 +23,10 @@ use self::context::LoweringContext;
 pub struct SemanticLowering;
 
 impl SemanticLowering {
-    /// Lower a validated `SemanticProgram` into a `MotionProgram`.
+    /// Lower a validated `SemanticProgram` into an `ExecutionProgram`.
     ///
     /// Iterates each `SemanticOperation` and emits the corresponding
-    /// `MotionInstruction` sequence:
+    /// `ExecutionInstruction` sequence:
     ///
     /// | Operation | Emitted Instructions | Source |
     /// |-----------|---------------------|--------|
@@ -36,11 +37,11 @@ impl SemanticLowering {
     /// | Home      | single MoveJ | home_pose() |
     ///
     /// Returns `Err(LoweringError)` if the provider returns an error for any
-    /// resource resolution. No partial `MotionProgram` is produced on error.
+    /// resource resolution. No partial `ExecutionProgram` is produced on error.
     pub fn lower(
         program: &SemanticProgram,
         ctx: &LoweringContext,
-    ) -> Result<MotionProgram, LoweringError> {
+    ) -> Result<ExecutionProgram, LoweringError> {
         let mut instructions = Vec::new();
 
         for op in &program.operations {
@@ -71,9 +72,9 @@ impl SemanticLowering {
             }
         }
 
-        Ok(MotionProgram {
+        Ok(ExecutionProgram {
             instructions,
-            metadata: MotionMetadata {
+            metadata: ExecutionMetadata {
                 schema_version: 1,
                 source_project: "thalos-semantic".into(),
             },
@@ -81,7 +82,7 @@ impl SemanticLowering {
     }
 
     fn emit_pick(
-        instructions: &mut Vec<MotionInstruction>,
+        instructions: &mut Vec<ExecutionInstruction>,
         pick: &PickOp,
         plan: &GraspPlan,
         _tool: Option<ToolId>,
@@ -91,28 +92,28 @@ impl SemanticLowering {
         let profile = ctx.default_profile.clone();
 
         // 1. Approach (MoveJ)
-        instructions.push(MotionInstruction::MoveJ {
+        instructions.push(ExecutionInstruction::MoveJ {
             origin: origin.clone(),
             target: MotionTarget::Pose(plan.approach_frame.clone()),
             profile: profile.clone(),
         });
 
         // 2. Grasp (MoveL)
-        instructions.push(MotionInstruction::MoveL {
+        instructions.push(ExecutionInstruction::MoveL {
             origin: origin.clone(),
             target: MotionTarget::Pose(plan.grasp_frame.clone()),
             profile: profile.clone(),
         });
 
         // 3. Grip (SetOutput)
-        instructions.push(MotionInstruction::SetOutput {
+        instructions.push(ExecutionInstruction::SetOutput {
             origin: origin.clone(),
             channel: crate::knowledge::gripper_channel(),
             value: thalos_core::motion::OutputValue::Bool(true),
         });
 
         // 4. Retract (MoveL)
-        instructions.push(MotionInstruction::MoveL {
+        instructions.push(ExecutionInstruction::MoveL {
             origin,
             target: MotionTarget::Pose(plan.retreat_frame.clone()),
             profile,
@@ -120,7 +121,7 @@ impl SemanticLowering {
     }
 
     fn emit_place(
-        instructions: &mut Vec<MotionInstruction>,
+        instructions: &mut Vec<ExecutionInstruction>,
         place: &PlaceOp,
         plan: &PlacementPlan,
         _tool: Option<ToolId>,
@@ -130,28 +131,28 @@ impl SemanticLowering {
         let profile = ctx.default_profile.clone();
 
         // 1. Approach (MoveJ)
-        instructions.push(MotionInstruction::MoveJ {
+        instructions.push(ExecutionInstruction::MoveJ {
             origin: origin.clone(),
             target: MotionTarget::Pose(plan.approach_frame.clone()),
             profile: profile.clone(),
         });
 
         // 2. Drop (MoveL)
-        instructions.push(MotionInstruction::MoveL {
+        instructions.push(ExecutionInstruction::MoveL {
             origin: origin.clone(),
             target: MotionTarget::Pose(plan.drop_frame.clone()),
             profile: profile.clone(),
         });
 
         // 3. Ungrip (SetOutput)
-        instructions.push(MotionInstruction::SetOutput {
+        instructions.push(ExecutionInstruction::SetOutput {
             origin: origin.clone(),
             channel: crate::knowledge::gripper_channel(),
             value: thalos_core::motion::OutputValue::Bool(false),
         });
 
         // 4. Retract (MoveL)
-        instructions.push(MotionInstruction::MoveL {
+        instructions.push(ExecutionInstruction::MoveL {
             origin,
             target: MotionTarget::Pose(plan.retreat_frame.clone()),
             profile,
@@ -159,32 +160,32 @@ impl SemanticLowering {
     }
 
     fn emit_move_to(
-        instructions: &mut Vec<MotionInstruction>,
+        instructions: &mut Vec<ExecutionInstruction>,
         mv: &MoveToOp,
         pose: &thalos_core::motion::MotionPose,
         ctx: &LoweringContext,
     ) {
-        instructions.push(MotionInstruction::MoveJ {
+        instructions.push(ExecutionInstruction::MoveJ {
             origin: mv.origin.clone(),
             target: MotionTarget::Pose(pose.clone()),
             profile: ctx.default_profile.clone(),
         });
     }
 
-    fn emit_wait(instructions: &mut Vec<MotionInstruction>, wait: &WaitOp) {
-        instructions.push(MotionInstruction::Delay {
+    fn emit_wait(instructions: &mut Vec<ExecutionInstruction>, wait: &WaitOp) {
+        instructions.push(ExecutionInstruction::Delay {
             origin: wait.origin.clone(),
             duration: wait.duration,
         });
     }
 
     fn emit_home(
-        instructions: &mut Vec<MotionInstruction>,
+        instructions: &mut Vec<ExecutionInstruction>,
         home: &HomeOp,
         pose: &thalos_core::motion::MotionPose,
         ctx: &LoweringContext,
     ) {
-        instructions.push(MotionInstruction::MoveJ {
+        instructions.push(ExecutionInstruction::MoveJ {
             origin: home.origin.clone(),
             target: MotionTarget::Pose(pose.clone()),
             profile: ctx.default_profile.clone(),
@@ -270,8 +271,8 @@ mod tests {
 
         let result = SemanticLowering::lower(&program, &ctx);
         assert!(result.is_ok());
-        let mp = result.unwrap();
-        assert_eq!(mp.instructions.len(), 4);
+        let ep = result.unwrap();
+        assert_eq!(ep.instructions.len(), 4);
     }
 
     #[test]
@@ -288,8 +289,8 @@ mod tests {
 
         let result = SemanticLowering::lower(&program, &ctx);
         assert!(result.is_ok());
-        let mp = result.unwrap();
-        assert_eq!(mp.instructions.len(), 4);
+        let ep = result.unwrap();
+        assert_eq!(ep.instructions.len(), 4);
     }
 
     #[test]
@@ -305,8 +306,8 @@ mod tests {
 
         let result = SemanticLowering::lower(&program, &ctx);
         assert!(result.is_ok());
-        let mp = result.unwrap();
-        assert_eq!(mp.instructions.len(), 1);
+        let ep = result.unwrap();
+        assert_eq!(ep.instructions.len(), 1);
     }
 
     #[test]
@@ -321,8 +322,8 @@ mod tests {
 
         let result = SemanticLowering::lower(&program, &ctx);
         assert!(result.is_ok());
-        let mp = result.unwrap();
-        assert_eq!(mp.instructions.len(), 1);
+        let ep = result.unwrap();
+        assert_eq!(ep.instructions.len(), 1);
     }
 
     #[test]
@@ -336,8 +337,8 @@ mod tests {
 
         let result = SemanticLowering::lower(&program, &ctx);
         assert!(result.is_ok());
-        let mp = result.unwrap();
-        assert_eq!(mp.instructions.len(), 1);
+        let ep = result.unwrap();
+        assert_eq!(ep.instructions.len(), 1);
     }
 
     // ── Instruction order per operation ─────────────────────────────────
@@ -353,27 +354,27 @@ mod tests {
         let provider = sample_provider();
         let ctx = sample_ctx(&provider);
 
-        let mp = SemanticLowering::lower(&program, &ctx).unwrap();
-        let insts = &mp.instructions;
+        let ep = SemanticLowering::lower(&program, &ctx).unwrap();
+        let insts = &ep.instructions;
 
         assert_eq!(insts.len(), 4);
         assert!(
-            matches!(insts[0], MotionInstruction::MoveJ { .. }),
+            matches!(insts[0], ExecutionInstruction::MoveJ { .. }),
             "First should be MoveJ (approach), got {:?}",
             insts[0]
         );
         assert!(
-            matches!(insts[1], MotionInstruction::MoveL { .. }),
+            matches!(insts[1], ExecutionInstruction::MoveL { .. }),
             "Second should be MoveL (grasp), got {:?}",
             insts[1]
         );
         assert!(
-            matches!(insts[2], MotionInstruction::SetOutput { .. }),
+            matches!(insts[2], ExecutionInstruction::SetOutput { .. }),
             "Third should be SetOutput (grip), got {:?}",
             insts[2]
         );
         assert!(
-            matches!(insts[3], MotionInstruction::MoveL { .. }),
+            matches!(insts[3], ExecutionInstruction::MoveL { .. }),
             "Fourth should be MoveL (retract), got {:?}",
             insts[3]
         );
@@ -391,24 +392,24 @@ mod tests {
         let provider = sample_provider();
         let ctx = sample_ctx(&provider);
 
-        let mp = SemanticLowering::lower(&program, &ctx).unwrap();
-        let insts = &mp.instructions;
+        let ep = SemanticLowering::lower(&program, &ctx).unwrap();
+        let insts = &ep.instructions;
 
         assert_eq!(insts.len(), 4);
         assert!(
-            matches!(insts[0], MotionInstruction::MoveJ { .. }),
+            matches!(insts[0], ExecutionInstruction::MoveJ { .. }),
             "First should be MoveJ (approach)"
         );
         assert!(
-            matches!(insts[1], MotionInstruction::MoveL { .. }),
+            matches!(insts[1], ExecutionInstruction::MoveL { .. }),
             "Second should be MoveL (drop)"
         );
         assert!(
-            matches!(insts[2], MotionInstruction::SetOutput { .. }),
+            matches!(insts[2], ExecutionInstruction::SetOutput { .. }),
             "Third should be SetOutput (ungrip)"
         );
         assert!(
-            matches!(insts[3], MotionInstruction::MoveL { .. }),
+            matches!(insts[3], ExecutionInstruction::MoveL { .. }),
             "Fourth should be MoveL (retract)"
         );
     }
@@ -424,10 +425,10 @@ mod tests {
         let provider = sample_provider();
         let ctx = sample_ctx(&provider);
 
-        let mp = SemanticLowering::lower(&program, &ctx).unwrap();
-        assert_eq!(mp.instructions.len(), 1);
+        let ep = SemanticLowering::lower(&program, &ctx).unwrap();
+        assert_eq!(ep.instructions.len(), 1);
         assert!(
-            matches!(mp.instructions[0], MotionInstruction::MoveJ { .. }),
+            matches!(ep.instructions[0], ExecutionInstruction::MoveJ { .. }),
             "MoveTo should produce MoveJ"
         );
     }
@@ -442,10 +443,10 @@ mod tests {
         let provider = sample_provider();
         let ctx = sample_ctx(&provider);
 
-        let mp = SemanticLowering::lower(&program, &ctx).unwrap();
-        assert_eq!(mp.instructions.len(), 1);
-        match &mp.instructions[0] {
-            MotionInstruction::Delay { duration, .. } => {
+        let ep = SemanticLowering::lower(&program, &ctx).unwrap();
+        assert_eq!(ep.instructions.len(), 1);
+        match &ep.instructions[0] {
+            ExecutionInstruction::Delay { duration, .. } => {
                 assert_eq!(*duration, Duration::from_secs(5));
             }
             _ => panic!("Wait should produce Delay"),
@@ -461,10 +462,10 @@ mod tests {
         let provider = sample_provider();
         let ctx = sample_ctx(&provider);
 
-        let mp = SemanticLowering::lower(&program, &ctx).unwrap();
-        assert_eq!(mp.instructions.len(), 1);
+        let ep = SemanticLowering::lower(&program, &ctx).unwrap();
+        assert_eq!(ep.instructions.len(), 1);
         assert!(
-            matches!(mp.instructions[0], MotionInstruction::MoveJ { .. }),
+            matches!(ep.instructions[0], ExecutionInstruction::MoveJ { .. }),
             "Home should produce MoveJ"
         );
     }
@@ -483,13 +484,13 @@ mod tests {
         let provider = sample_provider();
         let ctx = sample_ctx(&provider);
 
-        let mp = SemanticLowering::lower(&program, &ctx).unwrap();
-        for (i, inst) in mp.instructions.iter().enumerate() {
+        let ep = SemanticLowering::lower(&program, &ctx).unwrap();
+        for (i, inst) in ep.instructions.iter().enumerate() {
             let inst_origin = match inst {
-                MotionInstruction::MoveJ { origin, .. } => origin,
-                MotionInstruction::MoveL { origin, .. } => origin,
-                MotionInstruction::SetOutput { origin, .. } => origin,
-                MotionInstruction::Delay { origin, .. } => origin,
+                ExecutionInstruction::MoveJ { origin, .. } => origin,
+                ExecutionInstruction::MoveL { origin, .. } => origin,
+                ExecutionInstruction::SetOutput { origin, .. } => origin,
+                ExecutionInstruction::Delay { origin, .. } => origin,
             };
             assert_eq!(
                 *inst_origin, origin,
@@ -511,13 +512,13 @@ mod tests {
         let provider = sample_provider();
         let ctx = sample_ctx(&provider);
 
-        let mp = SemanticLowering::lower(&program, &ctx).unwrap();
-        for inst in &mp.instructions {
+        let ep = SemanticLowering::lower(&program, &ctx).unwrap();
+        for inst in &ep.instructions {
             let inst_origin = match inst {
-                MotionInstruction::MoveJ { origin, .. } => origin,
-                MotionInstruction::MoveL { origin, .. } => origin,
-                MotionInstruction::SetOutput { origin, .. } => origin,
-                MotionInstruction::Delay { origin, .. } => origin,
+                ExecutionInstruction::MoveJ { origin, .. } => origin,
+                ExecutionInstruction::MoveL { origin, .. } => origin,
+                ExecutionInstruction::SetOutput { origin, .. } => origin,
+                ExecutionInstruction::Delay { origin, .. } => origin,
             };
             assert_eq!(*inst_origin, origin);
         }
@@ -533,10 +534,10 @@ mod tests {
         let provider = sample_provider();
         let ctx = sample_ctx(&provider);
 
-        let mp = SemanticLowering::lower(&program, &ctx).unwrap();
-        assert_eq!(mp.instructions.len(), 1);
-        match &mp.instructions[0] {
-            MotionInstruction::MoveJ { origin: o, .. } => {
+        let ep = SemanticLowering::lower(&program, &ctx).unwrap();
+        assert_eq!(ep.instructions.len(), 1);
+        match &ep.instructions[0] {
+            ExecutionInstruction::MoveJ { origin: o, .. } => {
                 assert_eq!(*o, origin, "Home MoveJ should carry the HomeOp origin");
             }
             other => panic!("Expected MoveJ, got {other:?}"),
@@ -683,8 +684,8 @@ mod tests {
         let provider = sample_provider();
         let ctx = sample_ctx(&provider);
 
-        let mp = SemanticLowering::lower(&program, &ctx).unwrap();
+        let ep = SemanticLowering::lower(&program, &ctx).unwrap();
         // Pick(4) + Place(4) + MoveTo(1) + Wait(1) + Home(1) = 11
-        assert_eq!(mp.instructions.len(), 11);
+        assert_eq!(ep.instructions.len(), 11);
     }
 }

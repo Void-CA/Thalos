@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useSceneStore } from '../store'
@@ -6,67 +6,109 @@ import { DEFAULT_FRAME_STYLE } from '../types'
 import type { SceneFrame, SceneLink, ScenePrimitive } from '../types'
 import { AXIS_ORIGIN, LINK_COLOR, LINK_OPACITY } from '@/shared/tokens'
 
-/** Map primitive ID → mesh ref for direct transform updates. */
-const meshRefs = new Map<string, THREE.Mesh>()
+/** Angular-style registry: frame ID → THREE.Group for syncTransforms */
+const frameGroups = new Map<string, THREE.Group>()
+const meshRegistry = new Map<string, THREE.Mesh>()
+let prevJoints: number[] = []
+
+// SCARA canonical FK parameters
+const A1 = 1.0, A2 = 0.8, BASE_Z = 0.5
+
+/** Compute frame world positions from SCARA joint angles. Returns map of frameId → {pos, quat}. */
+function scaraFrames(joints: number[]) {
+  const j1 = joints[0] ?? 0, j2 = joints[1] ?? 0, j3 = joints[2] ?? 0
+  const c1 = Math.cos(j1), s1 = Math.sin(j1)
+  const c12 = Math.cos(j1 + j2), s12 = Math.sin(j1 + j2)
+  const l1x = A1 * c1, l1y = A1 * s1
+  const l2x = l1x + A2 * c12, l2y = l1y + A2 * s12
+  const l2z = BASE_Z + j3
+
+  return {
+    world:        { t: [0, 0, 0],       r: [1,0,0,0] },
+    base:         { t: [0, 0, BASE_Z],  r: [1,0,0,0] },
+    link_1:       { t: [l1x, l1y, BASE_Z], r: [Math.cos(j1/2),0,0,Math.sin(j1/2)] },
+    link_2:       { t: [l2x, l2y, BASE_Z], r: [Math.cos((j1+j2)/2),0,0,Math.sin((j1+j2)/2)] },
+    prismatic_joint: { t: [l2x, l2y, l2z], r: [1,0,0,0] },
+    wrist:        { t: [l2x, l2y, l2z], r: [Math.cos((j1+j2)/2),0,0,Math.sin((j1+j2)/2)] },
+  }
+}
 
 export function RobotModel() {
   const data = useSceneStore(s => s.data)
+  const runtime = useSceneStore(s => s.runtime)
   const liveTransforms = useSceneStore(s => s.liveTransforms)
   if (!data) return null
 
-  // On every animation frame, sync transforms from the latest RuntimeDelta
+  // Per-frame: sync frame groups from liveTransforms (scene tick) or FK (local playback)
   useFrame(() => {
-    if (liveTransforms.length === 0) return
-    for (const tx of liveTransforms) {
-      const mesh = meshRefs.get(tx.id)
-      if (!mesh) continue
-      mesh.position.set(tx.translation[0], tx.translation[1], tx.translation[2])
-      // Angular: set(x, y, z, w) from Rust [w, x, y, z]
-      mesh.quaternion.set(tx.rotation[1], tx.rotation[2], tx.rotation[3], tx.rotation[0])
+    // Path A: scene tick → liveTransforms has frame transforms
+    if (liveTransforms.length > 0) {
+      for (const tx of liveTransforms) {
+        const g = frameGroups.get(tx.id); if (!g) continue
+        g.position.set(tx.translation[0], tx.translation[1], tx.translation[2])
+        g.quaternion.set(tx.rotation[1], tx.rotation[2], tx.rotation[3], tx.rotation[0])
+      }
+      return
+    }
+    // Path B: local playback from runtime.joints
+    const joints = runtime?.joints
+    if (!joints || joints.length < 3) return
+    if (joints.every((v, i) => v === prevJoints[i])) return
+    prevJoints = [...joints]
+    const frames = scaraFrames(joints)
+    for (const [id, f] of Object.entries(frames)) {
+      const g = frameGroups.get(id); if (!g) continue
+      g.position.set(f.t[0], f.t[1], f.t[2])
+      g.quaternion.set(f.r[1], f.r[2], f.r[3], f.r[0])
     }
   })
 
   const primitivesByFrame = useMemo(() => {
-    const map = new Map<string, ScenePrimitive[]>()
+    const m = new Map<string, ScenePrimitive[]>()
     for (const p of data.primitives) {
-      const list = map.get(p.frameId) ?? []
-      list.push(p)
-      map.set(p.frameId, list)
+      const list = m.get(p.frameId) ?? []; list.push(p); m.set(p.frameId, list)
     }
-    return map
+    return m
   }, [data.primitives])
 
   const frameIds = new Set(data.frames.map(f => f.id))
 
   return (
     <group>
-      {data.links.map(link => (
-        <LinkComponent key={link.id} link={link} refDim={data.referenceDimension} />
-      ))}
+      {data.links.map(link => <LinkComponent key={link.id} link={link} refDim={data.referenceDimension} />)}
       {data.frames.map(frame => (
         <FrameComponent key={frame.id} frame={frame}>
-          {primitivesByFrame.get(frame.id)?.map(p => (
-            <PrimitiveComponent key={p.id} primitive={p} />
-          ))}
+          {primitivesByFrame.get(frame.id)?.map(p => <PrimitiveComponent key={p.id} primitive={p} />)}
         </FrameComponent>
       ))}
-      {data.primitives.filter(p => !frameIds.has(p.frameId)).map(p => (
-        <PrimitiveComponent key={p.id} primitive={p} />
-      ))}
+      {data.primitives.filter(p => !frameIds.has(p.frameId)).map(p => <PrimitiveComponent key={p.id} primitive={p} />)}
     </group>
   )
 }
 
-interface FrameComponentProps { frame: SceneFrame; children?: React.ReactNode }
 function rustQuatToThree([w, x, y, z]: [number, number, number, number]): THREE.Quaternion {
   return new THREE.Quaternion(x, y, z, w)
 }
-function FrameComponent({ frame, children }: FrameComponentProps) {
-  const style = frame.style ?? DEFAULT_FRAME_STYLE
-  const pos = new THREE.Vector3(...frame.translation)
-  const quat = rustQuatToThree(frame.rotation)
+
+function FrameComponent({ frame, children }: { frame: SceneFrame; children?: React.ReactNode }) {
+  const groupRef = useRef<THREE.Group>(null)
+  // Safe style — FK endpoint may return frames without style field
+  const style = { ...DEFAULT_FRAME_STYLE, ...(frame.style ?? {}) }
+
+  // Register frame group for syncTransforms AND set initial position
+  useEffect(() => {
+    const g = groupRef.current
+    if (!g) return
+    frameGroups.set(frame.id, g)
+    // Set initial position (R3F won't reset it if we don't pass position as prop)
+    g.position.set(frame.translation[0], frame.translation[1], frame.translation[2])
+    const q = rustQuatToThree(frame.rotation)
+    g.quaternion.set(q.x, q.y, q.z, q.w)
+    return () => { frameGroups.delete(frame.id) }
+  }, [frame.id, frame.translation, frame.rotation])
+
   return (
-    <group position={pos} quaternion={quat}>
+    <group ref={groupRef}>
       {style.originRadius > 0 && (<mesh><sphereGeometry args={[style.originRadius,12,12]} /><meshStandardMaterial color={AXIS_ORIGIN} /></mesh>)}
       <AxisArrow dir={new THREE.Vector3(1,0,0)} length={style.axisLength} radius={style.axisRadius} color={new THREE.Color(...style.colorX)} />
       <AxisArrow dir={new THREE.Vector3(0,1,0)} length={style.axisLength} radius={style.axisRadius} color={new THREE.Color(...style.colorY)} />
@@ -76,16 +118,15 @@ function FrameComponent({ frame, children }: FrameComponentProps) {
   )
 }
 
-interface LinkComponentProps { link: SceneLink; refDim: number }
-function LinkComponent({ link, refDim }: LinkComponentProps) {
+function LinkComponent({ link, refDim }: { link: SceneLink; refDim: number }) {
   const radius = Math.max(refDim * 0.015, 0.003)
   const mesh = useMemo(() => {
     const start = new THREE.Vector3(...link.start); const end = new THREE.Vector3(...link.end)
-    const dir = new THREE.Vector3().subVectors(end, start); const length = dir.length()
-    if (length < 1e-10) return null
+    const dir = new THREE.Vector3().subVectors(end, start); const len = dir.length()
+    if (len < 1e-10) return null
     const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5)
-    const up = new THREE.Vector3(0,1,0); const quat = new THREE.Quaternion().setFromUnitVectors(up, dir.clone().normalize())
-    return { position: mid, quaternion: quat, length }
+    const up = new THREE.Vector3(0,1,0); const q = new THREE.Quaternion().setFromUnitVectors(up, dir.clone().normalize())
+    return { position: mid, quaternion: q, length: len }
   }, [link.start, link.end])
   if (!mesh) return null
   return (<mesh position={mesh.position} quaternion={mesh.quaternion} scale={[1, mesh.length, 1]}>
@@ -105,16 +146,6 @@ function PrimitiveComponent({ primitive }: { primitive: ScenePrimitive }) {
   const color = primitive.color ? new THREE.Color(primitive.color[0], primitive.color[1], primitive.color[2]) : new THREE.Color(0xaaaaaa)
   const opacity = primitive.color?.[3] ?? 1
 
-  // Register mesh ref for syncTransforms
-  const prevId = useRef<string | null>(null)
-  if (meshRef.current) {
-    if (prevId.current !== primitive.id) {
-      if (prevId.current) meshRefs.delete(prevId.current)
-      meshRefs.set(primitive.id, meshRef.current)
-      prevId.current = primitive.id
-    }
-  }
-
   return (
     <mesh ref={meshRef} geometry={geometry}
       position={new THREE.Vector3(...primitive.translation)}
@@ -127,14 +158,14 @@ function PrimitiveComponent({ primitive }: { primitive: ScenePrimitive }) {
 
 function AxisArrow({ dir, length, radius, color }: { dir: THREE.Vector3; length: number; radius: number; color: THREE.Color }) {
   if (radius > 1e-6) {
-    const headLen = Math.min(length * 0.2, 0.04); const shaftLen = length - headLen; const up = new THREE.Vector3(0,1,0)
-    const sc = dir.clone().multiplyScalar(shaftLen / 2); const hc = dir.clone().multiplyScalar(shaftLen + headLen / 2)
+    const hl = Math.min(length * 0.2, 0.04), sl = length - hl, up = new THREE.Vector3(0,1,0)
+    const sc = dir.clone().multiplyScalar(sl/2), hc = dir.clone().multiplyScalar(sl+hl/2)
     const q = new THREE.Quaternion().setFromUnitVectors(up, dir)
-    return (<group><mesh position={sc} quaternion={q}><cylinderGeometry args={[radius, radius, shaftLen, 6, 1]} /><meshStandardMaterial color={color} /></mesh>
-      <mesh position={hc} quaternion={q}><coneGeometry args={[radius * 3, headLen, 6, 1]} /><meshStandardMaterial color={color} /></mesh></group>)
+    return (<group><mesh position={sc} quaternion={q}><cylinderGeometry args={[radius, radius, sl, 6, 1]} /><meshStandardMaterial color={color} /></mesh>
+      <mesh position={hc} quaternion={q}><coneGeometry args={[radius*3, hl, 6, 1]} /><meshStandardMaterial color={color} /></mesh></group>)
   }
   return <primitive object={createAxisLine(dir, length, color)} />
 }
-function createAxisLine(dir: THREE.Vector3, length: number, color: THREE.Color): THREE.Line {
-  return new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), dir.clone().multiplyScalar(length)]), new THREE.LineBasicMaterial({ color }))
+function createAxisLine(d: THREE.Vector3, l: number, c: THREE.Color) {
+  return new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), d.clone().multiplyScalar(l)]), new THREE.LineBasicMaterial({ color: c }))
 }

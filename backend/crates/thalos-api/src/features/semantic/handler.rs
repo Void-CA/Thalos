@@ -87,10 +87,15 @@ pub async fn run_semantic(
     // state.services.scene.schedule_program(compiled).await
     //     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": format!("{e}"), "code": "runtime_error"}))))?;
 
+    let wps: Vec<serde_json::Value> = extract_waypoints(&ep).iter().map(|p| {
+        serde_json::json!({"time_secs": p.timestamp(), "joints": p.joints()})
+    }).collect();
+
     Ok(Json(serde_json::json!({
         "status": "ok",
         "segment_count": ep.metadata.segment_count,
         "duration_secs": ep.metadata.total_duration.as_secs_f64(),
+        "waypoints": wps,
     })))
 }
 

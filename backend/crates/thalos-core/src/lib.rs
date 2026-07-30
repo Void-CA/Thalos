@@ -1,6 +1,7 @@
 pub mod analysis;
 pub mod collision;
 pub mod evaluation;
+pub mod execution;
 pub mod ids;
 pub mod kinematics;
 pub mod models;

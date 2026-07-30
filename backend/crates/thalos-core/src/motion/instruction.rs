@@ -1,57 +1,18 @@
-use serde::{Deserialize, Serialize};
-use std::time::Duration;
-
-use crate::ids::OperationId;
-
-use super::target::{MotionProfile, MotionTarget, OutputChannel, OutputValue};
-
-/// A single motion instruction in a `MotionProgram`.
-///
-/// Exactly four variants exist in v1:
-/// - `MoveJ`: joint-space movement to a target
-/// - `MoveL`: linear (Cartesian) movement to a target
-/// - `Delay`: wait for a duration
-/// - `SetOutput`: set a digital/analog output channel
-///
-/// All variants carry an `origin: OperationId` linking back to the source IR
-/// operation for traceability across the compiler → runtime pipeline.
-///
-/// Serialized as an internally-tagged enum (`"type": "move_j"`, etc.) for
-/// consistent JSON interchange across all consumers.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum MotionInstruction {
-    MoveJ {
-        origin: OperationId,
-        target: MotionTarget,
-        profile: MotionProfile,
-    },
-    MoveL {
-        origin: OperationId,
-        target: MotionTarget,
-        profile: MotionProfile,
-    },
-    Delay {
-        origin: OperationId,
-        duration: Duration,
-    },
-    SetOutput {
-        origin: OperationId,
-        channel: OutputChannel,
-        value: OutputValue,
-    },
-}
+// This module exists for backward compatibility.
+// MotionInstruction is now ExecutionInstruction in thalos_core::execution::program.
+// A #[deprecated] alias is re-exported from the parent `motion` module.
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::execution::program::ExecutionInstruction as MotionInstruction;
     use crate::motion::target::*;
+    use std::time::Duration;
 
     // ── Task 2.1: Construction of all 4 variants ────────────────────────
 
     #[test]
     fn move_j_constructs_with_origin_and_fields() {
-        let origin = OperationId("1".to_string());
+        let origin = crate::ids::OperationId("1".to_string());
         let target = MotionTarget::Pose(MotionPose {
             position: [1.0, 2.0, 3.0],
             orientation: [0.0, 0.0, 0.0, 1.0],
@@ -75,7 +36,7 @@ mod tests {
                 target: t,
                 profile: p,
             } => {
-                assert_eq!(o, &OperationId("1".to_string()));
+                assert_eq!(o, &crate::ids::OperationId("1".to_string()));
                 assert_eq!(*t, target);
                 assert_eq!(*p, profile);
             }
@@ -85,7 +46,7 @@ mod tests {
 
     #[test]
     fn move_l_constructs_with_origin_and_fields() {
-        let origin = OperationId("2".to_string());
+        let origin = crate::ids::OperationId("2".to_string());
         let target = MotionTarget::Pose(MotionPose {
             position: [4.0, 5.0, 6.0],
             orientation: [0.0, 0.0, 0.0, 1.0],
@@ -109,7 +70,7 @@ mod tests {
                 target: t,
                 profile: p,
             } => {
-                assert_eq!(o, &OperationId("2".to_string()));
+                assert_eq!(o, &crate::ids::OperationId("2".to_string()));
                 assert_eq!(*t, target);
                 assert_eq!(*p, profile);
             }
@@ -119,7 +80,7 @@ mod tests {
 
     #[test]
     fn delay_constructs_with_origin_and_duration() {
-        let origin = OperationId("3".to_string());
+        let origin = crate::ids::OperationId("3".to_string());
         let duration = Duration::from_millis(1500);
 
         let instr = MotionInstruction::Delay { origin, duration };
@@ -129,7 +90,7 @@ mod tests {
                 origin: o,
                 duration: d,
             } => {
-                assert_eq!(o, &OperationId("3".to_string()));
+                assert_eq!(o, &crate::ids::OperationId("3".to_string()));
                 assert_eq!(*d, Duration::from_millis(1500));
             }
             _ => panic!("Expected Delay variant"),
@@ -138,7 +99,7 @@ mod tests {
 
     #[test]
     fn set_output_constructs_with_origin_channel_value() {
-        let origin = OperationId("4".to_string());
+        let origin = crate::ids::OperationId("4".to_string());
         let channel = OutputChannel {
             name: "gripper".into(),
             channel_type: "digital".into(),
@@ -157,7 +118,7 @@ mod tests {
                 channel: c,
                 value: v,
             } => {
-                assert_eq!(o, &OperationId("4".to_string()));
+                assert_eq!(o, &crate::ids::OperationId("4".to_string()));
                 assert_eq!(*c, channel);
                 assert_eq!(*v, value);
             }
@@ -171,7 +132,7 @@ mod tests {
     fn all_variants_serde_round_trip() {
         let instructions = vec![
             MotionInstruction::MoveJ {
-                origin: OperationId("1".to_string()),
+                origin: crate::ids::OperationId("1".to_string()),
                 target: MotionTarget::Pose(MotionPose {
                     position: [1.0, 0.0, 0.0],
                     orientation: [0.0, 0.0, 0.0, 1.0],
@@ -184,7 +145,7 @@ mod tests {
                 },
             },
             MotionInstruction::MoveL {
-                origin: OperationId("2".to_string()),
+                origin: crate::ids::OperationId("2".to_string()),
                 target: MotionTarget::Pose(MotionPose {
                     position: [2.0, 0.0, 0.0],
                     orientation: [0.0, 0.0, 0.0, 1.0],
@@ -197,11 +158,11 @@ mod tests {
                 },
             },
             MotionInstruction::Delay {
-                origin: OperationId("3".to_string()),
+                origin: crate::ids::OperationId("3".to_string()),
                 duration: Duration::from_secs(5),
             },
             MotionInstruction::SetOutput {
-                origin: OperationId("4".to_string()),
+                origin: crate::ids::OperationId("4".to_string()),
                 channel: OutputChannel {
                     name: "vacuum".into(),
                     channel_type: "analog".into(),
@@ -220,7 +181,7 @@ mod tests {
     #[test]
     fn serde_internally_tagged_type_tags() {
         let move_j = MotionInstruction::MoveJ {
-            origin: OperationId("1".to_string()),
+            origin: crate::ids::OperationId("1".to_string()),
             target: MotionTarget::Pose(MotionPose {
                 position: [0.0, 0.0, 0.0],
                 orientation: [0.0, 0.0, 0.0, 1.0],
@@ -239,7 +200,7 @@ mod tests {
         );
 
         let delay = MotionInstruction::Delay {
-            origin: OperationId("2".to_string()),
+            origin: crate::ids::OperationId("2".to_string()),
             duration: Duration::from_secs(3),
         };
         let json = serde_json::to_string(&delay).expect("serialize");
@@ -249,7 +210,7 @@ mod tests {
         );
 
         let set_output = MotionInstruction::SetOutput {
-            origin: OperationId("3".to_string()),
+            origin: crate::ids::OperationId("3".to_string()),
             channel: OutputChannel {
                 name: "gripper".into(),
                 channel_type: "digital".into(),
@@ -282,7 +243,7 @@ mod tests {
     #[test]
     fn clone_and_eq_after_round_trip() {
         let original = MotionInstruction::MoveJ {
-            origin: OperationId("42".to_string()),
+            origin: crate::ids::OperationId("42".to_string()),
             target: MotionTarget::Pose(MotionPose {
                 position: [1.0, 2.0, 3.0],
                 orientation: [0.0, 0.0, 0.0, 1.0],
