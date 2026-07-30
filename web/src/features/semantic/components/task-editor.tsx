@@ -1,8 +1,9 @@
 import { Play, Plus, RotateCcw, Sparkles } from 'lucide-react'
 import { useSemanticEditor } from '../store'
 import { useSceneStore } from '../scene-store'
+import { useSceneStore as useViewportStore } from '@/features/viewport/store'
 import { OperationRow } from './operation-row'
-import { compileSemantic, runSemantic, CompileError } from '../api'
+import { compileSemantic, executeSemantic, CompileError } from '../api'
 
 let tickTimer: ReturnType<typeof setInterval> | null = null
 
@@ -14,11 +15,12 @@ export function TaskEditor() {
   } = useSemanticEditor()
   const toTaskDocument = useSceneStore((s) => s.toTaskDocument)
 
+  const makeOps = () => operations.map((op, i) => ({ ...op, origin: op.origin ?? `op_${i}` }))
+
   const handleCompile = async () => {
     setLoading(true); setError(null)
     try {
-      const ops = operations.map((op, i) => ({ ...op, origin: op.origin ?? `op_${i}` }))
-      const res = await compileSemantic({ task: toTaskDocument(ops) })
+      const res = await compileSemantic({ task: toTaskDocument(makeOps()) })
       setResult(res)
     } catch (err) {
       setError(err instanceof CompileError ? err.message : (err instanceof Error ? err.message : 'Failed'))
@@ -28,21 +30,28 @@ export function TaskEditor() {
   const handleSimulate = async () => {
     setLoading(true); setError(null)
     try {
-      const ops = operations.map((op, i) => ({ ...op, origin: op.origin ?? `op_${i}` }))
-      // 1. Load plan into runtime
-      await runSemantic({ task: toTaskDocument(ops) })
+      // 1. Compile + plan → load into runtime
+      await executeSemantic({ task: toTaskDocument(makeOps()) })
       // 2. Start execution
       await fetch('/api/v1/scene/motion/start', { method: 'POST' })
-      // 3. Start tick loop (like Angular)
+      // 3. Tick loop (50ms) — like Angular
       if (tickTimer) clearInterval(tickTimer)
       tickTimer = setInterval(async () => {
         try {
-          await fetch('/api/v1/scene/motion/tick', {
+          const res = await fetch('/api/v1/scene/motion/tick', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ dt: 0.05 }),
           })
-        } catch { /* tick failed */ }
+          if (res.ok) {
+            const delta = await res.json()
+            useViewportStore.getState().applyRuntimeDelta(delta.joints ?? [], delta.transforms ?? [], {
+              status: 'running',
+              progress: 0.5,
+              elapsedSecs: 0,
+            })
+          }
+        } catch {}
       }, 50)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Simulation failed')
@@ -90,7 +99,7 @@ export function TaskEditor() {
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {operations.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-8">No operations. Define resources in Scene, then click Add.</p>
+          <p className="text-xs text-muted-foreground text-center py-8">No operations defined.</p>
         ) : operations.map((op, i) => (
           <OperationRow key={i} op={op} index={i} total={operations.length}
             onChange={(idx, p) => updateOperation(idx, p)}
@@ -100,14 +109,12 @@ export function TaskEditor() {
         ))}
       </div>
 
-      {loading && <div className="px-3 py-2 text-xs text-muted-foreground border-t border-border/50">Processing...</div>}
+      {loading && <div className="px-3 py-2 text-xs text-muted-foreground border-t border-border/50">Compiling...</div>}
       {error && <div className="px-3 py-2 text-xs text-red-400 bg-red-950/20 border-t border-red-900/30">{error}</div>}
       {result && (
         <div className="px-3 py-2 border-t border-border/50 space-y-1.5 bg-card/20">
-          <div className="flex items-center gap-4 text-xs">
-            <span className="text-green-500 font-medium">✓ Compiled</span>
-            <span className="text-muted-foreground">{result.metadata.instruction_count} instructions</span>
-          </div>
+          <span className="text-green-500 font-medium text-xs">✓ Compiled</span>
+          <span className="text-muted-foreground text-xs ml-2">{result.metadata.instruction_count} instructions</span>
           {result.validation.warnings.length > 0 && (
             <div className="text-xs text-amber-400">{result.validation.warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}</div>
           )}

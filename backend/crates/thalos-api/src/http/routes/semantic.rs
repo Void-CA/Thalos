@@ -8,5 +8,5 @@ use crate::features::semantic::handler;
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/semantic/compile", post(handler::compile_semantic))
-        .route("/semantic/run", post(handler::run_semantic))
+        .route("/semantic/execute", post(handler::run_semantic))
 }

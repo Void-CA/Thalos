@@ -34,10 +34,4 @@ pub struct CompileResponse {
     pub motion_program: thalos_core::motion::MotionProgram,
 }
 
-/// Response from running a semantic task (compile + load into scene runtime).
-#[derive(Debug, Clone, Serialize)]
-pub struct RunResponse {
-    pub status: String,
-    pub segment_count: usize,
-    pub duration_secs: f64,
-}
+
