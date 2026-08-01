@@ -12,7 +12,7 @@ use thalos_core::{
     execution::runtime::{RuntimeAction, RuntimeEvent, RuntimeProgram},
     ids::OperationId,
     motion::segment::MotionSegment,
-    motion::target::{OutputChannel, OutputValue, MotionPose, MotionTarget, MotionProfile},
+    motion::target::{MotionPose, MotionProfile, MotionTarget, OutputChannel, OutputValue},
     prelude::Trajectory,
     trajectory::TrajectoryPoint,
 };

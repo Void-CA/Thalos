@@ -156,7 +156,10 @@ mod tests {
 
         // merged trajectory survives losslessly
         assert_eq!(decoded.merged_trajectory.len(), 2);
-        assert_eq!(decoded.merged_trajectory.waypoints()[1].joints(), &[0.5, 1.0]);
+        assert_eq!(
+            decoded.merged_trajectory.waypoints()[1].joints(),
+            &[0.5, 1.0]
+        );
     }
 
     #[test]
@@ -165,7 +168,10 @@ mod tests {
         let json = serde_json::to_string(&plan).expect("serialize");
         // Spot-check the shape: origin + time_range present with f64 ranges.
         assert!(json.contains("\"origin\":\"op-j\""), "{json}");
-        assert!(json.contains("\"time_range\":{\"start\":0.0,\"end\":1.0}"), "{json}");
+        assert!(
+            json.contains("\"time_range\":{\"start\":0.0,\"end\":1.0}"),
+            "{json}"
+        );
         assert!(json.contains("\"duration\":1.0"), "{json}");
     }
 
