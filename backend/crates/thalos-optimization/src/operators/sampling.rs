@@ -205,7 +205,7 @@ impl TrajectoryOperator for AdaptiveSampling {
         trajectory: &Trajectory,
         region: &ProblemRegion,
         _ctx: &OptimizationContext,
-        _constraints: Option<&dyn ConstraintQuery>,
+        constraints: Option<&dyn ConstraintQuery>,
     ) -> Result<Trajectory, OptimizationError> {
         let range = &region.waypoint_range;
         let all_wps = trajectory.waypoints();
@@ -215,8 +215,11 @@ impl TrajectoryOperator for AdaptiveSampling {
             return Ok(trajectory.clone());
         }
 
-        // Extract the region's waypoints into a working vec
+        // Extract the region's waypoints into a working vec. Each working
+        // waypoint keeps the ORIGINAL absolute index it had in the input
+        // trajectory, so constraint queries stay valid after insertions.
         let mut wps: Vec<TrajectoryPoint> = all_wps[range.clone()].to_vec();
+        let mut orig_idx: Vec<usize> = (range.start..range.end).collect();
 
         // Iterative scan: find the worst segment, subdivide it, repeat.
         // This avoids the stale-index problems of a heap-based approach
@@ -232,6 +235,14 @@ impl TrajectoryOperator for AdaptiveSampling {
             let mut worst_curvature = -1.0;
 
             for i in 0..wps.len().saturating_sub(1) {
+                // Constraint-aware guard: only subdivide segments whose
+                // endpoint waypoints both allow neighbor modification.
+                if !constraints.map_or(true, |c| {
+                    c.can_modify_neighbors(orig_idx[i]) && c.can_modify_neighbors(orig_idx[i + 1])
+                }) {
+                    continue;
+                }
+
                 let error = compute_joint_l2(&wps[i], &wps[i + 1]);
 
                 // Skip segments shorter than min_segment_length
@@ -253,14 +264,23 @@ impl TrajectoryOperator for AdaptiveSampling {
                 }
             }
 
+            // Termination: nothing subdividable remains (every candidate
+            // segment is constrained or below the thresholds).
+            if worst_idx == usize::MAX {
+                break;
+            }
+
             // Termination: the worst segment is within both thresholds
             if worst_error <= self.error_threshold && worst_curvature <= self.curvature_threshold {
                 break;
             }
 
-            // Subdivide the worst segment at its midpoint
+            // Subdivide the worst segment at its midpoint. The inserted
+            // midpoint inherits the segment start's original index — it
+            // was only inserted because both endpoints were modifiable.
             let mid = lerp_midpoint(&wps[worst_idx], &wps[worst_idx + 1]);
             wps.insert(worst_idx + 1, mid);
+            orig_idx.insert(worst_idx + 1, orig_idx[worst_idx]);
         }
 
         // Build the full trajectory by replacing the region's waypoints
@@ -633,6 +653,123 @@ mod unit_tests {
     fn estimate_cost_is_constant() {
         let op = AdaptiveSampling::new(100, 0.01, 0.1, 1e-6);
         assert!((op.estimate_cost() - 0.3).abs() < f32::EPSILON);
+    }
+
+    // ── 15. ConstraintQuery neighbor guard (2.6) ──────────
+
+    use thalos_core::operation::PrecisionLevel;
+
+    /// Mock query: only `can_modify_neighbors` is overridden; every other
+    /// guard returns `true`.
+    struct NeighborsMock {
+        allowed: Vec<bool>,
+    }
+
+    impl ConstraintQuery for NeighborsMock {
+        fn can_relax_orientation(&self, _i: usize, _a: f64) -> bool {
+            true
+        }
+        fn can_modify_position(&self, _i: usize) -> bool {
+            true
+        }
+        fn max_position_error(&self, _i: usize) -> Option<f64> {
+            None
+        }
+        fn max_velocity(&self, _i: usize) -> Option<f64> {
+            None
+        }
+        fn required_precision(&self, _i: usize) -> PrecisionLevel {
+            PrecisionLevel::None
+        }
+        fn can_modify_neighbors(&self, i: usize) -> bool {
+            self.allowed.get(i).copied().unwrap_or(true)
+        }
+    }
+
+    #[test]
+    fn constrained_neighbor_segment_not_subdivided() {
+        // Segment [0,0]→[10,10]: L2 ≈ 14.14 > error_threshold 8.0 → would
+        // insert a midpoint, but waypoint 0 forbids neighbor modification.
+        let op = AdaptiveSampling::new(100, 8.0, 10.0, 1e-6);
+        let robot = test_robot();
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![10.0, 10.0], 1.0),
+        ]);
+        let region = two_waypoint_region(); // 0..2
+        let ctx = test_ctx();
+
+        let mock = NeighborsMock {
+            allowed: vec![false, true],
+        };
+        let result = op
+            .apply(&robot, &traj, &region, &ctx, Some(&mock))
+            .unwrap();
+
+        assert_eq!(
+            result.len(),
+            2,
+            "no insertion in segment adjacent to constrained waypoint 0"
+        );
+        // Original waypoints remain byte-identical.
+        assert_eq!(result.waypoints()[0].joints(), traj.waypoints()[0].joints());
+        assert_eq!(result.waypoints()[1].joints(), traj.waypoints()[1].joints());
+    }
+
+    #[test]
+    fn unconstrained_high_error_segment_inserts() {
+        // Same segment with both endpoints free → exactly 1 insertion
+        // (sub-segments 7.07 < 8.0 stop further subdivision).
+        let op = AdaptiveSampling::new(100, 8.0, 10.0, 1e-6);
+        let robot = test_robot();
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![10.0, 10.0], 1.0),
+        ]);
+        let region = two_waypoint_region();
+        let ctx = test_ctx();
+
+        let free = NeighborsMock {
+            allowed: vec![true, true],
+        };
+        let result = op
+            .apply(&robot, &traj, &region, &ctx, Some(&free))
+            .unwrap();
+
+        assert_eq!(
+            result.len(),
+            3,
+            "1 insertion expected when both endpoints are free"
+        );
+    }
+
+    #[test]
+    fn constrained_middle_waypoint_blocks_adjacent_segments() {
+        // A=[0,0] B=[5,5] C=[10,10]: both segments have L2 ≈ 7.07 >
+        // error_threshold 3.0 → would insert, but the middle waypoint
+        // forbids neighbor modification → both segments stay intact.
+        let op = AdaptiveSampling::new(100, 3.0, 10.0, 1e-6);
+        let robot = test_robot();
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![5.0, 5.0], 1.0),
+            TrajectoryPoint::new(vec![10.0, 10.0], 2.0),
+        ]);
+        let region = three_waypoint_region(); // 0..3
+        let ctx = test_ctx();
+
+        let mock = NeighborsMock {
+            allowed: vec![true, false, true],
+        };
+        let result = op
+            .apply(&robot, &traj, &region, &ctx, Some(&mock))
+            .unwrap();
+
+        assert_eq!(
+            result.len(),
+            3,
+            "no insertion in segments adjacent to constrained waypoint 1"
+        );
     }
 }
 
