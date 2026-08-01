@@ -4,6 +4,7 @@ pub mod analysis;
 pub mod collision;
 pub mod error;
 pub mod evaluation;
+pub mod execution_plan_builder;
 pub mod feedback;
 pub mod finding;
 pub mod goal;
