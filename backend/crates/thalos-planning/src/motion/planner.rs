@@ -1,4 +1,7 @@
-use thalos_core::{kinematics::inverse::IKSolver, robot::serial_chain::SerialChain, robot::state::RobotState, robot::tool_frame::ToolFrame};
+use thalos_core::{
+    kinematics::inverse::IKSolver, robot::serial_chain::SerialChain, robot::state::RobotState,
+    robot::tool_frame::ToolFrame,
+};
 
 use crate::error::PlanningError;
 

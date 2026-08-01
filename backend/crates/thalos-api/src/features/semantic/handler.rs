@@ -155,14 +155,13 @@ pub async fn run_semantic(
         registry.create("world");
 
         let dof = robot_model.metadata().dof;
-        let resolver = MotionResolver::new(&ik_solver, &registry, &initial_joints, dof).map_err(
-            |e| {
+        let resolver =
+            MotionResolver::new(&ik_solver, &registry, &initial_joints, dof).map_err(|e| {
                 (
                     StatusCode::UNPROCESSABLE_ENTITY,
                     Json(serde_json::json!({"error": format!("{e}"), "code": "planning_error"})),
                 )
-            },
-        )?;
+            })?;
         let resolution = resolver.resolve(&mp).map_err(|e| {
             (
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -178,12 +177,14 @@ pub async fn run_semantic(
             ik_solver: &ik_solver,
             tcp: None,
         };
-        let compiled = compiler.compile(&resolution.planning, &seg_ctx).map_err(|e| {
-            (
-                StatusCode::UNPROCESSABLE_ENTITY,
-                Json(serde_json::json!({"error": format!("{e}"), "code": "planning_error"})),
-            )
-        })?;
+        let compiled = compiler
+            .compile(&resolution.planning, &seg_ctx)
+            .map_err(|e| {
+                (
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    Json(serde_json::json!({"error": format!("{e}"), "code": "planning_error"})),
+                )
+            })?;
 
         let wps_json: Vec<serde_json::Value> = compiled
             .merged_trajectory
