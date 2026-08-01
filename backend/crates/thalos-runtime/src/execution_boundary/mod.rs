@@ -1,11 +1,10 @@
 //! Execution Validation Boundary — plan→hardware manifest and trace types.
 //!
 //! This module owns the types shared with the ESP32 hardware backend and the
-//! trace-assembly helpers. The `ExecutionPlan`-based adapter
-//! (`ExecutionAdapter::prepare/execute`) and manifest builder
-//! (`ExecutionManifestBuilder::from_plan`) were removed with the parallel
-//! `ExecutionPlan` path (invariant I4 — the type no longer exists); the
-//! canonical trajectory output is `CompiledPlan` (IR-3).
+//! trace-assembly helpers. The plan-based adapter (`prepare`/`execute`) and
+//! manifest builder (`from_plan`) were removed with the parallel plan type
+//! (invariant I4 — the type no longer exists); the canonical trajectory
+//! output is `CompiledPlan` (IR-3).
 //!
 //! # Ownership
 //!

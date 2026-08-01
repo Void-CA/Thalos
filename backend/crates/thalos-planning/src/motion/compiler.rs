@@ -10,7 +10,7 @@ use crate::error::{CompileError, PlanningError};
 use crate::goal::{GoalResolver, GoalResolverConfig, JointGoal, ResolvedPoseGoal, ValidatedGoal};
 use crate::motion::move_j::{MoveJConfig, MoveJPlanner};
 use crate::motion::move_l::{MoveLConfig, MoveLPlanner};
-use crate::motion::planner::{MotionPlanner, SegmentPlanner, SegmentPlanningContext};
+use crate::motion::planner::{SegmentPlanner, SegmentPlanningContext};
 use crate::motion::program::{CompiledPlan, PlannedSegment, PlanningProgram};
 
 /// Dispatches a `MotionSegment` to the appropriate `MotionPlanner`.
