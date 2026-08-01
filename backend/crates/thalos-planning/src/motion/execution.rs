@@ -63,7 +63,7 @@ pub struct PlanMetadata {
 
 /// A complete, discretised execution plan ready for hardware backends.
 ///
-/// Produced by a `MotionPlanner` from a `MotionProgram`. Contains a
+/// Produced by a `MotionPlanner` from an `ExecutionProgram`. Contains a
 /// time-ordered sequence of segments with strict continuity and timing
 /// invariants.
 #[derive(Debug, Clone, PartialEq)]

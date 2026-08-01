@@ -3,7 +3,7 @@
 //! Valida los contratos entre `thalos-planning` y `thalos-runtime`:
 //!
 //! ```text
-//! MotionProgram
+//! PlanningProgram
 //!     ↓
 //! PlanCompiler          (thalos-planning)
 //!     ↓
@@ -16,7 +16,7 @@
 //!
 //! # ¿Qué verifica?
 //!
-//! - El `MotionProgram` compila sin errores con un robot real (Planar2R).
+//! - El `PlanningProgram` compila sin errores con un robot real (Planar2R).
 //! - El `CompiledPlan` preserva la cantidad de segmentos y waypoints.
 //! - Los waypoints extraídos pasan a `Esp32Backend::execute()` sin error.
 //! - El backend envía los comandos wire esperados (MANIFEST, SEGMENT, SAMPLE, EXECUTE).
@@ -38,7 +38,7 @@ use thalos_core::{
 use thalos_planning::motion::{
     compiler::{DefaultPlannerDispatcher, PlanCompiler},
     planner::SegmentPlanningContext,
-    program::MotionProgram,
+    program::PlanningProgram,
 };
 use thalos_runtime::{
     RobotController,
@@ -98,7 +98,7 @@ fn compile_movej_program(
         })
         .collect();
 
-    let program = MotionProgram::new(segments);
+    let program = PlanningProgram::new(segments);
     compiler
         .compile(&program, ctx)
         .expect("PlanCompiler::compile should succeed")
@@ -133,7 +133,7 @@ fn transport_with_responses(sample_count: usize) -> FakeTransport {
 
 /// Pipeline completo: planificación → ejecución simulada.
 ///
-/// Crea un `MotionProgram` con 2 segmentos MoveJ, lo compila con el
+/// Crea un `PlanningProgram` con 2 segmentos MoveJ, lo compila con el
 /// `PlanCompiler` sobre un robot Planar2R, extrae los waypoints, y los
 /// ejecuta sobre un `Esp32Backend` con `FakeTransport`.
 #[tokio::test]
@@ -258,7 +258,7 @@ async fn empty_plan_compile_ok_but_execute_fails() {
     let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
 
     // Compile empty program — compila Ok (no waypoints, no duration)
-    let program = MotionProgram::new(vec![]);
+    let program = PlanningProgram::new(vec![]);
     let plan = compiler
         .compile(&program, &ctx)
         .expect("empty program compiles to empty plan");

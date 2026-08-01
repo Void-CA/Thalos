@@ -22,10 +22,6 @@ impl PlanningProgram {
     }
 }
 
-/// Deprecated alias — use `PlanningProgram` instead.
-#[deprecated(note = "Renamed to PlanningProgram")]
-pub type MotionProgram = PlanningProgram;
-
 /// A single segment after planning.
 ///
 /// Preserves both the planned result (`trajectory`) and the original intent
@@ -122,19 +118,7 @@ mod tests {
         assert!(plan.extract_segment(100..110).is_none());
     }
 
-    // ── Phase 2, Task 2.1 + 2.2: PlanningProgram rename + deprecated alias ──
-
-    #[allow(deprecated)]
-    #[test]
-    fn motion_program_alias_resolves_to_planning_program() {
-        // Verify the deprecated alias is the same type as the new name.
-        let via_new = PlanningProgram::new(vec![]);
-        let via_old = MotionProgram::new(vec![]);
-        // Type compatibility: can pass one where the other is expected.
-        fn takes_planning(_p: PlanningProgram) {}
-        takes_planning(via_new);
-        takes_planning(via_old);
-    }
+    // ── PlanningProgram rename — canonical IR-2 name ──────────────────────
 
     #[test]
     fn test_extract_preserves_order() {

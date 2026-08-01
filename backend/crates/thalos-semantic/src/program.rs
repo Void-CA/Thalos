@@ -8,7 +8,7 @@ use crate::operation::SemanticOperation;
 /// independent of geometry or motion planning. Insertion order is preserved.
 ///
 /// `SemanticProgram` is the input to the lowering pipeline, which resolves
-/// logical IDs into concrete `MotionProgram` instructions.
+/// logical IDs into concrete `ExecutionProgram` instructions.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SemanticProgram {
     pub operations: Vec<SemanticOperation>,
@@ -138,7 +138,10 @@ mod tests {
         // Verify specific variant ordering after deserialization
         assert!(matches!(decoded.operations[0], SemanticOperation::Pick(_)));
         assert!(matches!(decoded.operations[1], SemanticOperation::Place(_)));
-        assert!(matches!(decoded.operations[2], SemanticOperation::MoveTo(_)));
+        assert!(matches!(
+            decoded.operations[2],
+            SemanticOperation::MoveTo(_)
+        ));
         assert!(matches!(decoded.operations[3], SemanticOperation::Wait(_)));
         assert!(matches!(decoded.operations[4], SemanticOperation::Home(_)));
     }

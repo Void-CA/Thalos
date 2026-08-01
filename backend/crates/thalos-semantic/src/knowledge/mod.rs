@@ -90,8 +90,13 @@ mod tests {
 
     #[test]
     fn place_plan_returns_result() {
-        fn check_return_type(provider: &dyn KnowledgeProvider, object: &ObjectId, location: &LocationId) {
-            let result: Result<PlacementPlan, LoweringError> = provider.place_plan(object, location);
+        fn check_return_type(
+            provider: &dyn KnowledgeProvider,
+            object: &ObjectId,
+            location: &LocationId,
+        ) {
+            let result: Result<PlacementPlan, LoweringError> =
+                provider.place_plan(object, location);
             let _ = result;
         }
     }
@@ -123,7 +128,7 @@ mod tests {
 
     #[test]
     fn no_motion_instruction_types_in_signatures() {
-        // Confirm that GraspPlan/PlacementPlan do NOT contain MotionInstruction
+        // Confirm that GraspPlan/PlacementPlan do NOT contain ExecutionInstruction
         fn check_grasp_plan_fields(plan: &GraspPlan) {
             let GraspPlan {
                 grasp_frame: _,
@@ -141,11 +146,11 @@ mod tests {
             } = plan;
         }
 
-        // Also verify the return types don't reference MotionInstruction
+        // Also verify the return types don't reference ExecutionInstruction
         fn provider_returns_no_instructions(provider: &dyn KnowledgeProvider, object: &ObjectId) {
             match provider.grasp_plan(object) {
                 Ok(plan) => {
-                    // plan is GraspPlan — not MotionInstruction, not MotionProgram
+                    // plan is GraspPlan — not ExecutionInstruction, not ExecutionProgram
                     let _: &GraspPlan = &plan;
                 }
                 Err(_) => {}

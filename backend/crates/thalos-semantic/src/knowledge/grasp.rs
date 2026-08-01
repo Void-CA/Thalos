@@ -6,7 +6,7 @@ use crate::resource::ToolId;
 ///
 /// Contains only geometric frames — no motion instructions, trajectories,
 /// or constraints exist on this type. Lowering converts these frames into
-/// `MotionInstruction` values.
+/// `ExecutionInstruction` values.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GraspPlan {
     /// The pose where grasping occurs (the object's position/orientation).
@@ -144,6 +144,9 @@ mod tests {
             preferred_tool: None,
         };
         let debug = format!("{plan:?}");
-        assert!(debug.contains("GraspPlan"), "Debug should contain type name");
+        assert!(
+            debug.contains("GraspPlan"),
+            "Debug should contain type name"
+        );
     }
 }

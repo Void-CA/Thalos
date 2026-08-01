@@ -5,7 +5,7 @@ use crate::ids::OperationId;
 use crate::motion::target::{MotionProfile, MotionTarget, OutputChannel, OutputValue};
 
 // ---------------------------------------------------------------------------
-// ExecutionInstruction — 4 variants matching the existing MotionInstruction
+// ExecutionInstruction — 4 variants forming the canonical IR-1 instruction set
 // ---------------------------------------------------------------------------
 
 /// A single instruction in an `ExecutionProgram`.
@@ -187,7 +187,10 @@ mod tests {
             "Third instruction should be Delay"
         );
         assert!(
-            matches!(program.instructions[3], ExecutionInstruction::SetOutput { .. }),
+            matches!(
+                program.instructions[3],
+                ExecutionInstruction::SetOutput { .. }
+            ),
             "Fourth instruction should be SetOutput"
         );
     }

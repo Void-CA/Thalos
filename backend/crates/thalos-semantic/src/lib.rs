@@ -11,7 +11,7 @@
 //!     │
 //!     ├─→ Validation (Level 1: sequence + Level 2: resource resolution)
 //!     │
-//!     └─→ SemanticLowering → MotionProgram (via KnowledgeProvider)
+//!     └─→ SemanticLowering → ExecutionProgram (via KnowledgeProvider)
 //! ```
 //!
 //! ## Module Structure

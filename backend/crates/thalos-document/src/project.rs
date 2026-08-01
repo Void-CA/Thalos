@@ -44,9 +44,11 @@ pub struct Settings {
 
 /// The kind of a task — either geometric (existing DSL) or semantic (task-level).
 ///
-/// A task is one or the other, never both. The variant determines which
-/// compiler pipeline processes it: `Geometric` → `thalos-compiler`,
-/// `Semantic` → `thalos-semantic` (SemanticLowering).
+/// A task is one or the other, never both. The variant determines how it is
+/// processed downstream: `Semantic` tasks lower through `thalos-semantic`
+/// (`SemanticLowering`) into an `ExecutionProgram`; `Geometric` tasks carry
+/// raw `Operation` sequences consumed by the planning pipeline
+/// (`thalos-planning`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum TaskKind {
@@ -230,21 +232,15 @@ mod tests {
             tasks: vec![
                 Task {
                     id: "first".to_string(),
-                    kind: TaskKind::Geometric {
-                        operations: vec![],
-                    },
+                    kind: TaskKind::Geometric { operations: vec![] },
                 },
                 Task {
                     id: "second".to_string(),
-                    kind: TaskKind::Geometric {
-                        operations: vec![],
-                    },
+                    kind: TaskKind::Geometric { operations: vec![] },
                 },
                 Task {
                     id: "third".to_string(),
-                    kind: TaskKind::Geometric {
-                        operations: vec![],
-                    },
+                    kind: TaskKind::Geometric { operations: vec![] },
                 },
             ],
             settings: Settings {
@@ -383,11 +379,11 @@ mod tests {
 
     #[test]
     fn semantic_task_serde_round_trip() {
+        use std::time::Duration;
         use thalos_semantic::{
             operation::{HomeOp, SemanticOperation, WaitOp},
             resource::{ObjectId as SemObjId, ToolId as SemToolId},
         };
-        use std::time::Duration;
 
         let program = thalos_semantic::program::SemanticProgram::new(vec![
             SemanticOperation::Wait(WaitOp {

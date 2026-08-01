@@ -80,7 +80,7 @@ pub enum FindingKind {
 /// a runtime observation from executing a compiled plan.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExecutionFinding {
-    /// Index of the problematic segment in the `MotionProgram`.
+    /// Index of the problematic segment in the `PlanningProgram`.
     pub segment_id: usize,
     /// What kind of problem was observed.
     pub kind: FindingKind,

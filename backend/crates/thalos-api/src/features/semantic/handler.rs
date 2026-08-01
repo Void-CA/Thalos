@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
-use axum::{Json, extract::State, response::IntoResponse, http::StatusCode};
+use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 
+use serde::Serialize;
 use thalos_core::models::RobotModel;
 use thalos_core::motion::MotionProfile;
 use thalos_core::trajectory::{Trajectory, TrajectoryPoint};
@@ -12,10 +13,9 @@ use thalos_planning::motion::{
     scara::ScaraPlanner,
 };
 use thalos_semantic::{
-    lowering::{context::LoweringContext, SemanticLowering},
+    lowering::{SemanticLowering, context::LoweringContext},
     validation::validate,
 };
-use serde::Serialize;
 use tracing_subscriber::field::debug;
 
 use crate::app::state::AppState;
@@ -23,7 +23,7 @@ use crate::features::semantic::{
     CompileMetadata, CompileResponse, SemanticCompileRequest, ValidationSummary,
 };
 
-/// Compile semantic task → MotionProgram.
+/// Compile semantic task → ExecutionProgram.
 pub async fn compile_semantic(
     State(_state): State<Arc<AppState>>,
     Json(payload): Json<SemanticCompileRequest>,
@@ -31,23 +31,48 @@ pub async fn compile_semantic(
     let task = payload.task;
     let validation = validate(&task.program);
     if !validation.errors.is_empty() {
-        let msgs: Vec<String> = validation.errors.iter()
-            .map(|d| format!("[{:?}] {} (op: {:?})", d.severity, d.message, d.origin)).collect();
-        return Err((StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({"error": msgs.join("; "), "code": "semantic_validation_error"}))));
+        let msgs: Vec<String> = validation
+            .errors
+            .iter()
+            .map(|d| format!("[{:?}] {} (op: {:?})", d.severity, d.message, d.origin))
+            .collect();
+        return Err((
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(
+                serde_json::json!({"error": msgs.join("; "), "code": "semantic_validation_error"}),
+            ),
+        ));
     }
-    let warnings: Vec<String> = validation.warnings.iter()
-        .map(|d| format!("[{:?}] {}", d.severity, d.message)).collect();
+    let warnings: Vec<String> = validation
+        .warnings
+        .iter()
+        .map(|d| format!("[{:?}] {}", d.severity, d.message))
+        .collect();
     let provider = task.scene.knowledge();
     let ctx = LoweringContext {
-        provider: &provider, default_tool: None,
-        default_profile: MotionProfile { max_velocity: 1.0, max_acceleration: 0.5, max_jerk: None },
+        provider: &provider,
+        default_tool: None,
+        default_profile: MotionProfile {
+            max_velocity: 1.0,
+            max_acceleration: 0.5,
+            max_jerk: None,
+        },
     };
-    let mp = SemanticLowering::lower(&task.program, &ctx)
-        .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({"error": format!("{e}"), "code": "lowering_error"}))))?;
+    let mp = SemanticLowering::lower(&task.program, &ctx).map_err(|e| {
+        (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(serde_json::json!({"error": format!("{e}"), "code": "lowering_error"})),
+        )
+    })?;
     Ok(Json(CompileResponse {
         status: "ok".into(),
-        validation: ValidationSummary { errors: vec![], warnings },
-        metadata: CompileMetadata { instruction_count: mp.instructions.len() },
+        validation: ValidationSummary {
+            errors: vec![],
+            warnings,
+        },
+        metadata: CompileMetadata {
+            instruction_count: mp.instructions.len(),
+        },
         motion_program: mp,
     }))
 }
@@ -66,30 +91,53 @@ pub async fn run_semantic(
         let task = payload.task;
         let validation = validate(&task.program);
         if !validation.errors.is_empty() {
-            let msgs: Vec<String> = validation.errors.iter()
-                .map(|d| format!("[{:?}] {} (op: {:?})", d.severity, d.message, d.origin)).collect();
-            return Err((StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({"error": msgs.join("; "), "code": "semantic_validation_error"}))));
+            let msgs: Vec<String> = validation
+                .errors
+                .iter()
+                .map(|d| format!("[{:?}] {} (op: {:?})", d.severity, d.message, d.origin))
+                .collect();
+            return Err((
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(
+                    serde_json::json!({"error": msgs.join("; "), "code": "semantic_validation_error"}),
+                ),
+            ));
         }
         let provider = task.scene.knowledge();
         let ctx = LoweringContext {
-            provider: &provider, default_tool: None,
-            default_profile: MotionProfile { max_velocity: 1.0, max_acceleration: 0.5, max_jerk: None },
+            provider: &provider,
+            default_tool: None,
+            default_profile: MotionProfile {
+                max_velocity: 1.0,
+                max_acceleration: 0.5,
+                max_jerk: None,
+            },
         };
-        let mp = SemanticLowering::lower(&task.program, &ctx)
-            .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({"error": format!("{e}"), "code": "lowering_error"}))))?;
+        let mp = SemanticLowering::lower(&task.program, &ctx).map_err(|e| {
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(serde_json::json!({"error": format!("{e}"), "code": "lowering_error"})),
+            )
+        })?;
 
         let planner = ScaraPlanner::new();
         let pctx = PlanningCtx {
-            initial_state: vec![0.0, 0.0, 0.0, 0.0], robot: RobotModel::Scara,
+            initial_state: vec![0.0, 0.0, 0.0, 0.0],
+            robot: RobotModel::Scara,
             interpolation: InterpolationConfig::default(),
         };
-        let ep = planner.plan(&mp, &pctx)
-            .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({"error": format!("{e}"), "code": "planning_error"}))))?;
+        let ep = planner.plan(&mp, &pctx).map_err(|e| {
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(serde_json::json!({"error": format!("{e}"), "code": "planning_error"})),
+            )
+        })?;
 
         let wps = extract_waypoints(&ep);
-        let wps_json: Vec<serde_json::Value> = wps.iter().map(|p| {
-            serde_json::json!({"time_secs": p.timestamp(), "joints": p.joints()})
-        }).collect();
+        let wps_json: Vec<serde_json::Value> = wps
+            .iter()
+            .map(|p| serde_json::json!({"time_secs": p.timestamp(), "joints": p.joints()}))
+            .collect();
         let traj = Trajectory::new(wps);
         let compiled = CompiledPlan::new(traj, vec![]);
 
@@ -103,8 +151,17 @@ pub async fn run_semantic(
     // provider, ctx, mp, ep, planner, pctx, task, wps — todos dropped
 
     // ── Asíncrono: schedulea en runtime ──
-    state.services.scene.schedule_program(compiled).await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": format!("{e}"), "code": "runtime_error"}))))?;
+    state
+        .services
+        .scene
+        .schedule_program(compiled)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": format!("{e}"), "code": "runtime_error"})),
+            )
+        })?;
 
     Ok(Json(serde_json::json!({
         "status": "ok",
@@ -120,14 +177,25 @@ fn extract_waypoints(plan: &ExecutionPlan) -> Vec<TrajectoryPoint> {
     for seg in &plan.segments {
         match seg {
             ExecutionSegment::JointTrajectory { samples } => {
-                for s in samples { pts.push(TrajectoryPoint::new(s.joints.clone(), t + s.time.as_secs_f64())); }
-                if let Some(last) = samples.last() { t += last.time.as_secs_f64(); }
+                for s in samples {
+                    pts.push(TrajectoryPoint::new(
+                        s.joints.clone(),
+                        t + s.time.as_secs_f64(),
+                    ));
+                }
+                if let Some(last) = samples.last() {
+                    t += last.time.as_secs_f64();
+                }
             }
             ExecutionSegment::CartesianTrajectory { resolved, .. } => {
-                for (i, j) in resolved.iter().enumerate() { pts.push(TrajectoryPoint::new(j.clone(), t + i as f64 * 0.01)); }
+                for (i, j) in resolved.iter().enumerate() {
+                    pts.push(TrajectoryPoint::new(j.clone(), t + i as f64 * 0.01));
+                }
                 t += resolved.len() as f64 * 0.01;
             }
-            ExecutionSegment::Pause { duration } => { t += duration.as_secs_f64(); }
+            ExecutionSegment::Pause { duration } => {
+                t += duration.as_secs_f64();
+            }
             ExecutionSegment::Output { .. } => {}
         }
     }

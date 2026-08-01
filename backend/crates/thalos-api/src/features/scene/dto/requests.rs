@@ -8,7 +8,7 @@ use thalos_core::{
     spatial::{frame::FrameId, pose::Pose},
 };
 use thalos_math::{Quaternion, Transform3D, UnitQuaternion, Vector3};
-use thalos_planning::motion::program::MotionProgram;
+use thalos_planning::motion::program::PlanningProgram;
 use thalos_runtime::Command;
 use thalos_runtime::commands::kinematics::KinematicsCommand;
 
@@ -130,15 +130,15 @@ pub struct MotionPlanRequest {
 }
 
 impl MotionPlanRequest {
-    /// Convert into a domain `MotionProgram`, resolving frame references
-    /// against the given default end-effector frame.
-    pub fn into_program(self, default_ee: FrameId) -> MotionProgram {
+    /// Convert into a domain `PlanningProgram` (IR-2), resolving frame
+    /// references against the given default end-effector frame.
+    pub fn into_program(self, default_ee: FrameId) -> PlanningProgram {
         let segments = self
             .segments
             .into_iter()
             .map(|s| s.into_segment(default_ee))
             .collect();
-        MotionProgram::new(segments)
+        PlanningProgram::new(segments)
     }
 }
 

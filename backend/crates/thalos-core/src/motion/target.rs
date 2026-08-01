@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 
 /// A robot-independent pose suitable for motion targeting.
 ///
-/// Mirrors the shape of `ResolvedPose` from the IR but lives in `thalos-core`
-/// so backends do not depend on `thalos-compiler`.
+/// Mirrors the shape of `ResolvedPoseGoal` from `thalos-planning` but lives
+/// in `thalos-core` so backends do not depend on the planning crate.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MotionPose {
     pub position: [f64; 3],
@@ -23,7 +23,7 @@ pub struct MotionPose {
 ///
 /// Currently only supports `Pose(MotionPose)`. New variants (e.g.
 /// `JointConfiguration`, `ExternalAxis`) can be added without breaking
-/// `MotionInstruction`.
+/// `ExecutionInstruction`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum MotionTarget {

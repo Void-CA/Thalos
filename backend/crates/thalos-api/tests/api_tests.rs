@@ -1426,9 +1426,21 @@ async fn semantic_compile_wait_home_returns_ok() {
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response body");
     assert_eq!(body["status"], "ok");
-    assert!(body["motion_program"]["instructions"].as_array().map(|a| a.len()).unwrap_or(0) > 0);
-    let instrs = body["motion_program"]["instructions"].as_array().map(|a| a.len()).unwrap_or(0);
-    assert!(instrs > 0, "should have at least 1 instruction, got {instrs}");
+    assert!(
+        body["motion_program"]["instructions"]
+            .as_array()
+            .map(|a| a.len())
+            .unwrap_or(0)
+            > 0
+    );
+    let instrs = body["motion_program"]["instructions"]
+        .as_array()
+        .map(|a| a.len())
+        .unwrap_or(0);
+    assert!(
+        instrs > 0,
+        "should have at least 1 instruction, got {instrs}"
+    );
 }
 
 #[tokio::test]
@@ -1447,8 +1459,14 @@ async fn semantic_compile_two_waits_sums_duration() {
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response body");
     assert_eq!(body["status"], "ok");
-    let instrs = body["motion_program"]["instructions"].as_array().map(|a| a.len()).unwrap_or(0);
-    assert!(instrs >= 2, "two Waits should produce at least 2 instructions, got {instrs}");
+    let instrs = body["motion_program"]["instructions"]
+        .as_array()
+        .map(|a| a.len())
+        .unwrap_or(0);
+    assert!(
+        instrs >= 2,
+        "two Waits should produce at least 2 instructions, got {instrs}"
+    );
 }
 
 #[tokio::test]
@@ -1525,10 +1543,16 @@ async fn semantic_compile_empty_operations_returns_422() {
         Some(task_doc_payload(json!([]))),
     )
     .await;
-    // Empty program compiles to empty MotionProgram (planning is separate)
+    // Empty program compiles to an empty ExecutionProgram (planning is separate)
     assert_eq!(status, StatusCode::OK);
     let body = _body.expect("response body");
-    assert_eq!(body["motion_program"]["instructions"].as_array().map(|a| a.len()).unwrap_or(99), 0);
+    assert_eq!(
+        body["motion_program"]["instructions"]
+            .as_array()
+            .map(|a| a.len())
+            .unwrap_or(99),
+        0
+    );
 }
 
 #[tokio::test]
@@ -1546,10 +1570,16 @@ async fn semantic_compile_home_alone_returns_ok() {
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response body");
     assert_eq!(body["status"], "ok");
-    assert!(body["motion_program"]["instructions"].as_array().map(|a| a.len()).unwrap_or(0) >= 1);
+    assert!(
+        body["motion_program"]["instructions"]
+            .as_array()
+            .map(|a| a.len())
+            .unwrap_or(0)
+            >= 1
+    );
 }
 
-/// Integration test: POST TaskDocument-shaped JSON → compile → MotionProgram.
+/// Integration test: POST TaskDocument-shaped JSON → compile → ExecutionProgram.
 ///
 /// Verifies the full pipeline accepts a TaskDocument with scene resources
 /// (objects, locations, home pose) and a semantic program referencing those
@@ -1596,11 +1626,20 @@ async fn semantic_compile_with_task_document() {
         })),
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "TaskDocument compile should succeed, got {:?}", body);
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "TaskDocument compile should succeed, got {:?}",
+        body
+    );
     let body = body.expect("response body must be valid JSON");
     assert_eq!(body["status"], "ok");
     assert!(
-        body["motion_program"]["instructions"].as_array().map(|a| a.len()).unwrap_or(0) > 0,
+        body["motion_program"]["instructions"]
+            .as_array()
+            .map(|a| a.len())
+            .unwrap_or(0)
+            > 0,
         "execution plan must have at least one segment"
     );
 }
@@ -1640,9 +1679,11 @@ async fn semantic_compile_with_task_document_and_scene() {
     let body = body.expect("response body must be valid JSON");
     assert_eq!(body["status"], "ok");
     assert!(
-        body["motion_program"]["instructions"].as_array().map(|a| a.len()).unwrap_or(0) > 0,
+        body["motion_program"]["instructions"]
+            .as_array()
+            .map(|a| a.len())
+            .unwrap_or(0)
+            > 0,
         "execution plan must have at least one segment"
     );
 }
-
-

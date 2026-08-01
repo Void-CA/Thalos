@@ -5,7 +5,7 @@ use thalos_core::motion::MotionProfile;
 use crate::knowledge::KnowledgeProvider;
 use crate::resource::ToolId;
 
-/// The context for lowering a `SemanticProgram` into a `MotionProgram`.
+/// The context for lowering a `SemanticProgram` into a `ExecutionProgram`.
 ///
 /// Wraps the read-only dependencies: a `KnowledgeProvider` for resource
 /// resolution, a default tool for operations that omit tool selection, and

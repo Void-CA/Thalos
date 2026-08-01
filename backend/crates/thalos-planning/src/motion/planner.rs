@@ -96,10 +96,6 @@ pub trait MotionPlanner {
 mod tests {
     use super::*;
     use crate::motion::execution::ExecutionSegment;
-    use thalos_core::motion::{
-        MotionInstruction, MotionMetadata, MotionPose, MotionProfile, MotionTarget, OutputChannel,
-        OutputValue,
-    };
 
     // ── Task 4: MotionPlanner trait is object-safe ────────────────────
 

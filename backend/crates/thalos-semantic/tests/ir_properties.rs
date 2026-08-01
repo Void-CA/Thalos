@@ -19,10 +19,8 @@ use thalos_core::ids::OperationId;
 use thalos_core::motion::{MotionPose, MotionProfile, MotionTarget, OutputValue};
 use thalos_semantic::{
     knowledge::{GraspPlan, MockKnowledgeProvider, PlacementPlan},
-    lowering::{context::LoweringContext, SemanticLowering},
-    operation::{
-        HomeOp, MoveToOp, PickOp, PlaceOp, SemanticOperation, WaitOp,
-    },
+    lowering::{SemanticLowering, context::LoweringContext},
+    operation::{HomeOp, MoveToOp, PickOp, PlaceOp, SemanticOperation, WaitOp},
     program::SemanticProgram,
     resource::{LocationId, ObjectId, ToolId},
 };
@@ -58,11 +56,7 @@ fn build_provider() -> MockKnowledgeProvider {
 
     MockKnowledgeProvider::new()
         .with_grasp_ok(ObjectId("bolt".into()), grasp)
-        .with_place_ok(
-            ObjectId("bolt".into()),
-            LocationId("tray".into()),
-            place,
-        )
+        .with_place_ok(ObjectId("bolt".into()), LocationId("tray".into()), place)
         .with_location_ok(LocationId("station".into()), sample_pose(1.0, 0.0, 0.0))
         .with_home_pose(Ok(sample_pose(0.0, 0.0, 0.0)))
 }
@@ -98,12 +92,28 @@ fn pick_produces_four_instructions() {
         tool: None,
     })]);
     let instructions = lower(program);
-    assert_eq!(instructions.len(), 4, "Pick should produce exactly 4 instructions");
+    assert_eq!(
+        instructions.len(),
+        4,
+        "Pick should produce exactly 4 instructions"
+    );
     // Shape: MoveJ → MoveL → SetOutput → MoveL
-    assert!(matches!(instructions[0], ExecutionInstruction::MoveJ { .. }), "pick[0] should be MoveJ");
-    assert!(matches!(instructions[1], ExecutionInstruction::MoveL { .. }), "pick[1] should be MoveL");
-    assert!(matches!(instructions[2], ExecutionInstruction::SetOutput { .. }), "pick[2] should be SetOutput");
-    assert!(matches!(instructions[3], ExecutionInstruction::MoveL { .. }), "pick[3] should be MoveL");
+    assert!(
+        matches!(instructions[0], ExecutionInstruction::MoveJ { .. }),
+        "pick[0] should be MoveJ"
+    );
+    assert!(
+        matches!(instructions[1], ExecutionInstruction::MoveL { .. }),
+        "pick[1] should be MoveL"
+    );
+    assert!(
+        matches!(instructions[2], ExecutionInstruction::SetOutput { .. }),
+        "pick[2] should be SetOutput"
+    );
+    assert!(
+        matches!(instructions[3], ExecutionInstruction::MoveL { .. }),
+        "pick[3] should be MoveL"
+    );
 }
 
 #[test]
@@ -115,11 +125,27 @@ fn place_produces_four_instructions() {
         tool: None,
     })]);
     let instructions = lower(program);
-    assert_eq!(instructions.len(), 4, "Place should produce exactly 4 instructions");
-    assert!(matches!(instructions[0], ExecutionInstruction::MoveJ { .. }), "place[0] should be MoveJ");
-    assert!(matches!(instructions[1], ExecutionInstruction::MoveL { .. }), "place[1] should be MoveL");
-    assert!(matches!(instructions[2], ExecutionInstruction::SetOutput { .. }), "place[2] should be SetOutput");
-    assert!(matches!(instructions[3], ExecutionInstruction::MoveL { .. }), "place[3] should be MoveL");
+    assert_eq!(
+        instructions.len(),
+        4,
+        "Place should produce exactly 4 instructions"
+    );
+    assert!(
+        matches!(instructions[0], ExecutionInstruction::MoveJ { .. }),
+        "place[0] should be MoveJ"
+    );
+    assert!(
+        matches!(instructions[1], ExecutionInstruction::MoveL { .. }),
+        "place[1] should be MoveL"
+    );
+    assert!(
+        matches!(instructions[2], ExecutionInstruction::SetOutput { .. }),
+        "place[2] should be SetOutput"
+    );
+    assert!(
+        matches!(instructions[3], ExecutionInstruction::MoveL { .. }),
+        "place[3] should be MoveL"
+    );
 }
 
 #[test]
@@ -130,8 +156,15 @@ fn move_to_produces_one_instruction() {
         tool: None,
     })]);
     let instructions = lower(program);
-    assert_eq!(instructions.len(), 1, "MoveTo should produce exactly 1 instruction");
-    assert!(matches!(instructions[0], ExecutionInstruction::MoveJ { .. }), "MoveTo should produce MoveJ");
+    assert_eq!(
+        instructions.len(),
+        1,
+        "MoveTo should produce exactly 1 instruction"
+    );
+    assert!(
+        matches!(instructions[0], ExecutionInstruction::MoveJ { .. }),
+        "MoveTo should produce MoveJ"
+    );
 }
 
 #[test]
@@ -141,8 +174,15 @@ fn wait_produces_one_delay() {
         duration: Duration::from_millis(500),
     })]);
     let instructions = lower(program);
-    assert_eq!(instructions.len(), 1, "Wait should produce exactly 1 instruction");
-    assert!(matches!(instructions[0], ExecutionInstruction::Delay { .. }), "Wait should produce Delay");
+    assert_eq!(
+        instructions.len(),
+        1,
+        "Wait should produce exactly 1 instruction"
+    );
+    assert!(
+        matches!(instructions[0], ExecutionInstruction::Delay { .. }),
+        "Wait should produce Delay"
+    );
 }
 
 #[test]
@@ -151,8 +191,15 @@ fn home_produces_one_move_j() {
         origin: make_origin("op-home"),
     })]);
     let instructions = lower(program);
-    assert_eq!(instructions.len(), 1, "Home should produce exactly 1 instruction");
-    assert!(matches!(instructions[0], ExecutionInstruction::MoveJ { .. }), "Home should produce MoveJ");
+    assert_eq!(
+        instructions.len(),
+        1,
+        "Home should produce exactly 1 instruction"
+    );
+    assert!(
+        matches!(instructions[0], ExecutionInstruction::MoveJ { .. }),
+        "Home should produce MoveJ"
+    );
 }
 
 // =========================================================================
@@ -175,7 +222,10 @@ fn pick_origin_propagates_to_all_instructions() {
             | ExecutionInstruction::SetOutput { origin, .. }
             | ExecutionInstruction::Delay { origin, .. } => origin,
         };
-        assert_eq!(*inst_origin, origin, "instruction {i} should carry origin '{origin}'");
+        assert_eq!(
+            *inst_origin, origin,
+            "instruction {i} should carry origin '{origin}'"
+        );
     }
 }
 
@@ -196,7 +246,10 @@ fn place_origin_propagates_to_all_instructions() {
             | ExecutionInstruction::SetOutput { origin, .. }
             | ExecutionInstruction::Delay { origin, .. } => origin,
         };
-        assert_eq!(*inst_origin, origin, "instruction {i} should carry origin '{origin}'");
+        assert_eq!(
+            *inst_origin, origin,
+            "instruction {i} should carry origin '{origin}'"
+        );
     }
 }
 
@@ -276,18 +329,30 @@ fn operation_order_is_preserved() {
     let instructions = lower(program);
 
     // Wait → Delay
-    assert!(matches!(instructions[0], ExecutionInstruction::Delay { .. }),
-        "first operation (Wait) should produce the first instruction");
+    assert!(
+        matches!(instructions[0], ExecutionInstruction::Delay { .. }),
+        "first operation (Wait) should produce the first instruction"
+    );
     // Pick → 4 instructions (MoveJ, MoveL, SetOutput, MoveL)
-    assert!(matches!(instructions[1], ExecutionInstruction::MoveJ { .. }),
-        "Pick should start at instruction 1");
-    assert!(matches!(instructions[4], ExecutionInstruction::MoveL { .. }),
-        "Pick should end at instruction 4");
+    assert!(
+        matches!(instructions[1], ExecutionInstruction::MoveJ { .. }),
+        "Pick should start at instruction 1"
+    );
+    assert!(
+        matches!(instructions[4], ExecutionInstruction::MoveL { .. }),
+        "Pick should end at instruction 4"
+    );
     // Home → MoveJ
-    assert!(matches!(instructions[5], ExecutionInstruction::MoveJ { .. }),
-        "Home should start at instruction 5");
+    assert!(
+        matches!(instructions[5], ExecutionInstruction::MoveJ { .. }),
+        "Home should start at instruction 5"
+    );
 
-    assert_eq!(instructions.len(), 6, "Wait(1) + Pick(4) + Home(1) = 6 instructions");
+    assert_eq!(
+        instructions.len(),
+        6,
+        "Wait(1) + Pick(4) + Home(1) = 6 instructions"
+    );
 }
 
 // =========================================================================
@@ -320,11 +385,17 @@ fn pick_wait_place_home_full_pipeline() {
     let instructions = lower(program);
 
     // Total: Pick(4) + Wait(1) + Place(4) + Home(1) = 10
-    assert_eq!(instructions.len(), 10, "full pipeline should produce 10 instructions");
+    assert_eq!(
+        instructions.len(),
+        10,
+        "full pipeline should produce 10 instructions"
+    );
 
     // ── Pick approach [0]: MoveJ with approach_frame from provider ──
     match &instructions[0] {
-        ExecutionInstruction::MoveJ { target, profile, .. } => {
+        ExecutionInstruction::MoveJ {
+            target, profile, ..
+        } => {
             assert_eq!(
                 *target,
                 MotionTarget::Pose(sample_pose(0.3, 0.0, 0.2)),
@@ -350,8 +421,15 @@ fn pick_wait_place_home_full_pipeline() {
     // ── Pick grip [2]: SetOutput(true) ──
     match &instructions[2] {
         ExecutionInstruction::SetOutput { channel, value, .. } => {
-            assert_eq!(channel.name, "gripper", "Pick grip should use gripper channel");
-            assert_eq!(*value, OutputValue::Bool(true), "Pick grip should close gripper (true)");
+            assert_eq!(
+                channel.name, "gripper",
+                "Pick grip should use gripper channel"
+            );
+            assert_eq!(
+                *value,
+                OutputValue::Bool(true),
+                "Pick grip should close gripper (true)"
+            );
         }
         _ => panic!("instructions[2] should be SetOutput (Pick grip)"),
     }
@@ -403,8 +481,15 @@ fn pick_wait_place_home_full_pipeline() {
     // ── Place ungrip [7]: SetOutput(false) ──
     match &instructions[7] {
         ExecutionInstruction::SetOutput { channel, value, .. } => {
-            assert_eq!(channel.name, "gripper", "Place ungrip should use gripper channel");
-            assert_eq!(*value, OutputValue::Bool(false), "Place ungrip should open gripper (false)");
+            assert_eq!(
+                channel.name, "gripper",
+                "Place ungrip should use gripper channel"
+            );
+            assert_eq!(
+                *value,
+                OutputValue::Bool(false),
+                "Place ungrip should open gripper (false)"
+            );
         }
         _ => panic!("instructions[7] should be SetOutput (Place ungrip)"),
     }
@@ -441,7 +526,11 @@ fn pick_wait_place_home_full_pipeline() {
             | ExecutionInstruction::SetOutput { origin, .. } => origin,
             _ => panic!("unexpected instruction type at {i}"),
         };
-        assert_eq!(*origin, OperationId("op-pick".to_string()), "instruction {i} should carry Pick origin");
+        assert_eq!(
+            *origin,
+            OperationId("op-pick".to_string()),
+            "instruction {i} should carry Pick origin"
+        );
     }
     match &instructions[4] {
         ExecutionInstruction::Delay { origin, .. } => {
@@ -456,7 +545,11 @@ fn pick_wait_place_home_full_pipeline() {
             | ExecutionInstruction::SetOutput { origin, .. } => origin,
             _ => panic!("unexpected instruction type at {i}"),
         };
-        assert_eq!(*origin, OperationId("op-place".to_string()), "instruction {i} should carry Place origin");
+        assert_eq!(
+            *origin,
+            OperationId("op-place".to_string()),
+            "instruction {i} should carry Place origin"
+        );
     }
     match &instructions[9] {
         ExecutionInstruction::MoveJ { origin, .. } => {
@@ -482,7 +575,11 @@ fn two_picks_produce_eight_instructions() {
         }),
     ]);
     let instructions = lower(program);
-    assert_eq!(instructions.len(), 8, "two Picks should produce 8 instructions");
+    assert_eq!(
+        instructions.len(),
+        8,
+        "two Picks should produce 8 instructions"
+    );
     match &instructions[2] {
         ExecutionInstruction::SetOutput { value, .. } => {
             assert_eq!(*value, OutputValue::Bool(true), "first Pick grip");
@@ -529,17 +626,20 @@ home";
     assert_eq!(program.operations.len(), 3);
 
     // Lower and verify structure
-    use thalos_semantic::lowering::context::LoweringContext;
-    use thalos_semantic::lowering::SemanticLowering;
     use thalos_core::motion::MotionProfile;
+    use thalos_semantic::lowering::SemanticLowering;
+    use thalos_semantic::lowering::context::LoweringContext;
 
     let provider = MockKnowledgeProvider::new()
-        .with_grasp_ok(ObjectId("bolt".into()), GraspPlan {
-            grasp_frame: sample_pose(0.5, 0.0, 0.0),
-            approach_frame: sample_pose(0.55, 0.0, 0.0),
-            retreat_frame: sample_pose(0.45, 0.0, 0.0),
-            preferred_tool: None,
-        })
+        .with_grasp_ok(
+            ObjectId("bolt".into()),
+            GraspPlan {
+                grasp_frame: sample_pose(0.5, 0.0, 0.0),
+                approach_frame: sample_pose(0.55, 0.0, 0.0),
+                retreat_frame: sample_pose(0.45, 0.0, 0.0),
+                preferred_tool: None,
+            },
+        )
         .with_home_pose(Ok(sample_pose(0.0, 0.0, 0.0)));
 
     let ctx = LoweringContext {
@@ -616,7 +716,12 @@ fn instruction_origin(inst: &ExecutionInstruction) -> OperationId {
 #[allow(clippy::type_complexity)]
 fn run_pipeline(
     program: SemanticProgram,
-) -> (Vec<OperationId>, Vec<OperationId>, Vec<OperationId>, Vec<OperationId>) {
+) -> (
+    Vec<OperationId>,
+    Vec<OperationId>,
+    Vec<OperationId>,
+    Vec<OperationId>,
+) {
     // ── Stage 0 → 1: SemanticLowering → ExecutionProgram ──────────────────
     let provider = build_provider();
     let ctx = default_ctx(&provider);
@@ -693,17 +798,29 @@ fn i2_operation_id_identity_across_full_pipeline() {
     let (instructions, segments, planned, events) = run_pipeline(program);
 
     // Stage 1 — every ExecutionInstruction carries the origin.
-    assert!(!instructions.is_empty(), "pipeline must produce instructions");
+    assert!(
+        !instructions.is_empty(),
+        "pipeline must produce instructions"
+    );
     for (i, o) in instructions.iter().enumerate() {
-        assert_eq!(o, &origin, "ExecutionInstruction[{i}] must carry origin 'op-7'");
+        assert_eq!(
+            o, &origin,
+            "ExecutionInstruction[{i}] must carry origin 'op-7'"
+        );
     }
     // Stage 2 — every MotionSegment carries the origin.
-    assert!(!segments.is_empty(), "pipeline must produce motion segments");
+    assert!(
+        !segments.is_empty(),
+        "pipeline must produce motion segments"
+    );
     for (i, o) in segments.iter().enumerate() {
         assert_eq!(o, &origin, "MotionSegment[{i}] must carry origin 'op-7'");
     }
     // Stage 3 — every PlannedSegment carries the origin.
-    assert!(!planned.is_empty(), "pipeline must produce planned segments");
+    assert!(
+        !planned.is_empty(),
+        "pipeline must produce planned segments"
+    );
     for (i, o) in planned.iter().enumerate() {
         assert_eq!(o, &origin, "PlannedSegment[{i}] must carry origin 'op-7'");
     }
@@ -738,7 +855,10 @@ fn i2_origin_identity_with_different_operations_and_origin() {
 
     assert!(!instructions.is_empty());
     for (i, o) in instructions.iter().enumerate() {
-        assert_eq!(o, &origin, "ExecutionInstruction[{i}] must carry origin 'op-99'");
+        assert_eq!(
+            o, &origin,
+            "ExecutionInstruction[{i}] must carry origin 'op-99'"
+        );
     }
     assert!(!segments.is_empty());
     for (i, o) in segments.iter().enumerate() {
