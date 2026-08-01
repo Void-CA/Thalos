@@ -1,5 +1,5 @@
 /// A single snapshot of a trajectory: joint positions at a given time.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TrajectoryPoint {
     pub(crate) joints: Vec<f64>,
     pub(crate) timestamp: f64,

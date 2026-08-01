@@ -1,4 +1,4 @@
-#[derive(Clone, Copy, Hash, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub enum FrameId {
     World,
     Id(u64),

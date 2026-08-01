@@ -2,9 +2,10 @@ use crate::{
     MathError, constants,
     traits::{Cross, Dot},
 };
+use serde::{Deserialize, Serialize};
 use std::ops::{Add, Mul, Sub};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Vector3 {
     pub x: f64,
     pub y: f64,

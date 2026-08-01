@@ -1,7 +1,8 @@
 use crate::traits::Cross;
 use crate::{MathError, Quaternion, UnitVector3, Vector3, constants};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct UnitQuaternion {
     pub q: Quaternion,
 }

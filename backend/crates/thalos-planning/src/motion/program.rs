@@ -1,5 +1,6 @@
 use std::ops::Range;
 
+use serde::{Deserialize, Serialize};
 use thalos_core::ids::OperationId;
 use thalos_core::prelude::Trajectory;
 
@@ -27,7 +28,7 @@ impl PlanningProgram {
 /// Preserves both the planned result (`trajectory`) and the original intent
 /// (`source`), along with positional metadata for visualization and runtime
 /// tracking.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlannedSegment {
     /// The IR-0 `OperationId` this segment was derived from, copied from
     /// `MotionSegment::origin` (invariant I2).
@@ -55,7 +56,7 @@ pub struct PlannedSegment {
 /// It receives `merged_trajectory` as a standard `Trajectory` and advances
 /// through it as it would any other plan. This keeps the runtime's
 /// `advance_trajectory` unchanged.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompiledPlan {
     pub merged_trajectory: Trajectory,
     pub segments: Vec<PlannedSegment>,
@@ -102,6 +103,70 @@ mod tests {
             .map(|i| TrajectoryPoint::new(vec![i as f64], i as f64))
             .collect();
         CompiledPlan::new(Trajectory::new(points), vec![])
+    }
+
+    /// A plan with one MoveJ segment — exercises MotionSegment + Trajectory
+    /// + ranges through serde (Q2: CompiledPlan serde).
+    fn plan_with_movej_segment() -> CompiledPlan {
+        let source = MotionSegment::MoveJ {
+            origin: OperationId("op-j".to_string()),
+            target: vec![0.5, 1.0],
+            max_velocity: Some(500.0),
+            max_acceleration: Some(1000.0),
+        };
+        let trajectory = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![0.5, 1.0], 1.0),
+        ]);
+        let segment = PlannedSegment {
+            origin: OperationId("op-j".to_string()),
+            source,
+            trajectory,
+            waypoint_range: 0..2,
+            time_range: 0.0..1.0,
+        };
+        let merged = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![0.5, 1.0], 1.0),
+        ]);
+        CompiledPlan::new(merged, vec![segment])
+    }
+
+    // ── CompiledPlan serde round-trip (D2, Q2) ───────────────────────────
+
+    #[test]
+    fn compiled_plan_serde_round_trip() {
+        let plan = plan_with_movej_segment();
+
+        let json = serde_json::to_string(&plan).expect("serialize");
+        let decoded: CompiledPlan = serde_json::from_str(&json).expect("deserialize");
+
+        assert_eq!(decoded.duration, plan.duration);
+        assert_eq!(decoded.waypoint_count, plan.waypoint_count);
+        assert_eq!(decoded.segments.len(), plan.segments.len());
+
+        let seg = &decoded.segments[0];
+        assert_eq!(seg.origin, OperationId("op-j".to_string()));
+        assert_eq!(seg.time_range, 0.0..1.0);
+        assert_eq!(seg.waypoint_range, 0..2);
+        assert_eq!(seg.trajectory.len(), 2);
+        assert_eq!(seg.trajectory.waypoints()[1].joints(), &[0.5, 1.0]);
+        assert_eq!(seg.trajectory.waypoints()[1].timestamp(), 1.0);
+        assert!(matches!(seg.source, MotionSegment::MoveJ { .. }));
+
+        // merged trajectory survives losslessly
+        assert_eq!(decoded.merged_trajectory.len(), 2);
+        assert_eq!(decoded.merged_trajectory.waypoints()[1].joints(), &[0.5, 1.0]);
+    }
+
+    #[test]
+    fn compiled_plan_serde_json_shape() {
+        let plan = plan_with_movej_segment();
+        let json = serde_json::to_string(&plan).expect("serialize");
+        // Spot-check the shape: origin + time_range present with f64 ranges.
+        assert!(json.contains("\"origin\":\"op-j\""), "{json}");
+        assert!(json.contains("\"time_range\":{\"start\":0.0,\"end\":1.0}"), "{json}");
+        assert!(json.contains("\"duration\":1.0"), "{json}");
     }
 
     #[test]

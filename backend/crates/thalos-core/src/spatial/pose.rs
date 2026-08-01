@@ -1,8 +1,9 @@
 use crate::spatial::frame::frame::FrameId;
+use serde::{Deserialize, Serialize};
 use thalos_math::Transform3D;
 use thalos_math::Vector3;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pose {
     reference: FrameId,
     target: FrameId,

@@ -1,7 +1,8 @@
 use crate::{MathError, constants};
+use serde::{Deserialize, Serialize};
 use std::ops::{Add, Mul, Sub};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Quaternion {
     pub w: f64,
     pub x: f64,

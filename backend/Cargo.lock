@@ -1434,6 +1434,7 @@ dependencies = [
  "criterion",
  "rand",
  "serde",
+ "serde_json",
  "thalos-collision",
  "thalos-optimization",
  "thalos_core",
@@ -1485,6 +1486,7 @@ name = "thalos_math"
 version = "0.1.0"
 dependencies = [
  "nalgebra",
+ "serde",
  "thiserror",
 ]
 

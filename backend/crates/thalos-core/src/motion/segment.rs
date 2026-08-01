@@ -1,6 +1,7 @@
 use crate::ids::OperationId;
 use crate::spatial::frame::FrameId;
 use crate::spatial::pose::Pose;
+use serde::{Deserialize, Serialize};
 
 /// A single movement command in a motion program.
 ///
@@ -15,7 +16,7 @@ use crate::spatial::pose::Pose;
 ///
 /// New variants (e.g. `Wait`, `SetTool`, `IO`) can be added without changing
 /// the compiler — only the dispatcher needs a new arm.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MotionSegment {
     /// Joint-space move to a target configuration.
     MoveJ {

@@ -10,7 +10,7 @@ pub use point::TrajectoryPoint;
 /// API, and visualised by front-end tools. Its place in `thalos-core`
 /// reflects that it belongs to the core domain model, not to any single
 /// subsystem.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Trajectory {
     waypoints: Vec<TrajectoryPoint>,
 }

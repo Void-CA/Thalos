@@ -1,4 +1,5 @@
 use crate::{UnitQuaternion, Vector3};
+use serde::{Deserialize, Serialize};
 
 /// Transformación rígida 3D (traslación + rotación).
 ///
@@ -6,7 +7,7 @@ use crate::{UnitQuaternion, Vector3};
 /// que sea una rotación válida en SO(3) (norma = 1).
 ///
 /// La traslación es un [`Vector3`] cualquiera.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Transform3D {
     pub translation: Vector3,
     pub rotation: UnitQuaternion,
