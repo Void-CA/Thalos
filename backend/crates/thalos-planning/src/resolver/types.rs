@@ -30,6 +30,15 @@ pub enum ResolutionError {
     },
     /// A frame name referenced in a MoveL instruction could not be resolved.
     UnknownFrame(String),
+    /// The resolver was configured for a robot whose DOF does not match the
+    /// length of the initial joint state (invariant I1 — single robot per
+    /// compilation, planner and runtime must agree on DOF).
+    DofMismatch {
+        /// DOF of the robot the resolver was configured for.
+        expected: usize,
+        /// DOF observed from the `initial_state` joint vector length.
+        actual: usize,
+    },
 }
 
 impl std::fmt::Display for ResolutionError {
@@ -47,6 +56,12 @@ impl std::fmt::Display for ResolutionError {
             }
             ResolutionError::UnknownFrame(frame) => {
                 write!(f, "unknown frame: {frame}")
+            }
+            ResolutionError::DofMismatch { expected, actual } => {
+                write!(
+                    f,
+                    "DOF mismatch: robot has {expected} DOF but initial_state has {actual} joints"
+                )
             }
         }
     }

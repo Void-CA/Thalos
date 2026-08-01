@@ -46,6 +46,14 @@ impl<'a> MotionResolver<'a> {
     /// The `initial_state` seeds the IK solver on the first `MoveJ`
     /// instruction and is tracked internally through all subsequent moves.
     ///
+    /// # DOF validation (invariant I1)
+    ///
+    /// `expected_dof` is the DOF of the robot model the caller resolved for
+    /// (e.g. `robot_model.metadata().dof`). It MUST match the length of
+    /// `initial_state`; a mismatch is rejected with
+    /// [`ResolutionError::DofMismatch`] at construction — fail fast, the
+    /// resolver never sees inconsistent state.
+    ///
     /// # Design note
     ///
     /// The `initial_state` parameter extends the design from `design.md`
@@ -56,12 +64,19 @@ impl<'a> MotionResolver<'a> {
         ik_solver: &'a dyn IKSolver,
         frame_registry: &'a FrameRegistry,
         initial_state: &'a [f64],
-    ) -> Self {
-        Self {
+        expected_dof: usize,
+    ) -> Result<Self, ResolutionError> {
+        if initial_state.len() != expected_dof {
+            return Err(ResolutionError::DofMismatch {
+                expected: expected_dof,
+                actual: initial_state.len(),
+            });
+        }
+        Ok(Self {
             ik_solver,
             frame_registry,
             initial_state,
-        }
+        })
     }
 
     /// Resolve an `ExecutionProgram` into `MotionResolution`.
@@ -241,7 +256,9 @@ mod tests {
         registry: &'a FrameRegistry,
         initial_state: &'a [f64],
     ) -> MotionResolver<'a> {
-        MotionResolver::new(ik, registry, initial_state)
+        // Test helper: initial_state length IS the expected DOF.
+        MotionResolver::new(ik, registry, initial_state, initial_state.len())
+            .expect("test resolvers use a matching DOF")
     }
 
     fn sample_pose() -> MotionPose {
@@ -668,5 +685,47 @@ mod tests {
             result.runtime.events[0].operation_id,
             OperationId("pick-1".to_string())
         );
+    }
+
+    // ── Test: DOF validation (invariant I1) ────────────────────────────────
+    //
+    // I1 — Single Robot Per Compilation: the resolver must reject a robot
+    // whose DOF does not match its `initial_state` before producing any
+    // output. The validation happens at construction (fail fast).
+
+    #[test]
+    fn dof_mismatch_rejects_at_construction() {
+        let ik = NoopIKSolver;
+        let registry = make_registry();
+
+        // initial_state carries 2 joints but the robot is configured for 4 DOF.
+        let result = MotionResolver::new(&ik, &registry, &[0.0, 0.0], 4);
+        match result {
+            Err(ResolutionError::DofMismatch { expected, actual }) => {
+                assert_eq!(expected, 4, "expected DOF comes from the robot model");
+                assert_eq!(actual, 2, "actual DOF comes from initial_state length");
+            }
+            Err(other) => panic!("expected DofMismatch, got {other:?}"),
+            Ok(_) => panic!("expected DofMismatch, got Ok"),
+        }
+    }
+
+    #[test]
+    fn matching_dof_constructs_resolver() {
+        let ik = NoopIKSolver;
+        let registry = make_registry();
+
+        let resolver =
+            MotionResolver::new(&ik, &registry, &[0.0, 0.0], 2).expect("2 DOF must construct");
+
+        let program = ExecutionProgram {
+            instructions: vec![],
+            metadata: sample_metadata(),
+        };
+        let result = resolver
+            .resolve(&program)
+            .expect("empty program should resolve");
+        assert!(result.planning.segments.is_empty());
+        assert!(result.runtime.events.is_empty());
     }
 }

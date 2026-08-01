@@ -734,7 +734,8 @@ fn run_pipeline(
     registry.create("world");
     let ik = FixedTargetIKSolver;
     let initial = [0.0, 0.0];
-    let resolver = MotionResolver::new(&ik, &registry, &initial);
+    // Planar2R is a 2-DOF robot — expected_dof must match initial_state.
+    let resolver = MotionResolver::new(&ik, &registry, &initial, 2).expect("2 DOF matches");
     let resolution = resolver.resolve(&exec).expect("resolution should succeed");
 
     let segment_origins: Vec<OperationId> = resolution
