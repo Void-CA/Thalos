@@ -10,3 +10,6 @@ thiserror = "2"
 
 [dev-dependencies]
 serde_json = "1"
+# I2 end-to-end origin-preservation tests drive the full canonical pipeline
+# (SemanticLowering → MotionResolver → PlanCompiler) from the semantic crate.
+thalos-planning = { path = "../thalos-planning" }
