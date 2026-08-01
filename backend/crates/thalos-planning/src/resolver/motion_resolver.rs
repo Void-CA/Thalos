@@ -137,6 +137,9 @@ impl<'a> MotionResolver<'a> {
 
                 ExecutionInstruction::Delay { origin, duration } => {
                     runtime_events.push(RuntimeEvent {
+                        // Logical event: no timing yet. The TimelineScheduler
+                        // assigns absolute at_time from the CompiledPlan (IR-3).
+                        at_time: Duration::ZERO,
                         operation_id: origin.clone(),
                         action: RuntimeAction::Delay(*duration),
                     });
@@ -148,6 +151,7 @@ impl<'a> MotionResolver<'a> {
                     value,
                 } => {
                     runtime_events.push(RuntimeEvent {
+                        at_time: Duration::ZERO,
                         operation_id: origin.clone(),
                         action: RuntimeAction::SetOutput {
                             channel: channel.clone(),
