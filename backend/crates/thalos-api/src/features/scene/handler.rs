@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use thalos_models::urdf::parser::parse_robot;
 
 use thalos_core::{
+    execution::runtime::RuntimeProgram,
     kinematics::{forward::ForwardKinematics, inverse::DampedLeastSquaresSolver},
     models::RobotModel,
     robot::{adapter, state::RobotState},
@@ -205,7 +206,11 @@ pub async fn preview_plan(
     // snapshot, fk, solver, ctx, robot_state, program dropped here
 
     // Phase 2 — schedule (async), clean scope
-    let snapshot = state.services.scene.schedule_program(compiled).await?;
+    let snapshot = state
+        .services
+        .scene
+        .schedule_program(compiled, RuntimeProgram::default())
+        .await?;
     Ok(Json(to_api_response(&snapshot)))
 }
 

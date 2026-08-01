@@ -70,6 +70,12 @@ impl RuntimeProgram {
     }
 }
 
+impl Default for RuntimeProgram {
+    fn default() -> Self {
+        Self { events: Vec::new() }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -162,7 +168,10 @@ mod tests {
 
         let json = serde_json::to_string(&program).expect("serialize");
         let decoded: RuntimeProgram = serde_json::from_str(&json).expect("deserialize");
-        assert_eq!(program, decoded, "RuntimeProgram must round-trip losslessly");
+        assert_eq!(
+            program, decoded,
+            "RuntimeProgram must round-trip losslessly"
+        );
     }
 
     // ── at_time absolute semantics (rt) ──────────────────────────────────
@@ -243,7 +252,10 @@ mod tests {
         };
 
         match &action {
-            RuntimeAction::SetOutput { channel: c, value: v } => {
+            RuntimeAction::SetOutput {
+                channel: c,
+                value: v,
+            } => {
                 assert_eq!(*c, channel);
                 assert_eq!(*v, value);
             }
@@ -261,7 +273,10 @@ mod tests {
 
         let action = RuntimeAction::SetOutput { channel, value };
         match &action {
-            RuntimeAction::SetOutput { channel: c, value: v } => {
+            RuntimeAction::SetOutput {
+                channel: c,
+                value: v,
+            } => {
                 assert_eq!(c.name, "vacuum");
                 assert_eq!(*v, OutputValue::Integer(75));
             }
@@ -491,13 +506,11 @@ mod tests {
     #[test]
     fn runtime_program_clone_and_eq() {
         let program = RuntimeProgram {
-            events: vec![
-                RuntimeEvent {
-                    at_time: Duration::ZERO,
-                    operation_id: OperationId("op-1".to_string()),
-                    action: RuntimeAction::Delay(Duration::from_secs(5)),
-                },
-            ],
+            events: vec![RuntimeEvent {
+                at_time: Duration::ZERO,
+                operation_id: OperationId("op-1".to_string()),
+                action: RuntimeAction::Delay(Duration::from_secs(5)),
+            }],
         };
 
         let cloned = program.clone();

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use thalos_core::{
+    execution::runtime::RuntimeProgram,
     kinematics::{
         forward::{ForwardKinematics, result::FKResult},
         inverse::{DampedLeastSquaresSolver, IKGoal, IKSolver, result::IKResult},
@@ -233,13 +234,25 @@ impl SceneService {
     // ── Program management ──
 
     /// Compile and store a motion program for preview.
+    ///
+    /// Accepts the `RuntimeProgram` (absolute `at_time` events) alongside the
+    /// `CompiledPlan` (PR 3): the compiled trajectory is stored for preview
+    /// and the event program is loaded into the controller so the tick loop
+    /// dispatches `SetOutput`/`Delay` at their absolute times.
     pub async fn schedule_program(
         &self,
         compiled: CompiledPlan,
+        runtime: RuntimeProgram,
     ) -> Result<RuntimeSnapshot, RuntimeError> {
         {
             let mut runtime = self.runtime.write().await;
             runtime.schedule_plan(compiled);
+        }
+        // Hand the event timeline to the controller (no-op for backends
+        // that do not dispatch runtime events).
+        if let Some(ctrl) = self.manager.get_controller().await {
+            let mut c = ctrl.write().await;
+            c.load_runtime_program(runtime).await?;
         }
         let runtime = self.runtime.read().await;
         Ok(Self::build_snapshot(&runtime, None))

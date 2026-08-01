@@ -18,6 +18,7 @@ use thalos_planning::{
         program::CompiledPlan,
     },
     resolver::MotionResolver,
+    timeline::TimelineScheduler,
 };
 use thalos_semantic::{
     lowering::{SemanticLowering, context::LoweringContext},
@@ -109,8 +110,8 @@ pub async fn run_semantic(
     let robot_model = state.services.scene.robot_model().await;
     let initial_joints = state.services.scene.initial_joints().await;
 
-    // ── Síncrono: validación, lowering, resolución, compilación — todo muere antes del await ──
-    let (duration_secs, segment_count, waypoints_json, event_count, compiled) = {
+    // ── Síncrono: validación, lowering, resolución, compilación, timeline ──
+    let (duration_secs, segment_count, waypoints_json, event_count, compiled, runtime_program) = {
         let task = payload.task;
         let validation = validate(&task.program);
         if !validation.errors.is_empty() {
@@ -186,6 +187,11 @@ pub async fn run_semantic(
                 )
             })?;
 
+        // TimelineScheduler: logical events → temporal events (absolute
+        // at_time aligned to the compiled trajectory). CompiledPlan owns
+        // physical time; the scheduler is the formal logical→temporal step.
+        let runtime_program = TimelineScheduler::new().schedule(&mp, &compiled, resolution.runtime);
+
         let wps_json: Vec<serde_json::Value> = compiled
             .merged_trajectory
             .waypoints()
@@ -197,8 +203,9 @@ pub async fn run_semantic(
             compiled.duration,
             compiled.segments.len(),
             wps_json,
-            resolution.runtime.events.len(),
+            runtime_program.events.len(),
             compiled,
+            runtime_program,
         )
     };
     // provider, ctx, mp, resolver, ik_solver, chain, registry, task — todos dropped
@@ -207,7 +214,7 @@ pub async fn run_semantic(
     state
         .services
         .scene
-        .schedule_program(compiled)
+        .schedule_program(compiled, runtime_program)
         .await
         .map_err(|e| {
             (

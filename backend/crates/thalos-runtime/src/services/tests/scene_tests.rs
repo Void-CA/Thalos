@@ -816,3 +816,143 @@ async fn select_tool_frame_rejects_invalid_frame() {
         "active_tcp should remain None after invalid selection"
     );
 }
+
+// ═════════════════════════════════════════════════════════════════════
+// PR 3 — Runtime event dispatch through the scene tick loop
+// ═════════════════════════════════════════════════════════════════════
+
+use std::time::Duration;
+use thalos_core::{
+    execution::runtime::{RuntimeAction, RuntimeEvent, RuntimeProgram},
+    ids::OperationId,
+    motion::target::{OutputChannel, OutputValue},
+    trajectory::TrajectoryPoint,
+};
+use thalos_planning::motion::program::CompiledPlan;
+
+/// Schedule a program with a SetOutput at t=1.0s, start execution, and
+/// verify the tick loop dispatches it at exactly clock 1.0s (rt).
+#[tokio::test]
+async fn scheduled_runtime_events_dispatch_via_tick() {
+    // Concrete controller so the test can observe dispatched events.
+    let concrete = Arc::new(RwLock::new(SimulationController::new(
+        RobotModel::Scara.metadata().dof,
+    )));
+    let controller = concrete.clone() as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let manager = Arc::new(BackendManager::new());
+    manager.set_active(controller).await.unwrap();
+    let svc = SceneService::new(
+        Box::new(InternalBackend),
+        manager.clone(),
+        RobotModel::Scara,
+    );
+
+    // A trivial 2-waypoint 4-DOF plan over 2.0s.
+    let plan = CompiledPlan::new(
+        thalos_core::trajectory::Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0, 0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![0.5, -0.3, 0.1, 0.0], 2.0),
+        ]),
+        vec![],
+    );
+    let runtime = RuntimeProgram::new(vec![RuntimeEvent {
+        at_time: Duration::from_secs_f64(1.0),
+        operation_id: OperationId("op-out".to_string()),
+        action: RuntimeAction::SetOutput {
+            channel: OutputChannel {
+                name: "gripper".into(),
+                channel_type: "digital".into(),
+            },
+            value: OutputValue::Bool(true),
+        },
+    }]);
+
+    svc.schedule_program(plan, runtime).await.unwrap();
+    svc.start_execution().await.unwrap();
+
+    // clock 0.5s — nothing dispatched yet.
+    svc.tick_execution_delta(0.5).await.unwrap();
+    assert!(concrete.read().await.dispatched_events().await.is_empty());
+
+    // clock 1.0s — the SetOutput fires at its absolute at_time.
+    svc.tick_execution_delta(0.5).await.unwrap();
+    let dispatched = concrete.read().await.dispatched_events().await;
+    assert_eq!(dispatched.len(), 1, "SetOutput dispatched via tick");
+    assert_eq!(
+        dispatched[0].operation_id,
+        OperationId("op-out".to_string())
+    );
+    assert_eq!(
+        concrete.read().await.clock_time().await,
+        Duration::from_secs_f64(1.0)
+    );
+}
+
+/// A Delay scheduled into the scene freezes the robot while the clock
+/// advances, then the trajectory resumes (rt — spec Delay semantics).
+#[tokio::test]
+async fn scheduled_delay_freezes_execution_through_tick() {
+    let concrete = Arc::new(RwLock::new(SimulationController::new(
+        RobotModel::Scara.metadata().dof,
+    )));
+    let controller = concrete.clone() as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let manager = Arc::new(BackendManager::new());
+    manager.set_active(controller).await.unwrap();
+    let svc = SceneService::new(
+        Box::new(InternalBackend),
+        manager.clone(),
+        RobotModel::Scara,
+    );
+
+    let plan = CompiledPlan::new(
+        thalos_core::trajectory::Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0, 0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![1.0, 0.0, 0.0, 0.0], 2.0),
+        ]),
+        vec![],
+    );
+    // Delay at 1.0s for 500ms: robot holds from 1.0s to 1.5s.
+    let runtime = RuntimeProgram::new(vec![RuntimeEvent {
+        at_time: Duration::from_secs_f64(1.0),
+        operation_id: OperationId("op-wait".to_string()),
+        action: RuntimeAction::Delay(Duration::from_millis(500)),
+    }]);
+
+    svc.schedule_program(plan, runtime).await.unwrap();
+    svc.start_execution().await.unwrap();
+
+    // Reach clock 1.0s (4 × 0.25s): joint[0] = 0.5 (linear over 2s).
+    for _ in 0..4 {
+        svc.tick_execution_delta(0.25).await.unwrap();
+    }
+    let held = svc.snapshot().await.unwrap().joints[0];
+    assert!(
+        (held - 0.5).abs() < 1e-9,
+        "joint[0] at delay start = {held}"
+    );
+
+    // clock 1.25s — inside the delay: clock advances, robot holds.
+    svc.tick_execution_delta(0.25).await.unwrap();
+    assert_eq!(
+        concrete.read().await.clock_time().await,
+        Duration::from_secs_f64(1.25)
+    );
+    let still = svc.snapshot().await.unwrap().joints[0];
+    assert!(
+        (still - held).abs() < 1e-9,
+        "robot must hold during delay (joint[0] = {still})"
+    );
+    assert_eq!(
+        concrete.read().await.traj_time().await,
+        Duration::from_secs_f64(1.0),
+        "traj time frozen during delay"
+    );
+
+    // clock 1.5s — delay elapsed: trajectory resumes.
+    svc.tick_execution_delta(0.25).await.unwrap();
+    let resumed = svc.snapshot().await.unwrap().joints[0];
+    assert!(
+        (resumed - 0.625).abs() < 1e-9,
+        "trajectory resumes from held state (joint[0] = {resumed})"
+    );
+}
