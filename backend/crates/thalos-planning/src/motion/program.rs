@@ -2,6 +2,7 @@ use std::ops::Range;
 
 use serde::{Deserialize, Serialize};
 use thalos_core::ids::OperationId;
+use thalos_core::operation::MotionRole;
 use thalos_core::prelude::Trajectory;
 
 use thalos_core::motion::segment::MotionSegment;
@@ -41,6 +42,14 @@ pub struct PlannedSegment {
     pub waypoint_range: Range<usize>,
     /// Time range within the merged trajectory's timeline (seconds).
     pub time_range: Range<f64>,
+    /// The operation that produced this segment, when compiled from the
+    /// Operation IR (None on the legacy `compile()` path).
+    #[serde(default)]
+    pub operation_id: Option<OperationId>,
+    /// The compilation role of this segment, when compiled from the
+    /// Operation IR (None on the legacy `compile()` path).
+    #[serde(default)]
+    pub role: Option<MotionRole>,
 }
 
 /// The result of compiling a `PlanningProgram`.
@@ -124,6 +133,8 @@ mod tests {
             trajectory,
             waypoint_range: 0..2,
             time_range: 0.0..1.0,
+            operation_id: None,
+            role: None,
         };
         let merged = Trajectory::new(vec![
             TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
@@ -173,6 +184,75 @@ mod tests {
             "{json}"
         );
         assert!(json.contains("\"duration\":1.0"), "{json}");
+    }
+
+    // ── PlannedSegment operation metadata (semantic propagation, 2.1) ──
+
+    /// A segment compiled from the Operation IR — carries operation_id + role.
+    fn segment_with_operation_metadata() -> PlannedSegment {
+        let source = MotionSegment::MoveJ {
+            origin: OperationId("op-pick-1".to_string()),
+            target: vec![0.5, 1.0],
+            max_velocity: Some(500.0),
+            max_acceleration: Some(1000.0),
+        };
+        let trajectory = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![0.5, 1.0], 1.0),
+        ]);
+        PlannedSegment {
+            origin: OperationId("op-pick-1".to_string()),
+            source,
+            trajectory,
+            waypoint_range: 0..2,
+            time_range: 0.0..1.0,
+            operation_id: Some(OperationId("42".to_string())),
+            role: Some(MotionRole::Execution),
+        }
+    }
+
+    #[test]
+    fn planned_segment_holds_operation_metadata() {
+        let seg = segment_with_operation_metadata();
+        assert_eq!(seg.operation_id, Some(OperationId("42".to_string())));
+        assert_eq!(seg.role, Some(MotionRole::Execution));
+    }
+
+    #[test]
+    fn planned_segment_legacy_fields_default_to_none() {
+        let seg = PlannedSegment {
+            operation_id: None,
+            role: None,
+            ..segment_with_operation_metadata()
+        };
+        assert!(seg.operation_id.is_none());
+        assert!(seg.role.is_none());
+    }
+
+    #[test]
+    fn planned_segment_serde_preserves_operation_metadata() {
+        let seg = segment_with_operation_metadata();
+        let json = serde_json::to_string(&seg).expect("serialize");
+        let decoded: PlannedSegment = serde_json::from_str(&json).expect("deserialize");
+
+        assert_eq!(decoded.operation_id, Some(OperationId("42".to_string())));
+        assert_eq!(decoded.role, Some(MotionRole::Execution));
+    }
+
+    #[test]
+    fn planned_segment_serde_defaults_missing_metadata_to_none() {
+        // Old serialized plans (without the new fields) must still deserialize.
+        let seg = segment_with_operation_metadata();
+        let json = serde_json::to_string(&seg).expect("serialize");
+        // Strip the new fields to simulate a legacy payload.
+        let legacy_json = json.replace("\"operation_id\":\"42\",", "").replace(
+            ",\"role\":\"Execution\"",
+            "",
+        );
+        let decoded: PlannedSegment = serde_json::from_str(&legacy_json).expect("deserialize");
+        assert!(decoded.operation_id.is_none());
+        assert!(decoded.role.is_none());
+        assert_eq!(decoded.origin, OperationId("op-pick-1".to_string()));
     }
 
     #[test]

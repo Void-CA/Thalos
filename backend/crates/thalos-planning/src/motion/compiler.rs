@@ -194,6 +194,8 @@ impl PlanCompiler {
                     start: time_offset,
                     end: time_offset + seg_duration,
                 },
+                operation_id: None,
+                role: None,
             });
 
             time_offset += seg_duration;
