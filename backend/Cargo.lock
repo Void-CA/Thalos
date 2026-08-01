@@ -1513,6 +1513,7 @@ dependencies = [
  "thalos_core",
  "thalos_math",
  "thalos_models",
+ "thalos_semantic",
  "thiserror",
  "tokio",
  "tokio-serial",

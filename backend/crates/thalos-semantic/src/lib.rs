@@ -30,3 +30,12 @@ pub mod program;
 pub mod resource;
 pub mod script;
 pub mod validation;
+
+/// Shared helpers for the canonical semantic scenario (feature `test-support`).
+///
+/// Single source of truth for the `Pick → Wait → Place → Home` program used by
+/// the pipeline regression tests (`ir_properties.rs`, `e2e_canonical_pipeline.rs`,
+/// `thalos-runtime/tests/e2e_execution.rs`). Test-only; never referenced by
+/// production code.
+#[cfg(feature = "test-support")]
+pub mod test_support;

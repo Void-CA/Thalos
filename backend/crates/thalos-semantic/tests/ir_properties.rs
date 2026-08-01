@@ -16,69 +16,24 @@ use std::time::Duration;
 
 use thalos_core::execution::program::ExecutionInstruction;
 use thalos_core::ids::OperationId;
-use thalos_core::motion::{MotionPose, MotionProfile, MotionTarget, OutputValue};
+use thalos_core::motion::{MotionTarget, OutputValue};
 use thalos_semantic::{
-    knowledge::{GraspPlan, MockKnowledgeProvider, PlacementPlan},
-    lowering::{SemanticLowering, context::LoweringContext},
+    knowledge::{GraspPlan, MockKnowledgeProvider},
+    lowering::SemanticLowering,
     operation::{HomeOp, MoveToOp, PickOp, PlaceOp, SemanticOperation, WaitOp},
     program::SemanticProgram,
-    resource::{LocationId, ObjectId, ToolId},
+    resource::{LocationId, ObjectId},
+    test_support::{
+        FixedTargetIKSolver, build_provider, default_ctx, lower, make_origin,
+        pick_wait_place_home_with_wait, sample_pose,
+    },
 };
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Helpers — shared with the pipeline e2e tests via `test_support`
+// (canonical scenario: `pick_wait_place_home_program`/`_with_wait`, provider,
+// context, lowering, and `FixedTargetIKSolver`).
 // ---------------------------------------------------------------------------
-
-fn sample_pose(x: f64, y: f64, z: f64) -> MotionPose {
-    MotionPose {
-        position: [x, y, z],
-        orientation: [0.0, 0.0, 0.0, 1.0],
-        frame: "world".into(),
-    }
-}
-
-fn make_origin(s: &str) -> OperationId {
-    OperationId(s.to_string())
-}
-
-fn build_provider() -> MockKnowledgeProvider {
-    let grasp = GraspPlan {
-        grasp_frame: sample_pose(0.5, 0.0, 0.0),
-        approach_frame: sample_pose(0.3, 0.0, 0.2),
-        retreat_frame: sample_pose(0.6, 0.0, 0.1),
-        preferred_tool: Some(ToolId("gripper-1".to_string())),
-    };
-    let place = PlacementPlan {
-        drop_frame: sample_pose(0.4, 0.5, 0.0),
-        approach_frame: sample_pose(0.4, 0.3, 0.2),
-        retreat_frame: sample_pose(0.4, 0.6, 0.1),
-    };
-
-    MockKnowledgeProvider::new()
-        .with_grasp_ok(ObjectId("bolt".into()), grasp)
-        .with_place_ok(ObjectId("bolt".into()), LocationId("tray".into()), place)
-        .with_location_ok(LocationId("station".into()), sample_pose(1.0, 0.0, 0.0))
-        .with_home_pose(Ok(sample_pose(0.0, 0.0, 0.0)))
-}
-
-fn default_ctx(provider: &MockKnowledgeProvider) -> LoweringContext {
-    LoweringContext {
-        provider,
-        default_tool: Some(ToolId("gripper-1".to_string())),
-        default_profile: MotionProfile {
-            max_velocity: 1.0,
-            max_acceleration: 0.5,
-            max_jerk: None,
-        },
-    }
-}
-
-fn lower(program: SemanticProgram) -> Vec<ExecutionInstruction> {
-    let provider = build_provider();
-    let ctx = default_ctx(&provider);
-    let mp = SemanticLowering::lower(&program, &ctx).expect("lowering should succeed");
-    mp.instructions
-}
 
 // =========================================================================
 // 1. Shape tests — each operation produces the expected instruction pattern
@@ -361,26 +316,7 @@ fn operation_order_is_preserved() {
 
 #[test]
 fn pick_wait_place_home_full_pipeline() {
-    let program = SemanticProgram::new(vec![
-        SemanticOperation::Pick(PickOp {
-            origin: make_origin("op-pick"),
-            object: ObjectId("bolt".into()),
-            tool: None,
-        }),
-        SemanticOperation::Wait(WaitOp {
-            origin: make_origin("op-wait"),
-            duration: Duration::from_millis(500),
-        }),
-        SemanticOperation::Place(PlaceOp {
-            origin: make_origin("op-place"),
-            object: ObjectId("bolt".into()),
-            destination: LocationId("tray".into()),
-            tool: None,
-        }),
-        SemanticOperation::Home(HomeOp {
-            origin: make_origin("op-home"),
-        }),
-    ]);
+    let program = pick_wait_place_home_with_wait(Duration::from_millis(500));
 
     let instructions = lower(program);
 
@@ -674,7 +610,6 @@ home";
 // resolution (IR-1 → IR-2 + runtime events), and compilation (IR-2 → IR-3).
 
 use thalos_core::{
-    kinematics::inverse::{IKGoal, IKResult, IKSolver},
     models::{RobotModel, RobotRegistry},
     robot::{serial_chain::SerialChain, state::RobotState},
     spatial::frame::FrameRegistry,
@@ -686,16 +621,6 @@ use thalos_planning::{
     },
     resolver::MotionResolver,
 };
-
-/// IK solver that returns a FIXED joint target — lets the resolver produce a
-/// real joint-space `MoveJ` without coupling the test to a specific robot.
-struct FixedTargetIKSolver;
-
-impl IKSolver for FixedTargetIKSolver {
-    fn solve(&self, _q0: &[f64], _goal: IKGoal) -> IKResult {
-        IKResult::converged(vec![0.5, 0.3], 1, 0.0, None)
-    }
-}
 
 /// The `OperationId` carried by an `ExecutionInstruction` (all four variants).
 fn instruction_origin(inst: &ExecutionInstruction) -> OperationId {

@@ -18,3 +18,8 @@ async-trait = "0.1"
 arc-swap = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+[dev-dependencies]
+# E2E #2 (tests/e2e_execution.rs) builds the compiled artifact from real
+# semantic intent via the canonical-scenario helpers (test-support feature).
+thalos_semantic = { path = "../thalos-semantic", features = ["test-support"] }
