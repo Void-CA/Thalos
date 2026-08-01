@@ -135,7 +135,7 @@ impl TrajectoryOperator for NullSpaceOptimization {
         trajectory: &Trajectory,
         region: &ProblemRegion,
         ctx: &OptimizationContext,
-        _constraints: Option<&dyn ConstraintQuery>,
+        constraints: Option<&dyn ConstraintQuery>,
     ) -> Result<Trajectory, OptimizationError> {
         let range = &region.waypoint_range;
         let all_wps = trajectory.waypoints();
@@ -191,8 +191,14 @@ impl TrajectoryOperator for NullSpaceOptimization {
             }
         }
 
-        for wp in &mut wps {
+        for (local_i, wp) in wps.iter_mut().enumerate() {
             let q = wp.joints();
+
+            // Constraint-aware guard: skip waypoints whose joint values
+            // are locked (counted as skipped, left unmodified).
+            if !constraints.map_or(true, |c| c.can_modify_joints(range.start + local_i)) {
+                continue;
+            }
 
             // Evaluate geometric Jacobian at this configuration
             let j = jacobian_solver.evaluate(q);
@@ -801,6 +807,108 @@ mod unit_tests {
         for (orig, res) in traj.waypoints().iter().zip(result.waypoints().iter()) {
             assert_eq!(orig.joints(), res.joints());
         }
+    }
+
+    // ── ConstraintQuery joint guard (2.5) ─────────────────
+
+    use thalos_core::operation::PrecisionLevel;
+
+    /// Mock query: only `can_modify_joints` is overridden; every other
+    /// guard returns `true`.
+    struct JointsMock {
+        allowed: Vec<bool>,
+    }
+
+    impl ConstraintQuery for JointsMock {
+        fn can_relax_orientation(&self, _i: usize, _a: f64) -> bool {
+            true
+        }
+        fn can_modify_position(&self, _i: usize) -> bool {
+            true
+        }
+        fn max_position_error(&self, _i: usize) -> Option<f64> {
+            None
+        }
+        fn max_velocity(&self, _i: usize) -> Option<f64> {
+            None
+        }
+        fn required_precision(&self, _i: usize) -> PrecisionLevel {
+            PrecisionLevel::None
+        }
+        fn can_modify_joints(&self, i: usize) -> bool {
+            self.allowed.get(i).copied().unwrap_or(true)
+        }
+    }
+
+    #[test]
+    fn constrained_waypoint_joints_preserved() {
+        // Asymmetric redundant config — null-space correction is non-zero
+        // (same configuration as benchmark_nullspace_correction_on_redundant_robot).
+        let robot = planar_4r();
+        let op = NullSpaceOptimization::new(0.3, 1e-6, 0.1);
+        let ctx = ctx_planar_4r();
+
+        let q = vec![1.5, 1.2, -1.3, -1.0];
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(q.clone(), 0.0),
+            TrajectoryPoint::new(q.clone(), 1.0),
+        ]);
+        let r = region(0..2, RegionKind::Constraint);
+
+        // Waypoint 0 is locked; waypoint 1 is free.
+        let mock = JointsMock {
+            allowed: vec![false, true],
+        };
+        let result = op.apply(&robot, &traj, &r, &ctx, Some(&mock)).unwrap();
+
+        assert_eq!(
+            result.waypoints()[0].joints(),
+            q.as_slice(),
+            "locked waypoint 0 must remain unchanged"
+        );
+        assert_ne!(
+            result.waypoints()[1].joints(),
+            q.as_slice(),
+            "free waypoint 1 must receive null-space correction"
+        );
+
+        // Triangulation: no query → both waypoints corrected (legacy behavior).
+        let none_result = op.apply(&robot, &traj, &r, &ctx, None).unwrap();
+        assert_ne!(
+            none_result.waypoints()[0].joints(),
+            q.as_slice(),
+            "without constraints waypoint 0 is corrected"
+        );
+        assert_ne!(
+            none_result.waypoints()[1].joints(),
+            q.as_slice(),
+            "without constraints waypoint 1 is corrected"
+        );
+    }
+
+    #[test]
+    fn mixed_constrained_and_free_waypoints() {
+        let robot = planar_4r();
+        let op = NullSpaceOptimization::new(0.3, 1e-6, 0.1);
+        let ctx = ctx_planar_4r();
+
+        let q = vec![1.5, 1.2, -1.3, -1.0];
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(q.clone(), 0.0),
+            TrajectoryPoint::new(q.clone(), 1.0),
+            TrajectoryPoint::new(q.clone(), 2.0),
+        ]);
+        let r = region(0..3, RegionKind::Constraint);
+
+        // Only the middle waypoint (absolute index 1) is locked.
+        let mock = JointsMock {
+            allowed: vec![true, false, true],
+        };
+        let result = op.apply(&robot, &traj, &r, &ctx, Some(&mock)).unwrap();
+
+        assert_ne!(result.waypoints()[0].joints(), q.as_slice());
+        assert_eq!(result.waypoints()[1].joints(), q.as_slice());
+        assert_ne!(result.waypoints()[2].joints(), q.as_slice());
     }
 
     // ── Waypoints outside region preserved ────────────────
