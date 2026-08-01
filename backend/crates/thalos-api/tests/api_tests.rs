@@ -1785,3 +1785,245 @@ async fn semantic_compile_with_task_document_and_scene() {
         "execution plan must have at least one segment"
     );
 }
+
+// ── /motion/plan tests (PR 4) ──────────────────────────────────────────
+
+/// The ExecutionProgram the semantic lowering produces for the
+/// planar2r_task_payload(home + wait) TaskDocument used below: `home` lowers
+/// to MoveJ toward the scene home pose with the default profile, `wait`
+/// lowers to Delay (see thalos-semantic lowering).
+fn home_wait_execution_program() -> Value {
+    json!({
+        "instructions": [
+            {
+                "type": "move_j",
+                "origin": "op_0",
+                "target": {
+                    "type": "pose",
+                    "position": [1.0, 1.0, 0.0],
+                    "orientation": [0.0, 0.0, 0.0, 1.0],
+                    "frame": "world"
+                },
+                "profile": {"max_velocity": 1.0, "max_acceleration": 0.5, "max_jerk": null}
+            },
+            {"type": "delay", "origin": "op_1", "duration": {"secs": 0, "nanos": 500000000}}
+        ],
+        "metadata": {"schema_version": 1, "source_project": "parity-test"}
+    })
+}
+
+#[tokio::test]
+async fn motion_plan_parity_with_semantic_path() {
+    let app = test_app().await;
+
+    // ── Semantic path: home + wait → MoveJ + Delay (the PR 2 scenario) ──
+    let (sem_status, sem_body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/semantic/execute",
+        Some(planar2r_task_payload(json!([
+            {"type": "home", "origin": "op_0"},
+            {"type": "wait", "origin": "op_1", "duration": {"secs": 0, "nanos": 500000000}}
+        ]))),
+    )
+    .await;
+    assert_eq!(sem_status, StatusCode::OK, "semantic path: {:?}", sem_body);
+    let sem = sem_body.expect("semantic response body");
+    let sem_wps = sem["waypoints"].as_array().expect("semantic waypoints");
+    let sem_event_count = sem["event_count"].as_u64().expect("semantic event_count");
+
+    // ── /motion/plan with the exact ExecutionProgram the lowering emits ──
+    let (mp_status, mp_body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/motion/plan",
+        Some(home_wait_execution_program()),
+    )
+    .await;
+    assert_eq!(mp_status, StatusCode::OK, "/motion/plan: {:?}", mp_body);
+    let mp = mp_body.expect("/motion/plan response body");
+
+    // Both IR-3 artifacts are present in the response.
+    let plan_wps = mp["compiled_plan"]["merged_trajectory"]["waypoints"]
+        .as_array()
+        .expect("compiled_plan waypoints");
+    let events = mp["runtime_program"]["events"]
+        .as_array()
+        .expect("runtime_program events");
+
+    // Parity: identical trajectory and identical runtime event stream.
+    assert!(!plan_wps.is_empty(), "compiled plan must produce waypoints");
+    assert_eq!(plan_wps.len(), sem_wps.len(), "waypoint count parity");
+    for (plan_wp, sem_wp) in plan_wps.iter().zip(sem_wps.iter()) {
+        assert_eq!(plan_wp["joints"], sem_wp["joints"], "joints parity");
+        assert_eq!(
+            plan_wp["timestamp"], sem_wp["time_secs"],
+            "timestamp parity"
+        );
+    }
+    assert_eq!(events.len() as u64, sem_event_count, "runtime event parity");
+
+    // I2: origin preserved from the ExecutionProgram into both artifacts.
+    assert_eq!(
+        mp["compiled_plan"]["segments"][0]["origin"], "op_0",
+        "PlannedSegment must carry the MoveJ origin"
+    );
+    assert_eq!(
+        events[0]["operation_id"], "op_1",
+        "RuntimeEvent must carry the Delay origin"
+    );
+}
+
+/// Spec scenario "Valid ExecutionProgram request": a program with MoveJ and
+/// SetOutput instructions must be accepted and produce a compiled trajectory
+/// plus one SetOutput runtime event (different code path than Delay).
+#[tokio::test]
+async fn motion_plan_accepts_movej_and_set_output() {
+    let app = test_app().await;
+    let exec_program = json!({
+        "instructions": [
+            {
+                "type": "move_j",
+                "origin": "op_j",
+                "target": {
+                    "type": "pose",
+                    "position": [1.0, 1.0, 0.0],
+                    "orientation": [0.0, 0.0, 0.0, 1.0],
+                    "frame": "world"
+                },
+                "profile": {"max_velocity": 1.0, "max_acceleration": 0.5, "max_jerk": null}
+            },
+            {
+                "type": "set_output",
+                "origin": "op_io",
+                "channel": {"name": "gripper", "channel_type": "digital"},
+                "value": {"Bool": true}
+            }
+        ],
+        "metadata": {"schema_version": 1, "source_project": "triangulate"}
+    });
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/motion/plan",
+        Some(exec_program),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {:?}", body);
+    let body = body.expect("response body");
+
+    let plan_wps = body["compiled_plan"]["merged_trajectory"]["waypoints"]
+        .as_array()
+        .expect("compiled_plan waypoints");
+    assert!(!plan_wps.is_empty(), "MoveJ must produce waypoints");
+    assert_eq!(
+        plan_wps[0]["joints"]
+            .as_array()
+            .map(|a| a.len())
+            .unwrap_or(0),
+        2,
+        "waypoint joints must match the scene robot DOF (Planar2R = 2)"
+    );
+
+    let events = body["runtime_program"]["events"]
+        .as_array()
+        .expect("runtime_program events");
+    assert_eq!(events.len(), 1, "SetOutput must produce exactly one event");
+    assert_eq!(events[0]["operation_id"], "op_io");
+    assert!(
+        events[0]["action"].get("SetOutput").is_some(),
+        "event action must be SetOutput, got {:?}",
+        events[0]["action"]
+    );
+    assert_eq!(
+        events[0]["action"]["SetOutput"]["channel"]["name"], "gripper",
+        "SetOutput channel must survive into the runtime program"
+    );
+    assert_eq!(
+        events[0]["action"]["SetOutput"]["value"],
+        json!({"Bool": true}),
+        "SetOutput value must survive into the runtime program"
+    );
+}
+
+/// Spec scenario "Non-ExecutionProgram input rejected": a body shaped like
+/// a SemanticProgram / TaskDocument (the semantic path's input) must NOT
+/// deserialize as an ExecutionProgram → 4xx.
+#[tokio::test]
+async fn motion_plan_rejects_non_execution_program() {
+    let app = test_app().await;
+    // Missing "instructions"/"metadata" — this is a SemanticProgram shape.
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/motion/plan",
+        Some(json!({"operations": [{"type": "home", "origin": "op_0"}]})),
+    )
+    .await;
+    assert!(
+        status.is_client_error(),
+        "non-ExecutionProgram input must be rejected, got {status}"
+    );
+    let has_plan = body
+        .as_ref()
+        .is_some_and(|b| b.get("compiled_plan").is_some() || b.get("runtime_program").is_some());
+    assert!(
+        !has_plan,
+        "rejected input must not yield plan artifacts, got {:?}",
+        body
+    );
+}
+
+/// Spec scenarios "Resolver error returns error response" and "No partial
+/// results on failure": an unreachable target makes IK fail → 4xx with the
+/// failure reason, and the body carries only the error.
+#[tokio::test]
+async fn motion_plan_resolver_error_returns_4xx_no_partial() {
+    let app = test_app().await;
+    // [50.0, 50.0, 0.0] is far beyond the Planar2R workspace → the DLS IK
+    // solver cannot converge → ResolutionError::IkFailed.
+    let exec_program = json!({
+        "instructions": [
+            {
+                "type": "move_j",
+                "origin": "op_far",
+                "target": {
+                    "type": "pose",
+                    "position": [50.0, 50.0, 0.0],
+                    "orientation": [0.0, 0.0, 0.0, 1.0],
+                    "frame": "world"
+                },
+                "profile": {"max_velocity": 1.0, "max_acceleration": 0.5, "max_jerk": null}
+            }
+        ],
+        "metadata": {"schema_version": 1, "source_project": "error-test"}
+    });
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/motion/plan",
+        Some(exec_program),
+    )
+    .await;
+    assert!(
+        status.is_client_error(),
+        "resolver failure must be 4xx, got {status}"
+    );
+    let body = body.expect("error response body");
+    assert!(
+        body["error"]
+            .as_str()
+            .is_some_and(|e| e.contains("IK failed")),
+        "error must carry the IK failure reason, got {:?}",
+        body["error"]
+    );
+    // No partial results on failure (spec: Error Handling).
+    assert!(
+        body.get("compiled_plan").is_none(),
+        "no partial compiled_plan may be returned"
+    );
+    assert!(
+        body.get("runtime_program").is_none(),
+        "no partial runtime_program may be returned"
+    );
+}
