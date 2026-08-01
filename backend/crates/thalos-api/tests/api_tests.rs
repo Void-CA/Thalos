@@ -1102,6 +1102,94 @@ async fn execute_plan_with_two_segments_returns_correct_segment_ranges() {
     );
 }
 
+// ── /scene/motion/plan with operations (semantic path, PR 3) ────────────
+
+#[tokio::test]
+async fn preview_plan_with_operations_uses_semantic_path() {
+    let app = test_app().await;
+
+    // Scara (4 DOF) — the DLS solver converges reliably for its MoveL paths
+    // (planar_2r's orientation-locked reachable set breaks cartesian IK).
+    let (status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/robot",
+        Some(json!({"robot_id": "scara"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "load scara should succeed");
+
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/motion/plan",
+        Some(json!({
+            "operations": [
+                {
+                    "type": "pick",
+                    "id": 1,
+                    "target": {
+                        "translation": [0.5, 0.5, 0.0],
+                        "rotation": { "kind": "Quaternion", "value": { "w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0 } }
+                    },
+                    "constraints": { "position_tolerance": 0.01 }
+                }
+            ]
+        })),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "preview_plan with operations should succeed"
+    );
+    let body = body.expect("response must be valid JSON");
+
+    let plan = body["active_plan"]
+        .as_object()
+        .expect("active_plan must be present");
+    assert_eq!(plan["state"], "Created");
+    assert_eq!(plan["motion_type"], "program");
+
+    // A Pick operation expands to 5 nodes → 5 planned segments. The legacy
+    // `segments` path never produces 5 segments from a single input, so this
+    // proves preview_plan routed through compile_with_operations().
+    let segments = plan["segments"]
+        .as_array()
+        .expect("segments must be an array");
+    assert_eq!(
+        segments.len(),
+        5,
+        "Pick should expand to 5 segments via compile_with_operations"
+    );
+}
+
+#[tokio::test]
+async fn preview_plan_without_operations_keeps_legacy_path() {
+    let app = test_app().await;
+
+    // `operations` absent → compile() fallback. Segment count must equal the
+    // number of authored segments (no expansion).
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/motion/plan",
+        Some(json!({
+            "segments": [
+                { "type": "movej", "target": [1.0, 0.5] },
+                { "type": "movej", "target": [0.0, 1.0] }
+            ]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+    let segments = body["active_plan"]["segments"]
+        .as_array()
+        .expect("segments must be an array");
+    assert_eq!(segments.len(), 2, "legacy path must keep authored segment count");
+}
+
 // ── TCP selection tests ──
 
 #[tokio::test]
