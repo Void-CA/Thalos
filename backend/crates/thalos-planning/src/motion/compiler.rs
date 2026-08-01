@@ -1,8 +1,12 @@
 use std::ops::Range;
 
 use thalos_core::{
+    ids::OperationId,
     motion::{expansion::expand_operation, segment::MotionSegment},
-    operation::{MotionNode, Operation, OperationConstraints, RangeConstraintQuery},
+    operation::{
+        MotionNode, MotionProvenance, MotionRole, Operation, OperationConstraints,
+        RangeConstraintQuery,
+    },
     prelude::{RobotState, Trajectory, TrajectoryPoint},
 };
 
@@ -132,6 +136,12 @@ impl PlanCompiler {
     /// into a single continuous trajectory with monotonically increasing
     /// timestamps.
     ///
+    /// This is the **legacy** path: plain `MotionSegment`s carry no
+    /// operation context, so every `PlannedSegment` gets `operation_id:
+    /// None` and `role: None`. It delegates to the same shared core as
+    /// [`compile_with_operations`](Self::compile_with_operations), so any
+    /// future compilation improvement benefits both paths.
+    ///
     /// # Atomicity
     ///
     /// If **any** segment fails, the entire compilation fails with a
@@ -142,12 +152,35 @@ impl PlanCompiler {
         program: &PlanningProgram,
         ctx: &SegmentPlanningContext,
     ) -> Result<CompiledPlan, CompileError> {
-        let mut segments = Vec::with_capacity(program.segments.len());
+        let metadata = vec![
+            NodeMetadata {
+                operation_id: None,
+                role: None,
+            };
+            program.segments.len()
+        ];
+        self.compile_segments(&program.segments, &metadata, ctx)
+    }
+
+    /// Shared compilation core.
+    ///
+    /// Plans `segments` in order, merging all waypoints into one continuous
+    /// trajectory, and attaches the per-segment `metadata` to each resulting
+    /// `PlannedSegment`. Both `compile()` (all-None metadata) and
+    /// `compile_with_operations()` (per-node metadata from expansion) route
+    /// through here.
+    fn compile_segments(
+        &self,
+        segments: &[MotionSegment],
+        metadata: &[NodeMetadata],
+        ctx: &SegmentPlanningContext,
+    ) -> Result<CompiledPlan, CompileError> {
+        let mut planned = Vec::with_capacity(segments.len());
         let mut all_waypoints: Vec<TrajectoryPoint> = Vec::new();
         let mut time_offset = 0.0_f64;
         let mut current_joints = ctx.current_state.joints.clone();
 
-        for (segment_index, segment) in program.segments.iter().enumerate() {
+        for (segment_index, segment) in segments.iter().enumerate() {
             let segment_state = RobotState::new(current_joints.clone());
             let segment_ctx = SegmentPlanningContext {
                 robot: ctx.robot,
@@ -182,7 +215,8 @@ impl PlanCompiler {
                 current_joints = last.joints().to_vec();
             }
 
-            segments.push(PlannedSegment {
+            let meta = metadata.get(segment_index);
+            planned.push(PlannedSegment {
                 origin: segment.origin().clone(),
                 source: segment.clone(),
                 trajectory,
@@ -194,22 +228,25 @@ impl PlanCompiler {
                     start: time_offset,
                     end: time_offset + seg_duration,
                 },
-                operation_id: None,
-                role: None,
+                operation_id: meta.and_then(|m| m.operation_id.clone()),
+                role: meta.and_then(|m| m.role),
             });
 
             time_offset += seg_duration;
         }
 
         let merged = Trajectory::new(all_waypoints);
-        Ok(CompiledPlan::new(merged, segments))
+        Ok(CompiledPlan::new(merged, planned))
     }
 
     /// Compile a sequence of Operations into a plan with a built-in ConstraintQuery.
     ///
     /// Expands each Operation into MotionNodes, builds a PlanningProgram,
     /// compiles it, and constructs a RangeConstraintQuery that maps each
-    /// operation's waypoint range to its constraints.
+    /// operation's waypoint range to its constraints. Also builds a
+    /// `Vec<MotionProvenance>` — one entry per expanded node/segment —
+    /// preserving each node's `operation_id` and `MotionRole` through
+    /// compilation.
     pub fn compile_with_operations(
         &self,
         operations: &[Operation],
@@ -229,14 +266,19 @@ impl PlanCompiler {
             all_nodes.extend(expansion);
         }
 
-        // 2. Extract segments and build a PlanningProgram.
-        let segments: Vec<MotionSegment> = all_nodes.into_iter().map(|n| n.segment).collect();
-        let program = PlanningProgram::new(segments);
+        // 2. Extract segments + per-node metadata and compile via the
+        //    shared core (same path as the legacy `compile()`).
+        let segments: Vec<MotionSegment> = all_nodes.iter().map(|n| n.segment.clone()).collect();
+        let metadata: Vec<NodeMetadata> = all_nodes
+            .iter()
+            .map(|n| NodeMetadata {
+                operation_id: n.operation_id.clone(),
+                role: Some(n.role),
+            })
+            .collect();
+        let plan = self.compile_segments(&segments, &metadata, ctx)?;
 
-        // 4. Compile the program normally.
-        let plan = self.compile(&program, ctx)?;
-
-        // 5. Build waypoint-level ranges from the per-operation node ranges.
+        // 3. Build waypoint-level ranges from the per-operation node ranges.
         let mut waypoint_ranges: Vec<(Range<usize>, OperationConstraints)> = Vec::new();
         for (node_range, constraints) in &op_node_ranges {
             let start_wp = plan.segments[node_range.start].waypoint_range.start;
@@ -246,20 +288,46 @@ impl PlanCompiler {
 
         let constraint_query = RangeConstraintQuery::new(waypoint_ranges);
 
+        // 4. Build provenance: one entry per expanded node/segment, preserving
+        //    the node's operation_id and role. Expansion always sets
+        //    operation_id = Some(op.id), so every node yields an entry.
+        let provenance: Vec<MotionProvenance> = all_nodes
+            .iter()
+            .enumerate()
+            .filter_map(|(i, node)| {
+                node.operation_id.clone().map(|operation_id| MotionProvenance {
+                    waypoint_range: plan.segments[i].waypoint_range.clone(),
+                    operation_id,
+                    role: node.role,
+                })
+            })
+            .collect();
+
         Ok(OperationCompilation {
             plan,
             constraint_query,
+            provenance,
         })
     }
 }
 
+/// Per-node semantic metadata carried from expansion into `PlannedSegment`.
+#[derive(Debug, Clone)]
+struct NodeMetadata {
+    operation_id: Option<OperationId>,
+    role: Option<MotionRole>,
+}
+
 /// Result of compiling a sequence of Operations.
 ///
-/// Includes the compiled plan and a RangeConstraintQuery built from
-/// the operations' constraints, mapped to the compiled waypoint ranges.
+/// Includes the compiled plan, a RangeConstraintQuery built from the
+/// operations' constraints (mapped to the compiled waypoint ranges), and
+/// the provenance records linking each waypoint range back to its
+/// originating operation node.
 pub struct OperationCompilation {
     pub plan: CompiledPlan,
     pub constraint_query: RangeConstraintQuery,
+    pub provenance: Vec<MotionProvenance>,
 }
 
 #[cfg(test)]
@@ -631,6 +699,97 @@ mod tests {
                 .can_relax_orientation(0, 10.0_f64.to_radians()),
             "unconstrained transit should allow orientation relaxation"
         );
+    }
+
+    // ── 2.2 Provenance preservation (semantic propagation pipeline) ─────
+
+    #[test]
+    fn compile_with_operations_builds_provenance() {
+        use thalos_core::operation::MotionRole;
+
+        let h = TestHarness::new();
+        let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
+
+        let ops = vec![
+            make_pick(1, OperationConstraints::default()),
+            CoreOperation::Transit {
+                id: OperationId("2".to_string()),
+                target_pose: sample_pose(),
+                constraints: OperationConstraints::default(),
+            },
+        ];
+
+        let opc = compiler
+            .compile_with_operations(&ops, &h.ctx())
+            .expect("compile_with_operations failed");
+        let prov = &opc.provenance;
+
+        // Pick expands to 5 nodes, Transit to 1 → 6 provenance entries.
+        assert_eq!(prov.len(), 6, "Pick(5) + Transit(1) → 6 provenance entries");
+
+        // Each entry preserves the originating node's operation_id.
+        for (i, p) in prov.iter().enumerate() {
+            let expected = if i < 5 { "1" } else { "2" };
+            assert_eq!(
+                p.operation_id,
+                OperationId(expected.to_string()),
+                "entry {i} must keep operation_id {expected}"
+            );
+        }
+
+        // Roles match the expansion order (pick_nodes_have_correct_roles_in_order).
+        let expected_roles = [
+            MotionRole::Approach,
+            MotionRole::Execution,
+            MotionRole::Interaction,
+            MotionRole::Departure,
+            MotionRole::Departure,
+            MotionRole::Transit,
+        ];
+        for (i, (p, role)) in prov.iter().zip(expected_roles.iter()).enumerate() {
+            assert_eq!(p.role, *role, "entry {i} must keep role {role:?}");
+        }
+
+        // Waypoint ranges are contiguous, in-bounds, and cover the whole plan.
+        assert_eq!(prov.first().unwrap().waypoint_range.start, 0);
+        assert_eq!(
+            prov.last().unwrap().waypoint_range.end,
+            opc.plan.waypoint_count
+        );
+        for w in prov.windows(2) {
+            assert_eq!(w[0].waypoint_range.end, w[1].waypoint_range.start);
+        }
+
+        // Per-segment metadata mirrors provenance (segments ↔ nodes 1:1).
+        assert_eq!(opc.plan.segments.len(), prov.len());
+        for (seg, p) in opc.plan.segments.iter().zip(prov.iter()) {
+            assert_eq!(seg.operation_id, Some(p.operation_id.clone()));
+            assert_eq!(seg.role, Some(p.role));
+        }
+    }
+
+    #[test]
+    fn compile_legacy_path_segments_have_no_operation_metadata() {
+        let h = TestHarness::new();
+        let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
+        let program = PlanningProgram::new(vec![MotionSegment::MoveJ {
+            origin: OperationId("test".into()),
+            target: vec![1.0, 1.0],
+            max_velocity: None,
+            max_acceleration: None,
+        }]);
+
+        let plan = compiler
+            .compile(&program, &h.ctx())
+            .expect("compile failed");
+
+        assert_eq!(plan.segments.len(), 1);
+        let seg = &plan.segments[0];
+        assert!(
+            seg.operation_id.is_none(),
+            "legacy compile() must leave operation_id None"
+        );
+        assert!(seg.role.is_none(), "legacy compile() must leave role None");
     }
 
     #[test]
