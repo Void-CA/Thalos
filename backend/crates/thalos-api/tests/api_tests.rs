@@ -1579,6 +1579,104 @@ async fn semantic_compile_home_alone_returns_ok() {
     );
 }
 
+// =========================================================================
+// Semantic execute endpoint — canonical resolver + compiler path (PR 2)
+// =========================================================================
+
+/// A task payload whose home_pose is reachable by the runtime's Planar2R
+/// robot (in-plane, within reach) so IK converges.
+///
+/// The runtime scene (`new_default_state`) uses `RobotModel::Planar2R`
+/// (2 DOF, l1 = l2 = 1.0, FK at zero config = [2.0, 0.0, 0.0]). A diagonal
+/// target at [1.0, 1.0, 0.0] is reachable (q ≈ [45°, -28°]) and avoids the
+/// full-extension singularity at the q = [0, 0] start, so DLS converges.
+fn planar2r_task_payload(operations: Value) -> Value {
+    json!({
+        "task": {
+            "id": "test",
+            "metadata": {
+                "name": "test",
+                "version": 1,
+                "created_at": "",
+                "modified_at": ""
+            },
+            "scene": {
+                "objects": [],
+                "locations": [],
+                "tools": [],
+                "home_pose": {"position": [1.0, 1.0, 0.0], "orientation": [0.0, 0.0, 0.0, 1.0]}
+            },
+            "program": {
+                "operations": operations
+            }
+        }
+    })
+}
+
+#[tokio::test]
+async fn semantic_execute_plans_with_scene_robot() {
+    let app = test_app().await;
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/semantic/execute",
+        Some(planar2r_task_payload(json!([
+            {"type": "home", "origin": "op_0"},
+            {"type": "wait", "origin": "op_1", "duration": {"secs": 0, "nanos": 500000000}}
+        ]))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {:?}", body);
+    let body = body.expect("response body");
+    assert_eq!(body["status"], "ok");
+    let wps = body["waypoints"].as_array().expect("waypoints array");
+    assert!(!wps.is_empty(), "canonical path must produce waypoints");
+    // The runtime scene robot is Planar2R (2 DOF) — planning must use the
+    // scene robot (invariant I1), NOT the hardcoded SCARA (4 DOF).
+    assert_eq!(
+        wps[0]["joints"].as_array().map(|a| a.len()).unwrap_or(0),
+        2,
+        "waypoint joints must match the scene robot DOF (Planar2R = 2)"
+    );
+    assert!(body["duration_secs"].as_f64().unwrap_or(0.0) > 0.0);
+    // Wait → Delay survives resolution as a runtime event (I3: no lossy path).
+    assert_eq!(
+        body["event_count"].as_u64().unwrap_or(0),
+        1,
+        "Wait must produce exactly one runtime event"
+    );
+}
+
+#[tokio::test]
+async fn semantic_execute_wait_only_produces_runtime_event() {
+    let app = test_app().await;
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/semantic/execute",
+        Some(planar2r_task_payload(json!([
+            {"type": "wait", "origin": "op_w", "duration": {"secs": 0, "nanos": 500000000}}
+        ]))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {:?}", body);
+    let body = body.expect("response body");
+    // No motion instructions → no waypoints, but the Delay survives
+    // resolution as a RuntimeEvent (I3 — events never dropped).
+    assert!(
+        body["waypoints"]
+            .as_array()
+            .map(|a| a.is_empty())
+            .unwrap_or(false),
+        "wait-only program must produce no waypoints"
+    );
+    assert_eq!(
+        body["event_count"].as_u64().unwrap_or(0),
+        1,
+        "Wait must produce exactly one runtime event"
+    );
+}
+
 /// Integration test: POST TaskDocument-shaped JSON → compile → ExecutionProgram.
 ///
 /// Verifies the full pipeline accepts a TaskDocument with scene resources

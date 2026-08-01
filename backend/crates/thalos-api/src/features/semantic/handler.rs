@@ -3,14 +3,21 @@ use std::sync::Arc;
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 
 use serde::Serialize;
-use thalos_core::models::RobotModel;
-use thalos_core::motion::MotionProfile;
-use thalos_core::trajectory::{Trajectory, TrajectoryPoint};
-use thalos_planning::motion::{
-    execution::{ExecutionPlan, ExecutionSegment},
-    planner::{InterpolationConfig, MotionPlanner, PlanningCtx},
-    program::CompiledPlan,
-    scara::ScaraPlanner,
+use thalos_core::{
+    kinematics::{forward::ForwardKinematics, inverse::DampedLeastSquaresSolver},
+    models::RobotRegistry,
+    motion::MotionProfile,
+    robot::state::RobotState,
+    spatial::frame::FrameRegistry,
+    trajectory::TrajectoryPoint,
+};
+use thalos_planning::{
+    motion::{
+        compiler::{DefaultPlannerDispatcher, PlanCompiler},
+        planner::SegmentPlanningContext,
+        program::CompiledPlan,
+    },
+    resolver::MotionResolver,
 };
 use thalos_semantic::{
     lowering::{SemanticLowering, context::LoweringContext},
@@ -79,6 +86,18 @@ pub async fn compile_semantic(
 
 /// Compile + plan + load into scene runtime for execution.
 ///
+/// Canonical path (I4 — one consumer per IR):
+///
+/// ```text
+/// SemanticLowering → ExecutionProgram → MotionResolver →
+/// PlanningProgram + RuntimeProgram → PlanCompiler → CompiledPlan
+/// ```
+///
+/// The `RobotModel` is injected from the scene state (I1) and drives both
+/// the IK solver and the DOF validation at the `MotionResolver` boundary.
+/// The `RuntimeProgram` is produced but not yet scheduled — runtime event
+/// dispatch arrives with the at_time post-pass (PR 3).
+///
 /// El bloque síncrono (lowering + planning) queda aislado para que
 /// las referencias no-Send (`dyn KnowledgeProvider`) mueran antes
 /// del `.await` de schedule_program.
@@ -86,8 +105,12 @@ pub async fn run_semantic(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<SemanticCompileRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    // ── Síncrono: validación, lowering, planning — todo muere antes del await ──
-    let (duration_secs, segment_count, waypoints_json, compiled) = {
+    // ── Robot del scene (I1: un solo robot por compilación) ──
+    let robot_model = state.services.scene.robot_model().await;
+    let initial_joints = state.services.scene.initial_joints().await;
+
+    // ── Síncrono: validación, lowering, resolución, compilación — todo muere antes del await ──
+    let (duration_secs, segment_count, waypoints_json, event_count, compiled) = {
         let task = payload.task;
         let validation = validate(&task.program);
         if !validation.errors.is_empty() {
@@ -120,35 +143,64 @@ pub async fn run_semantic(
             )
         })?;
 
-        let planner = ScaraPlanner::new();
-        let pctx = PlanningCtx {
-            initial_state: vec![0.0, 0.0, 0.0, 0.0],
-            robot: RobotModel::Scara,
-            interpolation: InterpolationConfig::default(),
-        };
-        let ep = planner.plan(&mp, &pctx).map_err(|e| {
+        // Build the IK solver from the scene's RobotModel (pattern recovered
+        // from the deleted scara.rs: `RobotRegistry::create_default` →
+        // `ForwardKinematics` → `DampedLeastSquaresSolver`).
+        let chain = RobotRegistry::create_default(robot_model);
+        let fk = ForwardKinematics::new(chain.clone());
+        let ik_solver = DampedLeastSquaresSolver::new(fk, *chain.end_effector(), 1000, 1e-4, 0.1);
+
+        // Frame registry for the frame names the semantic layer emits.
+        let mut registry = FrameRegistry::new();
+        registry.create("world");
+
+        let dof = robot_model.metadata().dof;
+        let resolver = MotionResolver::new(&ik_solver, &registry, &initial_joints, dof).map_err(
+            |e| {
+                (
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    Json(serde_json::json!({"error": format!("{e}"), "code": "planning_error"})),
+                )
+            },
+        )?;
+        let resolution = resolver.resolve(&mp).map_err(|e| {
             (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 Json(serde_json::json!({"error": format!("{e}"), "code": "planning_error"})),
             )
         })?;
 
-        let wps = extract_waypoints(&ep);
-        let wps_json: Vec<serde_json::Value> = wps
+        let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
+        let current_state = RobotState::new(initial_joints.clone());
+        let seg_ctx = SegmentPlanningContext {
+            robot: &chain,
+            current_state: &current_state,
+            ik_solver: &ik_solver,
+            tcp: None,
+        };
+        let compiled = compiler.compile(&resolution.planning, &seg_ctx).map_err(|e| {
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(serde_json::json!({"error": format!("{e}"), "code": "planning_error"})),
+            )
+        })?;
+
+        let wps_json: Vec<serde_json::Value> = compiled
+            .merged_trajectory
+            .waypoints()
             .iter()
             .map(|p| serde_json::json!({"time_secs": p.timestamp(), "joints": p.joints()}))
             .collect();
-        let traj = Trajectory::new(wps);
-        let compiled = CompiledPlan::new(traj, vec![]);
 
         (
-            ep.metadata.total_duration.as_secs_f64(),
-            ep.metadata.segment_count,
+            compiled.duration,
+            compiled.segments.len(),
             wps_json,
+            resolution.runtime.events.len(),
             compiled,
         )
     };
-    // provider, ctx, mp, ep, planner, pctx, task, wps — todos dropped
+    // provider, ctx, mp, resolver, ik_solver, chain, registry, task — todos dropped
 
     // ── Asíncrono: schedulea en runtime ──
     state
@@ -168,36 +220,6 @@ pub async fn run_semantic(
         "segment_count": segment_count,
         "duration_secs": duration_secs,
         "waypoints": waypoints_json,
+        "event_count": event_count,
     })))
-}
-
-fn extract_waypoints(plan: &ExecutionPlan) -> Vec<TrajectoryPoint> {
-    let mut pts = Vec::new();
-    let mut t = 0.0_f64;
-    for seg in &plan.segments {
-        match seg {
-            ExecutionSegment::JointTrajectory { samples } => {
-                for s in samples {
-                    pts.push(TrajectoryPoint::new(
-                        s.joints.clone(),
-                        t + s.time.as_secs_f64(),
-                    ));
-                }
-                if let Some(last) = samples.last() {
-                    t += last.time.as_secs_f64();
-                }
-            }
-            ExecutionSegment::CartesianTrajectory { resolved, .. } => {
-                for (i, j) in resolved.iter().enumerate() {
-                    pts.push(TrajectoryPoint::new(j.clone(), t + i as f64 * 0.01));
-                }
-                t += resolved.len() as f64 * 0.01;
-            }
-            ExecutionSegment::Pause { duration } => {
-                t += duration.as_secs_f64();
-            }
-            ExecutionSegment::Output { .. } => {}
-        }
-    }
-    pts
 }

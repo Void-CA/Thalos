@@ -172,6 +172,25 @@ impl SceneService {
         Ok(Self::build_snapshot(&runtime, None))
     }
 
+    /// The active robot model of the scene.
+    ///
+    /// The semantic planning path injects this model into the
+    /// `MotionResolver` boundary (invariant I1 — single robot per
+    /// compilation, taken from scene state).
+    pub async fn robot_model(&self) -> RobotModel {
+        let runtime = self.runtime.read().await;
+        runtime.active_robot.model
+    }
+
+    /// The current joint configuration of the scene's active robot.
+    ///
+    /// Used as the resolver's `initial_state` so planning starts from the
+    /// scene's real configuration, never a hardcoded zero vector (I3).
+    pub async fn initial_joints(&self) -> Vec<f64> {
+        let runtime = self.runtime.read().await;
+        runtime.active_robot.joints.clone()
+    }
+
     /// Execute a command (IK motion, FK set joints, etc.).
     pub async fn execute(&self, cmd: Command) -> Result<RuntimeSnapshot, RuntimeError> {
         let is_robot_change = matches!(cmd, Command::LoadRobot(_) | Command::LoadUrdfRobot { .. });
