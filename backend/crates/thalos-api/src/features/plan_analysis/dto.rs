@@ -11,6 +11,7 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
+use thalos_core::analysis::region::SemanticProblem;
 use thalos_planning::{
     advisor::Recommendation,
     analysis::{AnalysisSeverity, WaypointAnalysis},
@@ -196,6 +197,38 @@ pub struct ProblemRegionDto {
     pub explanation: ExplanationDto,
     pub confidence: Option<f64>,
     pub recommended_strategies: Vec<String>,
+    /// Operación semántica que originó la región (PR 3). Presente solo cuando
+    /// el plan fue compilado desde el IR de operaciones y la región se mapea a
+    /// un segmento con provenance; `None` en el camino legacy (segments).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub semantic: Option<SemanticProblemDto>,
+}
+
+/// Contexto de operación de una región problemática (PR 3).
+///
+/// Puente entre los rangos de waypoint de bajo nivel y la intención de la
+/// operación que los originó, para consumo del frontend.
+#[derive(Debug, Serialize)]
+pub struct SemanticProblemDto {
+    /// ID de la operación que originó la región (legible en JSON).
+    pub operation_id: Option<String>,
+    /// Rol de compilación dentro de la operación (approach, execution, …).
+    pub role: Option<String>,
+    /// Tipo de problema (heredado de la región origen).
+    pub kind: String,
+    /// Severidad del problema (heredada de la región origen).
+    pub severity: String,
+}
+
+impl From<&SemanticProblem> for SemanticProblemDto {
+    fn from(problem: &SemanticProblem) -> Self {
+        Self {
+            operation_id: problem.operation_id.as_ref().map(|id| id.to_string()),
+            role: problem.role.as_ref().map(|r| format!("{:?}", r).to_lowercase()),
+            kind: problem.kind.name().to_string(),
+            severity: format!("{:?}", problem.severity).to_lowercase(),
+        }
+    }
 }
 
 /// Optimization response DTOs.
@@ -317,5 +350,48 @@ impl From<Recommendation> for RecommendationDto {
             impact: r.impact.to_string(),
             waypoint: r.waypoint,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use thalos_core::{
+        analysis::region::{RegionKind, RegionSeverity, SemanticProblem},
+        operation::{MotionRole, OperationId},
+    };
+
+    #[test]
+    fn semantic_problem_dto_serializes_with_operation_context() {
+        let problem = SemanticProblem {
+            operation_id: Some(OperationId("42".to_string())),
+            role: Some(MotionRole::Execution),
+            kind: RegionKind::Singularity,
+            severity: RegionSeverity::Critical,
+            waypoint_range: 5..10,
+        };
+
+        let value = serde_json::to_value(SemanticProblemDto::from(&problem)).unwrap();
+        assert_eq!(value["operation_id"], "42");
+        assert_eq!(value["role"], "execution");
+        assert_eq!(value["kind"], "singularity");
+        assert_eq!(value["severity"], "critical");
+    }
+
+    #[test]
+    fn semantic_problem_dto_without_context_serializes_none_fields() {
+        let problem = SemanticProblem {
+            operation_id: None,
+            role: None,
+            kind: RegionKind::Velocity,
+            severity: RegionSeverity::Info,
+            waypoint_range: 0..3,
+        };
+
+        let value = serde_json::to_value(SemanticProblemDto::from(&problem)).unwrap();
+        assert!(value["operation_id"].is_null());
+        assert!(value["role"].is_null());
+        assert_eq!(value["kind"], "velocity");
+        assert_eq!(value["severity"], "info");
     }
 }
