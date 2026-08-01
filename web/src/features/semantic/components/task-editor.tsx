@@ -32,8 +32,7 @@ export function TaskEditor() {
     setLoading(true); setError(null)
     try {
       // 1. Compile semantic task → backend returns waypoints + schedules into runtime
-      const data = await executeSemantic({ task: toTaskDocument(makeOps()) })
-      const result = data as any
+      const result = await executeSemantic({ task: toTaskDocument(makeOps()) })
       if (result.status !== 'ok') { setError('Execution failed'); return }
 
       // 2. Start execution — ExecutionStore handles tick loop + applyRuntimeDelta

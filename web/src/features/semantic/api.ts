@@ -1,5 +1,6 @@
 import axios from 'axios'
 import type { CompileRequest, CompileResponse } from './types'
+import type { ExecuteSemanticResponse } from '@/shared/contracts'
 
 const client = axios.create({ baseURL: '/api/v1' })
 
@@ -16,7 +17,7 @@ export class CompileError extends Error {
 }
 
 /** POST /api/v1/semantic/execute — compile + plan, returns plan metadata */
-export async function executeSemantic(req: CompileRequest): Promise<{ segment_count: number; duration_secs: number }> {
+export async function executeSemantic(req: CompileRequest): Promise<ExecuteSemanticResponse> {
   const { data } = await client.post('/semantic/execute', req)
   return data
 }
