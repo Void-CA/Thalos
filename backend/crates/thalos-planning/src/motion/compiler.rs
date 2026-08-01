@@ -792,6 +792,118 @@ mod tests {
         assert!(seg.role.is_none(), "legacy compile() must leave role None");
     }
 
+    // ── 2.7 Provenance survival through optimization ─────────
+
+    #[test]
+    fn provenance_survives_through_optimization() {
+        use thalos_core::{
+            analysis::region::{
+                project_semantic_problem, ProblemRegion, RegionId, RegionKind, RegionSeverity,
+            },
+            evaluation::{
+                CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics, PlanMetrics,
+            },
+            operation::MotionRole,
+        };
+        use thalos_optimization::{
+            TrajectoryOperator,
+            domain::context::OptimizationContext,
+            operators::Retime,
+            pipeline::OptimizationPipeline,
+            PipelineConfig,
+        };
+
+        let h = TestHarness::new();
+        let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
+
+        let ops = vec![
+            make_pick(1, OperationConstraints::default()),
+            CoreOperation::Transit {
+                id: OperationId("2".to_string()),
+                target_pose: sample_pose(),
+                constraints: OperationConstraints::default(),
+            },
+        ];
+        let opc = compiler
+            .compile_with_operations(&ops, &h.ctx())
+            .expect("compile_with_operations failed");
+
+        // Retime preserves the waypoint count, so provenance ranges stay
+        // valid after optimization. Its temporal post-pass runs with the
+        // compiled constraint query.
+        let retime = Retime::new(3.0, 10.0);
+        let operators: [&dyn TrajectoryOperator; 1] = [&retime];
+
+        let robot = RobotRegistry::create_default(RobotModel::Planar2R);
+        let traj = &opc.plan.merged_trajectory;
+        let full_region = ProblemRegion::new(
+            RegionId(0),
+            RegionKind::Velocity,
+            RegionSeverity::Warning,
+            0..traj.len(),
+        );
+
+        use std::f64::consts::PI as STD_PI;
+        use thalos_optimization::domain::context::JointLimits;
+        let opt_ctx = OptimizationContext {
+            joint_limits: JointLimits {
+                lower: vec![-STD_PI, -STD_PI],
+                upper: vec![STD_PI, STD_PI],
+                velocity: None,
+                acceleration: None,
+            },
+            ..OptimizationContext::default()
+        };
+        let metrics = PlanMetrics::new(
+            0.0,
+            0,
+            ManipulabilityMetrics::new(0.0, 0.0, 0, 0),
+            JointSafetyMetrics::new(1.0, 0.0, 0),
+            CollisionMetrics::new(1.0, 0, 0),
+            0.0,
+            0.0,
+        );
+
+        let pipeline = OptimizationPipeline::new(PipelineConfig::default());
+        let result = pipeline
+            .optimize(
+                &operators,
+                &robot,
+                traj,
+                &[full_region],
+                &metrics,
+                &opt_ctx,
+                Some(&opc.constraint_query as &dyn ConstraintQuery),
+            )
+            .expect("pipeline optimize failed");
+
+        // Retime preserves the waypoint count.
+        assert_eq!(result.trajectory.len(), traj.len());
+
+        // Provenance still resolves semantic context against the OPTIMIZED
+        // trajectory (projection uses waypoint ranges, not trajectory data).
+        let pick_region = ProblemRegion::new(
+            RegionId(1),
+            RegionKind::Singularity,
+            RegionSeverity::Critical,
+            0..2,
+        );
+        let sp = project_semantic_problem(&pick_region, &opc.provenance);
+        assert_eq!(sp.operation_id, Some(OperationId("1".to_string())));
+        assert_eq!(sp.role, Some(MotionRole::Approach));
+
+        let transit_start = opc.plan.segments[5].waypoint_range.start;
+        let transit_region = ProblemRegion::new(
+            RegionId(2),
+            RegionKind::Velocity,
+            RegionSeverity::Warning,
+            transit_start..transit_start + 1,
+        );
+        let sp2 = project_semantic_problem(&transit_region, &opc.provenance);
+        assert_eq!(sp2.operation_id, Some(OperationId("2".to_string())));
+        assert_eq!(sp2.role, Some(MotionRole::Transit));
+    }
+
     #[test]
     fn constraint_query_from_compiler_affects_optimization_operator() {
         use thalos_core::analysis::region::{ProblemRegion, RegionId, RegionKind, RegionSeverity};
