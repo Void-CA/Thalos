@@ -20,10 +20,7 @@ pub use commands::dispatch::Command;
 pub use error::{ControllerError, RuntimeError};
 pub use execution_analysis::{ExecutionAnalyzer, ExecutionThresholds};
 pub use execution_boundary::{
-    ExecutionAdapter, ExecutionCommand, ExecutionError, ExecutionManifest,
-    ExecutionManifestBuilder, ExecutionReport, ExecutionSegmentBoundary, ExecutionStatus,
-    ManifestError, ManifestInstruction, ManifestMetadata, ManifestSegment, TimedWaypoint,
-    assemble_trace,
+    ExecutionManifest, ManifestInstruction, ManifestMetadata, ManifestSegment, TimedWaypoint,
 };
 pub use motion_trace::{MotionSample, MotionTrace};
 pub use plan::{ActiveMotionPlan, ExecutionSession, MotionType, PlanState, SessionStatus};

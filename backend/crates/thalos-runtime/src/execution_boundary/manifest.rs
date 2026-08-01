@@ -6,8 +6,8 @@
 //!
 //! # Ownership
 //!
-//! These types live in `execution_boundary` alongside the adapter so that
-//! all plan-to-hardware translation shares the same boundary module.
+//! These types live in `execution_boundary` so that all plan-to-hardware
+//! translation shares the same boundary module.
 
 /// Type of motion for a segment of an execution manifest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,10 +32,11 @@ pub struct TimedWaypoint {
     pub dt_us: u32,
 }
 
-/// A segment of an execution manifest, mapping back to an `ExecutionPlan` segment.
+/// A segment of an execution manifest, mapping back to a motion segment of
+/// the plan that produced it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ManifestSegment {
-    /// Index of this segment in the original `ExecutionPlan`.
+    /// Index of this segment in the original plan's segment list.
     pub index: usize,
     /// Type of motion for this segment.
     pub instruction: ManifestInstruction,
