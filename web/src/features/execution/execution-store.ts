@@ -154,7 +154,7 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>((set)
     stopLoop()
     set({ ...INITIAL, status: 'loading' })
     try {
-      await executionClient.load(plan)
+      await executionClient.load(plan.segments)
       set({ status: 'ready' })
     } catch (err) {
       set({ status: 'failed', error: (err as Error).message })

@@ -4,13 +4,14 @@ import type { CompileRequest, CompileResponse } from './types'
 const client = axios.create({ baseURL: '/api/v1' })
 
 export class CompileError extends Error {
-  constructor(
-    message: string,
-    public readonly code?: string,
-    public readonly status?: number,
-  ) {
+  readonly code?: string
+  readonly status?: number
+
+  constructor(message: string, code?: string, status?: number) {
     super(message)
     this.name = 'CompileError'
+    this.code = code
+    this.status = status
   }
 }
 
