@@ -135,7 +135,7 @@ impl TrajectoryOperator for Retime {
         trajectory: &Trajectory,
         region: &ProblemRegion,
         ctx: &OptimizationContext,
-        _constraints: Option<&dyn ConstraintQuery>,
+        constraints: Option<&dyn ConstraintQuery>,
     ) -> Result<Trajectory, OptimizationError> {
         let range = &region.waypoint_range;
         let all_wps = trajectory.waypoints();
@@ -168,6 +168,13 @@ impl TrajectoryOperator for Retime {
 
         // Stretch each segment independently, forward-propagating timestamps
         for i in 0..region_wps.len() - 1 {
+            // Constraint-aware guard: preserve the ORIGINAL timestamp of
+            // waypoints whose timing is locked, and stretch around them.
+            if !constraints.map_or(true, |c| c.can_modify_timing(range.start + i + 1)) {
+                new_timestamps[i + 1] = original_timestamps[i + 1];
+                continue;
+            }
+
             let dq: Vec<f64> = region_wps[i + 1]
                 .joints()
                 .iter()
@@ -581,6 +588,115 @@ mod unit_tests {
             "expected dt=2.0 with default_velocity=1.0, dq=2.0, got {}",
             new_dt
         );
+    }
+
+    // ── 13. ConstraintQuery timing guard (2.4) ────────────
+
+    use thalos_core::operation::PrecisionLevel;
+
+    /// Mock query: only `can_modify_timing` is overridden; every other
+    /// guard returns `true`.
+    struct TimingMock {
+        allowed: Vec<bool>,
+    }
+
+    impl ConstraintQuery for TimingMock {
+        fn can_relax_orientation(&self, _i: usize, _a: f64) -> bool {
+            true
+        }
+        fn can_modify_position(&self, _i: usize) -> bool {
+            true
+        }
+        fn max_position_error(&self, _i: usize) -> Option<f64> {
+            None
+        }
+        fn max_velocity(&self, _i: usize) -> Option<f64> {
+            None
+        }
+        fn required_precision(&self, _i: usize) -> PrecisionLevel {
+            PrecisionLevel::None
+        }
+        fn can_modify_timing(&self, i: usize) -> bool {
+            self.allowed.get(i).copied().unwrap_or(true)
+        }
+    }
+
+    #[test]
+    fn constrained_waypoint_timing_preserved() {
+        let op = Retime::new(3.0, 10.0);
+        let robot = test_robot();
+        // dq = 1.0 per joint, dt = 0.5 → would stretch to dt=1.0 with v_max=1.0
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![1.0, 1.0], 0.5),
+            TrajectoryPoint::new(vec![2.0, 2.0], 1.0),
+        ]);
+        let region = three_wp_velocity_region(); // 0..3
+        let ctx = ctx_with_velocity(vec![1.0, 1.0]);
+
+        // Waypoint 1 (absolute index 1) cannot have its timing modified.
+        let mock = TimingMock {
+            allowed: vec![true, false, true],
+        };
+
+        let result = op
+            .apply(&robot, &traj, &region, &ctx, Some(&mock))
+            .unwrap();
+
+        let t0 = result.waypoints()[0].timestamp();
+        let t1 = result.waypoints()[1].timestamp();
+        let t2 = result.waypoints()[2].timestamp();
+
+        // wp0 is never modified (first waypoint preserved by invariant).
+        assert!((t0 - 0.0).abs() < f64::EPSILON, "wp0 timestamp, got {t0}");
+        // wp1 keeps its ORIGINAL timestamp despite the velocity violation.
+        assert!(
+            (t1 - 0.5).abs() < f64::EPSILON,
+            "constrained wp1 timestamp must be preserved, got {t1}"
+        );
+        // wp2 is retimed around the constrained waypoint: dt(wp1→wp2)=1.0.
+        assert!(
+            (t2 - 1.5).abs() < f64::EPSILON,
+            "wp2 must be retimed around constrained wp1, got {t2}"
+        );
+    }
+
+    #[test]
+    fn unconstrained_waypoints_retimed_with_guard_allowed() {
+        let op = Retime::new(3.0, 10.0);
+        let robot = test_robot();
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![1.0, 1.0], 0.5),
+            TrajectoryPoint::new(vec![2.0, 2.0], 1.0),
+        ]);
+        let region = three_wp_velocity_region();
+        let ctx = ctx_with_velocity(vec![1.0, 1.0]);
+
+        // All waypoints free → identical to the no-constraint behavior.
+        let mock = TimingMock {
+            allowed: vec![true, true, true],
+        };
+        let with_query = op
+            .apply(&robot, &traj, &region, &ctx, Some(&mock))
+            .unwrap();
+        let without_query = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
+
+        for (a, b) in with_query
+            .waypoints()
+            .iter()
+            .zip(without_query.waypoints().iter())
+        {
+            assert!(
+                (a.timestamp() - b.timestamp()).abs() < f64::EPSILON,
+                "all-free guard must match None behavior"
+            );
+        }
+        // Sanity: all waypoints were actually stretched (both paths).
+        let t1 = with_query.waypoints()[1].timestamp();
+        let t2 = with_query.waypoints()[2].timestamp();
+        assert!((t1 - 1.0).abs() < f64::EPSILON, "wp1 stretched, got {t1}");
+        assert!((t2 - 2.0).abs() < f64::EPSILON, "wp2 stretched, got {t2}");
     }
 }
 
