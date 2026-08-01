@@ -18,8 +18,10 @@
 //! | `manifest` | `ExecutionManifest`, `ManifestMetadata`, `ManifestSegment`, `ManifestInstruction`, `TimedWaypoint` | PR 1 |
 //! | `sample` | `ExecutionSample` | PR 1 |
 //! | `trace_assembler` | `assemble_trace()` free function | PR 1 |
+//! | `manifest_builder` | `ExecutionManifestBuilder` — pure `ExecutionPlan → ExecutionManifest` builder + firmware-parity validator | PR 2 |
 
 pub mod manifest;
+pub mod manifest_builder;
 pub mod sample;
 pub mod trace_assembler;
 
