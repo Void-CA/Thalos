@@ -1,5 +1,6 @@
 import { GripVertical, Trash2 } from 'lucide-react'
 import type { SemanticOp } from '../types'
+import { DurationDto } from '@/shared/contracts'
 import { useSceneStore } from '../scene-store'
 
 interface OperationRowProps {
@@ -119,8 +120,8 @@ export function OperationRow({
           <input
             type="number"
             placeholder="Seconds"
-            value={op.duration_secs ?? ''}
-            onChange={(e) => update({ duration_secs: parseFloat(e.target.value) || 0 })}
+            value={op.duration ? op.duration.secs + op.duration.nanos / 1e9 : ''}
+            onChange={(e) => update({ duration: DurationDto.fromSeconds(parseFloat(e.target.value) || 0) })}
             min={0}
             step={0.1}
             className="px-2 py-1.5 text-xs rounded-md border border-border bg-background

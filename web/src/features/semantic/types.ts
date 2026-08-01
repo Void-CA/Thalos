@@ -1,3 +1,5 @@
+import type { DurationDto, CompileMetadata, ExecutionProgram } from '@/shared/contracts'
+
 /** A single semantic operation as sent to the API */
 export interface SemanticOp {
   type: 'pick' | 'place' | 'move_to' | 'wait' | 'home'
@@ -5,7 +7,8 @@ export interface SemanticOp {
   object?: string
   destination?: string
   tool?: string
-  duration_secs?: number
+  /** Wait duration — wire format `{secs, nanos}` (DurationDto), never a float */
+  duration?: DurationDto
 }
 
 /** Pose definition for a resource */
@@ -56,11 +59,8 @@ export interface CompileRequest {
 export interface CompileResponse {
   status: string
   validation: { errors: string[]; warnings: string[] }
-  metadata: { instruction_count: number; planning_time_ms: number }
-  motion_program: {
-    instructions: unknown[]
-    metadata: { schema_version: number; source_project: string }
-  }
+  metadata: CompileMetadata
+  motion_program: ExecutionProgram
 }
 
 

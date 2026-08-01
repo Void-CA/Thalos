@@ -51,7 +51,7 @@ export function TaskEditor() {
     op => (op.type === 'pick' && !op.object) ||
           (op.type === 'place' && (!op.object || !op.destination)) ||
           (op.type === 'move_to' && !op.destination) ||
-          (op.type === 'wait' && (!op.duration_secs || op.duration_secs <= 0)),
+          (op.type === 'wait' && (!op.duration || (op.duration.secs === 0 && op.duration.nanos === 0))),
   )
   const canCompile = operations.length > 0 && !loading && !hasMissingFields
 
