@@ -338,6 +338,7 @@ pub async fn handle_optimize(State(state): State<Arc<AppState>>) -> ApiResult<Op
             &analysis_report.problem_regions,
             &plan_metrics,
             &ctx,
+            None,
         )
         .map_err(|e| ApiError::Internal {
             message: format!("Optimization pipeline failed: {}", e),

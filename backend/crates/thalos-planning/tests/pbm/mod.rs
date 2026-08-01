@@ -174,7 +174,7 @@ pub fn run_scenario(scenario: &dyn BenchmarkScenario) -> PipelineReport {
     // ── 6. Run optimization pipeline ──────────────────────
     let pipeline = OptimizationPipeline::new(PipelineConfig::default());
     let result = pipeline
-        .optimize(&operators, &chain, &traj, &regions, &metrics_before, &ctx)
+        .optimize(&operators, &chain, &traj, &regions, &metrics_before, &ctx, None)
         .expect("pipeline optimization failed");
 
     // ── 7. Analyze AFTER ──────────────────────────────────
