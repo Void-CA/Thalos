@@ -170,7 +170,7 @@ impl TrajectoryOperator for Retime {
         for i in 0..region_wps.len() - 1 {
             // Constraint-aware guard: preserve the ORIGINAL timestamp of
             // waypoints whose timing is locked, and stretch around them.
-            if !constraints.map_or(true, |c| c.can_modify_timing(range.start + i + 1)) {
+            if !constraints.is_none_or(|c| c.can_modify_timing(range.start + i + 1)) {
                 new_timestamps[i + 1] = original_timestamps[i + 1];
                 continue;
             }

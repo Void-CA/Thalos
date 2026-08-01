@@ -237,7 +237,7 @@ impl TrajectoryOperator for AdaptiveSampling {
             for i in 0..wps.len().saturating_sub(1) {
                 // Constraint-aware guard: only subdivide segments whose
                 // endpoint waypoints both allow neighbor modification.
-                if !constraints.map_or(true, |c| {
+                if !constraints.is_none_or(|c| {
                     c.can_modify_neighbors(orig_idx[i]) && c.can_modify_neighbors(orig_idx[i + 1])
                 }) {
                     continue;

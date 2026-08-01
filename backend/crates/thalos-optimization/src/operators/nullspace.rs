@@ -196,7 +196,7 @@ impl TrajectoryOperator for NullSpaceOptimization {
 
             // Constraint-aware guard: skip waypoints whose joint values
             // are locked (counted as skipped, left unmodified).
-            if !constraints.map_or(true, |c| c.can_modify_joints(range.start + local_i)) {
+            if !constraints.is_none_or(|c| c.can_modify_joints(range.start + local_i)) {
                 continue;
             }
 
