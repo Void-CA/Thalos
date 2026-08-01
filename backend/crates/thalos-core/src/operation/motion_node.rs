@@ -46,6 +46,7 @@ mod tests {
 
     fn sample_segment() -> MotionSegment {
         MotionSegment::MoveJ {
+            origin: OperationId("test".to_string()),
             target: vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
             max_velocity: None,
             max_acceleration: None,

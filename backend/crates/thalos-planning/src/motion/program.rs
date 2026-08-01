@@ -1,5 +1,6 @@
 use std::ops::Range;
 
+use thalos_core::ids::OperationId;
 use thalos_core::prelude::Trajectory;
 
 use thalos_core::motion::segment::MotionSegment;
@@ -32,6 +33,9 @@ pub type MotionProgram = PlanningProgram;
 /// tracking.
 #[derive(Debug, Clone)]
 pub struct PlannedSegment {
+    /// The IR-0 `OperationId` this segment was derived from, copied from
+    /// `MotionSegment::origin` (invariant I2).
+    pub origin: OperationId,
     /// The original source command — preserves intent and planning parameters.
     pub source: MotionSegment,
     /// The planned trajectory for this segment (time-parameterized joint path).

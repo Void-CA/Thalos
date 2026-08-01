@@ -63,6 +63,7 @@ impl IntentionOperator for SwitchMoveStrategy<'_> {
     ) -> Result<Vec<MotionSegment>, TransformationError> {
         // Only works on MoveL segments
         let MotionSegment::MoveL {
+            origin,
             target_pose,
             max_velocity,
             ..
@@ -85,6 +86,7 @@ impl IntentionOperator for SwitchMoveStrategy<'_> {
         }
 
         Ok(vec![MotionSegment::MoveJ {
+            origin: origin.clone(),
             target: result.q,
             max_velocity: *max_velocity,
             max_acceleration: None,
@@ -101,6 +103,7 @@ impl IntentionOperator for SwitchMoveStrategy<'_> {
 
 #[cfg(test)]
 mod tests {
+    use thalos_core::ids::OperationId;
     use thalos_core::kinematics::inverse::{IKGoal, IKResult, IKSolver, IKStatus};
     use thalos_core::motion::segment::MotionSegment;
     use thalos_core::prelude::{FrameId, Pose, Transform3D};
@@ -150,6 +153,7 @@ mod tests {
         let strategy = SwitchMoveStrategy::new(&solver, &q0);
 
         let segment = MotionSegment::MoveL {
+            origin: OperationId("test".into()),
             frame: FrameId::World,
             target_pose: Pose::new(FrameId::World, FrameId::World, Transform3D::identity()),
             max_velocity: Some(100.0),
@@ -171,6 +175,7 @@ mod tests {
                 target,
                 max_velocity,
                 max_acceleration,
+                ..
             } => {
                 assert_eq!(target, &q0, "target should match q0 from IKSolver");
                 assert_eq!(*max_velocity, Some(100.0), "should preserve max_velocity");
@@ -195,6 +200,7 @@ mod tests {
         let strategy = SwitchMoveStrategy::new(&solver, &q0);
 
         let segment = MotionSegment::MoveJ {
+            origin: OperationId("test".into()),
             target: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             max_velocity: None,
             max_acceleration: None,
@@ -220,6 +226,7 @@ mod tests {
         let strategy = SwitchMoveStrategy::new(&solver, &q0);
 
         let segment = MotionSegment::MoveL {
+            origin: OperationId("test".into()),
             frame: FrameId::World,
             target_pose: Pose::new(FrameId::World, FrameId::World, Transform3D::identity()),
             max_velocity: None,
@@ -252,6 +259,7 @@ mod tests {
         let strategy = SwitchMoveStrategy::new(&solver, &q0);
 
         let segment = MotionSegment::MoveL {
+            origin: OperationId("test".into()),
             frame: FrameId::World,
             target_pose: Pose::new(FrameId::World, FrameId::World, Transform3D::identity()),
             max_velocity: Some(50.0),
@@ -273,6 +281,7 @@ mod tests {
         let strategy = SwitchMoveStrategy::new(&solver, &q0);
 
         let segment = MotionSegment::MoveJ {
+            origin: OperationId("test".into()),
             target: vec![0.0; 6],
             max_velocity: None,
             max_acceleration: None,
@@ -303,6 +312,7 @@ mod tests {
         let strategy = SwitchMoveStrategy::new(&solver, &q0);
 
         let segment = MotionSegment::MoveL {
+            origin: OperationId("test".into()),
             frame: FrameId::World,
             target_pose: Pose::new(FrameId::World, FrameId::World, Transform3D::identity()),
             max_velocity: None,

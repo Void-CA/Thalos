@@ -64,6 +64,7 @@ impl MotionPlannerDispatcher for DefaultPlannerDispatcher {
                 target,
                 max_velocity,
                 max_acceleration,
+                ..
             } => {
                 let resolver = GoalResolver::new(self.goal_resolver_config.clone());
                 let goal: ValidatedGoal<JointGoal> = resolver.resolve_joint(ctx, target)?;
@@ -80,6 +81,7 @@ impl MotionPlannerDispatcher for DefaultPlannerDispatcher {
                 frame: _,
                 target_pose,
                 max_velocity,
+                ..
             } => {
                 let resolver = GoalResolver::new(self.goal_resolver_config.clone());
                 let goal: ValidatedGoal<ResolvedPoseGoal> =
@@ -181,6 +183,7 @@ impl PlanCompiler {
             }
 
             segments.push(PlannedSegment {
+                origin: segment.origin().clone(),
                 source: segment.clone(),
                 trajectory,
                 waypoint_range: Range {
@@ -261,6 +264,7 @@ pub struct OperationCompilation {
 mod tests {
     use super::*;
     use thalos_core::{
+        ids::OperationId,
         kinematics::inverse::{IKResult, IKSolver},
         models::{RobotModel, RobotRegistry},
         robot::state::RobotState,
@@ -322,6 +326,7 @@ mod tests {
         let h = TestHarness::new();
         let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
         let program = PlanningProgram::new(vec![MotionSegment::MoveJ {
+            origin: OperationId("test".into()),
             target: vec![1.0, 1.0],
             max_velocity: None,
             max_acceleration: None,
@@ -362,11 +367,13 @@ mod tests {
         let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
         let program = PlanningProgram::new(vec![
             MotionSegment::MoveJ {
+                origin: OperationId("test".into()),
                 target: vec![1.0, 0.5],
                 max_velocity: None,
                 max_acceleration: None,
             },
             MotionSegment::MoveJ {
+                origin: OperationId("test".into()),
                 target: vec![0.0, 1.0],
                 max_velocity: None,
                 max_acceleration: None,
@@ -407,11 +414,13 @@ mod tests {
         let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
         let program = PlanningProgram::new(vec![
             MotionSegment::MoveJ {
+                origin: OperationId("test".into()),
                 target: vec![1.0, 0.5],
                 max_velocity: None,
                 max_acceleration: None,
             },
             MotionSegment::MoveJ {
+                origin: OperationId("test".into()),
                 target: vec![0.0, 1.0],
                 max_velocity: None,
                 max_acceleration: None,
@@ -451,11 +460,13 @@ mod tests {
         let compiler = PlanCompiler::new(Box::new(FailingDispatcher));
         let program = PlanningProgram::new(vec![
             MotionSegment::MoveJ {
+                origin: OperationId("test".into()),
                 target: vec![0.5, 0.5],
                 max_velocity: None,
                 max_acceleration: None,
             },
             MotionSegment::MoveJ {
+                origin: OperationId("test".into()),
                 target: vec![1.0, 0.0],
                 max_velocity: None,
                 max_acceleration: None,
@@ -499,11 +510,13 @@ mod tests {
         let compiler = PlanCompiler::new(Box::new(FailingSecondDispatcher));
         let program = PlanningProgram::new(vec![
             MotionSegment::MoveJ {
+                origin: OperationId("test".into()),
                 target: vec![0.5, 0.5],
                 max_velocity: None,
                 max_acceleration: None,
             },
             MotionSegment::MoveJ {
+                origin: OperationId("test".into()),
                 target: vec![1.0, 0.0],
                 max_velocity: None,
                 max_acceleration: None,
@@ -522,11 +535,10 @@ mod tests {
     }
 
     // ── 3.6 Integration: Operation → expand → compile → constraint query ──
-
     use thalos_core::{
         operation::{
-            ConstraintQuery, Operation as CoreOperation, OperationConstraints, OperationId,
-            OperationType, PrecisionLevel,
+            ConstraintQuery, Operation as CoreOperation, OperationConstraints, OperationType,
+            PrecisionLevel,
         },
         spatial::frame::FrameId,
         spatial::pose::Pose,
@@ -694,5 +706,78 @@ mod tests {
                 (w - o).abs()
             );
         }
+    }
+
+    // ── 3.7 Origin preservation (IR-2 → IR-3, invariant I2) ───────────────
+
+    #[test]
+    fn compile_preserves_origin_from_movej_segment() {
+        let h = TestHarness::new();
+        let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
+        let program = PlanningProgram::new(vec![MotionSegment::MoveJ {
+            origin: OperationId("op-j".to_string()),
+            target: vec![0.5, 0.3],
+            max_velocity: None,
+            max_acceleration: None,
+        }]);
+
+        let plan = compiler
+            .compile(&program, &h.ctx())
+            .expect("compile failed");
+        assert_eq!(plan.segments.len(), 1);
+        assert_eq!(
+            plan.segments[0].origin,
+            OperationId("op-j".to_string()),
+            "PlannedSegment must copy origin from its source MotionSegment"
+        );
+    }
+
+    #[test]
+    fn compile_preserves_origin_from_movel_segment() {
+        let h = TestHarness::new();
+        let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
+        let program = PlanningProgram::new(vec![MotionSegment::MoveL {
+            origin: OperationId("op-l".to_string()),
+            frame: FrameId::World,
+            target_pose: sample_pose(),
+            max_velocity: None,
+        }]);
+
+        let plan = compiler
+            .compile(&program, &h.ctx())
+            .expect("compile failed");
+        assert_eq!(plan.segments.len(), 1);
+        assert_eq!(
+            plan.segments[0].origin,
+            OperationId("op-l".to_string()),
+            "PlannedSegment must copy origin from its source MotionSegment"
+        );
+    }
+
+    #[test]
+    fn compile_preserves_distinct_origins_across_segments() {
+        let h = TestHarness::new();
+        let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
+        let program = PlanningProgram::new(vec![
+            MotionSegment::MoveJ {
+                origin: OperationId("pick-1".to_string()),
+                target: vec![0.5, 0.3],
+                max_velocity: None,
+                max_acceleration: None,
+            },
+            MotionSegment::MoveJ {
+                origin: OperationId("place-2".to_string()),
+                target: vec![1.0, 1.0],
+                max_velocity: None,
+                max_acceleration: None,
+            },
+        ]);
+
+        let plan = compiler
+            .compile(&program, &h.ctx())
+            .expect("compile failed");
+        assert_eq!(plan.segments.len(), 2);
+        assert_eq!(plan.segments[0].origin, OperationId("pick-1".to_string()));
+        assert_eq!(plan.segments[1].origin, OperationId("place-2".to_string()));
     }
 }

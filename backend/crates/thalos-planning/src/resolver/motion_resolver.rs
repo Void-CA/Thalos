@@ -5,7 +5,7 @@ use thalos_core::{
         program::{ExecutionInstruction, ExecutionProgram},
         runtime::{RuntimeAction, RuntimeEvent, RuntimeProgram},
     },
-    kinematics::inverse::{IKGoal, IKStatus, IKSolver},
+    kinematics::inverse::{IKGoal, IKSolver, IKStatus},
     motion::segment::MotionSegment,
     motion::target::{MotionPose, MotionTarget},
     spatial::{
@@ -28,6 +28,9 @@ use crate::motion::program::PlanningProgram;
 ///
 /// - **Order preservation**: Instructions are processed sequentially; output
 ///   order matches input order.
+/// - **Origin preservation (I2)**: Each segment/event copies the `origin`
+///   `OperationId` from its source instruction; no transformation drops or
+///   renames an identity.
 /// - **Determinism**: No I/O, no side effects, no global state.
 /// - **Atomic fail**: On any error, no partial `MotionResolution` is returned.
 pub struct MotionResolver<'a> {
@@ -66,17 +69,18 @@ impl<'a> MotionResolver<'a> {
     /// Processes instructions in order. Each instruction maps to exactly one
     /// output element in either the planning or runtime stream (invariant:
     /// completeness). On failure, no partial result is returned.
-    pub fn resolve(
-        &self,
-        program: &ExecutionProgram,
-    ) -> Result<MotionResolution, ResolutionError> {
+    pub fn resolve(&self, program: &ExecutionProgram) -> Result<MotionResolution, ResolutionError> {
         let mut planning_segments: Vec<MotionSegment> = Vec::new();
         let mut runtime_events: Vec<RuntimeEvent> = Vec::new();
         let mut current_joints = self.initial_state.to_vec();
 
         for (index, instruction) in program.instructions.iter().enumerate() {
             match instruction {
-                ExecutionInstruction::MoveJ { target, profile, .. } => {
+                ExecutionInstruction::MoveJ {
+                    origin,
+                    target,
+                    profile,
+                } => {
                     let pose = motion_target_to_pose(target, self.frame_registry)?;
                     let ik_result = self
                         .ik_solver
@@ -85,6 +89,7 @@ impl<'a> MotionResolver<'a> {
                     match ik_result.status {
                         IKStatus::Converged => {
                             planning_segments.push(MotionSegment::MoveJ {
+                                origin: origin.clone(),
                                 target: ik_result.q.clone(),
                                 max_velocity: Some(profile.max_velocity),
                                 max_acceleration: Some(profile.max_acceleration),
@@ -101,11 +106,14 @@ impl<'a> MotionResolver<'a> {
                 }
 
                 ExecutionInstruction::MoveL {
-                    target, profile, ..
+                    origin,
+                    target,
+                    profile,
                 } => {
                     let frame = resolve_frame(target, self.frame_registry)?;
                     let pose = motion_target_to_pose(target, self.frame_registry)?;
                     planning_segments.push(MotionSegment::MoveL {
+                        origin: origin.clone(),
                         frame,
                         target_pose: pose,
                         max_velocity: Some(profile.max_velocity),
@@ -272,7 +280,9 @@ mod tests {
             metadata: sample_metadata(),
         };
 
-        let result = resolver.resolve(&program).expect("empty program should resolve");
+        let result = resolver
+            .resolve(&program)
+            .expect("empty program should resolve");
         assert!(result.planning.segments.is_empty());
         assert!(result.runtime.events.is_empty());
     }
@@ -301,11 +311,19 @@ mod tests {
             metadata: sample_metadata(),
         };
 
-        let result = resolver.resolve(&program).expect("motion-only should resolve");
+        let result = resolver
+            .resolve(&program)
+            .expect("motion-only should resolve");
         assert_eq!(result.planning.segments.len(), 2);
         assert!(result.runtime.events.is_empty());
-        assert!(matches!(result.planning.segments[0], MotionSegment::MoveJ { .. }));
-        assert!(matches!(result.planning.segments[1], MotionSegment::MoveL { .. }));
+        assert!(matches!(
+            result.planning.segments[0],
+            MotionSegment::MoveJ { .. }
+        ));
+        assert!(matches!(
+            result.planning.segments[1],
+            MotionSegment::MoveL { .. }
+        ));
     }
 
     // ── Test: runtime-only (Delay, SetOutput) ─────────────────────────────
@@ -334,11 +352,19 @@ mod tests {
             metadata: sample_metadata(),
         };
 
-        let result = resolver.resolve(&program).expect("runtime-only should resolve");
+        let result = resolver
+            .resolve(&program)
+            .expect("runtime-only should resolve");
         assert!(result.planning.segments.is_empty());
         assert_eq!(result.runtime.events.len(), 2);
-        assert!(matches!(result.runtime.events[0].action, RuntimeAction::Delay(_)));
-        assert!(matches!(result.runtime.events[1].action, RuntimeAction::SetOutput { .. }));
+        assert!(matches!(
+            result.runtime.events[0].action,
+            RuntimeAction::Delay(_)
+        ));
+        assert!(matches!(
+            result.runtime.events[1].action,
+            RuntimeAction::SetOutput { .. }
+        ));
     }
 
     // ── Test: mixed program ───────────────────────────────────────────────
@@ -450,8 +476,14 @@ mod tests {
         let result = resolver.resolve(&program).expect("should resolve");
         assert_eq!(result.planning.segments.len(), 2);
         // First instruction is MoveL, second is MoveJ
-        assert!(matches!(result.planning.segments[0], MotionSegment::MoveL { .. }));
-        assert!(matches!(result.planning.segments[1], MotionSegment::MoveJ { .. }));
+        assert!(matches!(
+            result.planning.segments[0],
+            MotionSegment::MoveL { .. }
+        ));
+        assert!(matches!(
+            result.planning.segments[1],
+            MotionSegment::MoveJ { .. }
+        ));
     }
 
     // ── Test: atomic IK failure ───────────────────────────────────────────
@@ -463,20 +495,20 @@ mod tests {
         let resolver = make_resolver(&ik, &registry, &[0.0, 0.0]);
 
         let program = ExecutionProgram {
-            instructions: vec![
-                ExecutionInstruction::MoveJ {
-                    origin: OperationId("1".to_string()),
-                    target: MotionTarget::Pose(sample_pose()),
-                    profile: default_profile(),
-                },
-            ],
+            instructions: vec![ExecutionInstruction::MoveJ {
+                origin: OperationId("1".to_string()),
+                target: MotionTarget::Pose(sample_pose()),
+                profile: default_profile(),
+            }],
             metadata: sample_metadata(),
         };
 
         let result = resolver.resolve(&program);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ResolutionError::IkFailed { instruction_index, .. } => {
+            ResolutionError::IkFailed {
+                instruction_index, ..
+            } => {
                 assert_eq!(instruction_index, 0);
             }
             other => panic!("expected IkFailed, got {other:?}"),
@@ -526,10 +558,115 @@ mod tests {
         let result = resolver.resolve(&program);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ResolutionError::IkFailed { instruction_index, .. } => {
+            ResolutionError::IkFailed {
+                instruction_index, ..
+            } => {
                 assert_eq!(instruction_index, 1);
             }
             other => panic!("expected IkFailed at index 1, got {other:?}"),
         }
+    }
+
+    // ── Test: OperationId origin propagation (IR-1 → IR-2, invariant I2) ──
+
+    #[test]
+    fn movej_segment_carries_instruction_origin() {
+        let ik = NoopIKSolver;
+        let registry = make_registry();
+        let resolver = make_resolver(&ik, &registry, &[0.0, 0.0]);
+
+        let program = ExecutionProgram {
+            instructions: vec![ExecutionInstruction::MoveJ {
+                origin: OperationId("op-j".to_string()),
+                target: MotionTarget::Pose(sample_pose()),
+                profile: default_profile(),
+            }],
+            metadata: sample_metadata(),
+        };
+
+        let result = resolver.resolve(&program).expect("should resolve");
+        assert_eq!(result.planning.segments.len(), 1);
+        let seg = &result.planning.segments[0];
+        assert_eq!(
+            seg.origin(),
+            &OperationId("op-j".to_string()),
+            "MoveJ segment must carry the instruction origin"
+        );
+    }
+
+    #[test]
+    fn movel_segment_carries_instruction_origin() {
+        let ik = NoopIKSolver;
+        let registry = make_registry();
+        let resolver = make_resolver(&ik, &registry, &[0.0, 0.0]);
+
+        let program = ExecutionProgram {
+            instructions: vec![ExecutionInstruction::MoveL {
+                origin: OperationId("op-l".to_string()),
+                target: MotionTarget::Pose(sample_pose()),
+                profile: default_profile(),
+            }],
+            metadata: sample_metadata(),
+        };
+
+        let result = resolver.resolve(&program).expect("should resolve");
+        assert_eq!(result.planning.segments.len(), 1);
+        let seg = &result.planning.segments[0];
+        assert_eq!(
+            seg.origin(),
+            &OperationId("op-l".to_string()),
+            "MoveL segment must carry the instruction origin"
+        );
+    }
+
+    #[test]
+    fn distinct_origins_survive_mixed_program() {
+        let ik = NoopIKSolver;
+        let registry = make_registry();
+        let resolver = make_resolver(&ik, &registry, &[0.0, 0.0]);
+
+        let program = ExecutionProgram {
+            instructions: vec![
+                ExecutionInstruction::MoveJ {
+                    origin: OperationId("pick-1".to_string()),
+                    target: MotionTarget::Pose(sample_pose()),
+                    profile: default_profile(),
+                },
+                ExecutionInstruction::SetOutput {
+                    origin: OperationId("pick-1".to_string()),
+                    channel: OutputChannel {
+                        name: "gripper".into(),
+                        channel_type: "digital".into(),
+                    },
+                    value: OutputValue::Bool(true),
+                },
+                ExecutionInstruction::MoveL {
+                    origin: OperationId("place-2".to_string()),
+                    target: MotionTarget::Pose(sample_pose()),
+                    profile: default_profile(),
+                },
+            ],
+            metadata: sample_metadata(),
+        };
+
+        let result = resolver.resolve(&program).expect("should resolve");
+
+        // Planning segments keep their own instruction origins.
+        assert_eq!(result.planning.segments.len(), 2);
+        assert_eq!(
+            result.planning.segments[0].origin(),
+            &OperationId("pick-1".to_string())
+        );
+        assert_eq!(
+            result.planning.segments[1].origin(),
+            &OperationId("place-2".to_string())
+        );
+
+        // Runtime events keep their own instruction origins.
+        assert_eq!(result.runtime.events.len(), 1);
+        assert_eq!(
+            result.runtime.events[0].operation_id,
+            OperationId("pick-1".to_string())
+        );
     }
 }

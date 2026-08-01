@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 use thalos_core::motion::segment::MotionSegment;
 use thalos_core::{
+    ids::OperationId,
     kinematics::inverse::IKGoal,
     models::{RobotModel, RobotModelError},
     spatial::{frame::FrameId, pose::Pose},
@@ -142,6 +143,11 @@ impl MotionPlanRequest {
 }
 
 impl MotionSegmentDto {
+    /// Segments authored directly on the wire (no semantic IR-0 operation).
+    /// They carry a fixed placeholder origin so invariant I2 stays intact
+    /// for every `MotionSegment` in the system.
+    const MANUAL_ORIGIN: &'static str = "manual";
+
     fn into_segment(self, default_ee: FrameId) -> MotionSegment {
         match self {
             MotionSegmentDto::MoveJ {
@@ -149,6 +155,7 @@ impl MotionSegmentDto {
                 max_velocity,
                 max_acceleration,
             } => MotionSegment::MoveJ {
+                origin: OperationId(Self::MANUAL_ORIGIN.into()),
                 target,
                 max_velocity,
                 max_acceleration,
@@ -161,6 +168,7 @@ impl MotionSegmentDto {
                 let frame = frame_id.map_or(default_ee, FrameId::Id);
                 let pose = target.to_pose(frame);
                 MotionSegment::MoveL {
+                    origin: OperationId(Self::MANUAL_ORIGIN.into()),
                     frame,
                     target_pose: pose,
                     max_velocity,

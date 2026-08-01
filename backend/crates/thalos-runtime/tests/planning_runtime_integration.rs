@@ -29,6 +29,7 @@
 //! - Hardware real (usa `FakeTransport`).
 
 use thalos_core::{
+    ids::OperationId,
     kinematics::inverse::{IKGoal, IKResult, IKSolver},
     models::{RobotModel, RobotRegistry},
     motion::segment::MotionSegment,
@@ -40,11 +41,8 @@ use thalos_planning::motion::{
     program::MotionProgram,
 };
 use thalos_runtime::{
-    backends::{
-        esp32::Esp32Backend,
-        transport::FakeTransport,
-    },
     RobotController,
+    backends::{esp32::Esp32Backend, transport::FakeTransport},
 };
 
 // ---------------------------------------------------------------------------
@@ -93,6 +91,7 @@ fn compile_movej_program(
     let segments: Vec<MotionSegment> = targets
         .into_iter()
         .map(|target| MotionSegment::MoveJ {
+            origin: OperationId("test".to_string()),
             target,
             max_velocity: None,
             max_acceleration: None,
@@ -144,16 +143,18 @@ async fn plan_compile_then_esp32_execute() {
     let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
 
     // ── 2. Compile ──────────────────────────────────────────────────────
-    let plan = compile_movej_program(
-        &compiler,
-        vec![vec![0.5, -0.3], vec![1.0, 0.8]],
-        &ctx,
-    );
+    let plan = compile_movej_program(&compiler, vec![vec![0.5, -0.3], vec![1.0, 0.8]], &ctx);
 
     // Verify compilation integrity
-    assert!(plan.waypoint_count > 0, "compiled plan should produce waypoints");
+    assert!(
+        plan.waypoint_count > 0,
+        "compiled plan should produce waypoints"
+    );
     assert_eq!(plan.segments.len(), 2, "should preserve segment count");
-    assert!(plan.duration > 0.0, "compiled plan should have finite duration");
+    assert!(
+        plan.duration > 0.0,
+        "compiled plan should have finite duration"
+    );
 
     let waypoints: Vec<Vec<f64>> = plan
         .merged_trajectory
@@ -163,7 +164,11 @@ async fn plan_compile_then_esp32_execute() {
         .collect();
 
     assert_eq!(waypoints.len(), plan.waypoint_count);
-    assert_eq!(waypoints[0], vec![0.0, 0.0], "first waypoint must match start state (zero)");
+    assert_eq!(
+        waypoints[0],
+        vec![0.0, 0.0],
+        "first waypoint must match start state (zero)"
+    );
     assert_eq!(
         waypoints[waypoints.len() - 1],
         vec![1.0, 0.8],
@@ -178,7 +183,10 @@ async fn plan_compile_then_esp32_execute() {
         .connect()
         .await
         .expect("Esp32Backend should connect via FakeTransport");
-    assert!(backend.is_connected(), "should be connected after handshake");
+    assert!(
+        backend.is_connected(),
+        "should be connected after handshake"
+    );
 
     backend
         .execute(waypoints.clone(), plan.duration)
@@ -193,25 +201,40 @@ async fn plan_compile_then_esp32_execute() {
     let sent = backend.test_sent_commands();
     assert!(!sent.is_empty(), "commands should have been sent");
 
-    let as_text: Vec<String> = sent.iter().map(|b| String::from_utf8_lossy(b).to_string()).collect();
+    let as_text: Vec<String> = sent
+        .iter()
+        .map(|b| String::from_utf8_lossy(b).to_string())
+        .collect();
 
     // HELLO is always first (from connect)
     let hello_line: &String = &as_text[0];
-    assert_eq!(hello_line.trim(), "HELLO 1", "first command should be HELLO");
+    assert_eq!(
+        hello_line.trim(),
+        "HELLO 1",
+        "first command should be HELLO"
+    );
 
     // MANIFEST was sent with correct DOF and sample count
-    let manifest_line: Option<&String> = as_text.iter().find(|l: &&String| l.starts_with("MANIFEST"));
+    let manifest_line: Option<&String> =
+        as_text.iter().find(|l: &&String| l.starts_with("MANIFEST"));
     assert!(manifest_line.is_some(), "MANIFEST should have been sent");
     if let Some(ml) = manifest_line {
         let trimmed: &str = ml.as_str().trim();
         let parts: Vec<&str> = trimmed.split_whitespace().collect();
         assert_eq!(parts[0], "MANIFEST");
         assert_eq!(parts[1], "2", "DOF should be 2 for Planar2R");
-        assert_eq!(parts[2], waypoints.len().to_string(), "sample count should match");
+        assert_eq!(
+            parts[2],
+            waypoints.len().to_string(),
+            "sample count should match"
+        );
     }
 
     // All waypoints were sent as SAMPLE lines
-    let sample_count: usize = as_text.iter().filter(|l: &&String| l.starts_with("SAMPLE")).count();
+    let sample_count: usize = as_text
+        .iter()
+        .filter(|l: &&String| l.starts_with("SAMPLE"))
+        .count();
     assert_eq!(
         sample_count,
         waypoints.len(),
@@ -225,10 +248,7 @@ async fn plan_compile_then_esp32_execute() {
     assert!(has_execute, "EXECUTE should have been sent");
 
     // ── 5. Cleanup ─────────────────────────────────────────────────────
-    backend
-        .stop()
-        .await
-        .expect("stop should succeed");
+    backend.stop().await.expect("stop should succeed");
 }
 
 /// Compilación de programa vacío → Esp32Backend recibe error de validación.
@@ -248,10 +268,7 @@ async fn empty_plan_compile_ok_but_execute_fails() {
     // Execute with no waypoints — Esp32Backend rejection
     let transport = transport_with_responses(0);
     let mut backend = Esp32Backend::new(Box::new(transport));
-    backend
-        .connect()
-        .await
-        .expect("connect should succeed");
+    backend.connect().await.expect("connect should succeed");
 
     let result: Result<(), _> = backend.execute(vec![], 0.0).await;
     assert!(
@@ -274,7 +291,10 @@ async fn multi_segment_compile_preserves_continuity() {
     );
 
     assert_eq!(plan.segments.len(), 3);
-    assert!(plan.waypoint_count >= 3, "should have at least one waypoint per segment");
+    assert!(
+        plan.waypoint_count >= 3,
+        "should have at least one waypoint per segment"
+    );
 
     let waypoints = plan.merged_trajectory.waypoints();
 
@@ -331,10 +351,7 @@ async fn dof_consistency_across_pipeline() {
     // (es un método estático, lo llamamos indirectamente via execute)
     let transport = transport_with_responses(waypoints.len());
     let mut backend = Esp32Backend::new(Box::new(transport));
-    backend
-        .connect()
-        .await
-        .expect("connect should succeed");
+    backend.connect().await.expect("connect should succeed");
 
     backend
         .execute(waypoints, plan.duration)

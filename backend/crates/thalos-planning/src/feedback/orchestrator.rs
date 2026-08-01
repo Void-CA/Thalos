@@ -292,6 +292,7 @@ mod tests {
 
     use std::sync::Mutex;
 
+    use thalos_core::ids::OperationId;
     use thalos_core::motion::segment::MotionSegment;
     use thalos_core::prelude::{FrameId, Pose, Transform3D};
 
@@ -372,6 +373,7 @@ mod tests {
 
     fn make_move_l() -> MotionSegment {
         MotionSegment::MoveL {
+            origin: OperationId("test".into()),
             frame: FrameId::World,
             target_pose: Pose::new(FrameId::World, FrameId::World, Transform3D::identity()),
             max_velocity: None,

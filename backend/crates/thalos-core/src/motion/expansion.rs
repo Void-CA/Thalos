@@ -6,9 +6,13 @@ use crate::spatial::frame::FrameId;
 use crate::spatial::pose::Pose;
 
 /// Helper: creates a minimal MoveL node with placeholder geometry.
+///
+/// The segment carries the operation's `OperationId` as its `origin`
+/// (invariant I2 — origin survives expansion).
 fn move_to_pose(target_pose: Pose, id: OperationId, role: MotionRole) -> MotionNode {
     MotionNode {
         segment: MotionSegment::MoveL {
+            origin: id.clone(),
             frame: FrameId::World,
             target_pose,
             max_velocity: None,
@@ -155,6 +159,22 @@ mod tests {
                 "Pick node {} should carry operation_id {}",
                 i,
                 id
+            );
+        }
+    }
+
+    #[test]
+    fn pick_nodes_segments_carry_origin() {
+        // Invariant I2: the segment inside each expanded node carries the
+        // operation's OperationId as its origin.
+        let op = make_pick(42, sample_pose());
+        let nodes = expand_operation(&op);
+        for (i, node) in nodes.iter().enumerate() {
+            assert_eq!(
+                node.segment.origin(),
+                &OperationId("42".to_string()),
+                "Pick node {} segment should carry origin 42",
+                i
             );
         }
     }

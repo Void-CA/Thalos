@@ -104,6 +104,7 @@ impl std::error::Error for TransformationError {}
 
 #[cfg(test)]
 mod tests {
+    use thalos_core::ids::OperationId;
     use thalos_core::motion::segment::MotionSegment;
     use thalos_core::prelude::{FrameId, Pose, Transform3D};
 
@@ -153,6 +154,7 @@ mod tests {
     fn test_applies_to_move_l_with_high_tracking_error() {
         let op = TestOperator;
         let segment = MotionSegment::MoveL {
+            origin: OperationId("test".into()),
             frame: FrameId::World,
             target_pose: Pose::new(FrameId::World, FrameId::World, Transform3D::identity()),
             max_velocity: None,
@@ -170,6 +172,7 @@ mod tests {
     fn test_applies_to_move_j_returns_false() {
         let op = TestOperator;
         let segment = MotionSegment::MoveJ {
+            origin: OperationId("test".into()),
             target: vec![0.0; 6],
             max_velocity: None,
             max_acceleration: None,
@@ -189,6 +192,7 @@ mod tests {
     fn test_apply_unsupported_segment_returns_error() {
         let op = TestOperator;
         let segment = MotionSegment::MoveJ {
+            origin: OperationId("test".into()),
             target: vec![0.0; 6],
             max_velocity: None,
             max_acceleration: None,
@@ -214,6 +218,7 @@ mod tests {
     fn test_apply_supported_segment_returns_ok() {
         let op = TestOperator;
         let segment = MotionSegment::MoveL {
+            origin: OperationId("test".into()),
             frame: FrameId::World,
             target_pose: Pose::new(FrameId::World, FrameId::World, Transform3D::identity()),
             max_velocity: None,
