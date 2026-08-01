@@ -5,6 +5,8 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 
+use thalos_core::execution::runtime::RuntimeProgram;
+
 use crate::error::ControllerError;
 use crate::state::robot_state::RobotState;
 
@@ -101,6 +103,20 @@ pub trait RobotController: Send + Sync {
     /// Real hardware backends return `Err(UnsupportedCapability)` — time is real.
     async fn advance(&self, _dt: f64) -> Result<(), ControllerError> {
         Err(ControllerError::UnsupportedCapability)
+    }
+
+    /// Load the `RuntimeProgram` (absolute `at_time` events) that `advance`
+    /// should dispatch during execution.
+    ///
+    /// Called at schedule time, before `execute`. Simulation backends store
+    /// the program and fire `SetOutput`/`Delay` at their absolute times
+    /// (tick-driven dispatch). Hardware backends may ignore it — the default
+    /// is a no-op.
+    async fn load_runtime_program(
+        &mut self,
+        _program: RuntimeProgram,
+    ) -> Result<(), ControllerError> {
+        Ok(())
     }
 
     /// Seek to a position (fraction 0.0–1.0) in the current trajectory.
