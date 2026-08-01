@@ -1,5 +1,7 @@
 # Plan de Implementación — Thalos Intelligent Planning
 
+> **Obsoleto**: pipeline de planificación unificado — ver `openspec/changes/unified-ir-pipeline/` para el modelo canónico actual (IR-0 → IR-3).
+
 ## Visión
 
 **Objetivo final**: Convertir Thalos en una plataforma de planificación robótica basada en conocimiento, donde el usuario expresa objetivos y restricciones, y el sistema analiza, planifica, optimiza y explica automáticamente las soluciones.

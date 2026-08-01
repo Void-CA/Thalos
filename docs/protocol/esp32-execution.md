@@ -64,11 +64,12 @@ ESP → HOST: OK
 ```
 
 Defines a segment within the manifest. Segments map back to the
-original `ExecutionPlan` segments for later analysis.
+compiled plan's motion segments (`CompiledPlan.segments`, IR-3) for
+later analysis.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `index` | u32 | Segment index (ascending, matches `ExecutionPlan`) |
+| `index` | u32 | Segment index (ascending, matches `CompiledPlan`) |
 | `instruction` | string | `movej` (joint move) or `movel` (linear move) |
 | `sample_start` | u32 | Index of first sample in the flat `samples` array |
 | `sample_count` | u32 | Number of samples in this segment |

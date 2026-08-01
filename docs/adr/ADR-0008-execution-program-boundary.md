@@ -6,14 +6,15 @@ Accepted
 
 ## Context
 
-Thalos has two types both named `MotionProgram`:
+Thalos has two program types that, during early development, accidentally
+shared the same name — which suggested they should be unified:
 
-- `thalos_core::motion::MotionProgram` — output of `SemanticLowering`, contains `MoveJ`, `MoveL`, `Delay`, `SetOutput`
-- `thalos_planning::motion::program::MotionProgram` — input of `PlanCompiler`, contains only `MotionSegment` (MoveJ/MoveL)
+- `thalos_core::execution::ExecutionProgram` — output of `SemanticLowering`, contains `MoveJ`, `MoveL`, `Delay`, `SetOutput`
+- `thalos_planning::motion::PlanningProgram` — input of `PlanCompiler`, contains only `MotionSegment` (MoveJ/MoveL)
 
-They were created independently during early development and their identical name suggested they should be unified. A closer analysis reveals they respond to fundamentally different questions:
+A closer analysis reveals they respond to fundamentally different questions:
 
-| | core::MotionProgram | planning::MotionProgram |
+| | ExecutionProgram (core) | PlanningProgram (planning) |
 |---|---|---|
 | **Question** | "What actions must execute?" | "What trajectories must be planned?" |
 | **MoveJ target** | Cartesian pose (MotionPose) | Joint-space (Vec<f64>) |
@@ -26,9 +27,9 @@ The two types sit on opposite sides of a domain boundary: **execution intent** v
 
 ### 1. Keep two types, rename them
 
-The `thalos_core` type moves to `thalos_core::execution::ExecutionProgram` — it represents a complete program of actions to execute, including motion and runtime events.
+The `thalos_core` type is `thalos_core::execution::ExecutionProgram` — it represents a complete program of actions to execute, including motion and runtime events.
 
-The `thalos_planning` type stays as `thalos_planning::motion::PlanningProgram` (renamed from `MotionProgram`) — it represents only the movements that require geometric planning.
+The `thalos_planning` type is `thalos_planning::motion::PlanningProgram` — it represents only the movements that require geometric planning.
 
 ### 2. Introduce MotionResolver
 
@@ -101,5 +102,5 @@ It interleaves them in the order defined by the original `ExecutionProgram`. The
 - **Deciders:** @thalos-core
 - **Date:** 2026-07-29
 - **Alternatives considered:**
-  1. *Unify into one MotionProgram* — rejected because it forces the planner to understand Delay/SetOutput, which are not planifiable
-  2. *Adapter with no renaming* — rejected because the name "MotionProgram" for both types creates persistent cognitive ambiguity
+  1. *Unify into a single program type* — rejected because it forces the planner to understand Delay/SetOutput, which are not planifiable
+  2. *Adapter with no renaming* — rejected because the colliding name for both types creates persistent cognitive ambiguity
