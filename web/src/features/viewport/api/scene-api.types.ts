@@ -85,6 +85,10 @@ export interface ToolFrameDto {
   offset?: [number, number, number] | null
 }
 
+/** Execution info carried by the FULL-STATE response (`RuntimeStateResponse`,
+ *  e.g. from start/pause/scene endpoints). NOTE: the backend full-state mapper
+ *  sets `progress` to `current_time` — it is elapsed SECONDS, NOT a fraction
+ *  (backend quirk, see `dto/mappers/runtime.rs`). `elapsed_secs` mirrors it. */
 export interface ExecutionInfoDto {
   status: string
   progress: number
@@ -155,6 +159,10 @@ export interface RuntimeDelta {
   execution: ExecutionDto
 }
 
+/** Execution info carried by each TICK delta (`RuntimeDelta` from
+ *  `POST /scene/motion/tick`). Here `progress` IS a fraction 0..1 of the plan
+ *  duration (`exe.progress(plan_duration)`, clamped); `elapsed_secs` is
+ *  absolute seconds since plan start. */
 export interface ExecutionDto {
   status: ExecutionStatusDto
   progress: number
@@ -162,6 +170,31 @@ export interface ExecutionDto {
 }
 
 export type ExecutionStatusDto = 'Created' | 'Active' | 'Paused' | 'Completed' | 'Cancelled' | 'Failed' | 'Idle'
+
+// ── Motion plan request ──
+
+/** Wire shape of `backend::thalos_api::features::scene::dto::requests::MotionSegmentDto`
+ *  (serde internally-tagged `type`). Mirrors the motion program request segment. */
+export type MotionSegmentDto =
+  | {
+      type: 'movej'
+      target: number[]
+      max_velocity?: number | null
+      max_acceleration?: number | null
+    }
+  | {
+      type: 'movel'
+      frame_id?: number | null
+      target: PoseTargetDto
+      max_velocity?: number | null
+    }
+
+/** Wire shape of `MotionPlanRequest` — segments plus the optional semantic
+ *  `operations` path (backend routes through `compile_with_operations` when
+ *  present). The frontend sends `segments` only. */
+export interface MotionPlanRequest {
+  segments: MotionSegmentDto[]
+}
 
 // ── IK response ──
 

@@ -20,7 +20,10 @@ export interface IkResult {
   finalError: number
 }
 
-/** Estado de ejecución. */
+/** Execution state. `progress` is a fraction 0..1 of the plan when fed from
+ *  the execution-loop ticks (`RuntimeDelta`); `elapsedSecs` is seconds since
+ *  plan start. (Full-state backend previews map `progress` = elapsed seconds —
+ *  see `ExecutionInfoDto`.) */
 export interface ExecutionInfo {
   status: string
   progress: number

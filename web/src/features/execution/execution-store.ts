@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { executionClient } from './execution-client'
 import { useSceneStore } from '@/features/viewport/store'
 import type { ObjectTransform, ExecutionInfo } from '@/features/viewport/types'
+import type { MotionSegmentDto } from '@/features/viewport/api/scene-api.types'
 
 // ── Status ────────────────────────────────────────────────────────────────
 // Misma semántica que backend ExecutionStatusDto, pero en camelCase
@@ -24,7 +25,10 @@ export interface ExecutionState {
   status: ExecutionStatus
   joints: number[]
   transforms: ObjectTransform[]
+  /** Execution progress as a fraction 0..1 of the loaded plan, sourced from
+   *  the tick delta (`RuntimeDelta.execution.progress`). */
   progress: number
+  /** Elapsed seconds since plan start (tick delta `elapsed_secs`). */
   elapsedSecs: number
   error: string | null
 }
@@ -33,7 +37,7 @@ interface ExecutionActions {
   /** Cargar un plan en el runtime sin ejecutarlo. El parámetro es el mismo
    *  `{ segments }` que usa POST /scene/motion/plan. El store no conoce el
    *  origen del plan — puede venir de PlanningPanel, TaskExecutor, Replay… */
-  loadExecution: (plan: { segments: { type: string; target: unknown }[] }) => Promise<void>
+  loadExecution: (plan: { segments: MotionSegmentDto[] }) => Promise<void>
 
   /** Iniciar (o reanudar) la ejecución del plan cargado. */
   start: () => Promise<void>

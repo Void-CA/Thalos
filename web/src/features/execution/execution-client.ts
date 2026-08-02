@@ -1,5 +1,5 @@
 import { sceneApi } from '@/features/viewport/api/scene-api'
-import type { RuntimeDelta } from '@/features/viewport/api/scene-api.types'
+import type { MotionSegmentDto, RuntimeDelta } from '@/features/viewport/api/scene-api.types'
 
 /**
  * ExecutionClient — transporte puro.
@@ -12,7 +12,7 @@ import type { RuntimeDelta } from '@/features/viewport/api/scene-api.types'
  */
 export const executionClient = {
   /** Compile + schedule a motion program (load into runtime, don't start). */
-  load: (segments: { type: string; target: unknown }[]) =>
+  load: (segments: MotionSegmentDto[]) =>
     sceneApi.previewPlan({ segments }),
 
   /** Start execution of the scheduled plan. */

@@ -4,6 +4,7 @@ import type {
   SolveIKResponse,
   PoseTargetDto,
   RuntimeDelta,
+  MotionPlanRequest,
 } from './scene-api.types'
 
 export const sceneApi = {
@@ -52,7 +53,7 @@ export const sceneApi = {
     apiClient.post<RuntimeStateResponse>('/scene/execute-ik', { joint_angles: joints }).then(r => r.data),
 
   /** Preview a motion program (compile + visualize, no execution). */
-  previewPlan: (request: { segments: any[] }) =>
+  previewPlan: (request: MotionPlanRequest) =>
     apiClient.post<RuntimeStateResponse>('/scene/motion/plan', request).then(r => r.data),
 
   /** Execution control. */
