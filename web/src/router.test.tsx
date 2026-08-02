@@ -125,6 +125,22 @@ describe('hidden routes render placeholders (no 404)', () => {
   })
 })
 
+describe('in-workspace cross-nav flows through the router (perspective-store purge)', () => {
+  it('navigates from planning to analysis via "Analyze trajectory"', async () => {
+    const { router } = renderRouter(['/planning'])
+    fireEvent.click(screen.getByRole('button', { name: 'Analyze trajectory' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/analysis'))
+    expect(screen.getByText('No plan compiled')).toBeInTheDocument()
+  })
+
+  it('navigates back from analysis to planning via the breadcrumb', async () => {
+    const { router } = renderRouter(['/analysis'])
+    fireEvent.click(screen.getByRole('button', { name: 'Planning' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/planning'))
+    expect(screen.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
+  })
+})
+
 describe('router covers every registered workspace', () => {
   it('maps every registry workspace to a view in VIEW_REGISTRY', () => {
     for (const entry of WORKSPACE_REGISTRY) {
