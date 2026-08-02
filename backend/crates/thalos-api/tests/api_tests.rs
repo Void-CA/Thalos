@@ -2227,9 +2227,12 @@ async fn urdf_load_then_plan_uses_real_chain() {
 
     // MoveJ toward a pose inside the icebot workspace. The chain tip is
     // `tool0` (fixed tcp_joint child) at zero-config (0.225, 0, 0.04); the
-    // target below keeps X/Y at the start (the DLS solver's XY Jacobian is
-    // degenerate across the fixed joint) and moves the prismatic joint, so
-    // IK converges with real 4-joint motion.
+    // target below keeps X/Y at the start and moves the prismatic joint, so
+    // IK converges with real 4-joint motion. Keeping X/Y is deliberate: at
+    // q=0 the arm is FULLY EXTENDED — a classic planar singularity (the
+    // Jacobian X-row is all-zero, rank-2 linear Jacobian) where radial XY
+    // motion is unreachable. This is a physical singularity, not a solver
+    // or fixed-joint degeneracy (see `icebot_xy_ik_converges_from_non_singular_q0`).
     let program = json!({
         "instructions": [{
             "type": "move_j",
@@ -2315,6 +2318,93 @@ async fn urdf_load_then_semantic_execute_uses_real_chain() {
             .all(|wp| wp["joints"].as_array().map(|a| a.len()).unwrap_or(0) == 4),
         "every waypoint must carry 4 joints (real icebot chain), got {:?}",
         wps
+    );
+}
+
+/// Spec: unified-kinematics "XY-Convergence Regression" — a planar robot
+/// must converge on an XY target from a NON-singular initial configuration.
+///
+/// The icebot arm is fully extended at q=0 (tool0 at (0.225, 0, 0.04), the
+/// classic fully-extended planar singularity: the Jacobian X-row is all
+/// zero, so radial XY motion is unreachable). That is a physical
+/// singularity, NOT a solver or fixed-joint bug. Starting from the bent,
+/// non-singular configuration q0 = [π/4, π/4, π/4, π/4] the DLS solver
+/// MUST converge on an XY target inside the workspace.
+#[tokio::test]
+async fn icebot_xy_ik_converges_from_non_singular_q0() {
+    let app = test_app().await;
+    let icebot_urdf = include_str!("../../../../docs/robot/icebot.urdf");
+
+    let (load_status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/robot/from-urdf",
+        Some(json!({"urdf_source": icebot_urdf})),
+    )
+    .await;
+    assert_eq!(load_status, StatusCode::OK, "URDF load must succeed");
+
+    // Non-singular initial configuration: the three revolute joints bend
+    // the arm 3π/4 away from full extension, so radial XY motion is
+    // reachable. (The 4th component seeds the Z-prismatic; the solver
+    // converges to a physically valid solution regardless of the seed.)
+    let (set_status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/joints",
+        Some(json!({"joint_angles": [
+            std::f64::consts::PI / 4.0,
+            std::f64::consts::PI / 4.0,
+            std::f64::consts::PI / 4.0,
+            std::f64::consts::PI / 4.0
+        ]})),
+    )
+    .await;
+    assert_eq!(set_status, StatusCode::OK, "setting q0 must succeed");
+
+    // XY target inside the workspace (radius 0.180 < 0.225 max reach),
+    // Z offset within the prismatic range (q3 = 0.02). Differs from the
+    // q0 tool0 XY (0.088, 0.188) in both components — proving real XY
+    // motion, not a degenerate fixed-joint-only solve.
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/solve-ik-position",
+        Some(json!({"target": [0.15, 0.10, 0.02]})),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "IK must not error from a non-singular q0: {:?}",
+        body
+    );
+    let body = body.expect("IK response body");
+
+    let ik = body["ik_result"].as_object().expect("ik_result object");
+    assert_eq!(
+        ik["status"], "Converged",
+        "DLS must converge on the XY target from non-singular q0: {:?}",
+        ik
+    );
+    let final_error = ik["final_error"].as_f64().expect("final_error number");
+    assert!(
+        final_error < 1e-3,
+        "converged solution must be within tolerance (final_error = {final_error})"
+    );
+
+    // Kinematic validity: a 4-joint solution, all finite.
+    let joints = body["joints"]
+        .as_array()
+        .expect("joints array")
+        .iter()
+        .map(|j| j.as_f64().expect("joint value"))
+        .collect::<Vec<_>>();
+    assert_eq!(joints.len(), 4, "solution must carry 4 joints (real chain)");
+    assert!(
+        joints.iter().all(|j| j.is_finite()),
+        "solution must be finite (kinematically valid), got {:?}",
+        joints
     );
 }
 

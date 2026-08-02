@@ -51,7 +51,7 @@ pub(crate) fn build_visual_scene(snapshot: &thalos_runtime::RuntimeSnapshot) -> 
         builder.with_visual_elements(fk, &elements)
     } else {
         match snapshot.robot {
-            RobotModel::Scara => ScaraVisualBuilder::build(fk, chain),
+            Some(RobotModel::Scara) => ScaraVisualBuilder::build(fk, chain),
             _ => {
                 let builder = SceneBuilder::new(chain);
                 builder.from_fk(fk)

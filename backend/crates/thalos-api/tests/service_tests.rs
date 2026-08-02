@@ -71,6 +71,14 @@ async fn execute_load_robot_planar_3r() {
     assert!(result.is_ok(), "Planar3R is a valid robot model");
 
     let snapshot = result.unwrap();
-    assert_eq!(snapshot.robot, RobotModel::Planar3R);
+    assert_eq!(
+        snapshot.robot,
+        Some(RobotModel::Planar3R),
+        "built-in load must carry Some(model) — catalog membership"
+    );
+    assert!(
+        snapshot.joints_meta.is_empty(),
+        "built-in load must have empty joints_meta (metadata comes from RobotModel)"
+    );
     assert_eq!(snapshot.joints.len(), 3);
 }

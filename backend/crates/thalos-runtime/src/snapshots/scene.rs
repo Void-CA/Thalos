@@ -29,7 +29,10 @@ pub struct JointMeta {
 /// The `from_robot_state` constructor is the new construction path;
 /// direct field construction is still supported for tests.
 pub struct RuntimeSnapshot {
-    pub robot: RobotModel,
+    /// Catalog-membership tag (ADR-003): `Some(X)` = internal catalog robot;
+    /// `None` = URDF-imported robot (identity carried by `robot_name`,
+    /// `robot_source`, `joints_meta`, and `chain`).
+    pub robot: Option<RobotModel>,
     pub robot_source: Option<Robot>,
     pub robot_name: String,
     pub joints_meta: Vec<JointMeta>,
@@ -54,7 +57,7 @@ impl RuntimeSnapshot {
     /// ExecutionSession is derived from RobotState.execution for backward compat.
     pub fn from_robot_state(
         state: &Arc<RobotState>,
-        robot: RobotModel,
+        robot: Option<RobotModel>,
         robot_source: Option<Robot>,
         robot_name: String,
         joints_meta: Vec<JointMeta>,

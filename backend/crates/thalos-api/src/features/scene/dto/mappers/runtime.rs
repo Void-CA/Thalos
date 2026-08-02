@@ -44,10 +44,26 @@ impl RuntimeStateResponse {
         scene: VisualSceneDto,
         active_plan: Option<ActivePlanDto>,
     ) -> Self {
+        // Invariant (spec: "DTO Invariant"): joints_meta.is_empty() ⇔
+        // robot.is_some(). Built-in robots carry Some(model) with empty
+        // joints_meta (metadata comes from the catalog model); URDF robots
+        // carry None with non-empty joints_meta. Caught in debug builds.
+        debug_assert!(
+            snapshot.joints_meta.is_empty() == snapshot.robot.is_some(),
+            "invariant violated: joints_meta.is_empty()={} but robot.is_some()={}",
+            snapshot.joints_meta.is_empty(),
+            snapshot.robot.is_some()
+        );
+
         // When the robot was imported from URDF, the runtime carries joint
         // metadata. Otherwise fall back to the built-in RobotMetadata.
         let robot = if snapshot.joints_meta.is_empty() {
-            snapshot.robot.metadata().into()
+            snapshot
+                .robot
+                .as_ref()
+                .expect("built-in robot must carry a catalog model")
+                .metadata()
+                .into()
         } else {
             RobotMetadataDto {
                 id: "urdf".into(),

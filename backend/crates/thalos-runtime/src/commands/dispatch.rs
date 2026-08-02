@@ -15,13 +15,6 @@ use crate::{
     state::robot::SceneRuntime,
 };
 
-/// Display tag for URDF-imported robots (ADR-003).
-///
-/// Display/catalog only — never consumed for kinematics, DOF, or chain
-/// construction. The real kinematic source is the loaded `SerialChain`
-/// carried by `RuntimeSnapshot.chain`.
-pub const URDF_ROBOT_TAG: RobotModel = RobotModel::Planar3R;
-
 #[derive(Debug, Clone)]
 pub enum Command {
     SetJoints(Vec<f64>),
@@ -61,7 +54,7 @@ impl ExecutableCommand for Command {
             Command::LoadRobot(model) => {
                 let dof = model.metadata().dof;
                 let chain = RobotRegistry::create_default(*model);
-                runtime.active_robot = ActiveRobot::new(*model, chain, vec![0.0; dof]);
+                runtime.active_robot = ActiveRobot::new(Some(*model), chain, vec![0.0; dof]);
                 runtime.robot_name = model.metadata().display_name.to_string();
                 runtime.joints_meta.clear();
                 runtime.active_plan = None;
@@ -75,8 +68,7 @@ impl ExecutableCommand for Command {
                 robot,
             } => {
                 let dof = chain.dof_count();
-                runtime.active_robot =
-                    ActiveRobot::new(URDF_ROBOT_TAG, chain.clone(), vec![0.0; dof]);
+                runtime.active_robot = ActiveRobot::new(None, chain.clone(), vec![0.0; dof]);
                 runtime.robot_name = name.clone();
                 runtime.joints_meta = joints_meta.clone();
                 runtime.robot_source = Some(robot.clone());

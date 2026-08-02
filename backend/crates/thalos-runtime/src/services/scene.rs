@@ -85,7 +85,7 @@ impl SceneService {
     ) -> Self {
         let chain = RobotRegistry::create_default(model);
         let dof = model.metadata().dof;
-        let active_robot = ActiveRobot::new(model, chain, vec![0.0; dof]);
+        let active_robot = ActiveRobot::new(Some(model), chain, vec![0.0; dof]);
         let robot_name = model.metadata().display_name.to_string();
         let runtime = SceneRuntime::new(active_robot, robot_name);
 
@@ -171,15 +171,6 @@ impl SceneService {
     pub async fn snapshot(&self) -> Result<RuntimeSnapshot, RuntimeError> {
         let runtime = self.runtime.read().await;
         Ok(Self::build_snapshot(&runtime, None))
-    }
-
-    /// The current joint configuration of the scene's active robot.
-    ///
-    /// Used as the resolver's `initial_state` so planning starts from the
-    /// scene's real configuration, never a hardcoded zero vector (I3).
-    pub async fn initial_joints(&self) -> Vec<f64> {
-        let runtime = self.runtime.read().await;
-        runtime.active_robot.joints.clone()
     }
 
     /// Execute a command (IK motion, FK set joints, etc.).

@@ -67,7 +67,7 @@ async fn set_joints_updates_state_and_fk() {
         .unwrap();
 
     assert_eq!(snap.joints, joints);
-    assert_eq!(snap.robot, RobotModel::Scara);
+    assert_eq!(snap.robot, Some(RobotModel::Scara));
     // FK must be valid after setting joints
     let _pose = snap
         .fk_result
@@ -94,7 +94,7 @@ async fn load_robot_changes_model_and_resets_joints() {
         .await
         .unwrap();
 
-    assert_eq!(snap.robot, RobotModel::Planar3R);
+    assert_eq!(snap.robot, Some(RobotModel::Planar3R));
     assert_eq!(snap.joints.len(), 3, "Planar3R has 3 DOF");
     // Joints reset to zero
     assert!(snap.joints.iter().all(|&j| j == 0.0));
@@ -113,8 +113,8 @@ async fn load_robot_twice_produces_independent_snapshots() {
         .await
         .unwrap();
 
-    assert_eq!(snap1.robot, RobotModel::Planar2R);
-    assert_eq!(snap2.robot, RobotModel::Scara);
+    assert_eq!(snap1.robot, Some(RobotModel::Planar2R));
+    assert_eq!(snap2.robot, Some(RobotModel::Scara));
     assert_eq!(snap1.joints.len(), 2);
     assert_eq!(snap2.joints.len(), 4);
 }
@@ -808,11 +808,11 @@ async fn select_tool_frame_clears_on_robot_change() {
     );
 }
 
-/// Spec: unified-kinematics "Tag carries no kinematic meaning" + "Snapshot
+/// Spec: unified-kinematics "RobotModel Is Catalog Membership" + "Snapshot
 /// provides chain and joints atomically". A URDF-loaded robot must keep its
 /// real chain in the snapshot: DOF, joints, and joints_meta all derive from
-/// the loaded chain, and the stamped RobotModel is the display-only
-/// `URDF_ROBOT_TAG`.
+/// the loaded chain, and `robot` is `None` (identity carried by
+/// `robot_name`/`robot_source`/`joints_meta`/`chain`).
 #[tokio::test]
 async fn load_urdf_keeps_real_chain_in_snapshot() {
     let (svc, _mgr) = make_service(RobotModel::Scara).await;
@@ -851,15 +851,14 @@ async fn load_urdf_keeps_real_chain_in_snapshot() {
         4,
         "joints must match the loaded chain DOF"
     );
+    assert!(
+        snap.robot.is_none(),
+        "URDF-loaded robot must carry None model (catalog membership), not a fabricated RobotModel"
+    );
     assert_eq!(
         snap.joints_meta.len(),
         4,
         "joints_meta must carry the real actuated metadata"
-    );
-    assert_eq!(
-        snap.robot,
-        crate::commands::dispatch::URDF_ROBOT_TAG,
-        "stamped model is a display tag, never kinematics (ADR-003)"
     );
 }
 
