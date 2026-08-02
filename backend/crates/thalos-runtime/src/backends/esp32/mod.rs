@@ -16,7 +16,11 @@ use crate::error::ControllerError;
 use crate::execution_boundary::manifest::{
     ExecutionManifest, ManifestInstruction, ManifestMetadata, ManifestSegment, TimedWaypoint,
 };
+use crate::execution_boundary::manifest_builder::ExecutionManifestBuilder;
 use crate::state::robot_state::RobotState;
+use thalos_core::execution::plan::{
+    ExecutionInstruction, ExecutionPlan, ExecutionSegment, ExecutionWaypoint,
+};
 
 use protocol::{Esp32Protocol, ProtocolError};
 
@@ -43,48 +47,98 @@ impl Esp32Backend {
         }
     }
 
-    /// Build an `ExecutionManifest` from raw waypoints and total duration.
+    /// Build an [`ExecutionManifest`] from raw waypoints and total duration.
     ///
-    /// This converts the `RobotController::execute()` parameters into a
-    /// format the ESP32 protocol understands. Waypoints are evenly spaced
-    /// across the total duration; the first sample always has `dt_us = 0`.
+    /// # Migration shim (deprecated)
+    ///
+    /// The canonical chain is
+    /// `CompiledPlan → ExecutionPlanBuilder → ExecutionPlan →
+    /// ExecutionManifestBuilder`. This method keeps the legacy
+    /// `RobotController::execute()` contract working without callers opting
+    /// into the pure chain: it constructs the [`ExecutionPlan`] the legacy
+    /// algorithm implied (even spacing, a single MoveJ segment covering every
+    /// sample, first `dt_us = 0`) and delegates to [`ExecutionManifestBuilder`],
+    /// which emits bit-identical output to the old inline algorithm for the
+    /// same input. The one exception is a sub-(N−1)-microsecond duration,
+    /// handled by the degenerate branch in the body (see its comment).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the pure builder rejects the input. After the degenerate
+    /// sub-microsecond branch, the only builder rejection still reachable is
+    /// an empty waypoint slice (`EMPTY_MANIFEST`); the production call site
+    /// (`execute`) validates via `validate_manifest` first, so the panic is
+    /// unreachable there.
+    #[deprecated(note = "use ExecutionManifestBuilder via ExecutionPlanBuilder")]
     fn build_manifest(waypoints: &[Vec<f64>], duration: f64) -> ExecutionManifest {
         let total_samples = waypoints.len();
         let duration_us = (duration * 1_000_000.0) as u64;
-        let dof = waypoints.first().map(|w| w.len()).unwrap_or(0);
-
-        // Evenly space waypoints across the total duration
+        // Legacy even-spacing: integer division, first sample dt = 0.
         let dt_per_sample = if total_samples > 1 {
             duration_us / (total_samples - 1) as u64
         } else {
             0
         };
 
-        let samples: Vec<TimedWaypoint> = waypoints
-            .iter()
-            .enumerate()
-            .map(|(i, joints)| TimedWaypoint {
-                joints: joints.clone(),
-                dt_us: if i == 0 { 0 } else { dt_per_sample as u32 },
-            })
-            .collect();
-
-        let total_dt: u64 = samples.iter().map(|s| s.dt_us as u64).sum();
-
-        ExecutionManifest {
-            metadata: ManifestMetadata {
-                dof_count: dof,
-                total_samples,
-                duration_us: total_dt,
-            },
-            segments: vec![ManifestSegment {
-                index: 0,
-                instruction: ManifestInstruction::MoveJ,
-                sample_start: 0,
-                sample_count: total_samples,
-            }],
-            samples,
+        // Degenerate case: a duration shorter than (N-1) µs truncates the
+        // per-gap delta to zero, so every reconstructed timestamp collapses
+        // to 0.0 and the builder's dedup CANNOT represent the input — it
+        // either returns `Err(DedupConflict)` (equal timestamp, different
+        // joints), panicking the `.expect()` below inside the production
+        // `execute()` path, or silently collapses N distinct commanded
+        // waypoints into one sample when joints are bit-equal. Legacy
+        // behavior was total: an N-sample manifest with all `dt_us = 0`
+        // (`duration_us` = 0) that the firmware validator accepts (timing
+        // diff 0 <= 1000 µs floor). Bypass the builder and reproduce that
+        // output exactly.
+        if total_samples > 1 && dt_per_sample == 0 {
+            return ExecutionManifest {
+                metadata: ManifestMetadata {
+                    dof_count: waypoints.first().map(|w| w.len()).unwrap_or(0),
+                    total_samples,
+                    duration_us: 0,
+                },
+                segments: vec![ManifestSegment {
+                    index: 0,
+                    instruction: ManifestInstruction::MoveJ,
+                    sample_start: 0,
+                    sample_count: total_samples,
+                }],
+                samples: waypoints
+                    .iter()
+                    .map(|joints| TimedWaypoint {
+                        joints: joints.clone(),
+                        dt_us: 0,
+                    })
+                    .collect(),
+            };
         }
+
+        // Absolute timestamps chosen so the builder's `round()` reproduces
+        // `dt_per_sample` exactly, and a declared duration equal to the legacy
+        // SUMMED `duration_us` (sum of dt — NOT `round(duration * 1e6)` when
+        // the integer division truncates).
+        let plan = ExecutionPlan {
+            waypoints: waypoints
+                .iter()
+                .enumerate()
+                .map(|(i, joints)| ExecutionWaypoint {
+                    joints: joints.clone(),
+                    timestamp: i as f64 * dt_per_sample as f64 / 1_000_000.0,
+                })
+                .collect(),
+            segments: vec![ExecutionSegment {
+                index: 0,
+                planned_segment_index: 0,
+                instruction: ExecutionInstruction::MoveJ,
+                waypoint_range: 0..total_samples,
+            }],
+            duration: (total_samples.saturating_sub(1) as u64 * dt_per_sample) as f64 / 1_000_000.0,
+        };
+
+        ExecutionManifestBuilder::build(&plan).expect(
+            "build_manifest inputs are validated by execute(); the pure builder only rejects degenerate input",
+        )
     }
 
     /// Get a mutable reference to the protocol, if connected.
@@ -169,6 +223,9 @@ impl RobotController for Esp32Backend {
         Self::validate_manifest(&waypoints, duration)?;
 
         let protocol = self.protocol_mut()?;
+        // The legacy shim is deprecated; execute() still consumes it until the
+        // RobotController path migrates to the pure chain (separate SDD).
+        #[allow(deprecated)]
         let manifest = Self::build_manifest(&waypoints, duration);
 
         // Upload → READY
@@ -251,8 +308,15 @@ impl Esp32Backend {
 
 #[cfg(test)]
 mod tests {
+    #![allow(deprecated)] // build_manifest is deprecated by design (PR 3)
+
     use super::*;
     use crate::backends::transport::FakeTransport;
+    use crate::execution_boundary::manifest::ManifestInstruction;
+    use crate::execution_boundary::manifest_builder::ExecutionManifestBuilder;
+    use thalos_core::execution::plan::{
+        ExecutionInstruction, ExecutionPlan, ExecutionSegment, ExecutionWaypoint,
+    };
 
     /// Helper: create a connected Esp32Backend with a FakeTransport that
     /// will respond with HELLO 1 OK on the first handshake.
@@ -501,6 +565,102 @@ mod tests {
         assert_eq!(manifest.samples[0].dt_us, 0);
         assert_eq!(manifest.samples[1].dt_us, 1_000_000);
         assert_eq!(manifest.samples[2].dt_us, 1_000_000);
+    }
+
+    /// The deprecated `build_manifest` MUST delegate to the pure chain
+    /// (`ExecutionManifestBuilder`) and reproduce the legacy even-spacing
+    /// output bit-for-bit. A NON-divisible duration (2_000_000 µs / 3 gaps =
+    /// 666_666 µs) pins the legacy integer-division semantics: `duration_us`
+    /// is the SUM of `dt_us` (1_999_998), NOT `round(duration * 1e6)` — a
+    /// naive wrapper that just forwards `duration` would produce 2_000_000.
+    #[test]
+    fn deprecated_build_manifest_delegates_to_builder() {
+        let waypoints = vec![
+            vec![0.0, 0.0],
+            vec![0.5, 0.3],
+            vec![1.0, 0.5],
+            vec![1.5, 0.7],
+        ];
+        let duration = 2.0;
+
+        // Legacy wrapper output.
+        let legacy = Esp32Backend::build_manifest(&waypoints, duration);
+
+        // The pure chain, fed the plan the wrapper constructs (same even
+        // spacing reconstructed from the raw signature).
+        let duration_us = (duration * 1_000_000.0) as u64;
+        let dt_per_sample = duration_us / (waypoints.len() - 1) as u64;
+        let plan = ExecutionPlan {
+            waypoints: waypoints
+                .iter()
+                .enumerate()
+                .map(|(i, joints)| ExecutionWaypoint {
+                    joints: joints.clone(),
+                    timestamp: i as f64 * dt_per_sample as f64 / 1_000_000.0,
+                })
+                .collect(),
+            segments: vec![ExecutionSegment {
+                index: 0,
+                planned_segment_index: 0,
+                instruction: ExecutionInstruction::MoveJ,
+                waypoint_range: 0..waypoints.len(),
+            }],
+            duration: ((waypoints.len() as u64 - 1) * dt_per_sample) as f64 / 1_000_000.0,
+        };
+        let direct = ExecutionManifestBuilder::build(&plan).expect("same input must build");
+
+        // Old and new paths produce IDENTICAL manifests.
+        assert_eq!(legacy, direct);
+
+        // And both preserve the legacy semantics exactly (integer division).
+        assert_eq!(legacy.metadata.dof_count, 2);
+        assert_eq!(legacy.metadata.total_samples, 4);
+        assert_eq!(legacy.metadata.duration_us, 1_999_998);
+        assert_eq!(legacy.segments.len(), 1);
+        assert_eq!(legacy.segments[0].instruction, ManifestInstruction::MoveJ);
+        assert_eq!(legacy.segments[0].sample_start, 0);
+        assert_eq!(legacy.segments[0].sample_count, 4);
+        let dt: Vec<u32> = legacy.samples.iter().map(|s| s.dt_us).collect();
+        assert_eq!(dt, vec![0, 666_666, 666_666, 666_666]);
+        assert_eq!(legacy.samples[3].joints, vec![1.5, 0.7]);
+    }
+
+    /// Regression test for the review-reliability CRITICAL on the deprecated
+    /// shim: a duration shorter than (N-1) µs truncates `dt_per_sample` to
+    /// zero, collapsing every reconstructed timestamp to 0.0. The builder's
+    /// dedup then REJECTS the input (`DedupConflict` — equal timestamp,
+    /// different joints), which would panic the `.expect()` inside the
+    /// production `execute()` path, or silently collapse distinct commanded
+    /// waypoints when joints are bit-equal. The shim MUST instead reproduce
+    /// the legacy total output: N samples, all `dt_us = 0`, `duration_us = 0`,
+    /// one MoveJ segment covering everything — accepted by the firmware
+    /// validator (timing diff 0 <= 1000 µs floor).
+    #[test]
+    fn deprecated_build_manifest_handles_sub_microsecond_duration() {
+        // 3 waypoints over 1.5 µs: trunc(1.5) = 1 µs / 2 gaps = 0 µs per sample.
+        let waypoints = vec![vec![0.0, 0.0], vec![0.5, 0.3], vec![1.0, 0.5]];
+        let duration = 1.5e-6;
+
+        // Must NOT panic (the builder would return Err(DedupConflict) here).
+        let manifest = Esp32Backend::build_manifest(&waypoints, duration);
+
+        assert_eq!(manifest.metadata.dof_count, 2);
+        assert_eq!(manifest.metadata.total_samples, 3);
+        assert_eq!(manifest.metadata.duration_us, 0);
+
+        assert_eq!(manifest.segments.len(), 1);
+        assert_eq!(manifest.segments[0].index, 0);
+        assert_eq!(manifest.segments[0].instruction, ManifestInstruction::MoveJ);
+        assert_eq!(manifest.segments[0].sample_start, 0);
+        assert_eq!(manifest.segments[0].sample_count, 3);
+
+        assert_eq!(manifest.samples.len(), 3);
+        let dt: Vec<u32> = manifest.samples.iter().map(|s| s.dt_us).collect();
+        assert_eq!(dt, vec![0, 0, 0]);
+        // Every sample retains its original commanded joints — nothing collapsed.
+        for (sample, expected) in manifest.samples.iter().zip(&waypoints) {
+            assert_eq!(sample.joints, *expected);
+        }
     }
 
     #[test]
