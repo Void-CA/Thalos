@@ -51,7 +51,7 @@ mod tests {
         analysis::region::{ProblemRegion, RegionId, RegionKind, RegionSeverity},
         evaluation::PlanMetrics,
         models::{RobotModel, RobotRegistry},
-        operation::ConstraintQuery,
+        operation::{ConstraintQuery, PrecisionLevel},
         robot::serial_chain::SerialChain,
         trajectory::{Trajectory, TrajectoryPoint},
     };
@@ -304,6 +304,178 @@ mod tests {
         }
     }
 
+    /// Permissive mock query — every guard returns true.
+    struct AlwaysAllowQuery;
+
+    impl ConstraintQuery for AlwaysAllowQuery {
+        fn can_relax_orientation(&self, _waypoint_index: usize, _max_angle: f64) -> bool {
+            true
+        }
+        fn can_modify_position(&self, _waypoint_index: usize) -> bool {
+            true
+        }
+        fn max_position_error(&self, _waypoint_index: usize) -> Option<f64> {
+            None
+        }
+        fn max_velocity(&self, _waypoint_index: usize) -> Option<f64> {
+            None
+        }
+        fn required_precision(&self, _waypoint_index: usize) -> PrecisionLevel {
+            PrecisionLevel::None
+        }
+    }
+
+    /// Operator that records whether `apply()` received `Some` or `None`
+    /// constraints on every call (used to prove pipeline forwarding).
+    struct RecordingOperator {
+        id: &'static str,
+        family: OperatorFamily,
+        constraints_seen: std::sync::Mutex<Vec<bool>>,
+    }
+
+    impl RecordingOperator {
+        fn new(id: &'static str, family: OperatorFamily) -> Self {
+            Self {
+                id,
+                family,
+                constraints_seen: std::sync::Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl TrajectoryOperator for RecordingOperator {
+        fn id(&self) -> &'static str {
+            self.id
+        }
+
+        fn family(&self) -> OperatorFamily {
+            self.family
+        }
+
+        fn applicability(&self, _region: &ProblemRegion) -> f32 {
+            1.0
+        }
+
+        fn estimate_improvement(&self, _region: &ProblemRegion, _metrics: &PlanMetrics) -> f32 {
+            1.0
+        }
+
+        fn estimate_cost(&self) -> f32 {
+            1.0
+        }
+
+        fn apply(
+            &self,
+            _robot: &SerialChain,
+            trajectory: &Trajectory,
+            _region: &ProblemRegion,
+            _ctx: &OptimizationContext,
+            constraints: Option<&dyn ConstraintQuery>,
+        ) -> Result<Trajectory, OptimizationError> {
+            self.constraints_seen
+                .lock()
+                .expect("recording mutex poisoned")
+                .push(constraints.is_some());
+            Ok(trajectory.clone())
+        }
+    }
+
+    // ── ConstraintQuery forwarding through the pipeline (2.3) ──
+
+    #[test]
+    fn pipeline_forwards_constraints_to_geometric_operators() {
+        let pipeline = OptimizationPipeline::new(PipelineConfig::default());
+        let robot = test_robot();
+        let traj = test_trajectory();
+        let regions = vec![test_region(0)];
+        let metrics = test_metrics();
+        let ctx = test_ctx();
+        let query = AlwaysAllowQuery;
+
+        // Some(query) → geometric apply() receives Some
+        let op = RecordingOperator::new("rec", OperatorFamily::Geometry);
+        let operators: [&dyn TrajectoryOperator; 1] = [&op];
+        pipeline
+            .optimize(
+                &operators, &robot, &traj, &regions, &metrics, &ctx, Some(&query),
+            )
+            .expect("pipeline should succeed");
+        assert_eq!(
+            op.constraints_seen
+                .lock()
+                .expect("recording mutex poisoned")
+                .as_slice(),
+            &[true],
+            "geometric apply() must receive Some(&query)"
+        );
+
+        // None → geometric apply() receives None
+        let op2 = RecordingOperator::new("rec", OperatorFamily::Geometry);
+        let operators2: [&dyn TrajectoryOperator; 1] = [&op2];
+        pipeline
+            .optimize(&operators2, &robot, &traj, &regions, &metrics, &ctx, None)
+            .expect("pipeline should succeed");
+        assert_eq!(
+            op2.constraints_seen
+                .lock()
+                .expect("recording mutex poisoned")
+                .as_slice(),
+            &[false],
+            "geometric apply() must receive None"
+        );
+    }
+
+    #[test]
+    fn pipeline_forwards_constraints_to_temporal_post_pass() {
+        let pipeline = OptimizationPipeline::new(PipelineConfig::default());
+        let robot = test_robot();
+        let traj = test_trajectory();
+        let regions = vec![test_region(0)];
+        let metrics = test_metrics();
+        let ctx = test_ctx();
+        let query = AlwaysAllowQuery;
+
+        // "retime" (Temporal family) is deferred in the geometric pass and
+        // applied exactly once in the temporal post-pass.
+        let op = RecordingOperator::new("retime", OperatorFamily::Temporal);
+        let operators: [&dyn TrajectoryOperator; 1] = [&op];
+        let result = pipeline
+            .optimize(
+                &operators, &robot, &traj, &regions, &metrics, &ctx, Some(&query),
+            )
+            .expect("pipeline should succeed");
+
+        assert_eq!(
+            op.constraints_seen
+                .lock()
+                .expect("recording mutex poisoned")
+                .as_slice(),
+            &[true],
+            "temporal post-pass apply() must receive Some(&query)"
+        );
+        assert_eq!(
+            result.report.steps.len(),
+            2,
+            "1 deferred step + 1 post-pass step"
+        );
+        assert_eq!(result.report.steps[1].operator_id, "retime");
+
+        // None → post-pass apply() receives None
+        let op2 = RecordingOperator::new("retime", OperatorFamily::Temporal);
+        let operators2: [&dyn TrajectoryOperator; 1] = [&op2];
+        pipeline
+            .optimize(&operators2, &robot, &traj, &regions, &metrics, &ctx, None)
+            .expect("pipeline should succeed");
+        assert_eq!(
+            op2.constraints_seen
+                .lock()
+                .expect("recording mutex poisoned")
+                .as_slice(),
+            &[false],
+            "temporal post-pass apply() must receive None"
+        );
+    }
+
     // ── OperatorSelector Tests ───────────────────────────
 
     #[test]
@@ -407,7 +579,7 @@ mod tests {
         let ctx = test_ctx();
 
         let result = pipeline
-            .optimize(&[], &robot, &traj, &regions, &metrics, &ctx)
+            .optimize(&[], &robot, &traj, &regions, &metrics, &ctx, None)
             .expect("pipeline should succeed with no operators");
 
         assert!(result.report.steps.is_empty(), "expected no steps");
@@ -429,7 +601,7 @@ mod tests {
         let operators: [&dyn TrajectoryOperator; 1] = [&op];
 
         let result = pipeline
-            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx)
+            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx, None)
             .expect("pipeline should succeed");
 
         assert_eq!(result.report.steps.len(), 1);
@@ -452,7 +624,7 @@ mod tests {
         let operators: [&dyn TrajectoryOperator; 1] = [&op];
 
         let result = pipeline
-            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx)
+            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx, None)
             .expect("pipeline should succeed");
 
         assert_eq!(result.report.steps.len(), 3);
@@ -477,7 +649,7 @@ mod tests {
         let operators: [&dyn TrajectoryOperator; 1] = [&op];
 
         let result = pipeline
-            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx)
+            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx, None)
             .expect("pipeline should not error on operator failure");
 
         assert_eq!(result.report.steps.len(), 1);
@@ -506,7 +678,7 @@ mod tests {
         let operators: [&dyn TrajectoryOperator; 2] = [&succeed_op, &fail_op];
 
         let result = pipeline
-            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx)
+            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx, None)
             .expect("pipeline should succeed");
 
         assert_eq!(result.report.steps.len(), 1);
@@ -541,7 +713,7 @@ mod tests {
         let operators: [&dyn TrajectoryOperator; 2] = [&low_score_succeeds, &high_score_fails];
 
         let result = pipeline
-            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx)
+            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx, None)
             .expect("pipeline should succeed");
 
         assert_eq!(result.report.steps.len(), 1);

@@ -58,6 +58,9 @@ impl OptimizationPipeline {
     /// - `regions`: Problem regions detected in the trajectory
     /// - `metrics`: Current plan metrics for scoring
     /// - `ctx`: Optimization context (joint limits, config)
+    /// - `constraints`: Optional `ConstraintQuery` forwarded to every
+    ///   operator `apply()` call in both the geometric pass and the
+    ///   temporal post-pass. `None` preserves the legacy behavior.
     ///
     /// Returns an `OptimizationResult` containing the report and
     /// the final optimized trajectory.
@@ -69,6 +72,7 @@ impl OptimizationPipeline {
         regions: &[ProblemRegion],
         metrics: &PlanMetrics,
         ctx: &OptimizationContext,
+        constraints: Option<&dyn ConstraintQuery>,
     ) -> Result<OptimizationResult, OptimizationError> {
         let mut current = trajectory.clone();
         let mut steps = Vec::new();
@@ -100,7 +104,7 @@ impl OptimizationPipeline {
                     continue;
                 }
 
-                match op.apply(robot, &current, region, ctx, None) {
+                match op.apply(robot, &current, region, ctx, constraints) {
                     Ok(candidate_raw) => {
                         let blended = compose_trajectory(
                             &current,
@@ -173,7 +177,7 @@ impl OptimizationPipeline {
                 0..current.len(),
             );
 
-            match retime_op.apply(robot, &current, &full_range, ctx, None) {
+            match retime_op.apply(robot, &current, &full_range, ctx, constraints) {
                 Ok(retimed) => {
                     let blended = compose_trajectory(
                         &current,

@@ -9,6 +9,7 @@ use thalos_core::{
     execution::runtime::RuntimeProgram,
     kinematics::{forward::ForwardKinematics, inverse::DampedLeastSquaresSolver},
     models::RobotModel,
+    operation::Operation,
     robot::{adapter, state::RobotState},
 };
 use thalos_planning::{
@@ -173,17 +174,12 @@ const IK_LAMBDA: f64 = 0.1;
 /// call to `start_execution`.
 pub async fn preview_plan(
     State(state): State<Arc<AppState>>,
-    Json(payload): Json<MotionPlanRequest>,
+    Json(mut payload): Json<MotionPlanRequest>,
 ) -> ApiResult<RuntimeStateResponse> {
     // Phase 1 — read snapshot, build program, compile (all sync except the snapshot read)
     let compiled = {
         let snapshot = state.services.scene.snapshot().await?;
         let default_frame = snapshot.resolve_default_frame();
-        let program = payload.into_program(default_frame);
-
-        if program.segments.is_empty() {
-            return Ok(Json(to_api_response(&snapshot)));
-        }
 
         let fk = ForwardKinematics::new(snapshot.chain.clone());
         let solver =
@@ -196,12 +192,37 @@ pub async fn preview_plan(
             tcp: snapshot.active_tcp.as_ref(),
         };
         let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
-        compiler
-            .compile(&program, &ctx)
-            .map_err(|err: CompileError| ApiError::Validation {
-                message: err.to_string(),
-                code: format!("segment_{}_failed", err.segment_index),
-            })?
+        let map_err = |err: CompileError| ApiError::Validation {
+            message: err.to_string(),
+            code: format!("segment_{}_failed", err.segment_index),
+        };
+
+        // Semantic path: `operations` present → compile_with_operations(),
+        // preserving provenance + building the RangeConstraintQuery for
+        // downstream optimization. Legacy path: `segments` only → compile().
+        // NOTE: preview_plan itself never invokes the optimization pipeline —
+        // optimization is a separate endpoint operating on the stored active
+        // plan. Threading the constraint_query into optimize() requires
+        // persisting it alongside the plan (see apply-progress follow-up).
+        if let Some(ops) = payload.operations.take() {
+            if ops.is_empty() {
+                return Ok(Json(to_api_response(&snapshot)));
+            }
+            let operations: Vec<Operation> = ops
+                .into_iter()
+                .map(|op| op.into_operation(default_frame))
+                .collect();
+            compiler
+                .compile_with_operations(&operations, &ctx)
+                .map_err(map_err)?
+                .plan
+        } else {
+            let program = payload.into_program(default_frame);
+            if program.segments.is_empty() {
+                return Ok(Json(to_api_response(&snapshot)));
+            }
+            compiler.compile(&program, &ctx).map_err(map_err)?
+        }
     };
     // snapshot, fk, solver, ctx, robot_state, program dropped here
 

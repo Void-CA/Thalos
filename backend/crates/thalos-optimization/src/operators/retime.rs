@@ -135,7 +135,7 @@ impl TrajectoryOperator for Retime {
         trajectory: &Trajectory,
         region: &ProblemRegion,
         ctx: &OptimizationContext,
-        _constraints: Option<&dyn ConstraintQuery>,
+        constraints: Option<&dyn ConstraintQuery>,
     ) -> Result<Trajectory, OptimizationError> {
         let range = &region.waypoint_range;
         let all_wps = trajectory.waypoints();
@@ -166,8 +166,45 @@ impl TrajectoryOperator for Retime {
         let original_timestamps: Vec<f64> = region_wps.iter().map(|wp| wp.timestamp()).collect();
         let mut new_timestamps = original_timestamps.clone();
 
+        // Pre-pass: mark which waypoints have locked timing. Locked waypoints
+        // are hard anchors — their original timestamp is preserved — and free
+        // stretches must never overshoot the next anchor, or the output would
+        // lose its strictly-increasing invariant (see retime.rs invariants).
+        let locked: Vec<bool> = (0..region_wps.len())
+            .map(|k| !constraints.is_none_or(|c| c.can_modify_timing(range.start + k)))
+            .collect();
+
+        // Backward ceiling pass: compute a per-index hard ceiling so that free
+        // stretches between anchors keep strictly increasing timestamps. Each
+        // waypoint's ceiling is capped by the next locked anchor, and each
+        // free waypoint inherits a strictly smaller ceiling than its successor
+        // (ceiling[k] = previous representable value below ceiling[k+1]). This
+        // avoids the collapse where two consecutive free waypoints would both
+        // clamp to the same anchor value and produce equal (non-strictly-
+        // increasing) timestamps. The step is a true nextafter-down, not
+        // f64::EPSILON, which is absolute and rounds back to the anchor for
+        // magnitudes >= 2.0.
+        fn next_down(v: f64) -> f64 {
+            f64::from_bits(v.to_bits() - 1)
+        }
+        let mut ceiling: Vec<f64> = vec![f64::INFINITY; region_wps.len()];
+        for k in (0..region_wps.len()).rev() {
+            if locked[k] {
+                ceiling[k] = original_timestamps[k];
+            } else if k + 1 < region_wps.len() {
+                ceiling[k] = next_down(ceiling[k + 1]);
+            }
+        }
+
         // Stretch each segment independently, forward-propagating timestamps
         for i in 0..region_wps.len() - 1 {
+            // Constraint-aware guard: preserve the ORIGINAL timestamp of
+            // waypoints whose timing is locked, and stretch around them.
+            if locked[i + 1] {
+                new_timestamps[i + 1] = original_timestamps[i + 1];
+                continue;
+            }
+
             let dq: Vec<f64> = region_wps[i + 1]
                 .joints()
                 .iter()
@@ -186,7 +223,10 @@ impl TrajectoryOperator for Retime {
                 self.max_duration_scale,
             );
 
-            new_timestamps[i + 1] = new_timestamps[i] + new_dt;
+            // Hard ceiling: never overshoot the next locked anchor. Otherwise
+            // earlier stretches can push past a later locked waypoint and the
+            // timestamps become non-monotonic (e.g. [0.0, 4.0, 2.0]).
+            new_timestamps[i + 1] = (new_timestamps[i] + new_dt).min(ceiling[i + 1]);
         }
 
         // Build new waypoints with adjusted timestamps (joint values unchanged)
@@ -231,6 +271,10 @@ mod unit_tests {
 
     fn three_wp_velocity_region() -> ProblemRegion {
         velocity_region(0..3)
+    }
+
+    fn four_wp_velocity_region() -> ProblemRegion {
+        velocity_region(0..4)
     }
 
     fn test_robot() -> SerialChain {
@@ -580,6 +624,206 @@ mod unit_tests {
             (new_dt - 2.0).abs() < f64::EPSILON,
             "expected dt=2.0 with default_velocity=1.0, dq=2.0, got {}",
             new_dt
+        );
+    }
+
+    // ── 13. ConstraintQuery timing guard (2.4) ────────────
+
+    use thalos_core::operation::PrecisionLevel;
+
+    /// Mock query: only `can_modify_timing` is overridden; every other
+    /// guard returns `true`.
+    struct TimingMock {
+        allowed: Vec<bool>,
+    }
+
+    impl ConstraintQuery for TimingMock {
+        fn can_relax_orientation(&self, _i: usize, _a: f64) -> bool {
+            true
+        }
+        fn can_modify_position(&self, _i: usize) -> bool {
+            true
+        }
+        fn max_position_error(&self, _i: usize) -> Option<f64> {
+            None
+        }
+        fn max_velocity(&self, _i: usize) -> Option<f64> {
+            None
+        }
+        fn required_precision(&self, _i: usize) -> PrecisionLevel {
+            PrecisionLevel::None
+        }
+        fn can_modify_timing(&self, i: usize) -> bool {
+            self.allowed.get(i).copied().unwrap_or(true)
+        }
+    }
+
+    #[test]
+    fn constrained_waypoint_timing_preserved() {
+        let op = Retime::new(3.0, 10.0);
+        let robot = test_robot();
+        // dq = 1.0 per joint, dt = 0.5 → would stretch to dt=1.0 with v_max=1.0
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![1.0, 1.0], 0.5),
+            TrajectoryPoint::new(vec![2.0, 2.0], 1.0),
+        ]);
+        let region = three_wp_velocity_region(); // 0..3
+        let ctx = ctx_with_velocity(vec![1.0, 1.0]);
+
+        // Waypoint 1 (absolute index 1) cannot have its timing modified.
+        let mock = TimingMock {
+            allowed: vec![true, false, true],
+        };
+
+        let result = op
+            .apply(&robot, &traj, &region, &ctx, Some(&mock))
+            .unwrap();
+
+        let t0 = result.waypoints()[0].timestamp();
+        let t1 = result.waypoints()[1].timestamp();
+        let t2 = result.waypoints()[2].timestamp();
+
+        // wp0 is never modified (first waypoint preserved by invariant).
+        assert!((t0 - 0.0).abs() < f64::EPSILON, "wp0 timestamp, got {t0}");
+        // wp1 keeps its ORIGINAL timestamp despite the velocity violation.
+        assert!(
+            (t1 - 0.5).abs() < f64::EPSILON,
+            "constrained wp1 timestamp must be preserved, got {t1}"
+        );
+        // wp2 is retimed around the constrained waypoint: dt(wp1→wp2)=1.0.
+        assert!(
+            (t2 - 1.5).abs() < f64::EPSILON,
+            "wp2 must be retimed around constrained wp1, got {t2}"
+        );
+    }
+
+    #[test]
+    fn unconstrained_waypoints_retimed_with_guard_allowed() {
+        let op = Retime::new(3.0, 10.0);
+        let robot = test_robot();
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![1.0, 1.0], 0.5),
+            TrajectoryPoint::new(vec![2.0, 2.0], 1.0),
+        ]);
+        let region = three_wp_velocity_region();
+        let ctx = ctx_with_velocity(vec![1.0, 1.0]);
+
+        // All waypoints free → identical to the no-constraint behavior.
+        let mock = TimingMock {
+            allowed: vec![true, true, true],
+        };
+        let with_query = op
+            .apply(&robot, &traj, &region, &ctx, Some(&mock))
+            .unwrap();
+        let without_query = op.apply(&robot, &traj, &region, &ctx, None).unwrap();
+
+        for (a, b) in with_query
+            .waypoints()
+            .iter()
+            .zip(without_query.waypoints().iter())
+        {
+            assert!(
+                (a.timestamp() - b.timestamp()).abs() < f64::EPSILON,
+                "all-free guard must match None behavior"
+            );
+        }
+        // Sanity: all waypoints were actually stretched (both paths).
+        let t1 = with_query.waypoints()[1].timestamp();
+        let t2 = with_query.waypoints()[2].timestamp();
+        assert!((t1 - 1.0).abs() < f64::EPSILON, "wp1 stretched, got {t1}");
+        assert!((t2 - 2.0).abs() < f64::EPSILON, "wp2 stretched, got {t2}");
+    }
+
+    #[test]
+    fn locked_final_waypoint_keeps_timestamps_monotonic() {
+        let op = Retime::new(3.0, 10.0);
+        let robot = test_robot();
+        // Fast-moving joints that would stretch each segment to dt=4.0 under
+        // v_max=1.0, with a LOCKED final waypoint at the original timestamp.
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![4.0, 4.0], 1.0),
+            TrajectoryPoint::new(vec![8.0, 8.0], 2.0),
+        ]);
+        let region = three_wp_velocity_region(); // 0..3
+        let ctx = ctx_with_velocity(vec![1.0, 1.0]);
+
+        // Final waypoint (absolute index 2) cannot have its timing modified.
+        let mock = TimingMock {
+            allowed: vec![true, true, false],
+        };
+
+        let result = op
+            .apply(&robot, &traj, &region, &ctx, Some(&mock))
+            .unwrap();
+
+        let t: Vec<f64> = result.waypoints().iter().map(|wp| wp.timestamp()).collect();
+
+        // Regression: earlier free stretches must never overshoot the locked
+        // final anchor, otherwise timestamps become non-monotonic ([0,4,2]).
+        for pair in t.windows(2) {
+            assert!(
+                pair[1] > pair[0],
+                "timestamps must be strictly increasing, got {t:?}"
+            );
+        }
+        // The locked final waypoint keeps its original timestamp.
+        assert!(
+            (t[2] - 2.0).abs() < f64::EPSILON,
+            "locked final wp timestamp must be preserved, got {}",
+            t[2]
+        );
+        // The free stretch is capped just below the anchor, not left at dt=4.0.
+        assert!(
+            t[1] < 2.0,
+            "free wp1 must not overshoot the locked anchor, got {}",
+            t[1]
+        );
+    }
+
+    #[test]
+    fn multiple_free_waypoints_before_anchor_keep_monotonic_timestamps() {
+        let op = Retime::new(3.0, 10.0);
+        let robot = test_robot();
+        // Two consecutive free waypoints before a locked final anchor. Each
+        // segment would stretch to dt=4.0 under v_max=1.0, but the anchor at
+        // t=3.0 caps both; without per-index ceilings they would collapse to
+        // the same value and break strict monotonicity.
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![4.0, 4.0], 1.0),
+            TrajectoryPoint::new(vec![8.0, 8.0], 2.0),
+            TrajectoryPoint::new(vec![12.0, 12.0], 3.0),
+        ]);
+        let region = four_wp_velocity_region(); // 0..4
+        let ctx = ctx_with_velocity(vec![1.0, 1.0]);
+
+        let mock = TimingMock {
+            allowed: vec![true, true, true, false],
+        };
+
+        let result = op
+            .apply(&robot, &traj, &region, &ctx, Some(&mock))
+            .unwrap();
+
+        let t: Vec<f64> = result.waypoints().iter().map(|wp| wp.timestamp()).collect();
+
+        for pair in t.windows(2) {
+            assert!(
+                pair[1] > pair[0],
+                "timestamps must be strictly increasing, got {t:?}"
+            );
+        }
+        assert!(
+            (t[3] - 3.0).abs() < f64::EPSILON,
+            "locked final wp timestamp must be preserved, got {}",
+            t[3]
+        );
+        assert!(
+            t[1] < t[2],
+            "free waypoints must not collapse to the same timestamp, got {t:?}"
         );
     }
 }

@@ -21,7 +21,7 @@ pub struct MotionNode {
 /// - Pick's Interaction → CloseGripper
 /// - Weld's Interaction → ArcStart/ArcEnd
 /// Same role, different concrete actions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum MotionRole {
     /// Moving toward the operation target (pre-positioning).
     Approach,

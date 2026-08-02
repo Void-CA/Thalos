@@ -80,6 +80,8 @@ fn compiled_with_segments(segments: Vec<(f64, f64)>) -> crate::motion::program::
             trajectory,
             waypoint_range: 2 * i..2 * i + 2,
             time_range: *start..*end,
+            operation_id: None,
+            role: None,
         });
     }
     let merged = Trajectory::new(

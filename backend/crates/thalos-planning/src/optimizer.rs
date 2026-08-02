@@ -148,7 +148,7 @@ impl TrajectoryOptimizer {
         // 6. Run the optimization pipeline
         let result = self
             .pipeline
-            .optimize(&all_ops, chain, trajectory, regions, &metrics, &ctx)?;
+            .optimize(&all_ops, chain, trajectory, regions, &metrics, &ctx, None)?;
 
         Ok(result.report)
     }
