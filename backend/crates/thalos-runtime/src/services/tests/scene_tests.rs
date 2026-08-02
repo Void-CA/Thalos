@@ -767,11 +767,24 @@ async fn select_tool_frame_clears_on_robot_change() {
     assert!(snap3.active_tcp.is_some(), "active_tcp should be set again");
 
     let urdf = include_str!("../../../../thalos-models/tests/fixtures/scara.urdf");
+    let robot = thalos_models::urdf::parser::parse_robot(urdf).unwrap();
+    let joints_meta: Vec<crate::snapshots::scene::JointMeta> = robot
+        .bfs_joints()
+        .unwrap_or_default()
+        .iter()
+        .filter(|j| !j.kind.is_fixed())
+        .map(|j| crate::snapshots::scene::JointMeta {
+            name: j.name.clone(),
+            kind: j.kind.to_string(),
+            min: j.limits.map(|l| l.min),
+            max: j.limits.map(|l| l.max),
+        })
+        .collect();
     svc.execute(Command::LoadUrdfRobot {
         name: "urdf_scara".to_string(),
-        joints_meta: vec![],
+        joints_meta,
         chain: thalos_core::robot::adapter::from_urdf(urdf).unwrap(),
-        robot: thalos_models::urdf::parser::parse_robot(urdf).unwrap(),
+        robot,
     })
     .await
     .unwrap();
@@ -779,6 +792,74 @@ async fn select_tool_frame_clears_on_robot_change() {
     assert!(
         snap4.active_tcp.is_none(),
         "active_tcp should be cleared after LoadUrdfRobot"
+    );
+    // Real metadata (previously `vec![]`) — the DTO mapper derives the
+    // "urdf" robot id from non-empty joints_meta; an empty vec masked the
+    // fallback to built-in metadata.
+    assert_eq!(
+        snap4.chain.dof_count(),
+        4,
+        "loaded chain must keep its 4-DOF kinematics in the snapshot"
+    );
+    assert_eq!(
+        snap4.joints_meta.len(),
+        4,
+        "URDF joints_meta must carry the 4 actuated joints"
+    );
+}
+
+/// Spec: unified-kinematics "Tag carries no kinematic meaning" + "Snapshot
+/// provides chain and joints atomically". A URDF-loaded robot must keep its
+/// real chain in the snapshot: DOF, joints, and joints_meta all derive from
+/// the loaded chain, and the stamped RobotModel is the display-only
+/// `URDF_ROBOT_TAG`.
+#[tokio::test]
+async fn load_urdf_keeps_real_chain_in_snapshot() {
+    let (svc, _mgr) = make_service(RobotModel::Scara).await;
+    let urdf = include_str!("../../../../thalos-models/tests/fixtures/scara.urdf");
+    let robot = thalos_models::urdf::parser::parse_robot(urdf).unwrap();
+    let joints_meta: Vec<crate::snapshots::scene::JointMeta> = robot
+        .bfs_joints()
+        .unwrap_or_default()
+        .iter()
+        .filter(|j| !j.kind.is_fixed())
+        .map(|j| crate::snapshots::scene::JointMeta {
+            name: j.name.clone(),
+            kind: j.kind.to_string(),
+            min: j.limits.map(|l| l.min),
+            max: j.limits.map(|l| l.max),
+        })
+        .collect();
+
+    let snap = svc
+        .execute(Command::LoadUrdfRobot {
+            name: "urdf_scara".to_string(),
+            joints_meta: joints_meta.clone(),
+            chain: thalos_core::robot::adapter::from_urdf(urdf).unwrap(),
+            robot,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        snap.chain.dof_count(),
+        4,
+        "snapshot must carry the loaded chain DOF"
+    );
+    assert_eq!(
+        snap.joints.len(),
+        4,
+        "joints must match the loaded chain DOF"
+    );
+    assert_eq!(
+        snap.joints_meta.len(),
+        4,
+        "joints_meta must carry the real actuated metadata"
+    );
+    assert_eq!(
+        snap.robot,
+        crate::commands::dispatch::URDF_ROBOT_TAG,
+        "stamped model is a display tag, never kinematics (ADR-003)"
     );
 }
 

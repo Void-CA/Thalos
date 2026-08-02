@@ -15,11 +15,12 @@ use crate::{
     state::robot::SceneRuntime,
 };
 
-/// Placeholder model used for URDF-imported robots.
+/// Display tag for URDF-imported robots (ADR-003).
 ///
-/// The visual builder only specializes on `RobotModel::Scara`;
-/// any non-Scara variant falls through to the generic scene builder.
-const URDF_PLACEHOLDER: RobotModel = RobotModel::Planar3R;
+/// Display/catalog only — never consumed for kinematics, DOF, or chain
+/// construction. The real kinematic source is the loaded `SerialChain`
+/// carried by `RuntimeSnapshot.chain`.
+pub const URDF_ROBOT_TAG: RobotModel = RobotModel::Planar3R;
 
 #[derive(Debug, Clone)]
 pub enum Command {
@@ -75,7 +76,7 @@ impl ExecutableCommand for Command {
             } => {
                 let dof = chain.dof_count();
                 runtime.active_robot =
-                    ActiveRobot::new(URDF_PLACEHOLDER, chain.clone(), vec![0.0; dof]);
+                    ActiveRobot::new(URDF_ROBOT_TAG, chain.clone(), vec![0.0; dof]);
                 runtime.robot_name = name.clone();
                 runtime.joints_meta = joints_meta.clone();
                 runtime.robot_source = Some(robot.clone());

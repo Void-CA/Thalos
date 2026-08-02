@@ -2252,7 +2252,8 @@ async fn urdf_load_then_plan_uses_real_chain() {
     )
     .await;
     assert_eq!(
-        status, StatusCode::OK,
+        status,
+        StatusCode::OK,
         "URDF robot must plan against its real chain: {:?}",
         body
     );
@@ -2301,7 +2302,8 @@ async fn urdf_load_then_semantic_execute_uses_real_chain() {
     )
     .await;
     assert_eq!(
-        status, StatusCode::OK,
+        status,
+        StatusCode::OK,
         "semantic execute must plan against the real chain: {:?}",
         body
     );
@@ -2313,5 +2315,46 @@ async fn urdf_load_then_semantic_execute_uses_real_chain() {
             .all(|wp| wp["joints"].as_array().map(|a| a.len()).unwrap_or(0) == 4),
         "every waypoint must carry 4 joints (real icebot chain), got {:?}",
         wps
+    );
+}
+
+/// Spec: unified-kinematics "Tag carries no kinematic meaning" — the API DTO
+/// for a URDF-loaded robot must expose the real chain data (`id == "urdf"`,
+/// real DOF) instead of falling back to built-in metadata. This branch only
+/// activates when `joints_meta` is populated; an empty vec masks the
+/// fallback (the bug fixed in scene_tests.rs).
+#[tokio::test]
+async fn load_urdf_exposes_real_robot_dto() {
+    let app = test_app().await;
+    let icebot_urdf = include_str!("../../../../docs/robot/icebot.urdf");
+
+    let (load_status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/robot/from-urdf",
+        Some(json!({"urdf_source": icebot_urdf})),
+    )
+    .await;
+    assert_eq!(load_status, StatusCode::OK, "URDF load must succeed");
+
+    let (status, body) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    assert_eq!(status, StatusCode::OK, "scene read must succeed");
+    let body = body.expect("scene response body");
+    assert_eq!(
+        body["robot"]["id"], "urdf",
+        "URDF DTO must carry id 'urdf', got {:?}",
+        body["robot"]["id"]
+    );
+    assert_eq!(
+        body["robot"]["dof"], 4,
+        "URDF DTO must carry the real chain DOF"
+    );
+    assert_eq!(
+        body["robot"]["joints"]
+            .as_array()
+            .map(|a| a.len())
+            .unwrap_or(0),
+        4,
+        "URDF DTO must carry the 4 actuated joints"
     );
 }
