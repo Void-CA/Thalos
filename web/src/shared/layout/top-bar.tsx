@@ -1,19 +1,16 @@
-import { usePerspectiveStore } from './perspective-store'
-import { Button } from '@/components/ui/button'
+import { NavLink } from 'react-router'
+import { cn } from '@/lib/utils'
+import { WORKSPACE_REGISTRY } from '@/shared/workflow/registry'
+import { buttonVariants } from '@/components/ui/button'
 
-const PERSPECTIVE_LABELS: Record<string, string> = {
-  robot: 'Robot',
-  task: 'Task',
-  planning: 'Planning',
-  analysis: 'Analysis',
-  execution: 'Execution',
-  knowledge: 'Knowledge',
-  sessions: 'Sessions',
-}
-
+/**
+ * TopBar — navigation derived from WORKSPACE_REGISTRY.
+ * Hidden entries (sessions/knowledge) render no nav link until their content
+ * is delivered. The URL is the single source of truth for the active workspace.
+ */
 export function TopBar() {
-  const perspective = usePerspectiveStore(s => s.perspective)
-  const setPerspective = usePerspectiveStore(s => s.setPerspective)
+  const links = WORKSPACE_REGISTRY.filter((entry) => !entry.hidden)
+
   return (
     <header className="flex items-center gap-2 px-4 py-1.5 border-b border-border bg-sidebar shrink-0">
       {/* Logo / Name */}
@@ -21,20 +18,24 @@ export function TopBar() {
         Thalos
       </span>
 
-      {/* Perspective buttons */}
-      <div className="flex items-center gap-0.5">
-        {Object.entries(PERSPECTIVE_LABELS).map(([key, label]) => (
-          <Button
-            key={key}
-            variant={perspective === key ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-7 px-2.5 text-xs"
-            onClick={() => setPerspective(key as any)}
+      {/* Workspace nav links (registry-driven) */}
+      <nav className="flex items-center gap-0.5">
+        {links.map((entry) => (
+          <NavLink
+            key={entry.path}
+            to={entry.path}
+            end={entry.path === '/'}
+            className={({ isActive }) =>
+              cn(
+                buttonVariants({ variant: isActive ? 'secondary' : 'ghost', size: 'sm' }),
+                'h-7 px-2.5 text-xs',
+              )
+            }
           >
-            {label}
-          </Button>
+            {entry.label}
+          </NavLink>
         ))}
-      </div>
+      </nav>
 
       <div className="ml-auto flex items-center gap-2">
         {/* Placeholder for future widgets */}

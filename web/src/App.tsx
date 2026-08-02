@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { RouterProvider } from 'react-router'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ServicesProvider } from '@/features/viewport/services/service-context'
-import { AppShell } from '@/shared/layout/app-shell'
+import { router } from '@/router'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -18,7 +19,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <ServicesProvider>
         <TooltipProvider>
-          <AppShell />
+          <RouterProvider router={router} />
         </TooltipProvider>
       </ServicesProvider>
     </QueryClientProvider>
