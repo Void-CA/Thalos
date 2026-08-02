@@ -134,6 +134,28 @@ export interface ObjectTransform {
   scale: [number, number, number]
 }
 
+/** Backend FK frame transform (frame id → pose), from `scene.frames`
+ *  (`POST /scene/joints`). `quat` is `[w, x, y, z]`. */
+export interface FkFrame {
+  pos: [number, number, number]
+  quat: [number, number, number, number]
+}
+
+/** Map of backend FK frame id → frame transform. */
+export type FkFrameMap = Map<string, FkFrame>
+
+/**
+ * Single source of truth for robot transforms. The renderer NEVER recomputes
+ * FK — it applies whatever snapshot it receives.
+ * - `execution`: object transforms from a runtime tick (`RuntimeDelta`)
+ * - `fk`: frame transforms from backend `scene.frames` (`POST /scene/joints`)
+ * - `idle`: no live transform (static scene state)
+ */
+export type TransformSnapshot =
+  | { kind: 'execution'; transforms: ObjectTransform[] }
+  | { kind: 'fk'; frames: FkFrameMap }
+  | { kind: 'idle' }
+
 /** Target IK para el gizmo. */
 export interface IkTarget {
   type: 'position' | 'pose'
