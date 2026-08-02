@@ -6,91 +6,76 @@ import { DEFAULT_FRAME_STYLE } from '../types'
 import type { SceneFrame, SceneLink, ScenePrimitive } from '../types'
 import { AXIS_ORIGIN, LINK_COLOR, LINK_OPACITY } from '@/shared/tokens'
 
-/** Angular-style registries for runtime transform sync */
-const frameGroups = new Map<string, THREE.Group>()
-/** Link mesh registry — actualizado desde RuntimeDelta.transforms en Path A */
-const linkMeshes = new Map<string, THREE.Mesh>()
-let prevJoints: number[] = []
-
-// SCARA canonical FK parameters
-const A1 = 1.0, A2 = 0.8, BASE_Z = 0.5
-
-/** Compute frame world positions from SCARA joint angles. Returns map of frameId → {pos, quat}. */
-function scaraFrames(joints: number[]) {
-  const j1 = joints[0] ?? 0, j2 = joints[1] ?? 0, j3 = joints[2] ?? 0
-  const c1 = Math.cos(j1), s1 = Math.sin(j1)
-  const c12 = Math.cos(j1 + j2), s12 = Math.sin(j1 + j2)
-  const l1x = A1 * c1, l1y = A1 * s1
-  const l2x = l1x + A2 * c12, l2y = l1y + A2 * s12
-  const l2z = BASE_Z + j3
-
-  return {
-    world:        { t: [0, 0, 0],       r: [1,0,0,0] },
-    base:         { t: [0, 0, BASE_Z],  r: [1,0,0,0] },
-    link_1:       { t: [l1x, l1y, BASE_Z], r: [Math.cos(j1/2),0,0,Math.sin(j1/2)] },
-    link_2:       { t: [l2x, l2y, BASE_Z], r: [Math.cos((j1+j2)/2),0,0,Math.sin((j1+j2)/2)] },
-    prismatic_joint: { t: [l2x, l2y, l2z], r: [1,0,0,0] },
-    wrist:        { t: [l2x, l2y, l2z], r: [Math.cos((j1+j2)/2),0,0,Math.sin((j1+j2)/2)] },
-  }
-}
-
+/**
+ * RobotModel — renders the robot scene and applies the single
+ * `transformSnapshot` source of truth every frame.
+ *
+ * The component holds NO kinematic-family logic: it never computes FK, never
+ * asks which robot is loaded, and never hardcodes frame ids. It only applies
+ * the transforms it receives from `useSceneStore.transformSnapshot`:
+ * - `execution`: object transforms from runtime ticks (frames + links)
+ * - `fk`: frame transforms from backend `scene.frames` (POST /scene/joints)
+ * - `idle`: leave the last applied state (static scene)
+ *
+ * Frame/link registries are per-instance refs instead of module-level maps, so
+ * separate mounts never share stale entries.
+ */
 export function RobotModel() {
   const data = useSceneStore(s => s.data)
-  const runtime = useSceneStore(s => s.runtime)
-  const liveTransforms = useSceneStore(s => s.liveTransforms)
-  if (!data) return null
+  const transformSnapshot = useSceneStore(s => s.transformSnapshot)
+  const frameGroups = useRef(new Map<string, THREE.Group>())
+  const linkMeshes = useRef(new Map<string, THREE.Mesh>())
 
-  // Per-frame: sync frame groups + link meshes from liveTransforms (scene tick) or FK (local playback)
+  const primitivesByFrame = useMemo(() => {
+    const m = new Map<string, ScenePrimitive[]>()
+    for (const p of data?.primitives ?? []) {
+      const list = m.get(p.frameId) ?? []; list.push(p); m.set(p.frameId, list)
+    }
+    return m
+  }, [data?.primitives])
+
+  const frameIds = useMemo(() => new Set((data?.frames ?? []).map(f => f.id)), [data?.frames])
+
+  // Per-frame: apply the current transform snapshot to frame groups + link meshes.
   useFrame(() => {
-    // Path A: scene tick → liveTransforms has frame + link transforms
-    if (liveTransforms.length > 0) {
-      for (const tx of liveTransforms) {
-        // Apply frame transforms (frameGroups)
-        const g = frameGroups.get(tx.id)
+    if (!data) return
+    if (transformSnapshot.kind === 'execution') {
+      for (const tx of transformSnapshot.transforms) {
+        // Frame transforms (frame groups keyed by frame id)
+        const g = frameGroups.current.get(tx.id)
         if (g) {
           g.position.set(tx.translation[0], tx.translation[1], tx.translation[2])
           g.quaternion.set(tx.rotation[1], tx.rotation[2], tx.rotation[3], tx.rotation[0])
           continue
         }
-        // Apply link transforms (linkMeshes) — scale encodes cylinder length
-        const m = linkMeshes.get(tx.id)
+        // Link transforms (link meshes keyed by link id) — scale encodes cylinder length
+        const m = linkMeshes.current.get(tx.id)
         if (m) {
           m.position.set(tx.translation[0], tx.translation[1], tx.translation[2])
           m.quaternion.set(tx.rotation[1], tx.rotation[2], tx.rotation[3], tx.rotation[0])
           m.scale.set(tx.scale[0], tx.scale[1], tx.scale[2])
         }
       }
-
       return
     }
-    // Path B: local playback from runtime.joints
-    const joints = runtime?.joints
-    if (!joints || joints.length < 3) return
-    if (joints.every((v, i) => v === prevJoints[i])) return
-    prevJoints = [...joints]
-    const frames = scaraFrames(joints)
-    for (const [id, f] of Object.entries(frames)) {
-      const g = frameGroups.get(id); if (!g) continue
-      g.position.set(f.t[0], f.t[1], f.t[2])
-      g.quaternion.set(f.r[1], f.r[2], f.r[3], f.r[0])
+    if (transformSnapshot.kind === 'fk') {
+      for (const [id, frame] of transformSnapshot.frames) {
+        const g = frameGroups.current.get(id)
+        if (!g) continue
+        g.position.set(frame.pos[0], frame.pos[1], frame.pos[2])
+        g.quaternion.set(frame.quat[1], frame.quat[2], frame.quat[3], frame.quat[0])
+      }
     }
+    // kind === 'idle': nothing to apply (keep last state)
   })
 
-  const primitivesByFrame = useMemo(() => {
-    const m = new Map<string, ScenePrimitive[]>()
-    for (const p of data.primitives) {
-      const list = m.get(p.frameId) ?? []; list.push(p); m.set(p.frameId, list)
-    }
-    return m
-  }, [data.primitives])
-
-  const frameIds = new Set(data.frames.map(f => f.id))
+  if (!data) return null
 
   return (
     <group>
-      {data.links.map(link => <LinkComponent key={link.id} link={link} refDim={data.referenceDimension} />)}
+      {data.links.map(link => <LinkComponent key={link.id} link={link} refDim={data.referenceDimension} registry={linkMeshes.current} />)}
       {data.frames.map(frame => (
-        <FrameComponent key={frame.id} frame={frame}>
+        <FrameComponent key={frame.id} frame={frame} registry={frameGroups.current}>
           {primitivesByFrame.get(frame.id)?.map(p => <PrimitiveComponent key={p.id} primitive={p} />)}
         </FrameComponent>
       ))}
@@ -103,22 +88,22 @@ function rustQuatToThree([w, x, y, z]: [number, number, number, number]): THREE.
   return new THREE.Quaternion(x, y, z, w)
 }
 
-function FrameComponent({ frame, children }: { frame: SceneFrame; children?: React.ReactNode }) {
+function FrameComponent({ frame, registry, children }: { frame: SceneFrame; registry: Map<string, THREE.Group>; children?: React.ReactNode }) {
   const groupRef = useRef<THREE.Group>(null)
   // Safe style — FK endpoint may return frames without style field
   const style = { ...DEFAULT_FRAME_STYLE, ...(frame.style ?? {}) }
 
-  // Register frame group for syncTransforms AND set initial position
+  // Register frame group for transform sync AND set initial position
   useEffect(() => {
     const g = groupRef.current
     if (!g) return
-    frameGroups.set(frame.id, g)
+    registry.set(frame.id, g)
     // Set initial position (R3F won't reset it if we don't pass position as prop)
     g.position.set(frame.translation[0], frame.translation[1], frame.translation[2])
     const q = rustQuatToThree(frame.rotation)
     g.quaternion.set(q.x, q.y, q.z, q.w)
-    return () => { frameGroups.delete(frame.id) }
-  }, [frame.id, frame.translation, frame.rotation])
+    return () => { registry.delete(frame.id) }
+  }, [frame.id, frame.translation, frame.rotation, registry])
 
   return (
     <group ref={groupRef}>
@@ -131,7 +116,7 @@ function FrameComponent({ frame, children }: { frame: SceneFrame; children?: Rea
   )
 }
 
-function LinkComponent({ link, refDim }: { link: SceneLink; refDim: number }) {
+function LinkComponent({ link, refDim, registry }: { link: SceneLink; refDim: number; registry: Map<string, THREE.Mesh> }) {
   const radius = Math.max(refDim * 0.015, 0.003)
   const meshRef = useRef<THREE.Mesh>(null)
   const mesh = useMemo(() => {
@@ -143,11 +128,11 @@ function LinkComponent({ link, refDim }: { link: SceneLink; refDim: number }) {
     return { position: mid, quaternion: q, length: len }
   }, [link.start, link.end])
 
-  // Register mesh for liveTransforms sync (Path A)
+  // Register mesh for runtime transform sync
   useEffect(() => {
-    if (meshRef.current) linkMeshes.set(link.id, meshRef.current)
-    return () => { linkMeshes.delete(link.id) }
-  }, [link.id])
+    if (meshRef.current) registry.set(link.id, meshRef.current)
+    return () => { registry.delete(link.id) }
+  }, [link.id, registry])
 
   if (!mesh) return null
   return (<mesh ref={meshRef} position={mesh.position} quaternion={mesh.quaternion} scale={[1, mesh.length, 1]}>
