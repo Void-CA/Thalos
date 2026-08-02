@@ -1,6 +1,7 @@
 use thiserror::Error;
 
 use thalos_core::analysis::workspace::WorkspaceError;
+use thalos_core::kinematics::inverse::IkError;
 use thalos_core::models::RobotModelError;
 
 use thalos_planning::error::PlanningError;
@@ -67,6 +68,9 @@ pub enum RuntimeError {
     #[error("planning error: {0}")]
     Planning(#[from] PlanningError),
 
+    #[error("IK error: {0}")]
+    Ik(#[from] IkError),
+
     #[error("joint count mismatch: expected {expected}, received {received}")]
     JointCountMismatch { expected: usize, received: usize },
 
@@ -101,6 +105,12 @@ impl RuntimeError {
                 PlanningError::EmptyProgram => "empty_program",
                 PlanningError::InvalidContext(_) => "invalid_context",
                 PlanningError::IKFailure { .. } => "ik_failure",
+                PlanningError::Ik(e) => match e {
+                    IkError::UnsupportedJointType(_) => "unsupported_joint_type",
+                },
+            },
+            RuntimeError::Ik(e) => match e {
+                IkError::UnsupportedJointType(_) => "unsupported_joint_type",
             },
             RuntimeError::JointCountMismatch { expected, received } => "joint_count_mismatch",
             RuntimeError::ToolFrameNotFound { .. } => "tool_frame_not_found",

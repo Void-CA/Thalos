@@ -335,7 +335,7 @@ mod tests {
     use super::*;
     use thalos_core::{
         ids::OperationId,
-        kinematics::inverse::{IKResult, IKSolver},
+        kinematics::inverse::{IKResult, IKSolver, IkError},
         models::{RobotModel, RobotRegistry},
         robot::state::RobotState,
     };
@@ -343,8 +343,12 @@ mod tests {
     struct NoopIKSolver;
 
     impl IKSolver for NoopIKSolver {
-        fn solve(&self, q0: &[f64], _goal: thalos_core::kinematics::inverse::IKGoal) -> IKResult {
-            IKResult::converged(q0.to_vec(), 1, 0.0, None)
+        fn solve(
+            &self,
+            q0: &[f64],
+            _goal: thalos_core::kinematics::inverse::IKGoal,
+        ) -> Result<IKResult, IkError> {
+            Ok(IKResult::converged(q0.to_vec(), 1, 0.0, None))
         }
     }
 

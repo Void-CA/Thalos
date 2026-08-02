@@ -99,7 +99,11 @@ impl<'a> MotionResolver<'a> {
                     let pose = motion_target_to_pose(target, self.frame_registry)?;
                     let ik_result = self
                         .ik_solver
-                        .solve(&current_joints, IKGoal::Position(pose.translation()));
+                        .solve(&current_joints, IKGoal::Position(pose.translation()))
+                        .map_err(|e| ResolutionError::IkFailed {
+                            instruction_index: index,
+                            reason: e.to_string(),
+                        })?;
 
                     match ik_result.status {
                         IKStatus::Converged => {
@@ -224,7 +228,7 @@ mod tests {
     use thalos_core::{
         execution::program::ExecutionMetadata,
         ids::OperationId,
-        kinematics::inverse::{IKResult, IKSolver},
+        kinematics::inverse::{IKResult, IKSolver, IkError},
         motion::target::{MotionPose, MotionProfile, OutputChannel, OutputValue},
     };
 
@@ -233,8 +237,8 @@ mod tests {
     struct NoopIKSolver;
 
     impl IKSolver for NoopIKSolver {
-        fn solve(&self, q0: &[f64], _goal: IKGoal) -> IKResult {
-            IKResult::converged(q0.to_vec(), 1, 0.0, None)
+        fn solve(&self, q0: &[f64], _goal: IKGoal) -> Result<IKResult, IkError> {
+            Ok(IKResult::converged(q0.to_vec(), 1, 0.0, None))
         }
     }
 
@@ -242,8 +246,8 @@ mod tests {
     struct FailingIKSolver;
 
     impl IKSolver for FailingIKSolver {
-        fn solve(&self, q0: &[f64], _goal: IKGoal) -> IKResult {
-            IKResult::max_iterations(q0.to_vec(), 1000, 999.0, None)
+        fn solve(&self, q0: &[f64], _goal: IKGoal) -> Result<IKResult, IkError> {
+            Ok(IKResult::max_iterations(q0.to_vec(), 1000, 999.0, None))
         }
     }
 
@@ -543,13 +547,13 @@ mod tests {
         }
 
         impl IKSolver for SecondFailsIKSolver {
-            fn solve(&self, q0: &[f64], _goal: IKGoal) -> IKResult {
+            fn solve(&self, q0: &[f64], _goal: IKGoal) -> Result<IKResult, IkError> {
                 let mut count = self.call_count.lock().unwrap();
                 *count += 1;
                 if *count == 2 {
-                    IKResult::max_iterations(q0.to_vec(), 1000, 999.0, None)
+                    Ok(IKResult::max_iterations(q0.to_vec(), 1000, 999.0, None))
                 } else {
-                    IKResult::converged(q0.to_vec(), 1, 0.0, None)
+                    Ok(IKResult::converged(q0.to_vec(), 1, 0.0, None))
                 }
             }
         }

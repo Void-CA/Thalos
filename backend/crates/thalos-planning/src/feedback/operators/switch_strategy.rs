@@ -76,7 +76,11 @@ impl IntentionOperator for SwitchMoveStrategy<'_> {
 
         let result = self
             .ik_solver
-            .solve(self.current_joints, IKGoal::Pose(target_pose.clone()));
+            .solve(self.current_joints, IKGoal::Pose(target_pose.clone()))
+            .map_err(|_| TransformationError::IkFailure {
+                segment_id: finding.segment_id,
+                kind: finding.kind,
+            })?;
 
         if !result.status.is_converged() {
             return Err(TransformationError::IkFailure {
@@ -104,7 +108,7 @@ impl IntentionOperator for SwitchMoveStrategy<'_> {
 #[cfg(test)]
 mod tests {
     use thalos_core::ids::OperationId;
-    use thalos_core::kinematics::inverse::{IKGoal, IKResult, IKSolver, IKStatus};
+    use thalos_core::kinematics::inverse::{IKGoal, IKResult, IKSolver, IKStatus, IkError};
     use thalos_core::motion::segment::MotionSegment;
     use thalos_core::prelude::{FrameId, Pose, Transform3D};
 
@@ -118,8 +122,8 @@ mod tests {
     struct NoopIKSolver;
 
     impl IKSolver for NoopIKSolver {
-        fn solve(&self, q0: &[f64], _goal: IKGoal) -> IKResult {
-            IKResult::converged(q0.to_vec(), 1, 0.0, None)
+        fn solve(&self, q0: &[f64], _goal: IKGoal) -> Result<IKResult, IkError> {
+            Ok(IKResult::converged(q0.to_vec(), 1, 0.0, None))
         }
     }
 
@@ -127,8 +131,8 @@ mod tests {
     struct FailingIKSolver;
 
     impl IKSolver for FailingIKSolver {
-        fn solve(&self, q0: &[f64], _goal: IKGoal) -> IKResult {
-            IKResult::max_iterations(q0.to_vec(), 100, 1.5, None)
+        fn solve(&self, q0: &[f64], _goal: IKGoal) -> Result<IKResult, IkError> {
+            Ok(IKResult::max_iterations(q0.to_vec(), 100, 1.5, None))
         }
     }
 

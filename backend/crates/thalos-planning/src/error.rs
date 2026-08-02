@@ -1,3 +1,4 @@
+use thalos_core::kinematics::inverse::IkError;
 use thalos_core::spatial::pose::Pose;
 use thiserror::Error;
 
@@ -10,6 +11,9 @@ pub enum PlanningError {
         target_pose: Pose,
         reason: IkFailureReason,
     },
+
+    #[error("IK error: {0}")]
+    Ik(#[from] IkError),
 
     #[error("Joint limit violation at joint {joint_index}: value {value} ∉ [{min}, {max}]")]
     JointLimitViolation {

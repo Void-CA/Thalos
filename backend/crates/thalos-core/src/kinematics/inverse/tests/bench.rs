@@ -8,8 +8,12 @@ fn test_transpose_vs_dls_reachable() {
     let jt = JacobianTransposeSolver::new(fk.clone(), ee.clone(), 500, 1e-6, 0.5);
     let dls = DampedLeastSquaresSolver::new(fk, ee, 500, 1e-6, 0.1);
 
-    let r_jt = jt.solve(&[0.0, 0.0], IKGoal::Position(target));
-    let r_dls = dls.solve(&[0.0, 0.0], IKGoal::Position(target));
+    let r_jt = jt
+        .solve(&[0.0, 0.0], IKGoal::Position(target))
+        .expect("JT solve should succeed");
+    let r_dls = dls
+        .solve(&[0.0, 0.0], IKGoal::Position(target))
+        .expect("DLS solve should succeed");
 
     assert!(
         r_jt.status.is_converged(),
@@ -50,8 +54,12 @@ fn test_transpose_vs_dls_singular() {
     let jt = JacobianTransposeSolver::new(fk.clone(), ee.clone(), 500, 1e-6, 0.5);
     let dls = DampedLeastSquaresSolver::new(fk, ee, 500, 1e-6, 0.1);
 
-    let r_jt = jt.solve(&[0.0, 0.0], IKGoal::Position(target));
-    let r_dls = dls.solve(&[0.0, 0.0], IKGoal::Position(target));
+    let r_jt = jt
+        .solve(&[0.0, 0.0], IKGoal::Position(target))
+        .expect("JT solve should succeed");
+    let r_dls = dls
+        .solve(&[0.0, 0.0], IKGoal::Position(target))
+        .expect("DLS solve should succeed");
 
     assert!(
         r_jt.status.is_converged(),
@@ -94,8 +102,12 @@ fn test_transpose_vs_dls_unreachable() {
     let targets = [Vector3::new(3.0, 0.0, 0.0), Vector3::new(0.0, 3.0, 0.0)];
 
     for &target in &targets {
-        let r_jt = jt.solve(&[0.5, 0.0], IKGoal::Position(target));
-        let r_dls = dls.solve(&[0.5, 0.0], IKGoal::Position(target));
+        let r_jt = jt
+            .solve(&[0.5, 0.0], IKGoal::Position(target))
+            .expect("JT solve should succeed");
+        let r_dls = dls
+            .solve(&[0.5, 0.0], IKGoal::Position(target))
+            .expect("DLS solve should succeed");
 
         // Ambos deben agotar iteraciones
         assert_eq!(

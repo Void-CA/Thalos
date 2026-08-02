@@ -107,7 +107,7 @@ mod tests {
 
     use thalos_core::{
         analysis::region::{RegionId, RegionKind, RegionSeverity},
-        kinematics::inverse::{IKGoal, IKResult, IKStatus},
+        kinematics::inverse::{IKGoal, IKResult, IKStatus, IkError},
         models::{RobotModel, RobotRegistry},
         trajectory::TrajectoryPoint,
     };
@@ -129,14 +129,14 @@ mod tests {
     struct DummySolver;
 
     impl IKSolver for DummySolver {
-        fn solve(&self, _q0: &[f64], _goal: IKGoal) -> IKResult {
-            IKResult {
+        fn solve(&self, _q0: &[f64], _goal: IKGoal) -> Result<IKResult, IkError> {
+            Ok(IKResult {
                 q: vec![],
                 status: IKStatus::MaxIterations,
                 iterations: 0,
                 final_error: 999.0,
                 error_history: None,
-            }
+            })
         }
     }
 

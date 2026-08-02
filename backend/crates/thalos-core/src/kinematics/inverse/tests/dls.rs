@@ -12,7 +12,9 @@ fn converges_reachable_target() {
     let solver = DampedLeastSquaresSolver::new(fk, ee, 500, 1e-6, 0.1);
 
     let target = Vector3::new(1.0, 1.0, 0.0);
-    let result = solver.solve(&[0.0, 0.0], IKGoal::Position(target));
+    let result = solver
+        .solve(&[0.0, 0.0], IKGoal::Position(target))
+        .expect("DLS solve should succeed");
 
     assert!(
         result.status.is_converged(),
@@ -48,7 +50,9 @@ fn converges_from_singular() {
 
     // q=[0,0] es singular; JT se queda atascado con J^T·e radial
     let target = Vector3::new(1.2, 0.5, 0.0);
-    let result = solver.solve(&[0.0, 0.0], IKGoal::Position(target));
+    let result = solver
+        .solve(&[0.0, 0.0], IKGoal::Position(target))
+        .expect("DLS solve should succeed");
 
     assert!(
         result.status.is_converged(),
@@ -75,11 +79,15 @@ fn faster_than_jt_from_singular() {
 
     // DLS
     let dls = DampedLeastSquaresSolver::new(fk.clone(), ee.clone(), 500, 1e-6, 0.1);
-    let r_dls = dls.solve(&[0.0, 0.0], IKGoal::Position(target));
+    let r_dls = dls
+        .solve(&[0.0, 0.0], IKGoal::Position(target))
+        .expect("DLS solve should succeed");
 
     // JT
     let jt = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5);
-    let r_jt = jt.solve(&[0.0, 0.0], IKGoal::Position(target));
+    let r_jt = jt
+        .solve(&[0.0, 0.0], IKGoal::Position(target))
+        .expect("JT solve should succeed");
 
     assert!(
         r_dls.status.is_converged(),
@@ -120,7 +128,9 @@ fn unreachable_target_no_nan() {
     ];
 
     for &target in &targets {
-        let result = solver.solve(&[0.5, 0.0], IKGoal::Position(target));
+        let result = solver
+            .solve(&[0.5, 0.0], IKGoal::Position(target))
+            .expect("DLS solve should succeed");
 
         assert_eq!(
             result.status,
@@ -147,7 +157,9 @@ fn error_history() {
     let solver = DampedLeastSquaresSolver::new(fk, ee, 500, 1e-6, 0.1).with_history(true);
 
     let target = Vector3::new(1.0, 1.0, 0.0);
-    let result = solver.solve(&[0.0, 0.0], IKGoal::Position(target));
+    let result = solver
+        .solve(&[0.0, 0.0], IKGoal::Position(target))
+        .expect("DLS solve should succeed");
 
     let history = result
         .error_history

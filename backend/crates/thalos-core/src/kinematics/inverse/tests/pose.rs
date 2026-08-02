@@ -38,7 +38,9 @@ fn dls_pose_ik_reaches_known_pose() {
     let target_pose = make_target_pose(ee, &[PI / 4.0, PI / 3.0]);
     let solver = DampedLeastSquaresSolver::new(fk, ee, 500, 1e-6, 0.1);
 
-    let result = solver.solve(&[0.0, 0.0], IKGoal::Pose(target_pose));
+    let result = solver
+        .solve(&[0.0, 0.0], IKGoal::Pose(target_pose))
+        .expect("DLS solve should succeed");
 
     assert!(
         result.status.is_converged(),
@@ -73,7 +75,9 @@ fn pose_ik_fk_consistency() {
     let target_pose = make_target_pose(ee, &q_orig);
 
     let solver = DampedLeastSquaresSolver::new(fk.clone(), ee, 500, 1e-6, 0.1);
-    let result = solver.solve(&[0.0, 0.0], IKGoal::Pose(target_pose.clone()));
+    let result = solver
+        .solve(&[0.0, 0.0], IKGoal::Pose(target_pose.clone()))
+        .expect("DLS solve should succeed");
 
     assert!(
         result.status.is_converged(),
@@ -121,11 +125,15 @@ fn pose_faster_than_jt_from_singular() {
     let target_pose = make_target_pose(ee, &[PI / 3.0, PI / 6.0]);
 
     let dls = DampedLeastSquaresSolver::new(fk.clone(), ee.clone(), 500, 1e-6, 0.1);
-    let r_dls = dls.solve(&[0.0, 0.0], IKGoal::Pose(target_pose.clone()));
+    let r_dls = dls
+        .solve(&[0.0, 0.0], IKGoal::Pose(target_pose.clone()))
+        .expect("DLS solve should succeed");
 
     // JT con α más chico para evitar overshoot en 6D
     let jt = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.1);
-    let r_jt = jt.solve(&[0.0, 0.0], IKGoal::Pose(target_pose));
+    let r_jt = jt
+        .solve(&[0.0, 0.0], IKGoal::Pose(target_pose))
+        .expect("JT solve should succeed");
 
     assert!(
         r_dls.status.is_converged(),
@@ -178,11 +186,15 @@ fn pose_converges_where_position_ik_stagnates() {
 
     // DLS con posición sola → se estanca (error radial puro)
     let dls_pos = DampedLeastSquaresSolver::new(fk.clone(), ee.clone(), 200, 1e-6, 0.1);
-    let r_pos = dls_pos.solve(&[0.0, 0.0], IKGoal::Position(pos_target));
+    let r_pos = dls_pos
+        .solve(&[0.0, 0.0], IKGoal::Position(pos_target))
+        .expect("DLS solve should succeed");
 
     // DLS con pose → converge (gradiente de orientación)
     let dls_pose = DampedLeastSquaresSolver::new(fk, ee, 500, 1e-6, 0.1);
-    let r_pose = dls_pose.solve(&[0.0, 0.0], IKGoal::Pose(pose_target));
+    let r_pose = dls_pose
+        .solve(&[0.0, 0.0], IKGoal::Pose(pose_target))
+        .expect("DLS solve should succeed");
 
     println!(
         "  position-ik: status={:?}, error={:.2e}, {} iter",

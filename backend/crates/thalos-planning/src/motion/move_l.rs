@@ -94,7 +94,7 @@ impl SegmentPlanner for MoveLPlanner {
                     transform.clone(),
                 );
 
-                let ik_result = ctx.ik_solver.solve(&q_current, IKGoal::Pose(waypoint_pose));
+                let ik_result = ctx.ik_solver.solve(&q_current, IKGoal::Pose(waypoint_pose))?;
 
                 match ik_result.status {
                     IKStatus::Converged => {
@@ -132,7 +132,7 @@ mod tests {
     use super::*;
     use crate::goal::{GoalMetadata, PlanningAssessment, ResolvedPoseGoal};
     use thalos_core::{
-        kinematics::inverse::{IKResult, IKSolver},
+        kinematics::inverse::{IKResult, IKSolver, IkError},
         models::{RobotModel, RobotRegistry},
         robot::state::RobotState,
     };
@@ -140,8 +140,8 @@ mod tests {
     struct NoopIKSolver;
 
     impl IKSolver for NoopIKSolver {
-        fn solve(&self, q0: &[f64], _goal: IKGoal) -> IKResult {
-            IKResult::converged(q0.to_vec(), 1, 0.0, None)
+        fn solve(&self, q0: &[f64], _goal: IKGoal) -> Result<IKResult, IkError> {
+            Ok(IKResult::converged(q0.to_vec(), 1, 0.0, None))
         }
     }
 

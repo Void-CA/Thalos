@@ -1,6 +1,7 @@
 use crate::kinematics::forward::ForwardKinematics;
 use crate::kinematics::inverse::{
     IKSolver,
+    error::IkError,
     result::IKResult,
     solver::{IKGoal, compute_pose_error},
 };
@@ -47,7 +48,7 @@ impl JacobianTransposeSolver {
 }
 
 impl IKSolver for JacobianTransposeSolver {
-    fn solve(&self, q0: &[f64], goal: IKGoal) -> IKResult {
+    fn solve(&self, q0: &[f64], goal: IKGoal) -> Result<IKResult, IkError> {
         let mut q = DynamicVector::from_column_slice(q0);
         let mut error_history = if self.track_history {
             Some(Vec::with_capacity(self.max_iters))
@@ -101,12 +102,12 @@ impl IKSolver for JacobianTransposeSolver {
             }
 
             if magnitude < self.tolerance {
-                return IKResult::converged(
+                return Ok(IKResult::converged(
                     q.as_slice().to_vec(),
                     iteration + 1,
                     magnitude,
                     error_history,
-                );
+                ));
             }
 
             let dq = match &goal {
@@ -125,11 +126,12 @@ impl IKSolver for JacobianTransposeSolver {
             // wrap para continuous (rotación infinita), clamp para prismáticos.
             // Fixed no debería llegar acá (filtrado por dof() > 0)
             for i in 0..n_joints {
-                q[i] = match joint_kinds[i] {
+                let kind = joint_kinds[i];
+                q[i] = match kind {
                     JointKind::Continuous => joint_limits[i].wrap(q[i]),
                     JointKind::Revolute | JointKind::Prismatic => joint_limits[i].clamp(q[i]),
                     JointKind::Fixed | JointKind::Floating | JointKind::Planar => {
-                        unreachable!("Non-1-DOF joints are filtered out")
+                        return Err(IkError::UnsupportedJointType(kind));
                     }
                 };
             }
@@ -153,11 +155,11 @@ impl IKSolver for JacobianTransposeSolver {
             }
         };
 
-        IKResult::max_iterations(
+        Ok(IKResult::max_iterations(
             q.as_slice().to_vec(),
             self.max_iters,
             final_error,
             error_history,
-        )
+        ))
     }
 }

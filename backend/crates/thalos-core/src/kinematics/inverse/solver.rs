@@ -2,6 +2,7 @@ use crate::spatial::pose::Pose;
 use thalos_math::DynamicVector;
 use thalos_math::{UnitQuaternion, Vector3, orientation_error};
 
+use super::error::IkError;
 use super::result::IKResult;
 
 // ─── IK Goal ──────────────────────────────────────────────────────────
@@ -47,5 +48,5 @@ pub fn compute_pose_error(current: &Pose, target: &Pose) -> DynamicVector {
 // ─── IKSolver trait ───────────────────────────────────────────────────
 
 pub trait IKSolver: Send + Sync {
-    fn solve(&self, q0: &[f64], goal: IKGoal) -> IKResult;
+    fn solve(&self, q0: &[f64], goal: IKGoal) -> Result<IKResult, IkError>;
 }

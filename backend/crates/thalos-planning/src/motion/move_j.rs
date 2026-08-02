@@ -62,7 +62,7 @@ mod tests {
     use super::*;
     use crate::goal::{GoalMetadata, PlanningAssessment};
     use thalos_core::{
-        kinematics::inverse::{IKGoal, IKResult, IKSolver},
+        kinematics::inverse::{IKGoal, IKResult, IKSolver, IkError},
         models::{RobotModel, RobotRegistry},
         robot::state::RobotState,
     };
@@ -70,8 +70,8 @@ mod tests {
     struct NoopIKSolver;
 
     impl IKSolver for NoopIKSolver {
-        fn solve(&self, q0: &[f64], _goal: IKGoal) -> IKResult {
-            IKResult::converged(q0.to_vec(), 1, 0.0, None)
+        fn solve(&self, q0: &[f64], _goal: IKGoal) -> Result<IKResult, IkError> {
+            Ok(IKResult::converged(q0.to_vec(), 1, 0.0, None))
         }
     }
 

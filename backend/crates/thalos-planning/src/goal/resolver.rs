@@ -50,7 +50,7 @@ impl GoalResolver {
     ) -> Result<ValidatedGoal<ResolvedPoseGoal>, PlanningError> {
         let ik_result = ctx
             .ik_solver
-            .solve(ctx.current_state.as_slice(), IKGoal::Pose(pose.clone()));
+            .solve(ctx.current_state.as_slice(), IKGoal::Pose(pose.clone()))?;
 
         match ik_result.status {
             IKStatus::Converged => {}

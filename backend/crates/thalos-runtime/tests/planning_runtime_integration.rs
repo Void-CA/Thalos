@@ -30,7 +30,7 @@
 
 use thalos_core::{
     ids::OperationId,
-    kinematics::inverse::{IKGoal, IKResult, IKSolver},
+    kinematics::inverse::{IKGoal, IKResult, IKSolver, IkError},
     models::{RobotModel, RobotRegistry},
     motion::segment::MotionSegment,
     robot::{serial_chain::SerialChain, state::RobotState},
@@ -52,8 +52,8 @@ use thalos_runtime::{
 struct NoopIKSolver;
 
 impl IKSolver for NoopIKSolver {
-    fn solve(&self, q0: &[f64], _goal: IKGoal) -> IKResult {
-        IKResult::converged(q0.to_vec(), 1, 0.0, None)
+    fn solve(&self, q0: &[f64], _goal: IKGoal) -> Result<IKResult, IkError> {
+        Ok(IKResult::converged(q0.to_vec(), 1, 0.0, None))
     }
 }
 

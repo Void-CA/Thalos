@@ -45,7 +45,9 @@ pub fn solve_translation_offset(
             },
         );
 
-        let ik_result = ik_solver.solve(&q, IKGoal::Pose(target));
+        let ik_result = ik_solver
+            .solve(&q, IKGoal::Pose(target))
+            .map_err(|e| RepairError::IkFailure(e.to_string()))?;
         if !ik_result.status.is_converged() {
             return Err(RepairError::IkFailure(format!(
                 "IK did not converge (status: {:?}, error: {})",
@@ -90,7 +92,9 @@ pub fn solve_rotation_offset(
             },
         );
 
-        let ik_result = ik_solver.solve(&q, IKGoal::Pose(target));
+        let ik_result = ik_solver
+            .solve(&q, IKGoal::Pose(target))
+            .map_err(|e| RepairError::IkFailure(e.to_string()))?;
         if !ik_result.status.is_converged() {
             return Err(RepairError::IkFailure(format!(
                 "IK did not converge for rotation (status: {:?}, error: {})",

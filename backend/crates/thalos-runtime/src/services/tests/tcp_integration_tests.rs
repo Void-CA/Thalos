@@ -278,7 +278,9 @@ async fn ik_converges_and_tcp_maintains_offset() {
     let solver = DampedLeastSquaresSolver::new(fk_ik, tcp.base_frame.clone(), 500, 1e-6, 0.1);
 
     // Solve IK to reach the flange target
-    let ik_result = solver.solve(&q_zero, IKGoal::Position(flange_target));
+    let ik_result = solver
+        .solve(&q_zero, IKGoal::Position(flange_target))
+        .expect("IK solve should succeed");
 
     // IK should converge
     assert!(

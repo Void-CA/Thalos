@@ -10,7 +10,9 @@ fn result_exposes_metadata() {
 
     let q0 = vec![0.0, 0.0];
     let target = Vector3::new(1.0, 1.0, 0.0);
-    let result = solver.solve(&q0, IKGoal::Position(target));
+    let result = solver
+        .solve(&q0, IKGoal::Position(target))
+        .expect("JT solve should succeed");
 
     assert_eq!(result.q.len(), 2, "Solución debe tener 2 joint values");
     assert!(
@@ -50,7 +52,9 @@ fn error_history_is_recorded() {
 
     let q0 = vec![0.0, 0.0];
     let target = Vector3::new(1.0, 1.0, 0.0);
-    let result = solver.solve(&q0, IKGoal::Position(target));
+    let result = solver
+        .solve(&q0, IKGoal::Position(target))
+        .expect("JT solve should succeed");
 
     let history = result
         .error_history
@@ -91,7 +95,9 @@ fn two_dof_planar_arm_known_solution() {
 
     let q0 = vec![0.0, 0.0];
     let target = Vector3::new(1.0, 1.0, 0.0);
-    let result = solver.solve(&q0, IKGoal::Position(target));
+    let result = solver
+        .solve(&q0, IKGoal::Position(target))
+        .expect("JT solve should succeed");
 
     println!(
         "  q1 = {:.6} rad ({:.2}°)",
@@ -125,7 +131,9 @@ fn fk_ik_consistency() {
 
     let q0 = vec![0.0, 0.0];
     let target = Vector3::new(1.0, 1.0, 0.0);
-    let result = solver.solve(&q0, IKGoal::Position(target));
+    let result = solver
+        .solve(&q0, IKGoal::Position(target))
+        .expect("JT solve should succeed");
 
     let fk_result = fk.evaluate(&result.q);
     let reached = fk_result.ee_position().unwrap();
@@ -156,7 +164,9 @@ fn one_dof_reaches_known_target() {
 
     let q0 = vec![0.0];
     let target = Vector3::new(0.0, 1.0, 0.0);
-    let result = solver.solve(&q0, IKGoal::Position(target));
+    let result = solver
+        .solve(&q0, IKGoal::Position(target))
+        .expect("JT solve should succeed");
 
     println!(
         "  θ = {:.6} rad ({:.2}°)",
@@ -240,7 +250,9 @@ fn unreachable_target_returns_max_iterations() {
 
     let q0 = vec![0.0, 0.0];
     let target = Vector3::new(3.0, 0.0, 0.0);
-    let result = solver.solve(&q0, IKGoal::Position(target));
+    let result = solver
+        .solve(&q0, IKGoal::Position(target))
+        .expect("JT solve should succeed");
 
     assert_eq!(
         result.status,
@@ -285,7 +297,9 @@ fn unreachable_target_error_equals_distance() {
     ];
 
     for (target, target_distance) in test_cases {
-        let result = solver.solve(&[0.0, 0.0], IKGoal::Position(target));
+        let result = solver
+        .solve(&[0.0, 0.0], IKGoal::Position(target))
+        .expect("JT solve should succeed");
 
         assert_eq!(
             result.status,
@@ -333,7 +347,9 @@ fn unreachable_target_does_not_explode() {
     for q0 in &start_configs {
         for &target in &targets {
             let solver = JacobianTransposeSolver::new(fk.clone(), ee.clone(), 200, 1e-6, 0.5);
-            let result = solver.solve(q0, IKGoal::Position(target));
+            let result = solver
+                .solve(q0, IKGoal::Position(target))
+                .expect("JT solve should succeed");
 
             assert_eq!(
                 result.status,
@@ -373,11 +389,15 @@ fn singular_radial_error_blocks_convergence() {
 
     // Desde singular: J^T · e = 0 → stuck
     let solver_sing = JacobianTransposeSolver::new(fk.clone(), ee.clone(), 100, 1e-6, 0.5);
-    let result_singular = solver_sing.solve(&[0.0, 0.0], IKGoal::Position(target));
+    let result_singular = solver_sing
+        .solve(&[0.0, 0.0], IKGoal::Position(target))
+        .expect("JT solve should succeed");
 
     // Desde no-singular: converge
     let solver_nonsing = JacobianTransposeSolver::new(fk, ee, 100, 1e-6, 0.5);
-    let result_nonsingular = solver_nonsing.solve(&[PI / 4.0, PI / 4.0], IKGoal::Position(target));
+    let result_nonsingular = solver_nonsing
+        .solve(&[PI / 4.0, PI / 4.0], IKGoal::Position(target))
+        .expect("JT solve should succeed");
 
     println!(
         "  singular (q=[0,0]):       {} iter, error = {:.2e}, q = [{:.4}, {:.4}], status={:?}",
@@ -424,7 +444,9 @@ fn singular_config_error_history_monotonic() {
     let solver = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5).with_history(true);
 
     let target = Vector3::new(1.2, 0.5, 0.0);
-    let result = solver.solve(&[0.0, 0.0], IKGoal::Position(target));
+    let result = solver
+        .solve(&[0.0, 0.0], IKGoal::Position(target))
+        .expect("JT solve should succeed");
 
     assert!(
         result.status.is_converged(),
@@ -459,7 +481,9 @@ fn singular_config_no_oscillation() {
     let solver = JacobianTransposeSolver::new(fk, ee, 500, 1e-6, 0.5).with_history(true);
 
     let target = Vector3::new(1.2, 0.5, 0.0);
-    let result = solver.solve(&[0.0, 0.0], IKGoal::Position(target));
+    let result = solver
+        .solve(&[0.0, 0.0], IKGoal::Position(target))
+        .expect("JT solve should succeed");
 
     assert!(
         result.status.is_converged(),

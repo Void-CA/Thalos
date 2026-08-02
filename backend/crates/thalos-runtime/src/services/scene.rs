@@ -227,7 +227,7 @@ impl SceneService {
         let solver =
             DampedLeastSquaresSolver::new(fk, frame, IK_MAX_ITERS, IK_TOLERANCE, IK_LAMBDA);
         let q0 = runtime.active_robot.joints.clone();
-        let result = solver.solve(&q0, goal);
+        let result = solver.solve(&q0, goal)?;
         Ok((result.q.clone(), result))
     }
 

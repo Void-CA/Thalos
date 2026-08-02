@@ -14,11 +14,12 @@ impl ExecutableCommand for KinematicsCommand {
 
     fn execute(&self, runtime: &mut SceneRuntime) -> Result<IKResult, RuntimeError> {
         match self {
-            Self::MoveToPosition { frame, target } => {
-                Ok(runtime.solve_and_apply_ik(*frame, IKGoal::Position(*target)))
-            }
+            Self::MoveToPosition { frame, target } => Ok(runtime.solve_and_apply_ik(
+                *frame,
+                IKGoal::Position(*target),
+            )?),
             Self::MoveToPose { frame, target } => {
-                Ok(runtime.solve_and_apply_ik(*frame, IKGoal::Pose(target.clone())))
+                Ok(runtime.solve_and_apply_ik(*frame, IKGoal::Pose(target.clone()))?)
             }
         }
     }

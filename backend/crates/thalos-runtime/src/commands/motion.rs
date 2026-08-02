@@ -131,7 +131,7 @@ impl ExecutableCommand for MotionCommands {
                 // under-actuated arms like Planar2R that can't match a full pose).
                 let solver = make_ik_solver(&chain, *frame);
                 let translation = target_pose.translation();
-                let ik = solver.solve(&joints, IKGoal::Position(translation));
+                let ik = solver.solve(&joints, IKGoal::Position(translation))?;
 
                 let target = ik.q.clone();
                 let state = RobotState::new(joints.clone());

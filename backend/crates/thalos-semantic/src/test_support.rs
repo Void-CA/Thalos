@@ -16,7 +16,7 @@ use std::time::Duration;
 use thalos_core::{
     execution::program::ExecutionInstruction,
     ids::OperationId,
-    kinematics::inverse::{IKGoal, IKResult, IKSolver},
+    kinematics::inverse::{IKGoal, IKResult, IKSolver, IkError},
     motion::{MotionPose, MotionProfile},
 };
 
@@ -123,7 +123,7 @@ pub fn lower(program: SemanticProgram) -> Vec<ExecutionInstruction> {
 pub struct FixedTargetIKSolver;
 
 impl IKSolver for FixedTargetIKSolver {
-    fn solve(&self, _q0: &[f64], _goal: IKGoal) -> IKResult {
-        IKResult::converged(vec![0.5, 0.3], 1, 0.0, None)
+    fn solve(&self, _q0: &[f64], _goal: IKGoal) -> Result<IKResult, IkError> {
+        Ok(IKResult::converged(vec![0.5, 0.3], 1, 0.0, None))
     }
 }

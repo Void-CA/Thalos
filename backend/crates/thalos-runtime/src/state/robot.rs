@@ -3,7 +3,7 @@ use thalos_core::spatial::frame::FrameId;
 use thalos_core::{
     kinematics::{
         forward::ForwardKinematics,
-        inverse::{DampedLeastSquaresSolver, IKGoal, IKResult, IKSolver},
+        inverse::{DampedLeastSquaresSolver, IKGoal, IKResult, IKSolver, IkError},
     },
     prelude::Trajectory,
 };
@@ -70,14 +70,18 @@ impl SceneRuntime {
         }
     }
 
-    pub fn solve_and_apply_ik(&mut self, frame: FrameId, goal: IKGoal) -> IKResult {
+    pub fn solve_and_apply_ik(
+        &mut self,
+        frame: FrameId,
+        goal: IKGoal,
+    ) -> Result<IKResult, IkError> {
         let fk = ForwardKinematics::new(self.active_robot.chain.clone());
         let solver =
             DampedLeastSquaresSolver::new(fk, frame, IK_MAX_ITERS, IK_TOLERANCE, IK_LAMBDA);
         let q0 = self.active_robot.joints.clone();
-        let result = solver.solve(&q0, goal);
+        let result = solver.solve(&q0, goal)?;
         self.active_robot.joints = result.q.clone();
-        result
+        Ok(result)
     }
 
     // ── Single-shot plan setters (MoveJ / MoveL) ──
