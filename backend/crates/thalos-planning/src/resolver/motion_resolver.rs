@@ -743,8 +743,8 @@ mod tests {
     #[test]
     fn resolver_accepts_real_urdf_chain_dof() {
         let urdf = include_str!("../../../../../docs/robot/icebot.urdf");
-        let chain = thalos_core::robot::adapter::from_urdf(urdf)
-            .expect("icebot URDF must build a chain");
+        let chain =
+            thalos_core::robot::adapter::from_urdf(urdf).expect("icebot URDF must build a chain");
         assert_eq!(chain.dof_count(), 4, "icebot has 4 actuated DOF");
 
         let ik = NoopIKSolver;

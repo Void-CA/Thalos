@@ -104,7 +104,12 @@ pub async fn plan(
     // ADR-003 P1 — the loaded chain is the single source of kinematics. The
     // planner consumes `snapshot.chain` and derives DOF from
     // `chain.dof_count()`; it never rebuilds a chain from a `RobotModel`.
-    let snapshot = state.services.scene.snapshot().await.map_err(planning_error)?;
+    let snapshot = state
+        .services
+        .scene
+        .snapshot()
+        .await
+        .map_err(planning_error)?;
     let chain = snapshot.chain.clone();
     let initial_joints = snapshot.joints.clone();
     let dof = chain.dof_count();

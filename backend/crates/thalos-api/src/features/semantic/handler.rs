@@ -112,7 +112,12 @@ pub async fn run_semantic(
     // `chain.dof_count()`; it never rebuilds a chain from a `RobotModel`.
     // `SerialChain` is `Send + Sync` plain data, so cloning it inside the
     // sync block below is safe.
-    let snapshot = state.services.scene.snapshot().await.map_err(planning_error)?;
+    let snapshot = state
+        .services
+        .scene
+        .snapshot()
+        .await
+        .map_err(planning_error)?;
     let chain = snapshot.chain.clone();
     let initial_joints = snapshot.joints.clone();
 
@@ -161,8 +166,8 @@ pub async fn run_semantic(
         let mut registry = FrameRegistry::new();
         registry.create("world");
 
-        let resolver =
-            MotionResolver::new(&ik_solver, &registry, &initial_joints, dof).map_err(resolver_error)?;
+        let resolver = MotionResolver::new(&ik_solver, &registry, &initial_joints, dof)
+            .map_err(resolver_error)?;
         let resolution = resolver.resolve(&mp).map_err(resolver_error)?;
 
         let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
