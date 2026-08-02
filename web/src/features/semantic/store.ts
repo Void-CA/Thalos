@@ -23,12 +23,18 @@ interface SemanticEditorState {
   reset: () => void
 }
 
-const initialOp: SemanticOp = { type: 'pick', object: '' }
+/** Canonical sample program — Pick → Wait → Place → Home over the seeded scene. */
+const sampleOperations: SemanticOp[] = [
+  { type: 'pick', origin: 'op_1', object: 'bolt-1' },
+  { type: 'wait', origin: 'op_2', duration: { secs: 1, nanos: 0 } },
+  { type: 'place', origin: 'op_3', object: 'bolt-1', destination: 'tray-1' },
+  { type: 'home', origin: 'op_4' },
+]
 
 export const useSemanticEditor = create<SemanticEditorState>()(
   devtools(
     (set) => ({
-      operations: [{ ...initialOp }],
+      operations: sampleOperations.map((op) => ({ ...op })),
       result: null,
       loading: false,
       error: null,
@@ -60,7 +66,7 @@ export const useSemanticEditor = create<SemanticEditorState>()(
       setLoading: (loading) => set({ loading }),
       setError: (error) => set({ error, loading: false }),
       reset: () =>
-        set({ operations: [{ ...initialOp }], result: null, error: null }),
+        set({ operations: sampleOperations.map((op) => ({ ...op })), result: null, error: null }),
     }),
     { name: 'semantic-editor' },
   ),

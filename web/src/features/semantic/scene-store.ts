@@ -46,11 +46,20 @@ interface SceneState {
 // Mantener home_pose en FK([0,0,0,0]) para que IK converja al inicio
 const defaultPose: PoseDef = { position: [1.8, 0.0, 0.5], orientation: [0, 0, 0, 1] }
 
+// Canonical SCARA scene — seeded so a fresh Task is immediately runnable.
+// Values match the SceneEditor "+" handlers so edits behave identically.
+const seededObjects: SceneObject[] = [
+  { id: 'bolt-1', name: 'Bolt', pose: { position: [1.8, 0, 0.4], orientation: [0, 0, 0, 1] } },
+]
+const seededLocations: SceneLocation[] = [
+  { id: 'tray-1', name: 'Tray', pose: { position: [0.8, -0.3, 0], orientation: [0, 0, 0, 1] } },
+]
+
 export const useSceneStore = create<SceneState>()(
   devtools(
     (set, get) => ({
-      objects: [],
-      locations: [],
+      objects: seededObjects.map((o) => ({ ...o })),
+      locations: seededLocations.map((l) => ({ ...l })),
       tools: [],
       homePose: { ...defaultPose },
 
