@@ -173,16 +173,6 @@ impl SceneService {
         Ok(Self::build_snapshot(&runtime, None))
     }
 
-    /// The active robot model of the scene.
-    ///
-    /// The semantic planning path injects this model into the
-    /// `MotionResolver` boundary (invariant I1 — single robot per
-    /// compilation, taken from scene state).
-    pub async fn robot_model(&self) -> RobotModel {
-        let runtime = self.runtime.read().await;
-        runtime.active_robot.model
-    }
-
     /// The current joint configuration of the scene's active robot.
     ///
     /// Used as the resolver's `initial_state` so planning starts from the

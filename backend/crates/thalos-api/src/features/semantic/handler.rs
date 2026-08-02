@@ -5,7 +5,6 @@ use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use serde::Serialize;
 use thalos_core::{
     kinematics::{forward::ForwardKinematics, inverse::DampedLeastSquaresSolver},
-    models::RobotRegistry,
     motion::MotionProfile,
     robot::state::RobotState,
     spatial::frame::FrameRegistry,
@@ -94,8 +93,9 @@ pub async fn compile_semantic(
 /// PlanningProgram + RuntimeProgram → PlanCompiler → CompiledPlan
 /// ```
 ///
-/// The `RobotModel` is injected from the scene state (I1) and drives both
-/// the IK solver and the DOF validation at the `MotionResolver` boundary.
+/// The loaded chain (`RuntimeSnapshot.chain`) is injected from the scene
+/// state (I1) and drives both the IK solver and the DOF validation at the
+/// `MotionResolver` boundary.
 /// The `RuntimeProgram` is produced but not yet scheduled — runtime event
 /// dispatch arrives with the at_time post-pass (PR 3).
 ///
@@ -106,9 +106,15 @@ pub async fn run_semantic(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<SemanticCompileRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    // ── Robot del scene (I1: un solo robot por compilación) ──
-    let robot_model = state.services.scene.robot_model().await;
-    let initial_joints = state.services.scene.initial_joints().await;
+    // ── Robot del scene (I1: single robot per compilation) ──
+    // ADR-003 P1 — the loaded chain is the single source of kinematics. The
+    // semantic path consumes `snapshot.chain` and derives DOF from
+    // `chain.dof_count()`; it never rebuilds a chain from a `RobotModel`.
+    // `SerialChain` is `Send + Sync` plain data, so cloning it inside the
+    // sync block below is safe.
+    let snapshot = state.services.scene.snapshot().await.map_err(planning_error)?;
+    let chain = snapshot.chain.clone();
+    let initial_joints = snapshot.joints.clone();
 
     // ── Síncrono: validación, lowering, resolución, compilación, timeline ──
     let (duration_secs, segment_count, waypoints_json, event_count, compiled, runtime_program) = {
@@ -144,10 +150,10 @@ pub async fn run_semantic(
             )
         })?;
 
-        // Build the IK solver from the scene's RobotModel (pattern recovered
-        // from the deleted scara.rs: `RobotRegistry::create_default` →
+        // Build the IK solver from the scene's loaded chain (pattern
+        // recovered from the deleted scara.rs: `snapshot.chain` →
         // `ForwardKinematics` → `DampedLeastSquaresSolver`).
-        let chain = RobotRegistry::create_default(robot_model);
+        let dof = chain.dof_count();
         let fk = ForwardKinematics::new(chain.clone());
         let ik_solver = DampedLeastSquaresSolver::new(fk, *chain.end_effector(), 1000, 1e-4, 0.1);
 
@@ -155,7 +161,6 @@ pub async fn run_semantic(
         let mut registry = FrameRegistry::new();
         registry.create("world");
 
-        let dof = robot_model.metadata().dof;
         let resolver =
             MotionResolver::new(&ik_solver, &registry, &initial_joints, dof).map_err(|e| {
                 (
@@ -230,4 +235,14 @@ pub async fn run_semantic(
         "waypoints": waypoints_json,
         "event_count": event_count,
     })))
+}
+
+/// Map a scene/planning error to a 4xx HTTP response with a descriptive
+/// message (spec: Error Handling). The response body carries only the error
+/// — no partial `CompiledPlan` or `RuntimeProgram` is ever returned.
+fn planning_error(e: impl std::fmt::Display) -> (StatusCode, Json<serde_json::Value>) {
+    (
+        StatusCode::UNPROCESSABLE_ENTITY,
+        Json(serde_json::json!({"error": format!("{e}"), "code": "planning_error"})),
+    )
 }

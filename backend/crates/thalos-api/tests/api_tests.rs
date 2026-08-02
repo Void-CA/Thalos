@@ -2170,3 +2170,148 @@ async fn motion_plan_resolver_error_returns_4xx_no_partial() {
         "no partial runtime_program may be returned"
     );
 }
+
+// ── ORIGIN regression: URDF-loaded robot plans against its real chain ──────
+
+/// TaskDocument payload whose scene `home_pose` sits inside the icebot
+/// workspace: `home` lowers to a single MoveJ toward that pose (the same
+/// lowering `planar2r_task_payload` relies on, but reachable by a 4-DOF
+/// planar + prismatic robot).
+fn icebot_task_payload(operations: Value) -> Value {
+    json!({
+        "task": {
+            "id": "icebot-test",
+            "metadata": {
+                "name": "icebot-test",
+                "version": 1,
+                "created_at": "",
+                "modified_at": ""
+            },
+            "scene": {
+                "objects": [],
+                "locations": [],
+                "tools": [],
+                "home_pose": {
+                    "position": [0.225, 0.0, 0.02],
+                    "orientation": [0.0, 0.0, 0.0, 1.0]
+                }
+            },
+            "program": {
+                "operations": operations
+            }
+        }
+    })
+}
+
+/// ORIGIN regression (spec: "Icebot URDF plan returns 4-DOF waypoints").
+///
+/// Loading the 4-DOF icebot URDF and planning must produce 200 with 4-joint
+/// waypoints. The planner MUST consume `snapshot.chain` — a
+/// `create_default(Planar3R)` reconstruction (the pre-fix path) fails with
+/// `DofMismatch { expected: 3, actual: 4 }` → 422, or silently emits
+/// 3-joint waypoints; the assertion below catches both.
+#[tokio::test]
+async fn urdf_load_then_plan_uses_real_chain() {
+    let app = test_app().await;
+    let icebot_urdf = include_str!("../../../../docs/robot/icebot.urdf");
+
+    // Load the 4-DOF icebot URDF.
+    let (load_status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/robot/from-urdf",
+        Some(json!({"urdf_source": icebot_urdf})),
+    )
+    .await;
+    assert_eq!(load_status, StatusCode::OK, "URDF load must succeed");
+
+    // MoveJ toward a pose inside the icebot workspace. The chain tip is
+    // `tool0` (fixed tcp_joint child) at zero-config (0.225, 0, 0.04); the
+    // target below keeps X/Y at the start (the DLS solver's XY Jacobian is
+    // degenerate across the fixed joint) and moves the prismatic joint, so
+    // IK converges with real 4-joint motion.
+    let program = json!({
+        "instructions": [{
+            "type": "move_j",
+            "origin": "op_0",
+            "target": {
+                "type": "pose",
+                "position": [0.225, 0.0, 0.02],
+                "orientation": [0.0, 0.0, 0.0, 1.0],
+                "frame": "world"
+            },
+            "profile": {"max_velocity": 1.0, "max_acceleration": 0.5, "max_jerk": null}
+        }],
+        "metadata": {"schema_version": 1, "source_project": "urdf-origin"}
+    });
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/motion/plan",
+        Some(program),
+    )
+    .await;
+    assert_eq!(
+        status, StatusCode::OK,
+        "URDF robot must plan against its real chain: {:?}",
+        body
+    );
+    let body = body.expect("plan response body");
+    let waypoints = body["compiled_plan"]["merged_trajectory"]["waypoints"]
+        .as_array()
+        .expect("compiled_plan waypoints");
+    assert!(!waypoints.is_empty(), "plan must produce waypoints");
+    // Zero `RobotRegistry::create_default` calls during the flow: any
+    // Planar3R reconstruction yields 3-joint waypoints or a DofMismatch,
+    // both incompatible with this assertion.
+    assert!(
+        waypoints
+            .iter()
+            .all(|wp| wp["joints"].as_array().map(|a| a.len()).unwrap_or(0) == 4),
+        "every waypoint must carry 4 joints (real icebot chain), got {:?}",
+        waypoints
+    );
+}
+
+/// Spec: unified-kinematics "Semantic execute uses loaded chain" — same URDF
+/// via the semantic path must produce 200 with 4-joint waypoints.
+#[tokio::test]
+async fn urdf_load_then_semantic_execute_uses_real_chain() {
+    let app = test_app().await;
+    let icebot_urdf = include_str!("../../../../docs/robot/icebot.urdf");
+
+    let (load_status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/robot/from-urdf",
+        Some(json!({"urdf_source": icebot_urdf})),
+    )
+    .await;
+    assert_eq!(load_status, StatusCode::OK, "URDF load must succeed");
+
+    // `home` lowers to MoveJ toward the scene home_pose (inside the icebot
+    // workspace) — the semantic path must resolve it against the real chain.
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/semantic/execute",
+        Some(icebot_task_payload(json!([
+            {"type": "home", "origin": "op_0"}
+        ]))),
+    )
+    .await;
+    assert_eq!(
+        status, StatusCode::OK,
+        "semantic execute must plan against the real chain: {:?}",
+        body
+    );
+    let body = body.expect("semantic response body");
+    let wps = body["waypoints"].as_array().expect("waypoints array");
+    assert!(!wps.is_empty(), "semantic path must produce waypoints");
+    assert!(
+        wps.iter()
+            .all(|wp| wp["joints"].as_array().map(|a| a.len()).unwrap_or(0) == 4),
+        "every waypoint must carry 4 joints (real icebot chain), got {:?}",
+        wps
+    );
+}

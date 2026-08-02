@@ -5,7 +5,6 @@ use serde_json::json;
 use thalos_core::{
     execution::program::ExecutionProgram,
     kinematics::{forward::ForwardKinematics, inverse::DampedLeastSquaresSolver},
-    models::RobotRegistry,
     robot::state::RobotState,
     spatial::frame::FrameRegistry,
 };
@@ -93,22 +92,26 @@ pub async fn movel(
 ///                          └────────→ TimelineScheduler → RuntimeProgram (temporal)
 /// ```
 ///
-/// The `RobotModel` is injected from the scene state (I1) and drives both
-/// the IK solver and the DOF validation at the `MotionResolver` boundary.
-/// Plan-only: nothing is scheduled into the scene runtime, so no partial
-/// state is ever modified on failure.
+/// The `RuntimeSnapshot` chain is injected from the scene state (I1) and
+/// drives both the IK solver and the DOF validation at the `MotionResolver`
+/// boundary. Plan-only: nothing is scheduled into the scene runtime, so no
+/// partial state is ever modified on failure.
 pub async fn plan(
     State(state): State<Arc<AppState>>,
     Json(program): Json<ExecutionProgram>,
 ) -> Result<Json<MotionPlanResponse>, (StatusCode, Json<serde_json::Value>)> {
-    // ── Robot del scene (I1: un solo robot por compilación) ──
-    let robot_model = state.services.scene.robot_model().await;
-    let initial_joints = state.services.scene.initial_joints().await;
+    // ── Robot del scene (I1: single robot per compilation) ──
+    // ADR-003 P1 — the loaded chain is the single source of kinematics. The
+    // planner consumes `snapshot.chain` and derives DOF from
+    // `chain.dof_count()`; it never rebuilds a chain from a `RobotModel`.
+    let snapshot = state.services.scene.snapshot().await.map_err(planning_error)?;
+    let chain = snapshot.chain.clone();
+    let initial_joints = snapshot.joints.clone();
+    let dof = chain.dof_count();
 
-    // Build the IK solver from the scene's RobotModel — the same pattern as
-    // the semantic handler (`RobotRegistry::create_default` →
-    // `ForwardKinematics` → `DampedLeastSquaresSolver`).
-    let chain = RobotRegistry::create_default(robot_model);
+    // Build the IK solver from the scene's loaded chain — the same pattern as
+    // the semantic handler (`snapshot.chain` → `ForwardKinematics` →
+    // `DampedLeastSquaresSolver`).
     let fk = ForwardKinematics::new(chain.clone());
     let ik_solver = DampedLeastSquaresSolver::new(fk, *chain.end_effector(), 1000, 1e-4, 0.1);
 
@@ -116,7 +119,6 @@ pub async fn plan(
     let mut registry = FrameRegistry::new();
     registry.create("world");
 
-    let dof = robot_model.metadata().dof;
     let resolver =
         MotionResolver::new(&ik_solver, &registry, &initial_joints, dof).map_err(planning_error)?;
     let resolution = resolver.resolve(&program).map_err(planning_error)?;
