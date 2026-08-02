@@ -14,7 +14,11 @@ export class ApiError extends Error {
   readonly status?: number
   readonly code?: string
   readonly details?: unknown
-  readonly cause?: unknown
+  /** Native ES2022 `Error.cause`, set via `super(message, { cause })`.
+   *  Declared as ambient (`declare`) so it types the native property WITHOUT
+   *  emitting a class-field initializer — a plain field would overwrite the
+   *  cause set by `super()` with `undefined`. */
+  declare readonly cause?: unknown
 
   constructor(
     message: string,
