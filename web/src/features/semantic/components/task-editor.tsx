@@ -4,6 +4,38 @@ import { useSceneStore } from '../scene-store'
 import { useExecutionStore } from '@/features/execution/execution-store'
 import { OperationRow } from './operation-row'
 import { compileSemantic, executeSemantic, CompileError } from '../api'
+import { isApiError } from '@/shared/errors'
+
+/** Friendly guided CTAs keyed on the backend machine-readable error code
+ *  (verbatim codes from `backend/crates/thalos-api/src/features/semantic/handler.rs`).
+ *  The HTTP status is complementary only — decisions key on `code`. */
+const CTA_BY_CODE: Record<string, string> = {
+  semantic_validation_error: 'Fix the program errors',
+  lowering_error: 'Define the referenced objects/locations in Scene',
+  planning_error: 'Load a robot before executing',
+}
+
+interface CodedError extends Error {
+  code?: string
+  status?: number
+}
+
+/** Map a normalized HTTP error (ApiError / CompileError) to a guided CTA. */
+function describeError(err: unknown): string {
+  if (err instanceof CompileError || isApiError(err)) {
+    const coded = err as CodedError
+    if (coded.code && CTA_BY_CODE[coded.code]) {
+      return `${CTA_BY_CODE[coded.code]} — ${coded.message}`
+    }
+    if (coded.code) {
+      return coded.status != null
+        ? `${coded.message} (${coded.code}, HTTP ${coded.status})`
+        : `${coded.message} (${coded.code})`
+    }
+    return coded.message
+  }
+  return err instanceof Error ? err.message : 'Operation failed'
+}
 
 export function TaskEditor() {
   const {
@@ -24,7 +56,7 @@ export function TaskEditor() {
       const res = await compileSemantic({ task: toTaskDocument(makeOps()) })
       setResult(res)
     } catch (err) {
-      setError(err instanceof CompileError ? err.message : (err instanceof Error ? err.message : 'Failed'))
+      setError(describeError(err))
     } finally { setLoading(false) }
   }
 
@@ -38,7 +70,7 @@ export function TaskEditor() {
       // 2. Start execution — ExecutionStore handles tick loop + applyRuntimeDelta
       await useExecutionStore.getState().start()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Simulation failed')
+      setError(describeError(err))
     } finally { setLoading(false) }
   }
 
