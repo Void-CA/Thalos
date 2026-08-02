@@ -89,6 +89,13 @@ function startLoop() {
     try {
       const delta = await executionClient.tick(dt)
 
+      // An in-flight tick may resolve after pause/cancel/completion — never
+      // clobber the viewport with stale transforms from a superseded session.
+      if (useExecutionStore.getState().status !== 'running') {
+        stopLoop()
+        return
+      }
+
       // Convertir DTO → tipo interno (mismas shape, distinto módulo)
       const transforms = delta.transforms as unknown as ObjectTransform[]
       const executionInfo: ExecutionInfo = {
@@ -97,7 +104,7 @@ function startLoop() {
         elapsedSecs: delta.execution.elapsed_secs,
       }
 
-      // Actualizar viewport (Path A en RobotModel)
+      // Escribir el snapshot de ejecución para el viewport (single source of truth)
       useSceneStore.getState().applyRuntimeDelta(delta.joints, transforms, executionInfo)
 
       // Mapear estado del backend al nuestro
