@@ -5,22 +5,30 @@ import { TCP_COLOR } from '@/shared/tokens'
 
 export function TcpOverlay() {
   const activeTcp = useSceneStore(s => s.activeTcp)
-  const liveTransforms = useSceneStore(s => s.liveTransforms)
+  const transformSnapshot = useSceneStore(s => s.transformSnapshot)
   const data = useSceneStore(s => s.data)
 
   if (!activeTcp || !data) return null
 
   const frameId = String(activeTcp.baseFrameId)
-  const liveTransform = liveTransforms.find(t => t.id === frameId)
 
-  let position: THREE.Vector3
-  if (liveTransform) {
-    position = new THREE.Vector3(...liveTransform.translation)
-  } else {
-    const staticFrame = data.frames.find(f => f.id === frameId)
-    if (!staticFrame) return null
-    position = new THREE.Vector3(...staticFrame.translation)
+  // Resolve the TCP frame position from the same transform source that drives
+  // the robot model: execution ticks, FK frames, then the static scene.
+  let framePosition: [number, number, number] | null = null
+  if (transformSnapshot.kind === 'execution') {
+    const tx = transformSnapshot.transforms.find(t => t.id === frameId)
+    if (tx) framePosition = tx.translation
+  } else if (transformSnapshot.kind === 'fk') {
+    const frame = transformSnapshot.frames.get(frameId)
+    if (frame) framePosition = frame.pos
   }
+  if (!framePosition) {
+    const staticFrame = data.frames.find(f => f.id === frameId)
+    if (staticFrame) framePosition = staticFrame.translation
+  }
+  if (!framePosition) return null
+
+  const position = new THREE.Vector3(...framePosition)
 
   if (activeTcp.offset) {
     position.add(new THREE.Vector3(...activeTcp.offset))

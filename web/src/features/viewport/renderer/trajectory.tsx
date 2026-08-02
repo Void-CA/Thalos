@@ -7,6 +7,7 @@ import {
   SEGMENT_PALETTE,
   WAYPOINT_TYPE,
   TRAJECTORY_LINE,
+  WAYPOINT_ACTIVE,
   SEVERITY,
   MANIP_HIGH, MANIP_MED, MANIP_LOW,
   SINGULAR_NORMAL, SINGULAR_NEAR, SINGULAR_SINGULAR,
@@ -26,11 +27,23 @@ export function Trajectory() {
   const optimizedPositions = useSceneStore(s => s.optimizedPositions)
   const trajectoryViewMode = useSceneStore(s => s.trajectoryViewMode)
   const colorMode = useSceneStore(s => s.trajectoryColorMode)
+  const transformSnapshot = useSceneStore(s => s.transformSnapshot)
+  const execution = useSceneStore(s => s.execution)
   const analysisWp = useAnalysisStore(s => s.waypoints)
   const segments = activePlan?.segments
   const vis = activePlan?.visualization
 
   const hasAnalysis = analysisWp.length > 0 && analysisWp.length === (vis?.waypoints.length ?? 0)
+
+  // Active waypoint: highlighted while execution ticks drive the robot, index
+  // derived from the same execution progress that positions the model.
+  const activeWaypointIndex = useMemo(() => {
+    if (transformSnapshot.kind !== 'execution' || !execution) return -1
+    const count = vis?.waypoints.length ?? 0
+    if (count === 0) return -1
+    const idx = Math.floor(execution.progress * count)
+    return Math.min(Math.max(idx, 0), count - 1)
+  }, [transformSnapshot.kind, execution, vis])
 
   const perWaypointColor = useMemo(() => {
     if (!vis || !hasAnalysis || !analysisWp.length || colorMode === 'segment') return null
@@ -113,6 +126,7 @@ export function Trajectory() {
       <WaypointMarkers
         waypoints={vis.waypoints} colorMode={colorMode}
         segments={segments ?? undefined} perWaypointColor={perWaypointColor}
+        activeIndex={activeWaypointIndex}
       />
     </group>
   )
@@ -153,12 +167,13 @@ function TrajectoryLines({
 }
 
 function WaypointMarkers({
-  waypoints, colorMode, segments, perWaypointColor,
+  waypoints, colorMode, segments, perWaypointColor, activeIndex,
 }: {
   waypoints: VisualWaypointDto[]
   colorMode: string
   segments?: { segmentIndex: number; waypointStart: number; waypointEnd: number }[]
   perWaypointColor: number[] | null
+  activeIndex: number
 }) {
   return (
     <group>
@@ -171,10 +186,11 @@ function WaypointMarkers({
         } else {
           color = WAYPOINT_TYPE[wp.waypoint_type] ?? SEVERITY.nodata
         }
+        const isActive = i === activeIndex
         return (
           <mesh key={i} position={wp.position}>
-            <sphereGeometry args={[0.012, 12, 12]} />
-            <meshBasicMaterial color={color} />
+            <sphereGeometry args={[isActive ? 0.02 : 0.012, isActive ? 16 : 12, 12]} />
+            <meshBasicMaterial color={isActive ? WAYPOINT_ACTIVE : color} />
           </mesh>
         )
       })}

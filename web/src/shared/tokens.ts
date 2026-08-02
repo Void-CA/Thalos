@@ -39,6 +39,8 @@ export const WAYPOINT_TYPE: Record<string, number> = {
 
 export const TRAJECTORY_LINE = 0x3b82f6
 
+export const WAYPOINT_ACTIVE = 0xffffff
+
 // ── Severity / Analysis ──
 
 export const SEVERITY: Record<string, number> = {

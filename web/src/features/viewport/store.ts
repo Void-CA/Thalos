@@ -7,7 +7,6 @@ export type TrajectoryViewMode = 'original' | 'optimized'
 export interface SceneState {
   data: SceneData | null
   runtime: RuntimeInfo | null
-  liveTransforms: ObjectTransform[]
   transformSnapshot: TransformSnapshot
   execution: ExecutionInfo | null
   ikResult: IkResult | null
@@ -40,7 +39,6 @@ interface SceneActions {
 const INITIAL: SceneState = {
   data: null,
   runtime: null,
-  liveTransforms: [],
   transformSnapshot: { kind: 'idle' },
   execution: null,
   ikResult: null,
@@ -66,14 +64,14 @@ export const useSceneStore = create<SceneState & SceneActions>((set) => ({
   ...INITIAL,
 
   applyScene: (data, runtime, ikResult, activePlan, activeTcp, execution) => set({
-    data, runtime, liveTransforms: [], transformSnapshot: { kind: 'idle' }, execution, ikResult,
+    data, runtime, transformSnapshot: { kind: 'idle' }, execution, ikResult,
     solvedQ: null, activePlan, activeTcp, loading: false, error: null,
     optimizedPositions: null,
     trajectoryViewMode: 'original',
   }),
 
   applyFkUpdate: (data, runtime, ikResult, activeTcp) => set((state) => ({
-    data, runtime, liveTransforms: [], transformSnapshot: { kind: 'fk', frames: fkFramesFromScene(data.frames) }, execution: null, ikResult,
+    data, runtime, transformSnapshot: { kind: 'fk', frames: fkFramesFromScene(data.frames) }, execution: null, ikResult,
     solvedQ: null, ikTarget: state.ikTarget, activePlan: state.activePlan, activeTcp,
     loading: false, error: null,
   })),
@@ -82,7 +80,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set) => ({
 
   applyRuntimeDelta: (joints, transforms, execution) => set((state) => ({
     runtime: state.runtime ? { ...state.runtime, joints } : state.runtime,
-    liveTransforms: transforms, transformSnapshot: { kind: 'execution', transforms }, execution,
+    transformSnapshot: { kind: 'execution', transforms }, execution,
   })),
 
   setIkTarget: (target) => set({ ikTarget: target }),
