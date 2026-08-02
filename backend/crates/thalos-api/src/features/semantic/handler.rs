@@ -16,7 +16,7 @@ use thalos_planning::{
         planner::SegmentPlanningContext,
         program::CompiledPlan,
     },
-    resolver::MotionResolver,
+    resolver::{MotionResolver, ResolutionError},
     timeline::TimelineScheduler,
 };
 use thalos_semantic::{
@@ -162,18 +162,8 @@ pub async fn run_semantic(
         registry.create("world");
 
         let resolver =
-            MotionResolver::new(&ik_solver, &registry, &initial_joints, dof).map_err(|e| {
-                (
-                    StatusCode::UNPROCESSABLE_ENTITY,
-                    Json(serde_json::json!({"error": format!("{e}"), "code": "planning_error"})),
-                )
-            })?;
-        let resolution = resolver.resolve(&mp).map_err(|e| {
-            (
-                StatusCode::UNPROCESSABLE_ENTITY,
-                Json(serde_json::json!({"error": format!("{e}"), "code": "planning_error"})),
-            )
-        })?;
+            MotionResolver::new(&ik_solver, &registry, &initial_joints, dof).map_err(resolver_error)?;
+        let resolution = resolver.resolve(&mp).map_err(resolver_error)?;
 
         let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
         let current_state = RobotState::new(initial_joints.clone());
@@ -185,12 +175,7 @@ pub async fn run_semantic(
         };
         let compiled = compiler
             .compile(&resolution.planning, &seg_ctx)
-            .map_err(|e| {
-                (
-                    StatusCode::UNPROCESSABLE_ENTITY,
-                    Json(serde_json::json!({"error": format!("{e}"), "code": "planning_error"})),
-                )
-            })?;
+            .map_err(planning_error)?;
 
         // TimelineScheduler: logical events → temporal events (absolute
         // at_time aligned to the compiled trajectory). CompiledPlan owns
@@ -237,9 +222,28 @@ pub async fn run_semantic(
     })))
 }
 
-/// Map a scene/planning error to a 4xx HTTP response with a descriptive
-/// message (spec: Error Handling). The response body carries only the error
-/// — no partial `CompiledPlan` or `RuntimeProgram` is ever returned.
+/// Map a resolver error to a 4xx HTTP response with a descriptive message.
+///
+/// `ResolutionError::DofMismatch` carries the distinct `dof_mismatch` code
+/// so clients can distinguish a DOF contract violation from a generic
+/// planning failure (spec: Error Handling). The response body carries only
+/// the error — no partial `CompiledPlan` or `RuntimeProgram` is ever
+/// returned.
+fn resolver_error(e: ResolutionError) -> (StatusCode, Json<serde_json::Value>) {
+    let code = match e {
+        ResolutionError::DofMismatch { .. } => "dof_mismatch",
+        _ => "planning_error",
+    };
+    (
+        StatusCode::UNPROCESSABLE_ENTITY,
+        Json(serde_json::json!({"error": format!("{e}"), "code": code})),
+    )
+}
+
+/// Map a scene-read or compilation error to a 4xx HTTP response with a
+/// descriptive message (spec: Error Handling). The response body carries
+/// only the error — no partial `CompiledPlan` or `RuntimeProgram` is ever
+/// returned.
 fn planning_error(e: impl std::fmt::Display) -> (StatusCode, Json<serde_json::Value>) {
     (
         StatusCode::UNPROCESSABLE_ENTITY,

@@ -736,4 +736,29 @@ mod tests {
         assert!(result.planning.segments.is_empty());
         assert!(result.runtime.events.is_empty());
     }
+
+    /// Spec: ir-model "URDF robot uses real chain DOF" — a chain built from
+    /// a real 4-DOF URDF (icebot) must construct a resolver whose
+    /// `expected_dof` is `chain.dof_count()`, never metadata-derived DOF.
+    #[test]
+    fn resolver_accepts_real_urdf_chain_dof() {
+        let urdf = include_str!("../../../../../docs/robot/icebot.urdf");
+        let chain = thalos_core::robot::adapter::from_urdf(urdf)
+            .expect("icebot URDF must build a chain");
+        assert_eq!(chain.dof_count(), 4, "icebot has 4 actuated DOF");
+
+        let ik = NoopIKSolver;
+        let registry = make_registry();
+        let resolver = MotionResolver::new(&ik, &registry, &[0.0; 4], chain.dof_count())
+            .expect("4-DOF URDF chain must construct a resolver");
+
+        let program = ExecutionProgram {
+            instructions: vec![],
+            metadata: sample_metadata(),
+        };
+        let result = resolver
+            .resolve(&program)
+            .expect("empty program should resolve");
+        assert!(result.planning.segments.is_empty());
+    }
 }

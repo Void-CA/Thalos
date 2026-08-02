@@ -13,7 +13,7 @@ use thalos_planning::{
         compiler::{DefaultPlannerDispatcher, PlanCompiler},
         planner::SegmentPlanningContext,
     },
-    resolver::MotionResolver,
+    resolver::{MotionResolver, ResolutionError},
     timeline::TimelineScheduler,
 };
 use thalos_runtime::{Command, commands::motion::MotionCommands};
@@ -120,8 +120,8 @@ pub async fn plan(
     registry.create("world");
 
     let resolver =
-        MotionResolver::new(&ik_solver, &registry, &initial_joints, dof).map_err(planning_error)?;
-    let resolution = resolver.resolve(&program).map_err(planning_error)?;
+        MotionResolver::new(&ik_solver, &registry, &initial_joints, dof).map_err(resolver_error)?;
+    let resolution = resolver.resolve(&program).map_err(resolver_error)?;
 
     let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
     let current_state = RobotState::new(initial_joints.clone());
@@ -146,9 +146,28 @@ pub async fn plan(
     }))
 }
 
-/// Map a planning error to a 4xx HTTP response with a descriptive message
-/// (spec: Error Handling). The response body carries only the error — no
-/// partial `CompiledPlan` or `RuntimeProgram` is ever returned.
+/// Map a resolver error to a 4xx HTTP response with a descriptive message.
+///
+/// `ResolutionError::DofMismatch` carries the distinct `dof_mismatch` code
+/// so clients can distinguish a DOF contract violation from a generic
+/// planning failure (spec: Error Handling). The response body carries only
+/// the error — no partial `CompiledPlan` or `RuntimeProgram` is ever
+/// returned.
+fn resolver_error(e: ResolutionError) -> (StatusCode, Json<serde_json::Value>) {
+    let code = match e {
+        ResolutionError::DofMismatch { .. } => "dof_mismatch",
+        _ => "planning_error",
+    };
+    (
+        StatusCode::UNPROCESSABLE_ENTITY,
+        Json(json!({"error": format!("{e}"), "code": code})),
+    )
+}
+
+/// Map a scene-read or compilation error to a 4xx HTTP response with a
+/// descriptive message (spec: Error Handling). The response body carries
+/// only the error — no partial `CompiledPlan` or `RuntimeProgram` is ever
+/// returned.
 fn planning_error(e: impl std::fmt::Display) -> (StatusCode, Json<serde_json::Value>) {
     (
         StatusCode::UNPROCESSABLE_ENTITY,
@@ -161,20 +180,39 @@ mod tests {
     use super::*;
     use thalos_planning::resolver::ResolutionError;
 
-    /// DofMismatch (invariant I1) maps to 422 — the design-mandated status
-    /// for a scene/robot DOF contract violation.
+    /// DofMismatch (invariant I1) maps to 422 with the distinct
+    /// `dof_mismatch` code (spec: Error Handling) so clients can tell a DOF
+    /// contract violation apart from a generic planning failure.
     #[test]
     fn dof_mismatch_maps_to_422() {
-        let (status, Json(body)) = planning_error(ResolutionError::DofMismatch {
+        let (status, Json(body)) = resolver_error(ResolutionError::DofMismatch {
             expected: 2,
             actual: 4,
         });
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-        assert_eq!(body["code"], "planning_error");
+        assert_eq!(body["code"], "dof_mismatch");
         assert_eq!(
             body["error"],
             "DOF mismatch: robot has 2 DOF but initial_state has 4 joints"
         );
+    }
+
+    /// Other resolver errors (IK failure, unknown frame) keep the generic
+    /// `planning_error` code (spec: "IkFailed retains generic code").
+    #[test]
+    fn resolver_errors_keep_planning_error() {
+        let (status, Json(body)) = resolver_error(ResolutionError::IkFailed {
+            instruction_index: 0,
+            reason: "MaxIterations".into(),
+        });
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(body["code"], "planning_error");
+        assert_eq!(body["error"], "IK failed for instruction 1: MaxIterations");
+
+        let (status, Json(body)) = resolver_error(ResolutionError::UnknownFrame("base".into()));
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(body["code"], "planning_error");
+        assert_eq!(body["error"], "unknown frame: base");
     }
 
     /// Other resolver errors (IK failure, unknown frame) map to 4xx with a
