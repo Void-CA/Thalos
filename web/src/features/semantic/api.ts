@@ -1,8 +1,7 @@
-import axios from 'axios'
+import { apiClient } from '@/shared/api-client'
+import { isApiError } from '@/shared/errors'
 import type { CompileRequest, CompileResponse } from './types'
 import type { ExecuteSemanticResponse } from '@/shared/contracts'
-
-const client = axios.create({ baseURL: '/api/v1' })
 
 export class CompileError extends Error {
   readonly code?: string
@@ -18,7 +17,7 @@ export class CompileError extends Error {
 
 /** POST /api/v1/semantic/execute — compile + plan, returns plan metadata */
 export async function executeSemantic(req: CompileRequest): Promise<ExecuteSemanticResponse> {
-  const { data } = await client.post('/semantic/execute', req)
+  const { data } = await apiClient.post('/semantic/execute', req)
   return data
 }
 
@@ -27,16 +26,11 @@ export async function compileSemantic(
   req: CompileRequest,
 ): Promise<CompileResponse> {
   try {
-    const { data } = await client.post<CompileResponse>('/semantic/compile', req)
+    const { data } = await apiClient.post<CompileResponse>('/semantic/compile', req)
     return data
   } catch (err) {
-    if (axios.isAxiosError(err) && err.response?.data) {
-      const body = err.response.data as Record<string, unknown>
-      throw new CompileError(
-        (body.error as string) ?? err.message,
-        body.code as string,
-        err.response.status,
-      )
+    if (isApiError(err)) {
+      throw new CompileError(err.message, err.code, err.status)
     }
     throw new CompileError(
       err instanceof Error ? err.message : 'Compilation failed',
