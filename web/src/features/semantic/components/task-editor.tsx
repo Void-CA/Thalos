@@ -12,7 +12,18 @@ import { isApiError } from '@/shared/errors'
 const CTA_BY_CODE: Record<string, string> = {
   semantic_validation_error: 'Fix the program errors',
   lowering_error: 'Define the referenced objects/locations in Scene',
-  planning_error: 'Load a robot before executing',
+  planning_error: 'Planning failed — check the robot and scene targets',
+  dof_mismatch: 'The loaded robot does not match this task\'s degrees of freedom — select a compatible robot',
+}
+
+/** `planning_error` is a generic code — the message is the only signal. IK
+ *  failure signatures mean an unreachable/incompatible target, which deserves
+ *  a reach-specific CTA; everything else falls back to the generic one above. */
+const IK_FAILURE_MARKERS = ['IK failed', 'MaxIterations']
+const REACH_CTA = 'Targets are out of the robot\'s reach — adjust scene positions or load a larger robot'
+
+function reachCtaForPlanningError(message: string): string | null {
+  return IK_FAILURE_MARKERS.some(marker => message.includes(marker)) ? REACH_CTA : null
 }
 
 interface CodedError extends Error {
@@ -24,6 +35,10 @@ interface CodedError extends Error {
 function describeError(err: unknown): string {
   if (err instanceof CompileError || isApiError(err)) {
     const coded = err as CodedError
+    if (coded.code === 'planning_error' && coded.message) {
+      const reachCta = reachCtaForPlanningError(coded.message)
+      if (reachCta) return `${reachCta} — ${coded.message}`
+    }
     if (coded.code && CTA_BY_CODE[coded.code]) {
       return `${CTA_BY_CODE[coded.code]} — ${coded.message}`
     }
