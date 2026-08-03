@@ -59,7 +59,6 @@ export type WorkspaceName =
   | 'robot'
   | 'task'
   | 'planning'
-  | 'analysis'
   | 'execution'
   | 'sessions'
   | 'knowledge'

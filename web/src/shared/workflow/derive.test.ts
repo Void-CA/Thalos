@@ -194,8 +194,8 @@ describe('stepperStages — pipeline derived from the registry (global-stepper s
     expect(stepperStages(WORKSPACE_REGISTRY).some((e) => e.workspace === 'robot')).toBe(false)
   })
 
-  it('excludes the legacy analysis workspace (absorbed into planning in slice 6)', () => {
-    expect(stepperStages(WORKSPACE_REGISTRY).some((e) => e.workspace === 'analysis')).toBe(false)
+  it('excludes the absorbed analysis content (no /analysis stage after slice 6)', () => {
+    expect(stepperStages(WORKSPACE_REGISTRY).some((e) => e.path === '/analysis')).toBe(false)
   })
 
   it('excludes the hidden knowledge workspace (support capability, not a pipeline stage)', () => {

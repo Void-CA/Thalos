@@ -206,7 +206,7 @@ describe('top-bar — nav links reflect guard state (slice 5, task 5.2)', () => 
   })
 })
 
-describe('cross-navigation converges in stepper + top-bar (slice 5, task 5.2)', () => {
+describe('analysis content lives inside planning (slice 6 — absorbed section)', () => {
   it('planning workspace has no "Analyze trajectory" cross-nav button', () => {
     seedPrerequisites()
     renderRouter(['/planning'])
@@ -215,23 +215,24 @@ describe('cross-navigation converges in stepper + top-bar (slice 5, task 5.2)', 
     expect(main.queryByRole('button', { name: 'Analyze trajectory' })).not.toBeInTheDocument()
   })
 
-  it('analysis workspace has no back-to-planning breadcrumb button', () => {
+  it('renders the analysis section as a third section under Trajectory Color', () => {
     seedPrerequisites()
-    renderRouter(['/analysis'])
+    renderRouter(['/planning'])
     const main = within(screen.getByRole('main'))
-    expect(main.getByText('No plan compiled')).toBeInTheDocument()
+    expect(main.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
+    expect(main.getByRole('heading', { name: 'Trajectory Color' })).toBeInTheDocument()
+    expect(main.getByRole('heading', { name: 'Analysis' })).toBeInTheDocument()
+  })
+
+  it('shows the simple empty state when nothing is analyzed yet (no cross-nav)', () => {
+    seedPrerequisites()
+    renderRouter(['/planning'])
+    const main = within(screen.getByRole('main'))
+    expect(main.getByText('Compile and preview a motion program to see analysis')).toBeInTheDocument()
     expect(main.queryByRole('button', { name: 'Planning' })).not.toBeInTheDocument()
   })
 
-  it('analysis remains reachable through registry-driven navigation (top-bar link)', async () => {
-    seedPrerequisites()
-    const { router } = renderRouter(['/planning'])
-    fireEvent.click(screen.getByRole('link', { name: 'Analysis' }))
-    await waitFor(() => expect(router.state.location.pathname).toBe('/analysis'))
-    expect(screen.getByText('No plan compiled')).toBeInTheDocument()
-  })
-
-  it('analysis keeps its intra-workspace region drill-down back control', async () => {
+  it('renders StatusBanner + problem regions + optimization inside planning when analyzed', () => {
     seedPrerequisites({ analyzed: true })
     act(() => {
       useAnalysisStore.setState({
@@ -239,23 +240,88 @@ describe('cross-navigation converges in stepper + top-bar (slice 5, task 5.2)', 
           {
             id: 7,
             kind: 'singularity',
-            severity: 'warning',
+            severity: 'critical',
             waypoint_start: 10,
             waypoint_end: 20,
             waypoint_count: 11,
+            explanation: {
+              cause: 'Singularity near waypoint 10',
+              consequence: 'Tool flips near the goal',
+              recommended_strategies: ['Joint centering'],
+              confidence: 0.9,
+            },
           },
         ],
-        selectedRegionId: 7,
       })
     })
-    const { router } = renderRouter(['/analysis'])
+    renderRouter(['/planning'])
     const main = within(screen.getByRole('main'))
-    expect(main.getByRole('heading', { name: 'Region Details' })).toBeInTheDocument()
+    expect(main.getByText('Good')).toBeInTheDocument() // StatusBanner state label
+    expect(main.getByText('92 / 100')).toBeInTheDocument() // StatusBanner score
+    expect(
+      main.getByRole('button', { name: /Singularity near waypoint 10/i }),
+    ).toBeInTheDocument() // ProblemRegions region card
+    expect(main.getByRole('button', { name: 'Optimize Trajectory' })).toBeInTheDocument() // OptimizationPanel
+  })
 
-    // Intra-workspace drill-down: URL unchanged, no cross-workspace navigation.
-    fireEvent.click(main.getByRole('button', { name: 'Analysis' }))
-    expect(router.state.location.pathname).toBe('/analysis')
+  it('keeps intra-workspace region drill-down within planning (URL unchanged)', () => {
+    seedPrerequisites({ analyzed: true })
+    act(() => {
+      useAnalysisStore.setState({
+        problemRegions: [
+          {
+            id: 7,
+            kind: 'singularity',
+            severity: 'critical',
+            waypoint_start: 10,
+            waypoint_end: 20,
+            waypoint_count: 11,
+            explanation: {
+              cause: 'Singularity near waypoint 10',
+              consequence: 'Tool flips near the goal',
+              recommended_strategies: ['Joint centering'],
+              confidence: 0.9,
+            },
+          },
+        ],
+      })
+    })
+    const { router } = renderRouter(['/planning'])
+    const main = within(screen.getByRole('main'))
+
+    // Drill down: click the region card → Region Details inspector opens.
+    fireEvent.click(main.getByRole('button', { name: /Singularity near waypoint 10/i }))
+    expect(main.getByRole('heading', { name: 'Region Details' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/planning')
+
+    // Back control: close the inspector → overview returns, still on /planning.
+    fireEvent.click(main.getByRole('button', { name: '' }))
     expect(main.queryByRole('heading', { name: 'Region Details' })).not.toBeInTheDocument()
+    expect(
+      main.getByRole('button', { name: /Singularity near waypoint 10/i }),
+    ).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/planning')
+  })
+})
+
+describe('the /analysis route is gone (slice 6 — registry-only navigation)', () => {
+  it('shows no Analysis link in the top-bar', () => {
+    seedPrerequisites()
+    renderRouter(['/planning'])
+    expect(screen.queryByRole('link', { name: 'Analysis' })).not.toBeInTheDocument()
+  })
+
+  it('does not route /analysis — no analysis workspace content renders (native 404)', async () => {
+    seedPrerequisites()
+    const { router } = renderRouter(['/analysis'])
+
+    // No registry entry → no route → react-router renders no analysis content.
+    expect(router.state.location.pathname).toBe('/analysis') // no redirect
+    expect(screen.queryByRole('heading', { name: 'Analysis' })).not.toBeInTheDocument()
+    expect(screen.queryByText('No plan compiled')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByRole('main')).not.toBeInTheDocument()
+    })
   })
 })
 
