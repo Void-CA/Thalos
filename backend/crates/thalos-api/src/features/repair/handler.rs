@@ -3,19 +3,17 @@ use std::sync::Arc;
 use axum::{Json, extract::State};
 
 use thalos_core::{
-    analysis::observation::ArtifactRef,
     analysis::RegionGrouper,
+    analysis::observation::ArtifactRef,
     ids::MotionPlanId,
     kinematics::{forward::ForwardKinematics, inverse::JacobianTransposeSolver},
 };
 use thalos_math::Vector3;
-use thalos_planning::{
-    repair::{
-        context::RepairContext,
-        domain::RepairStrategy,
-        planner::RepairPlanner,
-        strategies::{LiftTcpStrategy, RotateToolStrategy, SplitSegment},
-    },
+use thalos_planning::repair::{
+    context::RepairContext,
+    domain::RepairStrategy,
+    planner::RepairPlanner,
+    strategies::{LiftTcpStrategy, RotateToolStrategy, SplitSegment},
 };
 use thalos_runtime::{PlanAnalysisService, RuntimeSnapshot};
 

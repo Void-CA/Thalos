@@ -152,8 +152,8 @@ pub async fn analyze_alternatives(
 
     // Detectar regiones (M8.1): el dueño único de la agrupación es el
     // RegionGrouper, sobre las observaciones del reporte canónico.
-    let regions = thalos_core::analysis::RegionGrouper::default()
-        .group(&result.report.observations);
+    let regions =
+        thalos_core::analysis::RegionGrouper::default().group(&result.report.observations);
 
     // RepairPlanner con estrategias
     let strategies: Vec<Box<dyn RepairStrategy>> = vec![

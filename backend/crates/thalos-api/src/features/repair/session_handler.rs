@@ -7,9 +7,9 @@ use axum::{
 };
 
 use thalos_core::{
+    analysis::RegionGrouper,
     analysis::observation::ArtifactRef,
     analysis::region::RegionId,
-    analysis::RegionGrouper,
     ids::MotionPlanId,
     kinematics::{forward::ForwardKinematics, inverse::JacobianTransposeSolver},
     trajectory::Trajectory,

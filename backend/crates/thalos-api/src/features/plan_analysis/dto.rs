@@ -25,6 +25,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use thalos_core::{
     analysis::{
+        RegionGrouper,
         action::Action,
         attribute_value::AttributeValue,
         location::Location,
@@ -32,11 +33,8 @@ use thalos_core::{
         region::{ProblemRegion, SemanticProblem, project_semantic_problem},
         report::AnalysisReport,
         summary::AnalysisSummary,
-        RegionGrouper,
     },
-    ids::{
-        ExecutionSessionId, MotionPlanId, RobotId, SceneId, SemanticProgramId, TaskDocumentId,
-    },
+    ids::{ExecutionSessionId, MotionPlanId, RobotId, SceneId, SemanticProgramId, TaskDocumentId},
     operation::MotionProvenance,
 };
 use thalos_planning::motion::program::PlannedSegment;
@@ -80,7 +78,11 @@ impl PlanAnalysisResponse {
         let regions = RegionGrouper::default().group(&report.observations);
         Self {
             artifact: ArtifactDto::from(&report.artifact),
-            observations: report.observations.iter().map(ObservationDto::from).collect(),
+            observations: report
+                .observations
+                .iter()
+                .map(ObservationDto::from)
+                .collect(),
             actions: report.actions.iter().map(ActionDto::from).collect(),
             metrics: report.metrics.clone(),
             summary: SummaryDto::from(&report.summary),
@@ -106,7 +108,9 @@ impl From<&ArtifactRef> for ArtifactDto {
             ArtifactRef::SemanticProgram(SemanticProgramId(id)) => Self::new("SemanticProgram", id),
             ArtifactRef::TaskDocument(TaskDocumentId(id)) => Self::new("TaskDocument", id),
             ArtifactRef::MotionPlan(MotionPlanId(id)) => Self::new("MotionPlan", id),
-            ArtifactRef::ExecutionSession(ExecutionSessionId(id)) => Self::new("ExecutionSession", id),
+            ArtifactRef::ExecutionSession(ExecutionSessionId(id)) => {
+                Self::new("ExecutionSession", id)
+            }
             // #[non_exhaustive]: artifact kinds añadidos al modelo quedan
             // cubiertos por este fallback documentado hasta extender el DTO
             // (O3: id vacío = placeholder temporal explícito).
@@ -291,7 +295,10 @@ impl From<&SemanticProblem> for SemanticProblemDto {
     fn from(problem: &SemanticProblem) -> Self {
         Self {
             operation_id: problem.operation_id.as_ref().map(|id| id.to_string()),
-            role: problem.role.as_ref().map(|r| format!("{:?}", r).to_lowercase()),
+            role: problem
+                .role
+                .as_ref()
+                .map(|r| format!("{:?}", r).to_lowercase()),
             kind: problem.kind.name().to_string(),
             severity: format!("{:?}", problem.severity).to_lowercase(),
         }
@@ -319,7 +326,9 @@ impl ProblemRegionsDtoAdapter {
             .map(|region| {
                 let mut dto = to_problem_region_dto(region);
                 dto.semantic = (!provenance.is_empty())
-                    .then(|| SemanticProblemDto::from(&project_semantic_problem(region, &provenance)))
+                    .then(|| {
+                        SemanticProblemDto::from(&project_semantic_problem(region, &provenance))
+                    })
                     .filter(|semantic| semantic.operation_id.is_some() || semantic.role.is_some());
                 dto
             })
@@ -382,7 +391,9 @@ fn build_provenance(segments: &[PlannedSegment]) -> Vec<MotionProvenance> {
             s.operation_id.clone().map(|operation_id| MotionProvenance {
                 waypoint_range: s.waypoint_range.clone(),
                 operation_id,
-                role: s.role.unwrap_or(thalos_core::operation::MotionRole::Transit),
+                role: s
+                    .role
+                    .unwrap_or(thalos_core::operation::MotionRole::Transit),
             })
         })
         .collect()
@@ -601,7 +612,10 @@ mod tests {
         // Spec "DTO projection of quality_index": 0.85 → score 85; the domain
         // keeps quality_index as the single measure (I7).
         let mut severity_distribution = BTreeMap::new();
-        severity_distribution.insert(thalos_core::analysis::observation::Severity::Warning, 1usize);
+        severity_distribution.insert(
+            thalos_core::analysis::observation::Severity::Warning,
+            1usize,
+        );
         let summary = AnalysisSummary {
             quality_index: 0.85,
             observation_count: 1,
@@ -610,7 +624,10 @@ mod tests {
         };
         let value = serde_json::to_value(SummaryDto::from(&summary)).expect("serialize");
         let obj = value.as_object().expect("object");
-        assert_eq!(obj["score"], 85, "quality_index 0.85 must project as score 85");
+        assert_eq!(
+            obj["score"], 85,
+            "quality_index 0.85 must project as score 85"
+        );
         assert!((obj["quality_index"].as_f64().expect("quality_index") - 0.85).abs() < 1e-9);
         assert_eq!(obj["grade"], "Good");
         assert_eq!(obj["observation_count"], 1);

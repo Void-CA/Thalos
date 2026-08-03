@@ -66,12 +66,17 @@ pub struct RegionGrouper {
     config: RegionGrouperConfig,
 }
 
+impl Default for RegionGrouper {
+    fn default() -> Self {
+        Self::new(RegionGrouperConfig::default())
+    }
+}
+
 impl RegionGrouper {
     /// Crea un agrupador con la configuración dada.
     pub fn new(config: RegionGrouperConfig) -> Self {
         Self { config }
     }
-
     /// Agrupa observaciones de una trayectoria en regiones contiguas.
     pub fn group(&self, observations: &[Observation]) -> Vec<ProblemRegion> {
         let normalized = self.normalize(observations);
@@ -338,7 +343,12 @@ mod tests {
     use crate::ids::MotionPlanId;
     use std::collections::BTreeMap;
 
-    fn observation(id: u32, kind: ObservationKind, severity: Severity, waypoint: usize) -> Observation {
+    fn observation(
+        id: u32,
+        kind: ObservationKind,
+        severity: Severity,
+        waypoint: usize,
+    ) -> Observation {
         Observation {
             id: ObservationId(id),
             kind,
@@ -356,7 +366,8 @@ mod tests {
     }
 
     fn with_value(mut o: Observation, value: f64) -> Observation {
-        o.attributes.insert("value".to_string(), AttributeValue::Number(value));
+        o.attributes
+            .insert("value".to_string(), AttributeValue::Number(value));
         o
     }
 

@@ -93,13 +93,13 @@ pub enum ObservationKind {
     ConstraintViolation,
     /// A transient peak of the tracking error during execution — distinct from
     /// the sustained [`ObservationKind::TrackingError`] (PR 4 vocabulary;
-    /// mirrors `FindingKind::TrackingSpike`).
+    /// mirrors the legacy tracking-spike detection).
     TrackingSpike,
     /// A single joint deviated from its planned position beyond threshold during
-    /// execution (PR 4 vocabulary; mirrors `FindingKind::JointDeviation`).
+    /// execution (PR 4 vocabulary; mirrors the legacy joint-deviation detection).
     JointDeviation,
     /// A single joint's velocity deviated beyond threshold during execution
-    /// (PR 4 vocabulary; mirrors `FindingKind::VelocityDeviation`).
+    /// (PR 4 vocabulary; mirrors the legacy velocity-deviation detection).
     VelocityDeviation,
 }
 
@@ -247,7 +247,8 @@ mod tests {
             // PR 5 vocabulary: document validation migrated from the legacy
             // document-validation vocabulary.
             ObservationKind::EmptyPath,
-            // PR 3 vocabulary: plan-level phenomena migrated from FindingKind.
+            // PR 3 vocabulary: plan-level phenomena migrated from the legacy
+            // trajectory-analysis vocabulary.
             ObservationKind::LowManipulability,
             ObservationKind::Singularity,
             ObservationKind::CollisionNear,

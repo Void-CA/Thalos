@@ -89,7 +89,8 @@ impl PlanAnalysisService {
         // Agregación canónica: observaciones → AnalysisReport (D3). El
         // aggregator reasigna ids 1..=n (I8), así que las acciones se generan
         // SOBRE las observaciones del reporte para referenciar ids reales.
-        let mut report = DefaultAggregator::new(DefaultScoringPolicy).aggregate(artifact, observations);
+        let mut report =
+            DefaultAggregator::new(DefaultScoringPolicy).aggregate(artifact, observations);
 
         // El Advisor solo interpreta observaciones, nunca recalcula (C2); las
         // acciones viven en el reporte y referencian observaciones por id (I5).

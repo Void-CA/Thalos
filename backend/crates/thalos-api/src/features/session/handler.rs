@@ -7,10 +7,7 @@ use axum::{
 use serde::Serialize;
 use serde_json::Value;
 
-use thalos_core::{
-    analysis::observation::ArtifactRef,
-    ids::ExecutionSessionId,
-};
+use thalos_core::{analysis::observation::ArtifactRef, ids::ExecutionSessionId};
 use thalos_runtime::{
     ExecutionAnalyzer, ExecutionSource, MotionTrace, TraceAnalyzer,
     backends::{
@@ -355,7 +352,8 @@ pub async fn import_trace(
 /// Respuesta combinada: métricas de comparación + observaciones de ejecución.
 ///
 /// PR 7a: el lenguaje de análisis es el mismo en todos los endpoints —
-/// observaciones canónicas (machine-readable, I2), no el `Finding` legacy.
+/// observaciones canónicas (machine-readable, I2), sin vocabulario legacy
+/// paralelo.
 #[derive(Debug, Serialize)]
 pub struct SessionComparisonResponse {
     pub metrics: comparison::ComparisonMetrics,

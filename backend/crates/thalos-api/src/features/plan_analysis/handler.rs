@@ -12,9 +12,7 @@ use std::sync::Arc;
 use axum::{Json, extract::State};
 
 use thalos_core::{
-    analysis::observation::ArtifactRef,
-    analysis::RegionGrouper,
-    ids::MotionPlanId,
+    analysis::RegionGrouper, analysis::observation::ArtifactRef, ids::MotionPlanId,
     kinematics::forward::ForwardKinematics,
 };
 use thalos_optimization::{
@@ -75,7 +73,10 @@ pub async fn analyze_plan(
 
     // El wire es una proyección del reporte canónico (I6): el handler no
     // construye modelos intermedios entre dominio y contrato.
-    Ok(Json(PlanAnalysisResponse::from_report(&result.report, segments)))
+    Ok(Json(PlanAnalysisResponse::from_report(
+        &result.report,
+        segments,
+    )))
 }
 
 // ── Metrics helpers ──────────────────────────────────────────

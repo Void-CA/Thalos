@@ -1187,7 +1187,11 @@ async fn preview_plan_without_operations_keeps_legacy_path() {
     let segments = body["active_plan"]["segments"]
         .as_array()
         .expect("segments must be an array");
-    assert_eq!(segments.len(), 2, "legacy path must keep authored segment count");
+    assert_eq!(
+        segments.len(),
+        2,
+        "legacy path must keep authored segment count"
+    );
 }
 
 #[tokio::test]
@@ -1223,16 +1227,29 @@ async fn operations_plan_propagates_semantic_context_to_analysis() {
         })),
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "preview_plan with operations should succeed");
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "preview_plan with operations should succeed"
+    );
 
-    let (status, body) = get_json(app, http::Method::POST, "/api/v1/plan/analyze", Some(json!({}))).await;
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/plan/analyze",
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "analyze should succeed");
     let body = body.expect("response must be valid JSON");
 
     let regions = body["problem_regions"]
         .as_array()
         .expect("problem_regions must be an array");
-    assert!(!regions.is_empty(), "near-reach plan must produce a problem region");
+    assert!(
+        !regions.is_empty(),
+        "near-reach plan must produce a problem region"
+    );
 
     // The region at waypoint 0 must map back to the originating operation via
     // the semantic field (operation_id + role propagated from expansion).
