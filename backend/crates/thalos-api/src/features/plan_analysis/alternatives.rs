@@ -141,7 +141,7 @@ pub async fn analyze_alternatives(
     // I3: observaciones ancladas al MotionPlan analizado.
     let artifact = ArtifactRef::MotionPlan(MotionPlanId(active_plan.plan_id.clone()));
 
-    // Analizar plan
+    // Analizar plan — reporte canónico (observaciones) + análisis técnico
     let result = PlanAnalysisService::analyze_plan(
         &snapshot.chain,
         trajectory,
@@ -149,11 +149,11 @@ pub async fn analyze_alternatives(
         None,
         artifact,
     )?;
-    let findings = &result.findings;
 
-    // Detectar regiones (M8.1)
-    let detector = thalos_planning::analysis::region::RegionDetector::new(Default::default());
-    let report = detector.detect(findings);
+    // Detectar regiones (M8.1): el dueño único de la agrupación es el
+    // RegionGrouper, sobre las observaciones del reporte canónico.
+    let regions =
+        thalos_core::analysis::RegionGrouper::default().group(&result.report.observations);
 
     // RepairPlanner con estrategias
     let strategies: Vec<Box<dyn RepairStrategy>> = vec![
@@ -178,7 +178,7 @@ pub async fn analyze_alternatives(
     };
 
     let ctx = build_repair_context(&snapshot);
-    let plans = planner.plan(&compiled, &report.problem_regions, &ctx);
+    let plans = planner.plan(&compiled, &regions, &ctx);
 
     // Mapear a formato legacy
     let mut rank = 1;

@@ -1,6 +1,5 @@
 //! Crate prelude: re-exports key types for convenient wildcard imports.
 
-pub use crate::diagnostic::{Diagnostic, Severity};
 pub use crate::id::*;
 pub use crate::operation::Operation;
 pub use crate::operation::io::OutputValue;

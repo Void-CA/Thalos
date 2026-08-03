@@ -6,7 +6,6 @@ pub mod error;
 pub mod evaluation;
 pub mod execution_plan_builder;
 pub mod feedback;
-pub mod finding;
 pub mod goal;
 pub mod interpolate;
 pub mod knowledge;

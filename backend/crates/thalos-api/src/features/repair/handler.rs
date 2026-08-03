@@ -3,19 +3,17 @@ use std::sync::Arc;
 use axum::{Json, extract::State};
 
 use thalos_core::{
+    analysis::RegionGrouper,
     analysis::observation::ArtifactRef,
     ids::MotionPlanId,
     kinematics::{forward::ForwardKinematics, inverse::JacobianTransposeSolver},
 };
 use thalos_math::Vector3;
-use thalos_planning::{
-    analysis::region::{RegionDetector, RegionDetectorConfig},
-    repair::{
-        context::RepairContext,
-        domain::RepairStrategy,
-        planner::RepairPlanner,
-        strategies::{LiftTcpStrategy, RotateToolStrategy, SplitSegment},
-    },
+use thalos_planning::repair::{
+    context::RepairContext,
+    domain::RepairStrategy,
+    planner::RepairPlanner,
+    strategies::{LiftTcpStrategy, RotateToolStrategy, SplitSegment},
 };
 use thalos_runtime::{PlanAnalysisService, RuntimeSnapshot};
 
@@ -62,8 +60,9 @@ pub async fn repair_options(
         artifact,
     )?;
 
-    let detector = RegionDetector::new(RegionDetectorConfig::default());
-    let report = detector.detect(&result.findings);
+    // Regiones desde las observaciones del reporte canónico (dueño único:
+    // RegionGrouper).
+    let regions = RegionGrouper::default().group(&result.report.observations);
 
     let strategies: Vec<Box<dyn RepairStrategy>> = vec![
         Box::new(LiftTcpStrategy::new(Vector3::new(0.0, 0.0, 0.01))),
@@ -85,7 +84,7 @@ pub async fn repair_options(
     };
 
     let ctx = build_repair_context(&snapshot);
-    let plans = planner.plan(&compiled, &report.problem_regions, &ctx);
+    let plans = planner.plan(&compiled, &regions, &ctx);
 
     let mut repairs = Vec::new();
     for plan in plans {

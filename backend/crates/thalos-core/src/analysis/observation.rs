@@ -2,8 +2,8 @@
 //!
 //! Every analyzer in Thalos emits [`Observation`]s: machine-readable,
 //! artifact-anchored facts devoid of presentation. This is the single
-//! observation language; `Finding`, `ExecutionFinding` and `Diagnostic`
-//! vocabularies are migrated onto it (see the `analysis-model` change).
+//! observation language; the three legacy analysis vocabularies were migrated
+//! onto it and removed (see the `analysis-model` change).
 //!
 //! # Invariants (from the specification)
 //!
@@ -30,7 +30,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::analysis::attribute_value::AttributeValue;
 use crate::analysis::location::Location;
-use crate::ids::{ExecutionSessionId, MotionPlanId, RobotId, SceneId, SemanticProgramId};
+use crate::ids::{
+    ExecutionSessionId, MotionPlanId, RobotId, SceneId, SemanticProgramId, TaskDocumentId,
+};
 
 /// Stable identity of an observation within a report (closed decision:
 /// a simple counter newtype over `u32`, NOT a UUID — no persistence or
@@ -70,6 +72,9 @@ pub enum ObservationKind {
     PlaceWithoutPick,
     /// A reference in the semantic program cannot be resolved.
     UnresolvableReference,
+    /// A `Path` resource in a task document contains no point references
+    /// (document validation, PR 5 vocabulary).
+    EmptyPath,
     /// Average manipulability (Yoshikawa) over the trajectory is below
     /// the configured threshold (plan-level phenomenon, PR 3 vocabulary).
     LowManipulability,
@@ -88,13 +93,13 @@ pub enum ObservationKind {
     ConstraintViolation,
     /// A transient peak of the tracking error during execution — distinct from
     /// the sustained [`ObservationKind::TrackingError`] (PR 4 vocabulary;
-    /// mirrors `FindingKind::TrackingSpike`).
+    /// mirrors the legacy tracking-spike detection).
     TrackingSpike,
     /// A single joint deviated from its planned position beyond threshold during
-    /// execution (PR 4 vocabulary; mirrors `FindingKind::JointDeviation`).
+    /// execution (PR 4 vocabulary; mirrors the legacy joint-deviation detection).
     JointDeviation,
     /// A single joint's velocity deviated beyond threshold during execution
-    /// (PR 4 vocabulary; mirrors `FindingKind::VelocityDeviation`).
+    /// (PR 4 vocabulary; mirrors the legacy velocity-deviation detection).
     VelocityDeviation,
 }
 
@@ -124,6 +129,8 @@ pub enum ArtifactRef {
     Scene(SceneId),
     /// A semantic program under validation.
     SemanticProgram(SemanticProgramId),
+    /// A task document under validation.
+    TaskDocument(TaskDocumentId),
     /// A motion plan produced by planning.
     MotionPlan(MotionPlanId),
     /// An execution session recorded at runtime.
@@ -225,7 +232,7 @@ mod tests {
     }
 
     #[test]
-    fn observation_kind_has_all_seventeen_phenomena_distinct() {
+    fn observation_kind_has_all_eighteen_phenomena_distinct() {
         let kinds = vec![
             ObservationKind::NearSingularity,
             ObservationKind::UnreachableTarget,
@@ -237,7 +244,11 @@ mod tests {
             ObservationKind::TrackingError,
             ObservationKind::PlaceWithoutPick,
             ObservationKind::UnresolvableReference,
-            // PR 3 vocabulary: plan-level phenomena migrated from FindingKind.
+            // PR 5 vocabulary: document validation migrated from the legacy
+            // document-validation vocabulary.
+            ObservationKind::EmptyPath,
+            // PR 3 vocabulary: plan-level phenomena migrated from the legacy
+            // trajectory-analysis vocabulary.
             ObservationKind::LowManipulability,
             ObservationKind::Singularity,
             ObservationKind::CollisionNear,
@@ -267,11 +278,12 @@ mod tests {
 
     #[test]
     fn artifact_ref_round_trip_all_variants() {
-        use crate::ids::{ExecutionSessionId, RobotId, SceneId, SemanticProgramId};
+        use crate::ids::{ExecutionSessionId, RobotId, SceneId, SemanticProgramId, TaskDocumentId};
         let refs = vec![
             ArtifactRef::Robot(RobotId("r1".to_string())),
             ArtifactRef::Scene(SceneId("s1".to_string())),
             ArtifactRef::SemanticProgram(SemanticProgramId("sp1".to_string())),
+            ArtifactRef::TaskDocument(TaskDocumentId("td1".to_string())),
             ArtifactRef::MotionPlan(MotionPlanId("mp1".to_string())),
             ArtifactRef::ExecutionSession(ExecutionSessionId("es1".to_string())),
         ];

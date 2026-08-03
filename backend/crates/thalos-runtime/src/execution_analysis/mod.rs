@@ -2,16 +2,13 @@
 //!
 //! El [`ExecutionAnalyzer`] toma un [`PlanExecutionComparison`] (plan vs
 //! ejecución) y emite observaciones canónicas del modelo unificado
-//! (spec planning-feedback-loop: `ExecutionFinding` → `Observation`):
+//! (spec planning-feedback-loop):
 //!
 //!   Comparison → ExecutionAnalyzer → Vec<Observation> → Aggregator → AnalysisReport
 //!                                            → (PR 4b) IntentionOperator → Action
 //!
-//! La emisión es DIRECTA (no vía `FindingAdapter`): el `Finding` legacy no
-//! transporta la riqueza temporal que exige el contrato C1, y el adapter no
-//! distingue los fenómenos que este analizador detecta (C2). El camino legacy
-//! [`ExecutionAnalyzer::analyze_findings`] se mantiene para el wire format de
-//! sesión y los tests legacy hasta la fase 6.
+//! La emisión es DIRECTA: la observación es el único vocabulario de análisis
+//! (PR 7a eliminó el camino legacy `analyze_findings`).
 //!
 //! # Schema temporal (contrato C1)
 //!
@@ -49,7 +46,6 @@ use thalos_core::analysis::{
     location::Location,
     observation::{ArtifactRef, Observation, ObservationId, ObservationKind, Severity},
 };
-use thalos_planning::finding::{Finding, FindingKind, Severity as FindingSeverity};
 
 /// Umbrales por defecto para detección de problemas de ejecución.
 ///
@@ -98,103 +94,11 @@ impl ExecutionAnalyzer {
         Self { thresholds }
     }
 
-    /// Analizar una comparación y producir hallazgos (camino legacy).
-    ///
-    /// # TODO(analysis-model): remove after phase 6
-    ///
-    /// Mantenido para el endpoint de sesión (wire format legacy, PR 7a) y los
-    /// tests legacy (fidelidad). El camino canónico es [`Self::analyze`], que
-    /// emite `Vec<Observation>` (spec planning-feedback-loop).
-    ///
-    /// Evalúa:
-    /// - Error de tracking global (RMSE)
-    /// - Picos de error máximo
-    /// - Desviaciones por articulación
-    /// - Desviaciones de velocidad
-    pub fn analyze_findings(&self, comparison: &PlanExecutionComparison) -> Vec<Finding> {
-        let mut findings = Vec::new();
-        let metrics = &comparison.metrics;
-
-        // Nivel mínimo de severidad: no tiene sentido analizar si no hay datos
-        if metrics.aligned_count == 0 {
-            return findings;
-        }
-
-        // 1. Error de tracking global (RMSE)
-        if metrics.global_rmse > self.thresholds.global_rmse_warning {
-            findings.push(Finding {
-                kind: FindingKind::TrackingError,
-                severity: FindingSeverity::Warning,
-                waypoint: None,
-                message: format!(
-                    "Global tracking RMSE {:.4} rad exceeds threshold {:.4} rad. \
-                     The robot did not follow the planned path closely.",
-                    metrics.global_rmse, self.thresholds.global_rmse_warning,
-                ),
-                value: Some(metrics.global_rmse),
-                threshold: Some(self.thresholds.global_rmse_warning),
-            });
-        }
-
-        // 2. Pico de error máximo
-        if metrics.global_max_error > self.thresholds.max_error_spike {
-            findings.push(Finding {
-                kind: FindingKind::TrackingSpike,
-                severity: FindingSeverity::Warning,
-                waypoint: None,
-                message: format!(
-                    "Maximum tracking error {:.4} rad exceeds spike threshold {:.4} rad. \
-                     A sharp deviation occurred during execution.",
-                    metrics.global_max_error, self.thresholds.max_error_spike,
-                ),
-                value: Some(metrics.global_max_error),
-                threshold: Some(self.thresholds.max_error_spike),
-            });
-        }
-
-        // 3. Desviaciones por articulación
-        for (j, &max_err) in metrics.per_joint.max_error.iter().enumerate() {
-            if max_err > self.thresholds.joint_max_error_warning {
-                findings.push(Finding {
-                    kind: FindingKind::JointDeviation,
-                    severity: FindingSeverity::Warning,
-                    waypoint: None,
-                    message: format!(
-                        "Joint {} max tracking error {:.4} rad exceeds threshold {:.4} rad.",
-                        j, max_err, self.thresholds.joint_max_error_warning,
-                    ),
-                    value: Some(max_err),
-                    threshold: Some(self.thresholds.joint_max_error_warning),
-                });
-            }
-        }
-
-        // 4. Desviaciones de velocidad
-        for (j, &max_vel_dev) in metrics.max_velocity_deviation.iter().enumerate() {
-            if max_vel_dev > self.thresholds.velocity_deviation_warning {
-                findings.push(Finding {
-                    kind: FindingKind::VelocityDeviation,
-                    severity: FindingSeverity::Info,
-                    waypoint: None,
-                    message: format!(
-                        "Joint {} max velocity deviation {:.4} rad/s exceeds threshold {:.4} rad/s.",
-                        j, max_vel_dev, self.thresholds.velocity_deviation_warning,
-                    ),
-                    value: Some(max_vel_dev),
-                    threshold: Some(self.thresholds.velocity_deviation_warning),
-                });
-            }
-        }
-
-        findings
-    }
-
     /// Analizar una comparación y producir observaciones canónicas.
     ///
-    /// Emisión DIRECTA (no vía `FindingAdapter`): el `Finding` legacy no
-    /// transporta la riqueza temporal que exige el contrato C1 (muestra,
-    /// instante), y el adapter no distingue los fenómenos que este analizador
-    /// detecta (C2). El schema temporal está documentado en el module doc.
+    /// Emisión DIRECTA: la observación es el único vocabulario de análisis
+    /// (PR 7a eliminó el camino legacy `analyze_findings`). El schema temporal
+    /// está documentado en el module doc.
     ///
     /// `artifact` ancla cada observación (I3): `ArtifactRef::ExecutionSession`
     /// con el id de la sesión ejecutada (el caller lo conoce; el analizador no
@@ -584,17 +488,22 @@ mod tests {
         (plan, exec)
     }
 
+    /// Artifact ancla de sesión para los tests (I3).
+    fn session_artifact() -> ArtifactRef {
+        ArtifactRef::ExecutionSession(ExecutionSessionId("e1".to_string()))
+    }
+
     #[test]
-    fn no_findings_for_perfect_execution() {
+    fn no_observations_for_perfect_execution() {
         let (plan, exec) = make_perfect_trace();
         let comparison = compare(&plan, &exec, "p1", "e1", "test");
         let analyzer = ExecutionAnalyzer::new();
-        let findings = analyzer.analyze_findings(&comparison);
+        let observations = analyzer.analyze(session_artifact(), &comparison);
 
         assert!(
-            findings.is_empty(),
-            "Perfect execution should produce no findings, got: {:?}",
-            findings
+            observations.is_empty(),
+            "Perfect execution should produce no observations, got: {:?}",
+            observations.iter().map(|o| o.kind).collect::<Vec<_>>()
         );
     }
 
@@ -603,36 +512,36 @@ mod tests {
         let (plan, exec) = make_deviated_trace();
         let comparison = compare(&plan, &exec, "p1", "e1", "test");
         let analyzer = ExecutionAnalyzer::new();
-        let findings = analyzer.analyze_findings(&comparison);
+        let observations = analyzer.analyze(session_artifact(), &comparison);
 
         // Should detect global tracking error
-        let has_tracking_error = findings
+        let has_tracking_error = observations
             .iter()
-            .any(|f| matches!(f.kind, FindingKind::TrackingError));
+            .any(|o| matches!(o.kind, ObservationKind::TrackingError));
         assert!(
             has_tracking_error,
             "Deviated execution should produce TrackingError"
         );
 
         // Should detect joint-level deviations
-        let has_joint_deviation = findings
+        let has_joint_deviation = observations
             .iter()
-            .any(|f| matches!(f.kind, FindingKind::JointDeviation));
+            .any(|o| matches!(o.kind, ObservationKind::JointDeviation));
         assert!(
             has_joint_deviation,
             "Deviated execution should produce JointDeviation"
         );
 
-        // Should produce at least 2 findings
+        // Should produce at least 2 observations
         assert!(
-            findings.len() >= 2,
-            "Expected >= 2 findings, got {}",
-            findings.len()
+            observations.len() >= 2,
+            "Expected >= 2 observations, got {}",
+            observations.len()
         );
     }
 
     #[test]
-    fn empty_comparison_produces_no_findings() {
+    fn empty_comparison_produces_no_observations() {
         let plan = MotionTrace::new();
         let meta = TraceMetadata {
             session_id: "e".into(),
@@ -646,9 +555,9 @@ mod tests {
         let exec = crate::telemetry::ExecutionTrace::new(meta);
         let comparison = compare(&plan, &exec, "", "", "");
         let analyzer = ExecutionAnalyzer::new();
-        let findings = analyzer.analyze_findings(&comparison);
+        let observations = analyzer.analyze(session_artifact(), &comparison);
 
-        assert!(findings.is_empty());
+        assert!(observations.is_empty());
     }
 
     #[test]
@@ -664,11 +573,11 @@ mod tests {
             velocity_deviation_warning: 10.0,
         };
         let analyzer = ExecutionAnalyzer::with_thresholds(permissive);
-        let findings = analyzer.analyze_findings(&comparison);
+        let observations = analyzer.analyze(session_artifact(), &comparison);
 
         assert!(
-            findings.is_empty(),
-            "Permissive thresholds should produce no findings"
+            observations.is_empty(),
+            "Permissive thresholds should produce no observations"
         );
 
         // Very strict thresholds
@@ -679,32 +588,32 @@ mod tests {
             velocity_deviation_warning: 0.001,
         };
         let analyzer = ExecutionAnalyzer::with_thresholds(strict);
-        let findings = analyzer.analyze_findings(&comparison);
+        let observations = analyzer.analyze(session_artifact(), &comparison);
 
         assert!(
-            !findings.is_empty(),
-            "Strict thresholds should produce findings"
+            !observations.is_empty(),
+            "Strict thresholds should produce observations"
         );
     }
 
     #[test]
-    fn findings_use_correct_kinds() {
+    fn observations_use_correct_kinds() {
         let (plan, exec) = make_deviated_trace();
         let comparison = compare(&plan, &exec, "p1", "e1", "test");
         let analyzer = ExecutionAnalyzer::new();
-        let findings = analyzer.analyze_findings(&comparison);
+        let observations = analyzer.analyze(session_artifact(), &comparison);
 
-        for f in &findings {
-            match f.kind {
-                FindingKind::TrackingError
-                | FindingKind::TrackingSpike
-                | FindingKind::JointDeviation
-                | FindingKind::VelocityDeviation => {
+        for o in &observations {
+            match o.kind {
+                ObservationKind::TrackingError
+                | ObservationKind::TrackingSpike
+                | ObservationKind::JointDeviation
+                | ObservationKind::VelocityDeviation => {
                     // These are the expected kinds from ExecutionAnalyzer
                 }
                 other => {
                     panic!(
-                        "Unexpected finding kind from ExecutionAnalyzer: {:?}",
+                        "Unexpected observation kind from ExecutionAnalyzer: {:?}",
                         other
                     );
                 }
@@ -716,9 +625,9 @@ mod tests {
     // PR 4a RED — ExecutionAnalyzer emits canonical Observations (tasks 4.1-4.2)
     // ═══════════════════════════════════════════════════════════════════════
     //
-    // Spec planning-feedback-loop: ExecutionFinding is replaced by Observation.
-    // These tests were written FIRST and fail against the legacy
-    // `analyze(&PlanExecutionComparison) -> Vec<Finding>` API.
+    // Spec planning-feedback-loop: execution findings are replaced by
+    // observations. These tests were written FIRST and fail against the
+    // pre-migration API.
 
     fn number(attrs: &BTreeMap<String, AttributeValue>, key: &str) -> f64 {
         match attrs.get(key) {
@@ -1068,9 +977,9 @@ mod tests {
     //    SwitchMoveStrategy (ObservationIntentionOperator) → ActionProposal → Action
     //
     // Proves the new-model feedback flow end-to-end WITHOUT the legacy
-    // orchestrator (which operated on ExecutionFinding before PR 4d).
-    // Green-first by design: every dependency landed in PR 4a (canonical
-    // analyzer) and PR 4b (observation operator + ActionProposal).
+    // orchestrator (which operated on the legacy execution findings before
+    // PR 4d). Green-first by design: every dependency landed in PR 4a
+    // (canonical analyzer) and PR 4b (observation operator + ActionProposal).
     #[test]
     fn feedback_regression_execution_observation_to_action() {
         use thalos_core::analysis::action::{ActionId, ActionKind};

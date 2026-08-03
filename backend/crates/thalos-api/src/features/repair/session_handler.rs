@@ -7,7 +7,9 @@ use axum::{
 };
 
 use thalos_core::{
+    analysis::RegionGrouper,
     analysis::observation::ArtifactRef,
+    analysis::region::RegionId,
     ids::MotionPlanId,
     kinematics::{forward::ForwardKinematics, inverse::JacobianTransposeSolver},
     trajectory::Trajectory,
@@ -15,10 +17,6 @@ use thalos_core::{
 use thalos_math::Vector3;
 use thalos_planning::{
     TrajectoryOperator, // re-exported from thalos-optimization
-    analysis::{
-        domain::RegionId,
-        region::{RegionDetector, RegionDetectorConfig},
-    },
     motion::program::CompiledPlan,
     optimizer::TrajectoryOptimizer,
     repair::{
@@ -244,19 +242,18 @@ pub async fn preview_repair(
         artifact,
     )?;
 
-    let detector = RegionDetector::new(RegionDetectorConfig::default());
-    let detect_report = detector.detect(&analysis.findings);
+    // Regiones desde las observaciones del reporte canónico (dueño único:
+    // RegionGrouper).
+    let regions = RegionGrouper::default().group(&analysis.report.observations);
 
     // Encontrar la región solicitada
     let region_id = RegionId(req.region_id);
-    let region = detect_report
-        .problem_regions
+    let region = regions
         .iter()
         .find(|r| r.id == region_id)
         // Fallback: buscar por waypoint_start si no hay match exacto
         .or_else(|| {
-            detect_report
-                .problem_regions
+            regions
                 .iter()
                 .find(|r| r.waypoint_range.start == req.region_id as usize)
         })
@@ -288,7 +285,7 @@ pub async fn preview_repair(
         .optimize(
             &snapshot.chain,
             trajectory,
-            &detect_report.problem_regions,
+            &regions,
             Some(ctx.ik_solver.clone()),
         )
         .map_err(|e| ApiError::Internal {

@@ -1,8 +1,11 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
+use thalos_core::analysis::attribute_value::AttributeValue;
+use thalos_core::analysis::observation::{Observation, ObservationKind, Severity};
+
+use super::observation;
 use crate::operation::SemanticOperation;
 use crate::program::SemanticProgram;
-use super::{Diagnostic, ValidationResult};
 
 /// Run Level 1 validation rules on a `SemanticProgram`.
 ///
@@ -16,8 +19,11 @@ use super::{Diagnostic, ValidationResult};
 /// - **Home parameterless**: `Home` accepts no parameters. Enforced by the
 ///   `HomeOp` struct definition — only `origin` is present.
 /// - **MoveTo**: No Level 1 rules apply.
-pub(super) fn validate_level1(program: &SemanticProgram) -> ValidationResult {
-    let mut errors: Vec<Diagnostic> = Vec::new();
+///
+/// Emits `Observation`s in the unified analysis model (spec I1-I3): the
+/// phenomenon (kind), the operation origin (location), and typed attributes.
+pub(super) fn validate_level1(program: &SemanticProgram) -> Vec<Observation> {
+    let mut observations: Vec<Observation> = Vec::new();
     // Track which ObjectIds have been picked (maps to the Pick's origin for traceability).
     let mut picked_objects: HashMap<&str, &thalos_core::ids::OperationId> = HashMap::new();
 
@@ -28,12 +34,16 @@ pub(super) fn validate_level1(program: &SemanticProgram) -> ValidationResult {
             }
             SemanticOperation::Place(place) => {
                 if !picked_objects.contains_key(place.object.0.as_str()) {
-                    errors.push(Diagnostic::error(
-                        format!(
-                            "Place references object '{}' which has no preceding Pick",
-                            place.object.0
-                        ),
+                    let mut attributes = BTreeMap::new();
+                    attributes.insert(
+                        "object_id".to_string(),
+                        AttributeValue::Text(place.object.0.clone()),
+                    );
+                    observations.push(observation(
+                        ObservationKind::PlaceWithoutPick,
+                        Severity::Error,
                         place.origin.clone(),
+                        attributes,
                     ));
                 }
             }
@@ -55,8 +65,5 @@ pub(super) fn validate_level1(program: &SemanticProgram) -> ValidationResult {
         }
     }
 
-    ValidationResult {
-        errors,
-        warnings: Vec::new(),
-    }
+    observations
 }

@@ -24,7 +24,10 @@ pub use metrics::{
 pub use report::{OperatorEntry, OperatorStatus, PipelineReport};
 
 use thalos_core::{
+    analysis::RegionGrouper,
     analysis::constraints::{Constraint, DefaultConstraintEvaluator},
+    analysis::observation::ArtifactRef,
+    ids::MotionPlanId,
     models::{RobotModel, RobotRegistry},
     trajectory::Trajectory,
 };
@@ -37,13 +40,7 @@ use thalos_optimization::{
     },
     pipeline::OptimizationPipeline,
 };
-use thalos_planning::{
-    analysis::{
-        TrajectoryAnalyzer,
-        region::{RegionDetector, RegionDetectorConfig},
-    },
-    evaluation::PlanEvaluator,
-};
+use thalos_planning::{analysis::TrajectoryAnalyzer, evaluation::PlanEvaluator};
 
 /// A benchmark scenario defines the inputs and expected outcomes for a
 /// single pipeline optimization run.
@@ -117,15 +114,16 @@ pub fn run_scenario(scenario: &dyn BenchmarkScenario) -> PipelineReport {
     } else {
         TrajectoryAnalyzer::new(&chain, None).with_constraints(&cons, &evaluator)
     };
-    let analysis_before = analyzer
-        .analyze_plan(&traj)
+    // Pasa único: análisis técnico + observaciones canónicas (PR 7a).
+    let artifact = ArtifactRef::MotionPlan(MotionPlanId("pbm".to_string()));
+    let (analysis_before, observations_before) = analyzer
+        .analyze_with_observations(artifact, &traj)
         .expect("before-analysis failed");
     let metrics_before = PlanEvaluator::compute_metrics(&analysis_before.waypoints);
 
     // ── 3. Detect problem regions ─────────────────────────
-    let detector = RegionDetector::new(RegionDetectorConfig::default());
-    let analysis_report = detector.detect(&analysis_before.findings);
-    let regions = analysis_report.problem_regions;
+    // Dueño único de la agrupación: RegionGrouper sobre observaciones.
+    let regions = RegionGrouper::default().group(&observations_before);
     let regions_detected = regions.len();
 
     // ── 4. Build optimization context ─────────────────────

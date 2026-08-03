@@ -21,7 +21,7 @@ pub mod types;
 
 pub use explain::RegionExplanation;
 pub use metrics::{RegionBoundary, RegionMetrics};
-pub use traits::{RegionDetector, RepairCapability, StrategyKind};
+pub use traits::{RepairCapability, StrategyKind};
 pub use types::{ProblemRegion, RegionEvidence, RegionId, RegionKind, RegionSeverity};
 
 // Los tipos de knowledge han migrado a `crate::knowledge::domain` (M8.3).

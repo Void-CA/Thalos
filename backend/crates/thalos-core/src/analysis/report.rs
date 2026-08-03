@@ -92,7 +92,7 @@ pub enum ReportError {
 pub struct AnalysisReport {
     /// The artifact this report analyzes (I3).
     pub artifact: ArtifactRef,
-    /// Diagnostic facts produced by analyzers.
+    /// Analysis facts produced by analyzers.
     pub observations: Vec<Observation>,
     /// Remediation actions targeting observations by id (I5).
     pub actions: Vec<Action>,

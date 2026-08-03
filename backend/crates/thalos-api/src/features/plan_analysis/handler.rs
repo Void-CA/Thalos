@@ -2,19 +2,18 @@
 //!
 //! POST /api/v1/plan/analyze
 //!
-//! Analiza el plan activo del runtime y retorna
-//! summary + metrics + findings + recommendations + problem_regions.
+//! Analiza el plan activo del runtime y retorna la PROYECCIÓN del
+//! [`AnalysisReport`](thalos_core::analysis::report::AnalysisReport) del
+//! dominio: artifact + observations + actions + metrics + summary (+
+//! `problem_regions` legacy vía adapter de DTO).
 
 use std::sync::Arc;
 
 use axum::{Json, extract::State};
 
 use thalos_core::{
-    analysis::observation::ArtifactRef,
-    analysis::region::project_semantic_problem,
-    ids::MotionPlanId,
+    analysis::RegionGrouper, analysis::observation::ArtifactRef, ids::MotionPlanId,
     kinematics::forward::ForwardKinematics,
-    operation::{MotionProvenance, MotionRole},
 };
 use thalos_optimization::{
     PlanMetrics,
@@ -25,103 +24,15 @@ use thalos_optimization::{
     },
     pipeline::OptimizationPipeline,
 };
-use thalos_planning::analysis::region::{RegionDetector, RegionDetectorConfig};
 use thalos_planning::motion::program::PlannedSegment;
 use thalos_runtime::PlanAnalysisService;
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
 use crate::features::plan_analysis::dto::{
-    ExplanationDto, FindingDto, MetricsComparisonDto, MetricsDto, OperatorAppliedDto,
-    OptimizeResponse, PlanAnalysisRequest, PlanAnalysisResponse, ProblemRegionDto,
-    RecommendationDto, RegionMetricsDto, SemanticProblemDto, SummaryDto, WaypointAnalysisDto,
+    MetricsComparisonDto, OperatorAppliedDto, OptimizeResponse, PlanAnalysisRequest,
+    PlanAnalysisResponse,
 };
-
-/// Mapper: ProblemRegion → ProblemRegionDto
-mod mapper {
-    use super::*;
-    use thalos_planning::analysis::domain::ProblemRegion;
-
-    pub fn to_problem_region_dto(region: &ProblemRegion) -> ProblemRegionDto {
-        let metrics = region.metrics.as_ref().map(|m| RegionMetricsDto {
-            waypoint_count: m.waypoint_count,
-            average_value: m.average_value,
-            min_value: m.min_value,
-            max_value: m.max_value,
-            error_count: m.error_count,
-            warning_count: m.warning_count,
-        });
-
-        let explanation = region
-            .explanation
-            .as_ref()
-            .map(|e| ExplanationDto {
-                cause: e.cause.clone(),
-                consequence: e.consequence.clone(),
-                recommended_strategies: e.recommended_strategies.clone(),
-                confidence: e.confidence,
-            })
-            .unwrap_or(ExplanationDto {
-                cause: String::new(),
-                consequence: String::new(),
-                recommended_strategies: vec![],
-                confidence: 1.0,
-            });
-
-        ProblemRegionDto {
-            id: region.id.0,
-            kind: region.kind.name().to_string(),
-            severity: format!("{:?}", region.severity).to_lowercase(),
-            waypoint_start: region.waypoint_range.start,
-            waypoint_end: region.waypoint_range.end.saturating_sub(1),
-            waypoint_count: region.waypoint_range.len(),
-            metrics,
-            explanation,
-            confidence: None,
-            recommended_strategies: vec![],
-            semantic: None,
-        }
-    }
-
-    /// Rebuild provenance from the active plan's segments.
-    ///
-    /// `compile_with_operations()` records one `MotionProvenance` per expanded
-    /// node/segment; the runtime persists the compiled `PlannedSegment`s
-    /// (with `operation_id` + `role`), so the projection input is recovered
-    /// from them without storing a separate structure. Legacy segments carry
-    /// `None` metadata and yield no provenance.
-    fn build_provenance(segments: &[PlannedSegment]) -> Vec<MotionProvenance> {
-        segments
-            .iter()
-            .filter_map(|s| {
-                s.operation_id.clone().map(|operation_id| MotionProvenance {
-                    waypoint_range: s.waypoint_range.clone(),
-                    operation_id,
-                    role: s.role.unwrap_or(MotionRole::Transit),
-                })
-            })
-            .collect()
-    }
-
-    pub fn to_problem_region_dtos(
-        regions: &[ProblemRegion],
-        segments: &[PlannedSegment],
-    ) -> Vec<ProblemRegionDto> {
-        let provenance = build_provenance(segments);
-        regions
-            .iter()
-            .map(|region| {
-                let mut dto = to_problem_region_dto(region);
-                dto.semantic = (!provenance.is_empty())
-                    .then(|| {
-                        SemanticProblemDto::from(&project_semantic_problem(region, &provenance))
-                    })
-                    .filter(|semantic| semantic.operation_id.is_some() || semantic.role.is_some());
-                dto
-            })
-            .collect()
-    }
-}
 
 /// POST /api/v1/plan/analyze
 pub async fn analyze_plan(
@@ -139,12 +50,13 @@ pub async fn analyze_plan(
             code: "no_active_plan".to_string(),
         })?;
     let trajectory = &active_plan.trajectory;
-    // I3: cada observación del reporte queda anclada a este MotionPlan.
+    // I3: cada observación del reporte queda anclada a este MotionPlan. O3: el
+    // identificador REAL disponible (plan_id) es el que expone el wire.
     let artifact = ArtifactRef::MotionPlan(MotionPlanId(active_plan.plan_id.clone()));
 
     // PR 3: segments carry operation provenance (operation_id + role) when the
-    // plan was compiled through compile_with_operations(). The analysis maps
-    // each problem region back to its originating operation.
+    // plan was compiled through compile_with_operations(). The DTO adapter
+    // projects each problem region back to its originating operation.
     let segments: &[PlannedSegment] = snapshot
         .active_plan
         .as_ref()
@@ -159,44 +71,12 @@ pub async fn analyze_plan(
         artifact,
     )?;
 
-    // M8.1: Detectar regiones problemáticas
-    let detector = RegionDetector::new(RegionDetectorConfig::default());
-    let analysis_report = detector.detect(&result.findings);
-
-    let metrics = &result.analysis.metrics;
-    let findings = &result.findings;
-
-    Ok(Json(PlanAnalysisResponse {
-        summary: SummaryDto::from_analysis(
-            findings,
-            metrics.has_collisions,
-            metrics.avg_manipulability,
-            metrics.singular_count,
-        ),
-        metrics: MetricsDto {
-            duration: metrics.trajectory_duration,
-            waypoint_count: metrics.waypoint_count,
-            average_manipulability: metrics.avg_manipulability,
-            near_singular_count: metrics.near_singular_count,
-            singular_count: metrics.singular_count,
-            min_collision_distance: metrics.min_collision_distance,
-            has_collisions: metrics.has_collisions,
-        },
-        waypoints: result
-            .analysis
-            .waypoints
-            .iter()
-            .map(WaypointAnalysisDto::from)
-            .collect(),
-        findings: findings.iter().map(FindingDto::from).collect(),
-        recommendations: result
-            .recommendations
-            .into_iter()
-            .map(RecommendationDto::from)
-            .collect(),
-        problem_regions: mapper::to_problem_region_dtos(&analysis_report.problem_regions, segments),
-        health_score: Some(analysis_report.health_score),
-    }))
+    // El wire es una proyección del reporte canónico (I6): el handler no
+    // construye modelos intermedios entre dominio y contrato.
+    Ok(Json(PlanAnalysisResponse::from_report(
+        &result.report,
+        segments,
+    )))
 }
 
 // ── Metrics helpers ──────────────────────────────────────────
@@ -284,7 +164,7 @@ pub async fn handle_optimize(State(state): State<Arc<AppState>>) -> ApiResult<Op
     // I3: observaciones ancladas al MotionPlan analizado.
     let artifact = ArtifactRef::MotionPlan(MotionPlanId(active_plan.plan_id.clone()));
 
-    // 2. Run PlanAnalysis (same as analyze)
+    // 2. Run PlanAnalysis (same as analyze) — reporte canónico + métricas
     let analysis_result = PlanAnalysisService::analyze_plan(
         &snapshot.chain,
         trajectory,
@@ -293,12 +173,12 @@ pub async fn handle_optimize(State(state): State<Arc<AppState>>) -> ApiResult<Op
         artifact,
     )?;
 
-    // 3. Detect problem regions
-    let detector = RegionDetector::new(RegionDetectorConfig::default());
-    let analysis_report = detector.detect(&analysis_result.findings);
+    // 3. Detect problem regions — el dueño único de la agrupación es el
+    //    RegionGrouper, sobre las observaciones del reporte canónico.
+    let regions = RegionGrouper::default().group(&analysis_result.report.observations);
 
     let before_metrics = &analysis_result.analysis.metrics;
-    let before_health = analysis_report.health_score;
+    let before_health = analysis_result.report.summary.quality_index;
 
     // 4. Extract joint limits from the chain (actuated joints only)
     let chain_joints: Vec<(f64, f64)> = snapshot
@@ -393,7 +273,7 @@ pub async fn handle_optimize(State(state): State<Arc<AppState>>) -> ApiResult<Op
             &operator_refs,
             &snapshot.chain,
             trajectory,
-            &analysis_report.problem_regions,
+            &regions,
             &plan_metrics,
             &ctx,
             None,
@@ -418,9 +298,7 @@ pub async fn handle_optimize(State(state): State<Arc<AppState>>) -> ApiResult<Op
         )),
     )?;
 
-    let after_detector = RegionDetector::new(RegionDetectorConfig::default());
-    let after_report = after_detector.detect(&after_analysis.findings);
-    let after_health = after_report.health_score;
+    let after_health = after_analysis.report.summary.quality_index;
     let after_metrics = &after_analysis.analysis.metrics;
 
     // 10. Extract operator report from pipeline steps
@@ -486,120 +364,4 @@ pub async fn handle_optimize(State(state): State<Arc<AppState>>) -> ApiResult<Op
             max_segment_error_after: max_seg_err_after,
         },
     }))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::mapper::to_problem_region_dtos;
-    use super::*;
-    use std::ops::Range;
-
-    use thalos_core::{
-        analysis::region::RegionSeverity,
-        motion::segment::MotionSegment,
-        operation::{MotionRole, OperationId},
-        trajectory::Trajectory,
-    };
-    use thalos_planning::analysis::domain::{ProblemRegion, RegionId, RegionKind};
-
-    fn segment_with_metadata(
-        waypoint_range: Range<usize>,
-        operation_id: Option<OperationId>,
-        role: Option<MotionRole>,
-    ) -> PlannedSegment {
-        PlannedSegment {
-            origin: OperationId("origin".to_string()),
-            source: MotionSegment::MoveJ {
-                origin: OperationId("origin".to_string()),
-                target: vec![0.0, 0.0],
-                max_velocity: None,
-                max_acceleration: None,
-            },
-            trajectory: Trajectory::new(vec![]),
-            waypoint_range,
-            time_range: 0.0..1.0,
-            operation_id,
-            role,
-        }
-    }
-
-    #[test]
-    fn to_problem_region_dtos_attaches_semantic_context() {
-        let regions = vec![ProblemRegion::new(
-            RegionId(0),
-            RegionKind::Singularity,
-            RegionSeverity::Critical,
-            5..10,
-        )];
-        let segments = vec![
-            segment_with_metadata(0..5, None, None),
-            segment_with_metadata(
-                5..10,
-                Some(OperationId("42".to_string())),
-                Some(MotionRole::Execution),
-            ),
-        ];
-
-        let dtos = to_problem_region_dtos(&regions, &segments);
-        let semantic = dtos[0]
-            .semantic
-            .as_ref()
-            .expect("region 5..10 must map to the segment carrying operation 42");
-        assert_eq!(semantic.operation_id.as_deref(), Some("42"));
-        assert_eq!(semantic.role.as_deref(), Some("execution"));
-        assert_eq!(semantic.kind, "singularity");
-        assert_eq!(semantic.severity, "critical");
-    }
-
-    #[test]
-    fn to_problem_region_dtos_legacy_segments_have_no_semantic() {
-        let regions = vec![ProblemRegion::new(
-            RegionId(0),
-            RegionKind::Velocity,
-            RegionSeverity::Warning,
-            0..5,
-        )];
-        let segments = vec![segment_with_metadata(0..5, None, None)];
-
-        let dtos = to_problem_region_dtos(&regions, &segments);
-        assert!(
-            dtos[0].semantic.is_none(),
-            "legacy segments (no operation_id) must not attach semantic context"
-        );
-    }
-
-    #[test]
-    fn semantic_projection_skips_regions_outside_provenance() {
-        let regions = vec![
-            ProblemRegion::new(
-                RegionId(0),
-                RegionKind::Singularity,
-                RegionSeverity::Critical,
-                5..10,
-            ),
-            ProblemRegion::new(
-                RegionId(1),
-                RegionKind::Velocity,
-                RegionSeverity::Info,
-                20..25,
-            ),
-        ];
-        let segments = vec![segment_with_metadata(
-            5..10,
-            Some(OperationId("7".to_string())),
-            Some(MotionRole::Interaction),
-        )];
-
-        let dtos = to_problem_region_dtos(&regions, &segments);
-        let semantic = dtos[0]
-            .semantic
-            .as_ref()
-            .expect("overlapping region must map to operation 7");
-        assert_eq!(semantic.operation_id.as_deref(), Some("7"));
-        assert_eq!(semantic.role.as_deref(), Some("interaction"));
-        assert!(
-            dtos[1].semantic.is_none(),
-            "region with no overlapping provenance must have no semantic context"
-        );
-    }
 }

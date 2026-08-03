@@ -19,9 +19,9 @@
 //!
 //! ## Legacy removal (PR 4d, task 4.6)
 //!
-//! The old `IntentionOperator` trait over `ExecutionFinding` (which returned
-//! transformed segments directly) was removed in PR 4d: operators no longer
-//! touch [`MotionSegment`]s or legacy findings. Its segment logic was
+//! The old `IntentionOperator` trait over the legacy execution findings (which
+//! returned transformed segments directly) was removed in PR 4d: operators no
+//! longer touch [`MotionSegment`]s or legacy findings. Its segment logic was
 //! generalized onto the proposal vocabulary in `feedback/materializer.rs`.
 
 use std::collections::BTreeMap;
@@ -80,7 +80,7 @@ impl ActionProposal {
 /// Intention operator over the unified observation model (PR 4b).
 ///
 /// The new-model operator trait. It consumes ONLY [`Observation`] — it has zero
-/// knowledge of `ExecutionFinding`, `Finding` or `Recommendation` (C1) — and
+/// knowledge of the legacy finding/recommendation vocabularies (C1) — and
 /// produces [`ActionProposal`]s (C3).
 ///
 /// # Contract
@@ -194,9 +194,9 @@ mod tests {
 
     #[test]
     fn observation_operator_contract_is_observation_only() {
-        // C1: the trait consumes `&Observation` exclusively — no
-        // ExecutionFinding / FindingKind / Recommendation appears anywhere in
-        // the contract (enforced at compile time by the signatures above).
+        // C1: the trait consumes `&Observation` exclusively — no legacy
+        // finding / recommendation type appears anywhere in the contract
+        // (enforced at compile time by the signatures above).
         let op = ObservationTestOperator;
         let obs = execution_observation(1, ObservationKind::TrackingError, vec![]);
 

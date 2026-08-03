@@ -1,7 +1,12 @@
-use crate::knowledge::{KnowledgeProvider, LoweringError};
+use std::collections::BTreeMap;
+
+use thalos_core::analysis::attribute_value::AttributeValue;
+use thalos_core::analysis::observation::{Observation, ObservationKind, Severity};
+
+use super::observation;
+use crate::knowledge::KnowledgeProvider;
 use crate::operation::SemanticOperation;
 use crate::program::SemanticProgram;
-use super::{Diagnostic, ValidationResult};
 
 /// Run Level 2 validation on a `SemanticProgram`.
 ///
@@ -13,51 +18,79 @@ use super::{Diagnostic, ValidationResult};
 /// - **Home**: The home pose must be resolvable via `home_pose`.
 /// - **Wait**: No provider calls needed.
 ///
-/// If the provider returns `Err`, a `Diagnostic` is emitted with the operation's
-/// `origin` for traceability. Level 2 presumes Level 1 has already passed — no
-/// sequence rules are checked here.
+/// If the provider returns `Err`, an `Observation` is emitted with kind
+/// `UnresolvableReference`, anchored at the operation's `origin` (spec I2), and
+/// carrying the unresolvable resource ids as typed attributes. The provider's
+/// error text is dropped — presentation is the renderer's responsibility (I1).
+/// Level 2 presumes Level 1 has already passed — no sequence rules are checked
+/// here.
 pub(super) fn validate_level2(
     program: &SemanticProgram,
     provider: &dyn KnowledgeProvider,
-) -> ValidationResult {
-    let mut errors: Vec<Diagnostic> = Vec::new();
+) -> Vec<Observation> {
+    let mut observations: Vec<Observation> = Vec::new();
 
     for op in &program.operations {
         match op {
             SemanticOperation::Pick(pick) => {
-                if let Err(e) = provider.grasp_plan(&pick.object) {
-                    errors.push(Diagnostic::error(
-                        format!("unresolvable object '{}': {}", pick.object.0, error_message(&e)),
+                if provider.grasp_plan(&pick.object).is_err() {
+                    let mut attributes = BTreeMap::new();
+                    attributes.insert(
+                        "object_id".to_string(),
+                        AttributeValue::Text(pick.object.0.clone()),
+                    );
+                    observations.push(observation(
+                        ObservationKind::UnresolvableReference,
+                        Severity::Error,
                         pick.origin.clone(),
+                        attributes,
                     ));
                 }
             }
             SemanticOperation::Place(place) => {
-                if let Err(e) = provider.place_plan(&place.object, &place.destination) {
-                    errors.push(Diagnostic::error(
-                        format!(
-                            "unresolvable placement '{}' at '{}': {}",
-                            place.object.0,
-                            place.destination.0,
-                            error_message(&e)
-                        ),
+                if provider
+                    .place_plan(&place.object, &place.destination)
+                    .is_err()
+                {
+                    let mut attributes = BTreeMap::new();
+                    attributes.insert(
+                        "object_id".to_string(),
+                        AttributeValue::Text(place.object.0.clone()),
+                    );
+                    attributes.insert(
+                        "location_id".to_string(),
+                        AttributeValue::Text(place.destination.0.clone()),
+                    );
+                    observations.push(observation(
+                        ObservationKind::UnresolvableReference,
+                        Severity::Error,
                         place.origin.clone(),
+                        attributes,
                     ));
                 }
             }
             SemanticOperation::MoveTo(mv) => {
-                if let Err(e) = provider.location_pose(&mv.destination) {
-                    errors.push(Diagnostic::error(
-                        format!("unresolvable location '{}': {}", mv.destination.0, error_message(&e)),
+                if provider.location_pose(&mv.destination).is_err() {
+                    let mut attributes = BTreeMap::new();
+                    attributes.insert(
+                        "location_id".to_string(),
+                        AttributeValue::Text(mv.destination.0.clone()),
+                    );
+                    observations.push(observation(
+                        ObservationKind::UnresolvableReference,
+                        Severity::Error,
                         mv.origin.clone(),
+                        attributes,
                     ));
                 }
             }
             SemanticOperation::Home(home) => {
-                if let Err(e) = provider.home_pose() {
-                    errors.push(Diagnostic::error(
-                        format!("unresolvable home pose: {}", error_message(&e)),
+                if provider.home_pose().is_err() {
+                    observations.push(observation(
+                        ObservationKind::UnresolvableReference,
+                        Severity::Error,
                         home.origin.clone(),
+                        BTreeMap::new(),
                     ));
                 }
             }
@@ -67,27 +100,19 @@ pub(super) fn validate_level2(
         }
     }
 
-    ValidationResult {
-        errors,
-        warnings: Vec::new(),
-    }
-}
-
-fn error_message(e: &LoweringError) -> String {
-    match e {
-        LoweringError::KnowledgeProvider(msg) => msg.clone(),
-        LoweringError::MissingHomePose => "home pose not configured".to_string(),
-    }
+    observations
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::time::Duration;
+    use thalos_core::analysis::location::Location;
+    use thalos_core::analysis::observation::ObservationKind;
     use thalos_core::ids::OperationId;
     use thalos_core::motion::MotionPose;
 
-    use crate::knowledge::{GraspPlan, MockKnowledgeProvider};
+    use crate::knowledge::{GraspPlan, LoweringError, MockKnowledgeProvider};
     use crate::operation::*;
     use crate::resource::*;
 
@@ -128,15 +153,15 @@ mod tests {
             .with_home_pose(Ok(sample_pose(0.0, 0.0, 0.5)))
     }
 
-    macro_rules! assert_error_count {
+    macro_rules! assert_observation_count {
         ($result:expr, $count:expr) => {
             assert_eq!(
-                $result.errors.len(),
+                $result.len(),
                 $count,
-                "Expected {} errors, got {}: {:?}",
+                "Expected {} observations, got {}: {:?}",
                 $count,
-                $result.errors.len(),
-                $result.errors
+                $result.len(),
+                $result
             );
         };
     }
@@ -144,24 +169,33 @@ mod tests {
     // ── Unresolvable object in Pick ──────────────────────────────────────
 
     #[test]
-    fn pick_with_unresolvable_object_errors() {
+    fn pick_with_unresolvable_object_is_unresolvable_reference() {
         let unknown = ObjectId("unknown".to_string());
         let provider = MockKnowledgeProvider::new()
-            .with_grasp_error(unknown.clone(), LoweringError::KnowledgeProvider("not found".into()))
+            .with_grasp_error(
+                unknown.clone(),
+                LoweringError::KnowledgeProvider("not found".into()),
+            )
             .with_home_pose(Ok(sample_pose(0.0, 0.0, 0.0)));
 
-        let program = SemanticProgram::new(vec![
-            SemanticOperation::Pick(PickOp {
-                origin: OperationId("pick-1".to_string()),
-                object: unknown,
-                tool: None,
-            }),
-        ]);
+        let program = SemanticProgram::new(vec![SemanticOperation::Pick(PickOp {
+            origin: OperationId("pick-1".to_string()),
+            object: unknown,
+            tool: None,
+        })]);
 
-        let result = validate_level2(&program, &provider);
-        assert_error_count!(result, 1);
-        assert_eq!(result.errors[0].origin, OperationId("pick-1".to_string()));
-        assert!(result.errors[0].message.contains("unknown"));
+        let observations = validate_level2(&program, &provider);
+        assert_observation_count!(observations, 1);
+        assert_eq!(observations[0].kind, ObservationKind::UnresolvableReference);
+        assert_eq!(observations[0].severity, Severity::Error);
+        assert_eq!(
+            observations[0].location,
+            Location::Operation(OperationId("pick-1".to_string()))
+        );
+        assert_eq!(
+            observations[0].attributes["object_id"],
+            AttributeValue::Text("unknown".to_string())
+        );
     }
 
     // ── Unresolvable location in MoveTo ──────────────────────────────────
@@ -170,20 +204,29 @@ mod tests {
     fn move_to_with_unresolvable_location_errors() {
         let unknown = LocationId("unknown-loc".to_string());
         let provider = MockKnowledgeProvider::new()
-            .with_location_error(unknown.clone(), LoweringError::KnowledgeProvider("location unknown".into()))
+            .with_location_error(
+                unknown.clone(),
+                LoweringError::KnowledgeProvider("location unknown".into()),
+            )
             .with_home_pose(Ok(sample_pose(0.0, 0.0, 0.0)));
 
-        let program = SemanticProgram::new(vec![
-            SemanticOperation::MoveTo(MoveToOp {
-                origin: OperationId("move-1".to_string()),
-                destination: unknown,
-                tool: None,
-            }),
-        ]);
+        let program = SemanticProgram::new(vec![SemanticOperation::MoveTo(MoveToOp {
+            origin: OperationId("move-1".to_string()),
+            destination: unknown,
+            tool: None,
+        })]);
 
-        let result = validate_level2(&program, &provider);
-        assert_error_count!(result, 1);
-        assert_eq!(result.errors[0].origin, OperationId("move-1".to_string()));
+        let observations = validate_level2(&program, &provider);
+        assert_observation_count!(observations, 1);
+        assert_eq!(observations[0].kind, ObservationKind::UnresolvableReference);
+        assert_eq!(
+            observations[0].location,
+            Location::Operation(OperationId("move-1".to_string()))
+        );
+        assert_eq!(
+            observations[0].attributes["location_id"],
+            AttributeValue::Text("unknown-loc".to_string())
+        );
     }
 
     // ── Unresolvable placement ──────────────────────────────────────────
@@ -199,37 +242,52 @@ mod tests {
             )
             .with_home_pose(Ok(sample_pose(0.0, 0.0, 0.0)));
 
-        let program = SemanticProgram::new(vec![
-            SemanticOperation::Place(PlaceOp {
-                origin: OperationId("place-1".to_string()),
-                object: unknown,
-                destination: LocationId("any".to_string()),
-                tool: None,
-            }),
-        ]);
+        let program = SemanticProgram::new(vec![SemanticOperation::Place(PlaceOp {
+            origin: OperationId("place-1".to_string()),
+            object: unknown,
+            destination: LocationId("any".to_string()),
+            tool: None,
+        })]);
 
-        let result = validate_level2(&program, &provider);
-        assert_error_count!(result, 1);
-        assert_eq!(result.errors[0].origin, OperationId("place-1".to_string()));
+        let observations = validate_level2(&program, &provider);
+        assert_observation_count!(observations, 1);
+        assert_eq!(observations[0].kind, ObservationKind::UnresolvableReference);
+        assert_eq!(
+            observations[0].location,
+            Location::Operation(OperationId("place-1".to_string()))
+        );
+        assert_eq!(
+            observations[0].attributes["object_id"],
+            AttributeValue::Text("unknown".to_string())
+        );
+        assert_eq!(
+            observations[0].attributes["location_id"],
+            AttributeValue::Text("any".to_string())
+        );
     }
 
     // ── Unresolvable home ────────────────────────────────────────────────
 
     #[test]
     fn home_without_pose_errors() {
-        let provider = MockKnowledgeProvider::new()
-            .with_home_pose(Err(LoweringError::MissingHomePose));
+        let provider =
+            MockKnowledgeProvider::new().with_home_pose(Err(LoweringError::MissingHomePose));
 
-        let program = SemanticProgram::new(vec![
-            SemanticOperation::Home(HomeOp {
-                origin: OperationId("home-1".to_string()),
-            }),
-        ]);
+        let program = SemanticProgram::new(vec![SemanticOperation::Home(HomeOp {
+            origin: OperationId("home-1".to_string()),
+        })]);
 
-        let result = validate_level2(&program, &provider);
-        assert_error_count!(result, 1);
-        assert_eq!(result.errors[0].origin, OperationId("home-1".to_string()));
-        assert!(result.errors[0].message.contains("home pose"));
+        let observations = validate_level2(&program, &provider);
+        assert_observation_count!(observations, 1);
+        assert_eq!(observations[0].kind, ObservationKind::UnresolvableReference);
+        assert_eq!(
+            observations[0].location,
+            Location::Operation(OperationId("home-1".to_string()))
+        );
+        assert!(
+            observations[0].attributes.is_empty(),
+            "home has no resource ids to carry as typed attributes"
+        );
     }
 
     // ── Wait does not trigger errors ─────────────────────────────────────
@@ -238,15 +296,13 @@ mod tests {
     fn wait_passes_without_provider_calls() {
         let provider = MockKnowledgeProvider::new().with_home_pose(Ok(sample_pose(0.0, 0.0, 0.0)));
 
-        let program = SemanticProgram::new(vec![
-            SemanticOperation::Wait(WaitOp {
-                origin: OperationId("wait-1".to_string()),
-                duration: Duration::from_secs(5),
-            }),
-        ]);
+        let program = SemanticProgram::new(vec![SemanticOperation::Wait(WaitOp {
+            origin: OperationId("wait-1".to_string()),
+            duration: Duration::from_secs(5),
+        })]);
 
-        let result = validate_level2(&program, &provider);
-        assert_error_count!(result, 0);
+        let observations = validate_level2(&program, &provider);
+        assert_observation_count!(observations, 0);
     }
 
     // ── Valid references pass ────────────────────────────────────────────
@@ -254,44 +310,38 @@ mod tests {
     #[test]
     fn valid_pick_passes() {
         let provider = sample_provider();
-        let program = SemanticProgram::new(vec![
-            SemanticOperation::Pick(PickOp {
-                origin: OperationId("pick-1".to_string()),
-                object: ObjectId("bolt-1".to_string()),
-                tool: None,
-            }),
-        ]);
+        let program = SemanticProgram::new(vec![SemanticOperation::Pick(PickOp {
+            origin: OperationId("pick-1".to_string()),
+            object: ObjectId("bolt-1".to_string()),
+            tool: None,
+        })]);
 
-        let result = validate_level2(&program, &provider);
-        assert_error_count!(result, 0);
+        let observations = validate_level2(&program, &provider);
+        assert_observation_count!(observations, 0);
     }
 
     #[test]
     fn valid_move_to_passes() {
         let provider = sample_provider();
-        let program = SemanticProgram::new(vec![
-            SemanticOperation::MoveTo(MoveToOp {
-                origin: OperationId("move-1".to_string()),
-                destination: LocationId("shelf-a".to_string()),
-                tool: None,
-            }),
-        ]);
+        let program = SemanticProgram::new(vec![SemanticOperation::MoveTo(MoveToOp {
+            origin: OperationId("move-1".to_string()),
+            destination: LocationId("shelf-a".to_string()),
+            tool: None,
+        })]);
 
-        let result = validate_level2(&program, &provider);
-        assert_error_count!(result, 0);
+        let observations = validate_level2(&program, &provider);
+        assert_observation_count!(observations, 0);
     }
 
     #[test]
     fn valid_home_passes() {
         let provider = sample_provider();
-        let program = SemanticProgram::new(vec![
-            SemanticOperation::Home(HomeOp {
-                origin: OperationId("home-1".to_string()),
-            }),
-        ]);
+        let program = SemanticProgram::new(vec![SemanticOperation::Home(HomeOp {
+            origin: OperationId("home-1".to_string()),
+        })]);
 
-        let result = validate_level2(&program, &provider);
-        assert_error_count!(result, 0);
+        let observations = validate_level2(&program, &provider);
+        assert_observation_count!(observations, 0);
     }
 
     #[test]
@@ -323,16 +373,16 @@ mod tests {
             }),
         ]);
 
-        let result = validate_level2(&program, &provider);
-        assert_error_count!(result, 0);
+        let observations = validate_level2(&program, &provider);
+        assert_observation_count!(observations, 0);
     }
 
     // ── Multiple errors ──────────────────────────────────────────────────
 
     #[test]
     fn multiple_unresolvable_operations_all_flagged() {
-        let provider = MockKnowledgeProvider::new()
-            .with_home_pose(Err(LoweringError::MissingHomePose));
+        let provider =
+            MockKnowledgeProvider::new().with_home_pose(Err(LoweringError::MissingHomePose));
 
         let program = SemanticProgram::new(vec![
             SemanticOperation::Pick(PickOp {
@@ -345,7 +395,12 @@ mod tests {
             }),
         ]);
 
-        let result = validate_level2(&program, &provider);
-        assert_error_count!(result, 2);
+        let observations = validate_level2(&program, &provider);
+        assert_observation_count!(observations, 2);
+        assert!(
+            observations
+                .iter()
+                .all(|o| o.kind == ObservationKind::UnresolvableReference)
+        );
     }
 }

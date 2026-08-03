@@ -1,11 +1,4 @@
-use crate::analysis::PlanAnalysis;
-use crate::analysis::domain::types::{ProblemRegion, RegionKind};
-use crate::motion::program::CompiledPlan;
-
-/// Contrato para la detección de regiones problemáticas a partir del análisis de un plan.
-pub trait RegionDetector {
-    fn detect(&self, analysis: &PlanAnalysis) -> Vec<ProblemRegion>;
-}
+use crate::analysis::domain::types::ProblemRegion;
 
 /// Estrategia de reparación aplicable a una región problemática.
 pub trait RepairCapability {
@@ -24,3 +17,6 @@ pub enum StrategyKind {
 }
 
 // PlanningKnowledgeProvider ha migrado a `crate::knowledge::provider` (M8.3).
+// El contrato `RegionDetector` fue eliminado en PR 7a: la agrupación de
+// regiones contiguas tiene UN único dueño, el `RegionGrouper` de
+// `thalos-core` (sobre el lenguaje de observaciones).

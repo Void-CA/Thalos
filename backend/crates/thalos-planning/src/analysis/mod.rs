@@ -6,20 +6,27 @@
 //! - Colisiones y distancia a obstáculos
 //! - Violaciones de constraints
 //!
-//! Desde PR 3, el camino canónico es [`TrajectoryAnalyzer::analyze`], que emite
+//! El camino canónico es [`TrajectoryAnalyzer::analyze`], que emite
 //! [`Observation`](thalos_core::analysis::observation::Observation)s ancladas al
 //! artefacto analizado (I3); el `DefaultAggregator` las agrega a un
-//! `AnalysisReport`. El camino legacy
+//! `AnalysisReport`. El camino técnico
 //! [`TrajectoryAnalyzer::analyze_plan`] produce un [`PlanAnalysis`] con datos
-//! por waypoint y métricas agregadas (regiones de problema, optimización, DTOs).
+//! por waypoint y métricas agregadas (consumido por el pipeline de
+//! optimización). Ambos comparten UN solo pasa de evaluación
+//! (`analyze_with_observations`), nunca evalúan la trayectoria dos veces.
 
-pub mod adapter;
 pub mod domain;
-pub mod region;
+
+use std::collections::BTreeMap;
 
 use thalos_collision::distance::geometries_distance;
 use thalos_core::{
-    analysis::constraints::{Constraint, ConstraintEvaluator, ConstraintViolation},
+    analysis::{
+        attribute_value::AttributeValue,
+        constraints::{Constraint, ConstraintEvaluator, ConstraintViolation},
+        location::Location,
+        observation::{ArtifactRef, Observation, ObservationId, ObservationKind, Severity},
+    },
     collision::{CollisionBodyBuilder, CollisionChecker, CollisionMatrix, EntityId},
     kinematics::{
         forward::ForwardKinematics,
@@ -33,11 +40,7 @@ use thalos_core::{
     trajectory::Trajectory,
 };
 
-use crate::analysis::adapter::FindingAdapter;
-use crate::analysis::domain::{ProblemRegion, RegionMetrics, RegionSeverity};
 use crate::error::PlanningError;
-use crate::finding::{Finding, FindingKind, Severity};
-use thalos_core::analysis::observation::{ArtifactRef, Observation};
 
 // ─── Data types ───────────────────────────────────────────────────
 
@@ -48,24 +51,8 @@ pub struct PlanAnalysis {
     pub waypoints: Vec<WaypointAnalysis>,
     /// Métricas agregadas de toda la trayectoria.
     pub metrics: AnalysisMetrics,
-    /// Hallazgos objetivos del análisis (previo a recomendaciones).
-    pub findings: Vec<Finding>,
     /// Violaciones de constraints, si se evaluaron.
     pub constraint_violations: Vec<ConstraintViolation>,
-}
-
-/// Resultado del análisis semántico: findings originales + regiones + health score.
-///
-/// Este es el objeto canónico del pipeline de análisis. Reemplaza gradualmente
-/// a `PlanAnalysis` como la salida estándar del `TrajectoryAnalyzer`.
-#[derive(Debug, Clone)]
-pub struct AnalysisReport {
-    /// Findings originales (compatibilidad hacia atrás).
-    pub findings: Vec<Finding>,
-    /// Regiones problemáticas detectadas.
-    pub problem_regions: Vec<ProblemRegion>,
-    /// Puntaje de salud general de la trayectoria (0.0 = peor, 1.0 = mejor).
-    pub health_score: f64,
 }
 
 /// Severidad resumida para visualización de trayectoria.
@@ -229,17 +216,56 @@ impl<'a> TrajectoryAnalyzer<'a> {
         self
     }
 
-    /// Análisis completo por waypoint — camino legacy (pre-observation-model).
+    /// Análisis técnico completo por waypoint (camino de métricas).
     ///
-    /// Produce un [`PlanAnalysis`] (waypoints + métricas + findings) para los
-    /// consumidores previos al modelo canónico: detección de regiones, pipeline
-    /// de optimización y DTOs de métricas de la API.
-    ///
-    /// # TODO(analysis-model): remove after phase 6
-    ///
-    /// El camino canónico es [`Self::analyze`], que emite
-    /// [`Observation`](thalos_core::analysis::observation::Observation)s.
+    /// Produce un [`PlanAnalysis`] (waypoints + métricas) para los consumidores
+    /// del análisis técnico: pipeline de optimización y harness pbm. El camino
+    /// canónico de observaciones es [`Self::analyze`]; ambos comparten un solo
+    /// pasa de evaluación vía [`Self::analyze_with_observations`].
     pub fn analyze_plan(&self, trajectory: &Trajectory) -> Result<PlanAnalysis, PlanningError> {
+        self.analyze_internal(None, trajectory)
+            .map(|(plan, _)| plan)
+    }
+
+    /// Emite las observaciones canónicas del análisis (PR 3, design D2).
+    ///
+    /// Cada [`Observation`](thalos_core::analysis::observation::Observation)
+    /// queda anclada al `artifact` recibido (I3) y describe el fenómeno por
+    /// `kind` + `location` (I2). La agregación a un
+    /// [`AnalysisReport`](thalos_core::analysis::report::AnalysisReport) es
+    /// responsabilidad del `DefaultAggregator`, nunca del analyzer (D2).
+    ///
+    /// El `message` de los hallazgos legacy se descarta (I1) — los renderers
+    /// reconstruyen la presentación (cambio A). El `artifact` (I3) no vive en
+    /// la observación sin ancla, por eso se recibe como parámetro.
+    pub fn analyze(&self, artifact: ArtifactRef, trajectory: &Trajectory) -> Vec<Observation> {
+        self.analyze_with_observations(artifact, trajectory)
+            .expect("TrajectoryAnalyzer::analyze only fails on programmer error")
+            .1
+    }
+
+    /// Pasa ÚNICO del análisis: análisis técnico por waypoint + observaciones
+    /// canónicas en la misma evaluación (PR 7a).
+    ///
+    /// `analyze_plan` (consumidores de waypoints/métricas) y `analyze`
+    /// (observaciones) comparten esta implementación. Los consumidores que
+    /// necesitan ambos — el servicio de análisis y el harness pbm — la usan
+    /// para NO evaluar la trayectoria dos veces.
+    pub fn analyze_with_observations(
+        &self,
+        artifact: ArtifactRef,
+        trajectory: &Trajectory,
+    ) -> Result<(PlanAnalysis, Vec<Observation>), PlanningError> {
+        self.analyze_internal(Some(&artifact), trajectory)
+    }
+
+    /// Evaluación única de la trayectoria: waypoints + métricas + violaciones
+    /// de constraints + observaciones canónicas (solo si `artifact` es `Some`).
+    fn analyze_internal(
+        &self,
+        artifact: Option<&ArtifactRef>,
+        trajectory: &Trajectory,
+    ) -> Result<(PlanAnalysis, Vec<Observation>), PlanningError> {
         let mut waypoints = Vec::with_capacity(trajectory.len());
         let mut total_yoshikawa = 0.0;
         let mut min_yoshikawa = f64::MAX;
@@ -377,130 +403,122 @@ impl<'a> TrajectoryAnalyzer<'a> {
             },
         };
 
-        // Findings — hechos objetivos derivados del análisis
-        let mut findings: Vec<Finding> = Vec::new();
-
-        // Manipulabilidad baja
-        if let Some(avg) = metrics.avg_manipulability {
-            let manip_threshold = 0.3;
-            if avg < manip_threshold {
-                // Encontrar el waypoint con manipulabilidad mínima
-                if let Some(worst) = waypoints
-                    .iter()
-                    .filter_map(|w| w.manipulability.as_ref().map(|m| (w.index, m.yoshikawa)))
-                    .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
-                {
-                    findings.push(Finding {
-                        kind: FindingKind::LowManipulability,
-                        severity: Severity::Warning,
-                        waypoint: Some(worst.0),
-                        message: format!(
-                            "Low manipulability ({:.3}) at waypoint {}",
-                            worst.1, worst.0
-                        ),
-                        value: Some(worst.1),
-                        threshold: Some(manip_threshold),
-                    });
+        // Observaciones canónicas — hechos objetivos derivados del análisis
+        // (PR 3/7a). El artifact es requerido (I3): solo se emiten cuando el
+        // caller pide observaciones (el camino técnico `analyze_plan` no).
+        let mut observations: Vec<Observation> = Vec::new();
+        if let Some(artifact) = artifact {
+            let mut push = |kind: ObservationKind,
+                            severity: Severity,
+                            waypoint: Option<usize>,
+                            value: Option<f64>,
+                            threshold: Option<f64>| {
+                let mut attributes = BTreeMap::new();
+                if let Some(v) = value {
+                    attributes.insert("value".to_string(), AttributeValue::Number(v));
                 }
-            }
-        }
-
-        // Singularidades
-        for wp in &waypoints {
-            if let Some(sr) = &wp.singularity {
-                if sr.condition_number >= 1000.0 {
-                    findings.push(Finding {
-                        kind: FindingKind::Singularity,
-                        severity: Severity::Error,
-                        waypoint: Some(wp.index),
-                        message: format!(
-                            "Singularity at waypoint {} (condition number: {:.1})",
-                            wp.index, sr.condition_number
-                        ),
-                        value: Some(sr.condition_number),
-                        threshold: Some(1000.0),
-                    });
-                } else if sr.condition_number >= 100.0 {
-                    findings.push(Finding {
-                        kind: FindingKind::NearSingularity,
-                        severity: Severity::Warning,
-                        waypoint: Some(wp.index),
-                        message: format!(
-                            "Near singularity at waypoint {} (condition number: {:.1})",
-                            wp.index, sr.condition_number
-                        ),
-                        value: Some(sr.condition_number),
-                        threshold: Some(100.0),
-                    });
+                if let Some(t) = threshold {
+                    attributes.insert("threshold".to_string(), AttributeValue::Number(t));
                 }
-            }
-        }
-
-        // Colisiones
-        if metrics.has_collisions {
-            findings.push(Finding {
-                kind: FindingKind::Collision,
-                severity: Severity::Error,
-                waypoint: metrics.first_collision_waypoint,
-                message: format!(
-                    "Collision at waypoint {}",
-                    metrics
-                        .first_collision_waypoint
-                        .map(|i| i.to_string())
-                        .unwrap_or_else(|| "unknown".to_string()),
-                ),
-                value: metrics.min_collision_distance,
-                threshold: Some(0.0),
-            });
-        } else if let Some(min_dist) = metrics.min_collision_distance {
-            if min_dist < 0.05 {
-                findings.push(Finding {
-                    kind: FindingKind::CollisionNear,
-                    severity: Severity::Warning,
-                    waypoint: metrics.min_collision_waypoint,
-                    message: format!("Obstacle distance low ({:.1} mm)", min_dist * 1000.0),
-                    value: Some(min_dist),
-                    threshold: Some(0.05),
+                observations.push(Observation {
+                    id: ObservationId(0), // el aggregator reasigna 1..=n (I8)
+                    kind,
+                    severity,
+                    artifact: artifact.clone(),
+                    location: waypoint
+                        .map(Location::Waypoint)
+                        .unwrap_or(Location::Timestamp(0)),
+                    attributes,
+                    causes: Vec::new(),
+                    related: Vec::new(),
                 });
+            };
+
+            // Manipulabilidad baja (fenómeno de plan: promedio < umbral)
+            if let Some(avg) = metrics.avg_manipulability {
+                let manip_threshold = 0.3;
+                if avg < manip_threshold {
+                    // El waypoint con manipulabilidad mínima es el ancla
+                    if let Some(worst) = waypoints
+                        .iter()
+                        .filter_map(|w| w.manipulability.as_ref().map(|m| (w.index, m.yoshikawa)))
+                        .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+                    {
+                        push(
+                            ObservationKind::LowManipulability,
+                            Severity::Warning,
+                            Some(worst.0),
+                            Some(worst.1),
+                            Some(manip_threshold),
+                        );
+                    }
+                }
+            }
+
+            // Singularidades
+            for wp in &waypoints {
+                if let Some(sr) = &wp.singularity {
+                    if sr.condition_number >= 1000.0 {
+                        push(
+                            ObservationKind::Singularity,
+                            Severity::Error,
+                            Some(wp.index),
+                            Some(sr.condition_number),
+                            Some(1000.0),
+                        );
+                    } else if sr.condition_number >= 100.0 {
+                        push(
+                            ObservationKind::NearSingularity,
+                            Severity::Warning,
+                            Some(wp.index),
+                            Some(sr.condition_number),
+                            Some(100.0),
+                        );
+                    }
+                }
+            }
+
+            // Colisiones
+            if metrics.has_collisions {
+                push(
+                    ObservationKind::CollisionRisk,
+                    Severity::Error,
+                    metrics.first_collision_waypoint,
+                    metrics.min_collision_distance,
+                    Some(0.0),
+                );
+            } else if let Some(min_dist) = metrics.min_collision_distance {
+                if min_dist < 0.05 {
+                    push(
+                        ObservationKind::CollisionNear,
+                        Severity::Warning,
+                        metrics.min_collision_waypoint,
+                        Some(min_dist),
+                        Some(0.05),
+                    );
+                }
+            }
+
+            // Violaciones de constraints
+            for v in &constraint_violations {
+                push(
+                    ObservationKind::ConstraintViolation,
+                    Severity::Error,
+                    Some(v.waypoint),
+                    Some(v.magnitude),
+                    None,
+                );
             }
         }
 
-        // Violaciones de constraints
-        for v in &constraint_violations {
-            findings.push(Finding {
-                kind: FindingKind::ConstraintViolation,
-                severity: Severity::Error,
-                waypoint: Some(v.waypoint),
-                message: v.message.clone(),
-                value: Some(v.magnitude),
-                threshold: None,
-            });
-        }
-
-        Ok(PlanAnalysis {
-            waypoints,
-            metrics,
-            findings,
-            constraint_violations,
-        })
-    }
-
-    /// Emite las observaciones canónicas del análisis (PR 3, design D2).
-    ///
-    /// Cada [`Observation`](thalos_core::analysis::observation::Observation)
-    /// queda anclada al `artifact` recibido (I3) y describe el fenómeno por
-    /// `kind` + `location` (I2). La agregación a un
-    /// [`AnalysisReport`](thalos_core::analysis::report::AnalysisReport) es
-    /// responsabilidad del `DefaultAggregator`, nunca del analyzer (D2).
-    ///
-    /// El `message` de los findings legacy se descarta (I1) — los renderers
-    /// reconstruyen la presentación (cambio A). El `artifact` (I3) no vive en
-    /// el `Finding`, por eso se recibe como parámetro.
-    pub fn analyze(&self, artifact: ArtifactRef, trajectory: &Trajectory) -> Vec<Observation> {
-        let analysis = self
-            .analyze_plan(trajectory)
-            .expect("TrajectoryAnalyzer::analyze_plan only fails on programmer error");
-        FindingAdapter.convert_all(artifact, &analysis.findings)
+        Ok((
+            PlanAnalysis {
+                waypoints,
+                metrics,
+                constraint_violations,
+            },
+            observations,
+        ))
     }
 }
 
@@ -509,6 +527,8 @@ mod tests {
     use super::*;
     use thalos_collision::NaiveCollisionChecker;
     use thalos_core::{
+        analysis::observation::ArtifactRef,
+        ids::MotionPlanId,
         models::{RobotModel, RobotRegistry},
         trajectory::TrajectoryPoint,
     };
@@ -560,7 +580,7 @@ mod tests {
     // ─── Scenario 1: Perfect plan ────────────────────────────────
 
     #[test]
-    fn scenario_perfect_plan_returns_ok_status() {
+    fn scenario_perfect_plan_emits_no_observations() {
         // Trajectory where q2 ≈ π/2 (maximum manipulability)
         let chain = RobotRegistry::create_default(RobotModel::Planar2R);
         let traj = Trajectory::new(vec![
@@ -569,22 +589,21 @@ mod tests {
             TrajectoryPoint::new(vec![0.6, 1.57], 1.0),
         ]);
         let analyzer = TrajectoryAnalyzer::new(&chain, None);
-        let analysis = analyzer.analyze_plan(&traj).expect("analysis failed");
+        let artifact = ArtifactRef::MotionPlan(MotionPlanId("mp-perfect".to_string()));
 
-        // Should have no findings
+        let observations = analyzer.analyze(artifact, &traj);
         assert!(
-            analysis.findings.is_empty(),
-            "Expected no findings for perfect plan, got {}: {:?}",
-            analysis.findings.len(),
-            analysis.findings
+            observations.is_empty(),
+            "Expected no observations for perfect plan, got {}: {:?}",
+            observations.len(),
+            observations.iter().map(|o| o.kind).collect::<Vec<_>>()
         );
-        assert!(analysis.metrics.avg_manipulability.unwrap_or(0.0) > 0.3);
     }
 
     // ─── Scenario 2: Low manipulability ──────────────────────────
 
     #[test]
-    fn scenario_low_manipulability_generates_findings() {
+    fn scenario_low_manipulability_emits_observations() {
         // Trajectory with q2 close to 0 (near-extended arm → low manipulability)
         let chain = RobotRegistry::create_default(RobotModel::Planar2R);
         let traj = Trajectory::new(vec![
@@ -592,54 +611,53 @@ mod tests {
             TrajectoryPoint::new(vec![0.5, 0.05], 0.5),
         ]);
         let analyzer = TrajectoryAnalyzer::new(&chain, None);
-        let analysis = analyzer.analyze_plan(&traj).expect("analysis failed");
+        let artifact = ArtifactRef::MotionPlan(MotionPlanId("mp-low-manip".to_string()));
 
-        // Should have findings (low manipulability or near-singularity)
+        let observations = analyzer.analyze(artifact, &traj);
         assert!(
-            !analysis.findings.is_empty(),
-            "Expected findings for low-manipulability plan"
+            !observations.is_empty(),
+            "Expected observations for low-manipulability plan"
         );
 
-        let has_low_manip = analysis
-            .findings
+        let has_low_manip = observations
             .iter()
-            .any(|f| matches!(f.kind, FindingKind::LowManipulability));
-        let has_near_sing = analysis
-            .findings
+            .any(|o| matches!(o.kind, ObservationKind::LowManipulability));
+        let has_near_sing = observations
             .iter()
-            .any(|f| matches!(f.kind, FindingKind::NearSingularity));
+            .any(|o| matches!(o.kind, ObservationKind::NearSingularity));
 
-        // Either finding is valid here — both indicate a problem
+        // Either observation is valid here — both indicate a problem
         assert!(
             has_low_manip || has_near_sing,
-            "Expected LowManipulability or NearSingularity finding, got: {:?}",
-            analysis.findings.iter().map(|f| f.kind).collect::<Vec<_>>()
+            "Expected LowManipulability or NearSingularity observation, got: {:?}",
+            observations.iter().map(|o| o.kind).collect::<Vec<_>>()
         );
     }
 
     // ─── Scenario 3: Singularity ─────────────────────────────────
 
     #[test]
-    fn scenario_singularity_generates_error() {
+    fn scenario_singularity_emits_error_observation() {
         // Arm fully extended along X → singular configuration
         let chain = RobotRegistry::create_default(RobotModel::Planar2R);
         let traj = Trajectory::new(vec![TrajectoryPoint::new(vec![0.0, 0.0], 0.0)]);
         let analyzer = TrajectoryAnalyzer::new(&chain, None);
-        let analysis = analyzer.analyze_plan(&traj).expect("analysis failed");
+        let artifact = ArtifactRef::MotionPlan(MotionPlanId("mp-singular".to_string()));
 
+        let observations = analyzer.analyze(artifact, &traj);
         // At q = [0, 0] the arm is fully extended → singular
-        // Should have at least a NearSingularity or Singularity finding
-        let has_singularity = analysis.findings.iter().any(|f| {
+        // Should have at least a NearSingularity or Singularity observation
+        let has_singularity = observations.iter().any(|o| {
             matches!(
-                f.kind,
-                FindingKind::Singularity | FindingKind::NearSingularity
+                o.kind,
+                ObservationKind::Singularity | ObservationKind::NearSingularity
             )
         });
 
         assert!(
             has_singularity,
-            "Expected Singularity or NearSingularity finding for fully-extended arm, got: {:?}",
-            analysis.findings.iter().map(|f| f.kind).collect::<Vec<_>>()
+            "Expected Singularity or NearSingularity observation for fully-extended arm, got: {:?}",
+            observations.iter().map(|o| o.kind).collect::<Vec<_>>()
         );
     }
 
@@ -655,22 +673,21 @@ mod tests {
             TrajectoryPoint::new(vec![0.5, 1.57], 1.0), // good
         ]);
         let analyzer = TrajectoryAnalyzer::new(&chain, None);
-        let analysis = analyzer.analyze_plan(&traj).expect("analysis failed");
+        let artifact = ArtifactRef::MotionPlan(MotionPlanId("mp-mixed".to_string()));
 
-        // Should have findings from waypoints 0 and 1
-        assert!(!analysis.findings.is_empty());
-        // Should have at least 2 findings (one per problem waypoint)
-        assert!(analysis.findings.len() >= 1);
-        // At least one finding from the singular waypoint
-        let sing_findings = analysis.findings.iter().filter(|f| {
+        let observations = analyzer.analyze(artifact, &traj);
+        // Should have observations from waypoints 0 and 1
+        assert!(!observations.is_empty());
+        // At least one observation from the singular waypoint
+        let sing_observations = observations.iter().filter(|o| {
             matches!(
-                f.kind,
-                FindingKind::Singularity
-                    | FindingKind::NearSingularity
-                    | FindingKind::LowManipulability
+                o.kind,
+                ObservationKind::Singularity
+                    | ObservationKind::NearSingularity
+                    | ObservationKind::LowManipulability
             )
         });
-        assert!(sing_findings.count() >= 1);
+        assert!(sing_observations.count() >= 1);
     }
 
     // ─── PR 3: canonical pipeline (task 3.1) ───────────────────────
@@ -716,8 +733,8 @@ mod tests {
                 .all(|o| matches!(o.artifact, ArtifactRef::MotionPlan(_)))
         );
 
-        // Fidelity: the fully-extended arm used to yield a Singularity or
-        // NearSingularity Finding — the observation equivalent must exist.
+        // Fidelity: the fully-extended arm yields a Singularity or
+        // NearSingularity observation (PR 3/7a vocabulary).
         assert!(
             report.observations.iter().any(|o| matches!(
                 o.kind,
@@ -738,7 +755,8 @@ mod tests {
                 .iter()
                 .any(|o| matches!(o.location, Location::Waypoint(_)))
         );
-        // The full singularity is an Error (severity preserved from the Finding).
+        // The full singularity is an Error (severity preserved from the
+        // legacy detection — the observation keeps the same semantics).
         assert!(
             report
                 .observations
@@ -845,34 +863,8 @@ mod tests {
         assert!(report.summary.quality_index < 1.0);
     }
 
-    // Verify the pipeline: Analyze → Findings → Recommendations
-    #[test]
-    fn findings_produce_recommendations() {
-        use crate::finding::{Finding, FindingKind, Severity};
-
-        // Create a trajectory with good manipulability (q2 ≈ π/2)
-        let chain = RobotRegistry::create_default(RobotModel::Planar2R);
-        let traj = Trajectory::new(vec![
-            TrajectoryPoint::new(vec![0.3, 1.57], 0.0),
-            TrajectoryPoint::new(vec![0.5, 1.57], 0.5),
-        ]);
-        let analyzer = TrajectoryAnalyzer::new(&chain, None);
-        let analysis = analyzer.analyze_plan(&traj).expect("analysis failed");
-
-        let advisor = crate::advisor::PlanAdvisor;
-
-        if !analysis.findings.is_empty() {
-            // If there are findings, verify they produce recommendations
-            let recommendations = advisor.advise_findings(&analysis.findings);
-            assert!(
-                !recommendations.is_empty(),
-                "Findings should produce recommendations. Findings: {:?}",
-                analysis.findings
-            );
-        } else {
-            // No findings → empty recommendations
-            let recommendations = advisor.advise_findings(&analysis.findings);
-            assert!(recommendations.is_empty());
-        }
-    }
+    // PR 7a: the remediation chain is fully observation-based — the advisor
+    // produces actions over observations (I5) — see `advisor::tests`
+    // `advise_produces_actions_over_observations` and the C4 chain test
+    // `full_chain_actions_reference_observations_without_orphans` above.
 }
