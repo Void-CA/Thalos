@@ -1,35 +1,58 @@
 //! Feedback loop orchestrator — coordinates the full planning feedback cycle.
 //!
-//! This is the coordination layer (PR 3) of the feedback loop. It receives:
+//! This is the coordination layer of the feedback loop (PR 4d rewrite). It
+//! receives four collaborating components and never implements their logic:
 //!
-//! - A [`PlanExecutor`] for compiling and executing `PlanningProgram`s.
-//! - A registry of [`IntentionOperator`]s for transforming problematic segments.
+//! - A [`PlanExecutor`] — executes [`PlanningProgram`]s and returns traces.
+//! - An [`Analyzer`](thalos_core::analysis::analyzer::Analyzer) — the
+//!   new-model "analyze" step: trace → [`Observation`]s.
+//! - A registry of [`ObservationIntentionOperator`]s — the "propose" step.
+//! - A [`ProposalMaterializer`] — the "materialize" step: proposal → segments.
 //!
-//! The orchestrator never implements analysis, transformation, or comparison
-//! logic — it delegates each responsibility to the appropriate component.
+//! ## Cycle (entirely in new-model terms, PR 4d)
 //!
-//! ## Cycle
+//! ```text
+//! Execution → analyze → Observation
+//!                      → propose → ActionProposal
+//!                                  → materialize → MotionSegment
+//!                                                  → apply → re-execute → Verdict
+//! ```
 //!
-//! 1. Execute original program
-//! 2. Analyze trace for [`ExecutionFinding`]s
-//! 3. If no findings → [`Verdict::NoActionNeeded`]
-//! 4. Find first-applicable operator (no ranking)
-//! 5. Apply operator → [`TransformationCandidate`]
-//! 6. Build new `PlanningProgram` with substituted segments
-//! 7. Re-execute
-//! 8. Compare: [`Verdict::from_comparison`]
+//! 1. Execute original program.
+//! 2. Analyze trace → [`Observation`]s (delegated to the analyzer).
+//! 3. If no observations → [`Verdict::NoActionNeeded`].
+//! 4. Propose: first-applicable operator → [`ActionProposal`]s (delegated).
+//! 5. Materialize: resolve the target segment and translate the proposal into
+//!    replacement segments (delegated to the materializer).
+//! 6. Apply: build the modified program with substituted segments.
+//! 7. Re-execute the modified program.
+//! 8. Compare: [`Verdict::from_comparison`].
 //!
-//! ## Constraints
+//! ## Constraints (C2 — the orchestrator owns no domain rules)
 //!
-//! - No concrete operator imports — receives `Vec<Box<dyn IntentionOperator>>`.
+//! - No concrete operator or materializer imports — components arrive via
+//!   `Box<dyn ...>`.
 //! - First-applicable operator wins — no ranking, no scoring.
-//! - Comparison math lives in `Verdict` — orchestrator never implements it.
+//! - The orchestrator NEVER matches on `ObservationKind` (phenomena), never
+//!   reads thresholds or severity, and never decides remediation HOW — the
+//!   operator and the materializer own those rules.
+//! - Plan addressing (observation → segment index) is mechanical coordination:
+//!   the feedback vocabulary anchors a segment via `Location::Waypoint(idx)`
+//!   or `attributes["segment_id"]`.
+//! - Comparison math lives in `Verdict` — the orchestrator never implements it.
+//! - The temporal `ExecutionFinding → Observation` adapter (PR 4c) is OUT of
+//!   this path: the analyzer produces observations directly (C3).
 //! - [`FeedbackError`] is kept minimal (single variant for v1).
 
+use thalos_core::analysis::analyzer::Analyzer;
+use thalos_core::analysis::attribute_value::AttributeValue;
+use thalos_core::analysis::location::Location;
+use thalos_core::analysis::observation::Observation;
 use thalos_core::motion::segment::MotionSegment;
 
-use crate::feedback::finding::{ExecutionFinding, TraceSnapshot, analyze_trace};
-use crate::feedback::operator::IntentionOperator;
+use crate::feedback::finding::TraceSnapshot;
+use crate::feedback::materializer::ProposalMaterializer;
+use crate::feedback::operator::ObservationIntentionOperator;
 use crate::motion::program::PlanningProgram;
 
 // ============================================================================
@@ -40,6 +63,15 @@ use crate::motion::program::PlanningProgram;
 ///
 /// The comparison logic lives here — consumers (including the orchestrator)
 /// call [`Verdict::from_comparison`] and never implement comparison math.
+///
+/// ## New-model mapping (PR 4d)
+///
+/// The improved/worsened semantics are preserved: a remediation is accepted
+/// only when the re-executed program actually improves the global max tracking
+/// error. The new-model concepts feed the cycle upstream — the observation's
+/// `severity` and the proposal's `priority`/`impact` express the *expected*
+/// remediation weight (computed by the operator); the verdict measures the
+/// *actual* execution-quality delta.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Verdict {
     /// The transformation improved execution quality.
@@ -93,7 +125,7 @@ impl Verdict {
 // TransformationCandidate
 // ============================================================================
 
-/// Records the result of applying an [`IntentionOperator`] to a segment.
+/// Records the result of materializing a proposal onto a segment.
 ///
 /// Preserves provenance for logging and audit: which operator ran, which
 /// segment it replaced, and what it produced. This is a pure internal type
@@ -104,7 +136,7 @@ pub struct TransformationCandidate {
     pub operator_name: &'static str,
     /// Index of the segment being replaced in the original `PlanningProgram`.
     pub segment_id: usize,
-    /// The replacement segments produced by the operator.
+    /// The replacement segments produced by the materializer.
     pub replacement_segments: Vec<MotionSegment>,
 }
 
@@ -115,8 +147,8 @@ pub struct TransformationCandidate {
 /// Errors that can occur during the feedback cycle.
 ///
 /// Kept minimal for v1 — only `ExecutionFailed` exists. New variants can
-/// be added as the feedback loop gains capability (e.g. operator errors,
-/// analysis errors, configuration errors).
+/// be added as the feedback loop gains capability (e.g. analyzer errors,
+/// configuration errors).
 #[derive(Debug)]
 pub enum FeedbackError {
     /// Execution of a motion program failed.
@@ -164,19 +196,35 @@ pub trait PlanExecutor: Send + Sync {
 // Helper functions (private)
 // ============================================================================
 
-/// Selects the first [`IntentionOperator`] whose `applies_to()` returns `true`.
+/// Selects the first [`ObservationIntentionOperator`] whose `applies_to()`
+/// returns `true`.
 ///
 /// Returns `None` when no operator is applicable. Operators are iterated in
 /// registration order — the order has no algorithmic meaning (no ranking).
 fn select_operator<'a>(
-    operators: &'a [Box<dyn IntentionOperator>],
-    segment: &MotionSegment,
-    finding: &ExecutionFinding,
-) -> Option<&'a dyn IntentionOperator> {
+    operators: &'a [Box<dyn ObservationIntentionOperator>],
+    observation: &Observation,
+) -> Option<&'a dyn ObservationIntentionOperator> {
     operators
         .iter()
-        .find(|op| op.applies_to(segment, finding))
+        .find(|op| op.applies_to(observation))
         .map(|op| op.as_ref())
+}
+
+/// Resolves the plan segment index an observation addresses.
+///
+/// The feedback vocabulary anchors a phenomenon to its segment position via
+/// `Location::Waypoint(idx)` (the PR 4c adapter contract) or
+/// `attributes["segment_id"]` (typed integer). This is mechanical plan
+/// addressing — coordination, not a phenomenon rule (C2).
+fn segment_index(observation: &Observation) -> Option<usize> {
+    match observation.location {
+        Location::Waypoint(idx) => Some(idx),
+        _ => match observation.attributes.get("segment_id") {
+            Some(AttributeValue::Integer(idx)) if *idx >= 0 => Some(*idx as usize),
+            _ => None,
+        },
+    }
 }
 
 /// Builds a new [`PlanningProgram`] by replacing one segment with alternatives.
@@ -202,28 +250,37 @@ fn build_modified_program(
 
 /// Coordinates the full planning feedback cycle.
 ///
-/// Holds an executor and an operator registry. The [`run()`](FeedbackOrchestrator::run)
-/// method orchestrates the cycle but never implements analysis, transformation,
-/// or comparison logic.
+/// Holds an executor, an analyzer, an operator registry and a materializer.
+/// The [`run()`](FeedbackOrchestrator::run) method orchestrates the cycle but
+/// never implements analysis, transformation, materialization, or comparison
+/// logic (C2).
 pub struct FeedbackOrchestrator {
     /// Abstracts compilation and execution (decouples from `thalos-runtime`).
     executor: Box<dyn PlanExecutor>,
+    /// New-model analyze step: execution trace → observations.
+    analyzer: Box<dyn Analyzer<TraceSnapshot> + Send + Sync>,
     /// Operator registry — receives at construction, never instantiates.
-    operators: Vec<Box<dyn IntentionOperator>>,
+    operators: Vec<Box<dyn ObservationIntentionOperator>>,
+    /// Proposal → plan modification step.
+    materializer: Box<dyn ProposalMaterializer>,
 }
 
 impl FeedbackOrchestrator {
-    /// Creates a new orchestrator with the given executor and operator registry.
+    /// Creates a new orchestrator with the given collaborating components.
     ///
     /// The operator registry is ordered but the order has no algorithmic
     /// meaning — only first-applicable selection is used.
     pub fn new(
         executor: Box<dyn PlanExecutor>,
-        operators: Vec<Box<dyn IntentionOperator>>,
+        analyzer: Box<dyn Analyzer<TraceSnapshot> + Send + Sync>,
+        operators: Vec<Box<dyn ObservationIntentionOperator>>,
+        materializer: Box<dyn ProposalMaterializer>,
     ) -> Self {
         Self {
             executor,
+            analyzer,
             operators,
+            materializer,
         }
     }
 
@@ -232,42 +289,57 @@ impl FeedbackOrchestrator {
     /// ## Steps
     ///
     /// 1. Execute the original program.
-    /// 2. Analyze the execution trace for findings.
-    /// 3. If no findings → return [`Verdict::NoActionNeeded`] early.
-    /// 4. Find the first-applicable operator (no ranking).
-    /// 5. Apply the operator → [`TransformationCandidate`].
+    /// 2. Analyze the trace → observations (delegated).
+    /// 3. If no observations → return [`Verdict::NoActionNeeded`] early.
+    /// 4. Propose: first-applicable operator → proposals (delegated).
+    /// 5. Materialize: resolve the target segment and translate the proposal
+    ///    into replacement segments (delegated).
     /// 6. Build a modified `PlanningProgram` with substituted segments.
     /// 7. Re-execute the modified program.
-    /// 8. Compare original vs new trace → return [`Verdict`].
+    /// 8. Compare original vs new trace → return [`Verdict`] (delegated).
     pub fn run(&self, program: &PlanningProgram) -> Result<Verdict, FeedbackError> {
         // 1. Execute original program
         let original_trace = self.executor.execute_program(program)?;
 
-        // 2. Analyze trace for findings
-        let findings = analyze_trace(&original_trace);
+        // 2. Analyze trace → observations (new-model analyze step)
+        let observations = self.analyzer.analyze(&original_trace);
 
-        // 3. Early return when no findings (clean trace → NoActionNeeded)
-        if findings.is_empty() {
+        // 3. Early return when no observations (clean trace → NoActionNeeded)
+        if observations.is_empty() {
             return Ok(Verdict::NoActionNeeded);
         }
 
-        // Take the first finding (v1 operates on one finding per cycle)
-        let finding = &findings[0];
-        let segment = &program.segments[finding.segment_id];
+        // Take the first observation (v1 operates on one per cycle, mirroring
+        // the legacy first-finding rule).
+        let observation = &observations[0];
 
-        // 4. Find first-applicable operator
-        let operator = select_operator(&self.operators, segment, finding).ok_or_else(|| {
-            FeedbackError::ExecutionFailed("no applicable operator for finding".to_string())
+        // 4. Propose: first-applicable observation operator (no ranking)
+        let operator = select_operator(&self.operators, observation).ok_or_else(|| {
+            FeedbackError::ExecutionFailed("no applicable operator for observation".to_string())
+        })?;
+        let proposals = operator.apply(observation);
+        let proposal = proposals.first().ok_or_else(|| {
+            FeedbackError::ExecutionFailed("operator produced no proposal".to_string())
         })?;
 
-        // 5. Apply operator → TransformationCandidate
-        let replacement_segments = operator
-            .apply(segment, finding)
+        // 5. Materialize: resolve the target segment and translate the
+        //    proposal into replacement segments.
+        let segment_id = segment_index(observation).ok_or_else(|| {
+            FeedbackError::ExecutionFailed(
+                "observation carries no plan segment address".to_string(),
+            )
+        })?;
+        let target = program.segments.get(segment_id).ok_or_else(|| {
+            FeedbackError::ExecutionFailed(format!("segment index {segment_id} out of bounds"))
+        })?;
+        let replacement_segments = self
+            .materializer
+            .materialize(proposal, target)
             .map_err(|e| FeedbackError::ExecutionFailed(e.to_string()))?;
 
         let candidate = TransformationCandidate {
             operator_name: operator.name(),
-            segment_id: finding.segment_id,
+            segment_id,
             replacement_segments,
         };
 
@@ -285,19 +357,27 @@ impl FeedbackOrchestrator {
 // ============================================================================
 // Tests
 // ============================================================================
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use std::collections::BTreeMap;
     use std::sync::Mutex;
 
-    use thalos_core::ids::OperationId;
+    use thalos_core::analysis::action::{ActionImpact, ActionKind, ActionPriority};
+    use thalos_core::analysis::analyzer::Analyzer;
+    use thalos_core::analysis::attribute_value::AttributeValue;
+    use thalos_core::analysis::location::Location;
+    use thalos_core::analysis::observation::{
+        ArtifactRef, Observation, ObservationId, ObservationKind, Severity,
+    };
+    use thalos_core::ids::{ExecutionSessionId, OperationId};
     use thalos_core::motion::segment::MotionSegment;
     use thalos_core::prelude::{FrameId, Pose, Transform3D};
 
     use crate::feedback::finding::SegmentTrace;
-    use crate::feedback::operator::TransformationError;
+    use crate::feedback::materializer::{MaterializationError, ProposalMaterializer};
+    use crate::feedback::operator::{ActionProposal, ObservationIntentionOperator};
 
     // ======================================================================
     // Mock types
@@ -331,39 +411,127 @@ mod tests {
         }
     }
 
-    /// Mock operator that returns configurable applicability and replacements.
+    /// Mock analyzer (new-model analyze step): returns configurable
+    /// observations for any trace.
+    struct MockAnalyzer {
+        observations: Vec<Observation>,
+    }
+
+    impl MockAnalyzer {
+        fn new(observations: Vec<Observation>) -> Self {
+            Self { observations }
+        }
+    }
+
+    impl Analyzer<TraceSnapshot> for MockAnalyzer {
+        fn analyze(&self, _trace: &TraceSnapshot) -> Vec<Observation> {
+            self.observations.clone()
+        }
+    }
+
+    /// Mock operator over the NEW observation model.
     struct MockOperator {
         name: &'static str,
         applies: bool,
-        replacement: Vec<MotionSegment>,
+        proposals: Vec<ActionProposal>,
     }
 
     impl MockOperator {
-        #[allow(dead_code)]
-        fn new(name: &'static str, applies: bool, replacement: Vec<MotionSegment>) -> Self {
+        fn new(name: &'static str, applies: bool, proposals: Vec<ActionProposal>) -> Self {
             Self {
                 name,
                 applies,
-                replacement,
+                proposals,
             }
         }
     }
 
-    impl IntentionOperator for MockOperator {
+    impl ObservationIntentionOperator for MockOperator {
         fn name(&self) -> &'static str {
             self.name
         }
 
-        fn applies_to(&self, _segment: &MotionSegment, _finding: &ExecutionFinding) -> bool {
+        fn applies_to(&self, _observation: &Observation) -> bool {
             self.applies
         }
 
-        fn apply(
+        fn apply(&self, _observation: &Observation) -> Vec<ActionProposal> {
+            self.proposals.clone()
+        }
+    }
+
+    /// Mock materializer: returns configurable replacements for any proposal.
+    struct MockMaterializer {
+        replacements: Vec<MotionSegment>,
+    }
+
+    impl MockMaterializer {
+        fn new(replacements: Vec<MotionSegment>) -> Self {
+            Self { replacements }
+        }
+    }
+
+    impl ProposalMaterializer for MockMaterializer {
+        fn name(&self) -> &'static str {
+            "mock_materializer"
+        }
+
+        fn materialize(
             &self,
-            _segment: &MotionSegment,
-            _finding: &ExecutionFinding,
-        ) -> Result<Vec<MotionSegment>, TransformationError> {
-            Ok(self.replacement.clone())
+            _proposal: &ActionProposal,
+            _target: &MotionSegment,
+        ) -> Result<Vec<MotionSegment>, MaterializationError> {
+            Ok(self.replacements.clone())
+        }
+    }
+
+    /// Materializer that fails with `IkFailure` (error propagation test).
+    struct FailingMaterializer;
+
+    impl ProposalMaterializer for FailingMaterializer {
+        fn name(&self) -> &'static str {
+            "failing_materializer"
+        }
+
+        fn materialize(
+            &self,
+            _proposal: &ActionProposal,
+            _target: &MotionSegment,
+        ) -> Result<Vec<MotionSegment>, MaterializationError> {
+            Err(MaterializationError::IkFailure)
+        }
+    }
+
+    /// Materializer that records the target segment it received, proving the
+    /// orchestrator resolved the right plan address. The recorder is shared
+    /// via `Arc` so the test can inspect it after `run()` consumed the box.
+    struct RecordingMaterializer {
+        recorded: std::sync::Arc<Mutex<Vec<MotionSegment>>>,
+    }
+
+    impl RecordingMaterializer {
+        fn new() -> Self {
+            Self {
+                recorded: std::sync::Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+    }
+
+    impl ProposalMaterializer for RecordingMaterializer {
+        fn name(&self) -> &'static str {
+            "recording_materializer"
+        }
+
+        fn materialize(
+            &self,
+            _proposal: &ActionProposal,
+            target: &MotionSegment,
+        ) -> Result<Vec<MotionSegment>, MaterializationError> {
+            self.recorded
+                .lock()
+                .expect("recording materializer lock")
+                .push(target.clone());
+            Ok(vec![target.clone()])
         }
     }
 
@@ -380,11 +548,69 @@ mod tests {
         }
     }
 
+    fn make_move_l_named(origin: &str) -> MotionSegment {
+        MotionSegment::MoveL {
+            origin: OperationId(origin.into()),
+            frame: FrameId::World,
+            target_pose: Pose::new(FrameId::World, FrameId::World, Transform3D::identity()),
+            max_velocity: None,
+        }
+    }
+
+    /// Tracking observation anchored at a plan segment via `Location::Waypoint`
+    /// — the feedback vocabulary's plan address (the adapter maps
+    /// `segment_id` → Waypoint).
+    fn tracking_observation_at_segment(id: u32, segment: usize) -> Observation {
+        Observation {
+            id: ObservationId(id),
+            kind: ObservationKind::TrackingError,
+            severity: Severity::Error,
+            artifact: ArtifactRef::ExecutionSession(ExecutionSessionId("e1".to_string())),
+            location: Location::Waypoint(segment),
+            attributes: BTreeMap::new(),
+            causes: Vec::new(),
+            related: Vec::new(),
+        }
+    }
+
+    /// Tracking observation anchored via `attributes["segment_id"]` (the
+    /// adapter emits both — triangulation for plan addressing).
+    fn tracking_observation_with_segment_attribute(id: u32, segment: u32) -> Observation {
+        let mut attributes = BTreeMap::new();
+        attributes.insert(
+            "segment_id".to_string(),
+            AttributeValue::Integer(segment as i64),
+        );
+        Observation {
+            id: ObservationId(id),
+            kind: ObservationKind::TrackingError,
+            severity: Severity::Error,
+            artifact: ArtifactRef::ExecutionSession(ExecutionSessionId("e1".to_string())),
+            location: Location::Timestamp(0),
+            attributes,
+            causes: Vec::new(),
+            related: Vec::new(),
+        }
+    }
+
+    /// The proposal shape the new-model operator emits (PR 4b).
+    fn switch_proposal(target: ObservationId) -> ActionProposal {
+        let mut parameters = BTreeMap::new();
+        parameters.insert(
+            "strategy".to_string(),
+            AttributeValue::Text("move_j".to_string()),
+        );
+        ActionProposal {
+            kind: ActionKind::SwitchMoveStrategy,
+            target_observation: target,
+            priority: ActionPriority::Medium,
+            impact: ActionImpact::Medium,
+            parameters,
+        }
+    }
+
     // ======================================================================
-    // Task 3.1 RED + Task 3.2 GREEN — Verdict comparison
-    //
-    // RED:   test written before Verdict::from_comparison existed
-    // GREEN: Verdict enum + from_comparison created
+    // Verdict comparison (approval tests — unchanged by PR 4d)
     // ======================================================================
 
     #[test]
@@ -452,8 +678,6 @@ mod tests {
             other => panic!("expected Reject, got {other:?}"),
         }
     }
-
-    // ── Triangulation: Verdict edge cases ──────────────────────────────────
 
     #[test]
     fn test_verdict_same_error_is_reject() {
@@ -526,56 +750,40 @@ mod tests {
     }
 
     // ======================================================================
-    // Task 3.3 GREEN — PlanExecutor trait (structural — no RED test)
-    //
-    // The trait is a structural contract. It is tested indirectly through
-    // all orchestrator tests that use MockExecutor.
-    // Triangulation skipped: purely structural trait definition.
-    // ======================================================================
-
-    // ======================================================================
-    // Task 3.4 RED + Task 3.5 GREEN — FeedbackOrchestrator constructor
-    //
-    // RED:   test written before FeedbackOrchestrator existed
-    // GREEN: FeedbackOrchestrator struct + new() created
+    // Orchestrator constructor (new pipeline: executor + analyzer + operators
+    // + materializer)
     // ======================================================================
 
     #[test]
-    fn test_orchestrator_constructor_accepts_executor_and_operators() {
+    fn test_orchestrator_constructor_accepts_all_four_components() {
         let executor = MockExecutor::new(vec![]);
-        let operators: Vec<Box<dyn IntentionOperator>> = vec![];
+        let analyzer = MockAnalyzer::new(vec![]);
+        let operators: Vec<Box<dyn ObservationIntentionOperator>> = vec![];
+        let materializer = MockMaterializer::new(vec![]);
 
-        let orch = FeedbackOrchestrator::new(Box::new(executor), operators);
+        let orch = FeedbackOrchestrator::new(
+            Box::new(executor),
+            Box::new(analyzer),
+            operators,
+            Box::new(materializer),
+        );
 
         // Verify the struct compiles and is Send + Sync
         fn is_send_sync<T: Send + Sync>() {}
         is_send_sync::<FeedbackOrchestrator>();
 
-        // Verify basic construction succeeded by checking the type exists
-        let _ = orch;
-    }
-
-    #[test]
-    fn test_orchestrator_constructor_with_operators() {
-        let executor = MockExecutor::new(vec![]);
-        let op = MockOperator::new("op1", true, vec![]);
-        let operators: Vec<Box<dyn IntentionOperator>> = vec![Box::new(op)];
-
-        let orch = FeedbackOrchestrator::new(Box::new(executor), operators);
         let _ = orch;
     }
 
     // ======================================================================
-    // Task 3.6 RED + Task 3.7 GREEN — Full cycle with improvement
-    //
-    // RED:   test written before FeedbackOrchestrator::run() existed
-    // GREEN: run() implemented with full cycle logic
+    // Full cycle orchestration (C2: run() coordinates, never implements)
     // ======================================================================
 
     #[test]
     fn test_full_cycle_with_improvement_accepts() {
-        // First execution: high tracking error (0.8)
-        // After transformation: lower tracking error (0.3) → Accept
+        // First execution: high tracking error (0.8) → observation produced.
+        // Operator proposes, materializer replaces, re-execution improves (0.3)
+        // → Accept.
         let trace_high = TraceSnapshot {
             segments: vec![SegmentTrace {
                 max_tracking_error: 0.8,
@@ -588,10 +796,19 @@ mod tests {
         };
 
         let executor = MockExecutor::new(vec![Ok(trace_high), Ok(trace_low)]);
+        let observation = tracking_observation_at_segment(1, 0);
+        let analyzer = MockAnalyzer::new(vec![observation.clone()]);
+        let operator =
+            MockOperator::new("test_improve", true, vec![switch_proposal(observation.id)]);
         let segment = make_move_l();
-        let operator = MockOperator::new("test_improve", true, vec![segment.clone()]);
+        let materializer = MockMaterializer::new(vec![segment.clone()]);
 
-        let orch = FeedbackOrchestrator::new(Box::new(executor), vec![Box::new(operator)]);
+        let orch = FeedbackOrchestrator::new(
+            Box::new(executor),
+            Box::new(analyzer),
+            vec![Box::new(operator)],
+            Box::new(materializer),
+        );
 
         let program = PlanningProgram::new(vec![segment]);
         let verdict = orch.run(&program).expect("run should succeed");
@@ -614,16 +831,9 @@ mod tests {
         }
     }
 
-    // ======================================================================
-    // Task 3.8 RED + Task 3.9 GREEN — NoActionNeeded early return
-    //
-    // RED:   test written before the early-return guard existed
-    // GREEN: `if findings.is_empty() { return Ok(NoActionNeeded) }` added
-    // ======================================================================
-
     #[test]
     fn test_clean_trace_returns_no_action_needed() {
-        // All segments below threshold → no findings → NoActionNeeded
+        // No observations → no remediation → NoActionNeeded (executor runs once).
         let clean_trace = TraceSnapshot {
             segments: vec![SegmentTrace {
                 max_tracking_error: 0.1,
@@ -631,8 +841,13 @@ mod tests {
         };
 
         let executor = MockExecutor::new(vec![Ok(clean_trace)]);
-        // No operators needed since we never reach transformation
-        let orch = FeedbackOrchestrator::new(Box::new(executor), vec![]);
+        let analyzer = MockAnalyzer::new(vec![]);
+        let orch = FeedbackOrchestrator::new(
+            Box::new(executor),
+            Box::new(analyzer),
+            vec![],
+            Box::new(MockMaterializer::new(vec![])),
+        );
 
         let program = PlanningProgram::new(vec![make_move_l()]);
         let verdict = orch.run(&program).expect("run should succeed");
@@ -657,7 +872,13 @@ mod tests {
         };
 
         let executor = MockExecutor::new(vec![Ok(clean_trace)]);
-        let orch = FeedbackOrchestrator::new(Box::new(executor), vec![]);
+        let analyzer = MockAnalyzer::new(vec![]);
+        let orch = FeedbackOrchestrator::new(
+            Box::new(executor),
+            Box::new(analyzer),
+            vec![],
+            Box::new(MockMaterializer::new(vec![])),
+        );
 
         let program = PlanningProgram::new(vec![make_move_l(), make_move_l(), make_move_l()]);
         let verdict = orch.run(&program).expect("run should succeed");
@@ -665,17 +886,10 @@ mod tests {
         assert_eq!(verdict, Verdict::NoActionNeeded);
     }
 
-    // ======================================================================
-    // Task 3.10 RED + Task 3.11 GREEN — Worsened metrics → Reject
-    //
-    // RED:   test written before comparison was wired in run()
-    // GREEN: run() delegates to Verdict::from_comparison
-    // ======================================================================
-
     #[test]
     fn test_worsened_metrics_returns_reject() {
-        // First execution: error above threshold (0.8) triggers finding
-        // After transformation: higher error (0.9) → Reject
+        // Original error above threshold (0.8) → remediation → worse (0.9)
+        // → Reject. Same pipeline, degraded outcome.
         let trace_original = TraceSnapshot {
             segments: vec![SegmentTrace {
                 max_tracking_error: 0.8,
@@ -688,10 +902,19 @@ mod tests {
         };
 
         let executor = MockExecutor::new(vec![Ok(trace_original), Ok(trace_worse)]);
+        let observation = tracking_observation_at_segment(1, 0);
+        let analyzer = MockAnalyzer::new(vec![observation.clone()]);
+        let operator =
+            MockOperator::new("test_worsen", true, vec![switch_proposal(observation.id)]);
         let segment = make_move_l();
-        let operator = MockOperator::new("test_worsen", true, vec![segment.clone()]);
+        let materializer = MockMaterializer::new(vec![segment.clone()]);
 
-        let orch = FeedbackOrchestrator::new(Box::new(executor), vec![Box::new(operator)]);
+        let orch = FeedbackOrchestrator::new(
+            Box::new(executor),
+            Box::new(analyzer),
+            vec![Box::new(operator)],
+            Box::new(materializer),
+        );
 
         let program = PlanningProgram::new(vec![segment]);
         let verdict = orch.run(&program).expect("run should succeed");
@@ -714,19 +937,10 @@ mod tests {
         }
     }
 
-    // ======================================================================
-    // Task 3.12 RED + Task 3.13 GREEN — Integration test (full cycle)
-    //
-    // RED:   test written before integration wiring was complete
-    // GREEN: all types wired together — mod.rs updated with pub mod orchestrator
-    // ======================================================================
-
     #[test]
     fn test_integration_full_cycle_end_to_end() {
-        // Full cycle with 3 segments:
-        //   - Segments 0, 2: clean
-        //   - Segment 1: high tracking error (0.9) → triggers operator
-        //   - After transformation: segment 1 error drops to 0.4 → Accept
+        // 3 segments; segment 1 has the problem; the replacement is spliced in
+        // and the re-execution improves → Accept.
         let trace_original = TraceSnapshot {
             segments: vec![
                 SegmentTrace {
@@ -755,18 +969,24 @@ mod tests {
         };
 
         let executor = MockExecutor::new(vec![Ok(trace_original), Ok(trace_improved)]);
-
-        let seg1 = make_move_l();
-        let seg2 = make_move_l();
-        let seg3 = make_move_l();
-
-        // Operator applies to segment 1 (index 1) — the one with high error
+        let observation = tracking_observation_at_segment(1, 1);
+        let analyzer = MockAnalyzer::new(vec![observation.clone()]);
+        let operator = MockOperator::new(
+            "test_integration",
+            true,
+            vec![switch_proposal(observation.id)],
+        );
         let replacement = make_move_l();
-        let operator = MockOperator::new("test_integration", true, vec![replacement]);
+        let materializer = MockMaterializer::new(vec![replacement]);
 
-        let orch = FeedbackOrchestrator::new(Box::new(executor), vec![Box::new(operator)]);
+        let orch = FeedbackOrchestrator::new(
+            Box::new(executor),
+            Box::new(analyzer),
+            vec![Box::new(operator)],
+            Box::new(materializer),
+        );
 
-        let program = PlanningProgram::new(vec![seg1, seg2, seg3]);
+        let program = PlanningProgram::new(vec![make_move_l(), make_move_l(), make_move_l()]);
         let verdict = orch.run(&program).expect("integration run should succeed");
 
         match verdict {
@@ -788,12 +1008,11 @@ mod tests {
     }
 
     // ======================================================================
-    // Triangulation: operator selection behavior
+    // Operator selection (first-applicable, no ranking)
     // ======================================================================
 
     #[test]
     fn test_orchestrator_uses_first_applicable_operator() {
-        // Two operators: first doesn't apply, second does → second should run
         let trace_high = TraceSnapshot {
             segments: vec![SegmentTrace {
                 max_tracking_error: 0.8,
@@ -806,17 +1025,19 @@ mod tests {
         };
 
         let executor = MockExecutor::new(vec![Ok(trace_high), Ok(trace_low)]);
-
+        let observation = tracking_observation_at_segment(1, 0);
+        let analyzer = MockAnalyzer::new(vec![observation.clone()]);
         let segment = make_move_l();
 
-        // Operator that does NOT apply to the finding
+        // Operator that does NOT apply, then one that DOES and improves.
         let op_noop = MockOperator::new("noop", false, vec![]);
-        // Operator that DOES apply and improves things
-        let op_fixer = MockOperator::new("fixer", true, vec![segment.clone()]);
+        let op_fixer = MockOperator::new("fixer", true, vec![switch_proposal(observation.id)]);
 
         let orch = FeedbackOrchestrator::new(
             Box::new(executor),
+            Box::new(analyzer),
             vec![Box::new(op_noop), Box::new(op_fixer)],
+            Box::new(MockMaterializer::new(vec![segment.clone()])),
         );
 
         let program = PlanningProgram::new(vec![segment]);
@@ -827,7 +1048,7 @@ mod tests {
 
     #[test]
     fn test_orchestrator_no_applicable_operator_returns_error() {
-        // Finding exists but no operator applies → error
+        // Observation exists but no operator applies → error.
         let trace_bad = TraceSnapshot {
             segments: vec![SegmentTrace {
                 max_tracking_error: 0.8,
@@ -835,9 +1056,16 @@ mod tests {
         };
 
         let executor = MockExecutor::new(vec![Ok(trace_bad)]);
+        let observation = tracking_observation_at_segment(1, 0);
+        let analyzer = MockAnalyzer::new(vec![observation]);
         let operator = MockOperator::new("never_applies", false, vec![]);
 
-        let orch = FeedbackOrchestrator::new(Box::new(executor), vec![Box::new(operator)]);
+        let orch = FeedbackOrchestrator::new(
+            Box::new(executor),
+            Box::new(analyzer),
+            vec![Box::new(operator)],
+            Box::new(MockMaterializer::new(vec![])),
+        );
 
         let program = PlanningProgram::new(vec![make_move_l()]);
         let result = orch.run(&program);
@@ -850,6 +1078,220 @@ mod tests {
                     "expected 'no applicable operator' message, got: {msg}"
                 );
             }
+        }
+    }
+
+    // ======================================================================
+    // Orchestration error paths (new-model)
+    // ======================================================================
+
+    #[test]
+    fn test_orchestrator_operator_without_proposal_returns_error() {
+        // An operator that applies but produces no proposal is a degenerate
+        // state — the orchestrator reports it instead of guessing.
+        let trace_bad = TraceSnapshot {
+            segments: vec![SegmentTrace {
+                max_tracking_error: 0.8,
+            }],
+        };
+
+        let executor = MockExecutor::new(vec![Ok(trace_bad)]);
+        let observation = tracking_observation_at_segment(1, 0);
+        let analyzer = MockAnalyzer::new(vec![observation]);
+        let operator = MockOperator::new("empty_proposer", true, vec![]);
+
+        let orch = FeedbackOrchestrator::new(
+            Box::new(executor),
+            Box::new(analyzer),
+            vec![Box::new(operator)],
+            Box::new(MockMaterializer::new(vec![])),
+        );
+
+        let program = PlanningProgram::new(vec![make_move_l()]);
+        let result = orch.run(&program);
+
+        assert!(
+            result.is_err(),
+            "expected error when operator yields no proposal"
+        );
+        match result.unwrap_err() {
+            FeedbackError::ExecutionFailed(msg) => {
+                assert!(
+                    msg.contains("no proposal"),
+                    "expected 'no proposal' message, got: {msg}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_orchestrator_observation_without_segment_address_returns_error() {
+        // An observation that carries no plan address (neither
+        // Location::Waypoint nor attributes["segment_id"]) cannot be mapped to
+        // a target segment — coordination error, reported by the orchestrator.
+        let trace_bad = TraceSnapshot {
+            segments: vec![SegmentTrace {
+                max_tracking_error: 0.8,
+            }],
+        };
+
+        let executor = MockExecutor::new(vec![Ok(trace_bad)]);
+        let mut observation = tracking_observation_at_segment(1, 0);
+        observation.location = Location::Timestamp(400);
+        observation.attributes = BTreeMap::new();
+        let analyzer = MockAnalyzer::new(vec![observation.clone()]);
+        let operator = MockOperator::new("no_address", true, vec![switch_proposal(observation.id)]);
+
+        let orch = FeedbackOrchestrator::new(
+            Box::new(executor),
+            Box::new(analyzer),
+            vec![Box::new(operator)],
+            Box::new(MockMaterializer::new(vec![])),
+        );
+
+        let program = PlanningProgram::new(vec![make_move_l()]);
+        let result = orch.run(&program);
+
+        assert!(
+            result.is_err(),
+            "expected error when the observation has no address"
+        );
+        match result.unwrap_err() {
+            FeedbackError::ExecutionFailed(msg) => {
+                assert!(
+                    msg.contains("no plan segment address"),
+                    "expected 'no plan segment address' message, got: {msg}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_orchestrator_segment_index_out_of_bounds_returns_error() {
+        // The observation addresses segment 9 but the program has 1 segment.
+        let trace_bad = TraceSnapshot {
+            segments: vec![SegmentTrace {
+                max_tracking_error: 0.8,
+            }],
+        };
+
+        let executor = MockExecutor::new(vec![Ok(trace_bad)]);
+        let observation = tracking_observation_at_segment(1, 9);
+        let analyzer = MockAnalyzer::new(vec![observation.clone()]);
+        let operator =
+            MockOperator::new("out_of_bounds", true, vec![switch_proposal(observation.id)]);
+
+        let orch = FeedbackOrchestrator::new(
+            Box::new(executor),
+            Box::new(analyzer),
+            vec![Box::new(operator)],
+            Box::new(MockMaterializer::new(vec![])),
+        );
+
+        let program = PlanningProgram::new(vec![make_move_l()]);
+        let result = orch.run(&program);
+
+        assert!(
+            result.is_err(),
+            "expected error when the segment index is out of bounds"
+        );
+        match result.unwrap_err() {
+            FeedbackError::ExecutionFailed(msg) => {
+                assert!(
+                    msg.contains("out of bounds"),
+                    "expected 'out of bounds' message, got: {msg}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_orchestrator_materializer_error_propagates() {
+        // run() never swallows materialization failures — the error surfaces
+        // as FeedbackError so the caller can react.
+        let trace_bad = TraceSnapshot {
+            segments: vec![SegmentTrace {
+                max_tracking_error: 0.8,
+            }],
+        };
+
+        let executor = MockExecutor::new(vec![Ok(trace_bad)]);
+        let observation = tracking_observation_at_segment(1, 0);
+        let analyzer = MockAnalyzer::new(vec![observation.clone()]);
+        let operator = MockOperator::new("ik_fail", true, vec![switch_proposal(observation.id)]);
+
+        let orch = FeedbackOrchestrator::new(
+            Box::new(executor),
+            Box::new(analyzer),
+            vec![Box::new(operator)],
+            Box::new(FailingMaterializer),
+        );
+
+        let program = PlanningProgram::new(vec![make_move_l()]);
+        let result = orch.run(&program);
+
+        assert!(result.is_err(), "expected error when materialization fails");
+        match result.unwrap_err() {
+            FeedbackError::ExecutionFailed(msg) => {
+                assert!(
+                    msg.contains("IK did not converge"),
+                    "expected materialization error message, got: {msg}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_orchestrator_resolves_segment_from_segment_id_attribute() {
+        // Plan addressing triangulation: an observation anchored via
+        // attributes["segment_id"] (Timestamp location) maps to the SAME
+        // program segment as the Waypoint form.
+        let trace_original = TraceSnapshot {
+            segments: vec![SegmentTrace {
+                max_tracking_error: 0.2,
+            }],
+        };
+        let trace_improved = TraceSnapshot {
+            segments: vec![SegmentTrace {
+                max_tracking_error: 0.1,
+            }],
+        };
+
+        let executor = MockExecutor::new(vec![Ok(trace_original), Ok(trace_improved)]);
+        let observation = tracking_observation_with_segment_attribute(1, 2);
+        let analyzer = MockAnalyzer::new(vec![observation.clone()]);
+        let operator =
+            MockOperator::new("attr_address", true, vec![switch_proposal(observation.id)]);
+        let recording = RecordingMaterializer::new();
+        let recorded = recording.recorded.clone();
+
+        let orch = FeedbackOrchestrator::new(
+            Box::new(executor),
+            Box::new(analyzer),
+            vec![Box::new(operator)],
+            Box::new(recording),
+        );
+
+        let program = PlanningProgram::new(vec![
+            make_move_l_named("seg_0"),
+            make_move_l_named("seg_1"),
+            make_move_l_named("seg_2"),
+        ]);
+        let verdict = orch.run(&program);
+        assert!(verdict.is_ok(), "expected Ok, got {verdict:?}");
+
+        // The materializer must have received segment index 2.
+        let recorded = recorded.lock().expect("recording lock");
+        assert_eq!(
+            recorded.len(),
+            1,
+            "materializer must be called exactly once"
+        );
+        match &recorded[0] {
+            MotionSegment::MoveL { origin, .. } => {
+                assert_eq!(origin, &OperationId("seg_2".into()));
+            }
+            other => panic!("expected MoveL target, got {other:?}"),
         }
     }
 }

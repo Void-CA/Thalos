@@ -175,7 +175,7 @@ impl ProposalMaterializer for SwitchMoveMaterializer<'_> {
             _ => {
                 return Err(MaterializationError::UnsupportedProposal {
                     kind: proposal.kind,
-                })
+                });
             }
         }
 
@@ -330,10 +330,17 @@ mod tests {
         let materializer = SwitchMoveMaterializer::new(&solver, &q0);
 
         let segments = materializer
-            .materialize(&switch_proposal("move_j", 0.9), &move_l("move_7", Some(50.0)))
+            .materialize(
+                &switch_proposal("move_j", 0.9),
+                &move_l("move_7", Some(50.0)),
+            )
             .expect("materialize");
         match &segments[0] {
-            MotionSegment::MoveJ { origin, max_velocity, .. } => {
+            MotionSegment::MoveJ {
+                origin,
+                max_velocity,
+                ..
+            } => {
                 assert_eq!(origin, &OperationId("move_7".into()));
                 assert_eq!(*max_velocity, Some(50.0));
             }
@@ -419,10 +426,7 @@ mod tests {
             kind: ActionKind::Collision,
         };
         let msg = err.to_string();
-        assert!(
-            msg.contains("unsupported proposal"),
-            "msg: {msg}"
-        );
+        assert!(msg.contains("unsupported proposal"), "msg: {msg}");
         assert!(msg.contains("Collision"), "msg: {msg}");
     }
 }

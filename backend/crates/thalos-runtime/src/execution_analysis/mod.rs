@@ -1194,10 +1194,7 @@ mod tests {
                 assert_eq!(origin, &OperationId("move_1".into()));
                 assert_eq!(target, &q0, "MoveJ must target the IK solution");
                 assert_eq!(*max_velocity, Some(50.0), "velocity limits preserved");
-                assert_eq!(
-                    *max_acceleration, None,
-                    "acceleration is the planner's job"
-                );
+                assert_eq!(*max_acceleration, None, "acceleration is the planner's job");
             }
             other => panic!("expected MoveJ replacement, got {other:?}"),
         }
