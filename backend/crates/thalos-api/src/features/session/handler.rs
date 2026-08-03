@@ -402,7 +402,7 @@ pub async fn get_session_comparison(
     let metrics = comparison.metrics.clone();
 
     let analyzer = ExecutionAnalyzer::new();
-    let findings = analyzer.analyze(&comparison);
+    let findings = analyzer.analyze_findings(&comparison);
 
     Ok(Json(SessionComparisonResponse {
         metrics,
