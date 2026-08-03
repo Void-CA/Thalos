@@ -14,6 +14,8 @@ import type { PlanAnalysisResponse } from '@/features/analysis/api/plan-analysis
  * analysis }`. Field notes:
  * - `scene.robotLoaded` — `useSceneStore.data !== null` (viewport store).
  * - `scene.objects` — semantic scene-store objects (`objects.length >= 1`).
+ * - `scene.validHomePose` — home-pose validity, computed by the hook via
+ *   `isValidHomePose()` from the semantic scene-store `homePose`.
  * - `task.operations` — semantic editor operations. `hasMissingFields` is
  *   derived purely from these (lifted from the task editor, design D5).
  * - `compile.dirty` — semantic editor dirty counter (0 = pristine).
@@ -22,6 +24,7 @@ export interface WorkflowSnapshot {
   scene: {
     robotLoaded: boolean
     objects: SceneObject[]
+    validHomePose: boolean
   }
   task: {
     operations: SemanticOp[]
@@ -38,15 +41,21 @@ export interface WorkflowSnapshot {
   }
 }
 
-/** Single derivation layer for workflow progress (design: WorkflowState). */
+/**
+ * Single derivation layer for workflow progress (design D2: WorkflowState
+ * COMPLETELY derived). Flags form the artifact chain (R2: RobotModel → Scene →
+ * SemanticProgram → MotionPlan → Runtime), so each downstream flag requires the
+ * upstream one — impossible states are impossible by construction (tasks C1).
+ */
 export interface WorkflowState {
   robotLoaded: boolean // useSceneStore.data !== null
-  taskValid: boolean // operations.length >= 1 && !hasMissingFields && objects.length >= 1
-  compiled: boolean // compileResult !== null && !dirty
-  analyzed: boolean // useAnalysisStore.summary !== null
-  executable: boolean // compiled && execStatus ∈ {ready, running, paused}
-  running: boolean // execStatus ∈ {running, paused}
-  completed: boolean // execStatus === 'completed'
+  sceneValid: boolean // scene artifact valid: robotLoaded && objects >= 1 && validHomePose
+  programValid: boolean // semantic program valid: sceneValid && operations >= 1 && !hasMissingFields
+  compiled: boolean // motion plan exists: programValid && compileResult !== null && !dirty
+  analyzed: boolean // analysis report exists: useAnalysisStore.summary !== null
+  executable: boolean // runtime can start: compiled && execStatus ∈ {ready, running, paused}
+  running: boolean // runtime active: execStatus ∈ {running, paused}
+  completed: boolean // execution session exists: execStatus === 'completed'
 }
 
 export type WorkflowFlag = keyof WorkflowState

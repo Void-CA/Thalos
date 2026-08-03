@@ -52,7 +52,8 @@ describe('WORKSPACE_REGISTRY (slice 3 — requires/produces/capability)', () => 
   it('keeps every requires/produces flag within the WorkflowState flag set', () => {
     const valid = new Set<WorkflowFlag>([
       'robotLoaded',
-      'taskValid',
+      'sceneValid',
+      'programValid',
       'compiled',
       'analyzed',
       'executable',
@@ -113,7 +114,7 @@ describe('producerOf (registry helper)', () => {
 
   it('returns undefined for flags no workspace produces', () => {
     expect(producerOf('robotLoaded')).toBeUndefined()
-    expect(producerOf('taskValid')).toBeUndefined()
+    expect(producerOf('programValid')).toBeUndefined()
     expect(producerOf('executable')).toBeUndefined()
     expect(producerOf('running')).toBeUndefined()
   })

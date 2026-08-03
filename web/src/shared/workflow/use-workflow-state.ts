@@ -3,7 +3,7 @@ import { useSceneStore as useSemanticSceneStore } from '@/features/semantic/scen
 import { useSemanticEditor } from '@/features/semantic/store'
 import { useExecutionStore } from '@/features/execution/execution-store'
 import { useAnalysisStore } from '@/features/analysis/store'
-import { deriveWorkflowState } from './derive'
+import { deriveWorkflowState, isValidHomePose } from './derive'
 import type { WorkflowState } from './types'
 
 /**
@@ -19,6 +19,7 @@ export function useWorkflowState(): WorkflowState {
     scene: {
       robotLoaded: useSceneStore((s) => s.data !== null),
       objects: useSemanticSceneStore((s) => s.objects),
+      validHomePose: isValidHomePose(useSemanticSceneStore((s) => s.homePose)),
     },
     task: {
       operations: useSemanticEditor((s) => s.operations),

@@ -15,10 +15,12 @@ export interface PipelineStage {
  * spec). The ONLY derivation layer is `useWorkflowState()` — this function
  * never reads raw stores (workflow-state spec, "No dual derivation").
  *
- * WorkflowState exposes one combined task flag, so the legacy Scene/Task
- * stages both derive from `taskValid`; the Compile stage surfaces a missing or
- * stale compile as pending. Stages map to the spec flags: `robotLoaded`,
- * `taskValid`, `compiled`, `executable`, `running`, `completed`.
+ * WorkflowState exposes the split scene/program flags, so the Scene and Task
+ * stages derive independently: `sceneValid` (objects ≥ 1 + valid home pose)
+ * drives Scene, `programValid` (operations ≥ 1 + no missing fields) drives
+ * Task; the Compile stage surfaces a missing or stale compile as pending.
+ * Stages map to the spec flags: `robotLoaded`, `sceneValid`, `programValid`,
+ * `compiled`, `executable`, `running`, `completed`.
  */
 export function pipelineStagesFromWorkflowState(state: WorkflowState): PipelineStage[] {
   const robot: PipelineStage = state.robotLoaded
@@ -27,16 +29,16 @@ export function pipelineStagesFromWorkflowState(state: WorkflowState): PipelineS
 
   const scene: PipelineStage = {
     name: 'Scene',
-    pass: state.taskValid,
+    pass: state.sceneValid,
     pending: false,
-    message: state.taskValid ? undefined : 'Complete the Scene',
+    message: state.sceneValid ? undefined : 'Complete the Scene',
   }
 
   const task: PipelineStage = {
     name: 'Task',
-    pass: state.taskValid,
+    pass: state.programValid,
     pending: false,
-    message: state.taskValid ? undefined : 'Define a program',
+    message: state.programValid ? undefined : 'Define a program',
   }
 
   const compile: PipelineStage = state.compiled
