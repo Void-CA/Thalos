@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { deriveWorkflowState, hasMissingFields } from './derive'
+import {
+  deriveWorkflowState,
+  deriveStepperStages,
+  deriveStatusMessage,
+  hasMissingFields,
+  requirementReason,
+  stepperStages,
+} from './derive'
+import { WORKSPACE_REGISTRY } from './registry'
 import type { WorkflowSnapshot, WorkflowState } from './types'
 import type { SemanticOp, CompileResponse } from '@/features/semantic/types'
 import type { PlanAnalysisResponse } from '@/features/analysis/api/plan-analysis.types'
@@ -169,5 +177,157 @@ describe('hasMissingFields — operation validation lifted from the task editor'
 
   it('passes an empty program (no missing fields to flag)', () => {
     expect(hasMissingFields([])).toBe(false)
+  })
+})
+
+describe('stepperStages — pipeline derived from the registry (global-stepper spec)', () => {
+  it('exposes Task, Planning, Execution, Sessions in registry order', () => {
+    expect(stepperStages(WORKSPACE_REGISTRY).map((e) => e.workspace)).toEqual([
+      'task',
+      'planning',
+      'execution',
+      'sessions',
+    ])
+  })
+
+  it('excludes the robot root (root, not a stage)', () => {
+    expect(stepperStages(WORKSPACE_REGISTRY).some((e) => e.workspace === 'robot')).toBe(false)
+  })
+
+  it('excludes the legacy analysis workspace (absorbed into planning in slice 6)', () => {
+    expect(stepperStages(WORKSPACE_REGISTRY).some((e) => e.workspace === 'analysis')).toBe(false)
+  })
+
+  it('excludes the hidden knowledge workspace (support capability, not a pipeline stage)', () => {
+    expect(stepperStages(WORKSPACE_REGISTRY).some((e) => e.workspace === 'knowledge')).toBe(false)
+  })
+})
+
+describe('deriveStepperStages — per-stage state from flags + active route', () => {
+  it('marks the active route stage as current', () => {
+    const stages = deriveStepperStages(
+      { ...ALL_TRUE, executable: false },
+      '/planning',
+      WORKSPACE_REGISTRY,
+    )
+    expect(stages.find((s) => s.entry.workspace === 'planning')?.state).toBe('current')
+    expect(stages.find((s) => s.entry.workspace === 'planning')?.reason).toBeNull()
+  })
+
+  it('has no current stage on a non-pipeline route (robot home)', () => {
+    const stages = deriveStepperStages(ALL_TRUE, '/', WORKSPACE_REGISTRY)
+    expect(stages.every((s) => s.state !== 'current')).toBe(true)
+  })
+
+  it('blocks Execution when executable is unmet, with a derived reason', () => {
+    const stages = deriveStepperStages(
+      { ...ALL_TRUE, executable: false },
+      '/task',
+      WORKSPACE_REGISTRY,
+    )
+    const execution = stages.find((s) => s.entry.workspace === 'execution')!
+    expect(execution.state).toBe('blocked')
+    expect(execution.reason).toBe('Requires an executable plan')
+  })
+
+  it('derives the reason from the first missing flag (compiled → planning)', () => {
+    const stages = deriveStepperStages(
+      { ...ALL_TRUE, compiled: false, executable: false },
+      '/task',
+      WORKSPACE_REGISTRY,
+    )
+    const planning = stages.find((s) => s.entry.workspace === 'planning')!
+    expect(planning.state).toBe('blocked')
+    expect(planning.reason).toBe('Requires a compiled plan')
+  })
+
+  it('derives the reason from the first missing flag (completed → sessions)', () => {
+    const stages = deriveStepperStages(ALL_TRUE, '/execution', WORKSPACE_REGISTRY)
+    const sessions = stages.find((s) => s.entry.workspace === 'sessions')!
+    expect(sessions.state).toBe('blocked')
+    expect(sessions.reason).toBe('Requires a completed execution')
+  })
+
+  it('passes a stage whose produces flag is already true', () => {
+    const stages = deriveStepperStages(
+      { ...ALL_TRUE, executable: false },
+      '/planning',
+      WORKSPACE_REGISTRY,
+    )
+    const task = stages.find((s) => s.entry.workspace === 'task')!
+    expect(task.state).toBe('passed')
+    expect(task.reason).toBeNull()
+  })
+
+  it('passes stages that come before the current one (position)', () => {
+    const stages = deriveStepperStages({ ...ALL_TRUE, completed: true }, '/sessions', WORKSPACE_REGISTRY)
+    for (const ws of ['task', 'planning', 'execution']) {
+      expect(stages.find((s) => s.entry.workspace === ws)?.state).toBe('passed')
+    }
+  })
+
+  it('keeps a future stage pending when requirements are met', () => {
+    const stages = deriveStepperStages(
+      { ...ALL_TRUE, executable: true },
+      '/planning',
+      WORKSPACE_REGISTRY,
+    )
+    const execution = stages.find((s) => s.entry.workspace === 'execution')!
+    expect(execution.state).toBe('pending')
+    expect(execution.reason).toBeNull()
+  })
+})
+
+describe('requirementReason — derived from the registry, never per-workspace strings', () => {
+  it('returns null when every requirement is met', () => {
+    const planning = WORKSPACE_REGISTRY.find((e) => e.workspace === 'planning')!
+    expect(requirementReason(planning, ALL_TRUE)).toBeNull()
+  })
+
+  it('names the missing flag when requirements are unmet', () => {
+    const planning = WORKSPACE_REGISTRY.find((e) => e.workspace === 'planning')!
+    expect(requirementReason(planning, { ...ALL_TRUE, compiled: false })).toBe(
+      'Requires a compiled plan',
+    )
+  })
+})
+
+describe('deriveStatusMessage — short status from workflow flags (S2)', () => {
+  it('reports no robot loaded when the robot is missing', () => {
+    expect(deriveStatusMessage({ ...ALL_TRUE, robotLoaded: false })).toBe('No robot loaded')
+  })
+
+  it('reports an incomplete task', () => {
+    expect(deriveStatusMessage({ ...ALL_TRUE, taskValid: false })).toBe('Task incomplete')
+  })
+
+  it('reports recompilation required when the plan is stale', () => {
+    expect(deriveStatusMessage({ ...ALL_TRUE, compiled: false })).toBe(
+      'Task modified — recompilation required',
+    )
+  })
+
+  it('reports a running plan', () => {
+    expect(deriveStatusMessage({ ...ALL_TRUE, running: true })).toBe('Plan running')
+  })
+
+  it('reports a completed plan and points to sessions', () => {
+    expect(deriveStatusMessage({ ...ALL_TRUE, executable: false, completed: true })).toBe(
+      'Plan completed — review in Sessions',
+    )
+  })
+
+  it('reports a plan ready to run', () => {
+    expect(deriveStatusMessage(ALL_TRUE)).toBe('Plan ready to run')
+  })
+
+  it('reports an analyzed plan before it is executable', () => {
+    expect(deriveStatusMessage({ ...ALL_TRUE, executable: false })).toBe('Plan analyzed')
+  })
+
+  it('defaults to the loaded + compiled baseline', () => {
+    expect(deriveStatusMessage({ ...ALL_TRUE, analyzed: false, executable: false })).toBe(
+      'Robot loaded · Task compiled',
+    )
   })
 })

@@ -182,6 +182,30 @@ describe('hidden routes render placeholders (no 404)', () => {
   })
 })
 
+describe('top-bar — nav links reflect guard state (slice 5, task 5.2)', () => {
+  it('disables links whose requirements are unmet (aria-disabled, no navigation)', async () => {
+    // Robot loaded but NOT compiled → Planning (requires compiled) must not navigate.
+    act(() => {
+      useSceneStore.setState({ data: {} as SceneData })
+      useSemanticEditor.setState({ result: null, dirty: 0 })
+      useExecutionStore.setState({ status: 'idle' })
+      useAnalysisStore.setState({ summary: null })
+    })
+    const { router } = renderRouter(['/task'])
+    const planningLink = screen.getByRole('link', { name: 'Planning' })
+    expect(planningLink).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(planningLink)
+    expect(router.state.location.pathname).toBe('/task')
+  })
+
+  it('keeps links enabled when their requirements are met', () => {
+    seedPrerequisites({ executable: true })
+    renderRouter(['/task'])
+    expect(screen.getByRole('link', { name: 'Planning' })).not.toHaveAttribute('aria-disabled')
+    expect(screen.getByRole('link', { name: 'Execution' })).not.toHaveAttribute('aria-disabled')
+  })
+})
+
 describe('cross-navigation converges in stepper + top-bar (slice 5, task 5.2)', () => {
   it('planning workspace has no "Analyze trajectory" cross-nav button', () => {
     seedPrerequisites()

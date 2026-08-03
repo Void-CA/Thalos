@@ -1,15 +1,17 @@
 import { Outlet } from 'react-router'
 import { TopBar } from './top-bar'
 import { StatusBar } from './status-bar'
+import { Stepper } from '@/stepper'
 import { Viewport } from '@/features/viewport/viewport'
 import { useSceneRobotSync } from '@/features/viewport/synchronization/use-scene-robot-sync'
 
 /**
  * AppShell — layout route (thin coordinator).
  *
- * TopBar + Viewport + StatusBar stay mounted OUTSIDE the <Outlet/>; only the
- * workspace panel changes inside it. This is what guarantees invariant #1: the
- * 3D viewport never unmounts when navigating between workspaces.
+ * TopBar + Stepper + Viewport + StatusBar stay mounted OUTSIDE the <Outlet/>;
+ * only the workspace panel changes inside it. This is what guarantees invariant
+ * #1: the 3D viewport never unmounts when navigating between workspaces, and
+ * the stepper keeps showing the workflow position across transitions.
  *
  * The coordinator performs no domain operations and knows nothing about the
  * workspaces: the active workspace is resolved by the router from the
@@ -22,6 +24,7 @@ export function AppShell() {
   return (
     <div className="flex flex-col h-full w-full overflow-hidden">
       <TopBar />
+      <Stepper />
 
       {/* Body: workspace panel (Outlet) + persistent viewport */}
       <div className="flex flex-1 overflow-hidden">
