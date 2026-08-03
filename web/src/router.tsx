@@ -1,6 +1,5 @@
 import { createElement, type ComponentType } from 'react'
 import { createBrowserRouter, type RouteObject } from 'react-router'
-import { AnalysisWorkspace } from '@/features/analysis/workspace'
 import { ExecutionWorkspace } from '@/features/execution/execution-workspace'
 import { KnowledgeWorkspace } from '@/features/knowledge/workspace'
 import { PlanningWorkspace } from '@/features/planning/workspace'
@@ -14,12 +13,15 @@ import { WORKSPACE_REGISTRY, type WorkspaceName } from '@/shared/workflow/regist
 /**
  * View registry — maps each registered workspace to its view component.
  * Kept separate from the navigation registry (design: VIEW_REGISTRY).
+ *
+ * Analysis is intentionally absent: it was absorbed into Planning in slice 6
+ * (one responsibility per workspace) — the analysis UI renders inside
+ * PlanningWorkspace, not as its own registered view.
  */
 export const VIEW_REGISTRY: Record<WorkspaceName, ComponentType> = {
   robot: RobotShell,
   task: SemanticWorkspace,
   planning: PlanningWorkspace,
-  analysis: AnalysisWorkspace,
   execution: ExecutionWorkspace,
   sessions: SessionsWorkspace,
   knowledge: KnowledgeWorkspace,

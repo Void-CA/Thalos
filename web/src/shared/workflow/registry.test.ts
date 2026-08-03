@@ -3,16 +3,19 @@ import { WORKSPACE_REGISTRY, producerOf } from './registry'
 import type { Capability, WorkflowFlag } from './types'
 
 describe('WORKSPACE_REGISTRY (slice 1 — navigation contract)', () => {
-  it('registers the 7 spec paths in order', () => {
+  it('registers the 6 final sitemap paths in order (analysis absorbed into planning)', () => {
     expect(WORKSPACE_REGISTRY.map((e) => e.path)).toEqual([
       '/',
       '/task',
       '/planning',
-      '/analysis',
       '/execution',
       '/sessions',
       '/knowledge',
     ])
+  })
+
+  it('no longer registers the absorbed /analysis workspace', () => {
+    expect(WORKSPACE_REGISTRY.some((e) => e.path === '/analysis')).toBe(false)
   })
 
   it('keeps paths and workspace names unique', () => {
