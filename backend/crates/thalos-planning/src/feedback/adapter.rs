@@ -31,8 +31,12 @@
 //! ## Removal gate
 //!
 //! Temporary by design: deleted in PR 6 together with the legacy
-//! `ExecutionFinding` path ([`analyze_trace`], the legacy orchestrator cycle,
-//! and the legacy [`IntentionOperator`](crate::feedback::operator::IntentionOperator)).
+//! `ExecutionFinding` path ([`analyze_trace`], [`ExecutionFinding`] itself).
+//! Since PR 4d the main feedback loop no longer consumes it — `run()`
+//! analyzes directly through an
+//! [`Analyzer`](thalos_core::analysis::analyzer::Analyzer), and the legacy
+//! `IntentionOperator` signature is gone (user contract C3: adapter off the
+//! main path, kept only until the legacy model is deleted).
 //!
 //! [`analyze_trace`]: crate::feedback::finding::analyze_trace
 //! [`ObservationIntentionOperator`]: crate::feedback::operator::ObservationIntentionOperator

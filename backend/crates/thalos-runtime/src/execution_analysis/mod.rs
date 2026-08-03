@@ -1068,7 +1068,7 @@ mod tests {
     //    SwitchMoveStrategy (ObservationIntentionOperator) → ActionProposal → Action
     //
     // Proves the new-model feedback flow end-to-end WITHOUT the legacy
-    // orchestrator, which keeps operating on ExecutionFinding until PR 4d/6.
+    // orchestrator (which operated on ExecutionFinding before PR 4d).
     // Green-first by design: every dependency landed in PR 4a (canonical
     // analyzer) and PR 4b (observation operator + ActionProposal).
     #[test]
