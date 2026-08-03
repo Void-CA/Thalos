@@ -50,3 +50,37 @@ export interface WorkflowState {
 }
 
 export type WorkflowFlag = keyof WorkflowState
+
+/** Primary capability a workspace owns (invariant #7: exactly one workspace per capability). */
+export type Capability = 'compile' | 'optimize' | 'execute' | 'replay' | 'explain'
+
+/** Stable workspace identifier — key for the view registry. */
+export type WorkspaceName =
+  | 'robot'
+  | 'task'
+  | 'planning'
+  | 'analysis'
+  | 'execution'
+  | 'sessions'
+  | 'knowledge'
+
+/**
+ * Declarative registry entry (design: WorkspaceEntry contract).
+ * The single source of truth for navigation, guards, stepper and breadcrumbs.
+ */
+export interface WorkspaceEntry {
+  /** Router path for this workspace ('/' for the landing). */
+  path: string
+  /** Stable workspace identifier — key for the view registry. */
+  workspace: WorkspaceName
+  /** Human-readable nav label. */
+  label: string
+  /** Prerequisites (WorkflowState flags) to access this workspace. */
+  requires: WorkflowFlag[]
+  /** Flag this workspace enables (null = terminal/read-only workspace). */
+  produces: WorkflowFlag | null
+  /** Primary capability (null = no exclusive capability; invariant #7). */
+  capability: Capability | null
+  /** True while the workspace has no delivered content yet (nav link suppressed). */
+  hidden: boolean
+}
