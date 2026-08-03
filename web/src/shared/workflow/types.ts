@@ -63,9 +63,24 @@ export type WorkflowFlag = keyof WorkflowState
 /** Primary capability a workspace owns (invariant #7: exactly one workspace per capability). */
 export type Capability = 'compile' | 'optimize' | 'execute' | 'replay' | 'explain'
 
+/**
+ * The seven domain artifacts of the pipeline chain (workflow-state spec R2 —
+ * the `ArtifactRef` variants in thalos-core). Typed `consumes`/`produces` for
+ * registry entries (design D1, tasks S1.8).
+ */
+export type ArtifactKind =
+  | 'URDF'
+  | 'RobotModel'
+  | 'Scene'
+  | 'SemanticProgram'
+  | 'MotionPlan'
+  | 'Runtime'
+  | 'ExecutionSession'
+
 /** Stable workspace identifier — key for the view registry. */
 export type WorkspaceName =
   | 'robot'
+  | 'scene'
   | 'task'
   | 'planning'
   | 'execution'
@@ -81,7 +96,7 @@ export interface WorkspaceEntry {
   path: string
   /** Stable workspace identifier — key for the view registry. */
   workspace: WorkspaceName
-  /** Human-readable nav label. */
+  /** Human-readable nav label (domain vocabulary, navigation-router spec). */
   label: string
   /** Prerequisites (WorkflowState flags) to access this workspace. */
   requires: WorkflowFlag[]
@@ -91,4 +106,20 @@ export interface WorkspaceEntry {
   capability: Capability | null
   /** True while the workspace has no delivered content yet (nav link suppressed). */
   hidden: boolean
+  /** Domain artifact this area consumes (R2 artifact chain; design D1). */
+  consumes: ArtifactKind | null
+  /** Domain artifact this area produces (R2 artifact chain; design D1). */
+  producesArtifact: ArtifactKind | null
+  /** Pipeline stage position (1-6) or null for non-stage areas (Robot = 1 marker). */
+  stage: number | null
+  /** Explicit position in the stepper (consumed from S3; carried as data in S1). */
+  stepperIndex?: number
 }
+
+/**
+ * D1 — the registry describes domain AREAS, not views. `Area` is the
+ * domain-area view of a registry entry (design D1: consumes/produces artifacts,
+ * stage, stepperIndex, guards). Full `guards.{}` nesting + `Area[]` registry
+ * conversion lands in S3.6; S1 carries the artifact + stage data.
+ */
+export type Area = WorkspaceEntry

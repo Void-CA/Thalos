@@ -9,6 +9,7 @@ import { routerConfig } from '@/router'
 import { producerOf } from '@/shared/workflow/registry'
 import { ServicesProvider } from '@/features/viewport/services/service-context'
 import { useSceneStore } from '@/features/viewport/store'
+import { useSceneStore as useSemanticSceneStore } from '@/features/semantic/scene-store'
 import { useSemanticEditor } from '@/features/semantic/store'
 import { useExecutionStore } from '@/features/execution/execution-store'
 import { useAnalysisStore } from '@/features/analysis/store'
@@ -94,9 +95,14 @@ function renderRouter(initialEntries: string[]) {
 }
 
 beforeEach(() => {
-  // Fresh stores per test (all flags false).
+  // Fresh stores per test (all flags false). The semantic scene store has no
+  // reset action, so restore the canonical seed (1 bolt) explicitly — tests
+  // that clear objects must not leak into later tests.
   useSceneStore.getState().reset()
   useSemanticEditor.getState().reset()
+  useSemanticSceneStore.setState({
+    objects: [{ id: 'bolt-1', name: 'Bolt', pose: { position: [1.8, 0, 0.4], orientation: [0, 0, 0, 1] } }],
+  })
   useExecutionStore.setState({ status: 'idle' })
   useAnalysisStore.setState({ summary: null })
 })
@@ -112,19 +118,38 @@ describe('GuardedRoute — behavior over real router routes', () => {
     expect(producer?.path).toBe('/task')
     await waitFor(() => expect(router.state.location.pathname).toBe(producer!.path))
 
-    // Planning panel must NOT render; Task workspace is active.
+    // Planning panel must NOT render; Programación workspace is active.
     expect(screen.queryByRole('heading', { name: 'Motion Program' })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Task' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Programación' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('chains to the root when the producer itself is blocked (no robot loaded)', async () => {
-    // robotLoaded=false → /task is also blocked → its producer is undefined → root '/'.
+    // robotLoaded=false → /scene is also blocked → its producer (Robot '/') is
+    // the chain terminal → the guard chain lands on the root.
     seedWorkflowState({})
     const router = renderRouter(['/planning'])
 
-    expect(producerOf('robotLoaded')).toBeUndefined()
+    expect(producerOf('robotLoaded')?.path).toBe('/')
     await waitFor(() => expect(router.state.location.pathname).toBe('/'))
     expect(screen.getByRole('heading', { name: 'Robots' })).toBeInTheDocument()
+  })
+
+  it('blocks /task without a valid scene, redirecting to the producer of sceneValid', async () => {
+    // sceneValid=false (objects cleared) but robot loaded → /task requires
+    // sceneValid → redirect to the Escena area (produces sceneValid).
+    seedWorkflowState({ robotLoaded: true })
+    act(() => {
+      useSemanticSceneStore.setState({ objects: [] })
+    })
+    const router = renderRouter(['/task'])
+
+    const producer = producerOf('sceneValid')
+    expect(producer?.path).toBe('/scene')
+    await waitFor(() => expect(router.state.location.pathname).toBe(producer!.path))
+
+    // Escena panel renders (SceneEditor content); Programación does not.
+    expect(screen.getByText('Objects')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Program' })).not.toBeInTheDocument()
   })
 
   it('renders /planning normally when the plan is compiled', async () => {

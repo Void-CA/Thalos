@@ -469,6 +469,12 @@ describe('requirementReason — derived from the registry, never per-workspace s
     )
   })
 
+  it('names sceneValid when the scene is invalid (split flags)', () => {
+    const task = WORKSPACE_REGISTRY.find((e) => e.workspace === 'task')!
+    expect(requirementReason(task, { ...ALL_TRUE, sceneValid: false })).toBe(
+      'Requires a valid scene',
+    )
+  })
 })
 
 describe('deriveStatusMessage — short status from workflow flags (S2)', () => {

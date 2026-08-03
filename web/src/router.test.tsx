@@ -114,15 +114,15 @@ describe('layout route: persistent viewport (invariant #1)', () => {
     // Full shell resolves at /task; viewport mounted exactly once.
     expect(screen.getByTestId('viewport-stub')).toBeInTheDocument()
     expect(viewportMetrics.mounts).toBe(1)
-    expect(screen.getByRole('link', { name: 'Task' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Programación' })).toHaveAttribute('aria-current', 'page')
 
     // URL-driven navigation via the TopBar nav link.
-    fireEvent.click(screen.getByRole('link', { name: 'Planning' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Planificación' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/planning'))
 
     // Only the Outlet content changed; the viewport was never unmounted/remounted.
     expect(screen.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Planning' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Planificación' })).toHaveAttribute('aria-current', 'page')
     expect(viewportMetrics.mounts).toBe(1)
     expect(viewportMetrics.unmounts).toBe(0)
   })
@@ -137,7 +137,7 @@ describe('layout route: persistent viewport (invariant #1)', () => {
       router.navigate(-1)
     })
     await waitFor(() => expect(router.state.location.pathname).toBe('/task'))
-    expect(screen.getByRole('link', { name: 'Task' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Programación' })).toHaveAttribute('aria-current', 'page')
     expect(viewportMetrics.unmounts).toBe(0)
 
     act(() => {
@@ -157,7 +157,7 @@ describe('direct URL entry renders the full shell', () => {
     expect(screen.getByRole('heading', { name: 'Execution' })).toBeInTheDocument()
     expect(screen.getByTestId('viewport-stub')).toBeInTheDocument()
     expect(screen.getByText('Thalos Robotics')).toBeInTheDocument() // StatusBar
-    expect(screen.getByRole('link', { name: 'Task' })).toBeInTheDocument() // TopBar nav
+    expect(screen.getByRole('link', { name: 'Programación' })).toBeInTheDocument() // TopBar nav
   })
 })
 
@@ -175,8 +175,8 @@ describe('hidden routes render placeholders (no 404)', () => {
 
   it('does not show nav links for hidden workspaces', () => {
     renderRouter(['/'])
-    expect(screen.getByRole('link', { name: 'Task' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Execution' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Programación' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ejecución' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Sessions' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Knowledge' })).not.toBeInTheDocument()
   })
@@ -192,7 +192,7 @@ describe('top-bar — nav links reflect guard state (slice 5, task 5.2)', () => 
       useAnalysisStore.setState({ summary: null })
     })
     const { router } = renderRouter(['/task'])
-    const planningLink = screen.getByRole('link', { name: 'Planning' })
+    const planningLink = screen.getByRole('link', { name: 'Planificación' })
     expect(planningLink).toHaveAttribute('aria-disabled', 'true')
     fireEvent.click(planningLink)
     expect(router.state.location.pathname).toBe('/task')
@@ -201,8 +201,8 @@ describe('top-bar — nav links reflect guard state (slice 5, task 5.2)', () => 
   it('keeps links enabled when their requirements are met', () => {
     seedPrerequisites({ executable: true })
     renderRouter(['/task'])
-    expect(screen.getByRole('link', { name: 'Planning' })).not.toHaveAttribute('aria-disabled')
-    expect(screen.getByRole('link', { name: 'Execution' })).not.toHaveAttribute('aria-disabled')
+    expect(screen.getByRole('link', { name: 'Planificación' })).not.toHaveAttribute('aria-disabled')
+    expect(screen.getByRole('link', { name: 'Ejecución' })).not.toHaveAttribute('aria-disabled')
   })
 })
 
