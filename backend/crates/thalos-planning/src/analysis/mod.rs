@@ -6,7 +6,12 @@
 //! - Colisiones y distancia a obstáculos
 //! - Violaciones de constraints
 //!
-//! Produce un [`PlanAnalysis`] con datos por waypoint y métricas agregadas.
+//! Desde PR 3, el camino canónico es [`TrajectoryAnalyzer::analyze`], que emite
+//! [`Observation`](thalos_core::analysis::observation::Observation)s ancladas al
+//! artefacto analizado (I3); el `DefaultAggregator` las agrega a un
+//! `AnalysisReport`. El camino legacy
+//! [`TrajectoryAnalyzer::analyze_plan`] produce un [`PlanAnalysis`] con datos
+//! por waypoint y métricas agregadas (regiones de problema, optimización, DTOs).
 
 pub mod adapter;
 pub mod domain;
@@ -28,9 +33,11 @@ use thalos_core::{
     trajectory::Trajectory,
 };
 
+use crate::analysis::adapter::FindingAdapter;
 use crate::analysis::domain::{ProblemRegion, RegionMetrics, RegionSeverity};
 use crate::error::PlanningError;
 use crate::finding::{Finding, FindingKind, Severity};
+use thalos_core::analysis::observation::{ArtifactRef, Observation};
 
 // ─── Data types ───────────────────────────────────────────────────
 
@@ -222,8 +229,17 @@ impl<'a> TrajectoryAnalyzer<'a> {
         self
     }
 
-    /// Analiza una trayectoria completa.
-    pub fn analyze(&self, trajectory: &Trajectory) -> Result<PlanAnalysis, PlanningError> {
+    /// Análisis completo por waypoint — camino legacy (pre-observation-model).
+    ///
+    /// Produce un [`PlanAnalysis`] (waypoints + métricas + findings) para los
+    /// consumidores previos al modelo canónico: detección de regiones, pipeline
+    /// de optimización y DTOs de métricas de la API.
+    ///
+    /// # TODO(analysis-model): remove after phase 6
+    ///
+    /// El camino canónico es [`Self::analyze`], que emite
+    /// [`Observation`](thalos_core::analysis::observation::Observation)s.
+    pub fn analyze_plan(&self, trajectory: &Trajectory) -> Result<PlanAnalysis, PlanningError> {
         let mut waypoints = Vec::with_capacity(trajectory.len());
         let mut total_yoshikawa = 0.0;
         let mut min_yoshikawa = f64::MAX;
@@ -468,6 +484,24 @@ impl<'a> TrajectoryAnalyzer<'a> {
             constraint_violations,
         })
     }
+
+    /// Emite las observaciones canónicas del análisis (PR 3, design D2).
+    ///
+    /// Cada [`Observation`](thalos_core::analysis::observation::Observation)
+    /// queda anclada al `artifact` recibido (I3) y describe el fenómeno por
+    /// `kind` + `location` (I2). La agregación a un
+    /// [`AnalysisReport`](thalos_core::analysis::report::AnalysisReport) es
+    /// responsabilidad del `DefaultAggregator`, nunca del analyzer (D2).
+    ///
+    /// El `message` de los findings legacy se descarta (I1) — los renderers
+    /// reconstruyen la presentación (cambio A). El `artifact` (I3) no vive en
+    /// el `Finding`, por eso se recibe como parámetro.
+    pub fn analyze(&self, artifact: ArtifactRef, trajectory: &Trajectory) -> Vec<Observation> {
+        let analysis = self
+            .analyze_plan(trajectory)
+            .expect("TrajectoryAnalyzer::analyze_plan only fails on programmer error");
+        FindingAdapter.convert_all(artifact, &analysis.findings)
+    }
 }
 
 #[cfg(test)]
@@ -493,7 +527,7 @@ mod tests {
         let traj = make_simple_trajectory();
         let analyzer = TrajectoryAnalyzer::new(&chain, None);
 
-        let analysis = analyzer.analyze(&traj).expect("analysis failed");
+        let analysis = analyzer.analyze_plan(&traj).expect("analysis failed");
         assert_eq!(analysis.waypoints.len(), 3);
         assert!(analysis.metrics.waypoint_count == 3);
     }
@@ -504,7 +538,7 @@ mod tests {
         let traj = make_simple_trajectory();
         let analyzer = TrajectoryAnalyzer::new(&chain, None);
 
-        let analysis = analyzer.analyze(&traj).expect("analysis failed");
+        let analysis = analyzer.analyze_plan(&traj).expect("analysis failed");
         assert!(analysis.metrics.avg_manipulability.is_some());
         assert!(analysis.metrics.avg_manipulability.unwrap() > 0.0);
     }
@@ -518,7 +552,7 @@ mod tests {
         let analyzer =
             TrajectoryAnalyzer::new(&chain, None).with_collision_checker(&checker, &matrix);
 
-        let analysis = analyzer.analyze(&traj).expect("analysis failed");
+        let analysis = analyzer.analyze_plan(&traj).expect("analysis failed");
         // Planar2R links are separated — should be no collisions
         assert!(!analysis.metrics.has_collisions);
     }
@@ -535,7 +569,7 @@ mod tests {
             TrajectoryPoint::new(vec![0.6, 1.57], 1.0),
         ]);
         let analyzer = TrajectoryAnalyzer::new(&chain, None);
-        let analysis = analyzer.analyze(&traj).expect("analysis failed");
+        let analysis = analyzer.analyze_plan(&traj).expect("analysis failed");
 
         // Should have no findings
         assert!(
@@ -558,7 +592,7 @@ mod tests {
             TrajectoryPoint::new(vec![0.5, 0.05], 0.5),
         ]);
         let analyzer = TrajectoryAnalyzer::new(&chain, None);
-        let analysis = analyzer.analyze(&traj).expect("analysis failed");
+        let analysis = analyzer.analyze_plan(&traj).expect("analysis failed");
 
         // Should have findings (low manipulability or near-singularity)
         assert!(
@@ -591,7 +625,7 @@ mod tests {
         let chain = RobotRegistry::create_default(RobotModel::Planar2R);
         let traj = Trajectory::new(vec![TrajectoryPoint::new(vec![0.0, 0.0], 0.0)]);
         let analyzer = TrajectoryAnalyzer::new(&chain, None);
-        let analysis = analyzer.analyze(&traj).expect("analysis failed");
+        let analysis = analyzer.analyze_plan(&traj).expect("analysis failed");
 
         // At q = [0, 0] the arm is fully extended → singular
         // Should have at least a NearSingularity or Singularity finding
@@ -621,7 +655,7 @@ mod tests {
             TrajectoryPoint::new(vec![0.5, 1.57], 1.0), // good
         ]);
         let analyzer = TrajectoryAnalyzer::new(&chain, None);
-        let analysis = analyzer.analyze(&traj).expect("analysis failed");
+        let analysis = analyzer.analyze_plan(&traj).expect("analysis failed");
 
         // Should have findings from waypoints 0 and 1
         assert!(!analysis.findings.is_empty());
@@ -639,6 +673,87 @@ mod tests {
         assert!(sing_findings.count() >= 1);
     }
 
+    // ─── PR 3: canonical pipeline (task 3.1) ───────────────────────
+    //
+    // TrajectoryAnalyzer → Vec<Observation> → DefaultAggregator → AnalysisReport.
+    // I3: every observation (and the report) is anchored to the analyzed
+    // MotionPlan. I2: NearSingularity/Singularity are identified by kind +
+    // location, never by text.
+
+    #[test]
+    fn plan_pipeline_emits_observations_and_report() {
+        use thalos_core::analysis::aggregator::{Aggregator, DefaultAggregator};
+        use thalos_core::analysis::location::Location;
+        use thalos_core::analysis::observation::{ArtifactRef, ObservationKind, Severity};
+        use thalos_core::analysis::scoring::DefaultScoringPolicy;
+        use thalos_core::ids::MotionPlanId;
+
+        // Fully extended arm → singular configuration (same trajectory as the
+        // legacy `scenario_singularity_generates_error` — fidelity anchor).
+        let chain = RobotRegistry::create_default(RobotModel::Planar2R);
+        let traj = Trajectory::new(vec![TrajectoryPoint::new(vec![0.0, 0.0], 0.0)]);
+        let analyzer = TrajectoryAnalyzer::new(&chain, None);
+        let artifact = ArtifactRef::MotionPlan(MotionPlanId("mp-pipeline".to_string()));
+
+        // Canonical producer contract (D2): analyze emits observations, NOT a report.
+        let observations = analyzer.analyze(artifact.clone(), &traj);
+        assert!(
+            !observations.is_empty(),
+            "a singular trajectory must produce observations"
+        );
+
+        let report = DefaultAggregator::new(DefaultScoringPolicy).aggregate(artifact, observations);
+
+        // I3: report + observations anchored to the analyzed MotionPlan.
+        assert_eq!(
+            report.artifact,
+            ArtifactRef::MotionPlan(MotionPlanId("mp-pipeline".to_string()))
+        );
+        assert!(
+            report
+                .observations
+                .iter()
+                .all(|o| matches!(o.artifact, ArtifactRef::MotionPlan(_)))
+        );
+
+        // Fidelity: the fully-extended arm used to yield a Singularity or
+        // NearSingularity Finding — the observation equivalent must exist.
+        assert!(
+            report.observations.iter().any(|o| matches!(
+                o.kind,
+                ObservationKind::Singularity | ObservationKind::NearSingularity
+            )),
+            "expected Singularity/NearSingularity observation, got: {:?}",
+            report
+                .observations
+                .iter()
+                .map(|o| o.kind)
+                .collect::<Vec<_>>()
+        );
+
+        // I2: the phenomenon is anchored at a waypoint, machine-readable.
+        assert!(
+            report
+                .observations
+                .iter()
+                .any(|o| matches!(o.location, Location::Waypoint(_)))
+        );
+        // The full singularity is an Error (severity preserved from the Finding).
+        assert!(
+            report
+                .observations
+                .iter()
+                .any(|o| o.severity == Severity::Error)
+        );
+
+        // Report structurally valid; quality reflects the observed problems.
+        assert_eq!(report.validate(), Ok(()));
+        assert!(
+            report.summary.quality_index < 1.0,
+            "quality must drop when problems are observed"
+        );
+    }
+
     // Verify the pipeline: Analyze → Findings → Recommendations
     #[test]
     fn findings_produce_recommendations() {
@@ -651,7 +766,7 @@ mod tests {
             TrajectoryPoint::new(vec![0.5, 1.57], 0.5),
         ]);
         let analyzer = TrajectoryAnalyzer::new(&chain, None);
-        let analysis = analyzer.analyze(&traj).expect("analysis failed");
+        let analysis = analyzer.analyze_plan(&traj).expect("analysis failed");
 
         let advisor = crate::advisor::PlanAdvisor;
 

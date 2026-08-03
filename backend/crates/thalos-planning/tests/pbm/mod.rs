@@ -117,7 +117,9 @@ pub fn run_scenario(scenario: &dyn BenchmarkScenario) -> PipelineReport {
     } else {
         TrajectoryAnalyzer::new(&chain, None).with_constraints(&cons, &evaluator)
     };
-    let analysis_before = analyzer.analyze(&traj).expect("before-analysis failed");
+    let analysis_before = analyzer
+        .analyze_plan(&traj)
+        .expect("before-analysis failed");
     let metrics_before = PlanEvaluator::compute_metrics(&analysis_before.waypoints);
 
     // ── 3. Detect problem regions ─────────────────────────
@@ -174,12 +176,20 @@ pub fn run_scenario(scenario: &dyn BenchmarkScenario) -> PipelineReport {
     // ── 6. Run optimization pipeline ──────────────────────
     let pipeline = OptimizationPipeline::new(PipelineConfig::default());
     let result = pipeline
-        .optimize(&operators, &chain, &traj, &regions, &metrics_before, &ctx, None)
+        .optimize(
+            &operators,
+            &chain,
+            &traj,
+            &regions,
+            &metrics_before,
+            &ctx,
+            None,
+        )
         .expect("pipeline optimization failed");
 
     // ── 7. Analyze AFTER ──────────────────────────────────
     let analysis_after = analyzer
-        .analyze(&result.trajectory)
+        .analyze_plan(&result.trajectory)
         .expect("after-analysis failed");
     let metrics_after = PlanEvaluator::compute_metrics(&analysis_after.waypoints);
 

@@ -66,7 +66,7 @@ impl PlanAnalysisService {
             analyzer = analyzer.with_constraints(c, &evaluator);
         }
 
-        let analysis = analyzer.analyze(trajectory)?;
+        let analysis = analyzer.analyze_plan(trajectory)?;
 
         // El Advisor solo interpreta findings, nunca recalcula
         let advisor = PlanAdvisor;

@@ -1,6 +1,8 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 use thalos_core::{
+    analysis::observation::ArtifactRef,
+    ids::MotionPlanId,
     models::{RobotModel, RobotRegistry},
     trajectory::{Trajectory, TrajectoryPoint},
 };
@@ -19,13 +21,18 @@ fn make_trajectory(n_waypoints: usize) -> Trajectory {
     Trajectory::new(waypoints)
 }
 
+/// I3 anchor for the benchmarked observations.
+fn artifact() -> ArtifactRef {
+    ArtifactRef::MotionPlan(MotionPlanId("bench".to_string()))
+}
+
 fn bench_analyze_10(c: &mut Criterion) {
     let chain = RobotRegistry::create_default(RobotModel::Planar2R);
     let traj = make_trajectory(10);
     let analyzer = TrajectoryAnalyzer::new(&chain, None);
 
     c.bench_function("analyze_10", |b| {
-        b.iter(|| analyzer.analyze(black_box(&traj)))
+        b.iter(|| analyzer.analyze(artifact(), black_box(&traj)))
     });
 }
 
@@ -35,7 +42,7 @@ fn bench_analyze_100(c: &mut Criterion) {
     let analyzer = TrajectoryAnalyzer::new(&chain, None);
 
     c.bench_function("analyze_100", |b| {
-        b.iter(|| analyzer.analyze(black_box(&traj)))
+        b.iter(|| analyzer.analyze(artifact(), black_box(&traj)))
     });
 }
 
@@ -45,7 +52,7 @@ fn bench_analyze_1000(c: &mut Criterion) {
     let analyzer = TrajectoryAnalyzer::new(&chain, None);
 
     c.bench_function("analyze_1000", |b| {
-        b.iter(|| analyzer.analyze(black_box(&traj)))
+        b.iter(|| analyzer.analyze(artifact(), black_box(&traj)))
     });
 }
 
