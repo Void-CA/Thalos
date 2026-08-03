@@ -1,7 +1,8 @@
 //! New-model `SwitchMoveStrategy` over [`Observation`] (PR 4b).
 //!
-//! The legacy segment-transforming operator operated on `ExecutionFinding`
-//! until PR 4d removed that trait; its materialization logic now lives in the
+//! The legacy segment-transforming operator operated on the old
+//! execution-finding vocabulary until PR 4d removed that trait; its
+//! materialization logic now lives in the
 //! [`ProposalMaterializer`](crate::feedback::materializer::ProposalMaterializer)
 //! (proposal → segments). This operator consumes the unified observation
 //! vocabulary instead (C1).
@@ -29,7 +30,7 @@ use thalos_core::analysis::observation::{Observation, ObservationKind};
 
 use crate::feedback::operator::{ActionProposal, ObservationIntentionOperator};
 
-/// Default tracking-error threshold mirroring the legacy `analyze_trace`
+/// Default tracking-error threshold mirroring the legacy trace-analyzer
 /// constant, used when an observation carries no `threshold` attribute.
 const DEFAULT_TRACKING_THRESHOLD: f64 = 0.5;
 

@@ -2,14 +2,15 @@
 //!
 //! El [`ExecutionAnalyzer`] toma un [`PlanExecutionComparison`] (plan vs
 //! ejecución) y emite observaciones canónicas del modelo unificado
-//! (spec planning-feedback-loop: `ExecutionFinding` → `Observation`):
+//! (spec planning-feedback-loop: los execution findings legacy → observaciones):
 //!
 //!   Comparison → ExecutionAnalyzer → Vec<Observation> → Aggregator → AnalysisReport
 //!                                            → (PR 4b) IntentionOperator → Action
 //!
-//! La emisión es DIRECTA (no vía `FindingAdapter`): el `Finding` legacy no
-//! transporta la riqueza temporal que exige el contrato C1, y el adapter no
-//! distingue los fenómenos que este analizador detecta (C2). El camino legacy
+//! La emisión es DIRECTA (no vía `FindingAdapter`): el tipo `Finding` legacy
+//! no transporta la riqueza temporal que exige el contrato C1, y el adapter
+//! no distingue los fenómenos que este analizador detecta (C2). El camino
+//! legacy
 //! [`ExecutionAnalyzer::analyze_findings`] se mantiene para el wire format de
 //! sesión y los tests legacy hasta la fase 6.
 //!
@@ -716,9 +717,9 @@ mod tests {
     // PR 4a RED — ExecutionAnalyzer emits canonical Observations (tasks 4.1-4.2)
     // ═══════════════════════════════════════════════════════════════════════
     //
-    // Spec planning-feedback-loop: ExecutionFinding is replaced by Observation.
-    // These tests were written FIRST and fail against the legacy
-    // `analyze(&PlanExecutionComparison) -> Vec<Finding>` API.
+    // Spec planning-feedback-loop: execution findings are replaced by
+    // observations. These tests were written FIRST and fail against the
+    // legacy `analyze(&PlanExecutionComparison) -> Vec<Finding>` API.
 
     fn number(attrs: &BTreeMap<String, AttributeValue>, key: &str) -> f64 {
         match attrs.get(key) {
@@ -1068,9 +1069,9 @@ mod tests {
     //    SwitchMoveStrategy (ObservationIntentionOperator) → ActionProposal → Action
     //
     // Proves the new-model feedback flow end-to-end WITHOUT the legacy
-    // orchestrator (which operated on ExecutionFinding before PR 4d).
-    // Green-first by design: every dependency landed in PR 4a (canonical
-    // analyzer) and PR 4b (observation operator + ActionProposal).
+    // orchestrator (which operated on the legacy execution findings before
+    // PR 4d). Green-first by design: every dependency landed in PR 4a
+    // (canonical analyzer) and PR 4b (observation operator + ActionProposal).
     #[test]
     fn feedback_regression_execution_observation_to_action() {
         use thalos_core::analysis::action::{ActionId, ActionKind};

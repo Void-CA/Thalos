@@ -13,6 +13,6 @@
 //! PR 4d: its materialization logic now lives in
 //! [`ProposalMaterializer`](crate::feedback::materializer::ProposalMaterializer),
 //! which works over [`ActionProposal`](crate::feedback::operator::ActionProposal)s
-//! instead of `ExecutionFinding`s.
+//! instead of legacy execution findings.
 
 pub mod observation_switch_strategy;

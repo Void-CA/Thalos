@@ -40,8 +40,9 @@
 //!   the feedback vocabulary anchors a segment via `Location::Waypoint(idx)`
 //!   or `attributes["segment_id"]`.
 //! - Comparison math lives in `Verdict` — the orchestrator never implements it.
-//! - The temporal `ExecutionFinding → Observation` adapter (PR 4c) is OUT of
-//!   this path: the analyzer produces observations directly (C3).
+//! - The temporal execution-finding adapter (PR 4c) was removed in the
+//!   phase-6 deletion (PR 6, tasks.md 6.1) — this path never used it: the
+//!   analyzer produces observations directly (C3).
 //! - [`FeedbackError`] is kept minimal (single variant for v1).
 
 use thalos_core::analysis::analyzer::Analyzer;
