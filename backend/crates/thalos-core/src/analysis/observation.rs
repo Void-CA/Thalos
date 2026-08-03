@@ -30,7 +30,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::analysis::attribute_value::AttributeValue;
 use crate::analysis::location::Location;
-use crate::ids::{ExecutionSessionId, MotionPlanId, RobotId, SceneId, SemanticProgramId};
+use crate::ids::{
+    ExecutionSessionId, MotionPlanId, RobotId, SceneId, SemanticProgramId, TaskDocumentId,
+};
 
 /// Stable identity of an observation within a report (closed decision:
 /// a simple counter newtype over `u32`, NOT a UUID — no persistence or
@@ -70,6 +72,9 @@ pub enum ObservationKind {
     PlaceWithoutPick,
     /// A reference in the semantic program cannot be resolved.
     UnresolvableReference,
+    /// A `Path` resource in a task document contains no point references
+    /// (document validation, PR 5 vocabulary).
+    EmptyPath,
     /// Average manipulability (Yoshikawa) over the trajectory is below
     /// the configured threshold (plan-level phenomenon, PR 3 vocabulary).
     LowManipulability,
@@ -124,6 +129,8 @@ pub enum ArtifactRef {
     Scene(SceneId),
     /// A semantic program under validation.
     SemanticProgram(SemanticProgramId),
+    /// A task document under validation.
+    TaskDocument(TaskDocumentId),
     /// A motion plan produced by planning.
     MotionPlan(MotionPlanId),
     /// An execution session recorded at runtime.
@@ -225,7 +232,7 @@ mod tests {
     }
 
     #[test]
-    fn observation_kind_has_all_seventeen_phenomena_distinct() {
+    fn observation_kind_has_all_eighteen_phenomena_distinct() {
         let kinds = vec![
             ObservationKind::NearSingularity,
             ObservationKind::UnreachableTarget,
@@ -237,6 +244,8 @@ mod tests {
             ObservationKind::TrackingError,
             ObservationKind::PlaceWithoutPick,
             ObservationKind::UnresolvableReference,
+            // PR 5 vocabulary: document validation migrated from Diagnostic.
+            ObservationKind::EmptyPath,
             // PR 3 vocabulary: plan-level phenomena migrated from FindingKind.
             ObservationKind::LowManipulability,
             ObservationKind::Singularity,
@@ -267,11 +276,12 @@ mod tests {
 
     #[test]
     fn artifact_ref_round_trip_all_variants() {
-        use crate::ids::{ExecutionSessionId, RobotId, SceneId, SemanticProgramId};
+        use crate::ids::{ExecutionSessionId, RobotId, SceneId, SemanticProgramId, TaskDocumentId};
         let refs = vec![
             ArtifactRef::Robot(RobotId("r1".to_string())),
             ArtifactRef::Scene(SceneId("s1".to_string())),
             ArtifactRef::SemanticProgram(SemanticProgramId("sp1".to_string())),
+            ArtifactRef::TaskDocument(TaskDocumentId("td1".to_string())),
             ArtifactRef::MotionPlan(MotionPlanId("mp1".to_string())),
             ArtifactRef::ExecutionSession(ExecutionSessionId("es1".to_string())),
         ];
