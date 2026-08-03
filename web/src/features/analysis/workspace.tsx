@@ -1,11 +1,11 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router'
 import { useAnalysisStore, useSelectedRegion } from './store'
 import { planAnalysisApi } from './api/plan-analysis-api'
 import { StatusBanner } from './components/status-banner'
 import { ProblemRegions } from './components/problem-regions'
 import { RegionInspector } from './components/region-inspector'
 import { OptimizationPanel } from './components/optimization-panel'
-import { usePerspectiveStore } from '@/shared/layout/perspective-store'
 import { useSceneStore } from '@/features/viewport/store'
 
 import { ChartBar, Loader2, ChevronRight } from 'lucide-react'
@@ -20,7 +20,7 @@ import { ChartBar, Loader2, ChevronRight } from 'lucide-react'
  *   - AlternativesPanel
  */
 export function AnalysisWorkspace() {
-  const setPerspective = usePerspectiveStore(s => s.setPerspective)
+  const navigate = useNavigate()
   const hasPlan = useSceneStore(s => s.activePlan !== null)
   const summary = useAnalysisStore(s => s.summary)
   const setAnalysis = useAnalysisStore(s => s.setAnalysis)
@@ -47,7 +47,7 @@ export function AnalysisWorkspace() {
     <div className="flex flex-col h-full overflow-hidden">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 px-4 py-2 border-b border-border text-xs text-muted-foreground shrink-0">
-        <button onClick={() => setPerspective('planning')} className="hover:text-foreground transition-colors cursor-pointer">
+        <button onClick={() => navigate('/planning')} className="hover:text-foreground transition-colors cursor-pointer">
           Planning
         </button>
         <ChevronRight className="h-3 w-3" />
