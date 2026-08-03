@@ -11,6 +11,10 @@ import { SemanticWorkspace } from './semantic-workspace'
  * the workspace is a pure authoring environment aligned with
  * TaskDocument { scene, program } — Scene (objects/locations/tools/home),
  * Program (operations editor) and Diagnostics (compile status) panels.
+ *
+ * NOTE (S2 transitional): the Scene panel still renders here while the Escena
+ * area lands; the S2.3 follow-up removes it so Task consumes the Scene only
+ * as an artifact. This file's assertions flip to "zero Scene UI" there.
  */
 function renderWorkspace() {
   const queryClient = new QueryClient({

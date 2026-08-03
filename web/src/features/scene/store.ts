@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
-import type { PoseDef, SceneContent, TaskDocument, DocMetadata } from './types'
+import type { PoseDef, SceneContent, TaskDocument, DocMetadata, SemanticOp } from '@/shared/contracts'
 
 export interface SceneObject {
   id: string
@@ -39,7 +39,7 @@ interface SceneState {
   setHomePose: (pose: PoseDef) => void
 
   /** Build a TaskDocument from the current scene + operations */
-  toTaskDocument: (operations: import('./types').SemanticOp[]) => TaskDocument
+  toTaskDocument: (operations: SemanticOp[]) => TaskDocument
 }
 
 // SCARA FK([0,0,0,0]) = [1.8, 0.0, 0.5]
@@ -55,7 +55,17 @@ const seededLocations: SceneLocation[] = [
   { id: 'tray-1', name: 'Tray', pose: { position: [0.8, -0.3, 0], orientation: [0, 0, 0, 1] } },
 ]
 
-export const useSceneStore = create<SceneState>()(
+/**
+ * Domain scene store (design D4, area-scene spec "Scene Store Renamed").
+ *
+ * Represents the Scene DOMAIN ARTIFACT (objects/locations/tools/homePose),
+ * not a widget: renamed from the semantic `useSceneStore` to
+ * `useDomainSceneStore` so it never collides with the viewport's
+ * `useSceneStore` (3D scene state). Task consumes this store as the Scene
+ * artifact (`toTaskDocument`) but the Scene area is its only editor.
+ * This module imports NO Task feature code (C4: Scene never knows Task).
+ */
+export const useDomainSceneStore = create<SceneState>()(
   devtools(
     (set, get) => ({
       objects: seededObjects.map((o) => ({ ...o })),
@@ -121,6 +131,6 @@ export const useSceneStore = create<SceneState>()(
         }
       },
     }),
-    { name: 'scene-editor' },
+    { name: 'domain-scene' },
   ),
 )

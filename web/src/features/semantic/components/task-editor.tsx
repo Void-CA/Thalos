@@ -1,7 +1,7 @@
 import { Play, Plus, RotateCcw, Send } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { useSemanticEditor } from '../store'
-import { useSceneStore } from '../scene-store'
+import { useDomainSceneStore } from '@/features/scene/store'
 import { useExecutionStore } from '@/features/execution/execution-store'
 import { useWorkflowState } from '@/shared/workflow/use-workflow-state'
 import { hasMissingFields } from '@/shared/workflow/derive'
@@ -73,7 +73,7 @@ export function TaskEditor() {
     addOperation, removeOperation, moveOperation, updateOperation,
     setResult, setLoading, setError, reset,
   } = useSemanticEditor()
-  const toTaskDocument = useSceneStore((s) => s.toTaskDocument)
+  const toTaskDocument = useDomainSceneStore((s) => s.toTaskDocument)
   const { compiled } = useWorkflowState()
   const navigate = useNavigate()
 

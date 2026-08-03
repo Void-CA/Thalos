@@ -10,7 +10,8 @@ import {
 } from './derive'
 import { WORKSPACE_REGISTRY } from './registry'
 import type { WorkflowSnapshot, WorkflowState } from './types'
-import type { SemanticOp, CompileResponse, PoseDef } from '@/features/semantic/types'
+import type { SemanticOp, PoseDef } from '@/shared/contracts'
+import type { CompileResponse } from '@/features/semantic/types'
 import type { PlanAnalysisResponse } from '@/features/analysis/api/plan-analysis.types'
 
 const summary: PlanAnalysisResponse['summary'] = {

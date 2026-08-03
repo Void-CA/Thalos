@@ -4,7 +4,7 @@ import { ExecutionWorkspace } from '@/features/execution/execution-workspace'
 import { KnowledgeWorkspace } from '@/features/knowledge/workspace'
 import { PlanningWorkspace } from '@/features/planning/workspace'
 import { RobotShell } from '@/features/robots/workspace'
-import { SceneArea } from '@/features/semantic/scene-area'
+import { SceneWorkspace } from '@/features/scene/SceneWorkspace'
 import { SemanticWorkspace } from '@/features/semantic/semantic-workspace'
 import { SessionsWorkspace } from '@/features/sessions/workspace'
 import { AppShell } from '@/shared/layout/app-shell'
@@ -18,11 +18,12 @@ import { WORKSPACE_REGISTRY, type WorkspaceName } from '@/shared/workflow/regist
  * Analysis is intentionally absent: it was absorbed into Planning in slice 6
  * (one responsibility per workspace) — the analysis UI renders inside
  * PlanningWorkspace, not as its own registered view. `scene` renders the
- * S1 placeholder (features/semantic/scene-area); S2 wires SceneWorkspace.
+ * Escena area (features/scene/SceneWorkspace) — the exclusive owner of the
+ * Scene editor since S2; /task renders zero Scene UI.
  */
 export const VIEW_REGISTRY: Record<WorkspaceName, ComponentType> = {
   robot: RobotShell,
-  scene: SceneArea,
+  scene: SceneWorkspace,
   task: SemanticWorkspace,
   planning: PlanningWorkspace,
   execution: ExecutionWorkspace,

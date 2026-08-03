@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useSemanticEditor } from './store'
-import { useSceneStore } from './scene-store'
+import { useDomainSceneStore } from '@/features/scene/store'
 import { deriveWorkflowState, isValidHomePose } from '@/shared/workflow/derive'
 import type { CompileResponse } from './types'
 
@@ -26,8 +26,8 @@ function workflowSnapshot() {
   return {
     scene: {
       robotLoaded: true,
-      objects: useSceneStore.getState().objects,
-      validHomePose: isValidHomePose(useSceneStore.getState().homePose),
+      objects: useDomainSceneStore.getState().objects,
+      validHomePose: isValidHomePose(useDomainSceneStore.getState().homePose),
     },
     task: { operations: useSemanticEditor.getState().operations },
     compile: {

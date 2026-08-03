@@ -1,5 +1,5 @@
 import type { WorkflowSnapshot, WorkflowState, WorkspaceEntry, Capability, WorkflowFlag } from './types'
-import type { SemanticOp, PoseDef } from '@/features/semantic/types'
+import type { SemanticOp, PoseDef } from '@/shared/contracts'
 import type { ExecutionStatus } from '@/features/execution/execution-store'
 
 /**

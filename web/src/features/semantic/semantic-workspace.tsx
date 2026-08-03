@@ -1,6 +1,6 @@
 import { Package } from 'lucide-react'
 import { TaskEditor } from './components/task-editor'
-import { SceneEditor } from './components/scene-editor'
+import { SceneEditor } from '@/features/scene/components/scene-editor'
 import { RobotSelector } from './components/robot-selector'
 import { PipelineStatus } from './components/pipeline-status'
 import { DiagnosticsPanel } from './components/diagnostics-panel'
@@ -18,6 +18,11 @@ import { DiagnosticsPanel } from './components/diagnostics-panel'
  *
  * ZERO execution capabilities live here: no Simulate/Stop, no progress, no
  * tick loop. Execution owns the lifecycle (execution-workspace spec).
+ *
+ * NOTE (S2 transitional): the Scene panel still renders here while the Escena
+ * area lands (features/scene/SceneWorkspace is the exclusive owner going
+ * forward — this inline block is removed once Task consumes the Scene purely
+ * as an artifact). The editor now imports from the new Scene feature.
  */
 export function SemanticWorkspace() {
   return (

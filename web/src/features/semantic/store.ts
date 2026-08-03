@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
-import type { SemanticOp, CompileResponse } from './types'
+import type { SemanticOp } from '@/shared/contracts'
+import type { CompileResponse } from './types'
 
 interface SemanticEditorState {
   /** Ordered list of operations in the editor */

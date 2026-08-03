@@ -9,7 +9,7 @@ import { routerConfig } from '@/router'
 import { producerOf } from '@/shared/workflow/registry'
 import { ServicesProvider } from '@/features/viewport/services/service-context'
 import { useSceneStore } from '@/features/viewport/store'
-import { useSceneStore as useSemanticSceneStore } from '@/features/semantic/scene-store'
+import { useDomainSceneStore } from '@/features/scene/store'
 import { useSemanticEditor } from '@/features/semantic/store'
 import { useExecutionStore } from '@/features/execution/execution-store'
 import { useAnalysisStore } from '@/features/analysis/store'
@@ -95,12 +95,12 @@ function renderRouter(initialEntries: string[]) {
 }
 
 beforeEach(() => {
-  // Fresh stores per test (all flags false). The semantic scene store has no
+  // Fresh stores per test (all flags false). The domain scene store has no
   // reset action, so restore the canonical seed (1 bolt) explicitly — tests
   // that clear objects must not leak into later tests.
   useSceneStore.getState().reset()
   useSemanticEditor.getState().reset()
-  useSemanticSceneStore.setState({
+  useDomainSceneStore.setState({
     objects: [{ id: 'bolt-1', name: 'Bolt', pose: { position: [1.8, 0, 0.4], orientation: [0, 0, 0, 1] } }],
   })
   useExecutionStore.setState({ status: 'idle' })
@@ -139,7 +139,7 @@ describe('GuardedRoute — behavior over real router routes', () => {
     // sceneValid → redirect to the Escena area (produces sceneValid).
     seedWorkflowState({ robotLoaded: true })
     act(() => {
-      useSemanticSceneStore.setState({ objects: [] })
+      useDomainSceneStore.setState({ objects: [] })
     })
     const router = renderRouter(['/task'])
 

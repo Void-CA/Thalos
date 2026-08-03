@@ -4,7 +4,7 @@ import { renderHook, act } from '@testing-library/react'
 import { useWorkflowState } from './use-workflow-state'
 import { useSemanticEditor } from '@/features/semantic/store'
 import { useSceneStore } from '@/features/viewport/store'
-import { useSceneStore as useSemanticSceneStore } from '@/features/semantic/scene-store'
+import { useDomainSceneStore } from '@/features/scene/store'
 import type { SceneData } from '@/features/viewport/types'
 import type { CompileResponse } from '@/features/semantic/types'
 
@@ -21,10 +21,10 @@ const compileResult: CompileResponse = {
 beforeEach(() => {
   useSceneStore.getState().reset()
   useSemanticEditor.getState().reset()
-  // The semantic scene store has no reset action — restore the canonical seed
+  // The domain scene store has no reset action — restore the canonical seed
   // (1 bolt + valid default home pose) so sceneValid starts true once a robot
   // is loaded, and mutations never leak across tests.
-  useSemanticSceneStore.setState({
+  useDomainSceneStore.setState({
     objects: [{ id: 'bolt-1', name: 'Bolt', pose: { position: [1.8, 0, 0.4], orientation: [0, 0, 0, 1] } }],
     homePose: { position: [1.8, 0.0, 0.5], orientation: [0, 0, 0, 1] },
   })
@@ -63,7 +63,7 @@ describe('useWorkflowState — selector hook over the real stores', () => {
     expect(result.current.compiled).toBe(false)
   })
 
-  it('carries scene.validHomePose from the semantic scene store into sceneValid', () => {
+  it('carries scene.validHomePose from the domain scene store into sceneValid', () => {
     const { result } = renderHook(() => useWorkflowState())
     act(() => {
       useSceneStore.setState({ data: {} as SceneData })
@@ -72,12 +72,20 @@ describe('useWorkflowState — selector hook over the real stores', () => {
 
     // A malformed home pose (non-finite component) invalidates the scene.
     act(() => {
-      useSemanticSceneStore.setState({
+      useDomainSceneStore.setState({
         homePose: { position: [1.8, 0.0, Number.NaN], orientation: [0, 0, 0, 1] },
       })
     })
     expect(result.current.sceneValid).toBe(false)
     // And the chain invalidates downstream: no valid scene → no valid program.
     expect(result.current.programValid).toBe(false)
+  })
+
+  it('imports the domain scene store without naming collision (area-scene spec)', () => {
+    // Both stores coexist under distinct names in the same scope: the
+    // viewport store (robotLoaded) and the renamed domain scene store.
+    expect(useDomainSceneStore).toBeDefined()
+    expect(useSceneStore).toBeDefined()
+    expect(useDomainSceneStore).not.toBe(useSceneStore)
   })
 })
