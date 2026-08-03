@@ -1,4 +1,3 @@
-import { useNavigate } from 'react-router'
 import { PlanningPanel } from './components/planning-panel'
 import { TrajectoryColorPicker } from './components/trajectory-color-picker'
 
@@ -8,11 +7,12 @@ import { TrajectoryColorPicker } from './components/trajectory-color-picker'
  * Matching Angular planning-workspace.ts:
  *   - Motion Program (scroll)
  *   - Trajectory Color selector
- *   - Analyze button → navega a Analysis (URL-driven, via router)
+ *
+ * No cross-navigation: the global stepper / top-bar own navigation to other
+ * workspaces (slice 5 — "Analyze trajectory" removed; analysis is reached via
+ * the registry-driven surfaces).
  */
 export function PlanningWorkspace() {
-  const navigate = useNavigate()
-
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex-1 overflow-y-auto p-3 space-y-4">
@@ -31,17 +31,6 @@ export function PlanningWorkspace() {
           </h2>
           <TrajectoryColorPicker />
         </section>
-
-        {/* Analyze button */}
-        <button
-          onClick={() => navigate('/analysis')}
-          className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium
-                     rounded-lg border border-amber-600/30 bg-amber-950/20 text-amber-500
-                     hover:bg-amber-950/30 hover:border-amber-600/50
-                     transition-all cursor-pointer"
-        >
-          Analyze trajectory
-        </button>
       </div>
     </div>
   )

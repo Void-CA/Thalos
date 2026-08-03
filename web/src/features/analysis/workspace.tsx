@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
 import { useAnalysisStore, useSelectedRegion } from './store'
 import { planAnalysisApi } from './api/plan-analysis-api'
 import { StatusBanner } from './components/status-banner'
@@ -14,13 +13,16 @@ import { ChartBar, Loader2, ChevronRight } from 'lucide-react'
  * AnalysisWorkspace — layout del workspace Analysis.
  *
  * Matching Angular analysis-workspace.ts con:
- *   - Breadcrumb navigation
+ *   - Breadcrumb (location only — no cross-workspace back button, slice 5)
  *   - StatusBanner
  *   - ProblemRegions (overview) / RegionInspector (deep inspection)
  *   - AlternativesPanel
+ *
+ * The breadcrumb shows the current location; the ONLY back control is the
+ * intra-workspace region drill-down (selectRegion). Cross-workspace navigation
+ * lives in the global stepper + top-bar (registry-driven).
  */
 export function AnalysisWorkspace() {
-  const navigate = useNavigate()
   const hasPlan = useSceneStore(s => s.activePlan !== null)
   const summary = useAnalysisStore(s => s.summary)
   const setAnalysis = useAnalysisStore(s => s.setAnalysis)
@@ -45,12 +47,8 @@ export function AnalysisWorkspace() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Breadcrumb */}
+      {/* Breadcrumb — current location; intra-workspace drill-down back only */}
       <nav className="flex items-center gap-1.5 px-4 py-2 border-b border-border text-xs text-muted-foreground shrink-0">
-        <button onClick={() => navigate('/planning')} className="hover:text-foreground transition-colors cursor-pointer">
-          Planning
-        </button>
-        <ChevronRight className="h-3 w-3" />
         {selectedRegion ? (
           <>
             <button onClick={() => useAnalysisStore.getState().selectRegion(null)} className="hover:text-foreground transition-colors cursor-pointer">
