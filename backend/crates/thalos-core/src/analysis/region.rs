@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
+
 /// Unique identifier for a problem region within an analysis.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RegionId(pub usize);
 
 /// Classification of the nature of a problem region.
