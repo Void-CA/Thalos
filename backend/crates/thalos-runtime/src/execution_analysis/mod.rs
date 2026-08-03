@@ -1063,4 +1063,59 @@ mod tests {
             "the chain ends in a remediation Action targeting the plan observation"
         );
     }
+
+    // ── PR 4c regression (user Option A): ExecutionAnalyzer → Observation →
+    //    SwitchMoveStrategy (ObservationIntentionOperator) → ActionProposal → Action
+    //
+    // Proves the new-model feedback flow end-to-end WITHOUT the legacy
+    // orchestrator, which keeps operating on ExecutionFinding until PR 4d/6.
+    // Green-first by design: every dependency landed in PR 4a (canonical
+    // analyzer) and PR 4b (observation operator + ActionProposal).
+    #[test]
+    fn feedback_regression_execution_observation_to_action() {
+        use thalos_core::analysis::action::{ActionId, ActionKind};
+        use thalos_planning::feedback::operator::ObservationIntentionOperator;
+        use thalos_planning::feedback::operators::observation_switch_strategy::SwitchMoveStrategy;
+
+        let (plan, exec) = make_deviated_trace();
+        let comparison = compare(&plan, &exec, "p1", "e1", "test");
+        let artifact = ArtifactRef::ExecutionSession(ExecutionSessionId("e1".to_string()));
+
+        // 1. Canonical analyzer (PR 4a): deviated trace → Vec<Observation>.
+        let observations = ExecutionAnalyzer::new().analyze(artifact, &comparison);
+        let tracking = observations
+            .iter()
+            .find(|o| o.kind == ObservationKind::TrackingError)
+            .expect("deviated execution must emit a TrackingError observation");
+
+        // 2. New-model operator (PR 4b): kind-keyed applicability (C2) — the
+        //    tracking phenomena react, unrelated phenomena do not.
+        let op = SwitchMoveStrategy::new();
+        assert!(op.applies_to(tracking));
+        let spike = observations
+            .iter()
+            .find(|o| o.kind == ObservationKind::TrackingSpike)
+            .expect("deviated execution must emit a TrackingSpike observation");
+        assert!(op.applies_to(spike));
+        let joint_dev = observations
+            .iter()
+            .find(|o| o.kind == ObservationKind::JointDeviation)
+            .expect("deviated execution must emit a JointDeviation observation");
+        assert!(
+            !op.applies_to(joint_dev),
+            "JointDeviation must not trigger a strategy switch"
+        );
+
+        // 3. Proposal (I5): references the observation by id, carries no ActionId.
+        let proposals = op.apply(tracking);
+        assert_eq!(proposals.len(), 1);
+        assert_eq!(proposals[0].kind, ActionKind::SwitchMoveStrategy);
+        assert_eq!(proposals[0].target_observation, tracking.id);
+
+        // 4. Materialized Action: caller-owned id, same target observation.
+        let action = proposals[0].materialize(ActionId(1));
+        assert_eq!(action.id, ActionId(1));
+        assert_eq!(action.kind, ActionKind::SwitchMoveStrategy);
+        assert_eq!(action.target_observation, tracking.id);
+    }
 }
