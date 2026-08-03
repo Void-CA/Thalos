@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
 import { act } from 'react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -123,11 +123,15 @@ describe('Task purity — zero execution controls in Task (frontend-task-workspa
     expect(await screen.findByRole('button', { name: /Compile/ })).toBeInTheDocument()
 
     // …but zero execution UI elements exist anywhere in the Task workspace.
-    expect(screen.queryByRole('button', { name: /Simulate/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Stop/i })).not.toBeInTheDocument()
-    expect(screen.queryByText(/Executing/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/Completed/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/elapsed/i)).not.toBeInTheDocument()
+    // Scoped to the workspace panel (<main>): the shell's global stepper is a
+    // separate surface and legitimately shows workflow reasons like "Requires a
+    // completed execution" — it is not an execution control inside Task.
+    const workspace = within(screen.getByRole('main'))
+    expect(workspace.queryByRole('button', { name: /Simulate/i })).not.toBeInTheDocument()
+    expect(workspace.queryByRole('button', { name: /Stop/i })).not.toBeInTheDocument()
+    expect(workspace.queryByText(/Executing/i)).not.toBeInTheDocument()
+    expect(workspace.queryByText(/Completed/i)).not.toBeInTheDocument()
+    expect(workspace.queryByText(/elapsed/i)).not.toBeInTheDocument()
   })
 })
 
