@@ -2,7 +2,11 @@ use std::sync::Arc;
 
 use axum::{Json, extract::State};
 
-use thalos_core::kinematics::{forward::ForwardKinematics, inverse::JacobianTransposeSolver};
+use thalos_core::{
+    analysis::observation::ArtifactRef,
+    ids::MotionPlanId,
+    kinematics::{forward::ForwardKinematics, inverse::JacobianTransposeSolver},
+};
 use thalos_math::Vector3;
 use thalos_planning::{
     analysis::region::{RegionDetector, RegionDetectorConfig},
@@ -39,20 +43,23 @@ pub async fn repair_options(
     State(state): State<Arc<AppState>>,
 ) -> ApiResult<RepairOptionsResponse> {
     let snapshot = state.services.scene.snapshot().await?;
-    let trajectory = snapshot
+    let active_plan = snapshot
         .active_plan
         .as_ref()
-        .map(|p| &p.trajectory)
         .ok_or_else(|| ApiError::InvalidState {
             message: "No active plan".to_string(),
             code: "no_active_plan".to_string(),
         })?;
+    let trajectory = &active_plan.trajectory;
+    // I3: observaciones ancladas al MotionPlan analizado.
+    let artifact = ArtifactRef::MotionPlan(MotionPlanId(active_plan.plan_id.clone()));
 
     let result = PlanAnalysisService::analyze_plan(
         &snapshot.chain,
         trajectory,
         snapshot.active_tcp.as_ref(),
         None,
+        artifact,
     )?;
 
     let detector = RegionDetector::new(RegionDetectorConfig::default());

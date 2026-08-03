@@ -754,6 +754,97 @@ mod tests {
         );
     }
 
+    // ─── C4: conceptual regression over the full chain (PR 3) ──────
+    //
+    // Plan → TrajectoryAnalyzer → Observations → PlanAdvisor → Actions
+    //
+    // Criteria (user contract C4):
+    // 1. EVERY action references an observation id that exists (I5 — explicit,
+    //    not just rely on report.validate()).
+    // 2. No observation is orphaned by an adaptation error: every observation
+    //    whose phenomenon has a plan-level remediation rule produces at least
+    //    one action. Phenomena outside the rule table (execution/semantic, or
+    //    anything new via `#[non_exhaustive]`) legitimately produce none — the
+    //    advisor never invents knowledge (C2).
+    #[test]
+    fn full_chain_actions_reference_observations_without_orphans() {
+        use thalos_core::analysis::aggregator::{Aggregator, DefaultAggregator};
+        use thalos_core::analysis::observation::{ArtifactRef, ObservationKind};
+        use thalos_core::analysis::scoring::DefaultScoringPolicy;
+        use thalos_core::ids::MotionPlanId;
+
+        // Mix of problem waypoints (same setup as the legacy
+        // `scenario_multiple_problems_aggregate_correctly` — fidelity anchor).
+        let chain = RobotRegistry::create_default(RobotModel::Planar2R);
+        let traj = Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),  // singular
+            TrajectoryPoint::new(vec![0.5, 0.05], 0.5), // low manipulability
+            TrajectoryPoint::new(vec![0.5, 1.57], 1.0), // good
+        ]);
+        let artifact = ArtifactRef::MotionPlan(MotionPlanId("mp-chain".to_string()));
+
+        // 1. Plan → TrajectoryAnalyzer → Observations
+        let analyzer = TrajectoryAnalyzer::new(&chain, None);
+        let observations = analyzer.analyze(artifact.clone(), &traj);
+        assert!(
+            !observations.is_empty(),
+            "problem trajectory must produce observations"
+        );
+
+        // 2. Observations → PlanAdvisor → Actions
+        let actions = crate::advisor::PlanAdvisor.advise(&observations);
+        assert!(
+            !actions.is_empty(),
+            "plan-level problems must produce actions"
+        );
+
+        // C3/I5 (explicit): every action targets an observation id that exists.
+        let ids: Vec<_> = observations.iter().map(|o| o.id).collect();
+        for action in &actions {
+            assert!(
+                ids.contains(&action.target_observation),
+                "action {:?} must target an existing observation id",
+                action.kind
+            );
+        }
+
+        // C4: no orphan by adaptation error — every observation of a
+        // remediated kind produces at least one action.
+        let remediated: [ObservationKind; 6] = [
+            ObservationKind::LowManipulability,
+            ObservationKind::NearSingularity,
+            ObservationKind::Singularity,
+            ObservationKind::CollisionRisk,
+            ObservationKind::CollisionNear,
+            ObservationKind::ConstraintViolation,
+        ];
+        for obs in &observations {
+            if remediated.contains(&obs.kind) {
+                assert!(
+                    actions.iter().any(|a| a.target_observation == obs.id),
+                    "observation {:?} (kind {:?}) must produce at least one action — \
+                     orphaned by adaptation error",
+                    obs.id,
+                    obs.kind
+                );
+            }
+        }
+
+        // The trajectory must exercise the singular phenomenon (fidelity).
+        assert!(
+            observations.iter().any(|o| matches!(
+                o.kind,
+                ObservationKind::Singularity | ObservationKind::NearSingularity
+            )),
+            "fully-extended arm must yield a singular observation"
+        );
+
+        // 3. Observations → DefaultAggregator → AnalysisReport (validate-safe).
+        let report = DefaultAggregator::new(DefaultScoringPolicy).aggregate(artifact, observations);
+        assert_eq!(report.validate(), Ok(()));
+        assert!(report.summary.quality_index < 1.0);
+    }
+
     // Verify the pipeline: Analyze → Findings → Recommendations
     #[test]
     fn findings_produce_recommendations() {
@@ -772,7 +863,7 @@ mod tests {
 
         if !analysis.findings.is_empty() {
             // If there are findings, verify they produce recommendations
-            let recommendations = advisor.advise(&analysis.findings);
+            let recommendations = advisor.advise_findings(&analysis.findings);
             assert!(
                 !recommendations.is_empty(),
                 "Findings should produce recommendations. Findings: {:?}",
@@ -780,7 +871,7 @@ mod tests {
             );
         } else {
             // No findings → empty recommendations
-            let recommendations = advisor.advise(&analysis.findings);
+            let recommendations = advisor.advise_findings(&analysis.findings);
             assert!(recommendations.is_empty());
         }
     }

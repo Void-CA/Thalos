@@ -11,6 +11,7 @@ use std::sync::Arc;
 use axum::{Json, extract::State};
 use serde::Serialize;
 
+use thalos_core::{analysis::observation::ArtifactRef, ids::MotionPlanId};
 use thalos_planning::{
     motion::program::CompiledPlan,
     repair::{
@@ -24,7 +25,6 @@ use thalos_runtime::{PlanAnalysisService, RuntimeSnapshot};
 use crate::app::error::ApiError;
 use crate::app::prelude::*;
 use crate::app::state::AppState;
-
 /// DTOs legacy (se mantienen idénticos para compatibilidad).
 #[derive(Debug, Serialize)]
 pub struct PerturbationDto {
@@ -130,14 +130,16 @@ pub async fn analyze_alternatives(
 ) -> ApiResult<AlternativesResponse> {
     let snapshot = state.services.scene.snapshot().await?;
 
-    let trajectory = snapshot
+    let active_plan = snapshot
         .active_plan
         .as_ref()
-        .map(|p| &p.trajectory)
         .ok_or_else(|| ApiError::InvalidState {
             message: "No active plan".to_string(),
             code: "no_active_plan".to_string(),
         })?;
+    let trajectory = &active_plan.trajectory;
+    // I3: observaciones ancladas al MotionPlan analizado.
+    let artifact = ArtifactRef::MotionPlan(MotionPlanId(active_plan.plan_id.clone()));
 
     // Analizar plan
     let result = PlanAnalysisService::analyze_plan(
@@ -145,6 +147,7 @@ pub async fn analyze_alternatives(
         trajectory,
         snapshot.active_tcp.as_ref(),
         None,
+        artifact,
     )?;
     let findings = &result.findings;
 

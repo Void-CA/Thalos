@@ -10,7 +10,9 @@ use std::sync::Arc;
 use axum::{Json, extract::State};
 
 use thalos_core::{
+    analysis::observation::ArtifactRef,
     analysis::region::project_semantic_problem,
+    ids::MotionPlanId,
     kinematics::forward::ForwardKinematics,
     operation::{MotionProvenance, MotionRole},
 };
@@ -111,7 +113,9 @@ mod mapper {
             .map(|region| {
                 let mut dto = to_problem_region_dto(region);
                 dto.semantic = (!provenance.is_empty())
-                    .then(|| SemanticProblemDto::from(&project_semantic_problem(region, &provenance)))
+                    .then(|| {
+                        SemanticProblemDto::from(&project_semantic_problem(region, &provenance))
+                    })
                     .filter(|semantic| semantic.operation_id.is_some() || semantic.role.is_some());
                 dto
             })
@@ -127,14 +131,16 @@ pub async fn analyze_plan(
     let snapshot = state.services.scene.snapshot().await?;
 
     // Obtener la trayectoria del plan activo
-    let trajectory = snapshot
+    let active_plan = snapshot
         .active_plan
         .as_ref()
-        .map(|p| &p.trajectory)
         .ok_or_else(|| ApiError::InvalidState {
             message: "No active plan to analyze".to_string(),
             code: "no_active_plan".to_string(),
         })?;
+    let trajectory = &active_plan.trajectory;
+    // I3: cada observación del reporte queda anclada a este MotionPlan.
+    let artifact = ArtifactRef::MotionPlan(MotionPlanId(active_plan.plan_id.clone()));
 
     // PR 3: segments carry operation provenance (operation_id + role) when the
     // plan was compiled through compile_with_operations(). The analysis maps
@@ -150,6 +156,7 @@ pub async fn analyze_plan(
         trajectory,
         snapshot.active_tcp.as_ref(),
         None, // constraints opcionales
+        artifact,
     )?;
 
     // M8.1: Detectar regiones problemáticas
@@ -266,14 +273,16 @@ pub async fn handle_optimize(State(state): State<Arc<AppState>>) -> ApiResult<Op
     let snapshot = state.services.scene.snapshot().await?;
 
     // 1. Get active plan trajectory
-    let trajectory = snapshot
+    let active_plan = snapshot
         .active_plan
         .as_ref()
-        .map(|p| &p.trajectory)
         .ok_or_else(|| ApiError::InvalidState {
             message: "No active plan to optimize".to_string(),
             code: "no_active_plan".to_string(),
         })?;
+    let trajectory = &active_plan.trajectory;
+    // I3: observaciones ancladas al MotionPlan analizado.
+    let artifact = ArtifactRef::MotionPlan(MotionPlanId(active_plan.plan_id.clone()));
 
     // 2. Run PlanAnalysis (same as analyze)
     let analysis_result = PlanAnalysisService::analyze_plan(
@@ -281,6 +290,7 @@ pub async fn handle_optimize(State(state): State<Arc<AppState>>) -> ApiResult<Op
         trajectory,
         snapshot.active_tcp.as_ref(),
         None,
+        artifact,
     )?;
 
     // 3. Detect problem regions
@@ -399,6 +409,13 @@ pub async fn handle_optimize(State(state): State<Arc<AppState>>) -> ApiResult<Op
         after_trajectory,
         snapshot.active_tcp.as_ref(),
         None,
+        ArtifactRef::MotionPlan(MotionPlanId(
+            snapshot
+                .active_plan
+                .as_ref()
+                .map(|p| p.plan_id.clone())
+                .unwrap_or_default(),
+        )),
     )?;
 
     let after_detector = RegionDetector::new(RegionDetectorConfig::default());
@@ -473,8 +490,8 @@ pub async fn handle_optimize(State(state): State<Arc<AppState>>) -> ApiResult<Op
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::mapper::to_problem_region_dtos;
+    use super::*;
     use std::ops::Range;
 
     use thalos_core::{
@@ -554,8 +571,18 @@ mod tests {
     #[test]
     fn semantic_projection_skips_regions_outside_provenance() {
         let regions = vec![
-            ProblemRegion::new(RegionId(0), RegionKind::Singularity, RegionSeverity::Critical, 5..10),
-            ProblemRegion::new(RegionId(1), RegionKind::Velocity, RegionSeverity::Info, 20..25),
+            ProblemRegion::new(
+                RegionId(0),
+                RegionKind::Singularity,
+                RegionSeverity::Critical,
+                5..10,
+            ),
+            ProblemRegion::new(
+                RegionId(1),
+                RegionKind::Velocity,
+                RegionSeverity::Info,
+                20..25,
+            ),
         ];
         let segments = vec![segment_with_metadata(
             5..10,
