@@ -1,7 +1,7 @@
 import { createElement, type ComponentType } from 'react'
 import { createBrowserRouter, type RouteObject } from 'react-router'
 import { AnalysisWorkspace } from '@/features/analysis/workspace'
-import { ExecutionWorkspace } from '@/features/execution/workspace'
+import { ExecutionWorkspace } from '@/features/execution/execution-workspace'
 import { KnowledgeWorkspace } from '@/features/knowledge/workspace'
 import { PlanningWorkspace } from '@/features/planning/workspace'
 import { RobotShell } from '@/features/robots/workspace'

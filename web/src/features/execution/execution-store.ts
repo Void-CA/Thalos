@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import { executionClient } from './execution-client'
 import { useSceneStore } from '@/features/viewport/store'
 import type { ObjectTransform, ExecutionInfo } from '@/features/viewport/types'
-import type { MotionSegmentDto } from '@/features/viewport/api/scene-api.types'
 
 // ── Status ────────────────────────────────────────────────────────────────
 // Misma semántica que backend ExecutionStatusDto, pero en camelCase
@@ -19,6 +18,19 @@ export type ExecutionStatus =
 
 const TERMINAL = new Set<ExecutionStatus>(['completed', 'cancelled', 'failed'])
 
+// ── Active plan ────────────────────────────────────────────────────────────
+
+/** Plan metadata captured at the Send-to-Execution handoff — feeds the Active
+ *  Plan card in the Execution workspace (execution-workspace spec). The plan
+ *  itself lives in the backend runtime; the store only mirrors the summary. */
+export interface ActivePlanInfo {
+  instructionCount: number
+  /** Backend-computed execution total from `POST /semantic/execute`. */
+  durationSecs: number
+  /** Where the plan came from — the handoff sources it from Task. */
+  source: string
+}
+
 // ── State ─────────────────────────────────────────────────────────────────
 
 export interface ExecutionState {
@@ -31,14 +43,11 @@ export interface ExecutionState {
   /** Elapsed seconds since plan start (tick delta `elapsed_secs`). */
   elapsedSecs: number
   error: string | null
+  /** Summary of the loaded plan; null until a plan is handed off. */
+  activePlan: ActivePlanInfo | null
 }
 
 interface ExecutionActions {
-  /** Cargar un plan en el runtime sin ejecutarlo. El parámetro es el mismo
-   *  `{ segments }` que usa POST /scene/motion/plan. El store no conoce el
-   *  origen del plan — puede venir de PlanningPanel, TaskExecutor, Replay… */
-  loadExecution: (plan: { segments: MotionSegmentDto[] }) => Promise<void>
-
   /** Iniciar (o reanudar) la ejecución del plan cargado. */
   start: () => Promise<void>
 
@@ -53,6 +62,12 @@ interface ExecutionActions {
 
   /** Resetear la sesión de ejecución. */
   reset: () => Promise<void>
+
+  /** Handoff reception (Invariant #5): the Task workspace hands a compiled
+   *  plan to the runtime via `POST /semantic/execute` (no `start()`) and
+   *  records it here. Sets `status = ready` — the tick loop is NOT started;
+   *  only `start()` (from the Execution workspace) begins it. */
+  receivePlan: (plan: ActivePlanInfo) => void
 }
 
 // ── Estado inicial ────────────────────────────────────────────────────────
@@ -64,6 +79,7 @@ const INITIAL: ExecutionState = {
   progress: 0,
   elapsedSecs: 0,
   error: null,
+  activePlan: null,
 }
 
 // ── Loop privado ──────────────────────────────────────────────────────────
@@ -161,16 +177,7 @@ function mapStatus(dto: string): ExecutionStatus {
 export const useExecutionStore = create<ExecutionState & ExecutionActions>((set) => ({
   ...INITIAL,
 
-  loadExecution: async (plan) => {
-    stopLoop()
-    set({ ...INITIAL, status: 'loading' })
-    try {
-      await executionClient.load(plan.segments)
-      set({ status: 'ready' })
-    } catch (err) {
-      set({ status: 'failed', error: (err as Error).message })
-    }
-  },
+  receivePlan: (plan) => set({ activePlan: plan, status: 'ready' }),
 
   start: async () => {
     try {
