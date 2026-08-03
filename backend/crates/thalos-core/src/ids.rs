@@ -54,3 +54,15 @@ id_newtype!(ObjectId);
 id_newtype!(LocationId);
 id_newtype!(ToolId);
 id_newtype!(TaskDocumentId);
+
+// ---------------------------------------------------------------------------
+// Analysis artifact identifiers — anchors for observations (spec I3)
+// ---------------------------------------------------------------------------
+// Defined in core so the analysis model never depends on planning/runtime
+// crates for identity (design D1, cycle-free layering).
+
+id_newtype!(RobotId);
+id_newtype!(SceneId);
+id_newtype!(SemanticProgramId);
+id_newtype!(MotionPlanId);
+id_newtype!(ExecutionSessionId);

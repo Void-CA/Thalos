@@ -17,9 +17,11 @@ pub mod attribute_value;
 pub mod constraints;
 pub mod location;
 pub mod manipulability;
+pub mod observation;
 pub mod region;
 pub mod singularity;
 pub mod workspace;
 
 pub use attribute_value::AttributeValue;
 pub use location::Location;
+pub use observation::{ArtifactRef, Observation, ObservationId, ObservationKind, Severity};
