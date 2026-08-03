@@ -9,7 +9,9 @@
 //! - `finding` — observation layer (PR 1): analyzes traces, produces findings
 //! - `operator` — transformation layer (PR 2): applies intention operators
 //! - `orchestrator` — coordination layer (PR 3): full feedback cycle
+//! - `adapter` — temporal compatibility bridge (PR 4c): ExecutionFinding → Observation
 
+pub mod adapter;
 pub mod finding;
 pub mod operator;
 pub mod operators;
