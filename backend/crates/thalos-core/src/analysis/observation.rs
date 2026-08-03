@@ -70,6 +70,22 @@ pub enum ObservationKind {
     PlaceWithoutPick,
     /// A reference in the semantic program cannot be resolved.
     UnresolvableReference,
+    /// Average manipulability (Yoshikawa) over the trajectory is below
+    /// the configured threshold (plan-level phenomenon, PR 3 vocabulary).
+    LowManipulability,
+    /// A full kinematic singularity: the Jacobian is (near-)rank-deficient and
+    /// the trajectory cannot be executed at this configuration (PR 3
+    /// vocabulary; distinct from [`ObservationKind::NearSingularity`] which is
+    /// the Warning-grade precursor).
+    Singularity,
+    /// A waypoint is dangerously close to an obstacle without colliding —
+    /// the Warning-grade precursor of [`ObservationKind::CollisionRisk`]
+    /// (PR 3 vocabulary).
+    CollisionNear,
+    /// A trajectory constraint (velocity, acceleration, orientation, …) was
+    /// violated — distinct from a joint-level [`ObservationKind::JointLimitViolation`]
+    /// (PR 3 vocabulary).
+    ConstraintViolation,
 }
 
 /// Severity of an observation. Machine-readable; renderers map it to
@@ -199,7 +215,7 @@ mod tests {
     }
 
     #[test]
-    fn observation_kind_has_all_ten_phenomena_distinct() {
+    fn observation_kind_has_all_fourteen_phenomena_distinct() {
         let kinds = vec![
             ObservationKind::NearSingularity,
             ObservationKind::UnreachableTarget,
@@ -211,6 +227,11 @@ mod tests {
             ObservationKind::TrackingError,
             ObservationKind::PlaceWithoutPick,
             ObservationKind::UnresolvableReference,
+            // PR 3 vocabulary: plan-level phenomena migrated from FindingKind.
+            ObservationKind::LowManipulability,
+            ObservationKind::Singularity,
+            ObservationKind::CollisionNear,
+            ObservationKind::ConstraintViolation,
         ];
         for (i, a) in kinds.iter().enumerate() {
             for (j, b) in kinds.iter().enumerate() {

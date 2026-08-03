@@ -2,7 +2,9 @@
 //!
 //! El [`PlanAdvisor`] toma los [`Finding`](crate::finding::Finding) producidos por el
 //! [`TrajectoryAnalyzer`](crate::analysis::TrajectoryAnalyzer) y los transforma en
-//! [`Recommendation`] accionables.
+//! [`Recommendation`] accionables (camino legacy) o, desde PR 3, toma
+//! [`Observation`](thalos_core::analysis::observation::Observation)s y produce
+//! [`Action`](thalos_core::analysis::action::Action)s que las referencian por id (I5).
 //!
 //! **Principio**: El Advisor NUNCA recalcula. Solo interpreta hallazgos.
 //! No vuelve a preguntar al Jacobiano, no vuelve a consultar colisiones.
@@ -10,7 +12,11 @@
 //!
 //! Si necesita más datos, el Analyzer debe producirlos como Findings.
 
+use std::collections::BTreeMap;
 use std::fmt;
+
+use thalos_core::analysis::action::{Action, ActionId, ActionImpact, ActionKind, ActionPriority};
+use thalos_core::analysis::observation::{Observation, ObservationKind};
 
 use crate::finding::{Finding, FindingKind, Severity};
 
@@ -74,11 +80,75 @@ pub struct Recommendation {
 pub struct PlanAdvisor;
 
 impl PlanAdvisor {
-    /// Transforma hallazgos en recomendaciones accionables.
+    /// Transforma observaciones en acciones accionables (PR 3, spec I5).
+    ///
+    /// Cada [`Action`] referencia la observación que la motivó por id
+    /// (`target_observation`), preservando la separación
+    /// diagnóstico/remediación (I5) y la trazabilidad de la cadena
+    /// `TrajectoryAnalyzer → Observation → PlanAdvisor → Action` (C3).
+    ///
+    /// Las reglas son 1:1 con las del advisor legacy (SuggestionKind →
+    /// ActionKind, Impact → priority/impact). El mensaje textual de la
+    /// recomendación se descarta (I1): los renderers reconstruyen la
+    /// presentación (cambio A). Fenómenos sin regla de remediación NO
+    /// producen acción (C2: el advisor no inventa conocimiento).
+    pub fn advise(&self, observations: &[Observation]) -> Vec<Action> {
+        let mut actions = Vec::new();
+        for observation in observations {
+            for &(kind, priority, impact) in Self::remediation(observation.kind) {
+                actions.push(Action {
+                    id: ActionId(0), // the consumer/aggregator reassigns unique ids
+                    kind,
+                    target_observation: observation.id,
+                    priority,
+                    impact,
+                    parameters: BTreeMap::new(),
+                });
+            }
+        }
+        actions
+    }
+
+    /// Reglas de remediación por fenómeno: `kind → [(ActionKind, priority, impact)]`.
+    ///
+    /// Traducción exacta de las reglas del advisor legacy (SuggestionKind /
+    /// Impact), ahora sobre el vocabulario de observaciones. Un fenómeno sin
+    /// entrada — o fuera del ámbito plan (ejecución/semántica, PR 4/5) — no
+    /// produce acción (C2).
+    fn remediation(kind: ObservationKind) -> &'static [(ActionKind, ActionPriority, ActionImpact)] {
+        use ActionImpact as I;
+        use ActionKind as K;
+        use ActionPriority as P;
+        match kind {
+            ObservationKind::LowManipulability => &[
+                (K::Manipulability, P::High, I::High),
+                (K::Waypoint, P::Medium, I::Medium),
+            ],
+            ObservationKind::NearSingularity => &[
+                (K::Singularity, P::High, I::High),
+                (K::Velocity, P::Medium, I::Medium),
+            ],
+            ObservationKind::Singularity => &[(K::Singularity, P::High, I::High)],
+            ObservationKind::CollisionRisk => &[(K::Collision, P::High, I::High)],
+            ObservationKind::CollisionNear => &[(K::Collision, P::Medium, I::Medium)],
+            ObservationKind::ConstraintViolation => &[(K::Constraint, P::High, I::High)],
+            // Fenómenos de ejecución/semánticos y cualquier fenómeno nuevo
+            // (enum `#[non_exhaustive]`) sin regla plan-level: sin acción.
+            _ => &[],
+        }
+    }
+
+    /// Transforma hallazgos legacy en recomendaciones accionables.
+    ///
+    /// # TODO(analysis-model): remove after phase 7
+    ///
+    /// Camino legacy mantenido para los DTOs de la API
+    /// ([`Recommendation`]) hasta que el wire format migre a
+    /// [`Action`] (PR 7a). El camino canónico es [`Self::advise`].
     ///
     /// Cada finding puede producir 0, 1 o varias recomendaciones.
     /// Las reglas son secuenciales y determinísticas.
-    pub fn advise(&self, findings: &[Finding]) -> Vec<Recommendation> {
+    pub fn advise_findings(&self, findings: &[Finding]) -> Vec<Recommendation> {
         let mut recommendations = Vec::new();
 
         for finding in findings {
@@ -213,10 +283,95 @@ mod tests {
     use super::*;
     use crate::finding::{Finding, FindingKind, Severity};
 
+    // ─── PR 3: advisor over the canonical model (task 3.3) ─────────
+    //
+    // I5: actions live at the report level and reference observations by id.
+    // C2: the advisor never discovers facts — it only proposes remediation for
+    // observations it already receives.
+
+    fn observation(id: u32, kind: ObservationKind) -> Observation {
+        use std::collections::BTreeMap;
+        use thalos_core::analysis::location::Location;
+        use thalos_core::analysis::observation::{
+            ArtifactRef, Observation, ObservationId, Severity,
+        };
+        use thalos_core::ids::MotionPlanId;
+        Observation {
+            id: ObservationId(id),
+            kind,
+            severity: Severity::Warning,
+            artifact: ArtifactRef::MotionPlan(MotionPlanId("mp-1".to_string())),
+            location: Location::Waypoint(5),
+            attributes: BTreeMap::new(),
+            causes: Vec::new(),
+            related: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn advise_produces_actions_over_observations() {
+        use thalos_core::analysis::observation::ObservationKind;
+        let observations = vec![
+            observation(1, ObservationKind::NearSingularity),
+            observation(2, ObservationKind::LowManipulability),
+        ];
+        let advisor = PlanAdvisor;
+        let actions = advisor.advise(&observations);
+
+        // LowManipulability → 2 actions, NearSingularity → 2 actions (the same
+        // remediation rules the legacy advisor applied to the findings).
+        assert_eq!(actions.len(), 4);
+
+        // I5: EVERY action references an observation id that exists.
+        for action in &actions {
+            assert!(
+                observations
+                    .iter()
+                    .any(|o| o.id == action.target_observation),
+                "action {:?} must target an existing observation",
+                action.kind
+            );
+        }
+
+        // The remediation kinds survive the migration (SuggestionKind → ActionKind).
+        assert!(
+            actions
+                .iter()
+                .any(|a| a.kind == thalos_core::analysis::action::ActionKind::Singularity)
+        );
+        assert!(
+            actions
+                .iter()
+                .any(|a| a.kind == thalos_core::analysis::action::ActionKind::Manipulability)
+        );
+        // Legacy impact model maps 1:1 onto the action priority/impact.
+        assert!(actions.iter().any(|a| {
+            a.priority == thalos_core::analysis::action::ActionPriority::High
+                && a.impact == thalos_core::analysis::action::ActionImpact::High
+        }));
+    }
+
+    #[test]
+    fn no_actions_for_empty_observations() {
+        let advisor = PlanAdvisor;
+        assert!(advisor.advise(&[]).is_empty());
+    }
+
+    #[test]
+    fn unknown_phenomena_get_no_action() {
+        // C2: the advisor proposes actions ONLY for phenomena it has remediation
+        // rules for — it never invents knowledge (e.g. a latency spike has no
+        // plan-level remediation here).
+        use thalos_core::analysis::observation::ObservationKind;
+        let observations = vec![observation(1, ObservationKind::LatencySpike)];
+        let advisor = PlanAdvisor;
+        assert!(advisor.advise(&observations).is_empty());
+    }
+
     #[test]
     fn no_recommendations_for_empty_findings() {
         let advisor = PlanAdvisor;
-        let recs = advisor.advise(&[]);
+        let recs = advisor.advise_findings(&[]);
         assert!(recs.is_empty());
     }
 
@@ -231,7 +386,7 @@ mod tests {
             threshold: Some(0.3),
         }];
         let advisor = PlanAdvisor;
-        let recs = advisor.advise(&findings);
+        let recs = advisor.advise_findings(&findings);
         assert_eq!(recs.len(), 2);
         assert!(
             recs.iter()
@@ -251,7 +406,7 @@ mod tests {
             threshold: Some(0.0),
         }];
         let advisor = PlanAdvisor;
-        let recs = advisor.advise(&findings);
+        let recs = advisor.advise_findings(&findings);
         assert_eq!(recs.len(), 1);
         assert_eq!(recs[0].kind, SuggestionKind::Collision);
         assert_eq!(recs[0].impact, Impact::High);

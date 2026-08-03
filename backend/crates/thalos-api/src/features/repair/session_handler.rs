@@ -7,6 +7,8 @@ use axum::{
 };
 
 use thalos_core::{
+    analysis::observation::ArtifactRef,
+    ids::MotionPlanId,
     kinematics::{forward::ForwardKinematics, inverse::JacobianTransposeSolver},
     trajectory::Trajectory,
 };
@@ -223,20 +225,23 @@ pub async fn preview_repair(
     let ctx = build_repair_context(&snapshot);
 
     // Detectar regiones desde el plan actual
-    let trajectory = snapshot
+    let active_plan = snapshot
         .active_plan
         .as_ref()
-        .map(|p| &p.trajectory)
         .ok_or_else(|| ApiError::InvalidState {
             message: "No active plan".into(),
             code: "no_active_plan".into(),
         })?;
+    let trajectory = &active_plan.trajectory;
+    // I3: observaciones ancladas al MotionPlan analizado.
+    let artifact = ArtifactRef::MotionPlan(MotionPlanId(active_plan.plan_id.clone()));
 
     let analysis = PlanAnalysisService::analyze_plan(
         &snapshot.chain,
         trajectory,
         snapshot.active_tcp.as_ref(),
         None,
+        artifact,
     )?;
 
     let detector = RegionDetector::new(RegionDetectorConfig::default());

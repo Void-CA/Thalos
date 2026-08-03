@@ -11,16 +11,26 @@
 //!
 //! # Mapping (spec I1-I3)
 //!
-//! - `kind` → [`ObservationKind`]: exact for vocabulary overlaps; documented
-//!   lossy bridges for plan-specific kinds (the 10-variant model vocabulary is
-//!   completed in PR 3 when `TrajectoryAnalyzer` migrates).
-//! - `severity` → [`Severity`]: 1:1 (`Info`/`Warning`/`Error`).
-//! - `waypoint` → [`Location::Waypoint`]; findings without a waypoint fall
-//!   back to [`Location::Timestamp(0)`] (proposal risk table).
-//! - `value`/`threshold` → `attributes["value"|"threshold"]` as
-//!   [`AttributeValue::Number`] (D5), only when present.
-//! - `message` → **DROPPED** (I1): observations carry facts, never localized
-//!   text. Renderers reconstruct presentation in cambio A.
+//! Since PR 3 completed the plan-level `ObservationKind` vocabulary, the
+//! `FindingKind → ObservationKind` bridge is lossless for every kind the
+//! `TrajectoryAnalyzer` produces. Migration table (user contract C1):
+//!
+//! | Legacy (Finding) | Canonical (Observation) | Fidelity |
+//! |------------------|--------------------------|----------|
+//! | `kind: NearSingularity` | `kind: NearSingularity` | exact |
+//! | `kind: Singularity` | `kind: Singularity` (new variant) | exact — full singularity ≠ near |
+//! | `kind: LowManipulability` | `kind: LowManipulability` (new variant) | exact |
+//! | `kind: Collision` | `kind: CollisionRisk` | exact (severity Error) |
+//! | `kind: CollisionNear` | `kind: CollisionNear` (new variant) | exact (severity Warning) |
+//! | `kind: ConstraintViolation` | `kind: ConstraintViolation` (new variant) | exact — trajectory constraints ≠ joint limits |
+//! | `kind: TrackingError` | `kind: TrackingError` | exact |
+//! | `kind: TrackingSpike` | `kind: TrackingError` | lossy — spike is a transient peak of the same phenomenon (attributes hold value/threshold) |
+//! | `kind: JointDeviation` \| `VelocityDeviation` | `kind: RuntimeDeviation` | lossy — executed joint/velocity deviation is a runtime deviation |
+//! | `kind: IkSuggestion` | `kind: ResidualError` | lossy — NO producer emits it today; it is conceptually remediation (`ActionKind::IkSolution`), kept for legacy compatibility until phase 6 |
+//! | `severity` | `severity` | 1:1 (`Info`/`Warning`/`Error`) |
+//! | `waypoint` | `location: Location::Waypoint(n)` | exact; `None` falls back to `Location::Timestamp(0)` |
+//! | `value`/`threshold` | `attributes["value"\|"threshold"]` as `Number` | exact, only when present |
+//! | `message` | **dropped** | **intentional (I1)** — observations carry facts, never localized text; renderers reconstruct presentation in cambio A |
 //!
 //! `Finding` has no artifact field (I3), so the caller supplies the
 //! [`ArtifactRef`] every observation is anchored to.
@@ -74,32 +84,28 @@ impl FindingAdapter {
 
     /// Maps a plan-specific [`FindingKind`] onto the model's [`ObservationKind`].
     ///
-    /// Vocabulary overlaps map 1:1; plan-only kinds use documented lossy
-    /// bridges. This table is temporary (PR 3 completes the vocabulary).
+    /// Lossless since PR 3 completed the plan-level vocabulary (see the module
+    /// docs for the full migration table, C1). The only remaining lossy arm is
+    /// [`FindingKind::IkSuggestion`], which no analyzer produces today.
     fn map_kind(kind: FindingKind) -> ObservationKind {
         match kind {
+            FindingKind::LowManipulability => ObservationKind::LowManipulability,
             FindingKind::NearSingularity => ObservationKind::NearSingularity,
+            FindingKind::Singularity => ObservationKind::Singularity,
+            FindingKind::Collision => ObservationKind::CollisionRisk,
+            FindingKind::CollisionNear => ObservationKind::CollisionNear,
+            FindingKind::ConstraintViolation => ObservationKind::ConstraintViolation,
             FindingKind::TrackingError => ObservationKind::TrackingError,
-            // No full-singularity variant in the model: a singularity is the
-            // degenerate case of the near-singularity phenomenon.
-            FindingKind::Singularity => ObservationKind::NearSingularity,
-            // The model has a single collision phenomenon; near-collision is
-            // the same risk at a smaller distance.
-            FindingKind::Collision | FindingKind::CollisionNear => ObservationKind::CollisionRisk,
-            // Closest phenomenon: a constraint violation typically surfaces as
-            // a joint-level limit violation.
-            FindingKind::ConstraintViolation => ObservationKind::JointLimitViolation,
             // A tracking spike is a transient peak of the tracking error.
             FindingKind::TrackingSpike => ObservationKind::TrackingError,
             // Executed joint/velocity deviations are runtime deviations.
             FindingKind::JointDeviation | FindingKind::VelocityDeviation => {
                 ObservationKind::RuntimeDeviation
             }
-            // No manipulability/IK-suggestion phenomenon yet: bridge to the
-            // nearest residual-quality phenomenon. PR 3 adds the vocabulary.
-            FindingKind::LowManipulability | FindingKind::IkSuggestion => {
-                ObservationKind::ResidualError
-            }
+            // No producer emits IkSuggestion today; conceptually it is
+            // remediation (ActionKind::IkSolution), not a fact. Kept mapped to
+            // ResidualError for legacy compatibility until phase 6.
+            FindingKind::IkSuggestion => ObservationKind::ResidualError,
         }
     }
 
@@ -159,21 +165,25 @@ mod tests {
     #[test]
     fn finding_kind_maps_to_observation_kind() {
         // kind → ObservationKind (spec I2: phenomenon, machine-readable).
-        // The exact-vocabulary arms map 1:1; the rest are documented lossy
-        // bridges until PR 3 completes the ObservationKind vocabulary.
+        // PR 3 completed the plan-level vocabulary: every kind the
+        // TrajectoryAnalyzer produces now maps exactly (migration table C1).
         let cases = [
+            (
+                FindingKind::LowManipulability,
+                ObservationKind::LowManipulability,
+            ),
             (
                 FindingKind::NearSingularity,
                 ObservationKind::NearSingularity,
             ),
-            (FindingKind::TrackingError, ObservationKind::TrackingError),
-            (FindingKind::Singularity, ObservationKind::NearSingularity),
+            (FindingKind::Singularity, ObservationKind::Singularity),
             (FindingKind::Collision, ObservationKind::CollisionRisk),
-            (FindingKind::CollisionNear, ObservationKind::CollisionRisk),
+            (FindingKind::CollisionNear, ObservationKind::CollisionNear),
             (
                 FindingKind::ConstraintViolation,
-                ObservationKind::JointLimitViolation,
+                ObservationKind::ConstraintViolation,
             ),
+            (FindingKind::TrackingError, ObservationKind::TrackingError),
             (FindingKind::TrackingSpike, ObservationKind::TrackingError),
             (
                 FindingKind::JointDeviation,
@@ -183,10 +193,8 @@ mod tests {
                 FindingKind::VelocityDeviation,
                 ObservationKind::RuntimeDeviation,
             ),
-            (
-                FindingKind::LowManipulability,
-                ObservationKind::ResidualError,
-            ),
+            // Sole documented lossy arm: no analyzer produces IkSuggestion
+            // today; conceptually it is remediation, not a fact (see module docs).
             (FindingKind::IkSuggestion, ObservationKind::ResidualError),
         ];
         for (kind, expected) in cases {
