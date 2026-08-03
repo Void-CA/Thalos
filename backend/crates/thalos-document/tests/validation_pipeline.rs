@@ -3,9 +3,9 @@
 //! Verifies that structural validation gates semantic validation:
 //! - Corrupt documents (duplicate IDs) → structural Err → semantic skipped
 //! - Structurally valid documents with bad references → structural Ok → semantic
-//!   produces diagnostics
+//!   produces observations
 
-use thalos_document::diagnostic::Severity;
+use thalos_core::analysis::observation::{ObservationKind, Severity};
 use thalos_document::prelude::*;
 use thalos_document::validation::{StructuralError, validate_semantic, validate_structural};
 
@@ -62,7 +62,10 @@ fn valid_project() -> Project {
 fn corrupt_duplicate_ids_skips_semantic() {
     let mut project = valid_project();
     // Add a duplicate operation ID
-    let ops = project.tasks[0].kind.geometric_operations_mut().expect("geometric task");
+    let ops = project.tasks[0]
+        .kind
+        .geometric_operations_mut()
+        .expect("geometric task");
     ops.push(Operation::Home {
         id: OperationId("op_1".to_string()),
     });
@@ -80,13 +83,16 @@ fn corrupt_duplicate_ids_skips_semantic() {
 }
 
 // ---------------------------------------------------------------------------
-// Structurally valid with bad refs → structural Ok → semantic diagnostics
+// Structurally valid with bad refs → structural Ok → semantic observations
 // ---------------------------------------------------------------------------
 
 #[test]
-fn valid_structure_with_bad_refs_produces_diagnostics() {
+fn valid_structure_with_bad_refs_produces_observations() {
     let mut project = valid_project();
-    let ops = project.tasks[0].kind.geometric_operations_mut().expect("geometric task");
+    let ops = project.tasks[0]
+        .kind
+        .geometric_operations_mut()
+        .expect("geometric task");
     // Change target to a non-existent point
     ops[0] = Operation::MoveTo {
         id: OperationId("op_1".to_string()),
@@ -104,23 +110,23 @@ fn valid_structure_with_bad_refs_produces_diagnostics() {
     let structural = validate_structural(&project);
     assert!(structural.is_ok(), "structurally valid document must pass");
 
-    // Semantic produces diagnostics
-    let diagnostics = validate_semantic(&project);
+    // Semantic produces observations
+    let observations = validate_semantic(&project);
     assert!(
-        !diagnostics.is_empty(),
+        !observations.is_empty(),
         "semantic must find issues in document with bad refs"
     );
 
-    // Check specific diagnostics
-    let unresolved: Vec<_> = diagnostics
+    // Check specific observations
+    let unresolved: Vec<_> = observations
         .iter()
-        .filter(|d| d.code == "unresolved-resource")
+        .filter(|o| o.kind == ObservationKind::UnresolvableReference)
         .collect();
     assert_eq!(unresolved.len(), 2, "should find two unresolved references");
 
     // Verify severity
-    for d in &diagnostics {
-        assert_eq!(d.severity, Severity::Error);
+    for o in &observations {
+        assert_eq!(o.severity, Severity::Error);
     }
 }
 
@@ -135,9 +141,9 @@ fn fully_valid_document_passes_both_passes() {
     let structural = validate_structural(&project);
     assert!(structural.is_ok());
 
-    let diagnostics = validate_semantic(&project);
+    let observations = validate_semantic(&project);
     assert!(
-        diagnostics.is_empty(),
-        "fully valid document should produce zero diagnostics"
+        observations.is_empty(),
+        "fully valid document should produce zero observations"
     );
 }
