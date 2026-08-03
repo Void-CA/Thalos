@@ -24,8 +24,8 @@
 //! | `kind: CollisionNear` | `kind: CollisionNear` (new variant) | exact (severity Warning) |
 //! | `kind: ConstraintViolation` | `kind: ConstraintViolation` (new variant) | exact — trajectory constraints ≠ joint limits |
 //! | `kind: TrackingError` | `kind: TrackingError` | exact |
-//! | `kind: TrackingSpike` | `kind: TrackingError` | lossy — spike is a transient peak of the same phenomenon (attributes hold value/threshold) |
-//! | `kind: JointDeviation` \| `VelocityDeviation` | `kind: RuntimeDeviation` | lossy — executed joint/velocity deviation is a runtime deviation |
+//! | `kind: TrackingSpike` | `kind: TrackingSpike` (PR 4 vocabulary) | exact — transient peak ≠ sustained error |
+//! | `kind: JointDeviation` \| `VelocityDeviation` | `kind: JointDeviation` \| `VelocityDeviation` (PR 4 vocabulary) | exact — per-joint phenomena are distinct kinds |
 //! | `kind: IkSuggestion` | `kind: ResidualError` | lossy — NO producer emits it today; it is conceptually remediation (`ActionKind::IkSolution`), kept for legacy compatibility until phase 6 |
 //! | `severity` | `severity` | 1:1 (`Info`/`Warning`/`Error`) |
 //! | `waypoint` | `location: Location::Waypoint(n)` | exact; `None` falls back to `Location::Timestamp(0)` |
@@ -96,12 +96,9 @@ impl FindingAdapter {
             FindingKind::CollisionNear => ObservationKind::CollisionNear,
             FindingKind::ConstraintViolation => ObservationKind::ConstraintViolation,
             FindingKind::TrackingError => ObservationKind::TrackingError,
-            // A tracking spike is a transient peak of the tracking error.
-            FindingKind::TrackingSpike => ObservationKind::TrackingError,
-            // Executed joint/velocity deviations are runtime deviations.
-            FindingKind::JointDeviation | FindingKind::VelocityDeviation => {
-                ObservationKind::RuntimeDeviation
-            }
+            FindingKind::TrackingSpike => ObservationKind::TrackingSpike,
+            FindingKind::JointDeviation => ObservationKind::JointDeviation,
+            FindingKind::VelocityDeviation => ObservationKind::VelocityDeviation,
             // No producer emits IkSuggestion today; conceptually it is
             // remediation (ActionKind::IkSolution), not a fact. Kept mapped to
             // ResidualError for legacy compatibility until phase 6.
@@ -184,14 +181,11 @@ mod tests {
                 ObservationKind::ConstraintViolation,
             ),
             (FindingKind::TrackingError, ObservationKind::TrackingError),
-            (FindingKind::TrackingSpike, ObservationKind::TrackingError),
-            (
-                FindingKind::JointDeviation,
-                ObservationKind::RuntimeDeviation,
-            ),
+            (FindingKind::TrackingSpike, ObservationKind::TrackingSpike),
+            (FindingKind::JointDeviation, ObservationKind::JointDeviation),
             (
                 FindingKind::VelocityDeviation,
-                ObservationKind::RuntimeDeviation,
+                ObservationKind::VelocityDeviation,
             ),
             // Sole documented lossy arm: no analyzer produces IkSuggestion
             // today; conceptually it is remediation, not a fact (see module docs).
