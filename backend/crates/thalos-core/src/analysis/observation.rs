@@ -2,8 +2,8 @@
 //!
 //! Every analyzer in Thalos emits [`Observation`]s: machine-readable,
 //! artifact-anchored facts devoid of presentation. This is the single
-//! observation language; `Finding`, `ExecutionFinding` and `Diagnostic`
-//! vocabularies are migrated onto it (see the `analysis-model` change).
+//! observation language; the three legacy analysis vocabularies were migrated
+//! onto it and removed (see the `analysis-model` change).
 //!
 //! # Invariants (from the specification)
 //!
@@ -244,7 +244,8 @@ mod tests {
             ObservationKind::TrackingError,
             ObservationKind::PlaceWithoutPick,
             ObservationKind::UnresolvableReference,
-            // PR 5 vocabulary: document validation migrated from Diagnostic.
+            // PR 5 vocabulary: document validation migrated from the legacy
+            // document-validation vocabulary.
             ObservationKind::EmptyPath,
             // PR 3 vocabulary: plan-level phenomena migrated from FindingKind.
             ObservationKind::LowManipulability,

@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use thalos_core::analysis::attribute_value::AttributeValue;
@@ -80,66 +79,10 @@ pub fn validate_with_provider(
     observations
 }
 
-// ── Legacy Diagnostic model ────────────────────────────────────────────────
-// The three types below are the pre-migration vocabulary. Production
-// validation now emits `Observation`; these definitions remain only until the
-// phase-6 deletion (tasks.md 6.1) and are no longer referenced by production
-// paths.
-
-/// Severity level for a validation diagnostic.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum Severity {
-    Error,
-    Warning,
-}
-
-/// A single validation finding — either an error or warning with trace origin.
-///
-/// Errors prevent lowering; warnings do not. Every diagnostic carries the
-/// `OperationId` of the operation that caused it for traceability.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Diagnostic {
-    pub severity: Severity,
-    pub message: String,
-    pub origin: OperationId,
-}
-
-impl Diagnostic {
-    /// Construct a new error diagnostic.
-    pub fn error(message: impl Into<String>, origin: OperationId) -> Self {
-        Self {
-            severity: Severity::Error,
-            message: message.into(),
-            origin,
-        }
-    }
-
-    /// Construct a new warning diagnostic.
-    pub fn warning(message: impl Into<String>, origin: OperationId) -> Self {
-        Self {
-            severity: Severity::Warning,
-            message: message.into(),
-            origin,
-        }
-    }
-}
-
-/// The result of validating a `SemanticProgram`.
-///
-/// Errors prevent lowering; warnings do not. Diagnostics preserve the origin
-/// trace ID of the operation that caused them.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-pub struct ValidationResult {
-    pub errors: Vec<Diagnostic>,
-    pub warnings: Vec<Diagnostic>,
-}
-
-impl ValidationResult {
-    /// Returns `true` if there are any error-level diagnostics.
-    pub fn has_errors(&self) -> bool {
-        !self.errors.is_empty()
-    }
-}
+// ── Legacy validation model ────────────────────────────────────────────────
+// REMOVED in the phase-6 deletion (tasks.md 6.1): the pre-migration
+// severity/diagnostic/result vocabulary had zero remaining consumers since
+// PR 5 (production validation emits `Observation`).
 
 #[cfg(test)]
 mod tests {
@@ -434,40 +377,5 @@ mod tests {
             len_before,
             "Validation must not mutate the program"
         );
-    }
-
-    // ── Warning diagnostics ───────────────────────────────────────────────
-
-    #[test]
-    fn warning_construction() {
-        let d = Diagnostic::warning("test warning", OperationId("w-1".to_string()));
-        assert_eq!(d.severity, Severity::Warning);
-        assert_eq!(d.message, "test warning");
-        assert_eq!(d.origin, OperationId("w-1".to_string()));
-    }
-
-    #[test]
-    fn error_construction() {
-        let d = Diagnostic::error("test error", OperationId("e-1".to_string()));
-        assert_eq!(d.severity, Severity::Error);
-        assert_eq!(d.message, "test error");
-        assert_eq!(d.origin, OperationId("e-1".to_string()));
-    }
-
-    // ── ValidationResult helpers ──────────────────────────────────────────
-
-    #[test]
-    fn validation_result_has_errors_positive() {
-        let result = ValidationResult {
-            errors: vec![Diagnostic::error("err", OperationId("1".to_string()))],
-            warnings: vec![],
-        };
-        assert!(result.has_errors());
-    }
-
-    #[test]
-    fn validation_result_has_errors_negative() {
-        let result = ValidationResult::default();
-        assert!(!result.has_errors());
     }
 }
