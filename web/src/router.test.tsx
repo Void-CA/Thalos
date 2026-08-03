@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
 import { act } from 'react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -182,21 +182,56 @@ describe('hidden routes render placeholders (no 404)', () => {
   })
 })
 
-describe('in-workspace cross-nav flows through the router (perspective-store purge)', () => {
-  it('navigates from planning to analysis via "Analyze trajectory"', async () => {
+describe('cross-navigation converges in stepper + top-bar (slice 5, task 5.2)', () => {
+  it('planning workspace has no "Analyze trajectory" cross-nav button', () => {
+    seedPrerequisites()
+    renderRouter(['/planning'])
+    const main = within(screen.getByRole('main'))
+    expect(screen.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
+    expect(main.queryByRole('button', { name: 'Analyze trajectory' })).not.toBeInTheDocument()
+  })
+
+  it('analysis workspace has no back-to-planning breadcrumb button', () => {
+    seedPrerequisites()
+    renderRouter(['/analysis'])
+    const main = within(screen.getByRole('main'))
+    expect(main.getByText('No plan compiled')).toBeInTheDocument()
+    expect(main.queryByRole('button', { name: 'Planning' })).not.toBeInTheDocument()
+  })
+
+  it('analysis remains reachable through registry-driven navigation (top-bar link)', async () => {
     seedPrerequisites()
     const { router } = renderRouter(['/planning'])
-    fireEvent.click(screen.getByRole('button', { name: 'Analyze trajectory' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Analysis' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/analysis'))
     expect(screen.getByText('No plan compiled')).toBeInTheDocument()
   })
 
-  it('navigates back from analysis to planning via the breadcrumb', async () => {
-    seedPrerequisites()
+  it('analysis keeps its intra-workspace region drill-down back control', async () => {
+    seedPrerequisites({ analyzed: true })
+    act(() => {
+      useAnalysisStore.setState({
+        problemRegions: [
+          {
+            id: 7,
+            kind: 'singularity',
+            severity: 'warning',
+            waypoint_start: 10,
+            waypoint_end: 20,
+            waypoint_count: 11,
+          },
+        ],
+        selectedRegionId: 7,
+      })
+    })
     const { router } = renderRouter(['/analysis'])
-    fireEvent.click(screen.getByRole('button', { name: 'Planning' }))
-    await waitFor(() => expect(router.state.location.pathname).toBe('/planning'))
-    expect(screen.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
+    const main = within(screen.getByRole('main'))
+    expect(main.getByRole('heading', { name: 'Region Details' })).toBeInTheDocument()
+
+    // Intra-workspace drill-down: URL unchanged, no cross-workspace navigation.
+    fireEvent.click(main.getByRole('button', { name: 'Analysis' }))
+    expect(router.state.location.pathname).toBe('/analysis')
+    expect(main.queryByRole('heading', { name: 'Region Details' })).not.toBeInTheDocument()
   })
 })
 
