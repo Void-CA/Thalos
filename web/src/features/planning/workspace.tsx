@@ -1,5 +1,6 @@
 import { PlanningPanel } from './components/planning-panel'
 import { TrajectoryColorPicker } from './components/trajectory-color-picker'
+import { AnalysisSection } from '@/features/analysis/analysis-section'
 
 /**
  * PlanningWorkspace — layout del workspace Planning.
@@ -7,10 +8,11 @@ import { TrajectoryColorPicker } from './components/trajectory-color-picker'
  * Matching Angular planning-workspace.ts:
  *   - Motion Program (scroll)
  *   - Trajectory Color selector
+ *   - Analysis (absorbed from the legacy /analysis workspace, slice 6)
  *
  * No cross-navigation: the global stepper / top-bar own navigation to other
- * workspaces (slice 5 — "Analyze trajectory" removed; analysis is reached via
- * the registry-driven surfaces).
+ * workspaces (slice 5 — "Analyze trajectory" removed; slice 6 — the analysis
+ * UI lives here as a plain section instead of a separate workspace).
  */
 export function PlanningWorkspace() {
   return (
@@ -30,6 +32,14 @@ export function PlanningWorkspace() {
             Trajectory Color
           </h2>
           <TrajectoryColorPicker />
+        </section>
+
+        {/* Analysis (absorbed from /analysis — one responsibility per workspace) */}
+        <section>
+          <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">
+            Analysis
+          </h2>
+          <AnalysisSection />
         </section>
       </div>
     </div>
