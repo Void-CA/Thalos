@@ -11,6 +11,10 @@ interface SemanticEditorState {
   loading: boolean
   /** Error message if compile failed */
   error: string | null
+  /** Edit counter — bumps on every operation mutation, resets on successful
+   *  compile. `deriveWorkflowState` uses it to invalidate `compiled`
+   *  (workflow-state spec, "Dirty Counter"). */
+  dirty: number
 
   // Actions
   addOperation: (op: SemanticOp) => void
@@ -38,13 +42,15 @@ export const useSemanticEditor = create<SemanticEditorState>()(
       result: null,
       loading: false,
       error: null,
+      dirty: 0,
 
       addOperation: (op) =>
-        set((s) => ({ operations: [...s.operations, op] })),
+        set((s) => ({ operations: [...s.operations, op], dirty: s.dirty + 1 })),
 
       removeOperation: (index) =>
         set((s) => ({
           operations: s.operations.filter((_, i) => i !== index),
+          dirty: s.dirty + 1,
         })),
 
       moveOperation: (from, to) =>
@@ -52,7 +58,7 @@ export const useSemanticEditor = create<SemanticEditorState>()(
           const ops = [...s.operations]
           const [moved] = ops.splice(from, 1)
           ops.splice(to, 0, moved)
-          return { operations: ops }
+          return { operations: ops, dirty: s.dirty + 1 }
         }),
 
       updateOperation: (index, op) =>
@@ -60,13 +66,20 @@ export const useSemanticEditor = create<SemanticEditorState>()(
           operations: s.operations.map((o, i) =>
             i === index ? { ...o, ...op } : o,
           ),
+          dirty: s.dirty + 1,
         })),
 
-      setResult: (result) => set({ result, error: null, loading: false }),
+      setResult: (result) =>
+        set({ result, error: null, loading: false, dirty: 0 }),
       setLoading: (loading) => set({ loading }),
       setError: (error) => set({ error, loading: false }),
       reset: () =>
-        set({ operations: sampleOperations.map((op) => ({ ...op })), result: null, error: null }),
+        set({
+          operations: sampleOperations.map((op) => ({ ...op })),
+          result: null,
+          error: null,
+          dirty: 0,
+        }),
     }),
     { name: 'semantic-editor' },
   ),

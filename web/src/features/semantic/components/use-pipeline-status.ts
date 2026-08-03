@@ -1,8 +1,5 @@
-import { useSceneStore } from '../scene-store'
-import { useSemanticEditor } from '../store'
-import { useSceneStore as useViewportStore } from '@/features/viewport/store'
-import { useExecutionStore } from '@/features/execution/execution-store'
-import { useSelectedRobot } from '@/features/robots/store'
+import { useWorkflowState } from '@/shared/workflow/use-workflow-state'
+import type { WorkflowState } from '@/shared/workflow/types'
 
 /** One stage of the Task execution pipeline (design: `{ name, pass, message? }`). */
 export interface PipelineStage {
@@ -14,65 +11,42 @@ export interface PipelineStage {
 }
 
 /**
- * Derives the 6-stage pipeline status reactively from the stores.
+ * Pure mapping WorkflowState → pipeline stages (single derivation layer,
+ * workflow-state spec "No dual derivation").
  *
- * Deliberately NOT an imperative `pipelineReady` flag: every stage is computed
- * from current store state, so it can never drift from what the UI actually
- * holds. Stages that depend on an action result that doesn't exist yet
- * (compile/plan) surface as `pending`, not failed.
+ * Deliberately derived ONLY from `WorkflowState` flags — the hook never reads
+ * raw stores. WorkflowState exposes one combined task flag, so the legacy
+ * Scene/Task stages both derive from `taskValid`, and the Compile stage no
+ * longer distinguishes a compile failure from "not compiled yet" (both surface
+ * as pending). This legacy stage list is temporary: pipeline-status is deleted
+ * once all consumers use `useWorkflowState` directly (design D7, slice 4).
  */
-export function usePipelineStatus(): PipelineStage[] {
-  const robotSelected = useSelectedRobot()
-  const sceneLoaded = useViewportStore((s) => s.data !== null)
-  const objects = useSceneStore((s) => s.objects)
-  const operations = useSemanticEditor((s) => s.operations)
-  const compileResult = useSemanticEditor((s) => s.result)
-  const compileError = useSemanticEditor((s) => s.error)
-  const execStatus = useExecutionStore((s) => s.status)
-
-  const robot: PipelineStage = sceneLoaded
+export function pipelineStagesFromWorkflowState(state: WorkflowState): PipelineStage[] {
+  const robot: PipelineStage = state.robotLoaded
     ? { name: 'Robot', pass: true, pending: false }
-    : {
-        name: 'Robot',
-        pass: false,
-        pending: !robotSelected,
-        message: robotSelected ? 'Loading robot…' : 'Select a robot',
-      }
+    : { name: 'Robot', pass: false, pending: false, message: 'Select a robot' }
 
   const scene: PipelineStage = {
     name: 'Scene',
-    pass: objects.length >= 1,
+    pass: state.taskValid,
     pending: false,
-    message: objects.length >= 1 ? undefined : 'Add an object to the Scene',
+    message: state.taskValid ? undefined : 'Complete the Scene',
   }
 
   const task: PipelineStage = {
     name: 'Task',
-    pass: operations.length >= 1,
+    pass: state.taskValid,
     pending: false,
-    message: operations.length >= 1 ? undefined : 'Add a program operation',
+    message: state.taskValid ? undefined : 'Define a program',
   }
 
-  const compile: PipelineStage = compileResult
-    ? {
-        name: 'Compile',
-        pass: true,
-        pending: false,
-        message: `${compileResult.metadata.instruction_count} instructions`,
-      }
-    : compileError
-      ? { name: 'Compile', pass: false, pending: false, message: 'Compile failed' }
-      : { name: 'Compile', pass: false, pending: true, message: 'Compile the program' }
+  const compile: PipelineStage = state.compiled
+    ? { name: 'Compile', pass: true, pending: false }
+    : { name: 'Compile', pass: false, pending: true, message: 'Compile the program' }
 
-  const plan: PipelineStage =
-    execStatus === 'ready' ||
-    execStatus === 'running' ||
-    execStatus === 'paused' ||
-    execStatus === 'completed'
-      ? { name: 'Plan', pass: true, pending: false }
-      : execStatus === 'failed'
-        ? { name: 'Plan', pass: false, pending: false, message: 'Plan failed' }
-        : { name: 'Plan', pass: false, pending: true, message: 'Run Simulate' }
+  const plan: PipelineStage = state.executable || state.completed
+    ? { name: 'Plan', pass: true, pending: false }
+    : { name: 'Plan', pass: false, pending: true, message: 'Run Simulate' }
 
   const priorOk = robot.pass && scene.pass && task.pass && compile.pass && plan.pass
   const execute: PipelineStage = priorOk
@@ -85,4 +59,13 @@ export function usePipelineStatus(): PipelineStage[] {
       }
 
   return [robot, scene, task, compile, plan, execute]
+}
+
+/**
+ * Re-sourced pipeline status (design D7): a thin wrapper over the single
+ * `useWorkflowState()` derivation. It no longer derives robot/scene/task/
+ * compile stages from raw stores.
+ */
+export function usePipelineStatus(): PipelineStage[] {
+  return pipelineStagesFromWorkflowState(useWorkflowState())
 }
