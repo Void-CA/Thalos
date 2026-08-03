@@ -86,6 +86,16 @@ pub enum ObservationKind {
     /// violated — distinct from a joint-level [`ObservationKind::JointLimitViolation`]
     /// (PR 3 vocabulary).
     ConstraintViolation,
+    /// A transient peak of the tracking error during execution — distinct from
+    /// the sustained [`ObservationKind::TrackingError`] (PR 4 vocabulary;
+    /// mirrors `FindingKind::TrackingSpike`).
+    TrackingSpike,
+    /// A single joint deviated from its planned position beyond threshold during
+    /// execution (PR 4 vocabulary; mirrors `FindingKind::JointDeviation`).
+    JointDeviation,
+    /// A single joint's velocity deviated beyond threshold during execution
+    /// (PR 4 vocabulary; mirrors `FindingKind::VelocityDeviation`).
+    VelocityDeviation,
 }
 
 /// Severity of an observation. Machine-readable; renderers map it to
@@ -215,7 +225,7 @@ mod tests {
     }
 
     #[test]
-    fn observation_kind_has_all_fourteen_phenomena_distinct() {
+    fn observation_kind_has_all_seventeen_phenomena_distinct() {
         let kinds = vec![
             ObservationKind::NearSingularity,
             ObservationKind::UnreachableTarget,
@@ -232,6 +242,10 @@ mod tests {
             ObservationKind::Singularity,
             ObservationKind::CollisionNear,
             ObservationKind::ConstraintViolation,
+            // PR 4 vocabulary: runtime phenomena migrated from ExecutionAnalyzer.
+            ObservationKind::TrackingSpike,
+            ObservationKind::JointDeviation,
+            ObservationKind::VelocityDeviation,
         ];
         for (i, a) in kinds.iter().enumerate() {
             for (j, b) in kinds.iter().enumerate() {
