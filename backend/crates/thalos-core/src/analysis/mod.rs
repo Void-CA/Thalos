@@ -22,12 +22,14 @@
 
 pub mod action;
 pub mod aggregator;
+pub mod analyzer;
 pub mod attribute_value;
 pub mod constraints;
 pub mod location;
 pub mod manipulability;
 pub mod observation;
 pub mod region;
+pub mod renderer;
 pub mod report;
 pub mod scoring;
 pub mod singularity;
@@ -36,9 +38,11 @@ pub mod workspace;
 
 pub use action::{Action, ActionId, ActionImpact, ActionKind, ActionPriority};
 pub use aggregator::{Aggregator, DefaultAggregator};
+pub use analyzer::Analyzer;
 pub use attribute_value::AttributeValue;
 pub use location::Location;
 pub use observation::{ArtifactRef, Observation, ObservationId, ObservationKind, Severity};
+pub use renderer::Renderer;
 pub use report::{AnalysisReport, ReportError};
 pub use scoring::{DefaultScoringPolicy, ScoringPolicy};
 pub use summary::{AnalysisSummary, Grade};
