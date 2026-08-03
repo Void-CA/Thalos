@@ -8,6 +8,7 @@
 //!
 //! Produce un [`PlanAnalysis`] con datos por waypoint y métricas agregadas.
 
+pub mod adapter;
 pub mod domain;
 pub mod region;
 
