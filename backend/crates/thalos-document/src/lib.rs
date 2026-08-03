@@ -1,4 +1,3 @@
-pub mod diagnostic;
 pub mod id;
 pub mod operation;
 pub mod pose;
