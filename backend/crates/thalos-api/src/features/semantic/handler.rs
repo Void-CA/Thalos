@@ -3,6 +3,8 @@ use std::sync::Arc;
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 
 use serde::Serialize;
+use thalos_core::analysis::location::Location;
+use thalos_core::analysis::observation::{Observation, Severity};
 use thalos_core::{
     kinematics::{forward::ForwardKinematics, inverse::DampedLeastSquaresSolver},
     motion::MotionProfile,
@@ -30,18 +32,31 @@ use crate::features::semantic::{
     CompileMetadata, CompileResponse, SemanticCompileRequest, ValidationSummary,
 };
 
+/// Project a validation observation into a machine-readable error string.
+///
+/// The domain observation carries no message (spec I1) — the phenomenon is
+/// the machine-readable `kind` (`{:?}` of the enum), the anchor is the
+/// operation id. Human-readable copy belongs to renderers (cambio A).
+fn validation_message(o: &Observation) -> String {
+    let op = match &o.location {
+        Location::Operation(id) => format!("{id}"),
+        other => format!("{other:?}"),
+    };
+    format!("[{:?}] {:?} (op: {op})", o.severity, o.kind)
+}
+
 /// Compile semantic task → ExecutionProgram.
 pub async fn compile_semantic(
     State(_state): State<Arc<AppState>>,
     Json(payload): Json<SemanticCompileRequest>,
 ) -> Result<Json<CompileResponse>, (StatusCode, Json<serde_json::Value>)> {
     let task = payload.task;
-    let validation = validate(&task.program);
-    if !validation.errors.is_empty() {
-        let msgs: Vec<String> = validation
-            .errors
+    let observations = validate(&task.program);
+    if observations.iter().any(|o| o.severity == Severity::Error) {
+        let msgs: Vec<String> = observations
             .iter()
-            .map(|d| format!("[{:?}] {} (op: {:?})", d.severity, d.message, d.origin))
+            .filter(|o| o.severity == Severity::Error)
+            .map(validation_message)
             .collect();
         return Err((
             StatusCode::UNPROCESSABLE_ENTITY,
@@ -50,10 +65,10 @@ pub async fn compile_semantic(
             ),
         ));
     }
-    let warnings: Vec<String> = validation
-        .warnings
+    let warnings: Vec<String> = observations
         .iter()
-        .map(|d| format!("[{:?}] {}", d.severity, d.message))
+        .filter(|o| o.severity == Severity::Warning)
+        .map(validation_message)
         .collect();
     let provider = task.scene.knowledge();
     let ctx = LoweringContext {
@@ -124,12 +139,12 @@ pub async fn run_semantic(
     // ── Síncrono: validación, lowering, resolución, compilación, timeline ──
     let (duration_secs, segment_count, waypoints_json, event_count, compiled, runtime_program) = {
         let task = payload.task;
-        let validation = validate(&task.program);
-        if !validation.errors.is_empty() {
-            let msgs: Vec<String> = validation
-                .errors
+        let observations = validate(&task.program);
+        if observations.iter().any(|o| o.severity == Severity::Error) {
+            let msgs: Vec<String> = observations
                 .iter()
-                .map(|d| format!("[{:?}] {} (op: {:?})", d.severity, d.message, d.origin))
+                .filter(|o| o.severity == Severity::Error)
+                .map(validation_message)
                 .collect();
             return Err((
                 StatusCode::UNPROCESSABLE_ENTITY,
