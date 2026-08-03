@@ -1,9 +1,10 @@
 //! New-model `SwitchMoveStrategy` over [`Observation`] (PR 4b).
 //!
-//! The legacy segment-transforming
-//! [`SwitchMoveStrategy`](super::switch_strategy::SwitchMoveStrategy) keeps
-//! operating on `ExecutionFinding` until PR 4d; this operator consumes the
-//! unified observation vocabulary instead (C1).
+//! The legacy segment-transforming operator operated on `ExecutionFinding`
+//! until PR 4d removed that trait; its materialization logic now lives in the
+//! [`ProposalMaterializer`](crate::feedback::materializer::ProposalMaterializer)
+//! (proposal → segments). This operator consumes the unified observation
+//! vocabulary instead (C1).
 //!
 //! ## Contract
 //!

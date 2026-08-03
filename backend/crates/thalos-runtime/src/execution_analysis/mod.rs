@@ -1068,7 +1068,7 @@ mod tests {
     //    SwitchMoveStrategy (ObservationIntentionOperator) → ActionProposal → Action
     //
     // Proves the new-model feedback flow end-to-end WITHOUT the legacy
-    // orchestrator, which keeps operating on ExecutionFinding until PR 4d/6.
+    // orchestrator (which operated on ExecutionFinding before PR 4d).
     // Green-first by design: every dependency landed in PR 4a (canonical
     // analyzer) and PR 4b (observation operator + ActionProposal).
     #[test]
@@ -1117,5 +1117,86 @@ mod tests {
         assert_eq!(action.id, ActionId(1));
         assert_eq!(action.kind, ActionKind::SwitchMoveStrategy);
         assert_eq!(action.target_observation, tracking.id);
+    }
+
+    // ── PR 4d integration (C5, task 4.6): Execution Trace → ExecutionAnalyzer
+    //    → Observations → IntentionOperator → ActionProposals →
+    //    ProposalMaterializer → Replacement MotionSegments
+    //
+    // Verifies ONLY that the full new-model pipeline produces VALID replacement
+    // segments — it does not re-prove the individual rules (analyzer, operator
+    // and materializer each carry their own unit coverage). The proposal is
+    // materialized against a concrete MoveL target segment, the plan-level
+    // anchor the feedback loop operates on.
+    #[test]
+    fn feedback_integration_observation_to_replacement_segments() {
+        use thalos_core::ids::OperationId;
+        use thalos_core::kinematics::inverse::{IKGoal, IKResult, IKSolver, IkError};
+        use thalos_core::motion::segment::MotionSegment;
+        use thalos_core::prelude::{FrameId, Pose, Transform3D};
+        use thalos_planning::feedback::materializer::{
+            ProposalMaterializer, SwitchMoveMaterializer,
+        };
+        use thalos_planning::feedback::operator::ObservationIntentionOperator;
+        use thalos_planning::feedback::operators::observation_switch_strategy::SwitchMoveStrategy;
+
+        /// Deterministic mock solver (2-DOF robot): returns q0 converged.
+        struct IdentityIKSolver;
+
+        impl IKSolver for IdentityIKSolver {
+            fn solve(&self, q0: &[f64], _goal: IKGoal) -> Result<IKResult, IkError> {
+                Ok(IKResult::converged(q0.to_vec(), 1, 0.0, None))
+            }
+        }
+
+        // 1. Analyze (PR 4a): deviated execution trace → observations.
+        let (plan, exec) = make_deviated_trace();
+        let comparison = compare(&plan, &exec, "p1", "e1", "test");
+        let artifact = ArtifactRef::ExecutionSession(ExecutionSessionId("e1".to_string()));
+        let observations = ExecutionAnalyzer::new().analyze(artifact, &comparison);
+        let tracking = observations
+            .iter()
+            .find(|o| o.kind == ObservationKind::TrackingError)
+            .expect("deviated execution must emit a TrackingError observation");
+
+        // 2. Propose (PR 4b): operator → ActionProposal over the observation.
+        let operator = SwitchMoveStrategy::new();
+        let proposals = operator.apply(tracking);
+        assert_eq!(proposals.len(), 1);
+        assert_eq!(proposals[0].target_observation, tracking.id);
+
+        // 3. Materialize (PR 4d): proposal + target MoveL → replacement
+        //    segments. The target segment is the feedback loop's plan anchor.
+        let q0 = vec![0.1, 0.2];
+        let solver = IdentityIKSolver;
+        let materializer = SwitchMoveMaterializer::new(&solver, &q0);
+        let target = MotionSegment::MoveL {
+            origin: OperationId("move_1".into()),
+            frame: FrameId::World,
+            target_pose: Pose::new(FrameId::World, FrameId::World, Transform3D::identity()),
+            max_velocity: Some(50.0),
+        };
+        let replacements = materializer
+            .materialize(&proposals[0], &target)
+            .expect("switch strategy proposal must materialize");
+
+        // 4. Verify the pipeline produced VALID replacement segments: one
+        //    MoveJ anchored to the IK solution, preserving the plan's velocity
+        //    limits and leaving acceleration to the planner.
+        assert_eq!(replacements.len(), 1, "exactly one replacement segment");
+        match &replacements[0] {
+            MotionSegment::MoveJ {
+                origin,
+                target,
+                max_velocity,
+                max_acceleration,
+            } => {
+                assert_eq!(origin, &OperationId("move_1".into()));
+                assert_eq!(target, &q0, "MoveJ must target the IK solution");
+                assert_eq!(*max_velocity, Some(50.0), "velocity limits preserved");
+                assert_eq!(*max_acceleration, None, "acceleration is the planner's job");
+            }
+            other => panic!("expected MoveJ replacement, got {other:?}"),
+        }
     }
 }
