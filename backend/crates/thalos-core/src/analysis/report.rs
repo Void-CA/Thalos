@@ -11,6 +11,10 @@
 //! - **Report artifact (I3)**: the report references the artifact it analyzes.
 //! - **Acyclic causal graph (I4)**: `causes[]` is a directed acyclic graph over
 //!   the report's observations; cycles and dangling references are rejected.
+//! - **Causal direction (I4, feedback loop)**: plan observations
+//!   (MotionPlan artifact) must not reference feedback observations
+//!   (ExecutionSession artifact) in `causes[]` — causality flows
+//!   feedback → plan only.
 //! - **Actions reference observations (I5)**: every action's `target_observation`
 //!   must exist in the report; observations never carry remediation.
 //! - **Unique identities (I8)**: observation ids (and action ids) are unique
@@ -48,6 +52,18 @@ pub enum ReportError {
     /// `causes[]` contains a cycle (I4).
     #[error("causal cycle detected at observation {0:?}")]
     CycleDetected(ObservationId),
+    /// A plan observation (MotionPlan artifact) references a feedback
+    /// observation (ExecutionSession artifact) in `causes[]` (I4 direction:
+    /// the causal graph flows feedback → plan only).
+    #[error(
+        "plan observation {from:?} must not reference feedback observation {target:?} in causes[]"
+    )]
+    DirectionViolation {
+        /// The plan observation holding the invalid reference.
+        from: ObservationId,
+        /// The referenced feedback observation.
+        target: ObservationId,
+    },
     /// Two actions share the same id (I8).
     #[error("duplicate action id {0:?}")]
     DuplicateActionId(ActionId),
@@ -130,6 +146,23 @@ impl AnalysisReport {
             }
         }
 
+        // 2b. Causal direction (I4, feedback loop): plan observations MUST NOT
+        // reference feedback observations in `causes[]`. The causal graph flows
+        // feedback → plan only; `related[]` has no direction and is exempt.
+        for obs in &self.observations {
+            for target in &obs.causes {
+                let target_obs = &self.observations[id_index[target]];
+                if matches!(obs.artifact, ArtifactRef::MotionPlan(_))
+                    && matches!(target_obs.artifact, ArtifactRef::ExecutionSession(_))
+                {
+                    return Err(ReportError::DirectionViolation {
+                        from: obs.id,
+                        target: *target,
+                    });
+                }
+            }
+        }
+
         // 3. Cycles on causes[] — classic 3-color DFS (design C4).
         let mut state = vec![VisitState::Unvisited; self.observations.len()];
         for i in 0..self.observations.len() {
@@ -202,6 +235,15 @@ mod tests {
             causes: causes.into_iter().map(ObservationId).collect(),
             related: related.into_iter().map(ObservationId).collect(),
         }
+    }
+
+    /// Same as [`observation`], but anchored to an execution session — the
+    /// feedback-domain counterpart used by the planning feedback loop.
+    fn execution_observation(id: u32, causes: Vec<u32>, related: Vec<u32>) -> Observation {
+        let mut obs = observation(id, causes, related);
+        obs.artifact =
+            ArtifactRef::ExecutionSession(crate::ids::ExecutionSessionId("es-1".to_string()));
+        obs
     }
 
     fn action(id: u32, target: u32) -> Action {
@@ -408,5 +450,52 @@ mod tests {
         assert_eq!(back.observations[1].causes, vec![ObservationId(1)]);
         assert_eq!(back.observations[2].causes, vec![ObservationId(2)]);
         assert_eq!(back.actions[0].target_observation, ObservationId(3));
+    }
+
+    #[test]
+    fn feedback_observation_may_reference_plan_observation_in_causes() {
+        // I4 direction (feedback loop): F.causes=[P] (feedback → plan) is valid.
+        let r = report(
+            vec![
+                observation(1, vec![], vec![]),            // P — plan observation
+                execution_observation(2, vec![1], vec![]), // F.causes=[P]
+            ],
+            vec![],
+        );
+        assert_eq!(r.validate(), Ok(()));
+    }
+
+    #[test]
+    fn plan_observation_must_not_reference_feedback_in_causes() {
+        // I4 negative: P.causes=[F] (plan → feedback) is rejected.
+        let r = report(
+            vec![
+                observation(1, vec![2], vec![]),          // P.causes=[F]
+                execution_observation(2, vec![], vec![]), // F
+            ],
+            vec![],
+        );
+        let err = r.validate().expect_err("P.causes=[F] must be rejected");
+        assert!(matches!(
+            err,
+            ReportError::DirectionViolation {
+                from: ObservationId(1),
+                target: ObservationId(2),
+            }
+        ));
+    }
+
+    #[test]
+    fn direction_rule_scoped_to_causes_not_related() {
+        // related[] carries no causal direction — cross-layer related links
+        // stay valid even though the same edge in causes[] would be rejected.
+        let r = report(
+            vec![
+                observation(1, vec![], vec![2]),
+                execution_observation(2, vec![], vec![]),
+            ],
+            vec![],
+        );
+        assert_eq!(r.validate(), Ok(()));
     }
 }
