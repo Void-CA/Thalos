@@ -7,8 +7,12 @@ use axum::{
 use serde::Serialize;
 use serde_json::Value;
 
+use thalos_core::{
+    analysis::observation::ArtifactRef,
+    ids::ExecutionSessionId,
+};
 use thalos_runtime::{
-    ExecutionAnalyzer, ExecutionSource, ExecutionTrace, MotionTrace, TraceAnalyzer,
+    ExecutionAnalyzer, ExecutionSource, MotionTrace, TraceAnalyzer,
     backends::{
         controller::RobotController,
         playback::interpolator::{Interpolator, LinearInterpolator, NearestSampleInterpolator},
@@ -17,11 +21,10 @@ use thalos_runtime::{
     comparison,
 };
 
-use thalos_planning::finding::Finding;
-
 use crate::app::error::ApiError;
 use crate::app::prelude::*;
 use crate::app::state::AppState;
+use crate::features::plan_analysis::dto::ObservationDto;
 use crate::features::scene::dto::responses::RuntimeStateResponse;
 use crate::features::scene::handler::to_api_response;
 use crate::features::session::dto::*;
@@ -349,15 +352,18 @@ pub async fn import_trace(
 
 // ── GET /sessions/{id}/comparison ──
 
-/// Respuesta combinada: métricas de comparación + hallazgos de ejecución.
+/// Respuesta combinada: métricas de comparación + observaciones de ejecución.
+///
+/// PR 7a: el lenguaje de análisis es el mismo en todos los endpoints —
+/// observaciones canónicas (machine-readable, I2), no el `Finding` legacy.
 #[derive(Debug, Serialize)]
 pub struct SessionComparisonResponse {
     pub metrics: comparison::ComparisonMetrics,
-    pub findings: Vec<Finding>,
+    pub observations: Vec<ObservationDto>,
     pub aligned_pair_count: usize,
 }
 
-/// Comparar plan con ejecución y devolver métricas + hallazgos.
+/// Comparar plan con ejecución y devolver métricas + observaciones.
 pub async fn get_session_comparison(
     State(state): State<Arc<AppState>>,
     Path(id): Path<u64>,
@@ -401,12 +407,15 @@ pub async fn get_session_comparison(
     let aligned_pair_count = comparison.alignment.pairs.len();
     let metrics = comparison.metrics.clone();
 
+    // Observaciones canónicas ancladas a la sesión ejecutada (I3; el id real
+    // de la sesión es el ancla disponible — O3).
     let analyzer = ExecutionAnalyzer::new();
-    let findings = analyzer.analyze_findings(&comparison);
+    let artifact = ArtifactRef::ExecutionSession(ExecutionSessionId(id.to_string()));
+    let observations = analyzer.analyze(artifact, &comparison);
 
     Ok(Json(SessionComparisonResponse {
         metrics,
-        findings,
+        observations: observations.iter().map(ObservationDto::from).collect(),
         aligned_pair_count,
     }))
 }

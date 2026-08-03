@@ -1507,21 +1507,22 @@ async fn e2e_full_pipeline() {
     assert!(summary.is_some(), "analyze should return summary");
     let score = summary.and_then(|s| s["score"].as_u64()).unwrap_or(0);
     assert!(score > 0 || score == 0, "score should be a valid number");
-    let findings = body
+    // PR 7a: the wire projects the AnalysisReport — observations/actions.
+    let observations = body
         .as_ref()
-        .and_then(|b| b["findings"].as_array())
-        .map(|a| a.len())
-        .unwrap_or(0);
-    assert!(findings > 0, "analyze should return at least one finding");
-    let recommendations = body
-        .as_ref()
-        .and_then(|b| b["recommendations"].as_array())
+        .and_then(|b| b["observations"].as_array())
         .map(|a| a.len())
         .unwrap_or(0);
     assert!(
-        recommendations > 0,
-        "analyze should return at least one recommendation"
+        observations > 0,
+        "analyze should return at least one observation"
     );
+    let actions = body
+        .as_ref()
+        .and_then(|b| b["actions"].as_array())
+        .map(|a| a.len())
+        .unwrap_or(0);
+    assert!(actions > 0, "analyze should return at least one action");
 }
 
 // =========================================================================

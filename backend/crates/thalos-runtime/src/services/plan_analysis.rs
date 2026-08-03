@@ -6,11 +6,16 @@
 //! 3. (PR 3) Emite observaciones canónicas ancladas al plan (I3) y las agrega a un
 //!    [`AnalysisReport`] vía `DefaultAggregator` (D2/D3)
 //! 4. (PR 3) El `PlanAdvisor` genera [`Action`]s sobre las observaciones (I5)
-//! 5. Retorna el resultado (campos legacy + reporte canónico)
+//! 5. Retorna el reporte canónico + el análisis técnico por waypoint (métricas
+//!    para el pipeline de optimización)
+//!
+//! PR 7a: los campos legacy `findings`/`recommendations` se eliminaron — el
+//! contrato HTTP es una proyección del [`AnalysisReport`] (spec
+//! motion-plan-endpoint), no un modelo intermedio.
 
 use thalos_collision::NaiveCollisionChecker;
 use thalos_core::{
-    analysis::action::Action,
+    analysis::action::ActionId,
     analysis::aggregator::{Aggregator, DefaultAggregator},
     analysis::constraints::{Constraint, DefaultConstraintEvaluator},
     analysis::observation::ArtifactRef,
@@ -20,10 +25,8 @@ use thalos_core::{
     robot::{serial_chain::SerialChain, tool_frame::ToolFrame},
 };
 use thalos_planning::{
-    advisor::{PlanAdvisor, Recommendation},
-    analysis::adapter::FindingAdapter,
+    advisor::PlanAdvisor,
     analysis::{PlanAnalysis, TrajectoryAnalyzer},
-    finding::Finding,
 };
 
 use crate::error::RuntimeError;
@@ -31,16 +34,12 @@ use crate::error::RuntimeError;
 /// Resultado completo del análisis de un plan.
 #[derive(Debug, Clone)]
 pub struct PlanAnalysisResult {
-    /// Análisis técnico por waypoint y métricas agregadas (camino legacy — PR 7a).
+    /// Análisis técnico por waypoint y métricas agregadas (consumido por el
+    /// pipeline de optimización — métricas before/after).
     pub analysis: PlanAnalysis,
-    /// Hallazgos objetivos (camino legacy — PR 7a).
-    pub findings: Vec<Finding>,
-    /// Recomendaciones del Advisor sobre findings (camino legacy — PR 7a).
-    pub recommendations: Vec<Recommendation>,
-    /// Reporte canónico agregado (PR 3): observaciones + summary, `validate()`-safe.
+    /// Reporte canónico agregado (PR 3): observaciones + acciones + summary,
+    /// `validate()`-safe. Es la proyección del wire de `/plan/analyze`.
     pub report: AnalysisReport,
-    /// Acciones del Advisor sobre las observaciones (PR 3, I5: `target_observation`).
-    pub actions: Vec<Action>,
 }
 
 /// Servicio de análisis de planes.
@@ -62,9 +61,9 @@ impl PlanAnalysisService {
     ///
     /// # Retorna
     ///
-    /// `PlanAnalysisResult` con análisis por waypoint, métricas agregadas,
-    /// observaciones canónicas agregadas (`report`), acciones (I5) y
-    /// recomendaciones legacy.
+    /// `PlanAnalysisResult` con el reporte canónico (observaciones + acciones
+    /// + summary) y el análisis técnico por waypoint (métricas para
+    /// optimización).
     pub fn analyze_plan(
         chain: &SerialChain,
         trajectory: &thalos_core::trajectory::Trajectory,
@@ -83,29 +82,23 @@ impl PlanAnalysisService {
             analyzer = analyzer.with_constraints(c, &evaluator);
         }
 
-        // El Analyzer produce hechos (waypoints/métricas + findings legacy).
-        let analysis = analyzer.analyze_plan(trajectory)?;
+        // Pasa único: análisis técnico + observaciones canónicas (PR 7a).
+        let (analysis, observations) =
+            analyzer.analyze_with_observations(artifact.clone(), trajectory)?;
 
-        // PR 3 — observaciones canónicas ancladas al artifact (I3); equivalente
-        // exacto de `TrajectoryAnalyzer::analyze(artifact, trajectory)` (el
-        // método canónico lo ejercitan los tests del crate planning).
-        let observations = FindingAdapter.convert_all(artifact.clone(), &analysis.findings);
+        // Agregación canónica: observaciones → AnalysisReport (D3). El
+        // aggregator reasigna ids 1..=n (I8), así que las acciones se generan
+        // SOBRE las observaciones del reporte para referenciar ids reales.
+        let mut report = DefaultAggregator::new(DefaultScoringPolicy).aggregate(artifact, observations);
 
-        // El Advisor solo interpreta observaciones, nunca recalcula (C2).
-        let advisor = PlanAdvisor;
-        let actions = advisor.advise(&observations);
-        let findings = analysis.findings.clone();
-        let recommendations = advisor.advise_findings(&findings);
+        // El Advisor solo interpreta observaciones, nunca recalcula (C2); las
+        // acciones viven en el reporte y referencian observaciones por id (I5).
+        let mut actions = PlanAdvisor.advise(&report.observations);
+        for (index, action) in actions.iter_mut().enumerate() {
+            action.id = ActionId((index + 1) as u32);
+        }
+        report.actions = actions;
 
-        // Agregación canónica: observaciones → AnalysisReport (D3).
-        let report = DefaultAggregator::new(DefaultScoringPolicy).aggregate(artifact, observations);
-
-        Ok(PlanAnalysisResult {
-            analysis,
-            findings,
-            recommendations,
-            report,
-            actions,
-        })
+        Ok(PlanAnalysisResult { analysis, report })
     }
 }

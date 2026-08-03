@@ -493,14 +493,31 @@ impl<'a> TrajectoryAnalyzer<'a> {
     /// [`AnalysisReport`](thalos_core::analysis::report::AnalysisReport) es
     /// responsabilidad del `DefaultAggregator`, nunca del analyzer (D2).
     ///
-    /// El `message` de los findings legacy se descarta (I1) — los renderers
+    /// El `message` de los hallazgos legacy se descarta (I1) — los renderers
     /// reconstruyen la presentación (cambio A). El `artifact` (I3) no vive en
-    /// el `Finding`, por eso se recibe como parámetro.
+    /// el hallazgo, por eso se recibe como parámetro.
     pub fn analyze(&self, artifact: ArtifactRef, trajectory: &Trajectory) -> Vec<Observation> {
-        let analysis = self
-            .analyze_plan(trajectory)
-            .expect("TrajectoryAnalyzer::analyze_plan only fails on programmer error");
-        FindingAdapter.convert_all(artifact, &analysis.findings)
+        self.analyze_with_observations(artifact, trajectory)
+            .expect("TrajectoryAnalyzer::analyze only fails on programmer error")
+            .1
+    }
+
+    /// Pasa ÚNICO del análisis: análisis técnico por waypoint + observaciones
+    /// canónicas en la misma evaluación (PR 7a).
+    ///
+    /// `analyze_plan` (camino legacy, consumidores de waypoints/métricas) y
+    /// `analyze` (camino canónico, observaciones) comparten esta
+    /// implementación. Los consumidores que necesitan ambos — el servicio de
+    /// análisis y el harness pbm — la usan para NO evaluar la trayectoria dos
+    /// veces.
+    pub fn analyze_with_observations(
+        &self,
+        artifact: ArtifactRef,
+        trajectory: &Trajectory,
+    ) -> Result<(PlanAnalysis, Vec<Observation>), PlanningError> {
+        let analysis = self.analyze_plan(trajectory)?;
+        let observations = FindingAdapter.convert_all(artifact, &analysis.findings);
+        Ok((analysis, observations))
     }
 }
 
