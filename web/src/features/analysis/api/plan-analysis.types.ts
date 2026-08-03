@@ -1,35 +1,18 @@
-/** Mirror de DTOs backend — backend/crates/thalos-api/src/features/plan_analysis/dto.rs */
+/**
+ * Mirror de DTOs backend — backend/crates/thalos-api/src/features/plan_analysis/dto.rs
+ *
+ * PR 7b: the legacy `/plan/analyze` contract types are re-exported from the
+ * single compatibility owner (`@/shared/contracts/plan-analysis-compat`) so
+ * the store and components keep compiling against the legacy shape while the
+ * backend serves the canonical AnalysisReport projection.
+ * TODO(change-A): remove compatibility layer — delete these re-exports and
+ * restore the canonical wire types when the new UI ships.
+ */
 
-export interface WaypointAnalysisDto {
-  index: number
-  severity: 'good' | 'warning' | 'critical'
-  manipulability: number | null
-  singularity_state: 'normal' | 'near' | 'singular' | null
-  clearance: number | null
-}
-
-export interface PlanAnalysisResponse {
-  summary: {
-    status: 'ok' | 'warning' | 'error'
-    score: number
-    grade: 'Excellent' | 'Good' | 'Fair' | 'Poor' | 'Invalid'
-    message: string
-  }
-  metrics: {
-    duration: number
-    waypoint_count: number
-    average_manipulability: number | null
-    near_singular_count: number
-    singular_count: number
-    min_collision_distance: number | null
-    has_collisions: boolean
-  }
-  waypoints: WaypointAnalysisDto[]
-  findings: { kind: string; severity: string; waypoint: number | null; message: string; value: number | null }[]
-  recommendations: { kind: string; message: string; impact: string; waypoint: number | null }[]
-  problem_regions?: unknown[]
-  health_score?: number
-}
+export type {
+  LegacyAnalysisResponse as PlanAnalysisResponse,
+  LegacyWaypointAnalysis as WaypointAnalysisDto,
+} from '@/shared/contracts/plan-analysis-compat'
 
 // ── Optimization (M9 / M10) ──
 
