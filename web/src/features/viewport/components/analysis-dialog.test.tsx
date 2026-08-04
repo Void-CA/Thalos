@@ -4,6 +4,7 @@ import { render, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AnalysisDialog } from './analysis-dialog'
 import { useRobotStore } from '@/features/robots/store'
+import { useSceneStore } from '../store'
 
 const mocks = vi.hoisted(() => ({
   sample: vi.fn(),
@@ -23,6 +24,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   useRobotStore.getState().setRobots([])
   useRobotStore.getState().select(null)
+  useSceneStore.getState().reset()
 })
 
 describe('AnalysisDialog — always targets the scene robot via /active endpoints (spec R3)', () => {
@@ -65,6 +67,31 @@ describe('AnalysisDialog — always targets the scene robot via /active endpoint
     })
     await waitFor(() => {
       expect(mocks.analyzeManipulability).toHaveBeenCalledWith(null, { samples: 200, seed: 3, tolerance: 0.01 })
+    })
+  })
+
+  it('targets /active with null robot id when the SCENE holds a URDF robot (R3 chain targeting)', async () => {
+    // A URDF robot is confirmed in the scene runtime. Analysis MUST still
+    // target the scene chain (/workspace/sample/active) — never capture the
+    // URDF identity nor any catalog selection (spec R3: URDF analyzed via chain).
+    useSceneStore.setState({
+      runtime: { robot: { id: 'urdf:a3f8b2c1d4e5', display_name: 'My URDF Robot', dof: 2, joints: [] }, joints: [], generatedAt: '2026-08-04T00:00:00Z' },
+    })
+
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { mutations: { retry: false } } })}>
+        <AnalysisDialog open samples={80} seed={11} tolerance={0.02} onClose={() => {}} />
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() => {
+      expect(mocks.sample).toHaveBeenCalledWith(null, { samples: 80, seed: 11, tolerance: 0.02 })
+    })
+    await waitFor(() => {
+      expect(mocks.analyzeSingularity).toHaveBeenCalledWith(null, { samples: 80, seed: 11, tolerance: 0.02 })
+    })
+    await waitFor(() => {
+      expect(mocks.analyzeManipulability).toHaveBeenCalledWith(null, { samples: 80, seed: 11, tolerance: 0.02 })
     })
   })
 })
