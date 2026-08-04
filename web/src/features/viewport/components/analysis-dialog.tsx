@@ -8,7 +8,6 @@ import {
 } from '@/components/ui/dialog'
 import { useWorkspaceService } from '../services/service-context'
 import { useWorkspaceStore } from '../store/workspace-store'
-import { useRobotStore } from '@/features/robots/store'
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 
 interface AnalysisDialogProps {
@@ -25,7 +24,6 @@ interface AnalysisDialogProps {
  */
 export function AnalysisDialog({ open, onClose, samples, seed, tolerance }: AnalysisDialogProps) {
   const service = useWorkspaceService()
-  const selectedId = useRobotStore(s => s.selectedId)
   const setSamples = useWorkspaceStore(s => s.setSamples)
   const setColorMode = useWorkspaceStore(s => s.setColorMode)
   const setShowPointCloud = useWorkspaceStore(s => s.setShowPointCloud)
@@ -34,7 +32,7 @@ export function AnalysisDialog({ open, onClose, samples, seed, tolerance }: Anal
   const params = { samples, seed, tolerance }
 
   const ws = useMutation({
-    mutationFn: () => service.sample(selectedId, params),
+    mutationFn: () => service.sample(null, params),
     onSuccess: (data) => {
       setSamples('workspace', data.samples)
       if (colorMode === 'none') {
@@ -45,7 +43,7 @@ export function AnalysisDialog({ open, onClose, samples, seed, tolerance }: Anal
   })
 
   const sg = useMutation({
-    mutationFn: () => service.analyzeSingularity(selectedId, params),
+    mutationFn: () => service.analyzeSingularity(null, params),
     onSuccess: (data) => {
       setSamples('singularity', data.samples)
       if (colorMode === 'none') {
@@ -56,7 +54,7 @@ export function AnalysisDialog({ open, onClose, samples, seed, tolerance }: Anal
   })
 
   const mp = useMutation({
-    mutationFn: () => service.analyzeManipulability(selectedId, params),
+    mutationFn: () => service.analyzeManipulability(null, params),
     onSuccess: (data) => {
       setSamples('manipulability', data.samples)
       if (colorMode === 'none') {
