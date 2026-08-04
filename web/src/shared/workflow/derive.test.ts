@@ -4,12 +4,13 @@ import {
   deriveStepperStages,
   deriveStatusMessage,
   hasMissingFields,
+  isValidHomePose,
   requirementReason,
   stepperStages,
 } from './derive'
 import { WORKSPACE_REGISTRY } from './registry'
 import type { WorkflowSnapshot, WorkflowState } from './types'
-import type { SemanticOp, CompileResponse } from '@/features/semantic/types'
+import type { SemanticOp, CompileResponse, PoseDef } from '@/features/semantic/types'
 import type { PlanAnalysisResponse } from '@/features/analysis/api/plan-analysis.types'
 
 const summary: PlanAnalysisResponse['summary'] = {
@@ -41,6 +42,7 @@ const base: WorkflowSnapshot = {
   scene: {
     robotLoaded: true,
     objects: [{ id: 'bolt-1', name: 'Bolt', pose: { position: [1.8, 0, 0.4], orientation: [0, 0, 0, 1] } }],
+    validHomePose: true,
   },
   task: { operations: validOps },
   compile: { result: compileResult, dirty: 0 },
@@ -50,7 +52,8 @@ const base: WorkflowSnapshot = {
 
 const ALL_TRUE: WorkflowState = {
   robotLoaded: true,
-  taskValid: true,
+  sceneValid: true,
+  programValid: true,
   compiled: true,
   analyzed: true,
   executable: true,
@@ -68,24 +71,55 @@ describe('deriveWorkflowState — derivation table (workflow-state spec)', () =>
     expect(deriveWorkflowState(base).robotLoaded).toBe(true)
   })
 
-  it('taskValid requires >= 1 operation', () => {
-    expect(deriveWorkflowState({ ...base, task: { operations: [] } }).taskValid).toBe(false)
+  it('sceneValid requires >= 1 scene object', () => {
+    const state = deriveWorkflowState({ ...base, scene: { ...base.scene, objects: [] } })
+    expect(state.sceneValid).toBe(false)
   })
 
-  it('taskValid requires >= 1 scene object', () => {
-    expect(deriveWorkflowState({ ...base, scene: { ...base.scene, objects: [] } }).taskValid).toBe(false)
+  it('sceneValid requires a valid home pose', () => {
+    const state = deriveWorkflowState({ ...base, scene: { ...base.scene, validHomePose: false } })
+    expect(state.sceneValid).toBe(false)
   })
 
-  it('taskValid is false when any operation has missing fields', () => {
+  it('sceneValid requires a loaded robot (artifact chain R2)', () => {
+    const state = deriveWorkflowState({ ...base, scene: { ...base.scene, robotLoaded: false } })
+    expect(state.sceneValid).toBe(false)
+  })
+
+  it('programValid requires >= 1 operation', () => {
+    const state = deriveWorkflowState({ ...base, task: { operations: [] } })
+    expect(state.programValid).toBe(false)
+    // An incomplete program does NOT invalidate the scene (the split).
+    expect(state.sceneValid).toBe(true)
+  })
+
+  it('programValid is false when any operation has missing fields', () => {
     const withMissing: WorkflowSnapshot = {
       ...base,
       task: { operations: [{ type: 'pick', origin: 'op_1', object: '' }] },
     }
-    expect(deriveWorkflowState(withMissing).taskValid).toBe(false)
+    expect(deriveWorkflowState(withMissing).programValid).toBe(false)
+  })
+
+  it('programValid requires a valid scene (artifact chain R2)', () => {
+    const state = deriveWorkflowState({ ...base, scene: { ...base.scene, objects: [] } })
+    expect(state.programValid).toBe(false)
+  })
+
+  it('scene validity and program validity are separately meaningful', () => {
+    // Scene valid + empty program → sceneValid true, programValid false
+    // (the split that taskValid used to conflate — workflow-state spec).
+    const state = deriveWorkflowState({ ...base, task: { operations: [] } })
+    expect(state.sceneValid).toBe(true)
+    expect(state.programValid).toBe(false)
   })
 
   it('compiled requires a compile result', () => {
     expect(deriveWorkflowState({ ...base, compile: { result: null, dirty: 0 } }).compiled).toBe(false)
+  })
+
+  it('compiled requires a valid program (artifact chain R2)', () => {
+    expect(deriveWorkflowState({ ...base, task: { operations: [] } }).compiled).toBe(false)
   })
 
   it('analyzed is exactly analysis.summary !== null', () => {
@@ -153,6 +187,117 @@ describe('deriveWorkflowState — dirty invalidates compiled (workflow-state spe
   })
 })
 
+// ── C1 property tests: impossible states (tasks.md S1.3, user criterion) ─────
+//
+// MECHANISM (decision): fast-check is NOT installed in this project, so this
+// suite does deterministic EXHAUSTIVE enumeration instead of generative
+// property testing: all 2^8 = 256 combinations of the eight boolean store
+// facts that feed deriveWorkflowState. No dependency, fully reproducible.
+//
+// The 8 inputs: robotLoaded, objects>=1, validHomePose, operations>=1,
+// hasMissingFields, compileResult!=null, dirty>0, execStatus∈EXECUTABLE.
+//
+// Invariants asserted over EVERY combination (workflow-state spec R2 +
+// tasks.md C1 — the artifact chain makes impossible states impossible):
+//   sceneValid ⇒ robotLoaded
+//   programValid ⇒ sceneValid
+//   compiled ⇒ programValid
+//   executable ⇒ compiled
+
+interface InputCombo {
+  robotLoaded: boolean
+  objects: 0 | 1
+  validHomePose: boolean
+  operations: 0 | 1
+  hasMissingFields: boolean
+  compileResult: boolean
+  dirty: boolean
+  execStatus: 'ready' | 'idle'
+}
+
+/** Exhaustive 2^8 enumeration — each bit of the mask is one input. */
+function allInputCombos(): InputCombo[] {
+  const combos: InputCombo[] = []
+  for (let mask = 0; mask < 256; mask++) {
+    combos.push({
+      robotLoaded: (mask & 1) !== 0,
+      objects: (mask & 2) !== 0 ? 1 : 0,
+      validHomePose: (mask & 4) !== 0,
+      operations: (mask & 8) !== 0 ? 1 : 0,
+      hasMissingFields: (mask & 16) !== 0,
+      compileResult: (mask & 32) !== 0,
+      dirty: (mask & 64) !== 0,
+      execStatus: (mask & 128) !== 0 ? 'ready' : 'idle',
+    })
+  }
+  return combos
+}
+
+function snapshotFrom(input: InputCombo): WorkflowSnapshot {
+  const operations: SemanticOp[] =
+    input.operations === 1
+      ? input.hasMissingFields
+        ? [{ type: 'pick', origin: 'op_1', object: '' }]
+        : validOps
+      : []
+  return {
+    scene: {
+      robotLoaded: input.robotLoaded,
+      objects:
+        input.objects === 1
+          ? [{ id: 'bolt-1', name: 'Bolt', pose: { position: [1.8, 0, 0.4], orientation: [0, 0, 0, 1] } }]
+          : [],
+      validHomePose: input.validHomePose,
+    },
+    task: { operations },
+    compile: { result: input.compileResult ? compileResult : null, dirty: input.dirty ? 2 : 0 },
+    execution: { status: input.execStatus },
+    analysis: { summary },
+  }
+}
+
+describe('C1 property — exhaustive 2^8 impossible-state invariants (tasks.md S1.3)', () => {
+  const combos = allInputCombos()
+
+  it('enumerates exactly 2^8 = 256 distinct input combinations', () => {
+    expect(combos).toHaveLength(256)
+    expect(new Set(combos.map((c) => JSON.stringify(c))).size).toBe(256)
+  })
+
+  it('never yields an impossible state: every chain implication holds for all 256 combinations', () => {
+    let violations = 0
+    for (const input of combos) {
+      const state = deriveWorkflowState(snapshotFrom(input))
+      if (state.sceneValid && !state.robotLoaded) violations++
+      if (state.programValid && !state.sceneValid) violations++
+      if (state.compiled && !state.programValid) violations++
+      if (state.executable && !state.compiled) violations++
+    }
+    expect(violations).toBe(0)
+  })
+
+  it('the invariants are not vacuous: every chain flag is reachable true AND false', () => {
+    const derived = combos.map((input) => deriveWorkflowState(snapshotFrom(input)))
+    // running/completed/analyzed are excluded: their inputs (specific
+    // execStatus values, analysis.summary) are boolean-collapsed in the 2^8
+    // space and are enumerated by the derivation-table it.each tests above.
+    for (const flag of ['robotLoaded', 'sceneValid', 'programValid', 'compiled', 'executable'] as const) {
+      expect(derived.some((s) => s[flag]), `${flag} is never true across the space`).toBe(true)
+      expect(derived.some((s) => !s[flag]), `${flag} is never false across the space`).toBe(true)
+    }
+  })
+
+  it('a scene cannot be valid without a robot, nor a program without a scene (spot check)', () => {
+    const noRobotButScene = snapshotFrom({
+      robotLoaded: false, objects: 1, validHomePose: true, operations: 1,
+      hasMissingFields: false, compileResult: true, dirty: false, execStatus: 'ready',
+    })
+    const state = deriveWorkflowState(noRobotButScene)
+    expect(state.sceneValid).toBe(false)
+    expect(state.programValid).toBe(false)
+  })
+})
+
 describe('hasMissingFields — operation validation lifted from the task editor', () => {
   it('flags a pick without an object', () => {
     expect(hasMissingFields([{ type: 'pick', origin: 'op_1', object: '' }])).toBe(true)
@@ -180,8 +325,34 @@ describe('hasMissingFields — operation validation lifted from the task editor'
   })
 })
 
+describe('isValidHomePose — home-pose validity feeding sceneValid', () => {
+  const validPose: PoseDef = { position: [1.8, 0.0, 0.5], orientation: [0, 0, 0, 1] }
+
+  it('accepts a well-formed default home pose', () => {
+    expect(isValidHomePose(validPose)).toBe(true)
+  })
+
+  it('rejects null/undefined poses', () => {
+    expect(isValidHomePose(null)).toBe(false)
+    expect(isValidHomePose(undefined)).toBe(false)
+  })
+
+  // Malformed poses are impossible at the type level (PoseDef is a fixed
+  // tuple) but reachable at runtime — the cast is deliberate: it exercises
+  // the defensive runtime check.
+  it('rejects a pose with a truncated position or orientation', () => {
+    expect(isValidHomePose({ position: [1.8, 0.0], orientation: [0, 0, 0, 1] } as unknown as PoseDef)).toBe(false)
+    expect(isValidHomePose({ position: [1.8, 0.0, 0.5], orientation: [0, 0, 0] } as unknown as PoseDef)).toBe(false)
+  })
+
+  it('rejects a pose with a non-finite component', () => {
+    expect(isValidHomePose({ position: [1.8, 0.0, Number.NaN], orientation: [0, 0, 0, 1] } as unknown as PoseDef)).toBe(false)
+    expect(isValidHomePose({ position: [1.8, Number.POSITIVE_INFINITY, 0.5], orientation: [0, 0, 0, 1] } as unknown as PoseDef)).toBe(false)
+  })
+})
+
 describe('stepperStages — pipeline derived from the registry (global-stepper spec)', () => {
-  it('exposes Task, Planning, Execution, Sessions in registry order', () => {
+  it('exposes Task, Planning, Execution, Sessions in registry order (4 stages until S3)', () => {
     expect(stepperStages(WORKSPACE_REGISTRY).map((e) => e.workspace)).toEqual([
       'task',
       'planning',
@@ -192,6 +363,13 @@ describe('stepperStages — pipeline derived from the registry (global-stepper s
 
   it('excludes the robot root (root, not a stage)', () => {
     expect(stepperStages(WORKSPACE_REGISTRY).some((e) => e.workspace === 'robot')).toBe(false)
+  })
+
+  it('excludes the scene area until S3 (capability-less areas are not stages yet)', () => {
+    // Cast: 'scene' is not yet a WorkspaceName in the commit-1 registry shape.
+    expect(
+      stepperStages(WORKSPACE_REGISTRY).some((e) => (e.workspace as string) === 'scene'),
+    ).toBe(false)
   })
 
   it('excludes the absorbed analysis content (no /analysis stage after slice 6)', () => {
@@ -290,6 +468,13 @@ describe('requirementReason — derived from the registry, never per-workspace s
       'Requires a compiled plan',
     )
   })
+
+  it('names sceneValid when the scene is invalid (split flags)', () => {
+    const task = WORKSPACE_REGISTRY.find((e) => e.workspace === 'task')!
+    expect(requirementReason(task, { ...ALL_TRUE, sceneValid: false })).toBe(
+      'Requires a valid scene',
+    )
+  })
 })
 
 describe('deriveStatusMessage — short status from workflow flags (S2)', () => {
@@ -297,8 +482,12 @@ describe('deriveStatusMessage — short status from workflow flags (S2)', () => 
     expect(deriveStatusMessage({ ...ALL_TRUE, robotLoaded: false })).toBe('No robot loaded')
   })
 
+  it('reports an incomplete scene', () => {
+    expect(deriveStatusMessage({ ...ALL_TRUE, sceneValid: false })).toBe('Scene incomplete')
+  })
+
   it('reports an incomplete task', () => {
-    expect(deriveStatusMessage({ ...ALL_TRUE, taskValid: false })).toBe('Task incomplete')
+    expect(deriveStatusMessage({ ...ALL_TRUE, programValid: false })).toBe('Task incomplete')
   })
 
   it('reports recompilation required when the plan is stale', () => {

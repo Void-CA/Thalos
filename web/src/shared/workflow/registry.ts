@@ -1,26 +1,31 @@
 import type { WorkflowFlag, WorkspaceEntry } from './types'
-export type { Capability, WorkspaceEntry, WorkspaceName } from './types'
+export type { Area, ArtifactKind, Capability, WorkspaceEntry, WorkspaceName } from './types'
 
 /**
- * Single declarative navigation + guard contract (design: WORKSPACE_REGISTRY).
+ * Single declarative navigation + guard contract (design: WORKSPACE_REGISTRY,
+ * D1 — the registry describes domain AREAS, not views).
  *
  * Every workspace declares what it `requires` (WorkflowState flags), what it
- * `produces`, and its exclusive `capability` (invariant #7). Routes, guards,
- * stepper and breadcrumbs all derive from this array — no ad-hoc nav rules
- * live anywhere else.
+ * `produces`, its exclusive `capability` (invariant #7), and its place in the
+ * artifact chain (`consumes`/`producesArtifact`, R2) with a `stage` marker.
+ * Routes, guards, stepper and breadcrumbs all derive from this array — no
+ * ad-hoc nav rules live anywhere else.
  *
- * NOTE: the legacy `/analysis` workspace was absorbed into `/planning` in
- * slice 6 (one responsibility per workspace); it has no registry entry and
- * therefore no route — the final sitemap is `/`, `/task`, `/planning`,
- * `/execution`, `/sessions` (hidden) and `/knowledge` (hidden).
+ * Labels are domain vocabulary (navigation-router spec): Robot / Escena /
+ * Programación / Planificación / Ejecución / Sesiones. Robot carries a stage
+ * marker (stage 1) even though it has no prerequisite. The legacy `/analysis`
+ * workspace was absorbed into `/planning` in slice 6; it has no registry entry
+ * and therefore no route — the final sitemap is `/`, `/scene`, `/task`,
+ * `/planning`, `/execution`, `/sessions` (hidden) and `/knowledge` (hidden).
  */
 export const WORKSPACE_REGISTRY: WorkspaceEntry[] = [
-  { path: '/', workspace: 'robot', label: 'Robot', requires: [], produces: null, capability: null, hidden: false },
-  { path: '/task', workspace: 'task', label: 'Task', requires: ['robotLoaded'], produces: 'compiled', capability: 'compile', hidden: false },
-  { path: '/planning', workspace: 'planning', label: 'Planning', requires: ['compiled'], produces: 'analyzed', capability: 'optimize', hidden: false },
-  { path: '/execution', workspace: 'execution', label: 'Execution', requires: ['executable'], produces: 'completed', capability: 'execute', hidden: false },
-  { path: '/sessions', workspace: 'sessions', label: 'Sessions', requires: ['completed'], produces: null, capability: 'replay', hidden: true },
-  { path: '/knowledge', workspace: 'knowledge', label: 'Knowledge', requires: ['analyzed'], produces: null, capability: 'explain', hidden: true },
+  { path: '/', workspace: 'robot', label: 'Robot', requires: [], produces: 'robotLoaded', capability: null, hidden: false, consumes: 'URDF', producesArtifact: 'RobotModel', stage: 1, stepperIndex: 1 },
+  { path: '/scene', workspace: 'scene', label: 'Escena', requires: ['robotLoaded'], produces: 'sceneValid', capability: null, hidden: false, consumes: 'RobotModel', producesArtifact: 'Scene', stage: 2, stepperIndex: 2 },
+  { path: '/task', workspace: 'task', label: 'Programación', requires: ['sceneValid'], produces: 'compiled', capability: 'compile', hidden: false, consumes: 'Scene', producesArtifact: 'SemanticProgram', stage: 3, stepperIndex: 3 },
+  { path: '/planning', workspace: 'planning', label: 'Planificación', requires: ['compiled'], produces: 'analyzed', capability: 'optimize', hidden: false, consumes: 'SemanticProgram', producesArtifact: 'MotionPlan', stage: 4, stepperIndex: 4 },
+  { path: '/execution', workspace: 'execution', label: 'Ejecución', requires: ['executable'], produces: 'completed', capability: 'execute', hidden: false, consumes: 'MotionPlan', producesArtifact: 'Runtime', stage: 5, stepperIndex: 5 },
+  { path: '/sessions', workspace: 'sessions', label: 'Sesiones', requires: ['completed'], produces: null, capability: 'replay', hidden: true, consumes: 'Runtime', producesArtifact: 'ExecutionSession', stage: 6, stepperIndex: 6 },
+  { path: '/knowledge', workspace: 'knowledge', label: 'Knowledge', requires: ['analyzed'], produces: null, capability: 'explain', hidden: true, consumes: null, producesArtifact: null, stage: null },
 ]
 
 /**

@@ -5,6 +5,7 @@ import { act } from 'react'
 import '@testing-library/jest-dom/vitest'
 import { StatusBar } from './status-bar'
 import { useSceneStore } from '@/features/viewport/store'
+import { useSceneStore as useSemanticSceneStore, type SceneObject } from '@/features/semantic/scene-store'
 import { useSemanticEditor } from '@/features/semantic/store'
 import { useExecutionStore } from '@/features/execution/execution-store'
 import { useAnalysisStore } from '@/features/analysis/store'
@@ -18,7 +19,9 @@ import type { PlanAnalysisResponse } from '@/features/analysis/api/plan-analysis
  * seeded per case and the rendered status line is asserted.
  *
  * The semantic stores are pre-seeded with a valid program + scene object, so
- * taskValid is true by default after reset (operations present, objects present).
+ * sceneValid/programValid are true by default after reset (operations present,
+ * objects present, valid home pose). The flags are split (S1): sceneValid =
+ * scene completeness, programValid = program completeness.
  */
 const compileResult: CompileResponse = {
   status: 'ok',
@@ -37,10 +40,13 @@ const analysisSummary: PlanAnalysisResponse['summary'] = {
   message: 'ok',
 }
 
+const seededObject: SceneObject = { id: 'bolt-1', name: 'Bolt', pose: { position: [1.8, 0, 0.4], orientation: [0, 0, 0, 1] } }
+
 /** Seed the real stores; defaults mirror a freshly-reset editor. */
 function seedStatus(opts: {
   robotLoaded?: boolean
-  taskValid?: boolean
+  sceneValid?: boolean
+  programValid?: boolean
   compiled?: boolean
   running?: boolean
   completed?: boolean
@@ -49,7 +55,8 @@ function seedStatus(opts: {
 } = {}) {
   const {
     robotLoaded = false,
-    taskValid = true,
+    sceneValid = true,
+    programValid = true,
     compiled = false,
     running = false,
     completed = false,
@@ -58,8 +65,9 @@ function seedStatus(opts: {
   } = opts
   act(() => {
     useSceneStore.setState({ data: robotLoaded ? ({} as SceneData) : null })
+    useSemanticSceneStore.setState({ objects: sceneValid ? [seededObject] : [] })
+    if (!programValid) useSemanticEditor.setState({ operations: [] })
     useSemanticEditor.setState({ result: compiled ? compileResult : null, dirty: 0 })
-    if (!taskValid) useSemanticEditor.setState({ operations: [] })
     useExecutionStore.setState({
       status: completed ? 'completed' : running ? 'running' : executable ? 'ready' : 'idle',
     })
@@ -70,6 +78,11 @@ function seedStatus(opts: {
 beforeEach(() => {
   useSceneStore.getState().reset()
   useSemanticEditor.getState().reset()
+  // The semantic scene store has no reset action — restore the canonical seed.
+  useSemanticSceneStore.setState({
+    objects: [seededObject],
+    homePose: { position: [1.8, 0.0, 0.5], orientation: [0, 0, 0, 1] },
+  })
   useExecutionStore.setState({ status: 'idle' })
   useAnalysisStore.setState({ summary: null })
 })
@@ -82,8 +95,14 @@ describe('StatusBar — surfaces the real workflow state (S2)', () => {
     expect(screen.getByText('No robot loaded')).toBeInTheDocument()
   })
 
+  it('reports an incomplete scene (split flag)', () => {
+    seedStatus({ robotLoaded: true, sceneValid: false })
+    render(<StatusBar />)
+    expect(screen.getByText('Scene incomplete')).toBeInTheDocument()
+  })
+
   it('reports an incomplete task', () => {
-    seedStatus({ robotLoaded: true, taskValid: false })
+    seedStatus({ robotLoaded: true, programValid: false })
     render(<StatusBar />)
     expect(screen.getByText('Task incomplete')).toBeInTheDocument()
   })

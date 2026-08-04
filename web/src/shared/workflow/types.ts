@@ -14,6 +14,8 @@ import type { PlanAnalysisResponse } from '@/features/analysis/api/plan-analysis
  * analysis }`. Field notes:
  * - `scene.robotLoaded` — `useSceneStore.data !== null` (viewport store).
  * - `scene.objects` — semantic scene-store objects (`objects.length >= 1`).
+ * - `scene.validHomePose` — home-pose validity, computed by the hook via
+ *   `isValidHomePose()` from the semantic scene-store `homePose`.
  * - `task.operations` — semantic editor operations. `hasMissingFields` is
  *   derived purely from these (lifted from the task editor, design D5).
  * - `compile.dirty` — semantic editor dirty counter (0 = pristine).
@@ -22,6 +24,7 @@ export interface WorkflowSnapshot {
   scene: {
     robotLoaded: boolean
     objects: SceneObject[]
+    validHomePose: boolean
   }
   task: {
     operations: SemanticOp[]
@@ -38,15 +41,21 @@ export interface WorkflowSnapshot {
   }
 }
 
-/** Single derivation layer for workflow progress (design: WorkflowState). */
+/**
+ * Single derivation layer for workflow progress (design D2: WorkflowState
+ * COMPLETELY derived). Flags form the artifact chain (R2: RobotModel → Scene →
+ * SemanticProgram → MotionPlan → Runtime), so each downstream flag requires the
+ * upstream one — impossible states are impossible by construction (tasks C1).
+ */
 export interface WorkflowState {
   robotLoaded: boolean // useSceneStore.data !== null
-  taskValid: boolean // operations.length >= 1 && !hasMissingFields && objects.length >= 1
-  compiled: boolean // compileResult !== null && !dirty
-  analyzed: boolean // useAnalysisStore.summary !== null
-  executable: boolean // compiled && execStatus ∈ {ready, running, paused}
-  running: boolean // execStatus ∈ {running, paused}
-  completed: boolean // execStatus === 'completed'
+  sceneValid: boolean // scene artifact valid: robotLoaded && objects >= 1 && validHomePose
+  programValid: boolean // semantic program valid: sceneValid && operations >= 1 && !hasMissingFields
+  compiled: boolean // motion plan exists: programValid && compileResult !== null && !dirty
+  analyzed: boolean // analysis report exists: useAnalysisStore.summary !== null
+  executable: boolean // runtime can start: compiled && execStatus ∈ {ready, running, paused}
+  running: boolean // runtime active: execStatus ∈ {running, paused}
+  completed: boolean // execution session exists: execStatus === 'completed'
 }
 
 export type WorkflowFlag = keyof WorkflowState
@@ -54,9 +63,24 @@ export type WorkflowFlag = keyof WorkflowState
 /** Primary capability a workspace owns (invariant #7: exactly one workspace per capability). */
 export type Capability = 'compile' | 'optimize' | 'execute' | 'replay' | 'explain'
 
+/**
+ * The seven domain artifacts of the pipeline chain (workflow-state spec R2 —
+ * the `ArtifactRef` variants in thalos-core). Typed `consumes`/`produces` for
+ * registry entries (design D1, tasks S1.8).
+ */
+export type ArtifactKind =
+  | 'URDF'
+  | 'RobotModel'
+  | 'Scene'
+  | 'SemanticProgram'
+  | 'MotionPlan'
+  | 'Runtime'
+  | 'ExecutionSession'
+
 /** Stable workspace identifier — key for the view registry. */
 export type WorkspaceName =
   | 'robot'
+  | 'scene'
   | 'task'
   | 'planning'
   | 'execution'
@@ -72,7 +96,7 @@ export interface WorkspaceEntry {
   path: string
   /** Stable workspace identifier — key for the view registry. */
   workspace: WorkspaceName
-  /** Human-readable nav label. */
+  /** Human-readable nav label (domain vocabulary, navigation-router spec). */
   label: string
   /** Prerequisites (WorkflowState flags) to access this workspace. */
   requires: WorkflowFlag[]
@@ -82,4 +106,20 @@ export interface WorkspaceEntry {
   capability: Capability | null
   /** True while the workspace has no delivered content yet (nav link suppressed). */
   hidden: boolean
+  /** Domain artifact this area consumes (R2 artifact chain; design D1). */
+  consumes: ArtifactKind | null
+  /** Domain artifact this area produces (R2 artifact chain; design D1). */
+  producesArtifact: ArtifactKind | null
+  /** Pipeline stage position (1-6) or null for non-stage areas (Robot = 1 marker). */
+  stage: number | null
+  /** Explicit position in the stepper (consumed from S3; carried as data in S1). */
+  stepperIndex?: number
 }
+
+/**
+ * D1 — the registry describes domain AREAS, not views. `Area` is the
+ * domain-area view of a registry entry (design D1: consumes/produces artifacts,
+ * stage, stepperIndex, guards). Full `guards.{}` nesting + `Area[]` registry
+ * conversion lands in S3.6; S1 carries the artifact + stage data.
+ */
+export type Area = WorkspaceEntry

@@ -25,7 +25,8 @@ import type { SceneData } from '@/features/viewport/types'
 
 const allGood: WorkflowState = {
   robotLoaded: true,
-  taskValid: true,
+  sceneValid: true,
+  programValid: true,
   compiled: true,
   analyzed: true,
   executable: true,
@@ -64,8 +65,15 @@ describe('pipelineStagesFromWorkflowState — stages derive ONLY from WorkflowSt
     expect(stage(stages, 'Execute').pass).toBe(false)
   })
 
-  it('Scene and Task fail when the task is not valid (combined flag)', () => {
-    const stages = pipelineStagesFromWorkflowState({ ...allGood, taskValid: false })
+  it('Scene passes while Task fails when only the program is incomplete (split flags)', () => {
+    const stages = pipelineStagesFromWorkflowState({ ...allGood, programValid: false })
+    expect(stage(stages, 'Scene').pass).toBe(true)
+    expect(stage(stages, 'Task').pass).toBe(false)
+    expect(stage(stages, 'Execute').pass).toBe(false)
+  })
+
+  it('Scene and Task both fail when the scene is invalid (artifact chain)', () => {
+    const stages = pipelineStagesFromWorkflowState({ ...allGood, sceneValid: false, programValid: false })
     expect(stage(stages, 'Scene').pass).toBe(false)
     expect(stage(stages, 'Task').pass).toBe(false)
     expect(stage(stages, 'Execute').pass).toBe(false)

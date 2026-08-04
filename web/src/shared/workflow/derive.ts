@@ -1,10 +1,10 @@
 import type { WorkflowSnapshot, WorkflowState, WorkspaceEntry, Capability, WorkflowFlag } from './types'
-import type { SemanticOp } from '@/features/semantic/types'
+import type { SemanticOp, PoseDef } from '@/features/semantic/types'
 import type { ExecutionStatus } from '@/features/execution/execution-store'
 
 /**
  * Operation validation lifted from the task editor (design: workflow-state
- * spec, `taskValid`). True when any operation references a missing resource —
+ * spec, `programValid`). True when any operation references a missing resource —
  * a pick without an object, a place without object/destination, a move_to
  * without destination, or a wait with a zero duration.
  */
@@ -25,21 +25,54 @@ const EXECUTABLE_STATUSES: readonly ExecutionStatus[] = ['ready', 'running', 'pa
 const RUNNING_STATUSES: readonly ExecutionStatus[] = ['running', 'paused']
 
 /**
+ * Home-pose validity (workflow-state spec derivation table: `sceneValid` =
+ * `objects.length >= 1 && validHomePose`). A pose is valid when both vectors
+ * are structurally complete and finite — guards against NaN / partial home
+ * poses leaking in from the scene editor.
+ */
+export function isValidHomePose(pose: PoseDef | null | undefined): boolean {
+  if (!pose) return false
+  const { position, orientation } = pose
+  return (
+    position.length === 3 &&
+    orientation.length === 4 &&
+    position.every((v) => Number.isFinite(v)) &&
+    orientation.every((v) => Number.isFinite(v))
+  )
+}
+
+/**
  * Pure derivation of workflow flags from a store snapshot (spec:
  * workflow-state, "Pure Derivation Hook"). No React, no subscriptions, no
  * side effects — every flag is a pure function of the snapshot.
+ *
+ * The flags form the artifact chain (R2: RobotModel → Scene → SemanticProgram
+ * → MotionPlan → Runtime), so each downstream flag requires the upstream one:
+ * `sceneValid ⇒ robotLoaded`, `programValid ⇒ sceneValid`,
+ * `compiled ⇒ programValid`, `executable ⇒ compiled` — impossible states are
+ * impossible by construction (tasks.md C1). The scene/program split keeps the
+ * two validities separately meaningful: a scene can be valid while the program
+ * is still incomplete.
  */
 export function deriveWorkflowState(snapshot: WorkflowSnapshot): WorkflowState {
+  const sceneValid =
+    snapshot.scene.robotLoaded &&
+    snapshot.scene.objects.length >= 1 &&
+    snapshot.scene.validHomePose
+  const programValid =
+    sceneValid &&
+    snapshot.task.operations.length >= 1 &&
+    !hasMissingFields(snapshot.task.operations)
   const compiled =
-    snapshot.compile.result !== null && snapshot.compile.dirty === 0
+    programValid &&
+    snapshot.compile.result !== null &&
+    snapshot.compile.dirty === 0
   const status = snapshot.execution.status
 
   return {
     robotLoaded: snapshot.scene.robotLoaded,
-    taskValid:
-      snapshot.task.operations.length >= 1 &&
-      !hasMissingFields(snapshot.task.operations) &&
-      snapshot.scene.objects.length >= 1,
+    sceneValid,
+    programValid,
     compiled,
     analyzed: snapshot.analysis.summary !== null,
     executable: compiled && EXECUTABLE_STATUSES.includes(status),
@@ -50,10 +83,11 @@ export function deriveWorkflowState(snapshot: WorkflowSnapshot): WorkflowState {
 
 // ── Stepper + status derivations (global-stepper spec) ──────────────────────
 //
-// The stepper is the workflow pipeline (Task → Planning → Execution → Sessions)
-// and everything it shows derives from the registry + WorkflowState: stage
-// order and labels come from WORKSPACE_REGISTRY, stage states from the flags.
-// No per-workspace strings live in the views.
+// The stepper is the workflow pipeline (Task → Planning → Execution → Sessions
+// until S3; Robot → Escena → … → Sesiones afterwards) and everything it shows
+// derives from the registry + WorkflowState: stage order and labels come from
+// WORKSPACE_REGISTRY, stage states from the flags. No per-workspace strings
+// live in the views.
 
 /**
  * Human-readable phrase per workflow flag — the ONLY string source for blocked
@@ -63,7 +97,8 @@ export function deriveWorkflowState(snapshot: WorkflowSnapshot): WorkflowState {
  */
 const FLAG_PHRASES: Record<WorkflowFlag, string> = {
   robotLoaded: 'a loaded robot',
-  taskValid: 'a valid task',
+  sceneValid: 'a valid scene',
+  programValid: 'a valid program',
   compiled: 'a compiled plan',
   analyzed: 'an analyzed plan',
   executable: 'an executable plan',
@@ -74,7 +109,8 @@ const FLAG_PHRASES: Record<WorkflowFlag, string> = {
 /** Pipeline capabilities in workflow order (global-stepper spec stage list).
  *  The stepper stages are the registry entries whose capability is a pipeline
  *  step: compile (Task) → optimize (Planning) → execute (Execution) → replay
- *  (Sessions). This excludes the robot root (no capability), the legacy
+ *  (Sessions). This excludes the robot root and the scene area (no capability —
+ *  their stage data arrives with the 6-stage stepper in S3), the legacy
  *  analysis workspace (no capability — absorbed into planning in slice 6), and
  *  the hidden knowledge workspace ('explain' is a support capability, not a
  *  pipeline stage). Sessions stays a stage even though its top-bar link is
@@ -155,7 +191,8 @@ export function deriveStepperStages(
  */
 export function deriveStatusMessage(state: WorkflowState): string {
   if (!state.robotLoaded) return 'No robot loaded'
-  if (!state.taskValid) return 'Task incomplete'
+  if (!state.sceneValid) return 'Scene incomplete'
+  if (!state.programValid) return 'Task incomplete'
   if (!state.compiled) return 'Task modified — recompilation required'
   if (state.running) return 'Plan running'
   if (state.completed) return 'Plan completed — review in Sessions'

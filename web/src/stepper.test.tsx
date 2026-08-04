@@ -15,9 +15,10 @@ import type { PlanAnalysisResponse } from '@/features/analysis/api/plan-analysis
 
 /**
  * Integration tests for the global-stepper spec: the stepper renders the
- * workflow pipeline (Task → Planning → Execution → Sessions) from the registry,
- * marks the active route, blocks navigation on unmet requirements and shows the
- * reason derived from the missing flag — never a per-workspace hardcoded string.
+ * workflow pipeline (Programación → Planificación → Ejecución → Sesiones) from
+ * the registry, marks the active route, blocks navigation on unmet
+ * requirements and shows the reason derived from the missing flag — never a
+ * per-workspace hardcoded string. Labels are the registry domain vocabulary.
  *
  * The stepper is rendered inside a minimal memory router (it consumes
  * useLocation/useNavigate); the REAL workflow stores are seeded so the flags
@@ -81,40 +82,41 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('Stepper — workflow-driven stages (global-stepper spec)', () => {
-  it('renders Task, Planning, Execution and Sessions stages', () => {
+  it('renders Programación, Planificación, Ejecución and Sesiones stages', () => {
     seedFlags({ robotLoaded: true, compiled: true, executable: true, completed: true, analyzed: true })
     renderStepper('/sessions')
-    expect(screen.getByRole('button', { name: 'Task' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Planning' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Execution' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Sessions' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Programación' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Planificación' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ejecución' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sesiones' })).toBeInTheDocument()
   })
 
-  it('excludes the robot root and hidden support workspaces from the stages', () => {
+  it('excludes the robot root, the scene area and hidden support workspaces from the stages (4 stages until S3)', () => {
     seedFlags()
     renderStepper('/')
     expect(screen.queryByRole('button', { name: 'Robot' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Escena' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Knowledge' })).not.toBeInTheDocument()
   })
 
   it('marks the active route stage as current (S4: I know where I am)', () => {
     seedFlags({ robotLoaded: true, compiled: true })
     renderStepper('/planning')
-    expect(screen.getByRole('button', { name: 'Planning' })).toHaveAttribute('aria-current', 'step')
-    expect(screen.getByRole('button', { name: 'Task' })).not.toHaveAttribute('aria-current')
+    expect(screen.getByRole('button', { name: 'Planificación' })).toHaveAttribute('aria-current', 'step')
+    expect(screen.getByRole('button', { name: 'Programación' })).not.toHaveAttribute('aria-current')
   })
 
   it('navigates when a future stage is clickable (requirements met)', async () => {
     seedFlags({ robotLoaded: true, compiled: true })
     const router = renderStepper('/task')
-    fireEvent.click(screen.getByRole('button', { name: 'Planning' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Planificación' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/planning'))
   })
 
   it('does not navigate on a blocked stage and shows the derived reason', async () => {
     seedFlags({ robotLoaded: true, compiled: true }) // executable=false
     const router = renderStepper('/task')
-    const execution = screen.getByRole('button', { name: 'Execution' })
+    const execution = screen.getByRole('button', { name: 'Ejecución' })
     expect(execution).toBeDisabled()
     expect(screen.getByText('Requires an executable plan')).toBeInTheDocument()
     fireEvent.click(execution)
@@ -131,7 +133,7 @@ describe('Stepper — workflow-driven stages (global-stepper spec)', () => {
   it('shows future stages whose requirements are met as pending (S4: next step visible)', () => {
     seedFlags({ robotLoaded: true, compiled: true, executable: true, analyzed: true })
     renderStepper('/planning')
-    const execution = screen.getByRole('button', { name: 'Execution' })
+    const execution = screen.getByRole('button', { name: 'Ejecución' })
     expect(execution).not.toBeDisabled()
     expect(execution).not.toHaveAttribute('aria-current')
   })
