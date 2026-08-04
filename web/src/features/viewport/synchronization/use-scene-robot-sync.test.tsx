@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act, cleanup } from '@testing-library/react'
-import { useSceneRobotSync } from './use-scene-robot-sync'
+import { useSceneRobotSync, shouldRequestRobot } from './use-scene-robot-sync'
 import { useRobotStore } from '@/features/robots/store'
 import { useSceneStore } from '../store'
 import type { RuntimeInfo } from '../types'
@@ -237,5 +237,85 @@ describe('useSceneRobotSync — backend-derived default (spec R7 / R6)', () => {
     renderHook(() => useSceneRobotSync())
 
     expect(mocks.loadScene).not.toHaveBeenCalled()
+  })
+
+  it('re-arms the GET /scene latch after a failed boot so a recovered backend can re-initialize', () => {
+    // If GET /scene fails durably (retry: 1 exhausted) with no confirmed
+    // identity, the `initialSceneRequested` latch stays set forever — a
+    // recovered backend could never re-initialize the scene. The latch must
+    // re-arm once the failure settles.
+    const { rerender } = renderHook(() => useSceneRobotSync())
+
+    expect(mocks.loadScene).toHaveBeenCalledTimes(1)
+
+    mocks.sceneMutation.isError = true
+    rerender()
+    expect(mocks.loadScene).toHaveBeenCalledTimes(2)
+
+    // Backend recovers — the re-fired GET /scene is now idle; no further calls.
+    mocks.sceneMutation.isError = false
+    rerender()
+    expect(mocks.loadScene).toHaveBeenCalledTimes(2)
+  })
+
+  it('bounds the automatic GET /scene re-fire so a persistently failing backend does not loop', () => {
+    // The re-arm is a bounded recovery, not a retry storm: while the backend
+    // stays down, at most a fixed number of re-fires are allowed.
+    const { rerender } = renderHook(() => useSceneRobotSync())
+
+    expect(mocks.loadScene).toHaveBeenCalledTimes(1)
+
+    // First failure → one re-arm/re-fire.
+    mocks.sceneMutation.isError = true
+    rerender()
+    expect(mocks.loadScene).toHaveBeenCalledTimes(2)
+
+    // Second failure → second re-arm/re-fire.
+    mocks.sceneMutation.isError = false
+    rerender()
+    mocks.sceneMutation.isError = true
+    rerender()
+    expect(mocks.loadScene).toHaveBeenCalledTimes(3)
+
+    // Budget exhausted — backend stays down, no further re-fires (no loop).
+    mocks.sceneMutation.isError = false
+    rerender()
+    mocks.sceneMutation.isError = true
+    rerender()
+    expect(mocks.loadScene).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('shouldRequestRobot — pure request decision (spec R2.1 + retry budget)', () => {
+  it('requests when the selection is not confirmed and not yet requested', () => {
+    expect(shouldRequestRobot('scara', 'planar_3r', null, false)).toBe(true)
+  })
+
+  it('does NOT request a robot the scene already confirms', () => {
+    expect(shouldRequestRobot('scara', 'scara', null, false)).toBe(false)
+  })
+
+  it('does NOT request a robot already latched as requested for this selection', () => {
+    expect(shouldRequestRobot('scara', 'planar_3r', 'scara', false)).toBe(false)
+  })
+
+  it('requests again after an error settle that granted the one automatic retry (latch cleared)', () => {
+    // Error settle: budget not yet consumed → the latch is cleared and the
+    // budget spent in the same step, so the pending retry fires once.
+    expect(shouldRequestRobot('scara', 'planar_3r', null, true)).toBe(true)
+  })
+
+  it('does NOT request again after the retry budget was spent and the latch re-set', () => {
+    // The retry also failed → budget consumed, latch re-set to the selection:
+    // no more automatic requests until the user changes the selection.
+    expect(shouldRequestRobot('scara', 'planar_3r', 'scara', true)).toBe(false)
+  })
+
+  it('requests after the selection changed (budget reset, latch cleared)', () => {
+    expect(shouldRequestRobot('scara', 'planar_3r', null, false)).toBe(true)
+  })
+
+  it('never requests for a null selection', () => {
+    expect(shouldRequestRobot(null, 'planar_3r', null, false)).toBe(false)
   })
 })
