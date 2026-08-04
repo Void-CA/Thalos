@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { useRobotStore } from '@/features/robots/store'
 import { useSceneStore } from '../store'
-import { useLoadRobot } from './use-scene-loader'
+import { useLoadRobot, useLoadScene } from './use-scene-loader'
+import { ROBOT_SELECTION_KEY } from '@/features/semantic/components/robot-selector'
 
 /**
  * Sincroniza la selección de robot del catálogo con la escena 3D.
@@ -16,9 +17,12 @@ import { useLoadRobot } from './use-scene-loader'
  */
 export function useSceneRobotSync() {
   const selectedId = useRobotStore(s => s.selectedId)
+  const robots = useRobotStore(s => s.robots)
   const loadRobot = useLoadRobot()
+  const loadScene = useLoadScene()
   const confirmedId = useSceneStore(s => s.runtime?.robot.id ?? null)
   const lastRequested = useRef<string | null>(null)
+  const initialLoadResolved = useRef(false)
 
   useEffect(() => {
     // Dedupe: skip robots already confirmed by the scene (applyScene response)
@@ -29,4 +33,18 @@ export function useSceneRobotSync() {
       loadRobot.mutate(selectedId)
     }
   }, [selectedId, confirmedId, loadRobot])
+
+  // Spec R7/R6 — backend-derived default. Once the catalog is known, request
+  // GET /scene ONLY when no catalog hint is pending: fresh session (no
+  // localStorage) or an unknown persisted id (select() ignores it). A valid
+  // persisted catalog id is requested by RobotSelector's select() — firing
+  // GET /scene here would race it and could clobber the request.
+  useEffect(() => {
+    if (initialLoadResolved.current) return
+    if (robots.length === 0) return // wait for the catalog to validate the hint
+    initialLoadResolved.current = true
+    const persisted = localStorage.getItem(ROBOT_SELECTION_KEY)
+    const persistedIsCatalog = persisted !== null && robots.some(r => r.id === persisted)
+    if (!persistedIsCatalog && !confirmedId) loadScene.mutate()
+  }, [robots, confirmedId, loadScene])
 }

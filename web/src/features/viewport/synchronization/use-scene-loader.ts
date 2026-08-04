@@ -31,6 +31,35 @@ export function useLoadRobot() {
 }
 
 /**
+ * Hook para cargar el estado de escena actual (GET /scene).
+ *
+ * Provee la identidad inicial DERIVADA DEL BACKEND (spec R7): sin selección
+ * previa, el default es el robot que el backend tiene en la escena (Planar2R).
+ */
+export function useLoadScene() {
+  const service = useSceneService()
+  const applyScene = useSceneStore(s => s.applyScene)
+  const setLoading = useSceneStore(s => s.setLoading)
+  const setError = useSceneStore(s => s.setError)
+
+  return useMutation({
+    mutationFn: () => service.loadScene(),
+    onMutate: () => setLoading(true),
+    onSuccess: (snapshot) => {
+      applyScene(
+        snapshot.scene,
+        snapshot.runtime,
+        snapshot.ikResult,
+        snapshot.activePlan,
+        snapshot.activeTcp,
+        snapshot.execution,
+      )
+    },
+    onError: (err: Error) => setError(err.message),
+  })
+}
+
+/**
  * Hook para importar un robot desde URDF.
  */
 export function useLoadRobotFromUrdf() {
