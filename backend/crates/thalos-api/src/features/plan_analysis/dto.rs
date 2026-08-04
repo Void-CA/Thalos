@@ -8,9 +8,10 @@
 //!   "artifact": { "kind": "MotionPlan", "id": "mp-1" },
 //!   "observations": [ ... kind/severity/artifact/location/attributes (I2) ... ],
 //!   "actions": [ ... target_observation (I5) ... ],
-//!   "metrics": { ... },
+//!   "metrics": { "waypoint_count": 20, "avg_manipulability": 0.42, ... },
 //!   "summary": { "quality_index": 0.85, "score": 85, "grade": "Good", ... },
-//!   "problem_regions": [ ... ]   // contrato legacy, vía ProblemRegionsDtoAdapter
+//!   "problem_regions": [ ... ],   // contrato legacy, vía ProblemRegionsDtoAdapter
+//!   "manipulability_series": [ { "waypoint": 0, "yoshikawa": 0.42 }, ... ]  // S1 (P3), opcional
 //! }
 //! ```
 //!
@@ -37,6 +38,7 @@ use thalos_core::{
     ids::{ExecutionSessionId, MotionPlanId, RobotId, SceneId, SemanticProgramId, TaskDocumentId},
     operation::MotionProvenance,
 };
+use thalos_planning::analysis::PlanAnalysis;
 use thalos_planning::motion::program::PlannedSegment;
 
 /// Request para analizar un plan activo.
@@ -49,7 +51,7 @@ pub struct PlanAnalysisRequest {
 
 /// Respuesta completa del análisis de un plan — proyección del
 /// [`AnalysisReport`] del dominio (spec motion-plan-endpoint).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PlanAnalysisResponse {
     /// Ancla del reporte (I3): kind + identificador real del artefacto
     /// analizado (O3: se expone el id disponible — `plan_id`).
@@ -66,16 +68,41 @@ pub struct PlanAnalysisResponse {
     /// proyectada desde el dominio vía `ProblemRegionsDtoAdapter`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub problem_regions: Vec<ProblemRegionDto>,
+    /// Serie de manipulabilidad por waypoint (P3, spec motion-plan-endpoint
+    /// "Analysis DTO Includes Manipulability Series"): un punto
+    /// `{waypoint, yoshikawa}` por waypoint analizado. ADITIVO — opcional en
+    /// el wire (`#[serde(default)]` + omitido cuando vacío): los clientes
+    /// existentes que no leen el campo siguen funcionando sin cambios (I3).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub manipulability_series: Vec<ManipulabilityPointDto>,
 }
 
 impl PlanAnalysisResponse {
-    /// Proyección pura `AnalysisReport → PlanAnalysisResponse`.
+    /// Proyección pura `AnalysisReport + PlanAnalysis → PlanAnalysisResponse`.
     ///
     /// Las regiones se derivan de las observaciones del reporte con el
     /// [`RegionGrouper`] (dueño único de la agrupación) y se proyectan al
     /// campo legacy `problem_regions` con el adapter de DTO. Nunca al revés.
-    pub fn from_report(report: &AnalysisReport, segments: &[PlannedSegment]) -> Self {
+    ///
+    /// `manipulability_series` es una PROYECCIÓN de `analysis.waypoints` (el
+    /// análisis técnico ya computado por el runtime — P3): el DTO nunca
+    /// recalcula manipulabilidad, solo la proyecta al wire.
+    pub fn from_report(
+        report: &AnalysisReport,
+        analysis: &PlanAnalysis,
+        segments: &[PlannedSegment],
+    ) -> Self {
         let regions = RegionGrouper::default().group(&report.observations);
+        let manipulability_series = analysis
+            .waypoints
+            .iter()
+            .filter_map(|w| {
+                w.manipulability.as_ref().map(|m| ManipulabilityPointDto {
+                    waypoint: w.index as u32,
+                    yoshikawa: m.yoshikawa,
+                })
+            })
+            .collect();
         Self {
             artifact: ArtifactDto::from(&report.artifact),
             observations: report
@@ -87,12 +114,26 @@ impl PlanAnalysisResponse {
             metrics: report.metrics.clone(),
             summary: SummaryDto::from(&report.summary),
             problem_regions: ProblemRegionsDtoAdapter::from_regions(&regions, segments),
+            manipulability_series,
         }
     }
 }
 
+/// Punto de la serie de manipulabilidad por waypoint (P3).
+///
+/// `waypoint` es el índice 0-based del waypoint en el plan; `yoshikawa` es la
+/// medida de manipulabilidad del análisis técnico (proyección, nunca
+/// recomputada por el DTO).
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct ManipulabilityPointDto {
+    /// Índice del waypoint en el plan (0-based).
+    pub waypoint: u32,
+    /// Medida de manipulabilidad de Yoshikawa en ese waypoint.
+    pub yoshikawa: f64,
+}
+
 /// Ancla de artefacto en el wire — kind + id real (O3).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ArtifactDto {
     /// Tipo de artefacto ("MotionPlan", "ExecutionSession", …).
     pub kind: String,
@@ -130,7 +171,7 @@ impl ArtifactDto {
 
 /// Observación canónica proyectada al wire (I2): kind/severity/artifact/
 /// location identifican el fenómeno sin parsing de texto.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ObservationDto {
     /// Id de la observación dentro del reporte (asignado por el aggregator).
     pub id: u32,
@@ -167,7 +208,7 @@ impl From<&Observation> for ObservationDto {
 
 /// Acción de remediación proyectada al wire (I5): referencia la observación
 /// objetivo por id, nunca embebida.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ActionDto {
     /// Id de la acción dentro del reporte.
     pub id: u32,
@@ -201,7 +242,7 @@ impl From<&Action> for ActionDto {
 /// `quality_index` (0..1) es la ÚNICA medida agregada de calidad (I7); `score`
 /// es la proyección de presentación `quality_index × 100` (spec
 /// motion-plan-endpoint "DTO projection of quality_index").
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SummaryDto {
     /// Medida única de calidad del dominio (0..1, I7).
     pub quality_index: f64,
@@ -236,7 +277,7 @@ impl From<&AnalysisSummary> for SummaryDto {
 // ─── problem_regions (representación pública heredada del contrato) ───
 
 /// Métricas de una región problemática.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RegionMetricsDto {
     pub waypoint_count: usize,
     pub average_value: Option<f64>,
@@ -247,7 +288,7 @@ pub struct RegionMetricsDto {
 }
 
 /// Explicación de una región problemática.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ExplanationDto {
     pub cause: String,
     pub consequence: String,
@@ -256,7 +297,7 @@ pub struct ExplanationDto {
 }
 
 /// Región problemática semántica (M8.1+).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ProblemRegionDto {
     pub id: usize,
     pub kind: String,
@@ -279,7 +320,7 @@ pub struct ProblemRegionDto {
 ///
 /// Puente entre los rangos de waypoint de bajo nivel y la intención de la
 /// operación que los originó, para consumo del frontend.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SemanticProblemDto {
     /// ID de la operación que originó la región (legible en JSON).
     pub operation_id: Option<String>,
@@ -565,7 +606,7 @@ mod tests {
         // observations[]/actions[]/metrics[]/summary.
         let report = sample_report();
         let segments: Vec<PlannedSegment> = Vec::new();
-        let response = PlanAnalysisResponse::from_report(&report, &segments);
+        let response = PlanAnalysisResponse::from_report(&report, &sample_analysis(0), &segments);
         let value = serde_json::to_value(response).expect("serialize");
         let obj = value.as_object().expect("object");
         for field in ["observations", "actions", "metrics", "summary"] {
@@ -714,6 +755,145 @@ mod tests {
             dtos[0].semantic.is_none(),
             "legacy segments (no operation_id) must not attach semantic context"
         );
+    }
+
+    // ─── S1: additive manipulability_series delta (P3, I3) ──────────────
+    //
+    // Spec `motion-plan-endpoint` "Analysis DTO Includes Manipulability
+    // Series": the response SHALL include `manipulability_series` — one
+    // `{waypoint, yoshikawa}` entry per analyzed waypoint — optional
+    // (`#[serde(default)]`) and backward-compatible. The series is a pure
+    // projection of `PlanAnalysis.waypoints[].manipulability` (the technical
+    // analysis), never recomputed by the DTO.
+
+    use thalos_core::kinematics::jacobian::manipulability::ManipulabilityReport;
+    use thalos_planning::analysis::{AnalysisMetrics, WaypointAnalysis};
+
+    /// `PlanAnalysis` con `count` waypoints, cada uno con manipulabilidad
+    /// determinística `yoshikawa = 0.1 + i * 0.01` (i = índice del waypoint).
+    fn sample_analysis(count: usize) -> PlanAnalysis {
+        PlanAnalysis {
+            waypoints: (0..count)
+                .map(|i| WaypointAnalysis {
+                    index: i,
+                    timestamp: i as f64 * 0.5,
+                    joints: vec![0.0, 0.0],
+                    singularity: None,
+                    manipulability: Some(ManipulabilityReport {
+                        yoshikawa: 0.1 + i as f64 * 0.01,
+                        isotropy: 1.0,
+                    }),
+                    min_collision_distance: None,
+                })
+                .collect(),
+            metrics: AnalysisMetrics {
+                waypoint_count: count,
+                trajectory_duration: 0.0,
+                avg_manipulability: None,
+                min_manipulability: None,
+                near_singular_count: 0,
+                singular_count: 0,
+                min_collision_distance: None,
+                min_collision_waypoint: None,
+                has_collisions: false,
+                first_collision_waypoint: None,
+            },
+            constraint_violations: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn manipulability_series_projects_one_entry_per_waypoint() {
+        // Spec "Series populated": a 20-waypoint plan → 20 entries, each with
+        // waypoint (0..19) and the backend-computed yoshikawa value.
+        let report = sample_report();
+        let analysis = sample_analysis(20);
+        let segments: Vec<PlannedSegment> = Vec::new();
+
+        let value = serde_json::to_value(PlanAnalysisResponse::from_report(
+            &report, &analysis, &segments,
+        ))
+        .expect("serialize");
+        let series = value["manipulability_series"]
+            .as_array()
+            .expect("manipulability_series must be an array");
+        assert_eq!(series.len(), 20, "20 waypoints → 20 series entries");
+        assert_eq!(series[0]["waypoint"], 0);
+        assert!((series[0]["yoshikawa"].as_f64().expect("f64") - 0.1).abs() < 1e-12);
+        assert_eq!(series[19]["waypoint"], 19);
+        assert!(
+            (series[19]["yoshikawa"].as_f64().expect("f64") - (0.1 + 19.0 * 0.01)).abs() < 1e-12
+        );
+    }
+
+    #[test]
+    fn manipulability_series_round_trips_preserving_values() {
+        // Serde round-trip: 20 entries survive serialize → deserialize with
+        // exact waypoint/yoshikawa values (contract fidelity for the chart).
+        let report = sample_report();
+        let analysis = sample_analysis(20);
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments);
+
+        let json = serde_json::to_string(&response).expect("serialize");
+        let back: PlanAnalysisResponse = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.manipulability_series.len(), 20);
+        assert_eq!(back.manipulability_series[3].waypoint, 3);
+        assert!(
+            (back.manipulability_series[3].yoshikawa - (0.1 + 3.0 * 0.01)).abs() < 1e-12,
+            "round-trip must preserve yoshikawa"
+        );
+    }
+
+    #[test]
+    fn manipulability_series_empty_for_trivial_plan() {
+        // Spec "Series empty for trivial plan": 0 waypoints → the field is
+        // omitted on the wire (skip_serializing_if, additive for old clients)
+        // and deserializes back to an empty array (serde default).
+        let report = sample_report();
+        let analysis = sample_analysis(0);
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments);
+
+        let value = serde_json::to_value(response).expect("serialize");
+        assert!(
+            value.get("manipulability_series").is_none(),
+            "empty series must be skipped on the wire (additive for old clients)"
+        );
+
+        let json = serde_json::to_string(&value).expect("serialize");
+        let back: PlanAnalysisResponse = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(
+            back.manipulability_series,
+            Vec::new(),
+            "absent field must default to an empty array"
+        );
+    }
+
+    #[test]
+    fn old_payload_without_new_fields_deserializes() {
+        // Spec I3 "Old client unaffected" + "Serde default for new fields":
+        // a payload without `manipulability_series` deserializes fine — the
+        // field defaults to empty; every pre-existing field keeps its shape.
+        let report = sample_report();
+        let analysis = sample_analysis(2);
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments);
+
+        let mut value = serde_json::to_value(response).expect("serialize");
+        value
+            .as_object_mut()
+            .expect("object")
+            .remove("manipulability_series");
+
+        let back: PlanAnalysisResponse =
+            serde_json::from_value(value).expect("old payload must deserialize");
+        assert!(back.manipulability_series.is_empty());
+        assert_eq!(
+            back.summary.score, 40,
+            "pre-existing fields keep their shape"
+        );
+        assert_eq!(back.observations.len(), 2);
     }
 
     #[test]

@@ -159,6 +159,42 @@ pub struct AnalysisMetrics {
     pub first_collision_waypoint: Option<usize>,
 }
 
+impl AnalysisMetrics {
+    /// Proyección a `BTreeMap<String, f64>` para `AnalysisReport.metrics`
+    /// (design P3: el servicio puebla `report.metrics` desde el análisis
+    /// técnico; claves estables del dominio).
+    ///
+    /// Los optionals ausentes (`avg_manipulability`, `min_manipulability`,
+    /// `min_collision_distance`) se OMITEN — nunca se proyecta `null`/`NaN` al
+    /// wire. Los agregados escalares (`waypoint_count`, `trajectory_duration`,
+    /// `near_singular_count`, `singular_count`, `has_collisions` como 1.0/0.0)
+    /// siempre están presentes.
+    pub fn to_btree_map(&self) -> BTreeMap<String, f64> {
+        let mut map = BTreeMap::new();
+        map.insert("waypoint_count".to_string(), self.waypoint_count as f64);
+        map.insert("trajectory_duration".to_string(), self.trajectory_duration);
+        map.insert(
+            "near_singular_count".to_string(),
+            self.near_singular_count as f64,
+        );
+        map.insert("singular_count".to_string(), self.singular_count as f64);
+        map.insert(
+            "has_collisions".to_string(),
+            if self.has_collisions { 1.0 } else { 0.0 },
+        );
+        if let Some(avg) = self.avg_manipulability {
+            map.insert("avg_manipulability".to_string(), avg);
+        }
+        if let Some(min) = self.min_manipulability {
+            map.insert("min_manipulability".to_string(), min);
+        }
+        if let Some(d) = self.min_collision_distance {
+            map.insert("min_collision_distance".to_string(), d);
+        }
+        map
+    }
+}
+
 // ─── TrajectoryAnalyzer ───────────────────────────────────────────
 
 /// Analizador de trayectorias planificadas.
@@ -867,4 +903,73 @@ mod tests {
     // produces actions over observations (I5) — see `advisor::tests`
     // `advise_produces_actions_over_observations` and the C4 chain test
     // `full_chain_actions_reference_observations_without_orphans` above.
+
+    // ─── S1: AnalysisMetrics → BTreeMap<String, f64> projection (P3) ─────
+    //
+    // The runtime service populates `report.metrics` from the technical
+    // analysis (`AnalysisMetrics`) so `/plan/analyze` stops shipping an empty
+    // `{}`. The projection uses STABLE domain keys and omits absent
+    // optionals — additive, never changes the semantics of existing fields.
+
+    #[test]
+    fn metrics_projection_carries_all_aggregates() {
+        let metrics = AnalysisMetrics {
+            waypoint_count: 5,
+            trajectory_duration: 12.5,
+            avg_manipulability: Some(0.42),
+            min_manipulability: Some(0.21),
+            near_singular_count: 3,
+            singular_count: 1,
+            min_collision_distance: Some(0.035),
+            min_collision_waypoint: Some(2),
+            has_collisions: true,
+            first_collision_waypoint: Some(2),
+        };
+
+        let map = metrics.to_btree_map();
+        assert_eq!(map["waypoint_count"], 5.0);
+        assert_eq!(map["trajectory_duration"], 12.5);
+        assert!((map["avg_manipulability"] - 0.42).abs() < 1e-12);
+        assert!((map["min_manipulability"] - 0.21).abs() < 1e-12);
+        assert_eq!(map["near_singular_count"], 3.0);
+        assert_eq!(map["singular_count"], 1.0);
+        assert!((map["min_collision_distance"] - 0.035).abs() < 1e-12);
+        assert_eq!(map["has_collisions"], 1.0);
+        assert_eq!(
+            map.len(),
+            8,
+            "all non-optional aggregates + present optionals"
+        );
+    }
+
+    #[test]
+    fn metrics_projection_omits_absent_optionals() {
+        let metrics = AnalysisMetrics {
+            waypoint_count: 2,
+            trajectory_duration: 0.0,
+            avg_manipulability: None,
+            min_manipulability: None,
+            near_singular_count: 0,
+            singular_count: 0,
+            min_collision_distance: None,
+            min_collision_waypoint: None,
+            has_collisions: false,
+            first_collision_waypoint: None,
+        };
+
+        let map = metrics.to_btree_map();
+        assert_eq!(map["waypoint_count"], 2.0);
+        assert_eq!(map["has_collisions"], 0.0);
+        for absent in [
+            "avg_manipulability",
+            "min_manipulability",
+            "min_collision_distance",
+        ] {
+            assert!(
+                !map.contains_key(absent),
+                "`{absent}` must be omitted when the value is None"
+            );
+        }
+        assert_eq!(map.len(), 5, "scalar aggregates are always present");
+    }
 }
