@@ -432,3 +432,64 @@ pub async fn select_tool_frame(
     let snapshot = state.services.scene.execute(cmd).await?;
     Ok(Json(to_api_response(&snapshot)))
 }
+
+/// Stable robot identity for URDF imports (spec robot-identity R1).
+///
+/// Deterministic `urdf:<hash>` id derived from the raw XML source: SHA-256 of
+/// the raw bytes, truncated to the first 6 bytes (12 hex chars). Same file →
+/// same id (R1.1); different bytes → different id. The raw source is used
+/// (design D1) so the id never depends on parser behavior.
+fn urdf_robot_id(source: &str) -> String {
+    use sha2::{Digest, Sha256};
+
+    let hash = Sha256::digest(source.as_bytes());
+    format!("urdf:{}", hex::encode(&hash[..6]))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::urdf_robot_id;
+
+    /// Spec robot-identity R1.1: the URDF robot id MUST be deterministic —
+    /// the same raw XML always yields the same `urdf:<hash>` id.
+    #[test]
+    fn same_source_yields_same_id() {
+        let source = r#"<robot name="a"><link name="base"/></robot>"#;
+        let first = urdf_robot_id(source);
+        let second = urdf_robot_id(source);
+        assert_eq!(
+            first, second,
+            "identical URDF source must produce identical robot ids"
+        );
+        assert_ne!(first, "urdf", "id must not be the legacy literal 'urdf'");
+    }
+
+    /// Spec robot-identity R1.1: two URDF files differing by at least one
+    /// byte MUST produce different ids.
+    #[test]
+    fn different_source_yields_different_id() {
+        let a = urdf_robot_id(r#"<robot name="a"><link name="base"/></robot>"#);
+        let b = urdf_robot_id(r#"<robot name="b"><link name="base"/></robot>"#);
+        assert_ne!(
+            a, b,
+            "URDF sources differing by one byte must yield different ids"
+        );
+    }
+
+    /// Spec robot-identity R1.1: the id MUST match `urdf:<12 lowercase hex>`.
+    #[test]
+    fn id_matches_urdf_hash_format() {
+        let id =
+            urdf_robot_id(r#"<robot name="icebot"><link name="base"/><link name="tool"/></robot>"#);
+        assert!(
+            id.starts_with("urdf:"),
+            "id must carry urdf: prefix, got {id}"
+        );
+        let hash = &id["urdf:".len()..];
+        assert_eq!(hash.len(), 12, "id must carry 12 hex chars, got {id}");
+        assert!(
+            hash.chars().all(|c| c.is_ascii_hexdigit()),
+            "id hash must be lowercase hex, got {id}"
+        );
+    }
+}
