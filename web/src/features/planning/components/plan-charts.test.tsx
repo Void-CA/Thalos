@@ -129,7 +129,12 @@ afterEach(() => cleanup())
 describe('PlanCharts — planning charts as siblings of AdvisorSection (S3)', () => {
   it('renders three charts from a canonical report: manipulability, score, metrics', async () => {
     render(<PlanCharts report={baseReport()} />)
-    const els = await screen.findAllByTestId('chart')
+    // The lazy ECharts chunk resolves asynchronously (React.lazy + dynamic
+    // import). Under full-parallel vitest (16 workers) the cold echarts
+    // transform can exceed testing-library's 1000ms default wait window — the
+    // explicit 5s timeout makes this wait deterministic under load (C2
+    // remediation: ECharts must stay in the lazy chunk).
+    const els = await screen.findAllByTestId('chart', {}, { timeout: 5000 })
     expect(els).toHaveLength(3)
     await flushEffects()
 
@@ -155,7 +160,7 @@ describe('PlanCharts — planning charts as siblings of AdvisorSection (S3)', ()
 
   it('colors manipulability points by observation severity (Error waypoint differs)', async () => {
     render(<PlanCharts report={baseReport()} />)
-    const els = await screen.findAllByTestId('chart')
+    const els = await screen.findAllByTestId('chart', {}, { timeout: 5000 })
     await flushEffects()
 
     const data = optionOf(els[0]).series[0].data
@@ -172,7 +177,7 @@ describe('PlanCharts — planning charts as siblings of AdvisorSection (S3)', ()
 
   it('derives the empty state from ChartModel.empty when the series is empty (P4)', async () => {
     render(<PlanCharts report={baseReport({ manipulability_series: [] })} />)
-    const charts = await screen.findAllByTestId('chart')
+    const charts = await screen.findAllByTestId('chart', {}, { timeout: 5000 })
     expect(charts).toHaveLength(2)
     expect(screen.getByTestId('chart-empty')).toHaveTextContent(
       'No manipulability data available',
@@ -188,7 +193,7 @@ describe('PlanCharts — planning charts as siblings of AdvisorSection (S3)', ()
         })}
       />,
     )
-    const charts = await screen.findAllByTestId('chart')
+    const charts = await screen.findAllByTestId('chart', {}, { timeout: 5000 })
     expect(charts).toHaveLength(2)
     expect(screen.getByTestId('chart-empty')).toHaveTextContent('Metrics not available')
   })
@@ -203,7 +208,7 @@ describe('PlanCharts — planning charts as siblings of AdvisorSection (S3)', ()
   it('delegates ALL domain mapping to the builders and renders their models verbatim (P2 purity)', async () => {
     const report = baseReport()
     render(<PlanCharts report={report} />)
-    const els = await screen.findAllByTestId('chart')
+    const els = await screen.findAllByTestId('chart', {}, { timeout: 5000 })
     await flushEffects()
 
     // The component passes the canonical report UNCHANGED to each builder —

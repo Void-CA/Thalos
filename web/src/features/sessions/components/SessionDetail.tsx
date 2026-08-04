@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { sessionApi, type SessionSummary } from '../api/session-api'
 import { ComparisonTab } from './comparison-tab'
 import { TimelineTab } from './timeline-tab'
+import { TraceTab } from './trace-tab'
 import { ExportTab } from './export-tab'
 
 interface SessionDetailProps {
@@ -63,6 +64,7 @@ export function SessionDetail({ session }: SessionDetailProps) {
           <TabsTrigger value="summary">Summary</TabsTrigger>
           <TabsTrigger value="comparison">Comparison</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
+          <TabsTrigger value="trace">Trace</TabsTrigger>
           <TabsTrigger value="export">Export</TabsTrigger>
         </TabsList>
 
@@ -116,6 +118,10 @@ export function SessionDetail({ session }: SessionDetailProps) {
 
         <TabsContent value="timeline" className="pt-3">
           <TimelineTab sessionId={session.id} />
+        </TabsContent>
+
+        <TabsContent value="trace" className="pt-3">
+          <TraceTab sessionId={session.id} />
         </TabsContent>
 
         <TabsContent value="export" className="pt-3">
