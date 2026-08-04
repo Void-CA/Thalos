@@ -603,9 +603,10 @@ async fn workspace_sample_scara_returns_metrics_and_bounds() {
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
 
-    // Has metrics
+    // Has metrics — sample_count is derived from samples.len() (workspace.rs),
+    // so it is exact, not a floor.
     let metrics = body.get("metrics").expect("must contain metrics");
-    assert!(metrics["sample_count"].as_u64().unwrap() >= 500);
+    assert_eq!(metrics["sample_count"].as_u64().unwrap(), 500);
     assert!(metrics["max_reach"].as_f64().unwrap() > 0.0);
     assert!(metrics["bounding_volume"].as_f64().unwrap() > 0.0);
     assert!(metrics.get("centroid").is_some());
@@ -765,7 +766,8 @@ async fn workspace_sample_active_targets_the_loaded_catalog_robot() {
     let body = body.expect("response must be valid JSON");
 
     let metrics = body.get("metrics").expect("must contain metrics");
-    assert!(metrics["sample_count"].as_u64().unwrap() >= 500);
+    // sample_count is derived from samples.len() (workspace.rs) — exact, not a floor.
+    assert_eq!(metrics["sample_count"].as_u64().unwrap(), 500);
     let samples = body.get("samples").expect("must contain samples");
     let arr = samples.as_array().unwrap();
     assert_eq!(arr.len(), 500, "must sample the active chain");
