@@ -75,6 +75,7 @@ pub async fn analyze_plan(
     // construye modelos intermedios entre dominio y contrato.
     Ok(Json(PlanAnalysisResponse::from_report(
         &result.report,
+        &result.analysis,
         segments,
     )))
 }

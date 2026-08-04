@@ -78,6 +78,17 @@ export interface ProblemRegionWire {
   recommended_strategies?: string[]
 }
 
+/** One manipulability point per analyzed waypoint (design P3, spec
+ *  motion-plan-endpoint). Projection of `PlanAnalysis.waypoints[].manipulability`
+ *  computed by the backend — the chart builder consumes this series verbatim
+ *  (I2: the UI never recomputes manipulability). */
+export interface ManipulabilityPointWire {
+  /** 0-based waypoint index in the analyzed plan. */
+  waypoint: number
+  /** Yoshikawa manipulability measure at that waypoint. */
+  yoshikawa: number
+}
+
 /** The canonical /plan/analyze wire payload — projection of the domain
  *  `AnalysisReport` (spec motion-plan-endpoint). */
 export interface AnalysisReportWire {
@@ -93,6 +104,10 @@ export interface AnalysisReportWire {
     severity_distribution: Record<string, number>
   }
   problem_regions?: ProblemRegionWire[]
+  /** Per-waypoint manipulability series (P3). OPTIONAL on the wire: the backend
+   *  annotates it `#[serde(default, skip_serializing_if = "Vec::is_empty")]`,
+   *  so old payloads and trivial plans omit it (I3 — additive delta). */
+  manipulability_series?: ManipulabilityPointWire[]
 }
 
 // ─── Derived pure helpers (I3: interpretation derives from kind/severity) ───
@@ -128,6 +143,15 @@ export function severityCounts(report: AnalysisReportWire): {
     warning: bySeverity('Warning'),
     info: bySeverity('Info'),
   }
+}
+
+/** The per-waypoint manipulability series, defaulting to `[]` when absent
+ *  (I3: old payloads and trivial plans omit the field — chart builders must
+ *  not break; S1 additive delta). */
+export function manipulabilitySeriesOf(
+  report: AnalysisReportWire,
+): ManipulabilityPointWire[] {
+  return report.manipulability_series ?? []
 }
 
 /** Per-waypoint analysis view derived from observations anchored to a

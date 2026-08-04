@@ -100,6 +100,94 @@ impl PlanAnalysisService {
         }
         report.actions = actions;
 
+        // (S1) Poblar `report.metrics` desde el análisis técnico (design P3):
+        // el aggregator es source-agnostic (no conoce `PlanAnalysis`), así que
+        // el servicio — composition root — conecta ambas proyecciones. El
+        // agregado vive en el reporte canónico y el DTO lo proyecta al wire.
+        // ADITIVO: solo llena un campo que llegaba vacío (`{}`).
+        report.metrics = analysis.metrics.to_btree_map();
+
         Ok(PlanAnalysisResult { analysis, report })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use thalos_core::{
+        ids::MotionPlanId,
+        models::{RobotModel, RobotRegistry},
+        trajectory::{Trajectory, TrajectoryPoint},
+    };
+
+    fn analyze(trajectory: Trajectory) -> PlanAnalysisResult {
+        let chain = RobotRegistry::create_default(RobotModel::Planar2R);
+        PlanAnalysisService::analyze_plan(
+            &chain,
+            &trajectory,
+            None,
+            None,
+            ArtifactRef::MotionPlan(MotionPlanId("mp-1".to_string())),
+        )
+        .expect("analyze_plan must succeed")
+    }
+
+    #[test]
+    fn analyze_plan_populates_report_metrics() {
+        // Spec motion-plan-endpoint "Metrics populated": after analyzing a
+        // real trajectory, `report.metrics` is NOT `{}` and carries the
+        // technical aggregates (waypoint_count, avg manipulability, …).
+        let result = analyze(Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![0.5, 1.57], 0.5),
+        ]));
+
+        assert!(
+            !result.report.metrics.is_empty(),
+            "report.metrics must not be empty after analysis"
+        );
+        assert_eq!(result.report.metrics["waypoint_count"], 2.0);
+
+        // Fidelity: the report metrics mirror the technical analysis.
+        let expected_avg = result
+            .analysis
+            .metrics
+            .avg_manipulability
+            .expect("avg manipulability computed");
+        assert!(
+            (result.report.metrics["avg_manipulability"] - expected_avg).abs() < 1e-12,
+            "report metrics must mirror analysis.metrics"
+        );
+    }
+
+    #[test]
+    fn analyze_plan_metrics_match_technical_analysis_for_singular_plan() {
+        // Triangulation: a singular trajectory (fully extended arm) — the
+        // singular counts and min manipulability ride into the report verbatim.
+        let result = analyze(Trajectory::new(vec![TrajectoryPoint::new(
+            vec![0.0, 0.0],
+            0.0,
+        )]));
+
+        let technical = &result.analysis.metrics;
+        assert_eq!(
+            result.report.metrics["waypoint_count"],
+            technical.waypoint_count as f64
+        );
+        assert!(
+            result.report.metrics["singular_count"] + result.report.metrics["near_singular_count"]
+                >= 1.0,
+            "fully extended arm must be (near-)singular in report metrics"
+        );
+        if let Some(min) = technical.min_manipulability {
+            assert!(
+                (result.report.metrics["min_manipulability"] - min).abs() < 1e-12,
+                "min manipulability must be projected verbatim"
+            );
+        }
+        assert!(
+            result.report.metrics.contains_key("has_collisions"),
+            "has_collisions is a stable aggregate key"
+        );
     }
 }
