@@ -26,11 +26,11 @@ describe('WORKSPACE_REGISTRY (slice 1 — navigation contract)', () => {
     expect(new Set(names).size).toBe(names.length)
   })
 
-  it('marks exactly sessions and knowledge as hidden (nav links suppressed)', () => {
+  it('marks exactly knowledge as hidden (sessions is visible since S5; config is a visible non-stage)', () => {
     const hidden = WORKSPACE_REGISTRY.filter((e) => e.hidden)
       .map((e) => e.workspace)
       .sort()
-    expect(hidden).toEqual(['knowledge', 'sessions'])
+    expect(hidden).toEqual(['knowledge'])
   })
 
   it('gives every entry a non-empty label', () => {

@@ -45,6 +45,14 @@ vi.mock('@/features/viewport/viewport', async () => {
   }
 })
 
+// The visible /sessions area fetches GET /sessions on mount — stub the api so
+// the router renders the list (or empty state) without real HTTP.
+const sessionsApiMocks = vi.hoisted(() => ({ list: vi.fn() }))
+vi.mock('@/features/sessions/api/session-api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/sessions/api/session-api')>()
+  return { ...actual, sessionApi: sessionsApiMocks }
+})
+
 const compileResult: CompileResponse = {
   status: 'ok',
   validation: { errors: [], warnings: [] },
@@ -105,6 +113,7 @@ function renderRouter(initialEntries: string[]) {
 beforeEach(() => {
   viewportMetrics.mounts = 0
   viewportMetrics.unmounts = 0
+  sessionsApiMocks.list.mockReset()
   // Fresh workflow state per test (guards read these stores).
   useSceneStore.getState().reset()
   useSemanticEditor.getState().reset()
@@ -169,22 +178,28 @@ describe('direct URL entry renders the full shell', () => {
 })
 
 describe('hidden routes render placeholders (no 404)', () => {
-  it.each([
-    ['/sessions', 'Sessions'],
-    ['/knowledge', 'Knowledge'],
-  ])('renders a placeholder at %s (no 404)', (path, heading) => {
-    seedPrerequisites({ completed: true, analyzed: true })
+  it.each([['/knowledge', 'Knowledge']])('renders a placeholder at %s (no 404)', (path, heading) => {
+    seedPrerequisites({ analyzed: true })
     renderRouter([path])
     expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument()
     expect(screen.getByTestId('viewport-stub')).toBeInTheDocument()
     expect(screen.getByText('Thalos Robotics')).toBeInTheDocument()
   })
 
-  it('does not show nav links for hidden workspaces', () => {
+  it('renders the sessions list at /sessions (visible since S5, no 404)', async () => {
+    seedPrerequisites({ completed: true })
+    sessionsApiMocks.list.mockResolvedValue([])
+    renderRouter(['/sessions'])
+    expect(screen.getByRole('heading', { name: 'Sesiones' })).toBeInTheDocument()
+    expect(await screen.findByText('No sessions yet')).toBeInTheDocument()
+    expect(screen.getByTestId('viewport-stub')).toBeInTheDocument()
+  })
+
+  it('shows nav links for visible workspaces only (Sesiones visible, Knowledge hidden)', () => {
     renderRouter(['/'])
     expect(screen.getByRole('link', { name: 'Programación' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Ejecución' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Sessions' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Sesiones' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Knowledge' })).not.toBeInTheDocument()
   })
 })
@@ -348,7 +363,10 @@ describe('router covers every registered workspace', () => {
   it.each(WORKSPACE_REGISTRY.filter((e) => !e.hidden))(
     'renders $path ($workspace) with the full shell and an active nav link',
     (entry) => {
-      seedPrerequisites({ executable: true })
+      // Sessions requires `completed` (status 'completed' — which makes
+      // `executable` false), every other visible area needs `executable`.
+      seedPrerequisites({ executable: true, completed: entry.workspace === 'sessions' })
+      sessionsApiMocks.list.mockResolvedValue([])
       renderRouter([entry.path])
       expect(screen.getByTestId('viewport-stub')).toBeInTheDocument()
       expect(screen.getByRole('link', { name: entry.label })).toHaveAttribute('aria-current', 'page')
