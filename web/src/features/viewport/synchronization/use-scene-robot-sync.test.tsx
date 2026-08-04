@@ -9,10 +9,13 @@ import type { RuntimeInfo } from '../types'
 const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
   loadScene: vi.fn(),
+  // Lifecycle state of the loadRobot mutation — flipped by the error-settle test
+  // to simulate a failed load (confirmed identity never changes).
+  robotMutation: { isError: false },
 }))
 
 vi.mock('./use-scene-loader', () => ({
-  useLoadRobot: () => ({ mutate: mocks.mutate, isPending: false }),
+  useLoadRobot: () => ({ mutate: mocks.mutate, isPending: false, isError: mocks.robotMutation.isError }),
   useLoadScene: () => ({ mutate: mocks.loadScene, isPending: false, isError: false }),
 }))
 
@@ -26,6 +29,7 @@ function runtime(robotId: string): RuntimeInfo {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.robotMutation.isError = false
   localStorage.clear()
   useRobotStore.getState().setRobots([
     { id: 'scara', display_name: 'SCARA', dof: 4, joints: [] },
@@ -111,6 +115,27 @@ describe('useSceneRobotSync — identity derived from the scene runtime (spec R2
     act(() => useSceneStore.setState({ runtime: runtime('urdf:a3f8b2c1d4e5') }))
 
     // Re-selecting the same catalog robot must be requested again.
+    act(() => useRobotStore.getState().select('scara'))
+
+    expect(mocks.mutate).toHaveBeenCalledTimes(2)
+    expect(mocks.mutate).toHaveBeenLastCalledWith('scara')
+  })
+
+  it('re-requests a catalog robot after its load failed and the confirmed identity never changed (latch reset on error settle)', () => {
+    // select X → loadRobot(X) fails → confirmedId stays the previous robot.
+    // The confirmedId-change reset never fires (nothing confirmed changes), so
+    // lastRequested keeps X blocked forever: re-selecting X after the catalog
+    // clears its selection must still re-request, not stay silent.
+    useSceneStore.setState({ runtime: runtime('planar_3r') })
+    renderHook(() => useSceneRobotSync())
+
+    act(() => useRobotStore.getState().select('scara'))
+    expect(mocks.mutate).toHaveBeenCalledWith('scara')
+
+    // loadRobot(scara) settles with an error — the confirmed identity stays
+    // planar_3r, so only the error-settle path can unblock the re-selection.
+    mocks.robotMutation.isError = true
+    act(() => useRobotStore.getState().select(null))
     act(() => useRobotStore.getState().select('scara'))
 
     expect(mocks.mutate).toHaveBeenCalledTimes(2)

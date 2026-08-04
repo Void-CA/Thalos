@@ -37,8 +37,11 @@ function snapshot(robotId: string): SceneSnapshot {
 }
 
 function wrapper({ children }: { children: React.ReactNode }) {
-  // retryDelay: 0 — keep the loadScene mutation's production retry:1 but make
-  // retries immediate in tests so error surfacing is deterministic.
+  // retryDelay: 0 — keep retries immediate in tests so error surfacing is
+  // deterministic. Note: retry:false here is only the CLIENT default — the
+  // loadScene mutation sets its own `retry: 1`, which OVERRIDES the client
+  // default, so the transient-failure retry test still exercises the real
+  // retry path (loadScene is called twice, the scene is applied on retry).
   return (
     <QueryClientProvider client={new QueryClient({ defaultOptions: { mutations: { retry: false, retryDelay: 0 } } })}>
       {children}
@@ -79,6 +82,25 @@ describe('useLoadScene — initial identity from GET /scene (spec R7)', () => {
     await waitFor(() => {
       expect(useSceneStore.getState().error).toBe('backend unreachable')
     })
+  })
+
+  it('retries a transient GET /scene failure and applies the scene on the retry', async () => {
+    // The loadScene mutation carries `retry: 1` (review fix R4-003): a one-shot
+    // backend blip must not leave the viewport uninitialized without a retry.
+    mocks.loadScene
+      .mockRejectedValueOnce(new Error('temporary backend blip'))
+      .mockResolvedValueOnce(snapshot('planar_2r'))
+
+    const { result } = renderHook(() => useLoadScene(), { wrapper })
+
+    act(() => {
+      result.current.mutate()
+    })
+
+    await waitFor(() => {
+      expect(useSceneStore.getState().runtime?.robot.id).toBe('planar_2r')
+    })
+    expect(mocks.loadScene).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -131,6 +153,34 @@ describe('useLoadRobot / useLoadRobotFromUrdf — stale response ordering (revie
 
     await waitFor(() => {
       expect(useSceneStore.getState().runtime?.robot.id).toBe('scara')
+    })
+  })
+
+  it('discards a stale loadRobot(A) when a newer loadRobot(B) resolved first (A→B interleave)', async () => {
+    // Finding R4-001: two rapid catalog selections A then B. B's response wins
+    // (identitySeq supersedes A's token); A's deferred response must NOT revert
+    // the confirmed identity back to A when it resolves last.
+    let releaseA!: (s: SceneSnapshot) => void
+    mocks.loadRobot
+      .mockReturnValueOnce(new Promise((resolve) => { releaseA = resolve }))
+      .mockResolvedValueOnce(snapshot('planar_3r'))
+
+    const { result } = renderHook(() => useLoadRobot(), { wrapper })
+
+    act(() => {
+      result.current.mutate('scara')
+      result.current.mutate('planar_3r')
+    })
+
+    await waitFor(() => {
+      expect(useSceneStore.getState().runtime?.robot.id).toBe('planar_3r')
+    })
+
+    // Stale A response resolves AFTER B was applied — must be discarded.
+    act(() => { releaseA(snapshot('scara')) })
+
+    await waitFor(() => {
+      expect(useSceneStore.getState().runtime?.robot.id).toBe('planar_3r')
     })
   })
 })

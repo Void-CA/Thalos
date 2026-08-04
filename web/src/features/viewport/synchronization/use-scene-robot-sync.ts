@@ -26,12 +26,23 @@ export function useSceneRobotSync() {
   // el flujo "select scara → importar URDF → re-seleccionar scara" quedaba
   // silenciosamente ignorado porque selectedId('scara') === lastRequested, aun
   // cuando confirmedId ya no era scara. Corre ANTES que el efecto de request
-  // para que una re-selección distinta se re-solicite en el mismo commit.
+  // para que una re-selección distinta se re-solicite en el mismo commit. El
+  // guard no depende de confirmedId truthy: también invalida cuando la identidad
+  // confirmada pasa a null/falsy (escena reseteada).
   useEffect(() => {
-    if (confirmedId && lastRequested.current !== confirmedId) {
+    if (confirmedId !== lastRequested.current) {
       lastRequested.current = null
     }
   }, [confirmedId])
+
+  // Invalida el dedupe latch cuando un load settle con ERROR (fix review F1):
+  // un loadRobot(X) fallido nunca cambia confirmedId, así que el reset por
+  // identidad confirmada jamás desbloquea X (selectedId === lastRequested === X).
+  // Un request fallido no debe envenenar la re-selección. Corre ANTES que el
+  // efecto de request para que el latch esté limpio en el mismo commit.
+  useEffect(() => {
+    if (loadRobot.isError) lastRequested.current = null
+  }, [loadRobot.isError])
 
   useEffect(() => {
     // Dedupe: skip robots already confirmed by the scene (applyScene response)
