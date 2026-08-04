@@ -1,5 +1,6 @@
 import { apiClient } from '@/shared/api-client'
 import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
+import type { RepairOptionsWire } from '@/shared/contracts/repair-options'
 import type { OptimizeResponse } from './plan-analysis.types'
 
 /**
@@ -14,8 +15,13 @@ export const planAnalysisApi = {
       .post<AnalysisReportWire>('/plan/analyze', { plan_id: planId ?? null })
       .then(r => r.data),
 
-  alternatives: () =>
-    apiClient.post<{ original_score: number; alternatives: unknown[] }>('/plan/analyze/alternatives', {}).then(r => r.data),
+  /**
+   * Canonical repair-options endpoint (spec alternatives-panel-react, S4).
+   * The deprecated `/plan/analyze/alternatives` route was removed from the
+   * client (criteria C1/C2) — the panel consumes ONLY `/plan/repair/options`.
+   */
+  repairOptions: (): Promise<RepairOptionsWire> =>
+    apiClient.post<RepairOptionsWire>('/plan/repair/options', {}).then(r => r.data),
 
   optimize: () =>
     apiClient.post<OptimizeResponse>('/plan/optimize', {}).then(r => r.data),
