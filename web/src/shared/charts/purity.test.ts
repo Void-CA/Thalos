@@ -50,4 +50,12 @@ describe('adapter boundary (O3: single ECharts frontier)', () => {
     expect(source).toMatch(/from\s+['"]echarts/)
     expect(source).not.toMatch(/from\s+['"]react/)
   })
+
+  it('feature chart components never import echarts (S3: PlanCharts stays a consumer)', () => {
+    const source = codeOf(
+      new URL('../../features/planning/components/PlanCharts.tsx', import.meta.url),
+    )
+    expect(source).not.toMatch(/from\s+['"]echarts/)
+    expect(source).not.toMatch(/\becharts\./i)
+  })
 })

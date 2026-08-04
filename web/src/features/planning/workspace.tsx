@@ -1,6 +1,7 @@
 import { PlanningPanel } from './components/planning-panel'
 import { TrajectoryColorPicker } from './components/trajectory-color-picker'
 import { AdvisorSection } from './components/AdvisorSection'
+import { PlanCharts } from './components/PlanCharts'
 import { AnalysisSection } from '@/features/analysis/analysis-section'
 import { useAnalysisStore } from '@/features/analysis/store'
 
@@ -49,6 +50,7 @@ export function PlanningWorkspace() {
             Analysis
           </h2>
           <AdvisorSection report={report} />
+          <PlanCharts report={report} />
           <AnalysisSection />
         </section>
       </div>
