@@ -183,4 +183,61 @@ describe('useLoadRobot / useLoadRobotFromUrdf — stale response ordering (revie
       expect(useSceneStore.getState().runtime?.robot.id).toBe('planar_3r')
     })
   })
+
+  it('discards a stale loadRobot(A) ERROR when a URDF import superseded it (token-guarded onError)', async () => {
+    // A catalog load (loadRobot) is in flight when a URDF import (separate
+    // mutation) supersedes it and succeeds. A then FAILS: without an ordering
+    // guard in onError, the stale failure would overwrite the scene error state
+    // that the URDF success cleared.
+    let rejectA!: (e: Error) => void
+    mocks.loadRobot.mockReturnValue(new Promise((_, reject) => { rejectA = reject }))
+    mocks.loadRobotFromUrdf.mockResolvedValue(snapshot('urdf:a3f8b2c1d4e5'))
+
+    const { result: robot } = renderHook(() => useLoadRobot(), { wrapper })
+    const { result: urdf } = renderHook(() => useLoadRobotFromUrdf(), { wrapper })
+
+    act(() => { robot.current.mutate('scara') })
+    act(() => { urdf.current.mutate('<urdf source/>') })
+
+    await waitFor(() => {
+      expect(useSceneStore.getState().runtime?.robot.id).toBe('urdf:a3f8b2c1d4e5')
+    })
+
+    // Stale scara failure resolves LAST. Wait for the loadRobot mutation to
+    // settle its error (that is what fires onError) — a synchronous assert right
+    // after rejectA can miss the microtask. The stale failure must NOT overwrite
+    // the scene error state that the URDF success cleared.
+    act(() => { rejectA(new Error('stale scara failure')) })
+    await waitFor(() => {
+      expect(robot.current.isError).toBe(true)
+    })
+
+    expect(useSceneStore.getState().error).toBeNull()
+  })
+
+  it('discards a stale GET /scene ERROR when a catalog load superseded it (token-guarded onError)', async () => {
+    let rejectScene!: (e: Error) => void
+    mocks.loadScene.mockReturnValue(new Promise((_, reject) => { rejectScene = reject }))
+    mocks.loadRobot.mockResolvedValue(snapshot('scara'))
+
+    const { result: scene } = renderHook(() => useLoadScene(), { wrapper })
+    const { result: robot } = renderHook(() => useLoadRobot(), { wrapper })
+
+    act(() => { scene.current.mutate() })
+    act(() => { robot.current.mutate('scara') })
+
+    await waitFor(() => {
+      expect(useSceneStore.getState().runtime?.robot.id).toBe('scara')
+    })
+
+    // Stale backend-default failure resolves last. Wait for the loadScene
+    // mutation to settle its error (retry: 1 exhausted) — that is what fires
+    // onError — before asserting the scene error was not overwritten.
+    act(() => { rejectScene(new Error('stale scene failure')) })
+    await waitFor(() => {
+      expect(scene.current.isError).toBe(true)
+    })
+
+    expect(useSceneStore.getState().error).toBeNull()
+  })
 })
