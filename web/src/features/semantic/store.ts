@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
 import type { SemanticOp } from '@/shared/contracts'
 import type { CompileResponse } from './types'
+import type { ParseError } from './script/types'
 
 interface SemanticEditorState {
   /** Ordered list of operations in the editor */
@@ -16,12 +17,26 @@ interface SemanticEditorState {
    *  compile. `deriveWorkflowState` uses it to invalidate `compiled`
    *  (workflow-state spec, "Dirty Counter"). */
   dirty: number
+  /** Parse errors from the last text-mode commit attempt (program-dual-editor
+   *  spec I5). DIAGNOSTIC ONLY: never touched by a failed parse, and never
+   *  derived from the store — the text buffer stays component-local (P4).
+   *  `replaceOperations`/`addOperation` etc. leave it untouched. */
+  scriptErrors: ParseError[]
 
   // Actions
   addOperation: (op: SemanticOp) => void
   removeOperation: (index: number) => void
   moveOperation: (from: number, to: number) => void
   updateOperation: (index: number, op: Partial<SemanticOp>) => void
+  /** Atomic full-program replace (program-dual-editor spec I5): overwrites
+   *  the ENTIRE operation set and bumps `dirty` (invalidating `compiled`).
+   *  Used ONLY by the text-mode Apply path after `parse()` succeeds — a
+   *  failed parse never reaches here (R2). */
+  replaceOperations: (ops: SemanticOp[]) => void
+  /** Record parse errors for inline + DiagnosticsPanel display. Bumps nothing,
+   *  touches no program state — the program is written exclusively through
+   *  `replaceOperations`. */
+  setScriptErrors: (errors: ParseError[]) => void
   setResult: (result: CompileResponse | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
@@ -44,6 +59,7 @@ export const useSemanticEditor = create<SemanticEditorState>()(
       loading: false,
       error: null,
       dirty: 0,
+      scriptErrors: [],
 
       addOperation: (op) =>
         set((s) => ({ operations: [...s.operations, op], dirty: s.dirty + 1 })),
@@ -70,6 +86,14 @@ export const useSemanticEditor = create<SemanticEditorState>()(
           dirty: s.dirty + 1,
         })),
 
+      replaceOperations: (ops) =>
+        set((s) => ({
+          operations: ops.map((o) => ({ ...o })),
+          dirty: s.dirty + 1,
+        })),
+
+      setScriptErrors: (scriptErrors) => set({ scriptErrors }),
+
       setResult: (result) =>
         set({ result, error: null, loading: false, dirty: 0 }),
       setLoading: (loading) => set({ loading }),
@@ -79,7 +103,9 @@ export const useSemanticEditor = create<SemanticEditorState>()(
           operations: sampleOperations.map((op) => ({ ...op })),
           result: null,
           error: null,
+          loading: false,
           dirty: 0,
+          scriptErrors: [],
         }),
     }),
     { name: 'semantic-editor' },

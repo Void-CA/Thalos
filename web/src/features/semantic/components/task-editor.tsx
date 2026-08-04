@@ -1,5 +1,5 @@
 import { Play, Plus, RotateCcw, Send } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useSemanticEditor } from '../store'
 import { useDomainSceneStore } from '@/features/scene/store'
@@ -10,6 +10,7 @@ import { OperationRow } from './operation-row'
 import { compileSemantic, executeSemantic, CompileError } from '../api'
 import { isApiError } from '@/shared/errors'
 import { serialize } from '../script/serializer'
+import { parse } from '../script/parser'
 
 /** Friendly guided CTAs keyed on the backend machine-readable error code
  *  (verbatim codes from `backend/crates/thalos-api/src/features/semantic/handler.rs`).
@@ -71,8 +72,9 @@ function describeError(err: unknown): string {
  */
 export function TaskEditor() {
   const {
-    operations, result, loading,
+    operations, result, loading, scriptErrors,
     addOperation, removeOperation, moveOperation, updateOperation,
+    replaceOperations, setScriptErrors,
     setResult, setLoading, setError, reset,
   } = useSemanticEditor()
   const toTaskDocument = useDomainSceneStore((s) => s.toTaskDocument)
@@ -83,10 +85,43 @@ export function TaskEditor() {
    *  toggling only changes the projection, never the store. */
   const [mode, setMode] = useState<'visual' | 'text'>('visual')
 
-  /** Text mode renders EXACTLY serialize(operations) — the store is the single
-   *  source of truth, the serializer the single source of text (I1). No local
-   *  buffer, no edit state in S1: this is a read-only projection. */
-  const programText = useMemo(() => serialize(operations), [operations])
+  /**
+   * S2 text buffer (design P4): component-LOCAL state. The store remains the
+   * single canonical source of truth — typing updates ONLY this buffer, and
+   * the serializer keeps deriving from `operations`, not from the buffer (R3).
+   * The buffer is (re)initialized from `serialize(operations)` on every
+   * entry into Text mode, so it can never drift from the model on entry.
+   */
+  const [buffer, setBuffer] = useState<string>(serialize(operations))
+
+  /** Text mode renders EXACTLY serialize(operations) on entry; once editing,
+   *  the buffer is the working copy until a successful atomic Apply. */
+  const switchToText = () => {
+    setBuffer(serialize(operations))
+    setMode('text')
+    setScriptErrors([])
+  }
+
+  const switchToVisual = () => {
+    setMode('visual')
+    setScriptErrors([])
+  }
+
+  /**
+   * Atomic commit (program-dual-editor spec I5, R2):
+   * parse(buffer) → OK: ONE `replaceOperations(ops)` (whole-set replace + dirty
+   * bump) → ERR: record errors for inline/panel display and touch NOTHING in
+   * the program state. No partial writes exist in any path.
+   */
+  const handleApply = () => {
+    const result = parse(buffer)
+    if (result.ops === null) {
+      setScriptErrors(result.errors)
+      return
+    }
+    setScriptErrors([])
+    replaceOperations(result.ops)
+  }
 
   const makeOps = () => operations.map((op, i) => ({ ...op, origin: op.origin ?? `op_${i}` }))
 
@@ -128,15 +163,21 @@ export function TaskEditor() {
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
         <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider flex-1">Program</h2>
         <div className="inline-flex items-center rounded-md border border-border bg-background overflow-hidden" role="group" aria-label="Editor mode">
-          <button onClick={() => setMode('visual')} aria-pressed={mode === 'visual'}
+          <button onClick={switchToVisual} aria-pressed={mode === 'visual'}
             className={`px-2 py-1 text-xs font-medium transition-colors cursor-pointer ${mode === 'visual' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
             Visual
           </button>
-          <button onClick={() => setMode('text')} aria-pressed={mode === 'text'}
+          <button onClick={switchToText} aria-pressed={mode === 'text'}
             className={`px-2 py-1 text-xs font-medium transition-colors cursor-pointer ${mode === 'text' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
             Text
           </button>
         </div>
+        {mode === 'text' && (
+          <button onClick={handleApply}
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-amber-600/20 text-amber-500 hover:bg-amber-600/30 cursor-pointer">
+            Apply
+          </button>
+        )}
         <button onClick={() => addOperation({ type: 'pick', object: '' })}
           className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer">
           <Plus className="size-3" /> Add
@@ -158,10 +199,25 @@ export function TaskEditor() {
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {mode === 'text' ? (
-          programText === ''
-            ? <p className="text-xs text-muted-foreground text-center py-8">No operations defined.</p>
-            : <pre data-testid="program-text"
-                className="whitespace-pre font-mono text-xs leading-relaxed text-foreground p-3 rounded-lg border border-border/50 bg-card/30 overflow-x-auto">{programText}</pre>
+          <div className="flex flex-col gap-2 h-full min-h-0">
+            <textarea
+              data-testid="program-textarea"
+              value={buffer}
+              onChange={(e) => setBuffer(e.target.value)}
+              spellCheck={false}
+              aria-label="Task script"
+              className="flex-1 min-h-32 w-full resize-none rounded-lg border border-border/50 bg-card/30 p-3 font-mono text-xs leading-relaxed text-foreground focus:outline-none focus:border-primary/50"
+            />
+            {scriptErrors.length > 0 && (
+              <ul className="space-y-1 text-xs" aria-label="Script parse errors">
+                {scriptErrors.map((e, i) => (
+                  <li key={i} role="alert" className="text-red-400">
+                    line {e.line}: {e.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         ) : operations.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-8">No operations defined.</p>
         ) : (
