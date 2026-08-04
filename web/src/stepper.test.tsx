@@ -155,8 +155,7 @@ describe('Stepper — six registry-derived stages (global-stepper spec S3)', () 
     expect(glyph('Programación')).toBe('✓') // passed — compiled produced
     expect(glyph('Planificación')).toBe('●') // current — active route
     expect(glyph('Ejecución')).toBe('○') // pending — requirements met, not reached
-    expect(glyph('Sesiones')).toBe('✕') // blocked — completed unmet (guard prevents access)
-    expect(screen.getByText('Requires a completed execution')).toBeInTheDocument()
+    expect(glyph('Sesiones')).toBe('○') // pending — guard relaxed, nothing blocks the browser
   })
 
   it('marks the active route stage as current (S4: I know where I am)', () => {
@@ -182,11 +181,12 @@ describe('Stepper — six registry-derived stages (global-stepper spec S3)', () 
     expect(execution).not.toHaveAttribute('aria-current')
   })
 
-  it('derives a different blocked reason per missing flag (not a fixed string)', () => {
-    seedFlags({ robotLoaded: true, compiled: true }) // executable=false, completed=false
+  it('derives a blocked reason from the missing flag (not a fixed string)', () => {
+    seedFlags({ robotLoaded: true, compiled: true }) // executable=false
     renderStepper('/planning')
     expect(screen.getByText('Requires an executable plan')).toBeInTheDocument()
-    expect(screen.getByText('Requires a completed execution')).toBeInTheDocument()
+    // Sessions is no longer blocked (guard relaxed) — no completed reason exists.
+    expect(screen.queryByText(/Requires a completed execution/)).not.toBeInTheDocument()
   })
 })
 

@@ -430,8 +430,8 @@ describe('deriveStepperStages — per-stage state from flags + active route', ()
     expect(byWs.task.state).toBe('passed') // compiled produced
     expect(byWs.planning.state).toBe('current') // active route
     expect(byWs.execution.state).toBe('pending') // requirements met, not reached
-    expect(byWs.sessions.state).toBe('blocked') // completed unmet — guard prevents access
-    expect(byWs.sessions.reason).toBe('Requires a completed execution')
+    expect(byWs.sessions.state).toBe('pending') // guard relaxed — nothing blocks the browser
+    expect(byWs.sessions.reason).toBeNull()
   })
 
   it('blocks Execution when executable is unmet, with a derived reason', () => {
@@ -456,11 +456,14 @@ describe('deriveStepperStages — per-stage state from flags + active route', ()
     expect(planning.reason).toBe('Requires a compiled plan')
   })
 
-  it('derives the reason from the first missing flag (completed → sessions)', () => {
+  it('never blocks sessions — the guard is relaxed (no requirement gates the browser)', () => {
+    // S5.1 AUDIT verdict (area-sessions spec): `completed` was REMOVED from
+    // sessions.requires so failed/running sessions are browsable. With
+    // completed=false the stage is pending (unreached), never blocked.
     const stages = deriveStepperStages(ALL_TRUE, '/execution', WORKSPACE_REGISTRY)
     const sessions = stages.find((s) => s.entry.workspace === 'sessions')!
-    expect(sessions.state).toBe('blocked')
-    expect(sessions.reason).toBe('Requires a completed execution')
+    expect(sessions.state).toBe('pending')
+    expect(sessions.reason).toBeNull()
   })
 
   it('passes a stage whose produces flag is already true', () => {
