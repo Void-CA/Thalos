@@ -126,6 +126,34 @@ describe('RobotSelector — localStorage is a REQUEST hint, not authority (spec 
     expect(localStorage.getItem(ROBOT_SELECTION_KEY)).toBe('scara')
     expect(useRobotStore.getState().selectedId).toBe('scara')
   })
+
+  it('migrates a stale persisted urdf:* hint — ignored, no select() request, backend default wins', async () => {
+    // Pre-PR-2 code persisted whatever id was selected, including URDF ids.
+    // After the identity contract (R1: urdf:* is scene state, not catalog),
+    // a leftover urdf:* hint MUST be treated like any unknown id: ignored,
+    // never requested through select(), never re-persisted.
+    localStorage.setItem(ROBOT_SELECTION_KEY, 'urdf:a3f8b2c1d4e5')
+
+    renderSelector()
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(useRobotStore.getState().selectedId).toBeNull()
+    expect(localStorage.getItem(ROBOT_SELECTION_KEY)).toBe('urdf:a3f8b2c1d4e5')
+  })
+
+  it('never persists or requests a confirmed URDF identity when it is the displayed value', async () => {
+    // The URDF option is DISPLAY-ONLY (R5.1). Re-picking the already-confirmed
+    // identity from the <select> must not write it back to localStorage nor
+    // send it through the catalog request path.
+    useSceneStore.setState({ runtime: runtime('urdf:a3f8b2c1d4e5', 'My URDF Robot') })
+    renderSelector()
+    await waitFor(() => expect(taskRobotSelect()).toHaveValue('urdf:a3f8b2c1d4e5'))
+
+    fireEvent.change(taskRobotSelect(), { target: { value: 'urdf:a3f8b2c1d4e5' } })
+
+    expect(localStorage.getItem(ROBOT_SELECTION_KEY)).toBeNull()
+    expect(useRobotStore.getState().selectedId).toBeNull()
+  })
 })
 
 describe('Integration — catalog select flows through the request path (spec R5.2)', () => {
