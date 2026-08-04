@@ -99,6 +99,15 @@ function seedTask(opts: { compiled?: boolean; dirty?: number } = {}) {
   })
 }
 
+/** Operation-row comboboxes = editable row controls. The workspace-header
+ *  robot selector (aria-label="Task robot") stays regardless of mode, so
+ *  scope the "rows hidden" assertion to the row selects only. */
+const rowComboboxes = () =>
+  screen.getAllByRole('combobox').filter((cb) => !cb.hasAttribute('aria-label'))
+
+const textarea = () =>
+  screen.getByTestId('program-textarea') as HTMLTextAreaElement
+
 beforeEach(() => {
   apiMocks.executeSemantic.mockClear()
   apiMocks.compileSemantic.mockClear()
@@ -224,15 +233,6 @@ describe('Program panel Visual/Text toggle — editable text mode with atomic co
   /** The store's canonical sample program serialized by `serialize` (P7). */
   const SAMPLE_TEXT = 'pick bolt-1\nwait 1s\nplace bolt-1 at tray-1\nhome'
 
-  /** Operation-row comboboxes = editable row controls. The workspace-header
-   *  robot selector (aria-label="Task robot") stays regardless of mode, so
-   *  scope the "rows hidden" assertion to the row selects only. */
-  const rowComboboxes = () =>
-    screen.getAllByRole('combobox').filter((cb) => !cb.hasAttribute('aria-label'))
-
-  const textarea = () =>
-    screen.getByTestId('program-textarea') as HTMLTextAreaElement
-
   it('defaults to Visual mode with editable rows; Text toggles to an editable textarea with canonical text', async () => {
     seedTask()
     renderRouter(['/task'])
@@ -339,5 +339,155 @@ describe('Program panel Visual/Text toggle — editable text mode with atomic co
     fireEvent.click(screen.getByRole('button', { name: 'Text' }))
     expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
     expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
+  })
+})
+
+describe('S3.1 — dirty guard: Text→Visual with uncommitted buffer (I6, P5)', () => {
+  const enterTextMode = async () => {
+    renderRouter(['/task'])
+    fireEvent.click(await screen.findByRole('button', { name: 'Text' }))
+  }
+
+  it('shows the confirm dialog when switching Text→Visual with a dirty buffer', async () => {
+    seedTask()
+    await enterTextMode()
+    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Visual' }))
+
+    // I6: warning SHALL appear "Uncommitted changes will be lost" and the
+    // user SHALL confirm or cancel — the switch is NOT performed yet.
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Uncommitted changes will be lost')
+    expect(screen.getByTestId('program-textarea')).toBeInTheDocument()
+  })
+
+  it('cancel keeps the buffer, stays in Text mode and touches nothing', async () => {
+    seedTask()
+    await enterTextMode()
+    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
+    const opsBefore = JSON.stringify(useSemanticEditor.getState().operations)
+    const dirtyBefore = useSemanticEditor.getState().dirty
+
+    fireEvent.click(screen.getByRole('button', { name: 'Visual' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Cancel/i }))
+
+    // Cancel → remain in Text mode, buffer intact, store byte-identical.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(textarea().value).toBe('pick bolt-1\nwait 2s\nhome')
+    expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
+    expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
+  })
+
+  it('confirm discards the buffer and switches to Visual without committing', async () => {
+    seedTask()
+    await enterTextMode()
+    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
+    const opsBefore = JSON.stringify(useSemanticEditor.getState().operations)
+    const dirtyBefore = useSemanticEditor.getState().dirty
+
+    fireEvent.click(screen.getByRole('button', { name: 'Visual' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Discard changes/i }))
+
+    // Confirm → buffer discarded (NOT committed), rows are back in Visual.
+    expect(screen.queryByTestId('program-textarea')).not.toBeInTheDocument()
+    expect(rowComboboxes().length).toBeGreaterThan(0)
+    expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
+    expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
+  })
+
+  it('switches silently when the buffer is clean (no dialog)', async () => {
+    seedTask()
+    await enterTextMode()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Visual' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(rowComboboxes().length).toBeGreaterThan(0)
+  })
+})
+
+describe('S3.3 — external store change does not silently overwrite a dirty buffer', () => {
+  it('warns when the program changed outside the editor while the buffer is dirty', async () => {
+    seedTask()
+    renderRouter(['/task'])
+    fireEvent.click(await screen.findByRole('button', { name: 'Text' }))
+    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
+
+    // External change (e.g. a visual edit elsewhere / a program mutation that
+    // is not this buffer's Apply): store.operations is replaced out-of-band.
+    act(() => {
+      useSemanticEditor.getState().replaceOperations([
+        { type: 'pick', origin: 'ext-1', object: 'bolt-1' },
+      ])
+    })
+
+    // Indicator appears; the buffer is NOT overwritten; the store holds the
+    // external change — no silent overwrite in either direction.
+    expect(screen.getByText(/changed outside the editor/i)).toBeInTheDocument()
+    expect(textarea().value).toBe('pick bolt-1\nwait 2s\nhome')
+    expect(useSemanticEditor.getState().operations).toEqual([
+      { type: 'pick', origin: 'ext-1', object: 'bolt-1' },
+    ])
+  })
+
+  it('shows no warning while the store is unchanged', async () => {
+    seedTask()
+    renderRouter(['/task'])
+    fireEvent.click(await screen.findByRole('button', { name: 'Text' }))
+    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
+
+    // User typed only — the store never moved, so no sync indicator.
+    expect(screen.queryByText(/changed outside the editor/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('S3.3 — Apply disabled while parse errors are present', () => {
+  it('disables Apply for an invalid buffer and re-enables once fixed', async () => {
+    seedTask()
+    renderRouter(['/task'])
+    fireEvent.click(await screen.findByRole('button', { name: 'Text' }))
+
+    // Clean canonical buffer → Apply enabled.
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled()
+
+    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\njump 10' } })
+
+    // Parse errors present → Apply disabled + inline errors shown.
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
+    expect(screen.getAllByRole('alert').length).toBeGreaterThan(0)
+
+    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s' } })
+
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
+describe('S3.5 — editor help in Text mode', () => {
+  it('renders the canonical grammar, an example and the canonical-text note in Text mode', async () => {
+    seedTask()
+    renderRouter(['/task'])
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Text' }))
+
+    // Grammar summary: all 5 ops + at + tool= + duration forms + comments.
+    const help = within(screen.getByTestId('script-help'))
+    expect(help.getByText('pick <object> [tool=<name>]')).toBeInTheDocument()
+    expect(help.getByText('place <object> at <location> [tool=<name>]')).toBeInTheDocument()
+    expect(help.getByText('move_to <location> [tool=<name>]')).toBeInTheDocument()
+    expect(help.getByText(/wait <duration>/)).toBeInTheDocument()
+    expect(help.getByText('home')).toBeInTheDocument()
+
+    // A brief worked example + the explicit canonical-representation contract.
+    expect(help.getByText(/pick bolt-1/)).toBeInTheDocument()
+    expect(help.getByText(/canonical representation/i)).toBeInTheDocument()
+    expect(help.getByText(/not preserved/i)).toBeInTheDocument()
+  })
+
+  it('is hidden in Visual mode', async () => {
+    seedTask()
+    renderRouter(['/task'])
+
+    expect(screen.queryByText('pick <object> [tool=<name>]')).not.toBeInTheDocument()
   })
 })

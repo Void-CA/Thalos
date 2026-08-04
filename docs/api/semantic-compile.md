@@ -14,7 +14,7 @@ Compila un programa de tareas semánticas en un plan de ejecución. Recorre todo
     { "type": "pick",   "object": "bolt", "tool": "gripper-1" },
     { "type": "place",  "object": "bolt", "destination": "tray", "tool": "gripper-1" },
     { "type": "move_to", "destination": "station-2" },
-    { "type": "wait",   "duration_secs": 0.5 },
+    { "type": "wait",   "duration": { "secs": 0, "nanos": 500000000 } },
     { "type": "home" }
   ]
 }
@@ -27,8 +27,10 @@ Compila un programa de tareas semánticas en un plan de ejecución. Recorre todo
 | `pick` | `object: string` | `tool: string` |
 | `place` | `object: string`, `destination: string` | `tool: string` |
 | `move_to` | `destination: string` | `tool: string` |
-| `wait` | `duration_secs: number` | — |
+| `wait` | `duration: { secs, nanos }` | — |
 | `home` | — | — |
+
+`duration` uses the `std::time::Duration` serde shape: `{ "secs": number, "nanos": number }` (never a float seconds value).
 
 ---
 
@@ -37,29 +39,29 @@ Compila un programa de tareas semánticas en un plan de ejecución. Recorre todo
 ```json
 {
   "status": "ok",
-  "execution_plan": {
-    "segment_count": 2,
-    "duration_ms": 5141
-  },
   "validation": {
     "errors": [],
     "warnings": []
   },
   "metadata": {
-    "instruction_count": 6,
-    "planning_time_ms": 6
+    "instruction_count": 6
+  },
+  "motion_program": {
+    "instructions": [],
+    "metadata": {
+      "schema_version": 1,
+      "source_project": "demo"
+    }
   }
 }
 ```
 
 | Field | Description |
 |-------|-------------|
-| `execution_plan.segment_count` | Número de segmentos planificados |
-| `execution_plan.duration_ms` | Duración total estimada en milisegundos |
 | `validation.errors` | Errores de validación semántica (vacíos en éxito) |
 | `validation.warnings` | Advertencias no fatales |
 | `metadata.instruction_count` | Instrucciones de movimiento generadas |
-| `metadata.planning_time_ms` | Tiempo de compilación en milisegundos |
+| `motion_program` | Programa de ejecución (IR-1) producido por el lowering |
 
 ---
 
@@ -113,7 +115,7 @@ Causa: el planificador geométrico no pudo generar una trayectoria (IK failure, 
 ```bash
 curl -s -X POST http://localhost:3000/api/v1/semantic/compile \
   -H "Content-Type: application/json" \
-  -d '{"operations":[{"type":"wait","duration_secs":0.5},{"type":"home"}]}'
+  -d '{"operations":[{"type":"wait","duration":{"secs":0,"nanos":500000000}},{"type":"home"}]}'
 ```
 
 ### Pick + Place + Home
