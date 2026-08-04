@@ -68,11 +68,28 @@ export interface MotionTraceWire {
   samples: MotionSampleWire[]
 }
 
-/** GET /sessions/{id}/execution-trace — full ExecutionTrace (typed for the
- *  timelineBuilder in S6; kept structural here). */
+/** One lifecycle event exactly as the backend serializes it — the
+ *  externally-tagged `thalos_runtime::telemetry::ExecutionEvent` enum (S6 fine
+ *  typing; previously structural). Exactly ONE variant key is present per
+ *  event; timestamps are seconds as f64. The timelineBuilder projects these
+ *  verbatim — it never infers events from samples. */
+export interface ExecutionEventWire {
+  Started?: { timestamp: number }
+  Paused?: { timestamp: number }
+  Resumed?: { timestamp: number }
+  WaypointReached?: { timestamp: number; waypoint: number }
+  SegmentCompleted?: { timestamp: number; segment: number }
+  Error?: { timestamp: number; message: string }
+  Completed?: { timestamp: number }
+  Cancelled?: { timestamp: number }
+}
+
+/** GET /sessions/{id}/execution-trace — full ExecutionTrace (samples stay
+ *  structural; S6 consumes only the events for the timeline). */
 export interface ExecutionTraceWire {
+  metadata: unknown
   samples: unknown[]
-  events: unknown[]
+  events: ExecutionEventWire[]
 }
 
 /** GET /sessions/{id}/comparison — backend `SessionComparisonResponse`. */

@@ -1,5 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { sessionApi, type SessionSummary } from '../api/session-api'
+import { ComparisonTab } from './comparison-tab'
+import { TimelineTab } from './timeline-tab'
+import { ExportTab } from './export-tab'
 
 interface SessionDetailProps {
   /** The selected list row — header context only; numbers come from the detail endpoints. */
@@ -7,15 +11,16 @@ interface SessionDetailProps {
 }
 
 /**
- * SessionDetail — detail pane for the selected session (S5, session-browser
- * spec "Trace Preview").
+ * SessionDetail — detail pane for the selected session (S5 + S6.3,
+ * session-browser + session-manager specs).
  *
- * The preview shows sample_count / duration / joint_count from `/summary`
- * (spec: "Preview without replay" — it SHALL NOT call `/trace` or `/replay`)
- * plus the `/statistics` readout. Both endpoints are consumed verbatim
- * through the canonical api module (I4) — every displayed field maps to a
- * canonical response field, no client-side enrichment (I1/C3). Comparison,
- * timeline and CSV export are S6.
+ * The pane is PURELY COMPOSITIONAL (P4): Summary | Comparison | Timeline |
+ * Export tabs. Summary keeps the `/summary` preview + `/statistics` readout
+ * (spec "Preview without replay" — it SHALL NOT call `/trace` or `/replay`);
+ * the S6 tabs are thin projections that fetch their canonical endpoint on
+ * mount (lazy — an inactive tab performs no request) and delegate ALL domain
+ * mapping to the S6 builders (`comparisonBuilder`, `timelineBuilder`) and the
+ * export helper. No client-side metrics, no event inference, no store.
  */
 export function SessionDetail({ session }: SessionDetailProps) {
   const summary = useQuery({
@@ -53,47 +58,70 @@ export function SessionDetail({ session }: SessionDetailProps) {
         </span>
       </header>
 
-      {summary.data && (
-        <section aria-label="Session preview" className="rounded-md border border-border p-3 space-y-2">
-          <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Preview
-          </h4>
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-            <dt className="text-muted-foreground">Samples</dt>
-            <dd className="text-foreground text-right">{summary.data.sample_count} samples</dd>
-            <dt className="text-muted-foreground">Duration</dt>
-            <dd className="text-foreground text-right">{summary.data.duration}s</dd>
-            <dt className="text-muted-foreground">Joints</dt>
-            <dd className="text-foreground text-right">{summary.data.joint_count} joints</dd>
-            <dt className="text-muted-foreground">Path length</dt>
-            <dd className="text-foreground text-right">{summary.data.path_length}</dd>
-            <dt className="text-muted-foreground">Source</dt>
-            <dd className="text-foreground text-right">{summary.data.recording_source}</dd>
-            <dt className="text-muted-foreground">Status</dt>
-            <dd className="text-foreground text-right">{summary.data.status}</dd>
-          </dl>
-        </section>
-      )}
+      <Tabs defaultValue="summary" className="w-full">
+        <TabsList>
+          <TabsTrigger value="summary">Summary</TabsTrigger>
+          <TabsTrigger value="comparison">Comparison</TabsTrigger>
+          <TabsTrigger value="timeline">Timeline</TabsTrigger>
+          <TabsTrigger value="export">Export</TabsTrigger>
+        </TabsList>
 
-      {statistics.data && (
-        <section aria-label="Execution statistics" className="rounded-md border border-border p-3 space-y-2">
-          <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Statistics
-          </h4>
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-            <dt className="text-muted-foreground">Sample rate</dt>
-            <dd className="text-foreground text-right">{statistics.data.sample_rate} Hz</dd>
-            <dt className="text-muted-foreground">Events</dt>
-            <dd className="text-foreground text-right">{statistics.data.event_count}</dd>
-            <dt className="text-muted-foreground">Waypoints completed</dt>
-            <dd className="text-foreground text-right">{statistics.data.waypoints_completed}</dd>
-            <dt className="text-muted-foreground">Max tracking error</dt>
-            <dd className="text-foreground text-right">{statistics.data.max_tracking_error}</dd>
-            <dt className="text-muted-foreground">Avg tracking error</dt>
-            <dd className="text-foreground text-right">{statistics.data.avg_tracking_error}</dd>
-          </dl>
-        </section>
-      )}
+        <TabsContent value="summary" className="pt-3">
+          {summary.data && (
+            <section aria-label="Session preview" className="rounded-md border border-border p-3 space-y-2">
+              <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Preview
+              </h4>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                <dt className="text-muted-foreground">Samples</dt>
+                <dd className="text-foreground text-right">{summary.data.sample_count} samples</dd>
+                <dt className="text-muted-foreground">Duration</dt>
+                <dd className="text-foreground text-right">{summary.data.duration}s</dd>
+                <dt className="text-muted-foreground">Joints</dt>
+                <dd className="text-foreground text-right">{summary.data.joint_count} joints</dd>
+                <dt className="text-muted-foreground">Path length</dt>
+                <dd className="text-foreground text-right">{summary.data.path_length}</dd>
+                <dt className="text-muted-foreground">Source</dt>
+                <dd className="text-foreground text-right">{summary.data.recording_source}</dd>
+                <dt className="text-muted-foreground">Status</dt>
+                <dd className="text-foreground text-right">{summary.data.status}</dd>
+              </dl>
+            </section>
+          )}
+
+          {statistics.data && (
+            <section aria-label="Execution statistics" className="rounded-md border border-border p-3 space-y-2">
+              <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Statistics
+              </h4>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                <dt className="text-muted-foreground">Sample rate</dt>
+                <dd className="text-foreground text-right">{statistics.data.sample_rate} Hz</dd>
+                <dt className="text-muted-foreground">Events</dt>
+                <dd className="text-foreground text-right">{statistics.data.event_count}</dd>
+                <dt className="text-muted-foreground">Waypoints completed</dt>
+                <dd className="text-foreground text-right">{statistics.data.waypoints_completed}</dd>
+                <dt className="text-muted-foreground">Max tracking error</dt>
+                <dd className="text-foreground text-right">{statistics.data.max_tracking_error}</dd>
+                <dt className="text-muted-foreground">Avg tracking error</dt>
+                <dd className="text-foreground text-right">{statistics.data.avg_tracking_error}</dd>
+              </dl>
+            </section>
+          )}
+        </TabsContent>
+
+        <TabsContent value="comparison" className="pt-3">
+          <ComparisonTab sessionId={session.id} />
+        </TabsContent>
+
+        <TabsContent value="timeline" className="pt-3">
+          <TimelineTab sessionId={session.id} />
+        </TabsContent>
+
+        <TabsContent value="export" className="pt-3">
+          <ExportTab sessionId={session.id} />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
