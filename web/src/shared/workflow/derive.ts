@@ -1,4 +1,4 @@
-import type { WorkflowSnapshot, WorkflowState, WorkspaceEntry, Capability, WorkflowFlag } from './types'
+import type { WorkflowSnapshot, WorkflowState, WorkspaceEntry, WorkflowFlag } from './types'
 import type { SemanticOp, PoseDef } from '@/shared/contracts'
 import type { ExecutionStatus } from '@/features/execution/execution-store'
 
@@ -83,11 +83,11 @@ export function deriveWorkflowState(snapshot: WorkflowSnapshot): WorkflowState {
 
 // ── Stepper + status derivations (global-stepper spec) ──────────────────────
 //
-// The stepper is the workflow pipeline (Task → Planning → Execution → Sessions
-// until S3; Robot → Escena → … → Sesiones afterwards) and everything it shows
-// derives from the registry + WorkflowState: stage order and labels come from
-// WORKSPACE_REGISTRY, stage states from the flags. No per-workspace strings
-// live in the views.
+// The stepper is the workflow pipeline (Robot → Escena → Programación →
+// Planificación → Ejecución → Sesiones) and everything it shows derives from
+// the registry + WorkflowState: stage order and labels come from
+// WORKSPACE_REGISTRY (the `stage` field), stage states from the flags. No
+// per-workspace strings live in the views.
 
 /**
  * Human-readable phrase per workflow flag — the ONLY string source for blocked
@@ -106,24 +106,19 @@ const FLAG_PHRASES: Record<WorkflowFlag, string> = {
   completed: 'a completed execution',
 }
 
-/** Pipeline capabilities in workflow order (global-stepper spec stage list).
- *  The stepper stages are the registry entries whose capability is a pipeline
- *  step: compile (Task) → optimize (Planning) → execute (Execution) → replay
- *  (Sessions). This excludes the robot root and the scene area (no capability —
- *  their stage data arrives with the 6-stage stepper in S3), the legacy
- *  analysis workspace (no capability — absorbed into planning in slice 6), and
- *  the hidden knowledge workspace ('explain' is a support capability, not a
- *  pipeline stage). Sessions stays a stage even though its top-bar link is
- *  hidden until change 2 — it is the pipeline terminal where completed
- *  executions are reviewed. */
-const PIPELINE_CAPABILITIES: readonly Capability[] = ['compile', 'optimize', 'execute', 'replay']
-
-/** Registry entries that form the stepper pipeline, in registry order. */
+/** Registry entries that form the stepper pipeline, ordered by the registry
+ *  `stage` field — the domain pipeline position (Robot=1 … Sesiones=6). This
+ *  replaced the old PIPELINE_CAPABILITIES capability filter, which excluded
+ *  Robot and Escena: the stepper is a PROJECTION of the area registry (ADR
+ *  ui-as-domain-projection, criterion C1), never a parallel stage list. Areas
+ *  with `stage: null` (knowledge; Configuración when it lands in S5 —
+ *  area-configuration spec "not a stepper stage") are not pipeline stages.
+ *  NOTE (C2, for verify): `stepperIndex` is currently redundant — it equals
+ *  `stage` on every pipeline area; `stage` is the canonical order key. */
 export function stepperStages(registry: readonly WorkspaceEntry[]): WorkspaceEntry[] {
-  return registry.filter(
-    (entry) =>
-      entry.capability !== null && PIPELINE_CAPABILITIES.includes(entry.capability),
-  )
+  return registry
+    .filter((entry): entry is WorkspaceEntry & { stage: number } => entry.stage !== null)
+    .sort((a, b) => a.stage - b.stage)
 }
 
 /** Per-stage state in the stepper (global-stepper spec: passed/current/pending/blocked). */
@@ -155,6 +150,7 @@ export function requirementReason(
  * Stages"). For every pipeline stage:
  * - the active route is `current`;
  * - a stage with an unmet requirement is `blocked` (reason from the missing flag);
+ *   Robot (requires []) is never blocked — it is the stage-1 entry point;
  * - a stage that already produced its output, or sits before the current one in
  *   pipeline order, is `passed`;
  * - anything else is `pending` (future stage, requirements met).
