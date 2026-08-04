@@ -197,4 +197,14 @@ describe('GuardedRoute — behavior over real router routes', () => {
     expect(router.state.location.pathname).toBe('/knowledge')
     expect(screen.getByRole('heading', { name: 'Knowledge' })).toBeInTheDocument()
   })
+
+  it('renders the /configuration shell with no 404 (non-stage area, area-configuration spec)', async () => {
+    // Configuración requires nothing — no workflow seed needed.
+    seedWorkflowState({})
+    const router = renderRouter(['/configuration'])
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/configuration'))
+    expect(screen.getByRole('heading', { name: 'Configuración' })).toBeInTheDocument()
+    expect(screen.getByText(/Settings coming soon/i)).toBeInTheDocument()
+  })
 })
