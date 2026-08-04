@@ -264,6 +264,25 @@ export function TaskEditor() {
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {mode === 'text' ? (
           <div className="flex flex-col gap-2 h-full min-h-0">
+            <details open data-testid="script-help" className="shrink-0 rounded-lg border border-border/50 bg-card/30 p-2 text-xs">
+              <summary className="cursor-pointer font-medium text-muted-foreground select-none">
+                Task Script grammar
+              </summary>
+              <div className="mt-1.5 space-y-1 font-mono text-muted-foreground">
+                <p>{'pick <object> [tool=<name>]'}</p>
+                <p>{'place <object> at <location> [tool=<name>]'}</p>
+                <p>{'move_to <location> [tool=<name>]'}</p>
+                <p>{'wait <duration> — e.g. 500ms, 2s, 1.5s'}</p>
+                <p>home</p>
+                <p className="font-sans"># comments and blank lines are ignored.</p>
+              </div>
+              <p className="mt-1.5 font-sans text-muted-foreground">Example:</p>
+              <pre className="mt-0.5 font-mono text-muted-foreground">{'pick bolt-1\nwait 2s\nplace bolt-1 at tray-1\nhome'}</pre>
+              <p className="mt-1.5 font-sans text-muted-foreground">
+                The script is a canonical representation of the program — comments,
+                blank lines, and formatting are not preserved.
+              </p>
+            </details>
             <textarea
               data-testid="program-textarea"
               value={buffer}

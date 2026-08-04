@@ -462,3 +462,32 @@ describe('S3.3 — Apply disabled while parse errors are present', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
+
+describe('S3.5 — editor help in Text mode', () => {
+  it('renders the canonical grammar, an example and the canonical-text note in Text mode', async () => {
+    seedTask()
+    renderRouter(['/task'])
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Text' }))
+
+    // Grammar summary: all 5 ops + at + tool= + duration forms + comments.
+    const help = within(screen.getByTestId('script-help'))
+    expect(help.getByText('pick <object> [tool=<name>]')).toBeInTheDocument()
+    expect(help.getByText('place <object> at <location> [tool=<name>]')).toBeInTheDocument()
+    expect(help.getByText('move_to <location> [tool=<name>]')).toBeInTheDocument()
+    expect(help.getByText(/wait <duration>/)).toBeInTheDocument()
+    expect(help.getByText('home')).toBeInTheDocument()
+
+    // A brief worked example + the explicit canonical-representation contract.
+    expect(help.getByText(/pick bolt-1/)).toBeInTheDocument()
+    expect(help.getByText(/canonical representation/i)).toBeInTheDocument()
+    expect(help.getByText(/not preserved/i)).toBeInTheDocument()
+  })
+
+  it('is hidden in Visual mode', async () => {
+    seedTask()
+    renderRouter(['/task'])
+
+    expect(screen.queryByText('pick <object> [tool=<name>]')).not.toBeInTheDocument()
+  })
+})
