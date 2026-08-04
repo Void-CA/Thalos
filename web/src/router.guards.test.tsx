@@ -34,6 +34,15 @@ vi.mock('@/features/viewport/viewport', async () => {
   }
 })
 
+// /sessions renders the SessionBrowser (guard relaxed since S5) — stub the api
+// so the workspace mounts without real HTTP (data assertions live in the
+// session-browser tests; here we only assert guard/navigation behavior).
+const sessionsApiMocks = vi.hoisted(() => ({ list: vi.fn() }))
+vi.mock('@/features/sessions/api/session-api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/sessions/api/session-api')>()
+  return { ...actual, sessionApi: sessionsApiMocks }
+})
+
 const compileResult: CompileResponse = {
   status: 'ok',
   validation: { errors: [], warnings: [] },
@@ -106,6 +115,7 @@ beforeEach(() => {
   })
   useExecutionStore.setState({ status: 'idle' })
   useAnalysisStore.setState({ report: null })
+  sessionsApiMocks.list.mockReset()
 })
 afterEach(() => cleanup())
 
@@ -179,15 +189,16 @@ describe('GuardedRoute — behavior over real router routes', () => {
     expect(screen.getByRole('heading', { name: 'Execution' })).toBeInTheDocument()
   })
 
-  it('redirects direct /sessions entry to the producer of completed', async () => {
-    // completed=false, executable=true → redirect to producerOf('completed') = /execution.
+  it('renders /sessions directly without a completed execution (guard relaxed)', async () => {
+    // S5.1 AUDIT verdict (area-sessions spec): `completed` was removed from
+    // sessions.requires — the guard SHALL NOT redirect when completed=false,
+    // so failed/running sessions are browsable. completed=false here.
     seedWorkflowState({ robotLoaded: true, compiled: true, executable: true })
+    sessionsApiMocks.list.mockResolvedValue([])
     const router = renderRouter(['/sessions'])
 
-    const producer = producerOf('completed')
-    expect(producer?.path).toBe('/execution')
-    await waitFor(() => expect(router.state.location.pathname).toBe(producer!.path))
-    expect(screen.getByRole('heading', { name: 'Execution' })).toBeInTheDocument()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/sessions'))
+    expect(screen.getByRole('heading', { name: 'Sesiones' })).toBeInTheDocument()
   })
 
   it('renders /knowledge once the plan is analyzed', async () => {

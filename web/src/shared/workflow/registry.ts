@@ -30,7 +30,11 @@ export const WORKSPACE_REGISTRY: Area[] = [
   { path: '/task', workspace: 'task', label: 'Programación', requires: ['sceneValid'], produces: 'compiled', capability: 'compile', hidden: false, consumes: 'Scene', producesArtifact: 'SemanticProgram', stage: 3, stepperIndex: 3 },
   { path: '/planning', workspace: 'planning', label: 'Planificación', requires: ['compiled'], produces: 'analyzed', capability: 'optimize', hidden: false, consumes: 'SemanticProgram', producesArtifact: 'MotionPlan', stage: 4, stepperIndex: 4 },
   { path: '/execution', workspace: 'execution', label: 'Ejecución', requires: ['executable'], produces: 'completed', capability: 'execute', hidden: false, consumes: 'MotionPlan', producesArtifact: 'Runtime', stage: 5, stepperIndex: 5 },
-  { path: '/sessions', workspace: 'sessions', label: 'Sesiones', requires: ['completed'], produces: null, capability: 'replay', hidden: false, consumes: 'Runtime', producesArtifact: 'ExecutionSession', stage: 6, stepperIndex: 6 },
+  // S5.1 AUDIT verdict (area-sessions spec): the `completed` requirement was
+  // REMOVED from /sessions — the browser must show failed/running sessions
+  // (status filters), so the guard no longer gates the area. `completed` stays
+  // a derived flag (execution still produces it; the status bar consumes it).
+  { path: '/sessions', workspace: 'sessions', label: 'Sesiones', requires: [], produces: null, capability: 'replay', hidden: false, consumes: 'Runtime', producesArtifact: 'ExecutionSession', stage: 6, stepperIndex: 6 },
   { path: '/knowledge', workspace: 'knowledge', label: 'Knowledge', requires: ['analyzed'], produces: null, capability: 'explain', hidden: true, consumes: null, producesArtifact: null, stage: null },
   { path: '/configuration', workspace: 'configuration', label: 'Configuración', requires: [], produces: null, capability: null, hidden: false, consumes: null, producesArtifact: null, stage: null },
 ]

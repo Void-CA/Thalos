@@ -81,7 +81,9 @@ describe('WORKSPACE_REGISTRY (slice 3 — requires/produces/capability)', () => 
     expect(byWorkspace.task.requires).toEqual(['sceneValid'])
     expect(byWorkspace.planning.requires).toEqual(['compiled'])
     expect(byWorkspace.execution.requires).toEqual(['executable'])
-    expect(byWorkspace.sessions.requires).toEqual(['completed'])
+    // Guard relaxed (area-sessions S5): the browser browses failed/running
+    // sessions too — no `completed` gate on /sessions.
+    expect(byWorkspace.sessions.requires).toEqual([])
     expect(byWorkspace.knowledge.requires).toEqual(['analyzed'])
     expect(byWorkspace.configuration.requires).toEqual([])
 
@@ -223,7 +225,7 @@ describe('WORKSPACE_REGISTRY (slice S3.5 — typed domain graph, user criterion 
       ['task', ['sceneValid'], 'compiled'],
       ['planning', ['compiled'], 'analyzed'],
       ['execution', ['executable'], 'completed'],
-      ['sessions', ['completed'], null],
+      ['sessions', [], null],
     ]
     for (const [workspace, requires, produces] of expected) {
       const entry = WORKSPACE_REGISTRY.find((e) => e.workspace === workspace)!
