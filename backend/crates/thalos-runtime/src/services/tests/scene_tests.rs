@@ -785,6 +785,7 @@ async fn select_tool_frame_clears_on_robot_change() {
         joints_meta,
         chain: thalos_core::robot::adapter::from_urdf(urdf).unwrap(),
         robot,
+        robot_id: "urdf:abcdef123456".to_string(),
     })
     .await
     .unwrap();
@@ -837,6 +838,7 @@ async fn load_urdf_keeps_real_chain_in_snapshot() {
             joints_meta: joints_meta.clone(),
             chain: thalos_core::robot::adapter::from_urdf(urdf).unwrap(),
             robot,
+            robot_id: "urdf:abcdef123456".to_string(),
         })
         .await
         .unwrap();

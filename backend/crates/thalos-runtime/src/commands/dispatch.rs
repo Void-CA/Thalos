@@ -25,6 +25,9 @@ pub enum Command {
         chain: SerialChain,
         /// The full URDF model — preserved for visual/collision rendering.
         robot: Robot,
+        /// Canonical identity `urdf:<sha256-trunc-12>` (spec robot-identity R1).
+        /// Computed in the API handler from the raw XML (design D2).
+        robot_id: String,
     },
     Kinematics(KinematicsCommand),
     Motion(MotionCommands),
@@ -56,6 +59,7 @@ impl ExecutableCommand for Command {
                 let chain = RobotRegistry::create_default(*model);
                 runtime.active_robot = ActiveRobot::new(Some(*model), chain, vec![0.0; dof]);
                 runtime.robot_name = model.metadata().display_name.to_string();
+                runtime.robot_id = model.metadata().id.to_string(); // spec R1.3
                 runtime.joints_meta.clear();
                 runtime.active_plan = None;
                 runtime.active_tcp = None; // Clear TCP when changing robot
@@ -66,10 +70,12 @@ impl ExecutableCommand for Command {
                 joints_meta,
                 chain,
                 robot,
+                robot_id,
             } => {
                 let dof = chain.dof_count();
                 runtime.active_robot = ActiveRobot::new(None, chain.clone(), vec![0.0; dof]);
                 runtime.robot_name = name.clone();
+                runtime.robot_id = robot_id.clone();
                 runtime.joints_meta = joints_meta.clone();
                 runtime.robot_source = Some(robot.clone());
                 runtime.active_plan = None;

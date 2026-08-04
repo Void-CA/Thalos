@@ -35,6 +35,10 @@ pub struct RuntimeSnapshot {
     pub robot: Option<RobotModel>,
     pub robot_source: Option<Robot>,
     pub robot_name: String,
+    /// Canonical robot identity (spec robot-identity R1) — mirrors
+    /// `SceneRuntime.robot_id`: `metadata.id` for catalog robots,
+    /// `urdf:<sha256-trunc-12>` for URDF imports.
+    pub robot_id: String,
     pub joints_meta: Vec<JointMeta>,
     pub joints: Vec<f64>,
     pub chain: SerialChain,
@@ -60,6 +64,7 @@ impl RuntimeSnapshot {
         robot: Option<RobotModel>,
         robot_source: Option<Robot>,
         robot_name: String,
+        robot_id: String,
         joints_meta: Vec<JointMeta>,
         chain: SerialChain,
         fk_result: FKResult,
@@ -71,6 +76,7 @@ impl RuntimeSnapshot {
             robot,
             robot_source,
             robot_name,
+            robot_id,
             joints_meta,
             joints: state.joints.positions.clone(),
             chain,

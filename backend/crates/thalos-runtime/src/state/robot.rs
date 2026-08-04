@@ -28,6 +28,10 @@ const IK_LAMBDA: f64 = 0.1;
 pub struct SceneRuntime {
     pub active_robot: ActiveRobot,
     pub robot_name: String,
+    /// Canonical robot identity (spec robot-identity R1): catalog robots
+    /// carry `metadata.id`; URDF imports carry `urdf:<sha256-trunc-12>`.
+    /// Single source for every consumer — snapshots and the API DTO.
+    pub robot_id: String,
     /// Original URDF model — `None` for built-in robots, `Some` for imports.
     pub robot_source: Option<Robot>,
     pub joints_meta: Vec<JointMeta>,
@@ -51,9 +55,16 @@ pub struct SceneRuntime {
 
 impl SceneRuntime {
     pub fn new(active_robot: ActiveRobot, robot_name: String) -> Self {
+        // Initial identity derives from the catalog model when present
+        // (design D4: explicit field, single writer via commands).
+        let robot_id = active_robot
+            .model
+            .map(|m| m.metadata().id.to_string())
+            .unwrap_or_default();
         Self {
             active_robot,
             robot_name,
+            robot_id,
             robot_source: None,
             joints_meta: Vec::new(),
             active_tcp: None,
