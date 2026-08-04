@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react'
 import { useRobotStore } from '@/features/robots/store'
 import { useSceneStore } from '../store'
 import { useLoadRobot, useLoadScene } from './use-scene-loader'
-import { ROBOT_SELECTION_KEY } from '@/features/semantic/components/robot-selector'
 
 /**
  * Sincroniza la selección de robot del catálogo con la escena 3D.
@@ -17,12 +16,22 @@ import { ROBOT_SELECTION_KEY } from '@/features/semantic/components/robot-select
  */
 export function useSceneRobotSync() {
   const selectedId = useRobotStore(s => s.selectedId)
-  const robots = useRobotStore(s => s.robots)
   const loadRobot = useLoadRobot()
   const loadScene = useLoadScene()
   const confirmedId = useSceneStore(s => s.runtime?.robot.id ?? null)
   const lastRequested = useRef<string | null>(null)
-  const initialLoadResolved = useRef(false)
+  const initialSceneRequested = useRef(false)
+
+  // Invalida el dedupe latch cuando cambia la identidad confirmada (fix review):
+  // el flujo "select scara → importar URDF → re-seleccionar scara" quedaba
+  // silenciosamente ignorado porque selectedId('scara') === lastRequested, aun
+  // cuando confirmedId ya no era scara. Corre ANTES que el efecto de request
+  // para que una re-selección distinta se re-solicite en el mismo commit.
+  useEffect(() => {
+    if (confirmedId && lastRequested.current !== confirmedId) {
+      lastRequested.current = null
+    }
+  }, [confirmedId])
 
   useEffect(() => {
     // Dedupe: skip robots already confirmed by the scene (applyScene response)
@@ -34,17 +43,19 @@ export function useSceneRobotSync() {
     }
   }, [selectedId, confirmedId, loadRobot])
 
-  // Spec R7/R6 — backend-derived default. Once the catalog is known, request
-  // GET /scene ONLY when no catalog hint is pending: fresh session (no
-  // localStorage) or an unknown persisted id (select() ignores it). A valid
-  // persisted catalog id is requested by RobotSelector's select() — firing
-  // GET /scene here would race it and could clobber the request.
+  // Spec R7/R6 — backend-derived default. GET /scene se dispara siempre que NO
+  // haya identidad confirmada ni un request de identidad en vuelo, INDEPENDIENTE
+  // del hint persistido (fix review): el hint es solo una REQUEST vía el
+  // select() de RobotSelector — montado únicamente en /task — nunca la única
+  // vía de carga. Sin esto, arrancar en '/' con un hint persistido dejaba la
+  // escena sin cargar (viewport vacío y redirect a '/'), y un fallo de GET
+  // /robots también bloqueaba la escena. El load extra de GET /scene es seguro:
+  // use-scene-loader descarta respuestas stale vía tokens de orden.
   useEffect(() => {
-    if (initialLoadResolved.current) return
-    if (robots.length === 0) return // wait for the catalog to validate the hint
-    initialLoadResolved.current = true
-    const persisted = localStorage.getItem(ROBOT_SELECTION_KEY)
-    const persistedIsCatalog = persisted !== null && robots.some(r => r.id === persisted)
-    if (!persistedIsCatalog && !confirmedId) loadScene.mutate()
-  }, [robots, confirmedId, loadScene])
+    if (confirmedId) return
+    if (loadScene.isPending || loadRobot.isPending) return
+    if (initialSceneRequested.current) return
+    initialSceneRequested.current = true
+    loadScene.mutate()
+  }, [confirmedId, loadScene.isPending, loadRobot.isPending, loadScene])
 }

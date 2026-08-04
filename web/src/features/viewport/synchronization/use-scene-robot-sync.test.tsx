@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { renderHook, act, cleanup } from '@testing-library/react'
 import { useSceneRobotSync } from './use-scene-robot-sync'
 import { useRobotStore } from '@/features/robots/store'
 import { useSceneStore } from '../store'
@@ -12,8 +12,8 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('./use-scene-loader', () => ({
-  useLoadRobot: () => ({ mutate: mocks.mutate }),
-  useLoadScene: () => ({ mutate: mocks.loadScene }),
+  useLoadRobot: () => ({ mutate: mocks.mutate, isPending: false }),
+  useLoadScene: () => ({ mutate: mocks.loadScene, isPending: false, isError: false }),
 }))
 
 function runtime(robotId: string): RuntimeInfo {
@@ -34,6 +34,10 @@ beforeEach(() => {
   useRobotStore.getState().select(null)
   useSceneStore.getState().reset()
 })
+
+// No global RTL cleanup in this repo's vitest config — unmount between tests
+// so a previous test's mounted hook cannot observe the next test's store state.
+afterEach(() => cleanup())
 
 describe('useSceneRobotSync — identity derived from the scene runtime (spec R2.1)', () => {
   it('requests a catalog robot that the scene runtime does not confirm yet', () => {
@@ -88,6 +92,30 @@ describe('useSceneRobotSync — identity derived from the scene runtime (spec R2
 
     expect(mocks.mutate).toHaveBeenCalledWith('scara')
   })
+
+  it('re-requests a catalog robot after a URDF import replaced the confirmed identity (dedupe latch reset)', () => {
+    // notes.txt workflow: select scara → import URDF → re-select scara. The
+    // lastRequested dedupe latch kept 'scara' forever, so the user's re-selection
+    // was silently ignored (selectedId !== confirmedId but === lastRequested).
+    // Changing the confirmed identity must invalidate the latch.
+    useSceneStore.setState({ runtime: runtime('planar_3r') })
+    renderHook(() => useSceneRobotSync())
+
+    act(() => useRobotStore.getState().select('scara'))
+    expect(mocks.mutate).toHaveBeenCalledWith('scara')
+    expect(mocks.mutate).toHaveBeenCalledTimes(1)
+
+    // URDF import: RobotCatalog deselects the catalog robot, then the scene
+    // confirms the new URDF identity via applyScene.
+    act(() => useRobotStore.getState().select(null))
+    act(() => useSceneStore.setState({ runtime: runtime('urdf:a3f8b2c1d4e5') }))
+
+    // Re-selecting the same catalog robot must be requested again.
+    act(() => useRobotStore.getState().select('scara'))
+
+    expect(mocks.mutate).toHaveBeenCalledTimes(2)
+    expect(mocks.mutate).toHaveBeenLastCalledWith('scara')
+  })
 })
 
 describe('useSceneRobotSync — backend-derived default (spec R7 / R6)', () => {
@@ -106,14 +134,28 @@ describe('useSceneRobotSync — backend-derived default (spec R7 / R6)', () => {
     expect(mocks.loadScene).toHaveBeenCalledTimes(1)
   })
 
-  it('skips GET /scene when a catalog hint is persisted — the select() request path owns it', () => {
-    // A valid persisted catalog id is requested later via select() →
-    // useLoadRobot; firing GET /scene here would race and clobber it.
+  it('requests GET /scene when a catalog hint is persisted but nothing is confirmed yet (deadlock fix)', () => {
+    // A persisted catalog id is only a REQUEST via RobotSelector's select() —
+    // which lives in /task and requires the scene loaded to mount. On '/' the
+    // selector never mounts, so GET /scene is the ONLY load path: skipping it
+    // on a valid hint deadlocked the boot (viewport empty, /scene and /task
+    // bounce back to '/'). The hint must never gate the backend-derived load.
     localStorage.setItem('thalos:task:robotId', 'scara')
 
     renderHook(() => useSceneRobotSync())
 
-    expect(mocks.loadScene).not.toHaveBeenCalled()
+    expect(mocks.loadScene).toHaveBeenCalledTimes(1)
+  })
+
+  it('requests GET /scene even when the catalog is empty/failed — the scene load is decoupled from it', () => {
+    // Finding 3: GET /scene was gated on `robots.length > 0` (the catalog
+    // fetch) — if GET /robots failed, the scene never initialized. The
+    // backend-derived default must fire independently of the catalog.
+    useRobotStore.getState().setRobots([])
+
+    renderHook(() => useSceneRobotSync())
+
+    expect(mocks.loadScene).toHaveBeenCalledTimes(1)
   })
 
   it('does not request GET /scene when the scene already confirms an identity', () => {
