@@ -14,7 +14,7 @@ import { useExecutionStore } from '@/features/execution/execution-store'
 import { useAnalysisStore } from '@/features/analysis/store'
 import type { SceneData } from '@/features/viewport/types'
 import type { CompileResponse } from '@/features/semantic/types'
-import type { PlanAnalysisResponse } from '@/features/analysis/api/plan-analysis.types'
+import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 
 /**
  * Integration tests for the navigation-router spec (slice 1).
@@ -55,11 +55,18 @@ const compileResult: CompileResponse = {
   },
 }
 
-const analysisSummary: PlanAnalysisResponse['summary'] = {
-  status: 'ok',
-  score: 92,
-  grade: 'Good',
-  message: 'ok',
+const analysisReport: AnalysisReportWire = {
+  artifact: { kind: 'MotionPlan', id: 'plan-1' },
+  observations: [],
+  actions: [],
+  metrics: {},
+  summary: {
+    quality_index: 0.92,
+    score: 92,
+    grade: 'Good',
+    observation_count: 0,
+    severity_distribution: {},
+  },
 }
 
 /** Seed robot + compiled always; executable/completed/analyzed on demand. */
@@ -76,7 +83,7 @@ function seedPrerequisites(opts: {
     useExecutionStore.setState({
       status: completed ? 'completed' : executable ? 'ready' : 'idle',
     })
-    useAnalysisStore.setState({ summary: opts.analyzed ? analysisSummary : null })
+    useAnalysisStore.setState({ report: opts.analyzed ? analysisReport : null })
   })
 }
 
@@ -102,7 +109,7 @@ beforeEach(() => {
   useSceneStore.getState().reset()
   useSemanticEditor.getState().reset()
   useExecutionStore.setState({ status: 'idle' })
-  useAnalysisStore.setState({ summary: null })
+  useAnalysisStore.setState({ report: null })
 })
 afterEach(() => cleanup())
 
@@ -189,7 +196,7 @@ describe('top-bar — nav links reflect guard state (slice 5, task 5.2)', () => 
       useSceneStore.setState({ data: {} as SceneData })
       useSemanticEditor.setState({ result: null, dirty: 0 })
       useExecutionStore.setState({ status: 'idle' })
-      useAnalysisStore.setState({ summary: null })
+      useAnalysisStore.setState({ report: null })
     })
     const { router } = renderRouter(['/task'])
     const planningLink = screen.getByRole('link', { name: 'Planificación' })
@@ -236,22 +243,25 @@ describe('analysis content lives inside planning (slice 6 — absorbed section)'
     seedPrerequisites({ analyzed: true })
     act(() => {
       useAnalysisStore.setState({
-        problemRegions: [
-          {
-            id: 7,
-            kind: 'singularity',
-            severity: 'critical',
-            waypoint_start: 10,
-            waypoint_end: 20,
-            waypoint_count: 11,
-            explanation: {
-              cause: 'Singularity near waypoint 10',
-              consequence: 'Tool flips near the goal',
-              recommended_strategies: ['Joint centering'],
-              confidence: 0.9,
+        report: {
+          ...analysisReport,
+          problem_regions: [
+            {
+              id: 7,
+              kind: 'singularity',
+              severity: 'critical',
+              waypoint_start: 10,
+              waypoint_end: 20,
+              waypoint_count: 11,
+              explanation: {
+                cause: 'Singularity near waypoint 10',
+                consequence: 'Tool flips near the goal',
+                recommended_strategies: ['Joint centering'],
+                confidence: 0.9,
+              },
             },
-          },
-        ],
+          ],
+        },
       })
     })
     renderRouter(['/planning'])
@@ -268,22 +278,25 @@ describe('analysis content lives inside planning (slice 6 — absorbed section)'
     seedPrerequisites({ analyzed: true })
     act(() => {
       useAnalysisStore.setState({
-        problemRegions: [
-          {
-            id: 7,
-            kind: 'singularity',
-            severity: 'critical',
-            waypoint_start: 10,
-            waypoint_end: 20,
-            waypoint_count: 11,
-            explanation: {
-              cause: 'Singularity near waypoint 10',
-              consequence: 'Tool flips near the goal',
-              recommended_strategies: ['Joint centering'],
-              confidence: 0.9,
+        report: {
+          ...analysisReport,
+          problem_regions: [
+            {
+              id: 7,
+              kind: 'singularity',
+              severity: 'critical',
+              waypoint_start: 10,
+              waypoint_end: 20,
+              waypoint_count: 11,
+              explanation: {
+                cause: 'Singularity near waypoint 10',
+                consequence: 'Tool flips near the goal',
+                recommended_strategies: ['Joint centering'],
+                confidence: 0.9,
+              },
             },
-          },
-        ],
+          ],
+        },
       })
     })
     const { router } = renderRouter(['/planning'])

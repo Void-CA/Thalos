@@ -74,7 +74,7 @@ export function deriveWorkflowState(snapshot: WorkflowSnapshot): WorkflowState {
     sceneValid,
     programValid,
     compiled,
-    analyzed: snapshot.analysis.summary !== null,
+    analyzed: snapshot.analysis.report !== null,
     executable: compiled && EXECUTABLE_STATUSES.includes(status),
     running: RUNNING_STATUSES.includes(status),
     completed: status === 'completed',

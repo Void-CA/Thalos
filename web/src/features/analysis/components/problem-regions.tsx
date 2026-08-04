@@ -1,15 +1,18 @@
 import { useState, useMemo } from 'react'
-import { useAnalysisStore, type ProblemRegion } from '../store'
+import { useAnalysisStore } from '../store'
+import type { ProblemRegionWire as ProblemRegion } from '@/shared/contracts/analysis-report'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 
 type SeverityTier = 'critical' | 'warning' | 'info'
 
 /**
  * ProblemRegions — lista de regiones problemáticas agrupadas por severidad.
- * Matching Angular problem-regions.ts.
+ * Derives from the canonical report's `problem_regions` (backend-projected
+ * via ProblemRegionsDtoAdapter; I3: interpretation from kind/severity).
  */
 export function ProblemRegions() {
-  const regions = useAnalysisStore(s => s.problemRegions)
+  const report = useAnalysisStore(s => s.report)
+  const regions = report?.problem_regions ?? []
   const selectRegion = useAnalysisStore(s => s.selectRegion)
   const selectedId = useAnalysisStore(s => s.selectedRegionId)
   const [activeFilter, setActiveFilter] = useState<string | null>(null)

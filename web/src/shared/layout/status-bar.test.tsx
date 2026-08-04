@@ -11,7 +11,7 @@ import { useExecutionStore } from '@/features/execution/execution-store'
 import { useAnalysisStore } from '@/features/analysis/store'
 import type { SceneData } from '@/features/viewport/types'
 import type { CompileResponse } from '@/features/semantic/types'
-import type { PlanAnalysisResponse } from '@/features/analysis/api/plan-analysis.types'
+import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 
 /**
  * Integration tests for S2: the status bar surfaces the REAL workflow state via
@@ -33,11 +33,18 @@ const compileResult: CompileResponse = {
   },
 }
 
-const analysisSummary: PlanAnalysisResponse['summary'] = {
-  status: 'ok',
-  score: 92,
-  grade: 'Good',
-  message: 'ok',
+const analysisReport: AnalysisReportWire = {
+  artifact: { kind: 'MotionPlan', id: 'plan-1' },
+  observations: [],
+  actions: [],
+  metrics: {},
+  summary: {
+    quality_index: 0.92,
+    score: 92,
+    grade: 'Good',
+    observation_count: 0,
+    severity_distribution: {},
+  },
 }
 
 const seededObject: SceneObject = { id: 'bolt-1', name: 'Bolt', pose: { position: [1.8, 0, 0.4], orientation: [0, 0, 0, 1] } }
@@ -71,7 +78,7 @@ function seedStatus(opts: {
     useExecutionStore.setState({
       status: completed ? 'completed' : running ? 'running' : executable ? 'ready' : 'idle',
     })
-    useAnalysisStore.setState({ summary: analyzed ? analysisSummary : null })
+    useAnalysisStore.setState({ report: analyzed ? analysisReport : null })
   })
 }
 
@@ -84,7 +91,7 @@ beforeEach(() => {
     homePose: { position: [1.8, 0.0, 0.5], orientation: [0, 0, 0, 1] },
   })
   useExecutionStore.setState({ status: 'idle' })
-  useAnalysisStore.setState({ summary: null })
+  useAnalysisStore.setState({ report: null })
 })
 afterEach(() => cleanup())
 

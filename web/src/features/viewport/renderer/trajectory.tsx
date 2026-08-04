@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useSceneStore } from '../store'
 import { useAnalysisStore } from '@/features/analysis/store'
+import { waypointAnalysisFromReport } from '@/shared/contracts/analysis-report'
 import type { VisualWaypointDto } from '../api/scene-api.types'
 import {
   SEGMENT_PALETTE,
@@ -29,9 +30,14 @@ export function Trajectory() {
   const colorMode = useSceneStore(s => s.trajectoryColorMode)
   const transformSnapshot = useSceneStore(s => s.transformSnapshot)
   const execution = useSceneStore(s => s.execution)
-  const analysisWp = useAnalysisStore(s => s.waypoints)
+  const analysisReport = useAnalysisStore(s => s.report)
   const segments = activePlan?.segments
   const vis = activePlan?.visualization
+
+  const analysisWp = useMemo(
+    () => (analysisReport ? waypointAnalysisFromReport(analysisReport) : []),
+    [analysisReport],
+  )
 
   const hasAnalysis = analysisWp.length > 0 && analysisWp.length === (vis?.waypoints.length ?? 0)
 

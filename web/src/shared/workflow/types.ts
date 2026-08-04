@@ -2,7 +2,7 @@ import type { SemanticOp } from '@/shared/contracts'
 import type { CompileResponse } from '@/features/semantic/types'
 import type { SceneObject } from '@/features/scene/store'
 import type { ExecutionStatus } from '@/features/execution/execution-store'
-import type { PlanAnalysisResponse } from '@/features/analysis/api/plan-analysis.types'
+import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 
 /**
  * Snapshot of the domain stores fed into `deriveWorkflowState()`.
@@ -38,7 +38,7 @@ export interface WorkflowSnapshot {
     status: ExecutionStatus
   }
   analysis: {
-    summary: PlanAnalysisResponse['summary'] | null
+    report: AnalysisReportWire | null
   }
 }
 

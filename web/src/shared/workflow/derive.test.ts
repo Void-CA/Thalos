@@ -12,13 +12,20 @@ import { WORKSPACE_REGISTRY } from './registry'
 import type { WorkflowSnapshot, WorkflowState } from './types'
 import type { SemanticOp, PoseDef } from '@/shared/contracts'
 import type { CompileResponse } from '@/features/semantic/types'
-import type { PlanAnalysisResponse } from '@/features/analysis/api/plan-analysis.types'
+import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 
-const summary: PlanAnalysisResponse['summary'] = {
-  status: 'ok',
-  score: 92,
-  grade: 'Good',
-  message: 'Plan is healthy',
+const analysisReport: AnalysisReportWire = {
+  artifact: { kind: 'MotionPlan', id: 'plan-1' },
+  observations: [],
+  actions: [],
+  metrics: {},
+  summary: {
+    quality_index: 0.92,
+    score: 92,
+    grade: 'Good',
+    observation_count: 0,
+    severity_distribution: {},
+  },
 }
 
 const compileResult: CompileResponse = {
@@ -48,7 +55,7 @@ const base: WorkflowSnapshot = {
   task: { operations: validOps },
   compile: { result: compileResult, dirty: 0 },
   execution: { status: 'ready' },
-  analysis: { summary },
+  analysis: { report: analysisReport },
 }
 
 const ALL_TRUE: WorkflowState = {
@@ -123,8 +130,8 @@ describe('deriveWorkflowState — derivation table (workflow-state spec)', () =>
     expect(deriveWorkflowState({ ...base, task: { operations: [] } }).compiled).toBe(false)
   })
 
-  it('analyzed is exactly analysis.summary !== null', () => {
-    expect(deriveWorkflowState({ ...base, analysis: { summary: null } }).analyzed).toBe(false)
+  it('analyzed is exactly analysis.report !== null', () => {
+    expect(deriveWorkflowState({ ...base, analysis: { report: null } }).analyzed).toBe(false)
     expect(deriveWorkflowState(base).analyzed).toBe(true)
   })
 
@@ -253,7 +260,9 @@ function snapshotFrom(input: InputCombo): WorkflowSnapshot {
     task: { operations },
     compile: { result: input.compileResult ? compileResult : null, dirty: input.dirty ? 2 : 0 },
     execution: { status: input.execStatus },
-    analysis: { summary },
+    // `analyzed` is NOT part of the 2^8 enumeration (9th input, boolean-collapsed):
+    // the report is always present so `analyzed` derives true uniformly.
+    analysis: { report: analysisReport },
   }
 }
 

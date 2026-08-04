@@ -36,7 +36,7 @@ export function useWorkflowState(): WorkflowState {
       status: useExecutionStore((s) => s.status),
     },
     analysis: {
-      summary: useAnalysisStore((s) => s.summary),
+      report: useAnalysisStore((s) => s.report),
     },
   })
 }
