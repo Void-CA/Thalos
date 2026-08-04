@@ -2427,10 +2427,10 @@ async fn icebot_xy_ik_converges_from_non_singular_q0() {
 }
 
 /// Spec: unified-kinematics "Tag carries no kinematic meaning" — the API DTO
-/// for a URDF-loaded robot must expose the real chain data (`id == "urdf"`,
-/// real DOF) instead of falling back to built-in metadata. This branch only
-/// activates when `joints_meta` is populated; an empty vec masks the
-/// fallback (the bug fixed in scene_tests.rs).
+/// for a URDF-loaded robot must expose the real chain data (stable
+/// `urdf:<hash>` id, real DOF) instead of falling back to built-in metadata.
+/// This branch only activates when `joints_meta` is populated; an empty vec
+/// masks the fallback (the bug fixed in scene_tests.rs).
 #[tokio::test]
 async fn load_urdf_exposes_real_robot_dto() {
     let app = test_app().await;
@@ -2448,9 +2448,10 @@ async fn load_urdf_exposes_real_robot_dto() {
     let (status, body) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
     assert_eq!(status, StatusCode::OK, "scene read must succeed");
     let body = body.expect("scene response body");
-    assert_eq!(
-        body["robot"]["id"], "urdf",
-        "URDF DTO must carry id 'urdf', got {:?}",
+    let id = body["robot"]["id"].as_str().expect("robot.id string");
+    assert!(
+        id.starts_with("urdf:") && id.len() == "urdf:".len() + 12,
+        "URDF DTO must carry a stable urdf:<hash> id, got {:?}",
         body["robot"]["id"]
     );
     assert_eq!(
@@ -2465,4 +2466,100 @@ async fn load_urdf_exposes_real_robot_dto() {
         4,
         "URDF DTO must carry the 4 actuated joints"
     );
+}
+
+/// Spec robot-identity R1.1/R1.2: importing the same URDF twice MUST yield
+/// the identical `robot.id` (deterministic hash of the raw XML).
+#[tokio::test]
+async fn urdf_load_emits_stable_robot_id() {
+    let app = test_app().await;
+    let icebot_urdf = include_str!("../../../../docs/robot/icebot.urdf");
+
+    // First import — the id must match urdf:<12 lowercase hex>.
+    let (load_status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/robot/from-urdf",
+        Some(json!({"urdf_source": icebot_urdf})),
+    )
+    .await;
+    assert_eq!(load_status, StatusCode::OK, "URDF load must succeed");
+    let body = body.expect("load response body");
+    let first_id = body["robot"]["id"]
+        .as_str()
+        .expect("robot.id string")
+        .to_string();
+    assert!(
+        first_id.starts_with("urdf:"),
+        "robot.id must start with 'urdf:', got {first_id}"
+    );
+    let hash = &first_id["urdf:".len()..];
+    assert_eq!(
+        hash.len(),
+        12,
+        "robot.id must carry 12 hex chars, got {first_id}"
+    );
+    assert!(
+        hash.chars().all(|c| c.is_ascii_hexdigit()),
+        "robot.id hash must be lowercase hex, got {first_id}"
+    );
+
+    // Re-import the same file → identical id (R1.1).
+    let (load_status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/robot/from-urdf",
+        Some(json!({"urdf_source": icebot_urdf})),
+    )
+    .await;
+    assert_eq!(load_status, StatusCode::OK, "second URDF load must succeed");
+    let body = body.expect("second load response body");
+    let second_id = body["robot"]["id"]
+        .as_str()
+        .expect("robot.id string")
+        .to_string();
+    assert_eq!(
+        first_id, second_id,
+        "re-importing the same URDF must yield the same robot.id"
+    );
+}
+
+/// Spec robot-identity R1.3: a built-in catalog robot loaded via `LoadRobot`
+/// MUST expose `robot.id == metadata.id`.
+#[tokio::test]
+async fn catalog_load_emits_metadata_id() {
+    let app = test_app().await;
+
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/robot",
+        Some(json!({"robot_id": "scara"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "catalog load must succeed");
+    let body = body.expect("response body");
+    assert_eq!(
+        body["robot"]["id"], "scara",
+        "catalog robot.id must equal metadata.id, got {:?}",
+        body["robot"]["id"]
+    );
+    assert_eq!(body["robot"]["dof"], 4, "SCARA metadata carries dof 4");
+
+    // Triangulate with a second catalog robot (different metadata id).
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/robot",
+        Some(json!({"robot_id": "planar_3r"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "second catalog load must succeed");
+    let body = body.expect("response body");
+    assert_eq!(
+        body["robot"]["id"], "planar_3r",
+        "catalog robot.id must equal metadata.id, got {:?}",
+        body["robot"]["id"]
+    );
+    assert_eq!(body["robot"]["dof"], 3, "Planar3R metadata carries dof 3");
 }

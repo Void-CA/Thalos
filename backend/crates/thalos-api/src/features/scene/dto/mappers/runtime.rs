@@ -57,16 +57,21 @@ impl RuntimeStateResponse {
 
         // When the robot was imported from URDF, the runtime carries joint
         // metadata. Otherwise fall back to the built-in RobotMetadata.
+        // The emitted `id` always comes from `snapshot.robot_id` — the
+        // canonical single source (spec robot-identity R1): metadata.id for
+        // catalog robots (R1.3), `urdf:<hash>` for imports (R1.1).
         let robot = if snapshot.joints_meta.is_empty() {
-            snapshot
+            let mut dto: RobotMetadataDto = snapshot
                 .robot
                 .as_ref()
                 .expect("built-in robot must carry a catalog model")
                 .metadata()
-                .into()
+                .into();
+            dto.id = snapshot.robot_id.clone();
+            dto
         } else {
             RobotMetadataDto {
-                id: "urdf".into(),
+                id: snapshot.robot_id.clone(),
                 display_name: snapshot.robot_name.clone(),
                 dof: snapshot.joints.len(),
                 joints: snapshot

@@ -130,6 +130,8 @@ pub async fn load_robot_from_urdf(
         joints_meta,
         chain,
         robot,
+        // Stable identity from the raw XML (spec R1): same file → same id.
+        robot_id: urdf_robot_id(&payload.urdf_source),
     };
 
     let snapshot = state.services.scene.execute(cmd).await?;
