@@ -104,7 +104,7 @@ describe('PipelineStatus — single derivation layer (workflow-state spec)', () 
     useSceneStore.getState().reset()
     useSemanticEditor.getState().reset()
     useExecutionStore.setState({ status: 'idle' })
-    useAnalysisStore.setState({ summary: null })
+    useAnalysisStore.setState({ report: null })
   })
   afterEach(() => cleanup())
 

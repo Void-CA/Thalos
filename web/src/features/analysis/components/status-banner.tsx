@@ -1,25 +1,27 @@
 import { useAnalysisStore } from '../store'
+import { severityCounts } from '@/shared/contracts/analysis-report'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 
 type BannerState = 'good' | 'attention' | 'critical'
 
 /**
  * StatusBanner — barra de estado horizontal con score, severity distribution.
- * Matching Angular status-banner.ts.
+ * Derives entirely from the canonical AnalysisReport (I3: interpretation from
+ * observation severities; I7: single score = summary.score).
  */
 export function StatusBanner() {
-  const summary = useAnalysisStore(s => s.summary)
-  const findings = useAnalysisStore(s => s.findings)
+  const report = useAnalysisStore(s => s.report)
 
-  const bannerState: BannerState = summary?.status === 'error' ? 'critical'
-    : summary?.status === 'warning' ? 'attention' : 'good'
+  const counts = report ? severityCounts(report) : { error: 0, warning: 0, info: 0 }
+  const bannerState: BannerState = counts.error > 0 ? 'critical'
+    : counts.warning > 0 ? 'attention' : 'good'
 
-  const stateLabel = summary?.status === 'error' ? 'Critical'
-    : summary?.status === 'warning' ? 'Attention' : 'Good'
+  const stateLabel = bannerState === 'critical' ? 'Critical'
+    : bannerState === 'attention' ? 'Attention' : 'Good'
 
-  const errorCount = findings.filter(f => f.severity === 'error').length
-  const warnCount = findings.filter(f => f.severity === 'warning').length
-  const infoCount = findings.filter(f => f.severity === 'info').length
+  const errorCount = counts.error
+  const warnCount = counts.warning
+  const infoCount = counts.info
 
   const colors: Record<BannerState, { bg: string; border: string; text: string }> = {
     good: { bg: 'bg-success-weak', border: 'border-success-mid', text: 'text-chart-3' },
@@ -28,7 +30,7 @@ export function StatusBanner() {
   }
 
   const c = colors[bannerState]
-  const total = findings.length
+  const total = errorCount + warnCount + infoCount
 
   return (
     <div className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border ${c.bg} ${c.border}`}>
@@ -36,11 +38,8 @@ export function StatusBanner() {
         <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${c.text} bg-current`} />
         <span className={`text-sm font-bold uppercase tracking-wider ${c.text}`}>{stateLabel}</span>
         <span className="text-xs text-muted-foreground font-semibold tabular-nums">
-          {summary?.score ?? '—'} / 100
+          {report?.summary.score ?? '—'} / 100
         </span>
-        {summary?.message && (
-          <span className="text-xs text-muted-foreground truncate hidden sm:inline">{summary.message}</span>
-        )}
       </div>
       {total > 0 && (
         <div className="flex items-center gap-2.5 shrink-0">

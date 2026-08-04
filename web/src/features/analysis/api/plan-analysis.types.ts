@@ -1,18 +1,18 @@
 /**
  * Mirror de DTOs backend — backend/crates/thalos-api/src/features/plan_analysis/dto.rs
  *
- * PR 7b: the legacy `/plan/analyze` contract types are re-exported from the
- * single compatibility owner (`@/shared/contracts/plan-analysis-compat`) so
- * the store and components keep compiling against the legacy shape while the
- * backend serves the canonical AnalysisReport projection.
- * TODO(change-A): remove compatibility layer — delete these re-exports and
- * restore the canonical wire types when the new UI ships.
+ * domain-areas S4: the compatibility layer was removed. The canonical
+ * `AnalysisReportWire` types live in `@/shared/contracts/analysis-report` and
+ * are the ONLY shape the analysis feature consumes (ADR:
+ * ui-as-domain-projection).
  */
 
 export type {
-  LegacyAnalysisResponse as PlanAnalysisResponse,
-  LegacyWaypointAnalysis as WaypointAnalysisDto,
-} from '@/shared/contracts/plan-analysis-compat'
+  AnalysisReportWire as PlanAnalysisResponse,
+  AnalysisObservationWire,
+  AnalysisActionWire,
+  ProblemRegionWire,
+} from '@/shared/contracts/analysis-report'
 
 // ── Optimization (M9 / M10) ──
 

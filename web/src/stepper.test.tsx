@@ -11,7 +11,7 @@ import { useExecutionStore } from '@/features/execution/execution-store'
 import { useAnalysisStore } from '@/features/analysis/store'
 import type { SceneData } from '@/features/viewport/types'
 import type { CompileResponse } from '@/features/semantic/types'
-import type { PlanAnalysisResponse } from '@/features/analysis/api/plan-analysis.types'
+import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 
 /**
  * Integration tests for the global-stepper spec (delta MODIFIED — 6 stages,
@@ -42,11 +42,18 @@ const compileResult: CompileResponse = {
   },
 }
 
-const analysisSummary: PlanAnalysisResponse['summary'] = {
-  status: 'ok',
-  score: 92,
-  grade: 'Good',
-  message: 'ok',
+const analysisReport: AnalysisReportWire = {
+  artifact: { kind: 'MotionPlan', id: 'plan-1' },
+  observations: [],
+  actions: [],
+  metrics: {},
+  summary: {
+    quality_index: 0.92,
+    score: 92,
+    grade: 'Good',
+    observation_count: 0,
+    severity_distribution: {},
+  },
 }
 
 const PIPELINE_LABELS = [
@@ -78,7 +85,7 @@ function seedFlags(opts: {
     useExecutionStore.setState({
       status: completed ? 'completed' : executable ? 'ready' : 'idle',
     })
-    useAnalysisStore.setState({ summary: analyzed ? analysisSummary : null })
+    useAnalysisStore.setState({ report: analyzed ? analysisReport : null })
   })
 }
 
@@ -106,7 +113,7 @@ beforeEach(() => {
   useSceneStore.getState().reset()
   useSemanticEditor.getState().reset()
   useExecutionStore.setState({ status: 'idle' })
-  useAnalysisStore.setState({ summary: null })
+  useAnalysisStore.setState({ report: null })
 })
 afterEach(() => cleanup())
 

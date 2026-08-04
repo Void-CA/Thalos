@@ -35,7 +35,7 @@ function workflowSnapshot() {
       dirty: useSemanticEditor.getState().dirty,
     },
     execution: { status: 'ready' as const },
-    analysis: { summary: null },
+    analysis: { report: null },
   }
 }
 

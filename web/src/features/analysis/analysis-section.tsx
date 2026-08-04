@@ -26,9 +26,9 @@ import { ChartBar } from 'lucide-react'
  * produces the analyzed flag.
  */
 export function AnalysisSection() {
-  const summary = useAnalysisStore(s => s.summary)
+  const report = useAnalysisStore(s => s.report)
   const selectedRegion = useSelectedRegion()
-  const hasAnalysis = summary !== null
+  const hasAnalysis = report !== null
 
   if (!hasAnalysis) {
     return (
