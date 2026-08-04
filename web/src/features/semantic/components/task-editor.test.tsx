@@ -219,3 +219,71 @@ describe('Task stays an authoring workspace (compile still works)', () => {
     expect(useSemanticEditor.getState().dirty).toBe(0)
   })
 })
+
+describe('Program panel Visual/Text toggle — read-only text projection (S1)', () => {
+  /** The store's canonical sample program serialized by `serialize` (P7). */
+  const SAMPLE_TEXT = 'pick bolt-1\nwait 1s\nplace bolt-1 at tray-1\nhome'
+
+  it('defaults to Visual mode with editable rows and shows canonical text on Text toggle', async () => {
+    seedTask()
+    renderRouter(['/task'])
+
+    // Operation-row comboboxes = editable row controls. The workspace-header
+    // robot selector (aria-label="Task robot") stays regardless of mode, so
+    // scope the "rows hidden" assertion to the row selects only.
+    const rowComboboxes = () =>
+      screen.getAllByRole('combobox').filter((cb) => !cb.hasAttribute('aria-label'))
+
+    // Visual mode is default: editable rows render, no text projection yet.
+    expect(await screen.findByRole('button', { name: 'Text' })).toBeInTheDocument()
+    expect(rowComboboxes().length).toBeGreaterThan(0)
+    expect(screen.queryByTestId('program-text')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Text' }))
+
+    // Text mode renders EXACTLY serialize(operations) — the canonical form,
+    // one op per line, no trailing blank (spec "Toggle to Text mode" scenario).
+    const pre = screen.getByTestId('program-text')
+    expect(pre.tagName).toBe('PRE')
+    expect(pre.textContent).toBe(SAMPLE_TEXT)
+
+    // Single editable surface: operation rows are hidden in Text mode.
+    expect(rowComboboxes()).toHaveLength(0)
+  })
+
+  it('Text mode is strictly read-only in S1 — no textarea/edit buffer exists', async () => {
+    seedTask()
+    renderRouter(['/task'])
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Text' }))
+
+    expect(screen.getByTestId('program-text').tagName).toBe('PRE')
+    // S1 = projection only: no textarea, no editing surface (S2 adds it).
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+  })
+
+  it('repeated Visual<->Text toggles never mutate the store (model intact)', async () => {
+    seedTask()
+    const opsBefore = JSON.stringify(useSemanticEditor.getState().operations)
+    const dirtyBefore = useSemanticEditor.getState().dirty
+    renderRouter(['/task'])
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Text' }))
+    expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
+    expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Visual' }))
+    expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
+    expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
+
+    // Rows are back in Visual mode — the same single editable surface.
+    const rowComboboxes = screen
+      .getAllByRole('combobox')
+      .filter((cb) => !cb.hasAttribute('aria-label'))
+    expect(rowComboboxes.length).toBeGreaterThan(0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Text' }))
+    expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
+    expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
+  })
+})
