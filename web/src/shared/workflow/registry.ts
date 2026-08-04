@@ -1,4 +1,4 @@
-import type { WorkflowFlag, WorkspaceEntry } from './types'
+import type { Area, WorkspaceEntry, WorkflowFlag } from './types'
 export type { Area, ArtifactKind, Capability, WorkspaceEntry, WorkspaceName } from './types'
 
 /**
@@ -17,8 +17,13 @@ export type { Area, ArtifactKind, Capability, WorkspaceEntry, WorkspaceName } fr
  * workspace was absorbed into `/planning` in slice 6; it has no registry entry
  * and therefore no route — the final sitemap is `/`, `/scene`, `/task`,
  * `/planning`, `/execution`, `/sessions` (hidden) and `/knowledge` (hidden).
+ *
+ * S3.6: typed as `Area[]` (design D1 — the registry describes domain AREAS,
+ * not views). The stepper, guards, breadcrumbs and pipeline derivations all
+ * draw from this one source; the stage/stepperIndex/consumes/produces fields
+ * make the pipeline graph fully derivable.
  */
-export const WORKSPACE_REGISTRY: WorkspaceEntry[] = [
+export const WORKSPACE_REGISTRY: Area[] = [
   { path: '/', workspace: 'robot', label: 'Robot', requires: [], produces: 'robotLoaded', capability: null, hidden: false, consumes: 'URDF', producesArtifact: 'RobotModel', stage: 1, stepperIndex: 1 },
   { path: '/scene', workspace: 'scene', label: 'Escena', requires: ['robotLoaded'], produces: 'sceneValid', capability: null, hidden: false, consumes: 'RobotModel', producesArtifact: 'Scene', stage: 2, stepperIndex: 2 },
   { path: '/task', workspace: 'task', label: 'Programación', requires: ['sceneValid'], produces: 'compiled', capability: 'compile', hidden: false, consumes: 'Scene', producesArtifact: 'SemanticProgram', stage: 3, stepperIndex: 3 },
