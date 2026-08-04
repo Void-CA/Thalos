@@ -1,5 +1,6 @@
-import type { SemanticOp, CompileResponse } from '@/features/semantic/types'
-import type { SceneObject } from '@/features/semantic/scene-store'
+import type { SemanticOp } from '@/shared/contracts'
+import type { CompileResponse } from '@/features/semantic/types'
+import type { SceneObject } from '@/features/scene/store'
 import type { ExecutionStatus } from '@/features/execution/execution-store'
 import type { PlanAnalysisResponse } from '@/features/analysis/api/plan-analysis.types'
 
@@ -13,9 +14,9 @@ import type { PlanAnalysisResponse } from '@/features/analysis/api/plan-analysis
  * Domain groups match the spec scenario: `{ scene, task, compile, execution,
  * analysis }`. Field notes:
  * - `scene.robotLoaded` — `useSceneStore.data !== null` (viewport store).
- * - `scene.objects` — semantic scene-store objects (`objects.length >= 1`).
+ * - `scene.objects` — domain scene-store objects (`objects.length >= 1`).
  * - `scene.validHomePose` — home-pose validity, computed by the hook via
- *   `isValidHomePose()` from the semantic scene-store `homePose`.
+ *   `isValidHomePose()` from the domain scene-store `homePose`.
  * - `task.operations` — semantic editor operations. `hasMissingFields` is
  *   derived purely from these (lifted from the task editor, design D5).
  * - `compile.dirty` — semantic editor dirty counter (0 = pristine).

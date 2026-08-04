@@ -78,3 +78,59 @@ export interface ExecuteSemanticResponse {
 export interface CompileMetadata {
   instruction_count: number
 }
+
+// ── TaskDocument (scene + program) wire contract ─────────────────────────────
+// The unified document posted to /semantic/compile and /semantic/execute.
+// Moved here from features/semantic/types.ts in S2 so the Scene area can
+// consume/produce it WITHOUT importing the Task feature (C4: Scene never
+// imports Task — shared/contracts is the neutral home for wire shapes).
+
+/** A single semantic operation as sent to the API */
+export interface SemanticOp {
+  type: 'pick' | 'place' | 'move_to' | 'wait' | 'home'
+  origin?: string
+  object?: string
+  destination?: string
+  tool?: string
+  /** Wait duration — wire format `{secs, nanos}` (DurationDto), never a float */
+  duration?: DurationDto
+}
+
+/** Pose definition for a resource */
+export interface PoseDef {
+  position: [number, number, number]
+  orientation: [number, number, number, number]
+}
+
+/** A resource with an associated pose (for the Scene) */
+export interface SceneResourceDef {
+  id: string
+  name: string
+  pose: PoseDef
+  category?: string | null
+  description?: string | null
+}
+
+/** SceneContent — the scene within a TaskDocument */
+export interface SceneContent {
+  objects: SceneResourceDef[]
+  locations: SceneResourceDef[]
+  tools: { id: string; name: string }[]
+  home_pose: PoseDef
+}
+
+/** Metadata for a TaskDocument */
+export interface DocMetadata {
+  name: string
+  version: number
+  created_at: string
+  modified_at: string
+}
+
+/** TaskDocument — unified scene + program */
+export interface TaskDocument {
+  id: string
+  metadata: DocMetadata
+  scene: SceneContent
+  program: { operations: SemanticOp[] }
+}

@@ -5,7 +5,7 @@ import { act } from 'react'
 import '@testing-library/jest-dom/vitest'
 import { StatusBar } from './status-bar'
 import { useSceneStore } from '@/features/viewport/store'
-import { useSceneStore as useSemanticSceneStore, type SceneObject } from '@/features/semantic/scene-store'
+import { useDomainSceneStore, type SceneObject } from '@/features/scene/store'
 import { useSemanticEditor } from '@/features/semantic/store'
 import { useExecutionStore } from '@/features/execution/execution-store'
 import { useAnalysisStore } from '@/features/analysis/store'
@@ -65,7 +65,7 @@ function seedStatus(opts: {
   } = opts
   act(() => {
     useSceneStore.setState({ data: robotLoaded ? ({} as SceneData) : null })
-    useSemanticSceneStore.setState({ objects: sceneValid ? [seededObject] : [] })
+    useDomainSceneStore.setState({ objects: sceneValid ? [seededObject] : [] })
     if (!programValid) useSemanticEditor.setState({ operations: [] })
     useSemanticEditor.setState({ result: compiled ? compileResult : null, dirty: 0 })
     useExecutionStore.setState({
@@ -78,8 +78,8 @@ function seedStatus(opts: {
 beforeEach(() => {
   useSceneStore.getState().reset()
   useSemanticEditor.getState().reset()
-  // The semantic scene store has no reset action — restore the canonical seed.
-  useSemanticSceneStore.setState({
+  // The domain scene store has no reset action — restore the canonical seed.
+  useDomainSceneStore.setState({
     objects: [seededObject],
     homePose: { position: [1.8, 0.0, 0.5], orientation: [0, 0, 0, 1] },
   })

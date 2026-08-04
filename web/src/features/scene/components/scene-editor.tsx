@@ -1,20 +1,20 @@
 import { Plus, Trash2 } from 'lucide-react'
-import { useSceneStore } from '../scene-store'
+import { useDomainSceneStore } from '../store'
 
 export function SceneEditor() {
-  const objects = useSceneStore((s) => s.objects)
-  const locations = useSceneStore((s) => s.locations)
-  const tools = useSceneStore((s) => s.tools)
-  const homePose = useSceneStore((s) => s.homePose)
-  const addObject = useSceneStore((s) => s.addObject)
-  const removeObject = useSceneStore((s) => s.removeObject)
-  const updateObject = useSceneStore((s) => s.updateObject)
-  const addLocation = useSceneStore((s) => s.addLocation)
-  const removeLocation = useSceneStore((s) => s.removeLocation)
-  const updateLocation = useSceneStore((s) => s.updateLocation)
-  const addTool = useSceneStore((s) => s.addTool)
-  const removeTool = useSceneStore((s) => s.removeTool)
-  const setHomePose = useSceneStore((s) => s.setHomePose)
+  const objects = useDomainSceneStore((s) => s.objects)
+  const locations = useDomainSceneStore((s) => s.locations)
+  const tools = useDomainSceneStore((s) => s.tools)
+  const homePose = useDomainSceneStore((s) => s.homePose)
+  const addObject = useDomainSceneStore((s) => s.addObject)
+  const removeObject = useDomainSceneStore((s) => s.removeObject)
+  const updateObject = useDomainSceneStore((s) => s.updateObject)
+  const addLocation = useDomainSceneStore((s) => s.addLocation)
+  const removeLocation = useDomainSceneStore((s) => s.removeLocation)
+  const updateLocation = useDomainSceneStore((s) => s.updateLocation)
+  const addTool = useDomainSceneStore((s) => s.addTool)
+  const removeTool = useDomainSceneStore((s) => s.removeTool)
+  const setHomePose = useDomainSceneStore((s) => s.setHomePose)
 
   const nextSeq = {
     obj: objects.length + 1,

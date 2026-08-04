@@ -1,7 +1,7 @@
 import { GripVertical, Trash2 } from 'lucide-react'
-import type { SemanticOp } from '../types'
+import type { SemanticOp } from '@/shared/contracts'
 import { DurationDto } from '@/shared/contracts'
-import { useSceneStore } from '../scene-store'
+import { useDomainSceneStore } from '@/features/scene/store'
 
 interface OperationRowProps {
   op: SemanticOp
@@ -30,9 +30,9 @@ export function OperationRow({
   onMoveUp,
   onMoveDown,
 }: OperationRowProps) {
-  const objects = useSceneStore((s) => s.objects)
-  const locations = useSceneStore((s) => s.locations)
-  const tools = useSceneStore((s) => s.tools)
+  const objects = useDomainSceneStore((s) => s.objects)
+  const locations = useDomainSceneStore((s) => s.locations)
+  const tools = useDomainSceneStore((s) => s.tools)
 
   const update = (partial: Partial<SemanticOp>) => onChange(index, partial)
 
