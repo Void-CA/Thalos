@@ -12,11 +12,14 @@ const mocks = vi.hoisted(() => ({
   // Lifecycle state of the loadRobot mutation — flipped by the error-settle test
   // to simulate a failed load (confirmed identity never changes).
   robotMutation: { isError: false },
+  // Lifecycle state of the loadScene mutation — flipped to simulate a failed
+  // backend-derived default boot (recovery re-fire).
+  sceneMutation: { isError: false },
 }))
 
 vi.mock('./use-scene-loader', () => ({
   useLoadRobot: () => ({ mutate: mocks.mutate, isPending: false, isError: mocks.robotMutation.isError }),
-  useLoadScene: () => ({ mutate: mocks.loadScene, isPending: false, isError: false }),
+  useLoadScene: () => ({ mutate: mocks.loadScene, isPending: false, isError: mocks.sceneMutation.isError }),
 }))
 
 function runtime(robotId: string): RuntimeInfo {
@@ -139,6 +142,51 @@ describe('useSceneRobotSync — identity derived from the scene runtime (spec R2
     act(() => useRobotStore.getState().select('scara'))
 
     expect(mocks.mutate).toHaveBeenCalledTimes(2)
+    expect(mocks.mutate).toHaveBeenLastCalledWith('scara')
+  })
+
+  it('does NOT loop forever when the same robot load keeps failing (bounded retry after error)', () => {
+    // CRITICAL R3-001: resetting the latch on every isError flip re-fires the
+    // request effect (the useMutation object is fresh per render), hammering
+    // POST /scene/robot with no backoff while the load keeps failing. At most
+    // ONE automatic re-request per selection is allowed; a persistent failure
+    // must not produce a request storm.
+    useSceneStore.setState({ runtime: runtime('planar_3r') })
+    const { rerender } = renderHook(() => useSceneRobotSync())
+
+    act(() => useRobotStore.getState().select('scara'))
+    expect(mocks.mutate).toHaveBeenCalledTimes(1)
+
+    // First failure settle → one bounded automatic re-request (re-render with
+    // the mutation's error state, mirroring react-query's per-render identity).
+    mocks.robotMutation.isError = true
+    rerender()
+    expect(mocks.mutate).toHaveBeenCalledTimes(2)
+
+    // Second failure settle → the retry budget for this selection is spent:
+    // no further mutate calls, no request storm.
+    mocks.robotMutation.isError = false
+    rerender()
+    mocks.robotMutation.isError = true
+    rerender()
+    expect(mocks.mutate).toHaveBeenCalledTimes(2)
+  })
+
+  it('allows a fresh retry after the user changes selection (retry budget resets)', () => {
+    useSceneStore.setState({ runtime: runtime('planar_3r') })
+    const { rerender } = renderHook(() => useSceneRobotSync())
+
+    act(() => useRobotStore.getState().select('scara'))
+    mocks.robotMutation.isError = true
+    rerender()
+    expect(mocks.mutate).toHaveBeenCalledTimes(2)
+
+    // User moves to another robot and back — the retry budget resets, so the
+    // same failing robot can be requested again (manual recovery path).
+    act(() => useRobotStore.getState().select(null))
+    act(() => useRobotStore.getState().select('planar_3r'))
+    act(() => useRobotStore.getState().select('scara'))
+    expect(mocks.mutate).toHaveBeenCalledTimes(3)
     expect(mocks.mutate).toHaveBeenLastCalledWith('scara')
   })
 })

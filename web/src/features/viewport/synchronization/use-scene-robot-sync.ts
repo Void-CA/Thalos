@@ -21,6 +21,11 @@ export function useSceneRobotSync() {
   const confirmedId = useSceneStore(s => s.runtime?.robot.id ?? null)
   const lastRequested = useRef<string | null>(null)
   const initialSceneRequested = useRef(false)
+  // Budget de reintento automático: permite a lo sumo UN re-request tras un
+  // fallo por selección. Sin este flag, resetear lastRequested en cada flip de
+  // isError re-disparaba el efecto de request (el objeto useMutation es fresco
+  // por render) → bucle infinito de POST /scene/robot (CRITICAL R3-001).
+  const retriedAfterError = useRef(false)
 
   // Invalida el dedupe latch cuando cambia la identidad confirmada (fix review):
   // el flujo "select scara → importar URDF → re-seleccionar scara" quedaba
@@ -35,13 +40,27 @@ export function useSceneRobotSync() {
     }
   }, [confirmedId])
 
-  // Invalida el dedupe latch cuando un load settle con ERROR (fix review F1):
-  // un loadRobot(X) fallido nunca cambia confirmedId, así que el reset por
-  // identidad confirmada jamás desbloquea X (selectedId === lastRequested === X).
-  // Un request fallido no debe envenenar la re-selección. Corre ANTES que el
-  // efecto de request para que el latch esté limpio en el mismo commit.
+  // Cuando el usuario cambia de selección, el budget de reintento se reinicia
+  // y el latch se limpia: una selección distinta (o una deselección) habilita
+  // de nuevo el reintento automático del robot fallido.
   useEffect(() => {
-    if (loadRobot.isError) lastRequested.current = null
+    if (selectedId !== lastRequested.current) {
+      retriedAfterError.current = false
+      lastRequested.current = null
+    }
+  }, [selectedId])
+
+  // Error settle: permite UN reintento automático por selección (fix CRITICAL
+  // R3-001). Un loadRobot(X) fallido nunca cambia confirmedId, así que el reset
+  // por identidad confirmada jamás desbloquea X (selectedId === lastRequested === X).
+  // Un request fallido no debe envenenar la re-selección — pero tampoco debe
+  // bombardear el backend: tras el primer reintento, retriedAfterError=true y el
+  // latch permanece, cortando el bucle hasta que el usuario cambie de selección.
+  useEffect(() => {
+    if (loadRobot.isError && !retriedAfterError.current) {
+      retriedAfterError.current = true
+      lastRequested.current = null
+    }
   }, [loadRobot.isError])
 
   useEffect(() => {
