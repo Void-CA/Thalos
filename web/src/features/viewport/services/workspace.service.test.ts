@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { apiClient } from '@/shared/api-client'
-import { WorkspaceService } from './workspace.service'
+import { WorkspaceService, NEAR_SINGULAR_CONDITION_THRESHOLD } from './workspace.service'
 
 const mocks = vi.hoisted(() => ({
   post: vi.fn(),
@@ -67,7 +67,7 @@ describe('WorkspaceService — /active targeting for the scene robot (spec R3)',
 
     expect(mocks.post).toHaveBeenCalledWith('/workspace/singularity/active', {
       ...sampleParams,
-      near_singular_condition_threshold: 100.0,
+      near_singular_condition_threshold: NEAR_SINGULAR_CONDITION_THRESHOLD,
       include_samples: true,
     })
   })
@@ -81,7 +81,7 @@ describe('WorkspaceService — /active targeting for the scene robot (spec R3)',
     expect(mocks.post).toHaveBeenCalledWith('/workspace/singularity', {
       robot_id: 'planar_3r',
       ...sampleParams,
-      near_singular_condition_threshold: 100.0,
+      near_singular_condition_threshold: NEAR_SINGULAR_CONDITION_THRESHOLD,
       include_samples: true,
     })
   })

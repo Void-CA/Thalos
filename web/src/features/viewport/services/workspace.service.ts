@@ -24,6 +24,15 @@ export interface SampleParams {
   tolerance: number
 }
 
+/**
+ * Umbral de condición para clasificar una muestra como casi-singular: número de
+ * condición de la matriz Jacobiana (razón entre el valor singular más fuerte y
+ * el más débil, adimensional). Refleja el default del backend
+ * `SingularityConfig::default()` en thalos-core/analysis/singularity/config.rs;
+ * el frontend lo reenvía tal cual en /workspace/singularity.
+ */
+export const NEAR_SINGULAR_CONDITION_THRESHOLD = 100.0
+
 /** Extrae puntos de muestra de una respuesta con position.*/
 function extractPoints(arr: unknown[] | undefined | null, stateKey?: string): CloudPoint[] | null {
   if (!arr || !Array.isArray(arr) || arr.length === 0) return null
@@ -65,7 +74,7 @@ export class WorkspaceService {
   async analyzeSingularity(robotId: string | null, params: SampleParams): Promise<SingularityResult> {
     const body = {
       ...params,
-      near_singular_condition_threshold: 100.0,
+      near_singular_condition_threshold: NEAR_SINGULAR_CONDITION_THRESHOLD,
       include_samples: true,
     }
     if (robotId) {
