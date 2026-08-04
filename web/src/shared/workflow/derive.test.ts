@@ -394,8 +394,7 @@ describe('stepperStages — six stages derived from the registry `stage` order (
     const stages = stepperStages(WORKSPACE_REGISTRY)
     expect(stages.every((e) => e.stage !== null)).toBe(true)
     expect(stages.some((e) => e.workspace === 'knowledge')).toBe(false)
-    // Cast: 'configuration' is not yet a WorkspaceName (S5.4 adds the entry).
-    expect(stages.some((e) => (e.workspace as string) === 'configuration')).toBe(false)
+    expect(stages.some((e) => e.workspace === 'configuration')).toBe(false)
   })
 
   it('excludes the absorbed analysis content (no /analysis stage after slice 6)', () => {

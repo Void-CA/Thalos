@@ -87,6 +87,7 @@ export type WorkspaceName =
   | 'execution'
   | 'sessions'
   | 'knowledge'
+  | 'configuration'
 
 /**
  * Declarative registry entry (design: WorkspaceEntry contract).

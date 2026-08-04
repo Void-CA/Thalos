@@ -3,7 +3,7 @@ import { WORKSPACE_REGISTRY, producerOf } from './registry'
 import type { ArtifactKind, Capability, WorkflowFlag } from './types'
 
 describe('WORKSPACE_REGISTRY (slice 1 — navigation contract)', () => {
-  it('registers the 7 sitemap paths in order (Escena added between / and /task)', () => {
+  it('registers the 8 sitemap paths in order (Escena added between / and /task)', () => {
     expect(WORKSPACE_REGISTRY.map((e) => e.path)).toEqual([
       '/',
       '/scene',
@@ -12,6 +12,7 @@ describe('WORKSPACE_REGISTRY (slice 1 — navigation contract)', () => {
       '/execution',
       '/sessions',
       '/knowledge',
+      '/configuration',
     ])
   })
 
@@ -82,6 +83,7 @@ describe('WORKSPACE_REGISTRY (slice 3 — requires/produces/capability)', () => 
     expect(byWorkspace.execution.requires).toEqual(['executable'])
     expect(byWorkspace.sessions.requires).toEqual(['completed'])
     expect(byWorkspace.knowledge.requires).toEqual(['analyzed'])
+    expect(byWorkspace.configuration.requires).toEqual([])
 
     expect(byWorkspace.robot.produces).toBe('robotLoaded')
     expect(byWorkspace.scene.produces).toBe('sceneValid')
@@ -135,6 +137,7 @@ describe('WORKSPACE_REGISTRY (slice S1.7 — scene entry, Robot stage marker, la
       ['execution', 5],
       ['sessions', 6],
       ['knowledge', null],
+      ['configuration', null],
     ])
   })
 
@@ -150,6 +153,7 @@ describe('WORKSPACE_REGISTRY (slice S1.7 — scene entry, Robot stage marker, la
       ['execution', 'MotionPlan', 'Runtime'],
       ['sessions', 'Runtime', 'ExecutionSession'],
       ['knowledge', null, null],
+      ['configuration', null, null],
     ]
     for (const [workspace, consumes, producesArtifact] of chain) {
       expect(byWorkspace[workspace].consumes).toBe(consumes)
@@ -166,6 +170,7 @@ describe('WORKSPACE_REGISTRY (slice S1.7 — scene entry, Robot stage marker, la
       'Ejecución',
       'Sesiones',
       'Knowledge',
+      'Configuración',
     ])
     const legacy = ['Task', 'Planning', 'Execution', 'Sessions']
     expect(WORKSPACE_REGISTRY.some((e) => legacy.includes(e.label))).toBe(false)
@@ -229,7 +234,7 @@ describe('WORKSPACE_REGISTRY (slice S3.5 — typed domain graph, user criterion 
 
   it('non-stage areas (stage null) are not part of the pipeline chain', () => {
     const nonStage = WORKSPACE_REGISTRY.filter((e) => e.stage === null).map((e) => e.workspace)
-    expect(nonStage).toEqual(['knowledge'])
+    expect(nonStage).toEqual(['knowledge', 'configuration'])
   })
 })
 
