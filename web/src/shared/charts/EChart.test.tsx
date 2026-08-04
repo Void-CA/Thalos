@@ -26,13 +26,18 @@ async function flushEffects(): Promise<void> {
   })
 }
 
+// NOTE: the findByTestId('chart' / 'chart-empty') waits below pass an explicit
+// 5s timeout — the lazy ECharts chunk (React.lazy + dynamic import) can exceed
+// testing-library's 1000ms default while echarts transforms cold under
+// full-parallel vitest load.
+
 beforeEach(() => installCanvasMock())
 afterEach(() => cleanup())
 
 describe('EChart wrapper', () => {
   it('lazily mounts a real ECharts instance that reflects the model', async () => {
     render(<EChart model={lineModel} />)
-    const el = await screen.findByTestId('chart')
+    const el = await screen.findByTestId('chart', {}, { timeout: 5000 })
     await flushEffects()
     const chart = echarts.getInstanceByDom(el)
     expect(chart).toBeTruthy()
@@ -43,7 +48,7 @@ describe('EChart wrapper', () => {
 
   it('updates the rendered chart when the model changes', async () => {
     const { rerender } = render(<EChart model={lineModel} />)
-    const el = await screen.findByTestId('chart')
+    const el = await screen.findByTestId('chart', {}, { timeout: 5000 })
     await flushEffects()
     expect(echarts.getInstanceByDom(el)).toBeTruthy()
 
@@ -64,7 +69,7 @@ describe('EChart wrapper', () => {
 
   it('resizes the chart when the container size changes (ResizeObserver)', async () => {
     render(<EChart model={lineModel} />)
-    const el = await screen.findByTestId('chart')
+    const el = await screen.findByTestId('chart', {}, { timeout: 5000 })
     await flushEffects()
 
     const spy = vi.spyOn(adapter, 'resizeChart')
@@ -78,7 +83,7 @@ describe('EChart wrapper', () => {
 
   it('disposes the ECharts instance on unmount (getInstanceByDom → undefined)', async () => {
     const { unmount } = render(<EChart model={lineModel} />)
-    const el = await screen.findByTestId('chart')
+    const el = await screen.findByTestId('chart', {}, { timeout: 5000 })
     await flushEffects()
     expect(echarts.getInstanceByDom(el)).toBeTruthy()
 
@@ -89,7 +94,7 @@ describe('EChart wrapper', () => {
   it('renders the empty-state message instead of a chart when the model is empty', async () => {
     render(<EChart model={{ series: [], xAxis: [], empty: { message: 'No manipulability data available' } }} />)
     await flushEffects()
-    const emptyEl = await screen.findByTestId('chart-empty')
+    const emptyEl = await screen.findByTestId('chart-empty', {}, { timeout: 5000 })
     expect(emptyEl).toHaveTextContent('No manipulability data available')
     expect(screen.queryByTestId('chart')).toBeNull()
     expect(echarts.getInstanceByDom(emptyEl)).toBeUndefined()

@@ -115,6 +115,14 @@ const traceFixture = {
   ],
 }
 
+const motionTraceFixture = {
+  samples: [
+    { timestamp: 0, joints: [0.1, 0.2], velocities: [0.2, 0.4], target_joints: null, progress: 0, errors: [] },
+    { timestamp: 5, joints: [0.3, 0.4], velocities: [0.6, 0.8], target_joints: null, progress: 0.5, errors: [] },
+    { timestamp: 10, joints: [0.5, 0.6], velocities: [1.0, 1.2], target_joints: null, progress: 1, errors: [] },
+  ],
+}
+
 const csvFixture = 'timestamp_s,joint_0,progress\n0.000000,0.100000,0.0000\n'
 
 function renderDetail() {
@@ -155,6 +163,10 @@ async function flushEffects(): Promise<void> {
   })
 }
 
+// NOTE: every findByTestId('chart') below passes an explicit 5s timeout — the
+// lazy ECharts chunk (React.lazy + dynamic import) can exceed testing-library's
+// 1000ms default while echarts transforms cold under full-parallel vitest load.
+
 beforeEach(() => {
   installCanvasMock()
   apiMocks.get.mockReset()
@@ -164,6 +176,7 @@ beforeEach(() => {
     if (url === '/sessions/1/statistics') return Promise.resolve({ data: statsFixture })
     if (url === '/sessions/1/comparison') return Promise.resolve({ data: comparisonFixture })
     if (url === '/sessions/1/execution-trace') return Promise.resolve({ data: traceFixture })
+    if (url === '/sessions/1/trace') return Promise.resolve({ data: motionTraceFixture })
     if (url === '/sessions/1/export') return Promise.resolve({ data: csvFixture })
     return Promise.reject(new Error(`unexpected URL ${url}`))
   })
@@ -183,6 +196,7 @@ describe('SessionDetail tabs — purely compositional (P4)', () => {
     // The tab triggers exist but the data-heavy tabs stay unmounted.
     expect(screen.getByRole('tab', { name: 'Comparison' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Timeline' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Trace' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Export' })).toBeInTheDocument()
   })
 
@@ -191,7 +205,7 @@ describe('SessionDetail tabs — purely compositional (P4)', () => {
     await screen.findByText('480 samples')
     fireEvent.click(screen.getByRole('tab', { name: 'Comparison' }))
 
-    const chart = await screen.findByTestId('chart')
+    const chart = await screen.findByTestId('chart', {}, { timeout: 5000 })
     await flushEffects()
 
     expect(apiMocks.get).toHaveBeenCalledWith('/sessions/1/comparison')
@@ -213,7 +227,7 @@ describe('SessionDetail tabs — purely compositional (P4)', () => {
     await screen.findByText('480 samples')
     fireEvent.click(screen.getByRole('tab', { name: 'Timeline' }))
 
-    const chart = await screen.findByTestId('chart')
+    const chart = await screen.findByTestId('chart', {}, { timeout: 5000 })
     await flushEffects()
 
     expect(apiMocks.get).toHaveBeenCalledWith('/sessions/1/execution-trace')
@@ -223,6 +237,25 @@ describe('SessionDetail tabs — purely compositional (P4)', () => {
       'Waypoint Reached · 0:03',
       'Completed · 0:10',
     ])
+  })
+
+  it('Trace tab: fetches /trace and renders one line series per joint with mm:ss time axis', async () => {
+    renderDetail()
+    await screen.findByText('480 samples')
+    fireEvent.click(screen.getByRole('tab', { name: 'Trace' }))
+
+    const chart = await screen.findByTestId('chart', {}, { timeout: 5000 })
+    await flushEffects()
+
+    // Canonical source (spec trace-chart): data comes from GET /sessions/{id}/trace.
+    expect(apiMocks.get).toHaveBeenCalledWith('/sessions/1/trace')
+    const option = optionOf(chart)
+    // One line series per joint (2 joints in the fixture), positions verbatim.
+    expect(option.series).toHaveLength(2)
+    expect(option.series.map((series) => series.type)).toEqual(['line', 'line'])
+    expect(valuesOf(option, 0)).toEqual([0.1, 0.3, 0.5])
+    // X axis = time, formatted mm:ss.
+    expect(option.xAxis?.[0]?.data).toEqual(['0:00', '0:05', '0:10'])
   })
 
   it('Export tab: fetches /export and downloads the canonical CSV verbatim', async () => {

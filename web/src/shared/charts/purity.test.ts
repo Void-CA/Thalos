@@ -13,7 +13,14 @@ const PURE_MODULES = [
   new URL('./theme.ts', import.meta.url),
   new URL('./builders/manipulability.ts', import.meta.url),
   new URL('./builders/metrics-dashboard.ts', import.meta.url),
+  new URL('./builders/comparison.ts', import.meta.url),
+  new URL('./builders/timeline.ts', import.meta.url),
+  new URL('./builders/repair-options.ts', import.meta.url),
+  new URL('./builders/trace.ts', import.meta.url),
 ]
+
+/** Every builder module — the pure-projection frontier of the chart system. */
+const BUILDER_MODULES = PURE_MODULES.filter((url) => url.pathname.includes('/builders/'))
 
 const BOUNDARY_MODULES = [new URL('./adapter.ts', import.meta.url)]
 
@@ -33,10 +40,7 @@ describe('builder purity (O2: AnalysisReport → Builder → ChartModel)', () =>
   })
 
   it('builders never mention the ECharts API surface', () => {
-    for (const url of [
-      new URL('./builders/manipulability.ts', import.meta.url),
-      new URL('./builders/metrics-dashboard.ts', import.meta.url),
-    ]) {
+    for (const url of BUILDER_MODULES) {
       const source = codeOf(url)
       expect(source).not.toMatch(/echarts/i)
       expect(source).not.toMatch(/\boption\b/i)
@@ -49,6 +53,12 @@ describe('adapter boundary (O3: single ECharts frontier)', () => {
     const source = codeOf(url)
     expect(source).toMatch(/from\s+['"]echarts/)
     expect(source).not.toMatch(/from\s+['"]react/)
+  })
+
+  it('the charts barrel never re-exports the adapter (C2: ECharts stays out of eager imports)', () => {
+    const source = codeOf(new URL('./index.ts', import.meta.url))
+    expect(source).not.toMatch(/from\s+['"]\.\/adapter/)
+    expect(source).not.toMatch(/\b(toEChartsOption|mountChart|resizeChart|disposeChart)\b/)
   })
 
   it('feature chart components never import echarts (S3: PlanCharts stays a consumer)', () => {
