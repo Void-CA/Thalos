@@ -254,11 +254,6 @@ export function TaskEditor() {
           className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-md bg-green-600/20 text-green-500 hover:bg-green-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
           <Play className="size-3" /> Compile
         </button>
-        <button onClick={handleSendToExecution} disabled={!compiled}
-          title={compiled ? 'Load the compiled plan into Execution' : 'Compile first'}
-          className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-md bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
-          <Send className="size-3" /> Send to Execution
-        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
@@ -317,8 +312,16 @@ export function TaskEditor() {
               onMoveDown={(idx) => idx < operations.length - 1 && moveOperation(idx, idx + 1)} />
           ))
         )}
+        <div className="flex items-center justify-around gap-2 mt-3">
+        <button onClick={handleSendToExecution} disabled={!compiled}
+          title={compiled ? 'Load the compiled plan into Execution' : 'Compile first'}
+          className="inline-flex items-center gap-1 px-10 py-1 text-md font-medium rounded-md bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+          <Send className="size-3" /> Send to Execution
+        </button>
+        </div>
       </div>
 
+        
       {/* S3.1/S3.2 dirty guard (P5): the store is NOT touched until the user
        *  confirms — discard only discards the uncommitted buffer. */}
       <Dialog open={confirmDiscardOpen} onOpenChange={(open) => { if (!open) setConfirmDiscardOpen(false) }}>
