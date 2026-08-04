@@ -56,6 +56,30 @@ describe('useSceneRobotSync — identity derived from the scene runtime (spec R2
     expect(mocks.mutate).not.toHaveBeenCalled()
   })
 
+  it('requests a DIFFERENT catalog robot when the scene confirms another one (identity confirm, not frozen)', () => {
+    // The scene confirms scara, but the user then asks for planar_3r — the
+    // confirmed identity must not freeze the request path (spec R2.1: scene
+    // is the writer, catalog selection is a request for a NEW identity).
+    useSceneStore.setState({ runtime: runtime('scara') })
+    renderHook(() => useSceneRobotSync())
+
+    act(() => useRobotStore.getState().select('planar_3r'))
+
+    expect(mocks.mutate).toHaveBeenCalledWith('planar_3r')
+  })
+
+  it('stays a no-op on repeated selections of the same confirmed identity (lastRequested dedupe)', () => {
+    // Selecting the already-confirmed robot twice must never trigger a load —
+    // guards the lastRequested dedupe against spurious re-requests.
+    useSceneStore.setState({ runtime: runtime('scara') })
+    renderHook(() => useSceneRobotSync())
+
+    act(() => useRobotStore.getState().select('scara'))
+    act(() => useRobotStore.getState().select('scara'))
+
+    expect(mocks.mutate).not.toHaveBeenCalled()
+  })
+
   it('requests a catalog robot when the scene holds a non-catalog (URDF) identity', () => {
     useSceneStore.setState({ runtime: runtime('urdf:a3f8b2c1d4e5') })
     renderHook(() => useSceneRobotSync())
