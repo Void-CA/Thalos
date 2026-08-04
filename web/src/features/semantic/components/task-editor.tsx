@@ -1,5 +1,5 @@
 import { Play, Plus, RotateCcw, Send } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useSemanticEditor } from '../store'
 import { useDomainSceneStore } from '@/features/scene/store'
@@ -11,6 +11,15 @@ import { compileSemantic, executeSemantic, CompileError } from '../api'
 import { isApiError } from '@/shared/errors'
 import { serialize } from '../script/serializer'
 import { parse } from '../script/parser'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 
 /** Friendly guided CTAs keyed on the backend machine-readable error code
  *  (verbatim codes from `backend/crates/thalos-api/src/features/semantic/handler.rs`).
@@ -94,24 +103,55 @@ export function TaskEditor() {
    */
   const [buffer, setBuffer] = useState<string>(serialize(operations))
 
+  /**
+   * S3.3 sync guard: the serialized store text the buffer was last synced to
+   * (Text entry or successful Apply). If `serialize(operations)` diverges from
+   * this while in Text mode, the program changed OUTSIDE this buffer — show an
+   * indicator instead of silently letting a stale Apply overwrite it.
+   */
+  const bufferBaseRef = useRef<string>(serialize(operations))
+
+  /** S3.1/S3.2 dirty-guard confirm dialog (P5): Text→Visual with an
+   *  uncommitted buffer asks the user before discarding. */
+  const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false)
+
   /** Text mode renders EXACTLY serialize(operations) on entry; once editing,
    *  the buffer is the working copy until a successful atomic Apply. */
   const switchToText = () => {
-    setBuffer(serialize(operations))
+    const text = serialize(operations)
+    bufferBaseRef.current = text
+    setBuffer(text)
     setMode('text')
     setScriptErrors([])
   }
 
   const switchToVisual = () => {
+    setConfirmDiscardOpen(false)
     setMode('visual')
     setScriptErrors([])
+  }
+
+  /**
+   * Dirty guard (program-dual-editor spec I6, design P5): switching away from
+   * Text only risks losing the buffer when it actually holds uncommitted
+   * edits (`buffer !== serialize(operations)`). Visual→Text is always safe —
+   * it re-serializes the current ops into the buffer.
+   */
+  const requestSwitchToVisual = () => {
+    if (mode === 'text' && buffer !== serialize(operations)) {
+      setConfirmDiscardOpen(true)
+      return
+    }
+    switchToVisual()
   }
 
   /**
    * Atomic commit (program-dual-editor spec I5, R2):
    * parse(buffer) → OK: ONE `replaceOperations(ops)` (whole-set replace + dirty
    * bump) → ERR: record errors for inline/panel display and touch NOTHING in
-   * the program state. No partial writes exist in any path.
+   * the program state. No partial writes exist in any path. On success the
+   * buffer is re-synced to the canonical projection so a subsequent dirty
+   * check sees a clean buffer (P7: text is a canonical representation).
    */
   const handleApply = () => {
     const result = parse(buffer)
@@ -121,7 +161,30 @@ export function TaskEditor() {
     }
     setScriptErrors([])
     replaceOperations(result.ops)
+    const canonical = serialize(result.ops)
+    setBuffer(canonical)
+    bufferBaseRef.current = canonical
   }
+
+  /**
+   * Live validation (S3.3): the buffer is parsed on EVERY change so parse
+   * errors show inline while typing and Apply stays disabled until the text
+   * is valid — a guaranteed-failed commit can never be triggered.
+   */
+  const handleBufferChange = (value: string) => {
+    setBuffer(value)
+    const res = parse(value)
+    setScriptErrors(res.ops === null ? res.errors : [])
+  }
+
+  /** S3.3 sync indicator: store changed externally while the buffer holds
+   *  uncommitted text → warn, never overwrite silently. */
+  const storeText = serialize(operations)
+  const storeChangedExternally = mode === 'text' && storeText !== bufferBaseRef.current
+  const showSyncWarning = storeChangedExternally && buffer !== storeText
+
+  /** S3.3: no Apply while the buffer has parse errors. */
+  const applyDisabled = scriptErrors.length > 0
 
   const makeOps = () => operations.map((op, i) => ({ ...op, origin: op.origin ?? `op_${i}` }))
 
@@ -163,7 +226,7 @@ export function TaskEditor() {
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
         <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider flex-1">Program</h2>
         <div className="inline-flex items-center rounded-md border border-border bg-background overflow-hidden" role="group" aria-label="Editor mode">
-          <button onClick={switchToVisual} aria-pressed={mode === 'visual'}
+          <button onClick={requestSwitchToVisual} aria-pressed={mode === 'visual'}
             className={`px-2 py-1 text-xs font-medium transition-colors cursor-pointer ${mode === 'visual' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
             Visual
           </button>
@@ -173,8 +236,9 @@ export function TaskEditor() {
           </button>
         </div>
         {mode === 'text' && (
-          <button onClick={handleApply}
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-amber-600/20 text-amber-500 hover:bg-amber-600/30 cursor-pointer">
+          <button onClick={handleApply} disabled={applyDisabled}
+            title={applyDisabled ? 'Fix the parse errors before applying' : 'Apply the script to the program'}
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-amber-600/20 text-amber-500 hover:bg-amber-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
             Apply
           </button>
         )}
@@ -203,11 +267,16 @@ export function TaskEditor() {
             <textarea
               data-testid="program-textarea"
               value={buffer}
-              onChange={(e) => setBuffer(e.target.value)}
+              onChange={(e) => handleBufferChange(e.target.value)}
               spellCheck={false}
               aria-label="Task script"
               className="flex-1 min-h-32 w-full resize-none rounded-lg border border-border/50 bg-card/30 p-3 font-mono text-xs leading-relaxed text-foreground focus:outline-none focus:border-primary/50"
             />
+            {showSyncWarning && (
+              <p role="alert" className="text-xs text-amber-400">
+                The program changed outside the editor — your uncommitted text is kept, but Apply will replace the external change.
+              </p>
+            )}
             {scriptErrors.length > 0 && (
               <ul className="space-y-1 text-xs" aria-label="Script parse errors">
                 {scriptErrors.map((e, i) => (
@@ -230,6 +299,27 @@ export function TaskEditor() {
           ))
         )}
       </div>
+
+      {/* S3.1/S3.2 dirty guard (P5): the store is NOT touched until the user
+       *  confirms — discard only discards the uncommitted buffer. */}
+      <Dialog open={confirmDiscardOpen} onOpenChange={(open) => { if (!open) setConfirmDiscardOpen(false) }}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Uncommitted changes will be lost</DialogTitle>
+            <DialogDescription>
+              Your text edits have not been applied to the program. Switch to Visual and discard them?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDiscardOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={switchToVisual}>
+              Discard changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
