@@ -14,6 +14,7 @@ export function DiagnosticsPanel() {
   const error = useSemanticEditor((s) => s.error)
   const loading = useSemanticEditor((s) => s.loading)
   const dirty = useSemanticEditor((s) => s.dirty)
+  const scriptErrors = useSemanticEditor((s) => s.scriptErrors)
   const { compiled } = useWorkflowState()
 
   return (
@@ -24,6 +25,16 @@ export function DiagnosticsPanel() {
       <div className="px-3 pb-2 space-y-1 text-xs">
         {loading && <p className="text-muted-foreground">Processing...</p>}
         {error && <p className="text-red-400">{error}</p>}
+        {scriptErrors.length > 0 && (
+          <div className="space-y-0.5">
+            <p className="text-red-400 font-medium">Script errors</p>
+            {scriptErrors.map((e, i) => (
+              <p key={i} className="text-red-400">
+                line {e.line}: {e.message}
+              </p>
+            ))}
+          </div>
+        )}
         {compiled && result && (
           <div className="space-y-0.5">
             <p className="text-green-500 font-medium">✓ Compiled</p>

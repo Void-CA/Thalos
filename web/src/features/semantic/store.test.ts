@@ -88,6 +88,47 @@ describe('semantic store dirty counter (workflow-state spec)', () => {
   })
 })
 
+describe('replaceOperations — atomic full replace (program-dual-editor spec I5)', () => {
+  it('replaces the ENTIRE operation set (no merge with existing ops)', () => {
+    useSemanticEditor.getState().addOperation(op)
+    useSemanticEditor.getState().addOperation(op)
+    const fresh = [
+      { type: 'pick' as const, origin: 'pick-1', object: 'bolt-1' },
+      { type: 'home' as const, origin: 'home-2' },
+    ]
+    useSemanticEditor.getState().replaceOperations(fresh)
+    expect(useSemanticEditor.getState().operations).toEqual(fresh)
+    expect(useSemanticEditor.getState().operations).toHaveLength(2)
+  })
+
+  it('bumps dirty (invalidates compiled)', () => {
+    useSemanticEditor.getState().replaceOperations([op])
+    expect(useSemanticEditor.getState().dirty).toBe(1)
+  })
+
+  it('can replace with an empty operation list', () => {
+    useSemanticEditor.getState().replaceOperations([])
+    expect(useSemanticEditor.getState().operations).toEqual([])
+  })
+
+  it('does not touch result/loading/error — those are owned by setResult/setLoading/setError', () => {
+    useSemanticEditor.getState().setResult(compileResult)
+    useSemanticEditor.getState().setError('still there')
+    useSemanticEditor.getState().replaceOperations([op])
+    expect(useSemanticEditor.getState().result).toEqual(compileResult)
+    expect(useSemanticEditor.getState().error).toBe('still there')
+  })
+
+  it('full replace invalidates a previously compiled program via dirty (I5 scenario)', () => {
+    useSemanticEditor.getState().setResult(compileResult)
+    expect(deriveWorkflowState(workflowSnapshot()).compiled).toBe(true)
+
+    useSemanticEditor.getState().replaceOperations([op])
+    expect(useSemanticEditor.getState().dirty).toBe(1)
+    expect(deriveWorkflowState(workflowSnapshot()).compiled).toBe(false)
+  })
+})
+
 describe('dirty counter wired into deriveWorkflowState (spec scenarios)', () => {
   it('operation edit after a successful compile invalidates compiled', () => {
     // Compile succeeds → dirty reset → compiled true.
