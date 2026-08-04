@@ -1,4 +1,5 @@
 import { Play, Plus, RotateCcw, Send } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useSemanticEditor } from '../store'
 import { useDomainSceneStore } from '@/features/scene/store'
@@ -8,6 +9,7 @@ import { hasMissingFields } from '@/shared/workflow/derive'
 import { OperationRow } from './operation-row'
 import { compileSemantic, executeSemantic, CompileError } from '../api'
 import { isApiError } from '@/shared/errors'
+import { serialize } from '../script/serializer'
 
 /** Friendly guided CTAs keyed on the backend machine-readable error code
  *  (verbatim codes from `backend/crates/thalos-api/src/features/semantic/handler.rs`).
@@ -77,6 +79,15 @@ export function TaskEditor() {
   const { compiled } = useWorkflowState()
   const navigate = useNavigate()
 
+  /** S1 dual mode (frontend-task-workspace spec): 'visual' is the default;
+   *  toggling only changes the projection, never the store. */
+  const [mode, setMode] = useState<'visual' | 'text'>('visual')
+
+  /** Text mode renders EXACTLY serialize(operations) — the store is the single
+   *  source of truth, the serializer the single source of text (I1). No local
+   *  buffer, no edit state in S1: this is a read-only projection. */
+  const programText = useMemo(() => serialize(operations), [operations])
+
   const makeOps = () => operations.map((op, i) => ({ ...op, origin: op.origin ?? `op_${i}` }))
 
   const handleCompile = async () => {
@@ -116,6 +127,16 @@ export function TaskEditor() {
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
         <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider flex-1">Program</h2>
+        <div className="inline-flex items-center rounded-md border border-border bg-background overflow-hidden" role="group" aria-label="Editor mode">
+          <button onClick={() => setMode('visual')} aria-pressed={mode === 'visual'}
+            className={`px-2 py-1 text-xs font-medium transition-colors cursor-pointer ${mode === 'visual' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+            Visual
+          </button>
+          <button onClick={() => setMode('text')} aria-pressed={mode === 'text'}
+            className={`px-2 py-1 text-xs font-medium transition-colors cursor-pointer ${mode === 'text' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+            Text
+          </button>
+        </div>
         <button onClick={() => addOperation({ type: 'pick', object: '' })}
           className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer">
           <Plus className="size-3" /> Add
@@ -136,16 +157,22 @@ export function TaskEditor() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        {operations.length === 0
-          ? <p className="text-xs text-muted-foreground text-center py-8">No operations defined.</p>
-          : operations.map((op, i) => (
+        {mode === 'text' ? (
+          programText === ''
+            ? <p className="text-xs text-muted-foreground text-center py-8">No operations defined.</p>
+            : <pre data-testid="program-text"
+                className="whitespace-pre font-mono text-xs leading-relaxed text-foreground p-3 rounded-lg border border-border/50 bg-card/30 overflow-x-auto">{programText}</pre>
+        ) : operations.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-8">No operations defined.</p>
+        ) : (
+          operations.map((op, i) => (
             <OperationRow key={i} op={op} index={i} total={operations.length}
               onChange={(idx, p) => updateOperation(idx, p)}
               onRemove={(idx) => removeOperation(idx)}
               onMoveUp={(idx) => idx > 0 && moveOperation(idx, idx - 1)}
               onMoveDown={(idx) => idx < operations.length - 1 && moveOperation(idx, idx + 1)} />
           ))
-        }
+        )}
       </div>
     </div>
   )
