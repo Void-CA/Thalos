@@ -18,12 +18,15 @@ const STATE_GLYPH: Record<StageState, string> = {
 }
 
 /**
- * Global workflow stepper (design D6, global-stepper spec).
+ * Global workflow stepper (design D1, global-stepper spec — delta MODIFIED).
  *
  * A slim strip below the TopBar, mounted in the layout route OUTSIDE the
  * <Outlet/> — like the viewport, it persists across workspace transitions. It
- * renders the pipeline stages from the WORKSPACE_REGISTRY order + labels and
- * derives each stage's state purely from `useWorkflowState()`:
+ * renders the six pipeline stages (Robot → Escena → Programación →
+ * Planificación → Ejecución → Sesiones) as a PROJECTION of the area registry
+ * (`deriveStepperStages` orders by the `stage` field — no parallel stage
+ * list, criterion C1) and derives each stage's state purely from
+ * `useWorkflowState()` (criterion C4 — it never re-derives store flags):
  *
  *   - current  → the active route (aria-current="step")
  *   - blocked  → a requirement is unmet; the stage is disabled and shows the
@@ -31,8 +34,11 @@ const STATE_GLYPH: Record<StageState, string> = {
  *   - passed   → the stage produced its output / lies before the current one
  *   - pending  → requirements met, not reached yet
  *
- * Navigation only happens here (registry-derived) and through the router:
- * no in-workspace cross-nav buttons remain.
+ * Availability and navigation are SEPARATE (criterion C3): a blocked stage
+ * stays visible with its reason, but its click never changes the area — the
+ * guards (GuardedRoute) own navigation decisions, the stepper only reflects
+ * progress (R5). Navigation only happens here (registry-derived) and through
+ * the router: no in-workspace cross-nav buttons remain.
  */
 export function Stepper() {
   const flags = useWorkflowState()
@@ -59,7 +65,13 @@ export function Stepper() {
             <button
               type="button"
               disabled={blocked}
-              onClick={() => navigate(entry.path)}
+              onClick={() => {
+                // C3: availability (disabled) and navigation are separate
+                // contracts. A blocked stage renders with its reason but its
+                // click must NEVER navigate — guard here AND via disabled.
+                if (blocked) return
+                navigate(entry.path)
+              }}
               aria-current={current ? 'step' : undefined}
               title={reason ?? undefined}
               className={cn(

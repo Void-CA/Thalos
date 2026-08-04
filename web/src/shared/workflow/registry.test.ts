@@ -172,6 +172,67 @@ describe('WORKSPACE_REGISTRY (slice S1.7 — scene entry, Robot stage marker, la
   })
 })
 
+describe('WORKSPACE_REGISTRY (slice S3.5 — typed domain graph, user criterion C3)', () => {
+  // Characterization tests: the registry data already satisfies the domain
+  // graph (laid down in S1.7/S1.8) — these pin the invariant against
+  // regression, proving the stepper/docs/guard/pipeline derivations all draw
+  // from ONE contiguous source (design D1).
+  const staged = WORKSPACE_REGISTRY.filter(
+    (e): e is typeof e & { stage: number } => e.stage !== null,
+  ).sort((a, b) => a.stage - b.stage)
+
+  it('has exactly the six pipeline areas with contiguous stages 1-6', () => {
+    expect(staged.map((e) => e.workspace)).toEqual([
+      'robot',
+      'scene',
+      'task',
+      'planning',
+      'execution',
+      'sessions',
+    ])
+    expect(staged.map((e) => e.stage)).toEqual([1, 2, 3, 4, 5, 6])
+  })
+
+  it('C3 — contiguous artifact graph: produces(area_i) === consumes(area_{i+1})', () => {
+    for (let i = 0; i < staged.length - 1; i++) {
+      expect(staged[i].producesArtifact, `${staged[i].workspace} → ${staged[i + 1].workspace}`).toBe(
+        staged[i + 1].consumes,
+      )
+    }
+    // Spot-check the typed chain (R2: RobotModel → Scene → SemanticProgram → …).
+    expect(staged[1].consumes).toBe('RobotModel')
+    expect(staged[2].consumes).toBe('Scene')
+    expect(staged[5].producesArtifact).toBe('ExecutionSession')
+  })
+
+  it('C2 observation — stepperIndex equals stage on every pipeline area (redundant, flagged for verify)', () => {
+    for (const entry of staged) {
+      expect(entry.stepperIndex).toBe(entry.stage)
+    }
+  })
+
+  it('keeps every pipeline stage guards typed (requires list + produces flag, per area)', () => {
+    const expected: Array<[string, WorkflowFlag[], WorkflowFlag | null]> = [
+      ['robot', [], 'robotLoaded'],
+      ['scene', ['robotLoaded'], 'sceneValid'],
+      ['task', ['sceneValid'], 'compiled'],
+      ['planning', ['compiled'], 'analyzed'],
+      ['execution', ['executable'], 'completed'],
+      ['sessions', ['completed'], null],
+    ]
+    for (const [workspace, requires, produces] of expected) {
+      const entry = WORKSPACE_REGISTRY.find((e) => e.workspace === workspace)!
+      expect(entry.requires).toEqual(requires)
+      expect(entry.produces).toBe(produces)
+    }
+  })
+
+  it('non-stage areas (stage null) are not part of the pipeline chain', () => {
+    const nonStage = WORKSPACE_REGISTRY.filter((e) => e.stage === null).map((e) => e.workspace)
+    expect(nonStage).toEqual(['knowledge'])
+  })
+})
+
 describe('producerOf (registry helper)', () => {
   it('maps each produced flag to the workspace that produces it', () => {
     expect(producerOf('robotLoaded')?.path).toBe('/')

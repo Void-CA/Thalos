@@ -352,9 +352,11 @@ describe('isValidHomePose — home-pose validity feeding sceneValid', () => {
   })
 })
 
-describe('stepperStages — pipeline derived from the registry (global-stepper spec)', () => {
-  it('exposes Task, Planning, Execution, Sessions in registry order (4 stages until S3)', () => {
+describe('stepperStages — six stages derived from the registry `stage` order (global-stepper spec S3)', () => {
+  it('exposes the six pipeline areas in stage order: robot … sessions', () => {
     expect(stepperStages(WORKSPACE_REGISTRY).map((e) => e.workspace)).toEqual([
+      'robot',
+      'scene',
       'task',
       'planning',
       'execution',
@@ -362,23 +364,33 @@ describe('stepperStages — pipeline derived from the registry (global-stepper s
     ])
   })
 
-  it('excludes the robot root (root, not a stage)', () => {
-    expect(stepperStages(WORKSPACE_REGISTRY).some((e) => e.workspace === 'robot')).toBe(false)
+  it('includes Robot as stage 1 (Robot is a pipeline stage, not the root)', () => {
+    const stages = stepperStages(WORKSPACE_REGISTRY)
+    expect(stages[0].workspace).toBe('robot')
+    expect(stages[0].stage).toBe(1)
   })
 
-  it('excludes the scene area until S3 (capability-less areas are not stages yet)', () => {
-    // Cast: 'scene' is not yet a WorkspaceName in the commit-1 registry shape.
-    expect(
-      stepperStages(WORKSPACE_REGISTRY).some((e) => (e.workspace as string) === 'scene'),
-    ).toBe(false)
+  it('orders the stages by the registry `stage` field (canonical order), not by capability', () => {
+    const stages = stepperStages(WORKSPACE_REGISTRY)
+    expect(stages.map((e) => e.stage)).toEqual([1, 2, 3, 4, 5, 6])
+  })
+
+  it('C2 observation: stepperIndex is redundant — equals stage on every pipeline area (flagged for verify)', () => {
+    for (const entry of stepperStages(WORKSPACE_REGISTRY)) {
+      expect(entry.stepperIndex).toBe(entry.stage)
+    }
+  })
+
+  it('excludes areas without a stage (knowledge; Configuración is not a stepper stage)', () => {
+    const stages = stepperStages(WORKSPACE_REGISTRY)
+    expect(stages.every((e) => e.stage !== null)).toBe(true)
+    expect(stages.some((e) => e.workspace === 'knowledge')).toBe(false)
+    // Cast: 'configuration' is not yet a WorkspaceName (S5.4 adds the entry).
+    expect(stages.some((e) => (e.workspace as string) === 'configuration')).toBe(false)
   })
 
   it('excludes the absorbed analysis content (no /analysis stage after slice 6)', () => {
     expect(stepperStages(WORKSPACE_REGISTRY).some((e) => e.path === '/analysis')).toBe(false)
-  })
-
-  it('excludes the hidden knowledge workspace (support capability, not a pipeline stage)', () => {
-    expect(stepperStages(WORKSPACE_REGISTRY).some((e) => e.workspace === 'knowledge')).toBe(false)
   })
 })
 
@@ -393,9 +405,25 @@ describe('deriveStepperStages — per-stage state from flags + active route', ()
     expect(stages.find((s) => s.entry.workspace === 'planning')?.reason).toBeNull()
   })
 
-  it('has no current stage on a non-pipeline route (robot home)', () => {
+  it('marks the Robot stage current on the root route (Robot is stage 1, its own area)', () => {
     const stages = deriveStepperStages(ALL_TRUE, '/', WORKSPACE_REGISTRY)
-    expect(stages.every((s) => s.state !== 'current')).toBe(true)
+    expect(stages.find((s) => s.entry.workspace === 'robot')?.state).toBe('current')
+  })
+
+  it('derives the full spec progress scenario (Robot passed … Ejecución pending)', () => {
+    const stages = deriveStepperStages(
+      { ...ALL_TRUE, executable: true },
+      '/planning',
+      WORKSPACE_REGISTRY,
+    )
+    const byWs = Object.fromEntries(stages.map((s) => [s.entry.workspace, s]))
+    expect(byWs.robot.state).toBe('passed') // robotLoaded produced
+    expect(byWs.scene.state).toBe('passed') // sceneValid produced
+    expect(byWs.task.state).toBe('passed') // compiled produced
+    expect(byWs.planning.state).toBe('current') // active route
+    expect(byWs.execution.state).toBe('pending') // requirements met, not reached
+    expect(byWs.sessions.state).toBe('blocked') // completed unmet — guard prevents access
+    expect(byWs.sessions.reason).toBe('Requires a completed execution')
   })
 
   it('blocks Execution when executable is unmet, with a derived reason', () => {

@@ -120,7 +120,14 @@ export interface WorkspaceEntry {
 /**
  * D1 — the registry describes domain AREAS, not views. `Area` is the
  * domain-area view of a registry entry (design D1: consumes/produces artifacts,
- * stage, stepperIndex, guards). Full `guards.{}` nesting + `Area[]` registry
- * conversion lands in S3.6; S1 carries the artifact + stage data.
+ * stage, stepperIndex, guards).
+ *
+ * S3.6 status: the flat `requires`/`produces` fields ARE the typed guards —
+ * every consumer (stepper, TopBar, GuardedRoute, derive, registry tests) draws
+ * from this single source, and the pipeline graph is contiguous
+ * (`produces(area_i) === consumes(area_{i+1})`, pinned by registry.test.ts
+ * S3.5). The design's nested `guards.{}` shape was DEFERRED: it would be a
+ * pure restructuring with no derivation gain and a wide ripple
+ * (top-bar/guarded-route/tests) — flagged as a deviation for verify.
  */
 export type Area = WorkspaceEntry
