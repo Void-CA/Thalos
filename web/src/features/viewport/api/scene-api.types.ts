@@ -101,11 +101,14 @@ export interface SelectToolFrameRequest {
 /** Execution info carried by the FULL-STATE response (`RuntimeStateResponse`,
  *  e.g. from start/pause/scene endpoints). NOTE: the backend full-state mapper
  *  sets `progress` to `current_time` — it is elapsed SECONDS, NOT a fraction
- *  (backend quirk, see `dto/mappers/runtime.rs`). `elapsed_secs` mirrors it. */
+ *  (backend quirk, see `dto/mappers/runtime.rs`). `elapsed_secs` mirrors it.
+ *  `source` is the backend execution source ("Simulation" | "Hardware") —
+ *  additive + optional (PR4, item 9). */
 export interface ExecutionInfoDto {
   status: string
   progress: number
   elapsed_secs: number
+  source?: string
 }
 
 export interface RuntimeStateResponse {
@@ -175,11 +178,12 @@ export interface RuntimeDelta {
 /** Execution info carried by each TICK delta (`RuntimeDelta` from
  *  `POST /scene/motion/tick`). Here `progress` IS a fraction 0..1 of the plan
  *  duration (`exe.progress(plan_duration)`, clamped); `elapsed_secs` is
- *  absolute seconds since plan start. */
+ *  absolute seconds since plan start. `source` mirrors the session source. */
 export interface ExecutionDto {
   status: ExecutionStatusDto
   progress: number
   elapsed_secs: number
+  source?: string
 }
 
 export type ExecutionStatusDto = 'Created' | 'Active' | 'Paused' | 'Completed' | 'Cancelled' | 'Failed' | 'Idle'

@@ -138,5 +138,6 @@ export function toExecutionInfo(dto: RuntimeStateResponse['execution']): Executi
     status: dto.status,
     progress: dto.progress,
     elapsedSecs: dto.elapsed_secs,
+    source: dto.source,
   }
 }

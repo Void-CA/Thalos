@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { executionClient } from './execution-client'
 import { useSceneStore } from '@/features/viewport/store'
+import { isApiError } from '@/shared/errors'
 import type { ObjectTransform, ExecutionInfo } from '@/features/viewport/types'
 
 // ── Status ────────────────────────────────────────────────────────────────
@@ -33,6 +34,14 @@ export interface ActivePlanInfo {
 
 // ── State ─────────────────────────────────────────────────────────────────
 
+/** Structured execution error (error-ux spec): the backend machine-readable
+ *  `code` is preserved alongside the display `message` so the UI can render a
+ *  code→CTA string instead of raw text. */
+export interface ExecutionError {
+  message: string
+  code?: string
+}
+
 export interface ExecutionState {
   status: ExecutionStatus
   joints: number[]
@@ -42,7 +51,7 @@ export interface ExecutionState {
   progress: number
   /** Elapsed seconds since plan start (tick delta `elapsed_secs`). */
   elapsedSecs: number
-  error: string | null
+  error: ExecutionError | null
   /** Summary of the loaded plan; null until a plan is handed off. */
   activePlan: ActivePlanInfo | null
 }
@@ -82,6 +91,16 @@ const INITIAL: ExecutionState = {
   activePlan: null,
 }
 
+/** Normalize any thrown error to `{message, code}` (error-ux spec): the
+ *  ApiError code survives into the store state so the workspace can render
+ *  the code→CTA mapping. Plain errors keep only their message. */
+function toExecutionError(err: unknown): ExecutionError {
+  if (isApiError(err)) {
+    return { message: err.message, code: err.code }
+  }
+  return { message: err instanceof Error ? err.message : 'Operation failed' }
+}
+
 // ── Loop privado ──────────────────────────────────────────────────────────
 
 let loopId: number | null = null
@@ -118,6 +137,7 @@ function startLoop() {
         status: delta.execution.status,
         progress: delta.execution.progress,
         elapsedSecs: delta.execution.elapsed_secs,
+        source: delta.execution.source,
       }
 
       // Escribir el snapshot de ejecución para el viewport (single source of truth)
@@ -141,7 +161,7 @@ function startLoop() {
       }
     } catch (err) {
       stopLoop()
-      useExecutionStore.setState({ status: 'failed', error: (err as Error).message })
+      useExecutionStore.setState({ status: 'failed', error: toExecutionError(err) })
       return
     }
 
@@ -185,7 +205,7 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>((set)
       set({ status: 'running' })
       startLoop()
     } catch (err) {
-      set({ status: 'failed', error: (err as Error).message })
+      set({ status: 'failed', error: toExecutionError(err) })
     }
   },
 
@@ -195,7 +215,7 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>((set)
       stopLoop()
       set({ status: 'paused' })
     } catch (err) {
-      set({ status: 'failed', error: (err as Error).message })
+      set({ status: 'failed', error: toExecutionError(err) })
     }
   },
 
@@ -205,7 +225,7 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>((set)
       set({ status: 'running' })
       startLoop()
     } catch (err) {
-      set({ status: 'failed', error: (err as Error).message })
+      set({ status: 'failed', error: toExecutionError(err) })
     }
   },
 
@@ -215,7 +235,7 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>((set)
       stopLoop()
       set({ status: 'cancelled' })
     } catch (err) {
-      set({ status: 'failed', error: (err as Error).message })
+      set({ status: 'failed', error: toExecutionError(err) })
     }
   },
 
@@ -225,7 +245,7 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>((set)
       stopLoop()
       set({ ...INITIAL })
     } catch (err) {
-      set({ status: 'failed', error: (err as Error).message })
+      set({ status: 'failed', error: toExecutionError(err) })
     }
   },
 }))

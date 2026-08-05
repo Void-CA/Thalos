@@ -7,8 +7,8 @@ import { useExecutionStore } from '@/features/execution/execution-store'
 import { useWorkflowState } from '@/shared/workflow/use-workflow-state'
 import { hasMissingFields } from '@/shared/workflow/derive'
 import { OperationRow } from './operation-row'
-import { compileSemantic, executeSemantic, CompileError } from '../api'
-import { isApiError } from '@/shared/errors'
+import { compileSemantic, executeSemantic } from '../api'
+import { describeError } from '@/shared/errors'
 import { serialize } from '../script/serializer'
 import { parse } from '../script/parser'
 import {
@@ -20,52 +20,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-
-/** Friendly guided CTAs keyed on the backend machine-readable error code
- *  (verbatim codes from `backend/crates/thalos-api/src/features/semantic/handler.rs`).
- *  The HTTP status is complementary only — decisions key on `code`. */
-const CTA_BY_CODE: Record<string, string> = {
-  semantic_validation_error: 'Fix the program errors',
-  lowering_error: 'Define the referenced objects/locations in Scene',
-  planning_error: 'Planning failed — check the robot and scene targets',
-  dof_mismatch: 'The loaded robot does not match this task\'s degrees of freedom — select a compatible robot',
-}
-
-/** `planning_error` is a generic code — the message is the only signal. IK
- *  failure signatures mean an unreachable/incompatible target, which deserves
- *  a reach-specific CTA; everything else falls back to the generic one above. */
-const IK_FAILURE_MARKERS = ['IK failed', 'MaxIterations']
-const REACH_CTA = 'Targets are out of the robot\'s reach — adjust scene positions or load a larger robot'
-
-function reachCtaForPlanningError(message: string): string | null {
-  return IK_FAILURE_MARKERS.some(marker => message.includes(marker)) ? REACH_CTA : null
-}
-
-interface CodedError extends Error {
-  code?: string
-  status?: number
-}
-
-/** Map a normalized HTTP error (ApiError / CompileError) to a guided CTA. */
-function describeError(err: unknown): string {
-  if (err instanceof CompileError || isApiError(err)) {
-    const coded = err as CodedError
-    if (coded.code === 'planning_error' && coded.message) {
-      const reachCta = reachCtaForPlanningError(coded.message)
-      if (reachCta) return `${reachCta} — ${coded.message}`
-    }
-    if (coded.code && CTA_BY_CODE[coded.code]) {
-      return `${CTA_BY_CODE[coded.code]} — ${coded.message}`
-    }
-    if (coded.code) {
-      return coded.status != null
-        ? `${coded.message} (${coded.code}, HTTP ${coded.status})`
-        : `${coded.message} (${coded.code})`
-    }
-    return coded.message
-  }
-  return err instanceof Error ? err.message : 'Operation failed'
-}
 
 /**
  * TaskEditor — the Program panel of the Task workspace (frontend-task-workspace

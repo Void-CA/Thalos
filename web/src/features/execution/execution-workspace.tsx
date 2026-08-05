@@ -1,5 +1,7 @@
-import { Activity, Clock, Play, Square, RefreshCw, Pause, Gauge, ListOrdered } from 'lucide-react'
+import { Activity, Clock, Play, Square, RefreshCw, Pause, Gauge, ListOrdered, Cpu } from 'lucide-react'
 import { useExecutionStore } from './execution-store'
+import { ErrorBox } from '@/components/ui/error-box'
+import { useSceneStore } from '@/features/viewport/store'
 
 /**
  * ExecutionWorkspace — the single owner of execution lifecycle and runtime
@@ -23,6 +25,9 @@ export function ExecutionWorkspace() {
   const elapsedSecs = useExecutionStore((s) => s.elapsedSecs)
   const error = useExecutionStore((s) => s.error)
   const activePlan = useExecutionStore((s) => s.activePlan)
+  /** Backend execution source ("Simulation" | "Hardware") — informational
+   *  badge only, from the runtime full-state `execution.source` (PR4). */
+  const executionSource = useSceneStore((s) => s.execution?.source)
 
   const start = useExecutionStore((s) => s.start)
   const pause = useExecutionStore((s) => s.pause)
@@ -42,6 +47,15 @@ export function ExecutionWorkspace() {
       {/* ── Header ── */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
         <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider flex-1">Execution</h2>
+        {executionSource && (
+          <span
+            data-testid="execution-source-badge"
+            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-blue-600/20 text-blue-400"
+          >
+            <Cpu className="size-2.5" />
+            {executionSource}
+          </span>
+        )}
         <span
           className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide
             ${status === 'running' ? 'bg-green-600/20 text-green-500'
@@ -108,13 +122,13 @@ export function ExecutionWorkspace() {
           <h3 className="flex items-center gap-1.5 text-[11px] font-semibold text-foreground uppercase tracking-wider mb-1.5">
             <Gauge className="size-3 text-muted-foreground" /> Execution Status
           </h3>
-          <p className="text-xs text-foreground">
+          <div className="text-xs text-foreground">
             {error ? (
-              <span className="text-red-400">{error}</span>
+              <ErrorBox error={error} />
             ) : (
               `Status: ${status}`
             )}
-          </p>
+          </div>
         </section>
 
         {/* ── Progress / Elapsed ── */}
