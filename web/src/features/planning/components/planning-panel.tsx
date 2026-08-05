@@ -6,12 +6,27 @@ import { sceneApi } from '@/features/viewport/api/scene-api'
 import { toSceneData, toRuntimeInfo, toIkResult, toActivePlan, toToolFrame, toExecutionInfo } from '@/features/viewport/adapter'
 import { planAnalysisApi } from '@/features/analysis/api/plan-analysis-api'
 import { useAnalysisStore } from '@/features/analysis/store'
+import { useExecutionStore } from '@/features/execution/execution-store'
+import type { RuntimeStateResponse } from '@/features/viewport/api/scene-api.types'
 import { Loader2, Plus, Trash2, Play, ChevronDown, ChevronRight } from 'lucide-react'
 import { PLAN_SEGMENT_PALETTE } from '@/shared/tokens'
 
 type MotionSegmentDto =
   | { type: 'movej'; target: number[] }
   | { type: 'movel'; target: { translation: [number, number, number]; rotation: any } }
+
+/**
+ * Plan metadata mirrored into the execution store after a successful preview
+ * (PR2, motion-program spec): instruction count = previewed segments; duration
+ * = the last segment's end time (segments are sequential). Pure — the handoff
+ * mirrors the plan, it never re-derives it from the backend runtime.
+ */
+export function planSummaryFromPreview(scene: RuntimeStateResponse): { instructionCount: number; durationSecs: number } {
+  const segments = scene.active_plan?.segments ?? []
+  const instructionCount = segments.length
+  const durationSecs = segments.length > 0 ? segments[segments.length - 1].time_end : 0
+  return { instructionCount, durationSecs }
+}
 
 function buildRequest(segments: SegmentModel[], dof: number): { segments: MotionSegmentDto[] } {
   const segs: MotionSegmentDto[] = []
@@ -54,6 +69,12 @@ function usePlanPreview() {
         toExecutionInfo(scene.execution),
       )
       setAnalysis(analysis)
+      // Handoff (Invariant #5, motion-program spec): mirror the previewed plan
+      // into the execution store — source 'Motion Program' — WITHOUT touching
+      // the backend runtime. Sets execStatus = ready; the tick loop does NOT
+      // start here (only start() from the Execution workspace begins it).
+      const { instructionCount, durationSecs } = planSummaryFromPreview(scene)
+      useExecutionStore.getState().receivePlan({ instructionCount, durationSecs, source: 'Motion Program' })
     },
   })
 }
