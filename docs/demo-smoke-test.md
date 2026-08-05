@@ -184,6 +184,86 @@ El trabajo del MVP se organiza en 4 bloques SDD (specs en `docs/intelligent-plan
 3. **flow-reorganization** — reorganización del flujo (preview/apply/undo de comandos, write-back del plan).
 4. **analysis-advisor** — análisis del plan + advisor (observaciones, regiones, recomendaciones; feature flag `THALOS_SCENE_WRITEBACK`).
 
+## Firmware Runbook (ESP32 execution backend, PR4)
+
+> Cómo flashear y operar el firmware ESP32 por serial para la demo con
+> backend físico. El firmware vive en `firmware/esp32/` (PlatformIO, Arduino
+> framework); el protocolo wire completo está en `docs/protocol/esp32-execution.md`.
+
+### Build + flash (PlatformIO)
+
+```bash
+cd firmware/esp32
+pio run                  # build (env esp32dev)
+pio run -t upload        # flash por USB
+pio device monitor -b 115200   # consola serial (monitor_speed del env)
+```
+
+### Protocolo serial (text-line, 115200 baud)
+
+Cada comando/respuesta es una línea terminada en `\n`. El host (thalos-runtime
+`backends/esp32`) siempre inicia el intercambio:
+
+```
+HOST → ESP: HELLO 1            ESP → HOST: HELLO 1 OK
+HOST → ESP: MANIFEST <dof> <samples> <duration_us>   → OK
+HOST → ESP: SEGMENT <i> <movej|movel> <start> <count> → OK
+HOST → ESP: SAMPLE <j0..jN> <dt_us>                  → OK   (upload phase)
+HOST → ESP: END_UPLOAD                                → READY | ERROR <reason>
+HOST → ESP: EXECUTE                                   → OK | ERROR <reason>
+HOST → ESP: STATUS                                    → STATUS RUNNING|COMPLETED|ERROR <reason>
+HOST → ESP: SAMPLES <count>                           → OK + líneas SAMPLE <ts_us> <j0..jN>
+```
+
+Errores tipificados: `DOF_MISMATCH`, `WAYPOINT_COUNT`, `TIMING_COUNT`,
+`EMPTY_MANIFEST`, `NOT_READY`, `NOT_ACTIVE`, `MALFORMED`, `NOT_AVAILABLE`.
+El host aborta la operación ante cualquier `ERROR` o respuesta inesperada.
+
+### STOP recovery
+
+`STOP` es válido desde **READY, EXECUTING, COMPLETED o ERROR** y devuelve el
+firmware a **Idle** (executor detenido + estado reseteado, responde `OK`).
+Desde **IDLE o RECEIVING** responde `ERROR NOT_ACTIVE` — no rompe el firmware,
+pero el host debe tratarlo como recuperación (la sesión ya está limpia).
+Secuencia de recuperación segura tras un fallo de ejecución:
+
+```
+STOP      → OK              (detener + reset)
+STATUS    → STATUS IDLE     (confirmar estado limpio)
+MANIFEST  → ... (re-upload si se quiere re-ejecutar)
+```
+
+### Rollover-safety
+
+El firmware usa `micros()` (32-bit) como autoridad de tiempo y calcula el
+avance como **resta unsigned** `elapsed = now_us - start_time_us_`
+(`executor.cpp::step_to`). La resta unsigned es correcta incluso cuando
+`micros()` hace wraparound (~71.6 minutos de uptime) — el elapsed nunca se
+vuelve negativo ni salta. No agregar comparaciones absolutas de `micros()`
+(`now_us < start`) en cambios futuros: rompen la inmunidad al overflow. El
+timing del manifest usa `u64` (`duration_us`, `dt_us`, `ts_us`) sin riesgo de
+overflow en trazas de demo.
+
+### Board-config caveat: `esp32dev` vs ESP32-S3
+
+`platformio.ini` define el env `esp32dev` con `board = esp32dev` (ESP32
+DevKit), pero el **target físico de la demo es un ESP32-S3** (el backend
+`thalos-runtime/backends/esp32` está diseñado para S3). Para flashear en S3:
+
+```ini
+[env:esp32dev]
+platform = espressif32
+board = esp32-s3-devkitc-1   ; ← cambiar desde esp32dev
+framework = arduino
+monitor_speed = 115200
+```
+
+Verifica que el S3 use USB CDC/OTG correcto para `pio run -t upload` (si la
+placa no aparece, mantén presionado el botón BOOT durante el reset). El env
+mantiene el nombre `esp32dev` por compatibilidad con el build cache — NO
+renombres el env sin limpiar `.pio/build/` (`.pio/build/esp32dev` es el
+directorio actual del cache).
+
 ## Definition of Done
 
 All rows in the Evidence Table green, with commands and observed outputs recorded in the Notes column. When green, criterion 5 of `mvp-freeze-criteria.md` is verified and the MVP freeze declaration can proceed.
