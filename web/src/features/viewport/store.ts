@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useWorkspaceStore } from './store/workspace-store'
 import type { SceneData, RuntimeInfo, IkResult, IkTarget, ActivePlan, ToolFrame, ExecutionInfo, ObjectTransform, TransformSnapshot, FkFrameMap, SceneFrame } from './types'
 
 export type TrajectoryColorMode = 'segment' | 'trajectory-quality' | 'manipulability' | 'singularity'
@@ -63,12 +64,23 @@ function fkFramesFromScene(frames: SceneFrame[]): FkFrameMap {
 export const useSceneStore = create<SceneState & SceneActions>((set) => ({
   ...INITIAL,
 
-  applyScene: (data, runtime, ikResult, activePlan, activeTcp, execution) => set({
-    data, runtime, transformSnapshot: { kind: 'idle' }, execution, ikResult,
-    solvedQ: null, activePlan, activeTcp, loading: false, error: null,
-    optimizedPositions: null,
-    trajectoryViewMode: 'original',
-  }),
+  applyScene: (data, runtime, ikResult, activePlan, activeTcp, execution) => {
+    // Cascade invalidation (spec R4, design D5): workspace samples describe
+    // the PREVIOUS robot's workspace. When the confirmed robot identity
+    // (runtime.robot.id, single source from the backend via applyScene)
+    // changes, clear them — but NEVER on every applyScene (36+ callers
+    // refresh the same robot, e.g. IK/plan previews).
+    const prevRobotId = useSceneStore.getState().runtime?.robot.id ?? null
+    if (prevRobotId !== runtime.robot.id) {
+      useWorkspaceStore.getState().reset()
+    }
+    set({
+      data, runtime, transformSnapshot: { kind: 'idle' }, execution, ikResult,
+      solvedQ: null, activePlan, activeTcp, loading: false, error: null,
+      optimizedPositions: null,
+      trajectoryViewMode: 'original',
+    })
+  },
 
   applyFkUpdate: (data, runtime, ikResult, activeTcp) => set((state) => ({
     data, runtime, transformSnapshot: { kind: 'fk', frames: fkFramesFromScene(data.frames) }, execution: null, ikResult,

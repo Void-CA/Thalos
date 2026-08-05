@@ -1,58 +1,70 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Cpu } from 'lucide-react'
 import { useRobots } from '@/features/robots/api/use-robots'
 import { useRobotStore } from '@/features/robots/store'
+import { useSceneStore } from '@/features/viewport/store'
 import type { RobotMetadataDto } from '@/features/robots/api/robot-api.types'
 
-/** localStorage key persisting the Task workspace robot selection. */
+/** localStorage key persisting the Task workspace robot REQUEST hint (spec R6 — non-authoritative). */
 export const ROBOT_SELECTION_KEY = 'thalos:task:robotId'
 
-/** Default robot for the Task workspace (SCARA — matches the seeded scene). */
-export const DEFAULT_ROBOT_ID = 'scara'
-
-const FALLBACK_ROBOTS: RobotMetadataDto[] = [
-  { id: DEFAULT_ROBOT_ID, display_name: 'SCARA', dof: 4, joints: [] },
-]
-
 /**
- * Robot selector for the Task workspace.
+ * Robot selector for the Task workspace — READER + REQUESTER (design D6/D8).
  *
- * Populates the catalog via `useRobots` (the RobotCatalog only renders in the
- * Robot perspective, so the Task sidebar loads it on its own). The selection is
- * persisted to localStorage and written to `useRobotStore.selectedId`; the
- * AppShell `useSceneRobotSync` hook reacts to that selection and loads the
- * robot into the scene through `useLoadRobot` — the same load path the Robot
- * perspective uses. No local `useLoadRobot` call, so a selection change never
- * double-loads.
+ * The DISPLAYED value is the CONFIRMED identity from the scene runtime
+ * (`runtime.robot.id`, written only by applyScene — single writer, spec R2).
+ * Catalog `select(id)` is a REQUEST: AppShell's useSceneRobotSync turns it into
+ * a backend load via useLoadRobot, and the display changes only once applyScene
+ * confirms (spec R5).
+ *
+ * localStorage (R6): persisted catalog ids are hints, requested on mount.
+ * URDF ids (`urdf:*`) are NEVER persisted nor requested through select() —
+ * they are scene state; persisting them would reload them as catalog robots.
  */
 export function RobotSelector() {
   const { isLoading } = useRobots()
   const robots = useRobotStore((s) => s.robots)
-  const selectedId = useRobotStore((s) => s.selectedId)
   const select = useRobotStore((s) => s.select)
 
-  // Selection restored from localStorage (or default SCARA); materialized once
-  // the catalog is known, because `select` ignores unknown ids.
-  const [pendingId, setPendingId] = useState<string | null>(() => {
-    const persisted = localStorage.getItem(ROBOT_SELECTION_KEY)
-    return persisted ?? DEFAULT_ROBOT_ID
-  })
+  // Confirmed identity — single writer: applyScene (spec R2, R5.1).
+  const runtimeRobot = useSceneStore((s) => s.runtime?.robot ?? null)
+
+  // Persisted hint, restored once. Materialized as a REQUEST once the catalog
+  // is known; select() ignores unknown ids → backend default wins (spec R6).
+  const [pendingId, setPendingId] = useState<string | null>(() =>
+    localStorage.getItem(ROBOT_SELECTION_KEY),
+  )
 
   useEffect(() => {
     if (robots.length === 0 || pendingId === null) return
-    const id = robots.some((r) => r.id === pendingId) ? pendingId : DEFAULT_ROBOT_ID
-    localStorage.setItem(ROBOT_SELECTION_KEY, id)
-    select(id)
+    if (robots.some((r) => r.id === pendingId)) {
+      select(pendingId) // request — the scene confirms or overrides via applyScene
+    }
+    // Unknown persisted ids (incl. stale urdf:*) are intentionally ignored.
     setPendingId(null)
   }, [robots, pendingId, select])
 
-  const options: RobotMetadataDto[] = robots.length > 0 ? robots : FALLBACK_ROBOTS
-  const value = selectedId ?? pendingId ?? DEFAULT_ROBOT_ID
+  // Options = catalog + the current non-catalog (URDF) identity so the <select>
+  // can DISPLAY a confirmed URDF robot (spec R5.1).
+  const options: RobotMetadataDto[] = useMemo(() => {
+    const catalog = robots.length > 0 ? robots : []
+    if (runtimeRobot && !catalog.some((r) => r.id === runtimeRobot.id)) {
+      return [...catalog, runtimeRobot]
+    }
+    return catalog
+  }, [robots, runtimeRobot])
+
+  const value = runtimeRobot?.id ?? ''
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = e.target.value
-    localStorage.setItem(ROBOT_SELECTION_KEY, id)
-    select(id)
+    if (id === runtimeRobot?.id) return // no-op: same confirmed identity
+    if (robots.some((r) => r.id === id)) {
+      // Catalog id → persist hint + request load (design D6/D8).
+      localStorage.setItem(ROBOT_SELECTION_KEY, id)
+      select(id)
+    }
+    // Non-catalog (urdf:*) values are display-only; never requested nor persisted.
   }
 
   return (
@@ -66,6 +78,11 @@ export function RobotSelector() {
         className="flex-1 min-w-0 px-2 py-1 text-xs rounded-md border border-border bg-background
                    text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
       >
+        {value === '' && (
+          <option value="" disabled>
+            {isLoading ? 'Loading…' : 'No robot'}
+          </option>
+        )}
         {options.map((r) => (
           <option key={r.id} value={r.id}>
             {r.display_name}

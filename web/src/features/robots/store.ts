@@ -21,6 +21,15 @@ export const useRobotStore = create<RobotState>((set, get) => ({
 
   setRobots: (robots) => set({ robots, error: null }),
 
+  /**
+   * Select a catalog robot as a REQUEST (spec R5.2, design D8).
+   *
+   * NOT authoritative: the CONFIRMED identity lives in the scene runtime
+   * (`runtime.robot.id`), written only by applyScene. `select` only records
+   * what the user asked for; AppShell's useSceneRobotSync turns it into a
+   * backend load via useLoadRobot. The catalog-only guard stays: unknown ids
+   * — including URDF identities (`urdf:*`) — never enter the selection.
+   */
   select: (id) => {
     const { robots } = get()
     if (id === null || robots.some(r => r.id === id)) {

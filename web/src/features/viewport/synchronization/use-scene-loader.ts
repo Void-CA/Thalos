@@ -3,6 +3,32 @@ import { useSceneStore } from '../store'
 import { useSceneService } from '../services/service-context'
 
 /**
+ * Tokens de orden de requests (fix review): compartidos entre loadRobot,
+ * loadRobotFromUrdf y loadScene para descartar respuestas stale. Cada request
+ * de identidad incrementa `identitySeq`; onSuccess Y onError aplican solo si su
+ * token sigue siendo el último emitido. Sin esto, una respuesta lenta de
+ * loadRobot(A) que resuelve después de un import URDF (o un GET /scene default
+ * que resuelve después de un loadRobot) revertía la identidad confirmada — o un
+ * fallo stale sobrescribía el estado de error de una escena sana.
+ *
+ * Contrato del singleton `sceneLoadSeqAtFire`: snapshot de `identitySeq` al
+ * momento de disparar un GET /scene (NO incrementa el contador). Un GET /scene
+ * solo aplica —tanto en éxito como en error— si ningún request de identidad lo
+ * superó desde que se disparó. `resetSceneRequestOrdering()` restablece ambos
+ * tokens — SOLO para tests (evita fuga de estado entre casos).
+ */
+const requestOrdering = {
+  identitySeq: 0,
+  sceneLoadSeqAtFire: 0,
+}
+
+/** Reset de los tokens de orden — para tests (evita fuga de estado entre casos). */
+export function resetSceneRequestOrdering() {
+  requestOrdering.identitySeq = 0
+  requestOrdering.sceneLoadSeqAtFire = 0
+}
+
+/**
  * Hook para cargar un robot en la escena.
  *
  * Dependencia: SceneService (inyectado via ServicesProvider).
@@ -15,8 +41,14 @@ export function useLoadRobot() {
 
   return useMutation({
     mutationFn: (id: string) => service.loadRobot(id),
-    onMutate: () => setLoading(true),
-    onSuccess: (snapshot) => {
+    onMutate: () => {
+      setLoading(true)
+      return ++requestOrdering.identitySeq // token de esta request
+    },
+    onSuccess: (snapshot, _id, token) => {
+      // Stale guard: un request de identidad más nuevo (p.ej. import URDF) la
+      // superó — no se aplica, no revierte la identidad confirmada.
+      if (token !== requestOrdering.identitySeq) return
       applyScene(
         snapshot.scene,
         snapshot.runtime,
@@ -26,7 +58,58 @@ export function useLoadRobot() {
         snapshot.execution,
       )
     },
-    onError: (err: Error) => setError(err.message),
+    onError: (err: Error, _id: string, token) => {
+      // Stale guard (onError): un fallo de un request superado (p.ej. loadRobot(A)
+      // que falla después de que loadRobot(B) o un import URDF aplicó) no debe
+      // sobrescribir el estado de error de la escena.
+      if (token !== requestOrdering.identitySeq) return
+      setError(err.message)
+    },
+  })
+}
+
+/**
+ * Hook para cargar el estado de escena actual (GET /scene).
+ *
+ * Provee la identidad inicial DERIVADA DEL BACKEND (spec R7): sin selección
+ * previa, el default es el robot que el backend tiene en la escena (Planar2R).
+ */
+export function useLoadScene() {
+  const service = useSceneService()
+  const applyScene = useSceneStore(s => s.applyScene)
+  const setLoading = useSceneStore(s => s.setLoading)
+  const setError = useSceneStore(s => s.setError)
+
+  return useMutation({
+    // Un fallo transitorio de GET /scene no debe dejar el viewport
+    // desinicializado sin reintento (fix review — App.tsx solo retry:1 queries).
+    retry: 1,
+    mutationFn: () => service.loadScene(),
+    onMutate: () => {
+      setLoading(true)
+      requestOrdering.sceneLoadSeqAtFire = requestOrdering.identitySeq
+    },
+    onSuccess: (snapshot) => {
+      // Stale guard: la respuesta del backend default NO debe pisar una
+      // identidad ya solicitada/confirmada — ni un request de identidad emitido
+      // después de este GET /scene, ni una identidad ya presente en el runtime.
+      if (requestOrdering.sceneLoadSeqAtFire !== requestOrdering.identitySeq) return
+      if (useSceneStore.getState().runtime !== null) return
+      applyScene(
+        snapshot.scene,
+        snapshot.runtime,
+        snapshot.ikResult,
+        snapshot.activePlan,
+        snapshot.activeTcp,
+        snapshot.execution,
+      )
+    },
+    onError: (err: Error) => {
+      // Stale guard (onError): un GET /scene superado por un request de
+      // identidad más nuevo no debe pintar un error stale sobre una escena sana.
+      if (requestOrdering.sceneLoadSeqAtFire !== requestOrdering.identitySeq) return
+      setError(err.message)
+    },
   })
 }
 
@@ -41,8 +124,13 @@ export function useLoadRobotFromUrdf() {
 
   return useMutation({
     mutationFn: (source: string) => service.loadRobotFromUrdf(source),
-    onMutate: () => setLoading(true),
-    onSuccess: (snapshot) => {
+    onMutate: () => {
+      setLoading(true)
+      return ++requestOrdering.identitySeq // token de esta request
+    },
+    onSuccess: (snapshot, _source, token) => {
+      // Stale guard: un import más nuevo la superó — no se aplica.
+      if (token !== requestOrdering.identitySeq) return
       applyScene(
         snapshot.scene,
         snapshot.runtime,
@@ -52,6 +140,11 @@ export function useLoadRobotFromUrdf() {
         snapshot.execution,
       )
     },
-    onError: (err: Error) => setError(err.message),
+    onError: (err: Error, _source: string, token) => {
+      // Stale guard (onError): un fallo de un import superado no debe
+      // sobrescribir el estado de error con el de una identidad obsoleta.
+      if (token !== requestOrdering.identitySeq) return
+      setError(err.message)
+    },
   })
 }

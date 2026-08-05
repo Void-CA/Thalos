@@ -81,6 +81,12 @@ export class SceneService {
     return toSnapshot(res)
   }
 
+  /** Load the current scene state — backend-derived default identity (spec R7). */
+  async loadScene(): Promise<SceneSnapshot> {
+    const res = await this.api.getScene()
+    return toSnapshot(res)
+  }
+
   async loadRobotFromUrdf(source: string): Promise<SceneSnapshot> {
     const res = await this.api.loadRobotFromUrdf(source)
     return toSnapshot(res)

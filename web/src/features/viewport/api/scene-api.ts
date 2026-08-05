@@ -8,6 +8,10 @@ import type {
 } from './scene-api.types'
 
 export const sceneApi = {
+  /** Fetch the current scene state — initial identity comes from the backend (spec R7). */
+  getScene: () =>
+    apiClient.get<RuntimeStateResponse>('/scene').then(r => r.data),
+
   /** Load a robot into the scene. */
   loadRobot: (id: string) =>
     apiClient.post<RuntimeStateResponse>('/scene/robot', { robot_id: id }).then(r => r.data),

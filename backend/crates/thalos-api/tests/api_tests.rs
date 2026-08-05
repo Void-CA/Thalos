@@ -603,9 +603,10 @@ async fn workspace_sample_scara_returns_metrics_and_bounds() {
     assert_eq!(status, StatusCode::OK);
     let body = body.expect("response must be valid JSON");
 
-    // Has metrics
+    // Has metrics — sample_count is derived from samples.len() (workspace.rs),
+    // so it is exact, not a floor.
     let metrics = body.get("metrics").expect("must contain metrics");
-    assert!(metrics["sample_count"].as_u64().unwrap() >= 500);
+    assert_eq!(metrics["sample_count"].as_u64().unwrap(), 500);
     assert!(metrics["max_reach"].as_f64().unwrap() > 0.0);
     assert!(metrics["bounding_volume"].as_f64().unwrap() > 0.0);
     assert!(metrics.get("centroid").is_some());
@@ -730,6 +731,94 @@ async fn workspace_sample_invalid_robot_returns_not_found() {
     assert_eq!(status, StatusCode::NOT_FOUND);
     let body = body.expect("response must be valid JSON");
     assert_eq!(body["code"], "not_found");
+}
+
+// 5.13: POST /workspace/sample/active targets the robot currently loaded in
+// the scene (spec robot-identity R3-003) — no robot_id in the request.
+
+#[tokio::test]
+async fn workspace_sample_active_targets_the_loaded_catalog_robot() {
+    let app = test_app().await;
+
+    // Load a catalog robot into the scene → it becomes the active chain.
+    let (load_status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/robot",
+        Some(json!({"robot_id": "scara"})),
+    )
+    .await;
+    assert_eq!(load_status, StatusCode::OK, "scene load must succeed");
+
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/workspace/sample/active",
+        Some(json!({
+            "samples": 500,
+            "seed": 0,
+            "tolerance": 0.001,
+            "include_samples": true,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+
+    let metrics = body.get("metrics").expect("must contain metrics");
+    // sample_count is derived from samples.len() (workspace.rs) — exact, not a floor.
+    assert_eq!(metrics["sample_count"].as_u64().unwrap(), 500);
+    let samples = body.get("samples").expect("must contain samples");
+    let arr = samples.as_array().unwrap();
+    assert_eq!(arr.len(), 500, "must sample the active chain");
+    for sample in arr {
+        assert!(sample.get("position").is_some(), "sample must have position");
+    }
+}
+
+#[tokio::test]
+async fn workspace_sample_active_targets_the_loaded_urdf_robot() {
+    let app = test_app().await;
+    let icebot_urdf = include_str!("../../../../docs/robot/icebot.urdf");
+
+    // A URDF import also becomes the active chain for the /active endpoint.
+    let (load_status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/robot/from-urdf",
+        Some(json!({"urdf_source": icebot_urdf})),
+    )
+    .await;
+    assert_eq!(load_status, StatusCode::OK, "URDF load must succeed");
+    let body = body.expect("load response body");
+    assert!(
+        body["robot"]["id"]
+            .as_str()
+            .expect("robot.id string")
+            .starts_with("urdf:"),
+        "loaded robot must carry a urdf: identity"
+    );
+
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/workspace/sample/active",
+        Some(json!({
+            "samples": 100,
+            "seed": 0,
+            "tolerance": 0.001,
+            "include_samples": true,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("response must be valid JSON");
+    let samples = body.get("samples").expect("must contain samples");
+    assert_eq!(
+        samples.as_array().unwrap().len(),
+        100,
+        "must sample the URDF chain"
+    );
 }
 
 // ────────────────────────────────────────────────────────────────────
