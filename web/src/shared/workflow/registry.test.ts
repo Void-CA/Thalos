@@ -3,7 +3,7 @@ import { WORKSPACE_REGISTRY, producerOf } from './registry'
 import type { ArtifactKind, Capability, WorkflowFlag } from './types'
 
 describe('WORKSPACE_REGISTRY (slice 1 — navigation contract)', () => {
-  it('registers the 8 sitemap paths in order (Escena added between / and /task)', () => {
+  it('registers the 9 sitemap paths in order (Escena added between / and /task)', () => {
     expect(WORKSPACE_REGISTRY.map((e) => e.path)).toEqual([
       '/',
       '/scene',
@@ -13,11 +13,12 @@ describe('WORKSPACE_REGISTRY (slice 1 — navigation contract)', () => {
       '/sessions',
       '/knowledge',
       '/configuration',
+      '/analysis',
     ])
   })
 
-  it('no longer registers the absorbed /analysis workspace', () => {
-    expect(WORKSPACE_REGISTRY.some((e) => e.path === '/analysis')).toBe(false)
+  it('registers /analysis (PR-D re-introduces the sampling tool as a kind:tool entry)', () => {
+    expect(WORKSPACE_REGISTRY.some((e) => e.path === '/analysis')).toBe(true)
   })
 
   it('keeps paths and workspace names unique', () => {
@@ -130,7 +131,7 @@ describe('WORKSPACE_REGISTRY (slice S1.7 — scene entry, Robot stage marker, la
     expect(robot.stepperIndex).toBe(1)
   })
 
-  it('carries a stage marker per pipeline area in chain order (Robot=1 … Sesiones=6)', () => {
+  it('carries a stage marker per pipeline area in chain order (Robot=1 … Sesiones=6; tools are stage null)', () => {
     const stages = WORKSPACE_REGISTRY.map((e) => [e.workspace, e.stage] as const)
     expect(stages).toEqual([
       ['robot', 1],
@@ -141,6 +142,7 @@ describe('WORKSPACE_REGISTRY (slice S1.7 — scene entry, Robot stage marker, la
       ['sessions', 6],
       ['knowledge', null],
       ['configuration', null],
+      ['analysis', null],
     ])
   })
 
@@ -174,6 +176,7 @@ describe('WORKSPACE_REGISTRY (slice S1.7 — scene entry, Robot stage marker, la
       'Sesiones',
       'Knowledge',
       'Configuración',
+      'Analysis',
     ])
     const legacy = ['Task', 'Planning', 'Execution', 'Sessions']
     expect(WORKSPACE_REGISTRY.some((e) => legacy.includes(e.label))).toBe(false)
@@ -237,7 +240,7 @@ describe('WORKSPACE_REGISTRY (slice S3.5 — typed domain graph, user criterion 
 
   it('non-stage areas (stage null) are not part of the pipeline chain', () => {
     const nonStage = WORKSPACE_REGISTRY.filter((e) => e.stage === null).map((e) => e.workspace)
-    expect(nonStage).toEqual(['knowledge', 'configuration'])
+    expect(nonStage).toEqual(['knowledge', 'configuration', 'analysis'])
   })
 })
 
@@ -262,5 +265,33 @@ describe('producerOf (registry helper)', () => {
         expect(producerOf(entry.produces)).toBe(entry)
       }
     }
+  })
+})
+
+describe('WORKSPACE_REGISTRY (PR-D — kind nav model, auxiliary-tools-navigation spec)', () => {
+  it('defaults kind to stage on the six pipeline entries (no explicit kind — backward compatible)', () => {
+    const pipeline = WORKSPACE_REGISTRY.filter((e) => e.stage !== null)
+    expect(pipeline).toHaveLength(6)
+    for (const entry of pipeline) {
+      expect(entry.kind).toBeUndefined()
+    }
+  })
+
+  it('registers /analysis as a tool entry (kind tool, requires robotLoaded, stage null)', () => {
+    const analysis = WORKSPACE_REGISTRY.find((e) => e.path === '/analysis')
+    expect(analysis).toBeDefined()
+    expect(analysis!.workspace).toBe('analysis')
+    expect(analysis!.label).toBe('Analysis')
+    expect(analysis!.kind).toBe('tool')
+    expect(analysis!.requires).toEqual(['robotLoaded'])
+    expect(analysis!.stage).toBeNull()
+    expect(analysis!.produces).toBeNull()
+    expect(analysis!.capability).toBeNull()
+    expect(analysis!.hidden).toBe(false)
+  })
+
+  it('keeps exactly one tool entry — analysis is the first (and only) auxiliary tool', () => {
+    const tools = WORKSPACE_REGISTRY.filter((e) => e.kind === 'tool')
+    expect(tools.map((e) => e.path)).toEqual(['/analysis'])
   })
 })
