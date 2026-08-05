@@ -6,8 +6,9 @@ import {
   defaultObjectPose,
   defaultLocationPose,
 } from './store'
+import type { PoseDef } from '@/shared/contracts'
 
-const seedHome = { position: [1.8, 0.0, 0.5], orientation: [0, 0, 0, 1] } as const
+const seedHome: PoseDef = { position: [1.8, 0.0, 0.5], orientation: [0, 0, 0, 1] }
 
 function resetToCanonicalSeed() {
   useDomainSceneStore.setState({
