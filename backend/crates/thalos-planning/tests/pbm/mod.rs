@@ -174,7 +174,7 @@ pub fn run_scenario(scenario: &dyn BenchmarkScenario) -> PipelineReport {
     // ── 6. Run optimization pipeline ──────────────────────
     let pipeline = OptimizationPipeline::new(PipelineConfig::default());
     let result = pipeline
-        .optimize(
+        .optimize_regions(
             &operators,
             &chain,
             &traj,

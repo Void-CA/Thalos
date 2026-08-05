@@ -12,7 +12,7 @@ use std::sync::Arc;
 use axum::{Json, extract::State};
 
 use thalos_core::{
-    analysis::RegionGrouper, analysis::observation::ArtifactRef, ids::MotionPlanId,
+    analysis::observation::ArtifactRef, ids::MotionPlanId,
     kinematics::forward::ForwardKinematics,
     kinematics::inverse::DampedLeastSquaresSolver,
     robot::state::RobotState,
@@ -599,10 +599,10 @@ pub async fn handle_optimize(State(state): State<Arc<AppState>>) -> ApiResult<Op
         artifact,
     )?;
 
-    // 3. Detect problem regions — el dueño único de la agrupación es el
-    //    RegionGrouper, sobre las observaciones del reporte canónico.
-    let regions = RegionGrouper::default().group(&analysis_result.report.observations);
-
+    // 3. Run OptimizationPipeline — the pipeline consumes the canonical
+    //    `&AnalysisReport` DIRECTLY (PR6 spec trajectory-optimization-pipeline:
+    //    "Direct report consumption") and derives problem regions internally
+    //    via RegionGrouper. The handler no longer pre-derives regions.
     let before_metrics = &analysis_result.analysis.metrics;
     let before_health = analysis_result.report.summary.quality_index;
 
@@ -692,14 +692,14 @@ pub async fn handle_optimize(State(state): State<Arc<AppState>>) -> ApiResult<Op
     let operator_refs: Vec<&dyn TrajectoryOperator> =
         operators.iter().map(|op| op.as_ref()).collect();
 
-    // 8. Run OptimizationPipeline
+    // 8. Run OptimizationPipeline with the canonical report.
     let pipeline = OptimizationPipeline::new(PipelineConfig::default());
     let pipeline_result = pipeline
         .optimize(
             &operator_refs,
             &snapshot.chain,
             trajectory,
-            &regions,
+            &analysis_result.report,
             &plan_metrics,
             &ctx,
             None,
