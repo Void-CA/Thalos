@@ -26,6 +26,9 @@ export interface WorkflowSnapshot {
     robotLoaded: boolean
     objects: SceneObject[]
     validHomePose: boolean
+    /** PR2: a plan is present in the viewport scene store (`activePlan !== null`)
+     *  — the planning-preview path that unlocks `planReady` without compiled. */
+    activePlanPresent: boolean
   }
   task: {
     operations: SemanticOp[]
@@ -53,8 +56,9 @@ export interface WorkflowState {
   sceneValid: boolean // scene artifact valid: robotLoaded && objects >= 1 && validHomePose
   programValid: boolean // semantic program valid: sceneValid && operations >= 1 && !hasMissingFields
   compiled: boolean // motion plan exists: programValid && compileResult !== null && !dirty
+  planReady: boolean // a plan exists for execution: compiled ∨ scene.activePlanPresent
   analyzed: boolean // analysis report exists: useAnalysisStore.summary !== null
-  executable: boolean // runtime can start: compiled && execStatus ∈ {ready, running, paused}
+  executable: boolean // runtime can start: planReady && execStatus ∈ {ready, running, paused}
   running: boolean // runtime active: execStatus ∈ {running, paused}
   completed: boolean // execution session exists: execStatus === 'completed'
 }
