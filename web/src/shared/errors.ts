@@ -36,3 +36,70 @@ export class ApiError extends Error {
 export function isApiError(e: unknown): e is ApiError {
   return e instanceof ApiError
 }
+
+// ── describeError — centralized code→CTA mapping (error-ux spec) ───────────
+
+/** Friendly guided CTAs keyed on the backend machine-readable error code
+ *  (verbatim codes from `backend/crates/thalos-api/src/features/semantic/handler.rs`
+ *  and the execution flow). The HTTP status is complementary only — decisions
+ *  key on `code`. Lifted from task-editor.tsx (PR4, item 7). */
+export const CTA_BY_CODE: Record<string, string> = {
+  no_active_plan: 'Preview a motion program in Planificación first',
+  semantic_validation_error: 'Fix the program errors',
+  lowering_error: 'Define the referenced objects/locations in Scene',
+  planning_error: 'Planning failed — check the robot and scene targets',
+  dof_mismatch: 'The loaded robot does not match this task\'s degrees of freedom — select a compatible robot',
+}
+
+/** `planning_error` is a generic code — the message is the only signal. IK
+ *  failure signatures mean an unreachable/incompatible target, which deserves
+ *  a reach-specific CTA; everything else falls back to the generic one above. */
+const IK_FAILURE_MARKERS = ['IK failed', 'MaxIterations']
+const REACH_CTA = 'Targets are out of the robot\'s reach — adjust scene positions or load a larger robot'
+
+export function reachCtaForPlanningError(message: string): string | null {
+  return IK_FAILURE_MARKERS.some(marker => message.includes(marker)) ? REACH_CTA : null
+}
+
+interface CodedError {
+  message: string
+  code?: string
+  status?: number
+}
+
+/** Structural guard: matches `ApiError` and the semantic feature's
+ *  `CompileError` (both extend Error and carry optional `code`/`status`) and
+ *  plain `{message, code?}` shapes (execution-store `ExecutionError`) WITHOUT
+ *  importing either — shared/errors must not depend on features. */
+function isCodedError(err: unknown): err is CodedError {
+  if (typeof err !== 'object' || err === null) return false
+  const candidate = err as CodedError
+  return (
+    typeof candidate.message === 'string' &&
+    (typeof candidate.code === 'string' ||
+      typeof candidate.status === 'number')
+  )
+}
+
+/** Map a normalized HTTP error (ApiError / CompileError / {message, code}) to
+ *  a guided CTA. Keys on `code` first; HTTP `status` is complementary display
+ *  only. */
+export function describeError(err: unknown): string {
+  if (isCodedError(err)) {
+    const coded = err as CodedError
+    if (coded.code === 'planning_error' && coded.message) {
+      const reachCta = reachCtaForPlanningError(coded.message)
+      if (reachCta) return `${reachCta} — ${coded.message}`
+    }
+    if (coded.code && CTA_BY_CODE[coded.code]) {
+      return `${CTA_BY_CODE[coded.code]} — ${coded.message}`
+    }
+    if (coded.code) {
+      return coded.status != null
+        ? `${coded.message} (${coded.code}, HTTP ${coded.status})`
+        : `${coded.message} (${coded.code})`
+    }
+    return coded.message
+  }
+  return err instanceof Error ? err.message : 'Operation failed'
+}
