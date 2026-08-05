@@ -69,7 +69,7 @@ export function ExecutionWorkspace() {
             </div>
           ) : (
             <p className="text-xs text-muted-foreground rounded-lg border border-dashed border-border/60 p-2.5">
-              No plan loaded — compile and send from Task
+              No plan loaded — send from Task or preview a Motion Program
             </p>
           )}
         </section>
