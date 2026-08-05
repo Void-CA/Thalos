@@ -255,6 +255,14 @@ impl SceneService {
         runtime.set_scene_writeback(enabled);
     }
 
+    /// Configure the command-history capacity (spec command-endpoints
+    /// "History Cap"). Honors the optional `THALOS_HISTORY_CAP` env var read
+    /// at the binary entry point; defaults to [`DEFAULT_HISTORY_CAP`].
+    pub async fn set_history_cap(&self, cap: usize) {
+        let mut runtime = self.runtime.write().await;
+        runtime.with_history_cap(cap);
+    }
+
     /// Apply a recompiled plan back to the runtime (design D4).
     ///
     /// Write-back path for `POST /plan/commands/apply`:
@@ -288,11 +296,15 @@ impl SceneService {
         runtime.history_len()
     }
 
-    /// Peek the last applied command (O(1)) — the undo endpoint resolves the
-    /// stored inverse to recompile the restored program.
-    pub async fn last_applied(&self) -> Option<AppliedCommand> {
+    /// Peek the last applied command together with the history version (PR2).
+    ///
+    /// The `(entry, version)` pair is read under a SINGLE read lock — the undo
+    /// flow recompiles against `entry` and later commits with `version` as the
+    /// expected value, closing the TOCTOU window between peek and commit.
+    pub async fn last_applied_with_version(&self) -> (Option<AppliedCommand>, u64) {
         let runtime = self.runtime.read().await;
-        runtime.last_applied_command().cloned()
+        let (entry, version) = runtime.last_applied_with_version();
+        (entry.cloned(), version)
     }
 
     /// Undo the last applied command (design D6): pop (O(1)) + write back the
@@ -302,15 +314,19 @@ impl SceneService {
     /// R4-001 stale guard lives in the runtime: `current_program` is the
     /// program reconstructed from the active plan and must match the entry's
     /// `applied_program`, else `StaleUndo` — no mutation, history intact.
+    /// PR2: `expected_version` is the history version read atomically with the
+    /// last entry (`last_applied_with_version`); the runtime re-validates it
+    /// under the write lock BEFORE any mutation (`UndoVersionMismatch`).
     /// The popped entry is returned so the API can report the restored
     /// metrics; the snapshot carries the restored active plan.
     pub async fn undo_compiled_plan(
         &self,
         current_program: &PlanningProgram,
         compiled: CompiledPlan,
+        expected_version: u64,
     ) -> Result<(AppliedCommand, RuntimeSnapshot), RuntimeError> {
         let mut runtime = self.runtime.write().await;
-        let popped = runtime.undo_plan(current_program, compiled)?;
+        let popped = runtime.undo_plan(current_program, compiled, expected_version)?;
         Ok((popped, Self::build_snapshot(&runtime, None)))
     }
 
@@ -591,5 +607,70 @@ impl SceneService {
             plan_duration: 0.0,
             active_tcp: runtime.active_tcp.clone(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use thalos_planning::motion::program::CompiledPlan;
+
+    /// A VALID compiled plan: two waypoints, non-zero duration, target `[t, t]`.
+    fn compiled_plan(t: f64) -> CompiledPlan {
+        let points = vec![
+            thalos_core::trajectory::TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            thalos_core::trajectory::TrajectoryPoint::new(vec![t, t], 1.0),
+        ];
+        CompiledPlan::new(thalos_core::trajectory::Trajectory::new(points), vec![])
+    }
+
+    /// A MoveWaypoint edit — the shape the apply pipeline records.
+    fn recorded_edit() -> (ProgramEdit, ProgramEdit) {
+        let cmd = ProgramEdit::MoveWaypoint {
+            segment_index: 0,
+            new_target: vec![2.0, 2.0],
+            old_target: Some(vec![1.0, 1.0]),
+        };
+        (cmd.clone(), cmd.inverse())
+    }
+
+    #[tokio::test]
+    async fn reset_execution_preserves_command_history() {
+        // Spec command-endpoints "Reset execution preserves history": resetting
+        // execution must NOT clear the applied-command history — the program is
+        // intact, so undo from a reset state stays valid.
+        let manager = Arc::new(BackendManager::new());
+        let service = SceneService::with_session_manager(
+            Box::new(crate::backends::InternalBackend),
+            manager,
+            RobotModel::Planar2R,
+            Arc::new(SessionManager::new()),
+        );
+        service.set_scene_writeback(true).await;
+
+        // Seed the history with one applied command (feature-flagged apply).
+        let (cmd, inverse) = recorded_edit();
+        service
+            .apply_compiled_plan(
+                compiled_plan(1.0),
+                cmd,
+                inverse,
+                CommandMetrics::new(0.4, 0.6),
+                Vec::new(),
+            )
+            .await
+            .expect("apply must succeed with the write-back flag on");
+        assert_eq!(service.history_len().await, 1, "setup: one applied command");
+
+        service
+            .reset_execution()
+            .await
+            .expect("reset_execution must succeed");
+
+        assert_eq!(
+            service.history_len().await,
+            1,
+            "reset_execution must NOT clear command history (undo stays valid)"
+        );
     }
 }

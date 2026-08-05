@@ -44,9 +44,48 @@ fn validate_dof_consistency(controller_dof: usize, scene_model: RobotModel) -> R
     }
 }
 
+/// Parse an optional raw env value into a boolean feature flag.
+///
+/// Accepts "1", "true", "yes", "on" (case-insensitive, whitespace
+/// trimmed). Absent or unparseable values default to `false`.
+fn parse_bool_value(value: Option<&str>) -> bool {
+    match value {
+        Some(raw) => matches!(
+            raw.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        ),
+        None => false,
+    }
+}
+
+/// Read `var` from the process environment and parse it as a boolean feature
+/// flag (see [`parse_bool_value`] for the accepted values).
+///
+/// Used ONLY at the binary entry point (`main.rs`) so that tests building
+/// state via `new_default_state()` stay hermetic regardless of the shell env.
+pub fn parse_env_bool(var: &str) -> bool {
+    parse_bool_value(std::env::var(var).ok().as_deref())
+}
+
+/// Read `var` from the process environment and parse it as a POSITIVE
+/// unsigned integer, falling back to `default` when absent, unparseable,
+/// zero, or negative (spec command-endpoints "History Cap": optional
+/// `THALOS_HISTORY_CAP` override).
+///
+/// Used ONLY at the binary entry point (`main.rs`) so that tests building
+/// state via `new_default_state()` stay hermetic regardless of the shell env.
+pub fn parse_env_usize(var: &str, default: usize) -> usize {
+    std::env::var(var)
+        .ok()
+        .and_then(|raw| raw.trim().parse::<usize>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(default)
+}
+
 pub async fn new_default_state() -> SharedState {
     // Design D5: scene-writeback is OFF by default (rollback-safe). The
     // first runtime-mutating surface (PR4 apply) requires explicit opt-in.
+    // History cap defaults to DEFAULT_HISTORY_CAP (PR3).
     new_state_with_scene_writeback(false).await
 }
 
@@ -57,6 +96,24 @@ pub async fn new_default_state() -> SharedState {
 /// the PR4 apply/write-back surface opt in via this constructor. Production
 /// rollout enables the flag per-environment after integration tests pass.
 pub async fn new_state_with_scene_writeback(scene_writeback: bool) -> SharedState {
+    new_state_with_scene_writeback_and_history_cap(
+        scene_writeback,
+        thalos_runtime::DEFAULT_HISTORY_CAP,
+    )
+    .await
+}
+
+/// State builder with both the scene-writeback flag (design D5) and the
+/// command-history capacity (spec command-endpoints "History Cap")
+/// configurable.
+///
+/// `new_state_with_scene_writeback` passes [`thalos_runtime::DEFAULT_HISTORY_CAP`];
+/// the binary entry point overrides it from the optional `THALOS_HISTORY_CAP`
+/// env var.
+pub async fn new_state_with_scene_writeback_and_history_cap(
+    scene_writeback: bool,
+    history_cap: usize,
+) -> SharedState {
     let backend = Box::new(InternalBackend);
 
     // Runtime controller DOF and scene robot model are named independently so
@@ -82,6 +139,7 @@ pub async fn new_state_with_scene_writeback(scene_writeback: bool) -> SharedStat
     if scene_writeback {
         scene.set_scene_writeback(true).await;
     }
+    scene.set_history_cap(history_cap).await;
     let robots = RobotService;
 
     Arc::new(AppState {
@@ -117,5 +175,91 @@ mod tests {
             "error must name the scene robot DOF: {err}"
         );
         assert!(err.contains("I1"), "error must cite invariant I1: {err}");
+    }
+
+    // ── parse_env_bool (design D5 env wiring, PR1) ──
+
+    #[test]
+    fn parse_bool_value_accepts_truthy_values_case_insensitive() {
+        assert!(parse_bool_value(Some("1")));
+        assert!(parse_bool_value(Some("true")));
+        assert!(parse_bool_value(Some("TRUE")));
+        assert!(parse_bool_value(Some("Yes")));
+        assert!(parse_bool_value(Some("ON")));
+        assert!(
+            parse_bool_value(Some("  on  ")),
+            "value must be trimmed before matching"
+        );
+    }
+
+    #[test]
+    fn parse_bool_value_rejects_falsy_garbage_and_empty() {
+        assert!(!parse_bool_value(Some("0")));
+        assert!(!parse_bool_value(Some("false")));
+        assert!(!parse_bool_value(Some("no")));
+        assert!(!parse_bool_value(Some("garbage")));
+        assert!(!parse_bool_value(Some("")));
+    }
+
+    #[test]
+    fn parse_bool_value_absent_defaults_to_false() {
+        assert!(!parse_bool_value(None));
+    }
+
+    #[test]
+    fn parse_env_bool_absent_var_defaults_to_false() {
+        // Unique name — never set in any shell; proves the None path of the
+        // wrapper that new_default_state relies on (hermeticity).
+        assert!(!parse_env_bool("THALOS_TEST_UNSET_VAR_3f9a2c"));
+    }
+
+    #[test]
+    fn parse_env_bool_reads_truthy_var_from_process_environment() {
+        // Unique name per test → parallel-safe (no other test touches VAR).
+        const VAR: &str = "THALOS_TEST_SET_VAR_7d1e4b";
+        // SAFETY: process-global env mutation; the unique name isolates this
+        // test from every other test in the binary.
+        unsafe { std::env::set_var(VAR, "true") };
+        assert!(parse_env_bool(VAR));
+    }
+
+    #[test]
+    fn parse_env_bool_trims_value_read_from_process_environment() {
+        const VAR: &str = "THALOS_TEST_SET_VAR_9b2f71";
+        // SAFETY: same isolation argument as the sibling test above.
+        unsafe { std::env::set_var(VAR, "  Yes  ") };
+        assert!(parse_env_bool(VAR));
+    }
+
+    // ── parse_env_usize (design D5 env wiring, PR3 — History Cap) ──
+
+    #[test]
+    fn parse_env_usize_absent_var_falls_back_to_default() {
+        // Unique name — never set in any shell; proves the None path of the
+        // wrapper that new_default_state relies on (hermeticity).
+        assert_eq!(parse_env_usize("THALOS_TEST_UNSET_USIZE_3c8a1f", 100), 100);
+    }
+
+    #[test]
+    fn parse_env_usize_reads_positive_var_from_process_environment() {
+        const VAR: &str = "THALOS_TEST_SET_USIZE_7d2b4e";
+        // SAFETY: process-global env mutation; the unique name isolates this
+        // test from every other test in the binary.
+        unsafe { std::env::set_var(VAR, "42") };
+        assert_eq!(parse_env_usize(VAR, 100), 42);
+    }
+
+    #[test]
+    fn parse_env_usize_rejects_zero_garbage_and_negative() {
+        const VAR: &str = "THALOS_TEST_SET_USIZE_9e4c2d";
+        // SAFETY: same isolation argument as the sibling test above.
+        unsafe { std::env::set_var(VAR, "0") };
+        assert_eq!(parse_env_usize(VAR, 100), 100, "zero cap is rejected");
+
+        unsafe { std::env::set_var(VAR, "abc") };
+        assert_eq!(parse_env_usize(VAR, 100), 100, "garbage is rejected");
+
+        unsafe { std::env::set_var(VAR, "-5") };
+        assert_eq!(parse_env_usize(VAR, 100), 100, "negative is rejected");
     }
 }

@@ -62,7 +62,9 @@ impl ExecutableCommand for Command {
                 runtime.robot_id = model.metadata().id.to_string(); // spec R1.3
                 runtime.joints_meta.clear();
                 runtime.active_plan = None;
+                runtime.scheduled_plan = None; // spec command-endpoints "Robot Change Cleanup"
                 runtime.active_tcp = None; // Clear TCP when changing robot
+                runtime.clear_command_history(); // stale inverses die with the robot
                 Ok(None)
             }
             Command::LoadUrdfRobot {
@@ -79,7 +81,9 @@ impl ExecutableCommand for Command {
                 runtime.joints_meta = joints_meta.clone();
                 runtime.robot_source = Some(robot.clone());
                 runtime.active_plan = None;
+                runtime.scheduled_plan = None; // spec command-endpoints "Robot Change Cleanup"
                 runtime.active_tcp = None; // Clear TCP when changing robot
+                runtime.clear_command_history(); // stale inverses die with the robot
                 Ok(None)
             }
             Command::Kinematics(cmd) => cmd.execute(runtime).map(Some),
@@ -89,5 +93,111 @@ impl ExecutableCommand for Command {
                 Ok(None)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use thalos_core::ids::OperationId;
+    use thalos_core::trajectory::TrajectoryPoint;
+    use thalos_planning::motion::program::CompiledPlan;
+    use thalos_planning::program_edit::ProgramEdit;
+
+    use crate::services::command_history::CommandMetrics;
+
+    fn test_runtime() -> SceneRuntime {
+        let chain = RobotRegistry::create_default(RobotModel::Planar2R);
+        let active_robot = ActiveRobot::new(Some(RobotModel::Planar2R), chain, vec![0.0; 2]);
+        SceneRuntime::new(active_robot, "test-bot".into())
+    }
+
+    /// A VALID compiled plan: two waypoints, non-zero duration, target `[t, t]`.
+    fn compiled_plan(t: f64) -> CompiledPlan {
+        let points = vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![t, t], 1.0),
+        ];
+        CompiledPlan::new(thalos_core::trajectory::Trajectory::new(points), vec![])
+    }
+
+    /// A MoveWaypoint edit — seeds the history with a stored inverse.
+    fn recorded_edit() -> (ProgramEdit, ProgramEdit) {
+        let cmd = ProgramEdit::MoveWaypoint {
+            segment_index: 0,
+            new_target: vec![2.0, 2.0],
+            old_target: Some(vec![1.0, 1.0]),
+        };
+        (cmd.clone(), cmd.inverse())
+    }
+
+    /// Seed a runtime with one applied command + a scheduled plan — the stale
+    /// state a robot change must invalidate (spec "Robot Change Cleanup").
+    fn seeded_runtime() -> SceneRuntime {
+        let mut runtime = test_runtime();
+        runtime.schedule_plan(compiled_plan(1.0));
+        let (cmd, inverse) = recorded_edit();
+        runtime.record_applied_command(cmd, inverse, CommandMetrics::new(0.4, 0.6), Vec::new());
+        assert_eq!(runtime.history_len(), 1, "setup: one applied command");
+        assert!(runtime.scheduled_plan.is_some(), "setup: a scheduled plan");
+        runtime
+    }
+
+    #[test]
+    fn load_robot_clears_command_history_and_scheduled_plan() {
+        // Spec command-endpoints "Robot Change Cleanup": a robot change must
+        // clear BOTH the command history (stale inverses) and the scheduled
+        // plan — undo from a different robot's history is invalid.
+        let mut runtime = seeded_runtime();
+
+        Command::LoadRobot(RobotModel::Planar2R)
+            .execute(&mut runtime)
+            .expect("catalog robot load must succeed");
+
+        assert_eq!(
+            runtime.history_len(),
+            0,
+            "LoadRobot must clear the command history"
+        );
+        assert!(
+            runtime.scheduled_plan.is_none(),
+            "LoadRobot must clear the scheduled plan"
+        );
+        assert!(
+            runtime.active_plan.is_none(),
+            "LoadRobot must clear the active plan"
+        );
+    }
+
+    #[test]
+    fn load_urdf_robot_clears_command_history_and_scheduled_plan() {
+        // Triangulation — the URDF import arm carries the same cleanup
+        // contract as the catalog arm.
+        let mut runtime = seeded_runtime();
+        let chain = RobotRegistry::create_default(RobotModel::Planar2R);
+
+        Command::LoadUrdfRobot {
+            name: "test-urdf".into(),
+            joints_meta: vec![],
+            chain,
+            robot: Robot::new("test-urdf", "base"),
+            robot_id: "urdf:test".into(),
+        }
+        .execute(&mut runtime)
+        .expect("URDF robot load must succeed");
+
+        assert_eq!(
+            runtime.history_len(),
+            0,
+            "LoadUrdfRobot must clear the command history"
+        );
+        assert!(
+            runtime.scheduled_plan.is_none(),
+            "LoadUrdfRobot must clear the scheduled plan"
+        );
+        assert!(
+            runtime.active_plan.is_none(),
+            "LoadUrdfRobot must clear the active plan"
+        );
     }
 }

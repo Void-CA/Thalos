@@ -456,16 +456,15 @@ pub async fn undo_command(State(state): State<Arc<AppState>>) -> ApiResult<UndoR
 
     // 2. Peek del último comando aplicado (O(1)) — su inverse es el que
     //    recompila el plan restaurado. Historial vacío → 409 ANTES de tocar
-    //    nada (spec "Undo with empty history").
-    let entry = state
-        .services
-        .scene
-        .last_applied()
-        .await
-        .ok_or_else(|| ApiError::Conflict {
-            message: "No applied command to undo".to_string(),
-            code: "empty_command_history".to_string(),
-        })?;
+    //    nada (spec "Undo with empty history"). PR2: la lectura es ATÓMICA
+    //    con la versión (un único read lock devuelve (entry, version)) — el
+    //    commit re-valida la versión bajo write lock y cierra el TOCTOU
+    //    (spec "Undo version mismatch").
+    let (entry, expected_version) = state.services.scene.last_applied_with_version().await;
+    let entry = entry.ok_or_else(|| ApiError::Conflict {
+        message: "No applied command to undo".to_string(),
+        code: "empty_command_history".to_string(),
+    })?;
 
     // 3. Aplicar el inverse ALMACENADO una sola vez (D6 — nunca replay).
     let restored_program = entry
@@ -505,11 +504,14 @@ pub async fn undo_command(State(state): State<Arc<AppState>>) -> ApiResult<UndoR
     //    entry devuelto es el REALMENTE deshecho (métricas del response). El
     //    guard R4-001 vive en el runtime: `program` (reconstruido del plan
     //    activo) debe coincidir con el programa que el comando escribió, si no
-    //    `stale_undo` (409) sin mutación.
+    //    `stale_undo` (409) sin mutación. PR2: el commit re-valida la versión
+    //    leída atómicamente en el paso 2 — si un apply/undo concurrente mutó
+    //    el historial entre el peek y el commit, `undo_version_mismatch` (409)
+    //    sin tocar nada.
     let (popped, restored_snapshot) = state
         .services
         .scene
-        .undo_compiled_plan(&program, compiled)
+        .undo_compiled_plan(&program, compiled, expected_version)
         .await?;
 
     // 6. Salud restaurada desde las métricas almacenadas (O(1) — sin re-análisis).
