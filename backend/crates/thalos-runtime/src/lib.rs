@@ -25,6 +25,7 @@ pub use execution_boundary::{
 pub use motion_trace::{MotionSample, MotionTrace};
 pub use plan::{ActiveMotionPlan, ExecutionSession, MotionType, PlanState, SessionStatus};
 pub use robot_command::RobotCommand;
+pub use services::command_history::{AppliedCommand, CommandHistory, CommandMetrics};
 pub use services::manipulability::ManipulabilityService;
 pub use services::plan_analysis::{PlanAnalysisResult, PlanAnalysisService};
 pub use services::scene::SceneService;

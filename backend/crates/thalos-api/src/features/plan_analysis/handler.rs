@@ -35,7 +35,7 @@ use thalos_planning::{
     },
     recommendation::{RecommendationId, RecommendationStatus},
 };
-use thalos_runtime::PlanAnalysisService;
+use thalos_runtime::{CommandMetrics, PlanAnalysisService};
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
@@ -360,20 +360,8 @@ pub async fn apply_command(
             code: "recompile_failed".to_string(),
         })?;
 
-    // 5. WRITE-BACK (D4/D5): replace_active_plan con snapshot+restore y flag
-    //    `scene-writeback`; el inverse se almacena en memoria para PR5 (D6).
-    let applied_snapshot = state
-        .services
-        .scene
-        .apply_compiled_plan(
-            compiled.clone(),
-            recommendation.edit.clone(),
-            recommendation.edit.inverse(),
-        )
-        .await?;
-
-    // 6. Análisis "after" sobre la trayectoria recompilada (la misma que el
-    //    write-back acaba de activar).
+    // 5. Análisis "after" sobre la trayectoria recompilada (la misma que el
+    //    write-back va a activar — no depende del snapshot del runtime).
     let after = PlanAnalysisService::analyze_plan(
         &snapshot.chain,
         &compiled.merged_trajectory,
@@ -382,8 +370,21 @@ pub async fn apply_command(
         artifact,
     )?;
 
+    // 6. WRITE-BACK (D4/D5): replace_active_plan con snapshot+restore y flag
+    //    `scene-writeback`; el inverse y las métricas se almacenan en memoria
+    //    (D6) para el undo O(1) de PR5.
     let health_before = before.report.summary.quality_index;
     let health_after = after.report.summary.quality_index;
+    let applied_snapshot = state
+        .services
+        .scene
+        .apply_compiled_plan(
+            compiled.clone(),
+            recommendation.edit.clone(),
+            recommendation.edit.inverse(),
+            CommandMetrics::new(health_before, health_after),
+        )
+        .await?;
 
     Ok(Json(ApplyResponse {
         recommendation_id: recommendation.id.0,

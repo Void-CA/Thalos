@@ -12,6 +12,7 @@ use thalos_planning::motion::program::CompiledPlan;
 use thalos_planning::program_edit::ProgramEdit;
 
 use crate::error::RuntimeError;
+use crate::services::command_history::{AppliedCommand, CommandHistory, CommandMetrics};
 use crate::snapshots::scene::JointMeta;
 pub use thalos_core::prelude::ActiveRobot;
 
@@ -29,19 +30,6 @@ const IK_LAMBDA: f64 = 0.1;
 /// the flag off restores the previous read-only behavior with zero code
 /// changes.
 pub const SCENE_WRITEBACK_FLAG: &str = "scene-writeback";
-
-/// A command applied to the runtime, with its pre-computed inverse (D6).
-///
-/// PR4 stores the inverse in memory so PR5 can implement `undo` in O(1) via
-/// `apply(inverse)` — no replay, no re-derivation. The undo endpoint lands in
-/// PR5; the history Vec lives on `SceneRuntime` close to the mutation surface.
-#[derive(Debug, Clone, PartialEq)]
-pub struct AppliedCommand {
-    /// The semantic edit that was applied.
-    pub command: ProgramEdit,
-    /// The edit that restores the previous program (`command.inverse()`).
-    pub inverse: ProgramEdit,
-}
 
 /// Runtime state — plans, IK, and robot metadata.
 ///
@@ -81,8 +69,8 @@ pub struct SceneRuntime {
 
     /// Applied command history (design D6): pre-computed inverses, in apply
     /// order. PR5's `undo` pops the last entry in O(1) and applies its
-    /// inverse. Stored in memory — no persistence in PR4.
-    command_history: Vec<AppliedCommand>,
+    /// inverse. Stored in memory — no persistence in PR4/PR5.
+    command_history: CommandHistory,
 
     next_plan_id: u64,
 }
@@ -105,7 +93,7 @@ impl SceneRuntime {
             scheduled_plan: None,
             active_plan: None,
             scene_writeback_enabled: false,
-            command_history: Vec::new(),
+            command_history: CommandHistory::new(),
             next_plan_id: 0,
         }
     }
@@ -240,17 +228,56 @@ impl SceneRuntime {
         Ok(())
     }
 
-    /// Record an applied command with its pre-computed inverse (D6).
+    /// Record an applied command with its pre-computed inverse + metrics (D6).
     ///
-    /// PR5's `undo` pops the last entry in O(1) and applies `inverse`.
-    /// PR4 only stores the inverse in memory — the undo endpoint is PR5.
-    pub fn record_applied_command(&mut self, command: ProgramEdit, inverse: ProgramEdit) {
-        self.command_history.push(AppliedCommand { command, inverse });
+    /// PR5's `undo` pops the last entry in O(1) and applies `inverse`; the
+    /// metrics let the undo response report the restored health without
+    /// re-running the analysis pipeline.
+    pub fn record_applied_command(
+        &mut self,
+        command: ProgramEdit,
+        inverse: ProgramEdit,
+        metrics: CommandMetrics,
+    ) {
+        self.command_history
+            .push(AppliedCommand { command, inverse, metrics });
     }
 
     /// Number of applied commands with stored inverses (undo history size).
     pub fn history_len(&self) -> usize {
         self.command_history.len()
+    }
+
+    /// Peek the last applied command (O(1)) — the undo endpoint resolves the
+    /// stored inverse without mutating the history.
+    pub fn last_applied_command(&self) -> Option<&AppliedCommand> {
+        self.command_history.last()
+    }
+
+    /// Pop the last applied command (O(1)) — commit step of the PR5 undo.
+    pub fn pop_applied_command(&mut self) -> Option<AppliedCommand> {
+        self.command_history.pop()
+    }
+
+    /// Undo the last applied command (design D6): pop (O(1)) + write back the
+    /// inverse-applied plan. Atomic: on ANY failure the history entry is
+    /// preserved and the runtime is restored to its previous state.
+    ///
+    /// Order matters:
+    /// 1. O(1) peek — an empty history errors BEFORE any mutation (spec
+    ///    command-endpoints "Undo with empty history" → 409).
+    /// 2. Write-back — feature-flagged (D5) with snapshot + atomic restore
+    ///    (D4); a failure here leaves both the plan AND the history intact.
+    /// 3. Commit — only now drop the entry (O(1) pop).
+    pub fn undo_plan(&mut self, compiled: CompiledPlan) -> Result<AppliedCommand, RuntimeError> {
+        let entry = self
+            .command_history
+            .last()
+            .cloned()
+            .ok_or(RuntimeError::EmptyCommandHistory)?;
+        self.replace_active_plan(compiled)?;
+        self.command_history.pop();
+        Ok(entry)
     }
 
     fn next_plan_id(&mut self) -> String {
@@ -484,6 +511,132 @@ mod tests {
             compiled_signature(runtime.scheduled_plan.as_ref().unwrap()),
             compiled_signature(after_second.as_ref().unwrap()),
             "restore must bring back the LATEST committed plan"
+        );
+    }
+
+    // ── PR5 — undo O(1) via pre-computed inverse (design D6) ──
+
+    /// A MoveWaypoint edit — the shape the apply pipeline records (PR4). The
+    /// runtime test never applies it to a program (the API recompiles); it
+    /// only needs to be recorded alongside its inverse + metrics.
+    fn recorded_edit() -> (ProgramEdit, ProgramEdit) {
+        let cmd = ProgramEdit::MoveWaypoint {
+            segment_index: 0,
+            new_target: vec![2.0, 2.0],
+            old_target: Some(vec![1.0, 1.0]),
+        };
+        (cmd.clone(), cmd.inverse())
+    }
+
+    #[test]
+    fn undo_restores_previous_plan_via_single_inverse() {
+        // Spec command-endpoints "Undo restores previous plan": undo pops the
+        // last applied command and writes the restored (inverse-applied) plan
+        // back to the runtime — the previous trajectory comes back.
+        let mut runtime = test_runtime();
+        runtime.set_scene_writeback(true);
+        runtime.schedule_plan(compiled_plan(1.0)); // the "previous" plan
+        let (cmd, inverse) = recorded_edit();
+        runtime.record_applied_command(cmd, inverse, CommandMetrics::new(0.4, 0.6));
+        runtime.replace_active_plan(compiled_plan(2.0)).unwrap(); // the "applied" plan
+        let applied_trajectory = runtime.active_plan.clone();
+        assert_eq!(
+            applied_trajectory
+                .as_ref()
+                .unwrap()
+                .trajectory
+                .waypoints()
+                .last()
+                .unwrap()
+                .joints(),
+            &[2.0, 2.0],
+            "setup: the applied plan carries the NEW trajectory"
+        );
+
+        // undo: pop (O(1)) + write-back of the inverse-applied plan (recompiled
+        // by the API layer — here represented by compiled_plan(1.0)).
+        let popped = runtime
+            .undo_plan(compiled_plan(1.0))
+            .expect("non-empty history → undo succeeds");
+        assert_eq!(
+            popped.metrics,
+            CommandMetrics::new(0.4, 0.6),
+            "undo returns the POPPED entry so the API reports its stored metrics"
+        );
+
+        // The restored plan carries the PREVIOUS trajectory.
+        let active = runtime.active_plan.as_ref().unwrap();
+        assert_eq!(
+            active.trajectory.waypoints().last().unwrap().joints(),
+            &[1.0, 1.0],
+            "undo must restore the previous plan trajectory"
+        );
+        assert_ne!(
+            active.plan_id, applied_trajectory.as_ref().unwrap().plan_id,
+            "restored plan gets a fresh id"
+        );
+        assert_eq!(
+            runtime.history_len(),
+            0,
+            "undo pops the entry — the history is empty again"
+        );
+    }
+
+    #[test]
+    fn undo_with_empty_history_errors_without_mutation() {
+        // Spec command-endpoints "Undo with empty history" (→ 409): no applied
+        // commands → undo errors and mutates NOTHING.
+        let mut runtime = test_runtime();
+        runtime.set_scene_writeback(true);
+        runtime.schedule_plan(compiled_plan(1.0));
+        let before_active = runtime.active_plan.clone();
+        let before_scheduled = runtime.scheduled_plan.clone();
+
+        let err = runtime
+            .undo_plan(compiled_plan(2.0))
+            .expect_err("empty history → undo must error");
+        assert!(
+            matches!(err, RuntimeError::EmptyCommandHistory),
+            "empty history must produce EmptyCommandHistory, got {err:?}"
+        );
+        assert_eq!(
+            active_signature(runtime.active_plan.as_ref().unwrap()),
+            active_signature(before_active.as_ref().unwrap()),
+            "empty-history undo must NOT mutate the active plan"
+        );
+        assert_eq!(
+            compiled_signature(runtime.scheduled_plan.as_ref().unwrap()),
+            compiled_signature(before_scheduled.as_ref().unwrap()),
+            "empty-history undo must NOT mutate the scheduled plan"
+        );
+    }
+
+    #[test]
+    fn undo_flag_off_errors_without_mutation_or_pop() {
+        // Design D5 applies to undo too: with scene-writeback OFF the write-back
+        // errors and the history entry is PRESERVED (atomicity — pop only
+        // commits after a successful write-back).
+        let mut runtime = test_runtime(); // flag OFF by default
+        runtime.schedule_plan(compiled_plan(1.0));
+        let (cmd, inverse) = recorded_edit();
+        runtime.record_applied_command(cmd, inverse, CommandMetrics::new(0.4, 0.6));
+
+        let err = runtime
+            .undo_plan(compiled_plan(2.0))
+            .expect_err("flag off → undo must error");
+        assert!(
+            matches!(err, RuntimeError::FeatureDisabled { .. }),
+            "flag-off undo must produce FeatureDisabled, got {err:?}"
+        );
+        assert_eq!(
+            runtime.history_len(),
+            1,
+            "flag-off undo must NOT pop the entry (atomicity)"
+        );
+        assert_eq!(
+            runtime.active_plan.as_ref().unwrap().trajectory.waypoints().last().unwrap().joints(),
+            &[1.0, 1.0],
+            "flag-off undo must NOT mutate the active plan"
         );
     }
 }

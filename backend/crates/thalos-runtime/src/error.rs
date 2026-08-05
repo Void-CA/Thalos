@@ -85,6 +85,11 @@ pub enum RuntimeError {
     /// zero duration — the runtime refuses to schedule a degenerate plan.
     #[error("invalid compiled plan: {reason}")]
     InvalidCompiledPlan { reason: String },
+
+    /// Undo was requested with an empty command history (spec command-endpoints
+    /// "Undo with empty history" → 409). No applied command carries an inverse.
+    #[error("no applied command to undo")]
+    EmptyCommandHistory,
 }
 
 impl RuntimeError {
@@ -125,6 +130,7 @@ impl RuntimeError {
             RuntimeError::ToolFrameNotFound { .. } => "tool_frame_not_found",
             RuntimeError::FeatureDisabled { .. } => "feature_disabled",
             RuntimeError::InvalidCompiledPlan { .. } => "invalid_compiled_plan",
+            RuntimeError::EmptyCommandHistory => "empty_command_history",
         }
     }
 }

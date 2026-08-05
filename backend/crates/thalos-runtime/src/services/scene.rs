@@ -25,6 +25,7 @@ use crate::error::RuntimeError;
 use crate::motion_recorder::MotionRecorder;
 use crate::motion_trace::MotionTrace;
 use crate::plan::{PlanState, SessionStatus};
+use crate::services::command_history::{AppliedCommand, CommandMetrics};
 use crate::session::{ExecutionSource, SessionManager};
 use crate::snapshots::{RuntimeSnapshot, TickDelta};
 use crate::state::robot::{ActiveRobot, SceneRuntime};
@@ -259,8 +260,9 @@ impl SceneService {
     /// Write-back path for `POST /plan/commands/apply`:
     /// 1. `SceneRuntime::replace_active_plan` — feature-flagged, snapshot +
     ///    atomic restore on failure.
-    /// 2. On success, the applied command and its pre-computed inverse are
-    ///    recorded (D6) so PR5's `undo` can pop it in O(1).
+    /// 2. On success, the applied command, its pre-computed inverse and the
+    ///    plan metrics are recorded (D6) so PR5's `undo` can pop it in O(1)
+    ///    and report the restored health without re-analysis.
     ///
     /// `trajectory_to_waypoints` reads `scheduled_plan` first, so the new
     /// plan propagates to execution automatically.
@@ -269,10 +271,11 @@ impl SceneService {
         compiled: CompiledPlan,
         command: ProgramEdit,
         inverse: ProgramEdit,
+        metrics: CommandMetrics,
     ) -> Result<RuntimeSnapshot, RuntimeError> {
         let mut runtime = self.runtime.write().await;
         runtime.replace_active_plan(compiled)?;
-        runtime.record_applied_command(command, inverse);
+        runtime.record_applied_command(command, inverse, metrics);
         Ok(Self::build_snapshot(&runtime, None))
     }
 
@@ -280,6 +283,28 @@ impl SceneService {
     pub async fn history_len(&self) -> usize {
         let runtime = self.runtime.read().await;
         runtime.history_len()
+    }
+
+    /// Peek the last applied command (O(1)) — the undo endpoint resolves the
+    /// stored inverse to recompile the restored program.
+    pub async fn last_applied(&self) -> Option<AppliedCommand> {
+        let runtime = self.runtime.read().await;
+        runtime.last_applied_command().cloned()
+    }
+
+    /// Undo the last applied command (design D6): pop (O(1)) + write back the
+    /// recompiled inverse-applied plan WITHOUT recording a new entry.
+    ///
+    /// Atomic and feature-flagged via `SceneRuntime::undo_plan` (D4/D5). The
+    /// popped entry is returned so the API can report the restored metrics;
+    /// the snapshot carries the restored active plan.
+    pub async fn undo_compiled_plan(
+        &self,
+        compiled: CompiledPlan,
+    ) -> Result<(AppliedCommand, RuntimeSnapshot), RuntimeError> {
+        let mut runtime = self.runtime.write().await;
+        let popped = runtime.undo_plan(compiled)?;
+        Ok((popped, Self::build_snapshot(&runtime, None)))
     }
 
     /// Extract waypoints from the active plan's trajectory.
