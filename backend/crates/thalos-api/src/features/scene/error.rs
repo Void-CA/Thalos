@@ -56,6 +56,50 @@ impl From<RuntimeError> for ApiError {
                 message: "stale undo: the active plan was replaced by a path that is not the command's pre-state".to_string(),
                 code: code.into(),
             },
+            // PR2: a concurrent mutation bumped the history version between
+            // the atomic peek and the commit — the undo target moved. State
+            // conflict, 409 (spec command-endpoints "Undo version mismatch").
+            RuntimeError::UndoVersionMismatch { expected, actual } => ApiError::Conflict {
+                message: format!("undo version mismatch: expected {expected}, got {actual}"),
+                code: code.into(),
+            },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+
+    #[test]
+    fn undo_version_mismatch_maps_to_conflict_409_with_code() {
+        // Spec command-endpoints "Undo version mismatch" → 409 with code
+        // `undo_version_mismatch`. The mapped ApiError must be a Conflict that
+        // carries BOTH versions (for the operator to see the drift) and the
+        // machine-readable code the frontend branches on.
+        let api: ApiError = RuntimeError::UndoVersionMismatch {
+            expected: 3,
+            actual: 5,
+        }
+        .into();
+
+        let (message, code) = match &api {
+            ApiError::Conflict { message, code } => (message.as_str(), code.as_str()),
+            _ => panic!("undo version mismatch must map to ApiError::Conflict (409)"),
+        };
+        assert_eq!(code, "undo_version_mismatch", "409 body code must match");
+        assert!(
+            message.contains('3') && message.contains('5'),
+            "the 409 message must name both the expected and the actual version: {message}"
+        );
+
+        let response = api.into_response();
+        assert_eq!(
+            response.status(),
+            StatusCode::CONFLICT,
+            "the mapped Conflict must answer HTTP 409"
+        );
     }
 }

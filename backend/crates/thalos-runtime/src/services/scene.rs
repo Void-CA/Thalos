@@ -288,11 +288,15 @@ impl SceneService {
         runtime.history_len()
     }
 
-    /// Peek the last applied command (O(1)) — the undo endpoint resolves the
-    /// stored inverse to recompile the restored program.
-    pub async fn last_applied(&self) -> Option<AppliedCommand> {
+    /// Peek the last applied command together with the history version (PR2).
+    ///
+    /// The `(entry, version)` pair is read under a SINGLE read lock — the undo
+    /// flow recompiles against `entry` and later commits with `version` as the
+    /// expected value, closing the TOCTOU window between peek and commit.
+    pub async fn last_applied_with_version(&self) -> (Option<AppliedCommand>, u64) {
         let runtime = self.runtime.read().await;
-        runtime.last_applied_command().cloned()
+        let (entry, version) = runtime.last_applied_with_version();
+        (entry.cloned(), version)
     }
 
     /// Undo the last applied command (design D6): pop (O(1)) + write back the
@@ -302,15 +306,19 @@ impl SceneService {
     /// R4-001 stale guard lives in the runtime: `current_program` is the
     /// program reconstructed from the active plan and must match the entry's
     /// `applied_program`, else `StaleUndo` — no mutation, history intact.
+    /// PR2: `expected_version` is the history version read atomically with the
+    /// last entry (`last_applied_with_version`); the runtime re-validates it
+    /// under the write lock BEFORE any mutation (`UndoVersionMismatch`).
     /// The popped entry is returned so the API can report the restored
     /// metrics; the snapshot carries the restored active plan.
     pub async fn undo_compiled_plan(
         &self,
         current_program: &PlanningProgram,
         compiled: CompiledPlan,
+        expected_version: u64,
     ) -> Result<(AppliedCommand, RuntimeSnapshot), RuntimeError> {
         let mut runtime = self.runtime.write().await;
-        let popped = runtime.undo_plan(current_program, compiled)?;
+        let popped = runtime.undo_plan(current_program, compiled, expected_version)?;
         Ok((popped, Self::build_snapshot(&runtime, None)))
     }
 
