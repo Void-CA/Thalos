@@ -58,17 +58,17 @@ Strict TDD RED-first, runners: frontend `pnpm test`, backend `cargo test --works
 
 ## Phase 4: PR4 — robustness-demo (items 7, 8, 9)
 
-- [ ] 4.1 RED nuevo `shared/errors.test.ts`: describeError code→CTA, unknown-code fallback, non-ApiError fallback
-- [ ] 4.2 RED `execution-workspace.test.tsx`: error `{message, code}` preservado; render code→CTA; badge Simulation/Hardware
-- [ ] 4.3 RED `runtime-state-response.test.ts`: fixture con `execution.source` en wire
-- [ ] 4.4 GREEN `shared/errors.ts`: lift `describeError` + `CTA_BY_CODE` + `reachCtaForPlanningError`
-- [ ] 4.5 GREEN nuevo `components/ui/error-box.tsx`: ErrorBox compartido (`{message, code?} | Error | string`)
-- [ ] 4.6 GREEN `execution-store.ts`: `error: {message,code}\|null`; preservar code en catch blocks :144,:188,:198,:208,:218,:228
-- [ ] 4.7 GREEN `execution-workspace.tsx:112`: render vía describeError + badge source; `task-editor.tsx` drop local describeError
-- [ ] 4.8 GREEN `analysis-metrics.tsx:108` + `ik-panel.tsx:299` quitar ErrorBox local; `analysis-workspace.tsx:9` + `alternatives-panel.tsx` → shared
-- [ ] 4.9 GREEN backend `responses.rs:278` `ExecutionDto.source: Option<String>`; `mappers/delta.rs:25` + `mappers/runtime.rs:257` populate
-- [ ] 4.10 Verify `cargo test --workspace` + `pnpm test` verdes
-- [ ] 4.11 Docs `docs/demo-smoke-test.md`: firmware runbook (serial protocol, STOP recovery, rollover-safety, board-config caveat)
+- [x] 4.1 RED nuevo `shared/errors.test.ts`: describeError code→CTA, unknown-code fallback, non-ApiError fallback
+- [x] 4.2 RED `execution-workspace.test.tsx`: error `{message, code}` preservado; render code→CTA; badge Simulation/Hardware
+- [x] 4.3 RED `runtime-state-response.test.ts`: fixture con `execution.source` en wire
+- [x] 4.4 GREEN `shared/errors.ts`: lift `describeError` + `CTA_BY_CODE` + `reachCtaForPlanningError`
+- [x] 4.5 GREEN nuevo `components/ui/error-box.tsx`: ErrorBox compartido (`{message, code?} | Error | string`)
+- [x] 4.6 GREEN `execution-store.ts`: `error: {message,code}\|null`; preservar code en catch blocks :144,:188,:198,:208,:218,:228
+- [x] 4.7 GREEN `execution-workspace.tsx:112`: render vía describeError + badge source; `task-editor.tsx` drop local describeError
+- [x] 4.8 GREEN `analysis-metrics.tsx:108` + `ik-panel.tsx:299` quitar ErrorBox local; `analysis-workspace.tsx:9` + `alternatives-panel.tsx` → shared
+- [x] 4.9 GREEN backend `responses.rs:278` `ExecutionDto.source: Option<String>`; `mappers/delta.rs:25` + `mappers/runtime.rs:257` populate
+- [x] 4.10 Verify `cargo test --workspace` + `pnpm test` verdes
+- [x] 4.11 Docs `docs/demo-smoke-test.md`: firmware runbook (serial protocol, STOP recovery, rollover-safety, board-config caveat)
 
 ## Phase 5: E2E verification
 
