@@ -14,13 +14,18 @@ import type { SceneData } from '@/features/viewport/types'
 import type { CompileResponse } from '@/features/semantic/types'
 
 /**
- * Behavior tests for the frontend-task-workspace spec (slice 4, task 4.1):
+ * Behavior tests for the frontend-task-workspace spec (slice 4, task 4.1) and
+ * the program-dual-editor spec (Unified Compile/Send Button):
  *
  * - Task purity: the Task workspace renders ZERO execution controls (no
  *   Simulate/Stop, no progress/elapsed footers) — execution lives in Execution.
- * - Send-to-Execution handoff: `executeSemantic` (never `start()`), disabled
- *   until compiled, navigates to /execution and leaves execStatus = 'ready'
- *   with the tick loop NOT running (execution-workspace spec, Invariant #5).
+ * - Unified Compile/Send button: ONE header action derives label + handler from
+ *   `compiled` ("Compile" green → "Send to Execution" purple), disabled without
+ *   `canCompile`; the footer Send button is removed; the payload is identical
+ *   for both actions (program-dual-editor spec "Unified Compile/Send Button").
+ * - Send-to-Execution handoff: `executeSemantic` (never `start()`), navigates
+ *   to /execution and leaves execStatus = 'ready' with the tick loop NOT
+ *   running (execution-workspace spec, Invariant #5).
  * - Task keeps its authoring responsibility: operations + compile still work.
  */
 
@@ -128,8 +133,10 @@ describe('Task purity — zero execution controls in Task (frontend-task-workspa
     seedTask({ compiled: true })
     renderRouter(['/task'])
 
-    // The Program panel renders with authoring controls…
-    expect(await screen.findByRole('button', { name: /Compile/ })).toBeInTheDocument()
+    // The Program panel renders with authoring controls — the unified
+    // Compile/Send header button (with a compiled plan it reads "Send to
+    // Execution"; either label proves the authoring surface rendered).
+    expect(await screen.findByRole('button', { name: /Compile|Send to Execution/ })).toBeInTheDocument()
 
     // …but zero execution UI elements exist anywhere in the Task workspace.
     // Scoped to the workspace panel (<main>): the shell's global stepper is a
@@ -144,24 +151,88 @@ describe('Task purity — zero execution controls in Task (frontend-task-workspa
   })
 })
 
-describe('Send to Execution handoff (execution-workspace spec, Invariant #5)', () => {
-  it('is disabled with a "Compile first" hint while the program is not compiled', async () => {
+describe('Unified Compile/Send button (program-dual-editor spec)', () => {
+  it('1.1 — header shows "Compile" for valid un-compiled ops and compiles the task document', async () => {
+    apiMocks.compileSemantic.mockResolvedValue(compileResult)
     seedTask() // no result → compiled = false
     renderRouter(['/task'])
 
-    const send = await screen.findByRole('button', { name: /Send to Execution/ })
-    expect(send).toBeDisabled()
-    expect(send).toHaveAttribute('title', 'Compile first')
+    const compile = await screen.findByRole('button', { name: 'Compile' })
+    expect(compile).toBeEnabled()
+    // Unified button: no separate Send control exists anywhere.
+    expect(screen.queryByRole('button', { name: /Send to Execution/ })).not.toBeInTheDocument()
+
+    fireEvent.click(compile)
+
+    await waitFor(() => expect(apiMocks.compileSemantic).toHaveBeenCalledTimes(1))
+    expect(apiMocks.compileSemantic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        task: expect.objectContaining({
+          scene: expect.objectContaining({ objects: expect.any(Array) }),
+          program: expect.objectContaining({ operations: expect.any(Array) }),
+        }),
+      }),
+    )
+    expect(useSemanticEditor.getState().result).toEqual(compileResult)
+    expect(useSemanticEditor.getState().dirty).toBe(0)
   })
 
-  it('re-disables after an edit invalidates the compile (dirty > 0)', async () => {
+  it('1.1b — disables the unified button when the program cannot compile (!canCompile)', async () => {
+    seedTask()
+    act(() => {
+      useSemanticEditor.setState({ operations: [] })
+    })
+    renderRouter(['/task'])
+
+    const compile = await screen.findByRole('button', { name: 'Compile' })
+    expect(compile).toBeDisabled()
+  })
+
+  it('1.2 — relabels to "Send to Execution" when compiled && dirty=0 and sends the SAME payload', async () => {
+    apiMocks.compileSemantic.mockResolvedValue(compileResult)
+    apiMocks.executeSemantic.mockResolvedValue(executeResponse)
+    seedTask() // compiled = false
+    const router = renderRouter(['/task'])
+
+    // Compile via the unified button and capture the exact payload sent.
+    fireEvent.click(await screen.findByRole('button', { name: 'Compile' }))
+    await waitFor(() => expect(apiMocks.compileSemantic).toHaveBeenCalledTimes(1))
+    const compilePayload = apiMocks.compileSemantic.mock.calls[0][0]
+
+    // The SAME button reads "Send to Execution" — no "Compile" label remains.
+    const send = await screen.findByRole('button', { name: /Send to Execution/ })
+    expect(send).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'Compile' })).not.toBeInTheDocument()
+
+    fireEvent.click(send)
+
+    await waitFor(() => expect(apiMocks.executeSemantic).toHaveBeenCalledTimes(1))
+    // Payload identity (spec): execute sends exactly what compile sent.
+    expect(apiMocks.executeSemantic).toHaveBeenCalledWith(compilePayload)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/execution'))
+  })
+
+  it('1.3 — dirty > 0 after compile reverts the button to "Compile" (compiled=false)', async () => {
     seedTask({ compiled: true, dirty: 1 }) // result set but dirty → compiled = false
     renderRouter(['/task'])
 
-    const send = await screen.findByRole('button', { name: /Send to Execution/ })
-    expect(send).toBeDisabled()
-    expect(send).toHaveAttribute('title', 'Compile first')
+    expect(await screen.findByRole('button', { name: 'Compile' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: /Send to Execution/ })).not.toBeInTheDocument()
   })
+
+  it('1.4 — footer holds no Compile/Send action: a single unified header button exists', async () => {
+    seedTask({ compiled: true })
+    renderRouter(['/task'])
+
+    const actions = within(screen.getByRole('main'))
+      .getAllByRole('button')
+      .filter((b) => /Compile|Send to Execution/.test(b.textContent ?? ''))
+    expect(actions).toHaveLength(1)
+    expect(actions[0]).toHaveTextContent(/Send to Execution/)
+  })
+})
+
+describe('Send to Execution handoff (execution-workspace spec, Invariant #5)', () => {
 
   it('calls executeSemantic without start(), loads the plan as ready, navigates to /execution and never starts the tick', async () => {
     apiMocks.executeSemantic.mockResolvedValue(executeResponse)
