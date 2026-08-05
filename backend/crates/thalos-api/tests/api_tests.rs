@@ -6,7 +6,7 @@ use axum::{
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
-use thalos_api::{app_router, new_default_state};
+use thalos_api::{app_router, new_default_state, new_state_with_scene_writeback};
 
 async fn test_app() -> Router {
     let state = new_default_state().await;
@@ -1770,6 +1770,186 @@ async fn preview_command_unknown_recommendation_returns_404_without_state_change
     assert_eq!(
         after["active_plan"], before["active_plan"],
         "a failed preview must not mutate the active plan"
+    );
+}
+
+// =========================================================================
+// Plan command apply (PR4 — scene write-back, design-first milestone)
+// =========================================================================
+
+/// App with the scene-writeback feature flag ENABLED (D5). The default
+/// `test_app` keeps the flag OFF (rollback-safe default); apply tests that
+/// must exercise the write-back surface use this builder.
+async fn writeback_app() -> Router {
+    let state = new_state_with_scene_writeback(true).await;
+    app_router().with_state(state)
+}
+
+#[tokio::test]
+async fn apply_command_writes_back_and_stores_inverse_without_preview() {
+    // Spec command-endpoints "Apply writes back to scene" + "Apply without
+    // prior preview": apply executes the edit, recompiles, writes back to
+    // SceneRuntime and stores the inverse — preview is NOT a prerequisite.
+    let app = writeback_app().await;
+    preview_setup(&app).await;
+
+    // Snapshot the active plan BEFORE the apply (GET /scene is read-only).
+    let (_, before) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before = before.expect("scene response must be valid JSON");
+    let before_plan_id = before["active_plan"]["plan_id"]
+        .as_str()
+        .expect("setup must leave an active plan with an id")
+        .to_string();
+
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/apply",
+        // Recommendation 3 is AVAILABLE in this scenario (ids 1-2 are
+        // LiftTcp/manipulability edits whose IK fails → unavailable, D8).
+        Some(json!({"recommendation_id": 3})),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "apply must succeed WITHOUT a prior preview (preview is not a prerequisite)"
+    );
+    let body = body.expect("apply response must be valid JSON");
+    assert_eq!(
+        body["history_length"], 1,
+        "apply must store the inverse for PR5's undo"
+    );
+    assert_eq!(
+        body["status"], "available",
+        "apply response must echo recommendation availability (D8)"
+    );
+    assert!(
+        body["plan_id"].is_string(),
+        "apply response must carry the new active plan id"
+    );
+
+    // Write-back is observable via GET /scene: the active plan CHANGED.
+    let (_, after) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after = after.expect("scene response must be valid JSON");
+    let after_plan_id = after["active_plan"]["plan_id"]
+        .as_str()
+        .expect("active plan must still exist after apply")
+        .to_string();
+    assert_ne!(
+        after_plan_id, before_plan_id,
+        "apply must write the new plan back to SceneRuntime"
+    );
+}
+
+#[tokio::test]
+async fn apply_command_unknown_recommendation_returns_404_without_state_change() {
+    // Spec command-endpoints "Preview with invalid recommendation" — the same
+    // contract applies to apply: unknown id → 404, no state change.
+    let app = writeback_app().await;
+    preview_setup(&app).await;
+
+    let (_, before) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before = before.expect("scene response must be valid JSON");
+
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/apply",
+        Some(json!({"recommendation_id": 999_999})),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::NOT_FOUND,
+        "unknown recommendation id must 404"
+    );
+    let body = body.expect("error response must be valid JSON");
+    assert_eq!(
+        body["code"], "not_found",
+        "404 body must carry the not_found code"
+    );
+
+    let (_, after) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after = after.expect("scene response must be valid JSON");
+    assert_eq!(
+        after["active_plan"], before["active_plan"],
+        "a failed apply must not mutate the active plan"
+    );
+}
+
+#[tokio::test]
+async fn apply_command_flag_off_returns_feature_disabled_without_mutation() {
+    // Design D5 at the API layer: the DEFAULT app has scene-writeback OFF, so
+    // apply fails with `feature_disabled` and mutates NOTHING — rollback-safe.
+    let app = test_app().await;
+    preview_setup(&app).await;
+
+    let (_, before) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before = before.expect("scene response must be valid JSON");
+
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/apply",
+        // Must pass the D8 gate (available recommendation) to reach the flag
+        // check — recommendation 3 is available in this scenario.
+        Some(json!({"recommendation_id": 3})),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "flag-off apply must fail with Conflict (feature_disabled)"
+    );
+    let body = body.expect("error response must be valid JSON");
+    assert_eq!(
+        body["code"], "feature_disabled",
+        "flag-off apply must carry the feature_disabled code"
+    );
+
+    let (_, after) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after = after.expect("scene response must be valid JSON");
+    assert_eq!(
+        after["active_plan"], before["active_plan"],
+        "flag-off apply must NOT mutate the active plan"
+    );
+}
+
+#[tokio::test]
+async fn apply_command_unavailable_recommendation_returns_409_without_mutation() {
+    // Design D8 at the API layer: an unavailable recommendation is NEVER
+    // applied — the handler rejects it explicitly (409) before any write.
+    let app = writeback_app().await;
+    preview_setup(&app).await;
+
+    let (_, before) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before = before.expect("scene response must be valid JSON");
+
+    // Recommendation 1 is unavailable in this scenario (LiftTcp IK fails).
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/apply",
+        Some(json!({"recommendation_id": 1})),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "unavailable recommendation must be rejected with Conflict"
+    );
+    let body = body.expect("error response must be valid JSON");
+    assert_eq!(
+        body["code"], "recommendation_unavailable",
+        "D8 rejection must carry the recommendation_unavailable code"
+    );
+
+    let (_, after) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after = after.expect("scene response must be valid JSON");
+    assert_eq!(
+        after["active_plan"], before["active_plan"],
+        "an unavailable recommendation must NOT mutate the active plan"
     );
 }
 

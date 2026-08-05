@@ -33,15 +33,15 @@ use thalos_planning::{
         planner::SegmentPlanningContext,
         program::{PlannedSegment, PlanningProgram},
     },
-    recommendation::RecommendationId,
+    recommendation::{RecommendationId, RecommendationStatus},
 };
 use thalos_runtime::PlanAnalysisService;
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
 use crate::features::plan_analysis::dto::{
-    MetricsComparisonDto, OperatorAppliedDto, OptimizeResponse, PlanAnalysisRequest,
-    PlanAnalysisResponse, PreviewRequest, PreviewResponse,
+    ApplyRequest, ApplyResponse, MetricsComparisonDto, OperatorAppliedDto, OptimizeResponse,
+    PlanAnalysisRequest, PlanAnalysisResponse, PreviewRequest, PreviewResponse,
 };
 
 /// POST /api/v1/plan/analyze
@@ -242,6 +242,161 @@ pub async fn preview_command(
         health_after,
         improvement: health_after - health_before,
         continuity,
+    }))
+}
+
+/// POST /api/v1/plan/commands/apply
+///
+/// WRITE-BACK de una recomendación (PR4, spec command-endpoints "Apply
+/// Endpoint"). Flujo (design D4/D5 — milestone de mayor riesgo, diseñado
+/// primero):
+///
+/// 1. Resolver la recomendación (mismo determinismo que preview — el preview
+///    NO es prerequisito, spec "Apply without prior preview").
+/// 2. Gate D8: un edit `unavailable` jamás se aplica — error explícito.
+/// 3. `edit.apply(&program)` → recompilar → `replace_active_plan` (snapshot +
+///    restore atómico + feature flag `scene-writeback`, OFF por defecto).
+/// 4. El inverse se almacena en memoria (D6) para el undo O(1) de PR5 — el
+///    endpoint undo llega en PR5.
+pub async fn apply_command(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<ApplyRequest>,
+) -> ApiResult<ApplyResponse> {
+    let snapshot = state.services.scene.snapshot().await?;
+
+    // 1. Plan activo — fuente del programa semántico (I1/I2).
+    let active_plan = snapshot
+        .active_plan
+        .as_ref()
+        .ok_or_else(|| ApiError::InvalidState {
+            message: "No active plan to apply".to_string(),
+            code: "no_active_plan".to_string(),
+        })?;
+    let artifact = ArtifactRef::MotionPlan(MotionPlanId(active_plan.plan_id.clone()));
+
+    let program = {
+        let segments = active_plan.segments.as_deref().ok_or_else(|| {
+            ApiError::InvalidState {
+                message: "Active plan carries no program segments".to_string(),
+                code: "no_program_segments".to_string(),
+            }
+        })?;
+        if segments.is_empty() {
+            return Err(ApiError::InvalidState {
+                message: "Active plan has no program segments".to_string(),
+                code: "no_program_segments".to_string(),
+            });
+        }
+        PlanningProgram::new(segments.iter().map(|s| s.source.clone()).collect())
+    };
+
+    // 2. Análisis "before" + resolución de la recomendación.
+    let before = PlanAnalysisService::analyze_plan(
+        &snapshot.chain,
+        &active_plan.trajectory,
+        snapshot.active_tcp.as_ref(),
+        None,
+        artifact.clone(),
+    )?;
+
+    let fk = ForwardKinematics::new(snapshot.chain.clone());
+    let solver =
+        DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
+    let recommendations = PlanAdvisor.recommend(
+        &before.report.observations,
+        &program,
+        &solver,
+        &snapshot.joints,
+    );
+
+    let recommendation = recommendations
+        .iter()
+        .find(|r| r.id == RecommendationId(req.recommendation_id))
+        .ok_or_else(|| ApiError::NotFound {
+            message: format!(
+                "Recommendation {} not found in the active plan",
+                req.recommendation_id
+            ),
+        })?;
+
+    // 3. Gate D8: unavailable → error explícito, nunca se aplica.
+    if recommendation.status == Some(RecommendationStatus::Unavailable) {
+        return Err(ApiError::Conflict {
+            message: format!(
+                "Recommendation {} is unavailable and cannot be applied",
+                req.recommendation_id
+            ),
+            code: "recommendation_unavailable".to_string(),
+        });
+    }
+
+    // 4. Aplicar la edición sobre el programa y recompilar desde el mismo
+    //    estado inicial que el plan activo (mismo start que preview).
+    let edited_program = recommendation
+        .edit
+        .apply(&program)
+        .map_err(|e| ApiError::Validation {
+            message: e.to_string(),
+            code: "edit_apply_failed".to_string(),
+        })?;
+
+    let start_joints = active_plan
+        .trajectory
+        .waypoints()
+        .first()
+        .map(|w| w.joints().to_vec())
+        .unwrap_or_else(|| snapshot.joints.clone());
+    let current_state = RobotState::new(start_joints);
+    let ctx = SegmentPlanningContext {
+        robot: &snapshot.chain,
+        current_state: &current_state,
+        ik_solver: &solver,
+        tcp: snapshot.active_tcp.as_ref(),
+    };
+    let compiled = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()))
+        .compile(&edited_program, &ctx)
+        .map_err(|e| ApiError::Validation {
+            message: e.to_string(),
+            code: "recompile_failed".to_string(),
+        })?;
+
+    // 5. WRITE-BACK (D4/D5): replace_active_plan con snapshot+restore y flag
+    //    `scene-writeback`; el inverse se almacena en memoria para PR5 (D6).
+    let applied_snapshot = state
+        .services
+        .scene
+        .apply_compiled_plan(
+            compiled.clone(),
+            recommendation.edit.clone(),
+            recommendation.edit.inverse(),
+        )
+        .await?;
+
+    // 6. Análisis "after" sobre la trayectoria recompilada (la misma que el
+    //    write-back acaba de activar).
+    let after = PlanAnalysisService::analyze_plan(
+        &snapshot.chain,
+        &compiled.merged_trajectory,
+        snapshot.active_tcp.as_ref(),
+        None,
+        artifact,
+    )?;
+
+    let health_before = before.report.summary.quality_index;
+    let health_after = after.report.summary.quality_index;
+
+    Ok(Json(ApplyResponse {
+        recommendation_id: recommendation.id.0,
+        status: recommendation.status,
+        plan_id: applied_snapshot
+            .active_plan
+            .as_ref()
+            .map(|p| p.plan_id.clone())
+            .unwrap_or_default(),
+        health_before,
+        health_after,
+        improvement: health_after - health_before,
+        history_length: state.services.scene.history_len().await,
     }))
 }
 

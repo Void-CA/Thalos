@@ -33,6 +33,16 @@ impl From<RuntimeError> for ApiError {
                 ),
                 code: code.into(),
             },
+            // Design D5: the scene-writeback surface is feature-flagged. A
+            // disabled flag is a configuration conflict, not a bad request.
+            RuntimeError::FeatureDisabled { feature } => ApiError::Conflict {
+                message: format!("feature is disabled: {feature}"),
+                code: code.into(),
+            },
+            RuntimeError::InvalidCompiledPlan { reason } => ApiError::Validation {
+                message: format!("invalid compiled plan: {reason}"),
+                code: code.into(),
+            },
         }
     }
 }

@@ -96,6 +96,45 @@ pub struct PreviewResponse {
     pub continuity: bool,
 }
 
+/// Request para aplicar una recomendación al runtime (PR4).
+///
+/// `POST /plan/commands/apply` — WRITE-BACK: la edición se aplica al programa
+/// semántico, se recompila y el resultado se escribe en el `SceneRuntime` vía
+/// `replace_active_plan` (design D4/D5: feature-flagged, snapshot + restore).
+/// El preview NO es prerequisito (spec command-endpoints "Apply without prior
+/// preview").
+#[derive(Debug, Deserialize)]
+pub struct ApplyRequest {
+    /// Id de la recomendación a aplicar (ids del advisor, 1-based).
+    pub recommendation_id: u32,
+}
+
+/// Respuesta de aplicar una recomendación (PR4).
+///
+/// Confirma el write-back: el nuevo `plan_id` activo, la salud antes/después y
+/// el tamaño del historial de comandos aplicados (el inverse se almacena en
+/// memoria para el undo O(1) de PR5, design D6).
+#[derive(Debug, Serialize)]
+pub struct ApplyResponse {
+    /// Id de la recomendación aplicada (eco del request).
+    pub recommendation_id: u32,
+    /// Disponibilidad del edit: `"available"` | `"unavailable"` (D8). Un edit
+    /// `unavailable` jamás se aplica — el handler lo rechaza explícitamente.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<RecommendationStatus>,
+    /// Id del plan activo resultante (el write-back asignó un nuevo id).
+    pub plan_id: String,
+    /// Calidad de salud (0..1) antes de la edición.
+    pub health_before: f64,
+    /// Calidad de salud (0..1) después de la edición.
+    pub health_after: f64,
+    /// Mejora de salud: `health_after - health_before` (negativo = degrada).
+    pub improvement: f64,
+    /// Tamaño del historial de comandos aplicados (inverses almacenados para
+    /// el undo de PR5).
+    pub history_length: usize,
+}
+
 /// Respuesta completa del análisis de un plan — proyección del
 /// [`AnalysisReport`] del dominio (spec motion-plan-endpoint).
 #[derive(Debug, Serialize, Deserialize)]

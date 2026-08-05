@@ -13,6 +13,7 @@ use thalos_core::{
     spatial::frame::FrameId,
 };
 use thalos_planning::motion::program::CompiledPlan;
+use thalos_planning::program_edit::ProgramEdit;
 
 use crate::backends::RobotBackend;
 use crate::backends::controller::RobotController;
@@ -241,7 +242,45 @@ impl SceneService {
         Ok(Self::build_snapshot(&runtime, None))
     }
 
-    // ── Execution control (delegates to controller via BackendManager) ──
+    // ── Scene write-back (PR4 — design-first, D4/D5) ──
+
+    /// Toggle the scene-writeback feature flag (design D5).
+    ///
+    /// OFF by default. Enabling it is the per-environment rollout step after
+    /// integration tests pass. Flipping it back OFF restores the read-only
+    /// behavior with zero code changes.
+    pub async fn set_scene_writeback(&self, enabled: bool) {
+        let mut runtime = self.runtime.write().await;
+        runtime.set_scene_writeback(enabled);
+    }
+
+    /// Apply a recompiled plan back to the runtime (design D4).
+    ///
+    /// Write-back path for `POST /plan/commands/apply`:
+    /// 1. `SceneRuntime::replace_active_plan` — feature-flagged, snapshot +
+    ///    atomic restore on failure.
+    /// 2. On success, the applied command and its pre-computed inverse are
+    ///    recorded (D6) so PR5's `undo` can pop it in O(1).
+    ///
+    /// `trajectory_to_waypoints` reads `scheduled_plan` first, so the new
+    /// plan propagates to execution automatically.
+    pub async fn apply_compiled_plan(
+        &self,
+        compiled: CompiledPlan,
+        command: ProgramEdit,
+        inverse: ProgramEdit,
+    ) -> Result<RuntimeSnapshot, RuntimeError> {
+        let mut runtime = self.runtime.write().await;
+        runtime.replace_active_plan(compiled)?;
+        runtime.record_applied_command(command, inverse);
+        Ok(Self::build_snapshot(&runtime, None))
+    }
+
+    /// Number of applied commands with stored inverses (undo history size).
+    pub async fn history_len(&self) -> usize {
+        let runtime = self.runtime.read().await;
+        runtime.history_len()
+    }
 
     /// Extract waypoints from the active plan's trajectory.
     fn trajectory_to_waypoints(runtime: &SceneRuntime) -> (Vec<Vec<f64>>, f64) {

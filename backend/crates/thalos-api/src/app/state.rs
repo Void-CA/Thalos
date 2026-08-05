@@ -45,6 +45,18 @@ fn validate_dof_consistency(controller_dof: usize, scene_model: RobotModel) -> R
 }
 
 pub async fn new_default_state() -> SharedState {
+    // Design D5: scene-writeback is OFF by default (rollback-safe). The
+    // first runtime-mutating surface (PR4 apply) requires explicit opt-in.
+    new_state_with_scene_writeback(false).await
+}
+
+/// State builder with the scene-writeback feature flag (design D5)
+/// configurable.
+///
+/// `new_default_state` keeps the flag OFF; integration tests that exercise
+/// the PR4 apply/write-back surface opt in via this constructor. Production
+/// rollout enables the flag per-environment after integration tests pass.
+pub async fn new_state_with_scene_writeback(scene_writeback: bool) -> SharedState {
     let backend = Box::new(InternalBackend);
 
     // Runtime controller DOF and scene robot model are named independently so
@@ -67,6 +79,9 @@ pub async fn new_default_state() -> SharedState {
     let sessions = Arc::new(SessionManager::new());
     let scene =
         SceneService::with_session_manager(backend, manager.clone(), scene_model, sessions.clone());
+    if scene_writeback {
+        scene.set_scene_writeback(true).await;
+    }
     let robots = RobotService;
 
     Arc::new(AppState {
