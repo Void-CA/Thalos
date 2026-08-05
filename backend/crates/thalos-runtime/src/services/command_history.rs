@@ -79,9 +79,17 @@ impl AppliedCommand {
 ///
 /// `undo` pops the last entry in constant time — the history is never
 /// replayed or re-derived.
+///
+/// PR2 versioned undo (spec command-endpoints "Undo version mismatch"): a
+/// monotonic `version: u64` counter increments on EVERY mutation (push/pop/
+/// clear). The undo flow reads it atomically with the last entry
+/// (`last_with_version`) and re-validates it at commit time — closing the
+/// TOCTOU window between the peek and the recompile.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct CommandHistory {
     entries: Vec<AppliedCommand>,
+    /// Monotonic mutation counter — bumped on push/pop/clear.
+    version: u64,
 }
 
 impl CommandHistory {
@@ -89,19 +97,48 @@ impl CommandHistory {
         Self::default()
     }
 
+    /// Current history version (number of mutations applied so far).
+    pub fn version(&self) -> u64 {
+        self.version
+    }
+
     /// Append an applied command with its pre-computed inverse + metrics.
     pub fn push(&mut self, entry: AppliedCommand) {
         self.entries.push(entry);
+        self.version += 1;
     }
 
     /// O(1) — remove and return the LAST applied command (no replay).
+    /// Bumps the version only when an entry was actually removed.
     pub fn pop(&mut self) -> Option<AppliedCommand> {
-        self.entries.pop()
+        let popped = self.entries.pop();
+        if popped.is_some() {
+            self.version += 1;
+        }
+        popped
     }
 
     /// O(1) — peek the last applied command without removing it.
     pub fn last(&self) -> Option<&AppliedCommand> {
         self.entries.last()
+    }
+
+    /// O(1) — peek the last applied command together with the history version.
+    ///
+    /// The pair is read under a SINGLE lock (atomic view): the undo flow
+    /// recompiles against `entry` and later commits with `version` as the
+    /// expected value, so a concurrent mutation between peek and commit is
+    /// detected at commit time (PR2 TOCTOU).
+    pub fn last_with_version(&self) -> (Option<&AppliedCommand>, u64) {
+        (self.entries.last(), self.version)
+    }
+
+    /// Remove ALL entries and bump the version — a mutation like any other,
+    /// so a concurrent undo commit re-validated against the old version is
+    /// rejected (PR2).
+    pub fn clear(&mut self) {
+        self.entries.clear();
+        self.version += 1;
     }
 
     pub fn len(&self) -> usize {
@@ -224,5 +261,95 @@ mod tests {
         assert_eq!(history.len(), 0);
         assert!(history.pop().is_none(), "empty history → pop returns None");
         assert!(history.last().is_none(), "empty history → last returns None");
+    }
+
+    // ── PR2 — versioned undo (spec command-endpoints "Undo version mismatch") ──
+
+    /// A minimal applied-command entry for the version-counter tests.
+    fn entry_for(target: f64) -> AppliedCommand {
+        let cmd = move_waypoint_edit(target);
+        AppliedCommand {
+            command: cmd.clone(),
+            inverse: cmd.inverse(),
+            metrics: CommandMetrics::new(0.4, 0.5),
+            applied_program: sample_program().segments.clone(),
+        }
+    }
+
+    #[test]
+    fn version_increments_on_push() {
+        // Spec: "The system MUST maintain a monotonic version counter (u64)
+        // on command history, incremented on every mutation (push/pop/clear)."
+        let mut history = CommandHistory::new();
+        assert_eq!(history.version(), 0, "fresh history → version 0");
+        history.push(entry_for(1.0));
+        assert_eq!(history.version(), 1, "one push → version 1");
+        history.push(entry_for(2.0));
+        assert_eq!(history.version(), 2, "two pushes → version 2");
+    }
+
+    #[test]
+    fn version_increments_on_pop_only_when_an_entry_is_removed() {
+        // A pop that actually removes an entry is a mutation (bump); a pop on
+        // an empty history removes nothing and must leave the version alone.
+        let mut history = CommandHistory::new();
+        history.push(entry_for(1.0));
+        history.push(entry_for(2.0));
+        assert_eq!(history.version(), 2);
+
+        assert!(history.pop().is_some());
+        assert_eq!(history.version(), 3, "pop of an entry must bump the version");
+        assert!(history.pop().is_some());
+        assert_eq!(history.version(), 4);
+
+        assert!(history.pop().is_none());
+        assert_eq!(
+            history.version(),
+            4,
+            "pop on empty history removes nothing → version unchanged"
+        );
+    }
+
+    #[test]
+    fn last_with_version_returns_atomic_pair() {
+        // PR2: the undo flow reads (last entry, version) under a SINGLE lock
+        // so the commit can re-validate the version — no TOCTOU window between
+        // the peek and the recompile.
+        let mut history = CommandHistory::new();
+        let (none_entry, v0) = history.last_with_version();
+        assert!(none_entry.is_none(), "empty history → no entry");
+        assert_eq!(v0, 0, "empty history → pair carries the current version");
+
+        history.push(entry_for(1.0));
+        let last = entry_for(2.0);
+        history.push(last.clone());
+
+        let (entry, version) = history.last_with_version();
+        assert_eq!(version, 2, "pair must carry the CURRENT version");
+        assert_eq!(entry, Some(&last), "pair must carry the LAST entry");
+        assert_eq!(
+            entry, history.last(),
+            "pair entry must be the same view as last() (single lock)"
+        );
+    }
+
+    #[test]
+    fn clear_empties_and_bumps_version() {
+        // `clear` is a mutation like push/pop — the version counter must
+        // advance so a concurrent undo commit re-validated against the old
+        // version is rejected.
+        let mut history = CommandHistory::new();
+        history.push(entry_for(1.0));
+        history.push(entry_for(2.0));
+        assert_eq!(history.version(), 2);
+
+        history.clear();
+        assert!(history.is_empty(), "clear must empty the history");
+        assert_eq!(history.len(), 0, "clear must empty the history");
+        assert_eq!(
+            history.version(),
+            3,
+            "clear is a mutation → version must bump"
+        );
     }
 }
