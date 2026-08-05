@@ -17,15 +17,18 @@ import {
 /**
  * Trajectory — renderiza la trayectoria del plan activo.
  *
- * Muestra exclusivamente una de las dos según `trajectoryViewMode`:
+ * Muestra exclusivamente una de las tres según `trajectoryViewMode`:
  * - `original`  → trayectoria original coloreada por modo
  * - `optimized` → solo la trayectoria optimizada (verde sólido)
+ * - `preview`   → solo la trayectoria simulada de una recomendación (ámbar,
+ *                 PR3 — reutiliza el mecanismo de overlay de `optimized`)
  *
- * Nunca ambas al mismo tiempo — toggle mutuamente excluyente.
+ * Nunca más de una al mismo tiempo — toggle mutuamente excluyente.
  */
 export function Trajectory() {
   const activePlan = useSceneStore(s => s.activePlan)
   const optimizedPositions = useSceneStore(s => s.optimizedPositions)
+  const previewPositions = useSceneStore(s => s.previewPositions)
   const trajectoryViewMode = useSceneStore(s => s.trajectoryViewMode)
   const colorMode = useSceneStore(s => s.trajectoryColorMode)
   const transformSnapshot = useSceneStore(s => s.transformSnapshot)
@@ -106,6 +109,41 @@ export function Trajectory() {
       </mesh>
     ))
   }, [optimizedPositions])
+
+  // Preview trajectory (from /plan/commands/preview — PR3)
+  const previewLine = useMemo(() => {
+    if (!previewPositions || previewPositions.length < 2) return null
+    const pts = previewPositions.map(p => new THREE.Vector3(p[0], p[1], p[2]))
+    const geo = new THREE.BufferGeometry().setFromPoints(pts)
+    const mat = new THREE.LineBasicMaterial({
+      color: 0xf59e0b,
+      transparent: true,
+      opacity: 0.85,
+    })
+    return <primitive object={new THREE.Line(geo, mat)} />
+  }, [previewPositions])
+
+  const previewMarkers = useMemo(() => {
+    if (!previewPositions) return null
+    return previewPositions.map((p, i) => (
+      <mesh key={`prev-${i}`} position={[p[0], p[1], p[2]]}>
+        <sphereGeometry args={[0.015, 8, 8]} />
+        <meshBasicMaterial color={0xf59e0b} transparent opacity={0.75} />
+      </mesh>
+    ))
+  }, [previewPositions])
+
+  // ── Mutually exclusive render ──
+  if (trajectoryViewMode === 'preview' && previewPositions) {
+    // Only show the previewed (simulated) trajectory
+    if (previewPositions.length < 2) return null
+    return (
+      <group>
+        {previewLine}
+        {previewMarkers}
+      </group>
+    )
+  }
 
   // ── Mutually exclusive render ──
   if (trajectoryViewMode === 'optimized' && optimizedPositions) {

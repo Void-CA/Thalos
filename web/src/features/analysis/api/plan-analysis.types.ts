@@ -40,3 +40,24 @@ export interface MetricsComparison {
   max_segment_error_before: number
   max_segment_error_after: number
 }
+
+// ── Plan command preview (PR3 — read-only simulation) ──
+
+/** POST /plan/commands/preview response (backend PreviewResponse). The
+ *  simulation applies the recommendation's edit to a CLONE, recompiles and
+ *  re-analyzes — the runtime is never mutated. */
+export interface PreviewResponse {
+  recommendation_id: number
+  /** Edit availability (D8): "available" | "unavailable" (omitted when none). */
+  status?: 'available' | 'unavailable'
+  /** End-effector positions [x, y, z] of the edited trajectory — feeds the
+   *  3D overlay (same pattern as OptimizeResponse.optimized_positions). */
+  waypoints: number[][]
+  metrics_before: Record<string, number>
+  metrics_after: Record<string, number>
+  health_before: number
+  health_after: number
+  /** health_after - health_before (negative = degrades). */
+  improvement: number
+  continuity: boolean
+}

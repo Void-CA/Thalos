@@ -1,9 +1,28 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { describe, it, expect, afterEach, vi } from 'vitest'
+import { render, screen, within, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { AdvisorSection } from './AdvisorSection'
 import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
+
+vi.mock('@/features/analysis/api/plan-analysis-api', () => ({
+  planAnalysisApi: {
+    preview: vi.fn(async (id: number) => ({
+      recommendation_id: id,
+      status: 'available',
+      waypoints: [
+        [1.0, 2.0, 3.0],
+        [1.2, 2.1, 3.1],
+      ],
+      metrics_before: { waypoint_count: 2 },
+      metrics_after: { waypoint_count: 2 },
+      health_before: 0.5,
+      health_after: 0.62,
+      improvement: 0.12,
+      continuity: true,
+    })),
+  },
+}))
 
 /**
  * S4b / S4.3 — Advisor projection (spec advisor-projection):
@@ -98,8 +117,7 @@ const infoReport: AnalysisReportWire = {
 
 afterEach(() => cleanup())
 
-describe('AdvisorSection — pure AnalysisReport projection (S4b)', () => {
-  it('renders a placeholder for a null report without crashing', () => {
+describe('AdvisorSection — pure AnalysisReport projection (S4b)', () => {  it('renders a placeholder for a null report without crashing', () => {
     render(<AdvisorSection report={null} />)
     expect(screen.getByText('No analysis available')).toBeInTheDocument()
   })
@@ -140,5 +158,111 @@ describe('AdvisorSection — pure AnalysisReport projection (S4b)', () => {
     expect(screen.getByText('Timestamp')).toBeInTheDocument()
     expect(screen.getByText('Retime')).toBeInTheDocument()
     expect(screen.getByText('target observation 5')).toBeInTheDocument()
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════
+// PR3 (task 3.4) — RecommendationRow projection (spec advisor-projection):
+// - recommendations[] project as N generic RecommendationRow components.
+// - Every row carries UNIFORM Preview/Apply/Undo controls regardless of the
+//   underlying action kind — NO per-strategy buttons, NO match_strategy /
+//   defaultStrategies string dispatch.
+// ══════════════════════════════════════════════════════════════════════════
+
+/** Three recommendations of MIXED action kinds — the uniform-row contract. */
+const recommendationReport: AnalysisReportWire = {
+  ...fullReport,
+  recommendations: [
+    {
+      id: 1,
+      action: { id: 30, kind: 'manipulability', target_observation: 1, priority: 'high', impact: 'raises manipulability', parameters: {} },
+      edit: { ReplaceSegment: { index: 0 } },
+      status: 'available',
+    },
+    {
+      id: 2,
+      action: { id: 31, kind: 'singularity', target_observation: 1, priority: 'high', impact: 'rotates tool', parameters: {} },
+      edit: { ReplaceSegment: { index: 0 } },
+      status: 'available',
+    },
+    {
+      id: 3,
+      action: { id: 32, kind: 'waypoint', target_observation: 1, priority: 'medium', impact: 'inserts waypoint', parameters: {} },
+      edit: { ReplaceSegment: { index: 0 } },
+      status: 'available',
+    },
+  ],
+}
+
+describe('AdvisorSection — RecommendationRow projection (PR3, task 3.4)', () => {
+  it('renders N uniform RecommendationRow components for N mixed-kind recommendations', () => {
+    render(<AdvisorSection report={recommendationReport} />)
+
+    // N rows — one per recommendation, all three kinds present.
+    const rows = screen.getAllByTestId('recommendation-row')
+    expect(rows).toHaveLength(3)
+    expect(screen.getByText('Manipulability')).toBeInTheDocument()
+    expect(screen.getByText('Singularity')).toBeInTheDocument()
+    expect(screen.getByText('Waypoint')).toBeInTheDocument()
+
+    // Uniform controls: exactly Preview + Apply + Undo per row.
+    expect(screen.getAllByRole('button', { name: /preview/i })).toHaveLength(3)
+    expect(screen.getAllByRole('button', { name: /apply/i })).toHaveLength(3)
+    expect(screen.getAllByRole('button', { name: /undo/i })).toHaveLength(3)
+
+    // No string-based dispatch: EVERY row exposes the same 3-control set —
+    // the action kind never changes the controls offered.
+    for (const row of rows) {
+      const rowButtons = within(row).getAllByRole('button')
+      expect(rowButtons).toHaveLength(3)
+    }
+  })
+
+  it('does not render per-strategy buttons (no match_strategy / defaultStrategies)', () => {
+    render(<AdvisorSection report={recommendationReport} />)
+    // The materializer names must NEVER surface as controls.
+    expect(screen.queryByRole('button', { name: /lift/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /rotate tool/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /insert waypoint/i })).toBeNull()
+    // Only the three uniform command controls exist anywhere.
+    expect(screen.getAllByRole('button')).toHaveLength(9)
+  })
+
+  it('leaves Apply/Undo ready but disabled until PR4/PR5', () => {
+    render(<AdvisorSection report={recommendationReport} />)
+    for (const button of screen.getAllByRole('button', { name: /apply/i })) {
+      expect(button).toBeDisabled()
+    }
+    for (const button of screen.getAllByRole('button', { name: /undo/i })) {
+      expect(button).toBeDisabled()
+    }
+  })
+
+  it('triangulates: a report without recommendations renders the empty state', () => {
+    render(<AdvisorSection report={fullReport} />)
+    expect(screen.queryAllByTestId('recommendation-row')).toHaveLength(0)
+    expect(screen.getByText('None')).toBeInTheDocument()
+  })
+
+  it('Preview click feeds the 3D overlay through the viewport store (OptimizationPanel pattern)', async () => {
+    // Spec advisor-projection "Preview overlay reuse": clicking Preview on a
+    // row writes the simulated waypoints into the scene store and switches the
+    // trajectory view — the SAME mechanism the OptimizationPanel uses.
+    const { useSceneStore } = await import('@/features/viewport/store')
+    useSceneStore.getState().setPreviewPositions(null)
+    useSceneStore.getState().setTrajectoryViewMode('original')
+
+    render(<AdvisorSection report={recommendationReport} />)
+    fireEvent.click(screen.getAllByRole('button', { name: /preview/i })[0])
+
+    await waitFor(() => {
+      expect(useSceneStore.getState().trajectoryViewMode).toBe('preview')
+    })
+    expect(useSceneStore.getState().previewPositions).toEqual([
+      [1.0, 2.0, 3.0],
+      [1.2, 2.1, 3.1],
+    ])
+    // The inline report renders the simulated health delta.
+    expect(await screen.findByText('Health')).toBeInTheDocument()
   })
 })
