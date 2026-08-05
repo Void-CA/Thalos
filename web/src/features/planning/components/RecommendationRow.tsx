@@ -21,13 +21,16 @@ import { Check, Eye, Loader2, Play, RotateCcw } from 'lucide-react'
  *   edición en el backend (replace_active_plan, feature-flagged) y refresca
  *   la escena para que el viewport muestre el plan activo resultante.
  *   D8: un edit `unavailable` jamás se aplica — botón deshabilitado.
- * - PR5: Undo llega en PR5 — el botón existe pero deshabilitado.
+ * - PR5 (undo O(1)): Undo está ACTIVO tras aplicar ESTA fila — el backend
+ *   popea el último comando y aplica su inverse almacenado (sin replay);
+ *   la fila vuelve al estado previo y la escena se refresca.
  */
 export function RecommendationRow({ recommendation }: { recommendation: RecommendationWire }) {
   const [previewing, setPreviewing] = useState(false)
   const [preview, setPreview] = useState<PreviewResponse | null>(null)
   const [applying, setApplying] = useState(false)
   const [applied, setApplied] = useState<ApplyResponse | null>(null)
+  const [undoing, setUndoing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const setPreviewPositions = useSceneStore(s => s.setPreviewPositions)
   const setTrajectoryViewMode = useSceneStore(s => s.setTrajectoryViewMode)
@@ -76,6 +79,31 @@ export function RecommendationRow({ recommendation }: { recommendation: Recommen
     }
   }
 
+  const handleUndo = async () => {
+    setUndoing(true)
+    setError(null)
+    try {
+      // PR5 undo O(1): el backend popea el último comando aplicado y aplica su
+      // inverse almacenado (sin replay). Esta fila deja de mostrar "Applied".
+      await planAnalysisApi.undo()
+      setApplied(null)
+      // La escena refleja el plan RESTAURADO: refrescar desde el backend.
+      const snapshot = await sceneService.loadScene()
+      applyScene(
+        snapshot.scene,
+        snapshot.runtime,
+        snapshot.ikResult,
+        snapshot.activePlan,
+        snapshot.activeTcp,
+        snapshot.execution,
+      )
+    } catch (err: any) {
+      setError(err.message ?? 'Undo failed')
+    } finally {
+      setUndoing(false)
+    }
+  }
+
   const pct = (before: number, after: number) => {
     if (before === 0) return after === 0 ? '0%' : '+∞'
     return `${((after - before) / before) * 100 >= 0 ? '+' : ''}${(((after - before) / before) * 100).toFixed(1)}%`
@@ -109,11 +137,16 @@ export function RecommendationRow({ recommendation }: { recommendation: Recommen
             Apply
           </button>
           <button
-            disabled
-            title="Undo lands in PR5"
-            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-medium text-muted-foreground disabled:cursor-not-allowed"
+            onClick={handleUndo}
+            disabled={undoing || applied === null}
+            title={
+              applied === null
+                ? 'No applied command to undo'
+                : 'Undo the last applied command (O(1) via stored inverse)'
+            }
+            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-muted/40 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <RotateCcw className="h-3 w-3" />
+            {undoing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
             Undo
           </button>
         </span>

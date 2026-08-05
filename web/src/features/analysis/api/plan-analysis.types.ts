@@ -82,3 +82,23 @@ export interface ApplyResponse {
   /** Undo-history size (inverses stored for PR5). */
   history_length: number
 }
+
+// ── Plan command undo (PR5 — O(1) via stored inverse) ──
+
+/** POST /plan/commands/undo response (backend UndoResponse). Undo pops the
+ *  last applied command and applies its STORED inverse once (no replay),
+ *  recompiles and writes the restored plan back to SceneRuntime. Empty
+ *  history → 409 empty_command_history. */
+export interface UndoResponse {
+  /** Restored (previous) plan id — proof the write-back happened. */
+  plan_id: string
+  /** Health of the plan being undone (the applied plan). */
+  health_before: number
+  /** Health of the restored (previous) plan. */
+  health_after: number
+  /** health_after - health_before (negative when the undone command had
+   *  improved the plan). */
+  improvement: number
+  /** Undo-history size after the pop. */
+  history_length: number
+}

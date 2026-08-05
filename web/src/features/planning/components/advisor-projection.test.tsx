@@ -31,6 +31,13 @@ vi.mock('@/features/analysis/api/plan-analysis-api', () => ({
       improvement: 0.12,
       history_length: 1,
     })),
+    undo: vi.fn(async () => ({
+      plan_id: 'plan-1',
+      health_before: 0.62,
+      health_after: 0.5,
+      improvement: -0.12,
+      history_length: 0,
+    })),
   },
 }))
 
@@ -264,16 +271,50 @@ describe('AdvisorSection — RecommendationRow projection (PR3, task 3.4)', () =
     expect(screen.getAllByRole('button')).toHaveLength(9)
   })
 
-  it('PR4: Apply is enabled for available recommendations; Undo stays disabled (PR5)', () => {
+  it('PR4: Apply is enabled for available recommendations', () => {
     render(<AdvisorSection report={recommendationReport} />)
     const applyButtons = screen.getAllByRole('button', { name: /apply/i })
     expect(applyButtons).toHaveLength(3)
     for (const button of applyButtons) {
       expect(button).toBeEnabled()
     }
+  })
+
+  it('PR5: Undo stays disabled until this row has been applied, then reverts', async () => {
+    // Spec command-endpoints "Undo restores previous plan" at the UI level:
+    // Undo pops the LAST applied command, so a row's Undo only activates
+    // after THAT row has been applied; clicking it reverts the applied state
+    // and refreshes the scene from the backend.
+    render(<AdvisorSection report={recommendationReport} />)
+    const rows = screen.getAllByTestId('recommendation-row')
+    const rowUndo = (i: number) => within(rows[i]).getByRole('button', { name: /undo/i })
+
+    // Before any apply: nothing to undo — every row's Undo is disabled.
     for (const button of screen.getAllByRole('button', { name: /undo/i })) {
       expect(button).toBeDisabled()
     }
+
+    // Apply row 0 → ONLY its Undo enables (the undo target is the last
+    // applied command); the other rows stay disabled.
+    fireEvent.click(screen.getAllByRole('button', { name: /apply/i })[0])
+    await screen.findByText('Applied')
+    expect(rowUndo(0)).toBeEnabled()
+    expect(rowUndo(1)).toBeDisabled()
+    expect(rowUndo(2)).toBeDisabled()
+
+    // Undo click → backend pops the last command (no body), the applied
+    // badge clears, and the row's Undo returns to disabled.
+    fireEvent.click(rowUndo(0))
+    await waitFor(() => {
+      expect(planAnalysisApi.undo).toHaveBeenCalledTimes(1)
+    })
+    expect(planAnalysisApi.undo).toHaveBeenCalledWith()
+    await waitFor(() => {
+      expect(screen.queryByText('Applied')).toBeNull()
+    })
+    await waitFor(() => {
+      expect(rowUndo(0)).toBeDisabled()
+    })
   })
 
   it('D8: an unavailable recommendation keeps Apply disabled (never applied)', () => {
