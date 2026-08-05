@@ -187,12 +187,7 @@ pub async fn run_semantic(
 
         let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
         let current_state = RobotState::new(initial_joints.clone());
-        let seg_ctx = SegmentPlanningContext {
-            robot: &chain,
-            current_state: &current_state,
-            ik_solver: &ik_solver,
-            tcp: None,
-        };
+        let seg_ctx = build_seg_ctx(&snapshot, &chain, &current_state, &ik_solver);
         let compiled = compiler
             .compile(&resolution.planning, &seg_ctx)
             .map_err(planning_error)?;
@@ -269,4 +264,107 @@ fn planning_error(e: impl std::fmt::Display) -> (StatusCode, Json<serde_json::Va
         StatusCode::UNPROCESSABLE_ENTITY,
         Json(serde_json::json!({"error": format!("{e}"), "code": "planning_error"})),
     )
+}
+
+/// Build the segment planning context for the semantic compile path.
+///
+/// Design D3: honors `snapshot.active_tcp` when present so singularity and
+/// manipulability analysis reference the active TCP (matching the preview
+/// path). When `active_tcp` is `None`, behavior is unchanged — analysis runs
+/// against the flange (`chain.end_effector`).
+fn build_seg_ctx<'a>(
+    snapshot: &'a thalos_runtime::RuntimeSnapshot,
+    chain: &'a thalos_core::robot::serial_chain::SerialChain,
+    current_state: &'a RobotState,
+    ik_solver: &'a dyn thalos_core::kinematics::inverse::IKSolver,
+) -> SegmentPlanningContext<'a> {
+    SegmentPlanningContext {
+        robot: chain,
+        current_state,
+        ik_solver,
+        tcp: snapshot.active_tcp.as_ref(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use thalos_core::{
+        kinematics::{
+            forward::ForwardKinematics,
+            inverse::{IKGoal, IKResult, IKSolver, IkError},
+        },
+        models::{RobotModel, RobotRegistry},
+        robot::{state::RobotState, tool_frame::ToolFrame},
+    };
+    use thalos_runtime::RuntimeSnapshot;
+
+    /// IK solver stub — never invoked by `build_seg_ctx`, only required to
+    /// satisfy the `SegmentPlanningContext` contract.
+    struct NoopIKSolver;
+
+    impl IKSolver for NoopIKSolver {
+        fn solve(&self, q0: &[f64], _goal: IKGoal) -> Result<IKResult, IkError> {
+            Ok(IKResult::converged(q0.to_vec(), 1, 0.0, None))
+        }
+    }
+
+    fn snapshot_with_tcp(active_tcp: Option<ToolFrame>) -> RuntimeSnapshot {
+        let chain = RobotRegistry::create_default(RobotModel::Planar2R);
+        let joints = vec![0.0, 0.0];
+        let fk_result = ForwardKinematics::new(chain.clone()).evaluate(&joints);
+        RuntimeSnapshot {
+            robot: Some(RobotModel::Planar2R),
+            robot_source: None,
+            robot_name: "test".into(),
+            robot_id: "planar_2r".into(),
+            joints_meta: vec![],
+            joints,
+            chain,
+            fk_result,
+            ik_result: None,
+            active_plan: None,
+            execution: None,
+            active_tcp,
+            generated_at: chrono::Utc::now(),
+        }
+    }
+
+    // ── Spec tcp-resolved-pose R6: semantic context gated on active_tcp ──
+
+    /// R6.1: `active_tcp` Some → `seg_ctx.tcp` Some (same TCP frame).
+    #[test]
+    fn seg_ctx_tcp_some_when_active_tcp_set() {
+        let chain = RobotRegistry::create_default(RobotModel::Planar2R);
+        let tcp = ToolFrame::identity(*chain.end_effector());
+        let snapshot = snapshot_with_tcp(Some(tcp.clone()));
+        let state = RobotState::zero(2);
+        let ik = NoopIKSolver;
+
+        let ctx = build_seg_ctx(&snapshot, &chain, &state, &ik);
+
+        let resolved = ctx
+            .tcp
+            .expect("seg_ctx.tcp must be Some when active_tcp is set");
+        assert_eq!(
+            resolved.base_frame, tcp.base_frame,
+            "seg_ctx.tcp must reference the active TCP frame"
+        );
+    }
+
+    /// R6.2: `active_tcp` None → `seg_ctx.tcp` None (unchanged legacy behavior).
+    #[test]
+    fn seg_ctx_tcp_none_when_active_tcp_unset() {
+        let chain = RobotRegistry::create_default(RobotModel::Planar2R);
+        let snapshot = snapshot_with_tcp(None);
+        let state = RobotState::zero(2);
+        let ik = NoopIKSolver;
+
+        let ctx = build_seg_ctx(&snapshot, &chain, &state, &ik);
+
+        assert!(
+            ctx.tcp.is_none(),
+            "seg_ctx.tcp must be None when active_tcp is unset"
+        );
+    }
 }
