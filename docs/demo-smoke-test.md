@@ -2,7 +2,7 @@
 
 > **Purpose**: verify ADR `mvp-freeze-criteria.md` criterion 5 — the system boots and the main flow works from a clean install. Every row green = the demo is reproducible.
 >
-> **Status**: ✅ VERIFIED (2026-08-05) — first execution: 6/6 steps PASS, 0 failures, 0 blockers. The single known debt — `scene-writeback` not env-operable — is now WIRED by PR1 (mvp-maintenance): `THALOS_SCENE_WRITEBACK=true` enables apply/undo. Final freeze re-run pending task 4.1 (E2E).
+> **Status**: ✅ **17/17 PASS (2026-08-05, final)** — first execution: 6/6 steps PASS with `scene-writeback` as the sole gap. Fase 2 (`mvp-maintenance`) wired `THALOS_SCENE_WRITEBACK`; E2E re-run (task 4.1) with the flag enabled confirmed Apply/Undo moved from 409 `feature_disabled` to 200 OK, and Undo restores the program byte-identical in segments. Criterion 5 of `mvp-freeze-criteria.md` is VERIFIED.
 
 ## Procedure
 
@@ -77,4 +77,4 @@ Done
 
 All rows in the Evidence Table green, with commands and observed outputs recorded in the Notes column. When green, criterion 5 of `mvp-freeze-criteria.md` is verified and the MVP freeze declaration can proceed.
 
-**Current state**: 15/17 green; rows 15/16 (Apply/Undo) now WIRED by PR1 — the single known debt (`scene-writeback` env wiring) is resolved. Re-run this runbook with `THALOS_SCENE_WRITEBACK=true` on a truly clean checkout for the final freeze declaration (task 4.1).
+**Current state**: ✅ **17/17 PASS (2026-08-05)** — Apply/Undo verified working with `THALOS_SCENE_WRITEBACK=true` (E2E task 4.1): apply mutates plan (plan-0→plan-1), undo restores byte-identical segments (plan-2), 58 recommendations + 241 preview waypoints unchanged from the first smoke. Criterion 5 of `mvp-freeze-criteria.md` is VERIFIED. For the formal freeze declaration, re-run on a truly clean checkout (this run used cached builds).
