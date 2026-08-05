@@ -17,6 +17,7 @@ use crate::execution_boundary::manifest::{
     ExecutionManifest, ManifestInstruction, ManifestMetadata, ManifestSegment, TimedWaypoint,
 };
 use crate::execution_boundary::manifest_builder::ExecutionManifestBuilder;
+use crate::session::execution_source::ExecutionSource;
 use crate::state::robot_state::RobotState;
 use thalos_core::execution::plan::{
     ExecutionInstruction, ExecutionPlan, ExecutionSegment, ExecutionWaypoint,
@@ -268,6 +269,13 @@ impl RobotController for Esp32Backend {
 
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities::minimal()
+    }
+
+    /// The ESP32 is a real hardware execution backend: report `Hardware` so the
+    /// UI execution-source badge reflects the actual controller instead of the
+    /// `Simulation` default (review fix R4-001).
+    fn execution_source(&self) -> ExecutionSource {
+        ExecutionSource::Hardware
     }
 }
 
@@ -547,6 +555,15 @@ mod tests {
         assert!(!caps.io);
         assert!(!caps.gripper);
         assert!(!caps.streaming);
+    }
+
+    #[test]
+    fn execution_source_reports_hardware() {
+        // The ESP32 is a real hardware execution backend — the UI badge must
+        // reflect that, not the Simulation default (review fix R4-001).
+        let transport = FakeTransport::new();
+        let backend = Esp32Backend::new(Box::new(transport));
+        assert_eq!(backend.execution_source(), ExecutionSource::Hardware);
     }
 
     #[test]
