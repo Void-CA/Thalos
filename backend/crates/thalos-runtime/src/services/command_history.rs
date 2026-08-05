@@ -85,16 +85,58 @@ impl AppliedCommand {
 /// clear). The undo flow reads it atomically with the last entry
 /// (`last_with_version`) and re-validates it at commit time — closing the
 /// TOCTOU window between the peek and the recompile.
-#[derive(Debug, Clone, Default, PartialEq)]
+/// Default maximum number of retained applied commands (spec command-endpoints
+/// "History Cap"). Bounded memory: undo stays O(1) and the oldest entry is
+/// discarded when the capacity is exceeded on push.
+pub const DEFAULT_HISTORY_CAP: usize = 100;
+
+/// Bounded, versioned undo history.
+///
+/// Entries are pre-computed inverses in apply order (design D6). The capacity
+/// bounds memory (spec "History Cap") while keeping undo O(1) — overflow
+/// discards the OLDEST entry (`remove(0)`, O(n) bounded by cap ≤ 100). The
+/// monotonic version covers any mutation (push/pop/clear) for the PR2 TOCTOU
+/// gate.
+#[derive(Debug, Clone, PartialEq)]
 pub struct CommandHistory {
     entries: Vec<AppliedCommand>,
     /// Monotonic mutation counter — bumped on push/pop/clear.
     version: u64,
+    /// Maximum number of retained entries (spec "History Cap").
+    cap: usize,
+}
+
+impl Default for CommandHistory {
+    /// The default capacity MUST be the documented constant — deriving
+    /// `Default` would leave `cap = 0` and silently discard every push.
+    fn default() -> Self {
+        Self {
+            entries: Vec::new(),
+            version: 0,
+            cap: DEFAULT_HISTORY_CAP,
+        }
+    }
 }
 
 impl CommandHistory {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// History with a custom capacity (spec "History Cap"): at most `cap`
+    /// entries are retained; overflow discards the oldest.
+    pub fn with_cap(cap: usize) -> Self {
+        Self {
+            entries: Vec::new(),
+            version: 0,
+            cap,
+        }
+    }
+
+    /// Reconfigure the capacity of an EXISTING history (entry point env
+    /// wiring). Existing entries are kept; the next push evicts on overflow.
+    pub fn set_cap(&mut self, cap: usize) {
+        self.cap = cap;
     }
 
     /// Current history version (number of mutations applied so far).
@@ -103,8 +145,17 @@ impl CommandHistory {
     }
 
     /// Append an applied command with its pre-computed inverse + metrics.
+    ///
+    /// Bounded by the capacity (spec "History Cap"): at capacity the OLDEST
+    /// entry is evicted so the tail (undo) stays O(1). A zero cap disables
+    /// retention entirely (guarded — `remove(0)` would panic on an empty vec).
     pub fn push(&mut self, entry: AppliedCommand) {
-        self.entries.push(entry);
+        if self.cap > 0 {
+            if self.entries.len() >= self.cap {
+                self.entries.remove(0);
+            }
+            self.entries.push(entry);
+        }
         self.version += 1;
     }
 
@@ -190,9 +241,11 @@ mod tests {
     fn undo_is_o1_with_100_plus_history_entries_no_replay() {
         // Spec command-endpoints "Undo is O(1)": a session with N > 100
         // applied commands — undo must be CONSTANT TIME. It pops ONE entry and
-        // applies ONE stored inverse; it never replays the history.
+        // applies ONE stored inverse; it never replays the history. The cap is
+        // raised to 150 so the scenario exercises the FULL 150-entry history
+        // (PR3: the default cap would evict the oldest 50).
         let program = sample_program();
-        let mut history = CommandHistory::new();
+        let mut history = CommandHistory::with_cap(150);
         for i in 1..=150 {
             let cmd = move_waypoint_edit(i as f64);
             history.push(AppliedCommand {
@@ -232,9 +285,11 @@ mod tests {
     #[test]
     fn undo_with_1000_entries_still_pops_a_single_entry() {
         // Triangulation — a DIFFERENT scale (10x the spec's N > 100): the
-        // operation count must stay constant regardless of history size.
+        // operation count must stay constant regardless of history size. The
+        // cap is raised to 1000 so the FULL 1000 entries are retained (PR3:
+        // the default cap would evict the oldest 900).
         let program = sample_program();
-        let mut history = CommandHistory::new();
+        let mut history = CommandHistory::with_cap(1000);
         for i in 1..=1000 {
             let cmd = move_waypoint_edit(i as f64);
             history.push(AppliedCommand {
@@ -350,6 +405,85 @@ mod tests {
             history.version(),
             3,
             "clear is a mutation → version must bump"
+        );
+    }
+
+    // ── PR3 — history cap (spec command-endpoints "History Cap") ──
+
+    /// Behavior-relevant target of an entry's command (the MoveWaypoint edit
+    /// stores `new_target: vec![f, f]` — `[0]` is the behavior signature).
+    fn target_of_edit(entry: &AppliedCommand) -> f64 {
+        match &entry.command {
+            ProgramEdit::MoveWaypoint { new_target, .. } => new_target[0],
+            other => panic!("expected a MoveWaypoint edit, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn history_bounded_by_default_cap_discards_oldest_on_overflow() {
+        // Spec "History Cap / Overflow discards oldest": history is bounded by
+        // the default capacity (100) — 150 pushes keep only the 100 MOST
+        // RECENT entries; the oldest ones are discarded, the newest preserved.
+        let mut history = CommandHistory::new(); // default cap
+        for i in 1..=150 {
+            history.push(entry_for(i as f64));
+        }
+
+        assert_eq!(
+            history.len(),
+            100,
+            "history must stay at the default cap after 150 pushes"
+        );
+        assert_eq!(
+            target_of_edit(history.last().unwrap()),
+            150.0,
+            "the NEWEST entry must be preserved at overflow"
+        );
+
+        // Drain the bounded history — the newest is popped first; the oldest
+        // SURVIVING entry is 51 (150 pushes − cap 100 = 50 discarded), and
+        // entry 1 was evicted at overflow.
+        let mut popped: Vec<f64> = Vec::new();
+        while let Some(entry) = history.pop() {
+            popped.push(target_of_edit(&entry));
+        }
+        assert_eq!(popped.len(), 100, "drain yields exactly the cap entries");
+        assert_eq!(popped[0], 150.0, "pop drains from the tail — newest first");
+        assert_eq!(
+            *popped.last().unwrap(),
+            51.0,
+            "the oldest surviving entry is the 51st (1..=50 discarded)"
+        );
+        assert!(
+            !popped.contains(&1.0),
+            "entry 1 (oldest) must have been evicted at overflow"
+        );
+    }
+
+    #[test]
+    fn with_cap_sets_custom_capacity() {
+        // Spec "History Cap": capacity is configurable — `with_cap(5)` bounds
+        // the history to 5 entries regardless of the default.
+        let mut history = CommandHistory::with_cap(5);
+        for i in 1..=7 {
+            history.push(entry_for(i as f64));
+        }
+
+        assert_eq!(history.len(), 5, "custom cap must bound the history");
+        assert_eq!(
+            target_of_edit(history.last().unwrap()),
+            7.0,
+            "the NEWEST entry must be preserved"
+        );
+
+        let mut popped: Vec<f64> = Vec::new();
+        while let Some(entry) = history.pop() {
+            popped.push(target_of_edit(&entry));
+        }
+        assert_eq!(
+            popped,
+            vec![7.0, 6.0, 5.0, 4.0, 3.0],
+            "only the 5 most recent entries survive (1..=2 discarded)"
         );
     }
 }
