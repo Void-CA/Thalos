@@ -12,35 +12,76 @@ Analiza el plan activo y devuelve métricas, hallazgos y regiones problemáticas
 }
 ```
 
+El body es opcional en la práctica: `plan_id` (opcional) selecciona un plan; si se omite, se analiza el plan activo del runtime. Un `{}` vacío funciona.
+
 ### Response
 
 ```json
 {
-  "summary": { "status": "ok|warning|error", "score": 0..100, "grade": "Excellent|Good|Fair|Poor|Invalid", "message": "..." },
-  "metrics": { "duration": 14.7, "waypoint_count": 148, "average_manipulability": 0.37, ... },
-  "findings": [{ "kind": "singularity", "severity": "error", "waypoint": 147, "message": "...", "value": 0.02 }],
-  "recommendations": [{ "kind": "singularity", "message": "...", "impact": "high", "waypoint": 147 }],
+  "artifact": { "kind": "MotionPlan", "id": "plan-0" },
+  "observations": [
+    {
+      "id": 1,
+      "kind": "LowManipulability",
+      "severity": "Warning",
+      "artifact": { "kind": "MotionPlan", "id": "plan-0" },
+      "location": { "Waypoint": 0 },
+      "attributes": { "threshold": { "Number": 0.3 }, "value": { "Number": 0.0 } },
+      "causes": [],
+      "related": []
+    }
+  ],
+  "actions": [
+    { "id": 1, "kind": "Manipulability", "target_observation": 1, "priority": "High", "impact": "High", "parameters": {} }
+  ],
+  "metrics": {
+    "avg_manipulability": 0.19,
+    "has_collisions": 0.0,
+    "min_manipulability": 0.0,
+    "near_singular_count": 39.0,
+    "singular_count": 17.0,
+    "trajectory_duration": 3.55,
+    "waypoint_count": 241.0
+  },
+  "summary": {
+    "quality_index": 0.0,
+    "score": 0,
+    "grade": "Poor",
+    "observation_count": 57,
+    "severity_distribution": { "Error": 17, "Warning": 40 }
+  },
   "problem_regions": [
     {
       "id": 0,
-      "kind": "singularity",
-      "severity": "critical",
-      "waypoint_start": 147,
-      "waypoint_end": 227,
-      "waypoint_count": 80,
-      "metrics": { "error_count": 80, "warning_count": 0 },
-      "explanation": { "cause": "...", "consequence": "...", "confidence": 1.0 }
+      "kind": "low_manipulability",
+      "severity": "warning",
+      "waypoint_start": 0,
+      "waypoint_end": 0,
+      "waypoint_count": 1,
+      "metrics": { "waypoint_count": 1, "average_value": 0.0, "min_value": 0.0, "max_value": 0.0, "error_count": 0, "warning_count": 1 },
+      "explanation": { "cause": "...", "consequence": "...", "recommended_strategies": ["Switch IK solver", "Lift TCP", "Insert waypoint"], "confidence": 1.0 }
     }
   ],
-  "health_score": 0.42
+  "manipulability_series": [
+    { "waypoint": 0, "yoshikawa": 0.0 },
+    { "waypoint": 1, "yoshikawa": 0.000012 }
+  ],
+  "recommendations": [
+    {
+      "id": 1,
+      "action": { "id": 1, "kind": "Manipulability", "target_observation": 1, "priority": "High", "impact": "High", "parameters": {} },
+      "edit": { "ReplaceSegment": { "index": 0, "replacement": [ { "MoveJ": { "origin": "manual", "target": [0.5, -0.3, -0.1, 0.0], "max_velocity": null, "max_acceleration": null } } ], "original": [] } },
+      "status": "available"
+    }
+  ]
 }
 ```
 
 ### Notas
 
-- `problem_regions` aparece en M8.1+ (puede estar vacío)
-- `health_score` aparece en M8.1+ (0.0 = peor, 1.0 = mejor)
-- Los campos nuevos usan `skip_serializing_if` — clientes viejos no se rompen
+- `observations` son las observaciones canónicas machine-readable (con `id` 1-based) — el componente principal del reporte
+- `recommendations` son acciones de remediación; cada una lleva `action` + `edit` (comando semántico de plan). Su `id` es el que se pasa a `/plan/commands/preview` y `/plan/commands/apply`
+- `problem_regions`, `manipulability_series` y `recommendations` son aditivos (`skip_serializing_if` cuando vacíos) — clientes viejos no se rompen
 
 ## POST /api/v1/plan/repair/options
 
