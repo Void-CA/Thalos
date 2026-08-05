@@ -6,7 +6,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import '@testing-library/jest-dom/vitest'
 import { routerConfig, VIEW_REGISTRY } from '@/router'
-import { WORKSPACE_REGISTRY } from '@/shared/workflow/registry'
+import { WORKSPACE_REGISTRY, producerOf } from '@/shared/workflow/registry'
 import { ServicesProvider } from '@/features/viewport/services/service-context'
 import { useSceneStore } from '@/features/viewport/store'
 import { useSemanticEditor } from '@/features/semantic/store'
@@ -335,24 +335,35 @@ describe('analysis content lives inside planning (slice 6 — absorbed section)'
   })
 })
 
-describe('the /analysis route is gone (slice 6 — registry-only navigation)', () => {
-  it('shows no Analysis link in the top-bar', () => {
+describe('the /analysis route renders the AnalysisWorkspace tool (PR-D — kind nav model)', () => {
+  it('shows an Analysis link in the top-bar tools group', () => {
     seedPrerequisites()
     renderRouter(['/planning'])
-    expect(screen.queryByRole('link', { name: 'Analysis' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Analysis' })).toBeInTheDocument()
   })
 
-  it('does not route /analysis — no analysis workspace content renders (native 404)', async () => {
+  it('routes /analysis to the AnalysisWorkspace when a robot is loaded (no modal)', () => {
     seedPrerequisites()
     const { router } = renderRouter(['/analysis'])
 
-    // No registry entry → no route → react-router renders no analysis content.
-    expect(router.state.location.pathname).toBe('/analysis') // no redirect
-    expect(screen.queryByRole('heading', { name: 'Analysis' })).not.toBeInTheDocument()
-    expect(screen.queryByText('No plan compiled')).not.toBeInTheDocument()
-    await waitFor(() => {
-      expect(screen.queryByRole('main')).not.toBeInTheDocument()
+    // No redirect: the route is registered (navigation-router "Analysis route
+    // registered"). The inline workspace renders its config + explicit trigger.
+    expect(router.state.location.pathname).toBe('/analysis')
+    expect(screen.getByRole('button', { name: 'Run Analysis' })).toBeInTheDocument()
+    expect(screen.getByText('No data yet — run the analysis')).toBeInTheDocument()
+  })
+
+  it('redirects /analysis to the root when no robot is loaded (requires robotLoaded)', async () => {
+    act(() => {
+      useSceneStore.setState({ data: null })
+      useSemanticEditor.setState({ result: null, dirty: 0 })
+      useExecutionStore.setState({ status: 'idle' })
+      useAnalysisStore.setState({ report: null })
     })
+    const { router } = renderRouter(['/analysis'])
+
+    expect(producerOf('robotLoaded')?.path).toBe('/')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
   })
 })
 
