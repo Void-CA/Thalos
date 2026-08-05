@@ -1,5 +1,6 @@
 import { useSemanticEditor } from '../store'
 import { useWorkflowState } from '@/shared/workflow/use-workflow-state'
+import { CompiledInstructions } from './compiled-instructions'
 
 /**
  * DiagnosticsPanel — compile status of the Task workspace
@@ -39,6 +40,7 @@ export function DiagnosticsPanel() {
           <div className="space-y-0.5">
             <p className="text-green-500 font-medium">✓ Compiled</p>
             <p className="text-muted-foreground">{result.metadata.instruction_count} instructions</p>
+            <CompiledInstructions instructions={result.motion_program.instructions} />
             {result.validation.warnings.length > 0 && (
               <div className="text-amber-400">
                 {result.validation.warnings.map((w, i) => (
