@@ -43,6 +43,12 @@ impl From<RuntimeError> for ApiError {
                 message: format!("invalid compiled plan: {reason}"),
                 code: code.into(),
             },
+            // Spec command-endpoints "Undo with empty history": undo with no
+            // applied commands is a state conflict, not a bad request.
+            RuntimeError::EmptyCommandHistory => ApiError::Conflict {
+                message: "no applied command to undo".to_string(),
+                code: code.into(),
+            },
         }
     }
 }

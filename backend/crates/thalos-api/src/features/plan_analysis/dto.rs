@@ -135,6 +135,28 @@ pub struct ApplyResponse {
     pub history_length: usize,
 }
 
+/// Respuesta de deshacer el último comando aplicado (PR5).
+///
+/// Undo O(1) (design D6): pop del último `AppliedCommand` + `apply(inverse)`
+/// — nunca replay del historial. La salud restaurada se reporta desde las
+/// métricas almacenadas en el entry (sin re-ejecutar el pipeline de análisis).
+#[derive(Debug, Serialize)]
+pub struct UndoResponse {
+    /// Id del plan restaurado (el write-back asignó un nuevo id).
+    pub plan_id: String,
+    /// Salud (0..1) del plan que se está deshaciendo — la que el comando
+    /// deshecho había activado (equivale al `health_after` de su apply).
+    pub health_before: f64,
+    /// Salud (0..1) del plan restaurado — el estado previo al comando
+    /// (equivale al `health_before` de su apply).
+    pub health_after: f64,
+    /// Diferencia de salud: `health_after - health_before` (negativo si el
+    /// comando deshecho había mejorado el plan).
+    pub improvement: f64,
+    /// Tamaño del historial de comandos aplicados tras el pop.
+    pub history_length: usize,
+}
+
 /// Respuesta completa del análisis de un plan — proyección del
 /// [`AnalysisReport`] del dominio (spec motion-plan-endpoint).
 #[derive(Debug, Serialize, Deserialize)]

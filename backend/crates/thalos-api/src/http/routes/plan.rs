@@ -18,6 +18,10 @@ pub fn routes() -> Router<Arc<AppState>> {
             post(handler::apply_command),
         )
         .route(
+            "/plan/commands/undo",
+            post(handler::undo_command),
+        )
+        .route(
             "/plan/analyze/alternatives",
             post(alternatives::analyze_alternatives),
         )

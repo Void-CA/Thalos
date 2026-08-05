@@ -41,7 +41,7 @@ use crate::app::prelude::*;
 use crate::app::state::AppState;
 use crate::features::plan_analysis::dto::{
     ApplyRequest, ApplyResponse, MetricsComparisonDto, OperatorAppliedDto, OptimizeResponse,
-    PlanAnalysisRequest, PlanAnalysisResponse, PreviewRequest, PreviewResponse,
+    PlanAnalysisRequest, PlanAnalysisResponse, PreviewRequest, PreviewResponse, UndoResponse,
 };
 
 /// POST /api/v1/plan/analyze
@@ -390,6 +390,110 @@ pub async fn apply_command(
         recommendation_id: recommendation.id.0,
         status: recommendation.status,
         plan_id: applied_snapshot
+            .active_plan
+            .as_ref()
+            .map(|p| p.plan_id.clone())
+            .unwrap_or_default(),
+        health_before,
+        health_after,
+        improvement: health_after - health_before,
+        history_length: state.services.scene.history_len().await,
+    }))
+}
+
+/// POST /api/v1/plan/commands/undo
+///
+/// Undo O(1) (design D6, spec command-endpoints "Undo Endpoint"): pop del
+/// último comando aplicado, `apply(inverse)` UNA sola vez (nunca replay del
+/// historial), recompilar y escribir el plan restaurado en el `SceneRuntime`
+/// vía `replace_active_plan`. Historial vacío → 409 (spec "Undo with empty
+/// history"). El inverse ya fue capturado en el apply (PR4) — este endpoint
+/// lo consume sin re-derivarlo.
+pub async fn undo_command(State(state): State<Arc<AppState>>) -> ApiResult<UndoResponse> {
+    let snapshot = state.services.scene.snapshot().await?;
+
+    // 1. Plan activo — la fuente del programa semántico (I1/I2).
+    let active_plan = snapshot
+        .active_plan
+        .as_ref()
+        .ok_or_else(|| ApiError::InvalidState {
+            message: "No active plan to undo".to_string(),
+            code: "no_active_plan".to_string(),
+        })?;
+
+    let program = {
+        let segments = active_plan.segments.as_deref().ok_or_else(|| {
+            ApiError::InvalidState {
+                message: "Active plan carries no program segments".to_string(),
+                code: "no_program_segments".to_string(),
+            }
+        })?;
+        if segments.is_empty() {
+            return Err(ApiError::InvalidState {
+                message: "Active plan has no program segments".to_string(),
+                code: "no_program_segments".to_string(),
+            });
+        }
+        PlanningProgram::new(segments.iter().map(|s| s.source.clone()).collect())
+    };
+
+    // 2. Peek del último comando aplicado (O(1)) — su inverse es el que
+    //    recompila el plan restaurado. Historial vacío → 409 ANTES de tocar
+    //    nada (spec "Undo with empty history").
+    let entry = state
+        .services
+        .scene
+        .last_applied()
+        .await
+        .ok_or_else(|| ApiError::Conflict {
+            message: "No applied command to undo".to_string(),
+            code: "empty_command_history".to_string(),
+        })?;
+
+    // 3. Aplicar el inverse ALMACENADO una sola vez (D6 — nunca replay).
+    let restored_program = entry
+        .undo_program(&program)
+        .map_err(|e| ApiError::Validation {
+            message: e.to_string(),
+            code: "inverse_apply_failed".to_string(),
+        })?;
+
+    // 4. Recompilar desde el mismo estado inicial que el plan activo (mismo
+    //    start que preview/apply — el programa restaurado es el previo al
+    //    comando deshecho).
+    let fk = ForwardKinematics::new(snapshot.chain.clone());
+    let solver =
+        DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
+    let start_joints = active_plan
+        .trajectory
+        .waypoints()
+        .first()
+        .map(|w| w.joints().to_vec())
+        .unwrap_or_else(|| snapshot.joints.clone());
+    let current_state = RobotState::new(start_joints);
+    let ctx = SegmentPlanningContext {
+        robot: &snapshot.chain,
+        current_state: &current_state,
+        ik_solver: &solver,
+        tcp: snapshot.active_tcp.as_ref(),
+    };
+    let compiled = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()))
+        .compile(&restored_program, &ctx)
+        .map_err(|e| ApiError::Validation {
+            message: e.to_string(),
+            code: "recompile_failed".to_string(),
+        })?;
+
+    // 5. WRITE-BACK atómico (D4/D5): pop (O(1)) + replace_active_plan — el
+    //    entry devuelto es el REALMENTE deshecho (métricas del response).
+    let (popped, restored_snapshot) = state.services.scene.undo_compiled_plan(compiled).await?;
+
+    // 6. Salud restaurada desde las métricas almacenadas (O(1) — sin re-análisis).
+    let health_before = popped.metrics.health_after;
+    let health_after = popped.metrics.health_before;
+
+    Ok(Json(UndoResponse {
+        plan_id: restored_snapshot
             .active_plan
             .as_ref()
             .map(|p| p.plan_id.clone())

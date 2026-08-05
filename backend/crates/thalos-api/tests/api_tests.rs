@@ -1954,6 +1954,139 @@ async fn apply_command_unavailable_recommendation_returns_409_without_mutation()
 }
 
 // =========================================================================
+// Plan command undo (PR5 — O(1) via stored inverse, design D6)
+// =========================================================================
+
+/// Trajectory signature of the active plan from a GET /scene response: the
+/// waypoint COUNT plus the FIRST and LAST joints. Proves an undo restored the
+/// previous plan without coupling to float-exact intermediate waypoints.
+fn active_trajectory_signature(scene: &serde_json::Value) -> (usize, Vec<Vec<f64>>) {
+    let wps = scene["active_plan"]["visualization"]["waypoints"]
+        .as_array()
+        .expect("active plan must carry trajectory visualization waypoints");
+    let joints: Vec<Vec<f64>> = wps
+        .iter()
+        .map(|w| {
+            w["joints"]
+                .as_array()
+                .map(|j| j.iter().map(|v| v.as_f64().expect("joint value")).collect())
+                .expect("waypoint must carry joints")
+        })
+        .collect();
+    assert!(!joints.is_empty(), "trajectory must not be empty");
+    (
+        joints.len(),
+        vec![joints.first().unwrap().clone(), joints.last().unwrap().clone()],
+    )
+}
+
+#[tokio::test]
+async fn undo_command_restores_previous_plan_via_inverse() {
+    // Spec command-endpoints "Undo restores previous plan": after an apply,
+    // undo pops the stored inverse, recompiles and writes the PREVIOUS plan
+    // back to SceneRuntime — the original trajectory comes back.
+    let app = writeback_app().await;
+    preview_setup(&app).await;
+
+    // Trajectory BEFORE the apply (the state the undo must restore).
+    let (_, before_scene) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before_scene = before_scene.expect("scene response must be valid JSON");
+    let original = active_trajectory_signature(&before_scene);
+
+    // Apply recommendation 3 (available in this scenario) → plan changes.
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/apply",
+        Some(json!({"recommendation_id": 3})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "apply must succeed");
+    let body = body.expect("apply response must be valid JSON");
+    assert_eq!(body["history_length"], 1, "apply stores the inverse");
+    let applied_plan_id = body["plan_id"].as_str().expect("plan id").to_string();
+
+    let (_, applied_scene) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let applied_scene = applied_scene.expect("scene response must be valid JSON");
+    let applied = active_trajectory_signature(&applied_scene);
+
+    // Undo — POST with NO body: the endpoint pops the last applied command.
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/undo",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "undo must succeed after an apply");
+    let body = body.expect("undo response must be valid JSON");
+    assert_eq!(
+        body["history_length"], 0,
+        "undo pops the entry — the history is empty again"
+    );
+    assert!(
+        body["plan_id"].is_string(),
+        "undo response must carry the restored plan id"
+    );
+    assert_ne!(
+        body["plan_id"].as_str().unwrap(),
+        applied_plan_id,
+        "undo must write a NEW restored plan back to the runtime"
+    );
+    assert!(
+        body["health_before"].as_f64().is_some() && body["health_after"].as_f64().is_some(),
+        "undo response must report the restored health from the stored metrics"
+    );
+
+    // The scene now carries the PREVIOUS trajectory (shape equality with the
+    // pre-apply plan), not the applied one.
+    let (_, after_scene) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after_scene = after_scene.expect("scene response must be valid JSON");
+    let restored = active_trajectory_signature(&after_scene);
+    assert_eq!(
+        restored, original,
+        "undo must restore the previous plan trajectory"
+    );
+    assert_ne!(restored, applied, "the applied trajectory must be gone");
+}
+
+#[tokio::test]
+async fn undo_command_empty_history_returns_409_without_mutation() {
+    // Spec command-endpoints "Undo with empty history": no applied commands →
+    // 409 Conflict; the runtime is untouched.
+    let app = writeback_app().await;
+    preview_setup(&app).await;
+
+    let (_, before) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before = before.expect("scene response must be valid JSON");
+
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/undo",
+        None,
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "undo with empty history must fail with Conflict (409)"
+    );
+    let body = body.expect("error response must be valid JSON");
+    assert_eq!(
+        body["code"], "empty_command_history",
+        "empty-history undo must carry the empty_command_history code"
+    );
+
+    let (_, after) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after = after.expect("scene response must be valid JSON");
+    assert_eq!(
+        after["active_plan"], before["active_plan"],
+        "empty-history undo must NOT mutate the active plan"
+    );
+}
+
+// =========================================================================
 // Semantic compile endpoint
 // =========================================================================
 
