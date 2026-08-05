@@ -261,6 +261,14 @@ impl SceneRuntime {
         self.command_history.last()
     }
 
+    /// Peek the last applied command together with the history version — the
+    /// atomic `(entry, version)` pair the undo flow reads under a SINGLE lock
+    /// before recompiling (PR2 TOCTOU). The version is re-validated at commit
+    /// time by [`SceneRuntime::undo_plan`].
+    pub fn last_applied_with_version(&self) -> (Option<&AppliedCommand>, u64) {
+        self.command_history.last_with_version()
+    }
+
     /// Pop the last applied command (O(1)) — commit step of the PR5 undo.
     pub fn pop_applied_command(&mut self) -> Option<AppliedCommand> {
         self.command_history.pop()
@@ -284,16 +292,31 @@ impl SceneRuntime {
     /// 3. Write-back — feature-flagged (D5) with snapshot + atomic restore
     ///    (D4); a failure here leaves both the plan AND the history intact.
     /// 4. Commit — only now drop the entry (O(1) pop).
+    ///
+    /// PR2 versioned undo (spec command-endpoints "Undo version mismatch"):
+    /// `expected_version` is the history version read atomically with the last
+    /// entry (`last_applied_with_version`). It is re-validated under the write
+    /// lock BEFORE the stale guard and the commit — a concurrent apply/undo
+    /// that mutated the history between the peek and the commit is rejected
+    /// with `UndoVersionMismatch` and NOTHING is mutated or popped.
     pub fn undo_plan(
         &mut self,
         current: &PlanningProgram,
         compiled: CompiledPlan,
+        expected_version: u64,
     ) -> Result<AppliedCommand, RuntimeError> {
         let entry = self
             .command_history
             .last()
             .cloned()
             .ok_or(RuntimeError::EmptyCommandHistory)?;
+        // Version gate FIRST — closes the peek→recompile→commit TOCTOU window.
+        if self.command_history.version() != expected_version {
+            return Err(RuntimeError::UndoVersionMismatch {
+                expected: expected_version,
+                actual: self.command_history.version(),
+            });
+        }
         if !entry.matches_applied_program(current) {
             return Err(RuntimeError::StaleUndo);
         }
@@ -587,7 +610,7 @@ mod tests {
         // by the API layer — here represented by compiled_plan(1.0)).
         let current = PlanningProgram::new(Vec::new());
         let popped = runtime
-            .undo_plan(&current, compiled_plan(1.0))
+            .undo_plan(&current, compiled_plan(1.0), runtime.command_history.version())
             .expect("non-empty history → undo succeeds");
         assert_eq!(
             popped.metrics,
@@ -624,7 +647,11 @@ mod tests {
         let before_scheduled = runtime.scheduled_plan.clone();
 
         let err = runtime
-            .undo_plan(&PlanningProgram::new(Vec::new()), compiled_plan(2.0))
+            .undo_plan(
+                &PlanningProgram::new(Vec::new()),
+                compiled_plan(2.0),
+                runtime.command_history.version(),
+            )
             .expect_err("empty history → undo must error");
         assert!(
             matches!(err, RuntimeError::EmptyCommandHistory),
@@ -653,7 +680,11 @@ mod tests {
         runtime.record_applied_command(cmd, inverse, CommandMetrics::new(0.4, 0.6), Vec::new());
 
         let err = runtime
-            .undo_plan(&PlanningProgram::new(Vec::new()), compiled_plan(2.0))
+            .undo_plan(
+                &PlanningProgram::new(Vec::new()),
+                compiled_plan(2.0),
+                runtime.command_history.version(),
+            )
             .expect_err("flag off → undo must error");
         assert!(
             matches!(err, RuntimeError::FeatureDisabled { .. }),
@@ -703,7 +734,7 @@ mod tests {
         let current = PlanningProgram::new(Vec::new());
 
         let err = runtime
-            .undo_plan(&current, compiled_plan(1.0))
+            .undo_plan(&current, compiled_plan(1.0), runtime.command_history.version())
             .expect_err("stale inverse must be rejected");
         assert!(
             matches!(err, RuntimeError::StaleUndo),
@@ -719,5 +750,80 @@ mod tests {
             rescheduled.as_ref().unwrap().plan_id,
             "stale undo must NOT mutate the re-scheduled plan"
         );
+    }
+
+    // ── PR2 — versioned undo (spec command-endpoints "Undo version mismatch") ──
+
+    #[test]
+    fn undo_with_stale_expected_version_errors_without_mutation_or_pop() {
+        // PR2: the undo flow reads (last entry, version) atomically, recompiles,
+        // then commits with the expected version. A concurrent apply/undo that
+        // bumped the version in between MUST be rejected — no pop, no plan
+        // mutation (the entry and the plan stay exactly as they were).
+        let mut runtime = test_runtime();
+        runtime.set_scene_writeback(true);
+        runtime.schedule_plan(compiled_plan(1.0));
+        let (cmd, inverse) = recorded_edit();
+        runtime.record_applied_command(cmd, inverse, CommandMetrics::new(0.4, 0.6), Vec::new());
+
+        // The history holds one entry (version 1) — commit with a STALE
+        // expected version, as if the history moved on between peek and commit.
+        let err = runtime
+            .undo_plan(&PlanningProgram::new(Vec::new()), compiled_plan(2.0), 999)
+            .expect_err("stale expected version → undo must error");
+        assert!(
+            matches!(
+                err,
+                RuntimeError::UndoVersionMismatch {
+                    expected: 999,
+                    actual: 1
+                }
+            ),
+            "stale version must produce UndoVersionMismatch, got {err:?}"
+        );
+        assert_eq!(
+            runtime.history_len(),
+            1,
+            "version-mismatch undo must NOT pop the entry"
+        );
+        assert_eq!(
+            runtime
+                .active_plan
+                .as_ref()
+                .unwrap()
+                .trajectory
+                .waypoints()
+                .last()
+                .unwrap()
+                .joints(),
+            &[1.0, 1.0],
+            "version-mismatch undo must NOT mutate the active plan"
+        );
+    }
+
+    #[test]
+    fn undo_with_current_expected_version_commits_and_pops() {
+        // Triangulation of the version gate: the version read ATOMICALLY with
+        // the last entry (last_applied_with_version) must commit normally —
+        // the gate only rejects when the history actually moved on.
+        let mut runtime = test_runtime();
+        runtime.set_scene_writeback(true);
+        runtime.schedule_plan(compiled_plan(1.0));
+        let (cmd, inverse) = recorded_edit();
+        runtime.record_applied_command(cmd, inverse, CommandMetrics::new(0.4, 0.6), Vec::new());
+
+        let (last, version) = runtime.last_applied_with_version();
+        assert!(last.is_some(), "one recorded command → last entry present");
+        assert_eq!(version, 1, "one push → version 1");
+
+        let popped = runtime
+            .undo_plan(&PlanningProgram::new(Vec::new()), compiled_plan(1.0), version)
+            .expect("current expected version → undo commits");
+        assert_eq!(
+            popped.metrics,
+            CommandMetrics::new(0.4, 0.6),
+            "the popped entry carries the stored metrics"
+        );
+        assert_eq!(runtime.history_len(), 0, "commit pops the entry");
     }
 }

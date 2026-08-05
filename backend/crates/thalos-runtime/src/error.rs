@@ -97,6 +97,13 @@ pub enum RuntimeError {
     /// corrupt the plan, so the runtime refuses without mutation.
     #[error("stale undo: the active plan was replaced by a path that is not the command's pre-state")]
     StaleUndo,
+
+    /// Undo was requested with a STALE expected version (PR2 → 409): the
+    /// history mutated between the atomic peek (`last_with_version`) and the
+    /// commit — a concurrent apply/undo slipped into the TOCTOU window. The
+    /// runtime refuses without mutation; the caller must re-read the pair.
+    #[error("undo version mismatch: expected {expected}, got {actual}")]
+    UndoVersionMismatch { expected: u64, actual: u64 },
 }
 
 impl RuntimeError {
@@ -139,6 +146,7 @@ impl RuntimeError {
             RuntimeError::InvalidCompiledPlan { .. } => "invalid_compiled_plan",
             RuntimeError::EmptyCommandHistory => "empty_command_history",
             RuntimeError::StaleUndo => "stale_undo",
+            RuntimeError::UndoVersionMismatch { .. } => "undo_version_mismatch",
         }
     }
 }
