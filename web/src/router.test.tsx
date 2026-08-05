@@ -240,12 +240,15 @@ describe('analysis content lives inside planning (slice 6 — absorbed section)'
     expect(main.queryByRole('button', { name: 'Analyze trajectory' })).not.toBeInTheDocument()
   })
 
-  it('renders the analysis section as a third section under Trajectory Color', () => {
+  it('renders the analysis content under the Analysis tab (PR2 tabs layout)', () => {
     seedPrerequisites()
     renderRouter(['/planning'])
     const main = within(screen.getByRole('main'))
+    // Motion Program tab is the default — its panel shows both sections.
     expect(main.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
     expect(main.getByRole('heading', { name: 'Trajectory Color' })).toBeInTheDocument()
+    // The analysis content moved into the Analysis tab (workspace-analysis spec).
+    fireEvent.click(main.getByRole('tab', { name: 'Analysis' }))
     expect(main.getByRole('heading', { name: 'Analysis' })).toBeInTheDocument()
   })
 
@@ -253,6 +256,7 @@ describe('analysis content lives inside planning (slice 6 — absorbed section)'
     seedPrerequisites()
     renderRouter(['/planning'])
     const main = within(screen.getByRole('main'))
+    fireEvent.click(main.getByRole('tab', { name: 'Analysis' }))
     expect(main.getByText('Compile and preview a motion program to see analysis')).toBeInTheDocument()
     expect(main.queryByRole('button', { name: 'Planning' })).not.toBeInTheDocument()
   })
@@ -284,6 +288,7 @@ describe('analysis content lives inside planning (slice 6 — absorbed section)'
     })
     renderRouter(['/planning'])
     const main = within(screen.getByRole('main'))
+    fireEvent.click(main.getByRole('tab', { name: 'Analysis' }))
     expect(main.getByText('Good')).toBeInTheDocument() // StatusBanner state label
     expect(main.getByText('92 / 100')).toBeInTheDocument() // StatusBanner score
     expect(
@@ -319,6 +324,7 @@ describe('analysis content lives inside planning (slice 6 — absorbed section)'
     })
     const { router } = renderRouter(['/planning'])
     const main = within(screen.getByRole('main'))
+    fireEvent.click(main.getByRole('tab', { name: 'Analysis' }))
 
     // Drill down: click the region card → Region Details inspector opens.
     fireEvent.click(main.getByRole('button', { name: /Singularity near waypoint 10/i }))
