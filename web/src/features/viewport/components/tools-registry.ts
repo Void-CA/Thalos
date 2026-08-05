@@ -22,7 +22,7 @@ export const TOOLS_BY_PERSPECTIVE: Record<string, ToolDef[]> = {
     { id: 'fk', label: 'Forward Kinematics', component: FkPanel, defaultOpen: true },
     { id: 'ik', label: 'Inverse Kinematics', component: IkPanel, defaultOpen: true },
     { id: 'workspace', label: 'Workspace Analysis', component: WorkspacePanel, defaultOpen: false },
-    { id: 'tcp', label: 'Active TCP', component: TcpPanel, defaultOpen: false },
+    { id: 'tcp', label: 'Active TCP', component: TcpPanel, defaultOpen: true },
   ],
   sessions: [],
   planning: [],
