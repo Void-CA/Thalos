@@ -28,8 +28,17 @@ export const WORKSPACE_REGISTRY: Area[] = [
   { path: '/', workspace: 'robot', label: 'Robot', requires: [], produces: 'robotLoaded', capability: null, hidden: false, consumes: 'URDF', producesArtifact: 'RobotModel', stage: 1, stepperIndex: 1 },
   { path: '/scene', workspace: 'scene', label: 'Escena', requires: ['robotLoaded'], produces: 'sceneValid', capability: null, hidden: false, consumes: 'RobotModel', producesArtifact: 'Scene', stage: 2, stepperIndex: 2 },
   { path: '/task', workspace: 'task', label: 'Programación', requires: ['sceneValid'], produces: 'compiled', capability: 'compile', hidden: false, consumes: 'Scene', producesArtifact: 'SemanticProgram', stage: 3, stepperIndex: 3 },
-  { path: '/planning', workspace: 'planning', label: 'Planificación', requires: ['compiled'], produces: 'analyzed', capability: 'optimize', hidden: false, consumes: 'SemanticProgram', producesArtifact: 'MotionPlan', stage: 4, stepperIndex: 4 },
-  { path: '/execution', workspace: 'execution', label: 'Ejecución', requires: ['executable'], produces: 'completed', capability: 'execute', hidden: false, consumes: 'MotionPlan', producesArtifact: 'Runtime', stage: 5, stepperIndex: 5 },
+  // D2 (flow-reorganization): Planning builds its OWN Motion Program via
+  // /scene/preview — Task Program and Motion Program are ALTERNATE
+  // representations, so the gate is `sceneValid`, NOT `compiled`. The
+  // `consumes: 'SemanticProgram'` below is nominally stale (planning no longer
+  // consumes the Task-compiled plan); ArtifactKind re-model is a documented
+  // follow-up, out of scope for this block.
+  { path: '/planning', workspace: 'planning', label: 'Planificación', requires: ['sceneValid'], produces: 'analyzed', capability: 'optimize', hidden: false, consumes: 'SemanticProgram', producesArtifact: 'MotionPlan', stage: 4, stepperIndex: 4 },
+  // Execution KEEPS its compiled gate (executable = compiled && status): the
+  // explicit `compiled` prerequisite lets the guard redirect to /task (the
+  // producer of compiled) when no plan has been compiled, instead of the root.
+  { path: '/execution', workspace: 'execution', label: 'Ejecución', requires: ['compiled', 'executable'], produces: 'completed', capability: 'execute', hidden: false, consumes: 'MotionPlan', producesArtifact: 'Runtime', stage: 5, stepperIndex: 5 },
   // S5.1 AUDIT verdict (area-sessions spec): the `completed` requirement was
   // REMOVED from /sessions — the browser must show failed/running sessions
   // (status filters), so the guard no longer gates the area. `completed` stays
