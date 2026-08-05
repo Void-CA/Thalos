@@ -35,6 +35,8 @@ vi.mock('@/features/execution/execution-client', async (importOriginal) => {
 })
 
 const plan: ActivePlanInfo = { instructionCount: 4, durationSecs: 12.5, source: 'TaskDocument' }
+/** PR2: a plan mirrored from the Planning workspace preview (motion-program spec). */
+const motionProgramPlan: ActivePlanInfo = { instructionCount: 3, durationSecs: 8.0, source: 'Motion Program' }
 
 /** A terminal tick delta — lets the rAF loop run exactly once and stop. */
 const completedDelta = {
@@ -70,7 +72,7 @@ describe('Active Plan card (execution-workspace spec)', () => {
   it('shows a clear empty state until a plan is handed off', () => {
     setStatus('idle')
     renderWorkspace()
-    expect(screen.getByText('No plan loaded — compile and send from Task')).toBeInTheDocument()
+    expect(screen.getByText('No plan loaded — send from Task or preview a Motion Program')).toBeInTheDocument()
   })
 
   it('renders instruction count, estimated duration and the TaskDocument source after handoff', () => {
@@ -79,6 +81,14 @@ describe('Active Plan card (execution-workspace spec)', () => {
     expect(screen.getByText(/4 instructions/)).toBeInTheDocument()
     expect(screen.getByText(/Est\. 12\.5s/)).toBeInTheDocument()
     expect(screen.getByText(/Source: TaskDocument/)).toBeInTheDocument()
+  })
+
+  it('reflects the Motion Program source for a plan received from the planning preview', () => {
+    setStatus('ready', { activePlan: motionProgramPlan })
+    renderWorkspace()
+    expect(screen.getByText(/3 instructions/)).toBeInTheDocument()
+    expect(screen.getByText(/Est\. 8\.0s/)).toBeInTheDocument()
+    expect(screen.getByText(/Source: Motion Program/)).toBeInTheDocument()
   })
 })
 
