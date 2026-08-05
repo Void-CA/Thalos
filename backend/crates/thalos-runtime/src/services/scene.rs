@@ -255,6 +255,14 @@ impl SceneService {
         runtime.set_scene_writeback(enabled);
     }
 
+    /// Configure the command-history capacity (spec command-endpoints
+    /// "History Cap"). Honors the optional `THALOS_HISTORY_CAP` env var read
+    /// at the binary entry point; defaults to [`DEFAULT_HISTORY_CAP`].
+    pub async fn set_history_cap(&self, cap: usize) {
+        let mut runtime = self.runtime.write().await;
+        runtime.with_history_cap(cap);
+    }
+
     /// Apply a recompiled plan back to the runtime (design D4).
     ///
     /// Write-back path for `POST /plan/commands/apply`:
@@ -599,5 +607,70 @@ impl SceneService {
             plan_duration: 0.0,
             active_tcp: runtime.active_tcp.clone(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use thalos_planning::motion::program::CompiledPlan;
+
+    /// A VALID compiled plan: two waypoints, non-zero duration, target `[t, t]`.
+    fn compiled_plan(t: f64) -> CompiledPlan {
+        let points = vec![
+            thalos_core::trajectory::TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            thalos_core::trajectory::TrajectoryPoint::new(vec![t, t], 1.0),
+        ];
+        CompiledPlan::new(thalos_core::trajectory::Trajectory::new(points), vec![])
+    }
+
+    /// A MoveWaypoint edit — the shape the apply pipeline records.
+    fn recorded_edit() -> (ProgramEdit, ProgramEdit) {
+        let cmd = ProgramEdit::MoveWaypoint {
+            segment_index: 0,
+            new_target: vec![2.0, 2.0],
+            old_target: Some(vec![1.0, 1.0]),
+        };
+        (cmd.clone(), cmd.inverse())
+    }
+
+    #[tokio::test]
+    async fn reset_execution_preserves_command_history() {
+        // Spec command-endpoints "Reset execution preserves history": resetting
+        // execution must NOT clear the applied-command history — the program is
+        // intact, so undo from a reset state stays valid.
+        let manager = Arc::new(BackendManager::new());
+        let service = SceneService::with_session_manager(
+            Box::new(crate::backends::InternalBackend),
+            manager,
+            RobotModel::Planar2R,
+            Arc::new(SessionManager::new()),
+        );
+        service.set_scene_writeback(true).await;
+
+        // Seed the history with one applied command (feature-flagged apply).
+        let (cmd, inverse) = recorded_edit();
+        service
+            .apply_compiled_plan(
+                compiled_plan(1.0),
+                cmd,
+                inverse,
+                CommandMetrics::new(0.4, 0.6),
+                Vec::new(),
+            )
+            .await
+            .expect("apply must succeed with the write-back flag on");
+        assert_eq!(service.history_len().await, 1, "setup: one applied command");
+
+        service
+            .reset_execution()
+            .await
+            .expect("reset_execution must succeed");
+
+        assert_eq!(
+            service.history_len().await,
+            1,
+            "reset_execution must NOT clear command history (undo stays valid)"
+        );
     }
 }
