@@ -138,7 +138,10 @@ impl SceneService {
         rt.set_joints_from_state(&state.joints.positions);
 
         let fk_result = Self::compute_fk(&rt.active_robot.chain, &rt.active_robot.joints);
-        let execution = session_from_state(&state);
+        // R4-001: the derived session carries the ACTIVE controller's source so
+        // the badge reports Hardware/Esp32 when the ESP32 backend is connected.
+        let source = ctrl.execution_source();
+        let execution = session_from_state(&state).map(|exe| exe.with_source(source));
 
         // Sync the active_plan state with the execution
         if let Some(ref mut plan) = rt.active_plan {
@@ -374,7 +377,10 @@ impl SceneService {
                 let runtime = self.runtime.read().await;
                 runtime.robot_name.clone()
             };
-            let source = ExecutionSource::Simulation;
+            // R4-001: the source reflects the ACTIVE controller (Simulation vs
+            // Hardware/Esp32), not a hardcoded value — the badge must be able to
+            // say Hardware when the ESP32 backend is connected.
+            let source = self.manager.active_source().await;
             let wps_for_recorder = waypoints.clone();
             let joint_count = wps_for_recorder.first().map(|w| w.len()).unwrap_or(0);
             let robot_name_for_session = robot_name.clone();
@@ -587,13 +593,20 @@ impl SceneService {
             let fk_result =
                 Self::compute_fk(&runtime.active_robot.chain, &runtime.active_robot.joints);
 
-            return Ok(TickDelta::from_robot_state(
+            let mut delta = TickDelta::from_robot_state(
                 &state,
                 runtime.active_robot.chain.clone(),
                 fk_result,
                 plan_duration,
                 runtime.active_tcp.clone(),
-            ));
+            );
+            // R4-001: tick deltas carry the ACTIVE controller's source so the
+            // running badge keeps reflecting the real backend (Hardware/Esp32).
+            let active_source = self.manager.active_source().await;
+            if let Some(ref exe) = delta.execution {
+                delta.execution = Some(exe.clone().with_source(active_source));
+            }
+            return Ok(delta);
         }
 
         // Fallback: no controller — read-only snapshot

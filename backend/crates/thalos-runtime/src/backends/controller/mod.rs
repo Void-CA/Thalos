@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use thalos_core::execution::runtime::RuntimeProgram;
 
 use crate::error::ControllerError;
+use crate::session::execution_source::ExecutionSource;
 use crate::state::robot_state::RobotState;
 
 /// Descriptor of a backend's capabilities — consumed by the UI to
@@ -133,6 +134,14 @@ pub trait RobotController: Send + Sync {
     /// Static capabilities descriptor.
     fn capabilities(&self) -> BackendCapabilities;
 
+    /// Execution origin this controller represents (R4-001). Defaults to
+    /// Simulation; hardware controllers (Esp32) report Hardware so the
+    /// execution badge reflects the ACTIVE backend instead of always
+    /// "Simulation". Informational only — never gates the execution flow.
+    fn execution_source(&self) -> ExecutionSource {
+        ExecutionSource::Simulation
+    }
+
     // ── Device I/O — defaults return UnsupportedCapability ──
 
     /// Set a digital output port.
@@ -173,6 +182,9 @@ pub mod tests {
         pub executed: AtomicBool,
         pub paused: AtomicBool,
         pub capabilities: BackendCapabilities,
+        /// Reported `ExecutionSource` (R4-001) — lets tests simulate a
+        /// hardware controller without a real transport.
+        pub source: ExecutionSource,
     }
 
     impl MockController {
@@ -184,6 +196,7 @@ pub mod tests {
                 executed: AtomicBool::new(false),
                 paused: AtomicBool::new(false),
                 capabilities: BackendCapabilities::full(),
+                source: ExecutionSource::Simulation,
             }
         }
     }
@@ -252,6 +265,10 @@ pub mod tests {
 
         fn capabilities(&self) -> BackendCapabilities {
             self.capabilities.clone()
+        }
+
+        fn execution_source(&self) -> ExecutionSource {
+            self.source.clone()
         }
     }
 

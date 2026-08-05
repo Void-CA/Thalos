@@ -114,6 +114,17 @@ impl ExecutionSession {
     /// Used by RuntimeSnapshot/TickDelta to represent controller state
     /// in the legacy execution session format.
     pub fn derived(status: SessionStatus, progress: f64) -> Self {
+        Self::derived_with_source(status, progress, ExecutionSource::Simulation)
+    }
+
+    /// `derived` with an explicit origin (R4-001). Snapshot builders pass the
+    /// ACTIVE controller's source so the badge reports Hardware/Esp32 instead
+    /// of always Simulation. Informational only — execution flow is unchanged.
+    pub fn derived_with_source(
+        status: SessionStatus,
+        progress: f64,
+        source: ExecutionSource,
+    ) -> Self {
         let current_time = if progress >= 1.0 && status.is_terminal() {
             1.0
         } else {
@@ -130,7 +141,15 @@ impl ExecutionSession {
             } else {
                 None
             },
-            source: ExecutionSource::Simulation,
+            source,
         }
+    }
+
+    /// Override the informational source (R4-001). Consumed by snapshot
+    /// builders that know the active controller but build the session from
+    /// robot state. Never changes execution behavior.
+    pub fn with_source(mut self, source: ExecutionSource) -> Self {
+        self.source = source;
+        self
     }
 }
