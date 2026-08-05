@@ -6,6 +6,7 @@ import '@testing-library/jest-dom/vitest'
 import { ExecutionWorkspace } from './execution-workspace'
 import { useExecutionStore } from './execution-store'
 import type { ActivePlanInfo, ExecutionStatus } from './execution-store'
+import { useSceneStore } from '@/features/viewport/store'
 
 /**
  * Behavior tests for the execution-workspace spec (slice 4, task 4.2):
@@ -64,6 +65,9 @@ beforeEach(() => {
     progress: 0,
     elapsedSecs: 0,
     error: null,
+  })
+  act(() => {
+    useSceneStore.setState({ execution: null } as never)
   })
 })
 afterEach(() => cleanup())
@@ -192,9 +196,49 @@ describe('Progress and status display (execution-workspace spec)', () => {
     expect(screen.getByText('Paused')).toBeInTheDocument()
   })
 
-  it('surfaces execution errors in the status panel', () => {
-    setStatus('failed', { error: 'Tick failed: IK diverged' })
+  it('renders the code→CTA from describeError instead of the raw error message', () => {
+    setStatus('failed', {
+      error: { message: 'No plan', code: 'no_active_plan' },
+    } as never)
     renderWorkspace()
-    expect(screen.getByText(/Tick failed: IK diverged/)).toBeInTheDocument()
+    // error-ux spec: display the CTA from describeError, not the raw message
+    expect(
+      screen.getByText(/Preview a motion program in Planificación first/),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/^No plan$/)).not.toBeInTheDocument()
+  })
+})
+
+describe('Backend source badge (execution-workspace spec, ADDED)', () => {
+  function setRuntimeExecutionSource(source: string) {
+    act(() => {
+      useSceneStore.setState({
+        execution: {
+          status: 'running',
+          progress: 0.5,
+          elapsedSecs: 6.25,
+          source,
+        },
+      } as never)
+    })
+  }
+
+  it('shows a Simulation badge when the runtime reports execution.source = Simulation', () => {
+    setRuntimeExecutionSource('Simulation')
+    renderWorkspace()
+    expect(screen.getByText('Simulation')).toBeInTheDocument()
+  })
+
+  it('shows a Hardware badge when the runtime reports execution.source = Hardware', () => {
+    setRuntimeExecutionSource('Hardware')
+    renderWorkspace()
+    expect(screen.getByText('Hardware')).toBeInTheDocument()
+  })
+
+  it('shows no source badge when execution has no source', () => {
+    setStatus('idle')
+    renderWorkspace()
+    expect(screen.queryByText('Simulation')).not.toBeInTheDocument()
+    expect(screen.queryByText('Hardware')).not.toBeInTheDocument()
   })
 })
