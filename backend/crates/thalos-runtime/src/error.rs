@@ -90,6 +90,13 @@ pub enum RuntimeError {
     /// "Undo with empty history" → 409). No applied command carries an inverse.
     #[error("no applied command to undo")]
     EmptyCommandHistory,
+
+    /// Undo was requested for a STALE inverse (R4-001 → 409): the active plan
+    /// no longer matches the program the command produced (a non-commanded
+    /// path — e.g. a re-schedule — replaced it). Applying the inverse would
+    /// corrupt the plan, so the runtime refuses without mutation.
+    #[error("stale undo: the active plan was replaced by a path that is not the command's pre-state")]
+    StaleUndo,
 }
 
 impl RuntimeError {
@@ -131,6 +138,7 @@ impl RuntimeError {
             RuntimeError::FeatureDisabled { .. } => "feature_disabled",
             RuntimeError::InvalidCompiledPlan { .. } => "invalid_compiled_plan",
             RuntimeError::EmptyCommandHistory => "empty_command_history",
+            RuntimeError::StaleUndo => "stale_undo",
         }
     }
 }

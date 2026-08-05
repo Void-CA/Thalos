@@ -49,6 +49,13 @@ impl From<RuntimeError> for ApiError {
                 message: "no applied command to undo".to_string(),
                 code: code.into(),
             },
+            // R4-001: the active plan no longer matches the command's
+            // pre-state (re-scheduled by a non-commanded path) — applying the
+            // stale inverse would corrupt the plan. State conflict, 409.
+            RuntimeError::StaleUndo => ApiError::Conflict {
+                message: "stale undo: the active plan was replaced by a path that is not the command's pre-state".to_string(),
+                code: code.into(),
+            },
         }
     }
 }

@@ -12,7 +12,7 @@ use thalos_core::{
     robot::serial_chain::SerialChain,
     spatial::frame::FrameId,
 };
-use thalos_planning::motion::program::CompiledPlan;
+use thalos_planning::motion::program::{CompiledPlan, PlanningProgram};
 use thalos_planning::program_edit::ProgramEdit;
 
 use crate::backends::RobotBackend;
@@ -263,6 +263,8 @@ impl SceneService {
     /// 2. On success, the applied command, its pre-computed inverse and the
     ///    plan metrics are recorded (D6) so PR5's `undo` can pop it in O(1)
     ///    and report the restored health without re-analysis.
+    /// 3. `applied_program` links the entry to the program the apply wrote
+    ///    back (R4-001) — undo refuses a stale inverse.
     ///
     /// `trajectory_to_waypoints` reads `scheduled_plan` first, so the new
     /// plan propagates to execution automatically.
@@ -272,10 +274,11 @@ impl SceneService {
         command: ProgramEdit,
         inverse: ProgramEdit,
         metrics: CommandMetrics,
+        applied_program: Vec<thalos_core::motion::segment::MotionSegment>,
     ) -> Result<RuntimeSnapshot, RuntimeError> {
         let mut runtime = self.runtime.write().await;
         runtime.replace_active_plan(compiled)?;
-        runtime.record_applied_command(command, inverse, metrics);
+        runtime.record_applied_command(command, inverse, metrics, applied_program);
         Ok(Self::build_snapshot(&runtime, None))
     }
 
@@ -296,14 +299,18 @@ impl SceneService {
     /// recompiled inverse-applied plan WITHOUT recording a new entry.
     ///
     /// Atomic and feature-flagged via `SceneRuntime::undo_plan` (D4/D5). The
-    /// popped entry is returned so the API can report the restored metrics;
-    /// the snapshot carries the restored active plan.
+    /// R4-001 stale guard lives in the runtime: `current_program` is the
+    /// program reconstructed from the active plan and must match the entry's
+    /// `applied_program`, else `StaleUndo` — no mutation, history intact.
+    /// The popped entry is returned so the API can report the restored
+    /// metrics; the snapshot carries the restored active plan.
     pub async fn undo_compiled_plan(
         &self,
+        current_program: &PlanningProgram,
         compiled: CompiledPlan,
     ) -> Result<(AppliedCommand, RuntimeSnapshot), RuntimeError> {
         let mut runtime = self.runtime.write().await;
-        let popped = runtime.undo_plan(compiled)?;
+        let popped = runtime.undo_plan(current_program, compiled)?;
         Ok((popped, Self::build_snapshot(&runtime, None)))
     }
 

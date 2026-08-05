@@ -8,7 +8,7 @@ use thalos_core::{
     prelude::Trajectory,
 };
 use thalos_models::Robot;
-use thalos_planning::motion::program::CompiledPlan;
+use thalos_planning::motion::program::{CompiledPlan, PlanningProgram};
 use thalos_planning::program_edit::ProgramEdit;
 
 use crate::error::RuntimeError;
@@ -232,15 +232,22 @@ impl SceneRuntime {
     ///
     /// PR5's `undo` pops the last entry in O(1) and applies `inverse`; the
     /// metrics let the undo response report the restored health without
-    /// re-running the analysis pipeline.
+    /// re-running the analysis pipeline. `applied_program` links the entry to
+    /// the program the apply produced (R4-001) — undo refuses when the active
+    /// plan no longer matches it.
     pub fn record_applied_command(
         &mut self,
         command: ProgramEdit,
         inverse: ProgramEdit,
         metrics: CommandMetrics,
+        applied_program: Vec<thalos_core::motion::segment::MotionSegment>,
     ) {
-        self.command_history
-            .push(AppliedCommand { command, inverse, metrics });
+        self.command_history.push(AppliedCommand {
+            command,
+            inverse,
+            metrics,
+            applied_program,
+        });
     }
 
     /// Number of applied commands with stored inverses (undo history size).
@@ -263,18 +270,33 @@ impl SceneRuntime {
     /// inverse-applied plan. Atomic: on ANY failure the history entry is
     /// preserved and the runtime is restored to its previous state.
     ///
+    /// R4-001 stale guard: the stored inverse is ONLY applied to the exact
+    /// program the command produced. `current` is the program reconstructed
+    /// from the active plan — if it no longer matches the entry's
+    /// `applied_program`, undo returns `StaleUndo` WITHOUT mutation (a
+    /// non-commanded path — e.g. a re-schedule — replaced the active plan).
+    ///
     /// Order matters:
     /// 1. O(1) peek — an empty history errors BEFORE any mutation (spec
     ///    command-endpoints "Undo with empty history" → 409).
-    /// 2. Write-back — feature-flagged (D5) with snapshot + atomic restore
+    /// 2. Stale guard — the current program must match the command's
+    ///    pre-state; a mismatch errors BEFORE any mutation (R4-001 → 409).
+    /// 3. Write-back — feature-flagged (D5) with snapshot + atomic restore
     ///    (D4); a failure here leaves both the plan AND the history intact.
-    /// 3. Commit — only now drop the entry (O(1) pop).
-    pub fn undo_plan(&mut self, compiled: CompiledPlan) -> Result<AppliedCommand, RuntimeError> {
+    /// 4. Commit — only now drop the entry (O(1) pop).
+    pub fn undo_plan(
+        &mut self,
+        current: &PlanningProgram,
+        compiled: CompiledPlan,
+    ) -> Result<AppliedCommand, RuntimeError> {
         let entry = self
             .command_history
             .last()
             .cloned()
             .ok_or(RuntimeError::EmptyCommandHistory)?;
+        if !entry.matches_applied_program(current) {
+            return Err(RuntimeError::StaleUndo);
+        }
         self.replace_active_plan(compiled)?;
         self.command_history.pop();
         Ok(entry)
@@ -320,6 +342,7 @@ impl SceneRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use thalos_core::ids::OperationId;
     use thalos_core::models::{RobotModel, RobotRegistry};
     use thalos_core::trajectory::TrajectoryPoint;
 
@@ -537,7 +560,14 @@ mod tests {
         runtime.set_scene_writeback(true);
         runtime.schedule_plan(compiled_plan(1.0)); // the "previous" plan
         let (cmd, inverse) = recorded_edit();
-        runtime.record_applied_command(cmd, inverse, CommandMetrics::new(0.4, 0.6));
+        runtime.record_applied_command(
+            cmd,
+            inverse,
+            CommandMetrics::new(0.4, 0.6),
+            // The apply wrote a plan WITHOUT program segments (legacy compiled
+            // plan) — the guard compares the reconstructed program (also empty).
+            Vec::new(),
+        );
         runtime.replace_active_plan(compiled_plan(2.0)).unwrap(); // the "applied" plan
         let applied_trajectory = runtime.active_plan.clone();
         assert_eq!(
@@ -555,8 +585,9 @@ mod tests {
 
         // undo: pop (O(1)) + write-back of the inverse-applied plan (recompiled
         // by the API layer — here represented by compiled_plan(1.0)).
+        let current = PlanningProgram::new(Vec::new());
         let popped = runtime
-            .undo_plan(compiled_plan(1.0))
+            .undo_plan(&current, compiled_plan(1.0))
             .expect("non-empty history → undo succeeds");
         assert_eq!(
             popped.metrics,
@@ -593,7 +624,7 @@ mod tests {
         let before_scheduled = runtime.scheduled_plan.clone();
 
         let err = runtime
-            .undo_plan(compiled_plan(2.0))
+            .undo_plan(&PlanningProgram::new(Vec::new()), compiled_plan(2.0))
             .expect_err("empty history → undo must error");
         assert!(
             matches!(err, RuntimeError::EmptyCommandHistory),
@@ -619,10 +650,10 @@ mod tests {
         let mut runtime = test_runtime(); // flag OFF by default
         runtime.schedule_plan(compiled_plan(1.0));
         let (cmd, inverse) = recorded_edit();
-        runtime.record_applied_command(cmd, inverse, CommandMetrics::new(0.4, 0.6));
+        runtime.record_applied_command(cmd, inverse, CommandMetrics::new(0.4, 0.6), Vec::new());
 
         let err = runtime
-            .undo_plan(compiled_plan(2.0))
+            .undo_plan(&PlanningProgram::new(Vec::new()), compiled_plan(2.0))
             .expect_err("flag off → undo must error");
         assert!(
             matches!(err, RuntimeError::FeatureDisabled { .. }),
@@ -637,6 +668,56 @@ mod tests {
             runtime.active_plan.as_ref().unwrap().trajectory.waypoints().last().unwrap().joints(),
             &[1.0, 1.0],
             "flag-off undo must NOT mutate the active plan"
+        );
+    }
+
+    #[test]
+    fn undo_stale_inverse_errors_without_mutation_or_pop() {
+        // R4-001: after an apply, replacing the active plan by a NON-commanded
+        // path (e.g. schedule_plan) makes the stored inverse stale. undo_plan
+        // must reject with StaleUndo, mutating NOTHING and preserving the
+        // history entry.
+        let mut runtime = test_runtime();
+        runtime.set_scene_writeback(true);
+        runtime.schedule_plan(compiled_plan(1.0));
+        let (cmd, inverse) = recorded_edit();
+        // The apply wrote a program carrying one MoveJ segment.
+        let applied_program = vec![thalos_core::motion::segment::MotionSegment::MoveJ {
+            origin: OperationId("op-0".to_string()),
+            target: vec![0.0, 0.0],
+            max_velocity: Some(500.0),
+            max_acceleration: Some(1000.0),
+        }];
+        runtime.record_applied_command(
+            cmd,
+            inverse,
+            CommandMetrics::new(0.4, 0.6),
+            applied_program,
+        );
+        runtime.replace_active_plan(compiled_plan(2.0)).unwrap(); // the "applied" plan
+
+        // A DIFFERENT (re-scheduled) plan is now active — its program (empty)
+        // no longer matches the recorded applied program.
+        runtime.schedule_plan(compiled_plan(3.0));
+        let rescheduled = runtime.active_plan.clone();
+        let current = PlanningProgram::new(Vec::new());
+
+        let err = runtime
+            .undo_plan(&current, compiled_plan(1.0))
+            .expect_err("stale inverse must be rejected");
+        assert!(
+            matches!(err, RuntimeError::StaleUndo),
+            "stale undo must produce StaleUndo, got {err:?}"
+        );
+        assert_eq!(
+            runtime.history_len(),
+            1,
+            "stale undo must NOT pop the entry"
+        );
+        assert_eq!(
+            runtime.active_plan.as_ref().unwrap().plan_id,
+            rescheduled.as_ref().unwrap().plan_id,
+            "stale undo must NOT mutate the re-scheduled plan"
         );
     }
 }

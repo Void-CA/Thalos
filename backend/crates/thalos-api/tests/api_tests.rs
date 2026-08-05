@@ -2166,6 +2166,85 @@ async fn undo_command_one_to_many_insert_waypoint_restores_original() {
 }
 
 #[tokio::test]
+async fn undo_command_stale_inverse_rejected_after_reschedule() {
+    // R4-001: undo must NEVER apply an inverse to a plan that is not its
+    // pre-state. After an apply, re-scheduling the plan through a NON-commanded
+    // path (e.g. /scene/motion/plan) replaces active_plan WITHOUT touching the
+    // command history — a subsequent undo must be rejected (409 stale_undo),
+    // never write a mixed plan from the stale inverse.
+    let app = writeback_app().await;
+    preview_setup(&app).await;
+
+    // 1. Apply an available recommendation → history_length 1.
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/apply",
+        Some(json!({"recommendation_id": 3})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "apply must succeed");
+    let body = body.expect("apply response must be valid JSON");
+    assert_eq!(body["history_length"], 1, "apply stores the inverse");
+
+    // 2. Re-schedule the plan by a NON-commanded path (motion plan preview).
+    //    This replaces active_plan while the command history still holds the
+    //    stale entry from the apply.
+    let (status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/motion/plan",
+        Some(json!({
+            "segments": [
+                {"type": "movej", "target": [0.5, -0.3, -0.1, 0.0]},
+                {
+                    "type": "movel",
+                    "target": {
+                        "translation": [1.5, 0.3, 0.5],
+                        "rotation": {"kind": "Quaternion", "value": {"w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0}}
+                    }
+                }
+            ]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "re-schedule must succeed");
+
+    // The re-scheduled (unrelated) plan must survive — undo must NOT corrupt it.
+    let (_, rescheduled_scene) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let rescheduled_scene = rescheduled_scene.expect("scene response must be valid JSON");
+    let rescheduled = active_trajectory_signature(&rescheduled_scene);
+
+    // 3. Undo of the STALE entry must be rejected — never applied.
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/undo",
+        None,
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "undo of a stale inverse (plan re-scheduled by another path) must be rejected"
+    );
+    let body = body.expect("error response must be valid JSON");
+    assert_eq!(
+        body["code"], "stale_undo",
+        "stale-undo rejection must carry the stale_undo code"
+    );
+
+    // 4. The re-scheduled plan is untouched — no mixed/corrupted write-back.
+    let (_, after_scene) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after_scene = after_scene.expect("scene response must be valid JSON");
+    assert_eq!(
+        active_trajectory_signature(&after_scene),
+        rescheduled,
+        "the re-scheduled plan must remain intact after a rejected stale undo"
+    );
+}
+
+#[tokio::test]
 async fn undo_command_empty_history_returns_409_without_mutation() {
     // Spec command-endpoints "Undo with empty history": no applied commands →
     // 409 Conflict; the runtime is untouched.

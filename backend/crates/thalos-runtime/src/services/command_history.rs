@@ -9,6 +9,7 @@ use thalos_planning::{
     motion::program::PlanningProgram,
     program_edit::{EditError, ProgramEdit},
 };
+use thalos_core::motion::segment::MotionSegment;
 
 /// Health metrics captured at apply time (D6) — the undo endpoint reports the
 /// restored health from these without re-running the analysis pipeline.
@@ -40,6 +41,11 @@ impl CommandMetrics {
 /// `apply(inverse)` — no replay, no re-derivation. The history lives on
 /// `SceneRuntime` close to the mutation surface (design open question:
 /// runtime, not planning — it tracks scene mutations).
+///
+/// R4-001: each entry is LINKED to the program it produced (`applied_program`).
+/// Undo must never apply an inverse to a plan that is not that command's
+/// pre-state — `matches_applied_program` is the guard that rejects a stale
+/// inverse when another path (e.g. a re-schedule) replaced the active plan.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AppliedCommand {
     /// The semantic edit that was applied.
@@ -48,6 +54,9 @@ pub struct AppliedCommand {
     pub inverse: ProgramEdit,
     /// Health metrics of the applied plan — undo reports from these (O(1)).
     pub metrics: CommandMetrics,
+    /// The program segments the apply WROTE BACK — the only state this
+    /// command's inverse may be applied to (R4-001 stale-undo guard).
+    pub applied_program: Vec<MotionSegment>,
 }
 
 impl AppliedCommand {
@@ -55,6 +64,14 @@ impl AppliedCommand {
     /// never a replay of the history (design D6, spec "Undo is O(1)").
     pub fn undo_program(&self, program: &PlanningProgram) -> Result<PlanningProgram, EditError> {
         self.inverse.apply(program)
+    }
+
+    /// True when `program` is the exact program this command produced (R4-001).
+    ///
+    /// Undo is only safe when the inverse is applied to its own pre-state; if
+    /// another path replaced the active plan, the stored inverse is stale.
+    pub fn matches_applied_program(&self, program: &PlanningProgram) -> bool {
+        self.applied_program == program.segments
     }
 }
 
@@ -145,6 +162,7 @@ mod tests {
                 command: cmd.clone(),
                 inverse: cmd.inverse(),
                 metrics: CommandMetrics::new(0.4, 0.5),
+                applied_program: program.segments.clone(),
             });
         }
 
@@ -186,6 +204,7 @@ mod tests {
                 command: cmd.clone(),
                 inverse: cmd.inverse(),
                 metrics: CommandMetrics::new(0.4, 0.5),
+                applied_program: program.segments.clone(),
             });
         }
 

@@ -399,6 +399,7 @@ pub async fn apply_command(
             recommendation.edit.clone(),
             recommendation.edit.inverse(),
             CommandMetrics::new(health_before, health_after),
+            edited_program.segments.clone(),
         )
         .await?;
 
@@ -501,8 +502,15 @@ pub async fn undo_command(State(state): State<Arc<AppState>>) -> ApiResult<UndoR
         })?;
 
     // 5. WRITE-BACK atómico (D4/D5): pop (O(1)) + replace_active_plan — el
-    //    entry devuelto es el REALMENTE deshecho (métricas del response).
-    let (popped, restored_snapshot) = state.services.scene.undo_compiled_plan(compiled).await?;
+    //    entry devuelto es el REALMENTE deshecho (métricas del response). El
+    //    guard R4-001 vive en el runtime: `program` (reconstruido del plan
+    //    activo) debe coincidir con el programa que el comando escribió, si no
+    //    `stale_undo` (409) sin mutación.
+    let (popped, restored_snapshot) = state
+        .services
+        .scene
+        .undo_compiled_plan(&program, compiled)
+        .await?;
 
     // 6. Salud restaurada desde las métricas almacenadas (O(1) — sin re-análisis).
     let health_before = popped.metrics.health_after;
