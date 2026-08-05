@@ -76,6 +76,17 @@ function usePlanPreview() {
       const { instructionCount, durationSecs } = planSummaryFromPreview(scene)
       useExecutionStore.getState().receivePlan({ instructionCount, durationSecs, source: 'Motion Program' })
     },
+    // R4-002: a FAILED preview must not leave the previously-mirrored Motion
+    // Program executable. If the failed plan was the one received from a prior
+    // preview (source 'Motion Program'), clear the mirror so the planReady
+    // guard falls and Start cannot run a stale plan. The previous preview stays
+    // visible in the scene — only the execution-store mirror is cleared.
+    onError: () => {
+      const { activePlan } = useExecutionStore.getState()
+      if (activePlan?.source === 'Motion Program') {
+        useExecutionStore.setState({ activePlan: null, status: 'idle' })
+      }
+    },
   })
 }
 

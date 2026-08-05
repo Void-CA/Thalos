@@ -143,4 +143,31 @@ describe('PlanningPanel — preview success mirrors the plan into the execution 
     expect(useExecutionStore.getState().activePlan).toBeNull()
     expect(useExecutionStore.getState().status).not.toBe('ready')
   })
+
+  it('clears the stale Motion Program plan when a LATER preview fails (R4-002)', async () => {
+    // Preview #1 succeeds → the plan is mirrored and the store turns ready.
+    sceneApiMocks.previewPlan.mockResolvedValueOnce(previewResponse)
+    analysisApiMocks.analyze.mockResolvedValue(analysisReport)
+    renderPanel()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    await waitFor(() => {
+      expect(useExecutionStore.getState().activePlan).toEqual({
+        instructionCount: 2,
+        durationSecs: 5,
+        source: 'Motion Program',
+      })
+      expect(useExecutionStore.getState().status).toBe('ready')
+    })
+
+    // Preview #2 fails → the stale mirrored plan must NOT stay executable.
+    sceneApiMocks.previewPlan.mockRejectedValueOnce(new Error('segment_1_failed'))
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+
+    await waitFor(() => {
+      expect(sceneApiMocks.previewPlan).toHaveBeenCalledTimes(2)
+    })
+    expect(useExecutionStore.getState().activePlan).toBeNull()
+    expect(useExecutionStore.getState().status).not.toBe('ready')
+  })
 })
