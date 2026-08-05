@@ -61,7 +61,10 @@ function SceneEntityMesh({ id, name, pose, kind }: SceneEntityMeshProps) {
 }
 
 export function SceneEntities() {
-  const { objects, locations } = useDomainSceneStore.getState()
+  // Selector subscription — live pose edits in the editor re-render the meshes
+  // (spec R1.3). Selecting each array re-renders only when that array changes.
+  const objects = useDomainSceneStore(s => s.objects)
+  const locations = useDomainSceneStore(s => s.locations)
 
   if (objects.length === 0 && locations.length === 0) return null
 

@@ -86,3 +86,22 @@ describe('SceneEntities — tolerates an empty store (R2)', () => {
     expect(screen.queryByText('Tray')).not.toBeInTheDocument()
   })
 })
+
+describe('SceneEntities — updates when an entity pose is edited (R1.3)', () => {
+  it('re-renders the mesh at the new pose after updateObject', () => {
+    act(() => {
+      useDomainSceneStore.setState({ objects: [boltAt] })
+    })
+    render(<SceneEntities />)
+    const mesh = screen.getByTestId('scene-entity-mesh-bolt-1')
+    expect(mesh.getAttribute('position')).toBe('1.5,0.3,0.5')
+
+    act(() => {
+      useDomainSceneStore.getState().updateObject('bolt-1', {
+        pose: { position: [2, 0.5, 0.1], orientation: [1, 0, 0, 0] },
+      })
+    })
+
+    expect(mesh.getAttribute('position')).toBe('2,0.5,0.1')
+  })
+})
