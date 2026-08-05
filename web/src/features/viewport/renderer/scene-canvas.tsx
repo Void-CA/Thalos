@@ -6,6 +6,7 @@ import { Trajectory } from './trajectory'
 import { IkGizmo } from './ik-gizmo'
 import { TcpOverlay } from './tcp-overlay'
 import { PointCloud } from './point-cloud'
+import { SceneEntities } from './scene-entities'
 import { SCENE_BG, GRID_COLOR_CENTER, GRID_COLOR_LINE } from '@/shared/tokens'
 import { useSceneStore } from '../store'
 
@@ -78,6 +79,7 @@ export function SceneCanvas({ showStats = false }: SceneCanvasProps) {
           <IkGizmo />
           <TcpOverlay />
           <PointCloud />
+          <SceneEntities />
         </Suspense>
       )}
 
