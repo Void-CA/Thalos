@@ -206,7 +206,8 @@ describe('hidden routes render placeholders (no 404)', () => {
 
 describe('top-bar — nav links reflect guard state (slice 5, task 5.2)', () => {
   it('disables links whose requirements are unmet (aria-disabled, no navigation)', async () => {
-    // Robot loaded but NOT compiled → Planning (requires compiled) must not navigate.
+    // Robot loaded (sceneValid=true) but NOT compiled → Planning (requires
+    // sceneValid) navigates; Execution (requires compiled) must not.
     act(() => {
       useSceneStore.setState({ data: {} as SceneData })
       useSemanticEditor.setState({ result: null, dirty: 0 })
@@ -215,8 +216,10 @@ describe('top-bar — nav links reflect guard state (slice 5, task 5.2)', () => 
     })
     const { router } = renderRouter(['/task'])
     const planningLink = screen.getByRole('link', { name: 'Planificación' })
-    expect(planningLink).toHaveAttribute('aria-disabled', 'true')
-    fireEvent.click(planningLink)
+    expect(planningLink).not.toHaveAttribute('aria-disabled')
+    const executionLink = screen.getByRole('link', { name: 'Ejecución' })
+    expect(executionLink).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(executionLink)
     expect(router.state.location.pathname).toBe('/task')
   })
 
