@@ -8,6 +8,7 @@ import { RobotShell } from '@/features/robots/workspace'
 import { SceneWorkspace } from '@/features/scene/SceneWorkspace'
 import { SemanticWorkspace } from '@/features/semantic/semantic-workspace'
 import { SessionsWorkspace } from '@/features/sessions/workspace'
+import { AnalysisWorkspace } from '@/features/viewport/components/analysis-workspace'
 import { AppShell } from '@/shared/layout/app-shell'
 import { GuardedRoute } from '@/shared/workflow/guarded-route'
 import { WORKSPACE_REGISTRY, type WorkspaceName } from '@/shared/workflow/registry'
@@ -16,11 +17,11 @@ import { WORKSPACE_REGISTRY, type WorkspaceName } from '@/shared/workflow/regist
  * View registry — maps each registered workspace to its view component.
  * Kept separate from the navigation registry (design: VIEW_REGISTRY).
  *
- * Analysis is intentionally absent: it was absorbed into Planning in slice 6
- * (one responsibility per workspace) — the analysis UI renders inside
- * PlanningWorkspace, not as its own registered view. `scene` renders the
- * Escena area (features/scene/SceneWorkspace) — the exclusive owner of the
- * Scene editor since S2; /task renders zero Scene UI.
+ * PR-D registers `analysis` (kind 'tool', /analysis) to the inline
+ * AnalysisWorkspace (features/viewport/components) — the sampling tool,
+ * distinct from plan-analysis which renders inside PlanningWorkspace. `scene`
+ * renders the Escena area (features/scene/SceneWorkspace) — the exclusive
+ * owner of the Scene editor since S2; /task renders zero Scene UI.
  */
 export const VIEW_REGISTRY: Record<WorkspaceName, ComponentType> = {
   robot: RobotShell,
@@ -31,6 +32,7 @@ export const VIEW_REGISTRY: Record<WorkspaceName, ComponentType> = {
   sessions: SessionsWorkspace,
   knowledge: KnowledgeWorkspace,
   configuration: ConfigurationWorkspace,
+  analysis: AnalysisWorkspace,
 }
 
 /**
