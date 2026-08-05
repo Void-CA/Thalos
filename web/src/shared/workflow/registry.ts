@@ -14,10 +14,12 @@ export type { Area, ArtifactKind, Capability, WorkspaceEntry, WorkspaceName } fr
  * Labels are domain vocabulary (navigation-router spec): Robot / Escena /
  * Programación / Planificación / Ejecución / Sesiones / Configuración. Robot
  * carries a stage marker (stage 1) even though it has no prerequisite. The
- * legacy `/analysis` workspace was absorbed into `/planning` in slice 6; it has
- * no registry entry and therefore no route — the sitemap is `/`, `/scene`,
- * `/task`, `/planning`, `/execution`, `/sessions` (visible since S5),
- * `/knowledge` (hidden) and `/configuration` (non-stage shell, S5).
+ * legacy plan-analysis `/analysis` was absorbed into `/planning` in slice 6;
+ * PR-D re-introduces `/analysis` as the SAMPLING tool (kind: 'tool' — reach /
+ * singularity / manipulability), distinct from plan-analysis. The sitemap is
+ * `/`, `/scene`, `/task`, `/planning`, `/execution`, `/sessions` (visible
+ * since S5), `/knowledge` (hidden), `/configuration` (non-stage shell, S5)
+ * and `/analysis` (auxiliary tool).
  *
  * S3.6: typed as `Area[]` (design D1 — the registry describes domain AREAS,
  * not views). The stepper, guards, breadcrumbs and pipeline derivations all
@@ -46,6 +48,12 @@ export const WORKSPACE_REGISTRY: Area[] = [
   { path: '/sessions', workspace: 'sessions', label: 'Sesiones', requires: [], produces: null, capability: 'replay', hidden: false, consumes: 'Runtime', producesArtifact: 'ExecutionSession', stage: 6, stepperIndex: 6 },
   { path: '/knowledge', workspace: 'knowledge', label: 'Knowledge', requires: ['analyzed'], produces: null, capability: 'explain', hidden: true, consumes: null, producesArtifact: null, stage: null },
   { path: '/configuration', workspace: 'configuration', label: 'Configuración', requires: [], produces: null, capability: null, hidden: false, consumes: null, producesArtifact: null, stage: null },
+  // D5 (flow-reorganization): /analysis is the SAMPLING tool (reach /
+  // singularity / manipulability), kind:'tool' — NOT a pipeline stage.
+  // Auxiliary-tools-navigation spec: stage null (no stepper position),
+  // requires robotLoaded (the workspace samples a real robot). Distinct from
+  // plan-analysis (useAnalysisStore.report absorbed into /planning in slice 6).
+  { path: '/analysis', workspace: 'analysis', label: 'Analysis', requires: ['robotLoaded'], produces: null, capability: null, hidden: false, consumes: null, producesArtifact: null, stage: null, kind: 'tool' },
 ]
 
 /**

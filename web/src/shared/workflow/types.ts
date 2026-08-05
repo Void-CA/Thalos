@@ -88,6 +88,7 @@ export type WorkspaceName =
   | 'sessions'
   | 'knowledge'
   | 'configuration'
+  | 'analysis'
 
 /**
  * Declarative registry entry (design: WorkspaceEntry contract).
@@ -116,6 +117,13 @@ export interface WorkspaceEntry {
   stage: number | null
   /** Explicit position in the stepper (consumed from S3; carried as data in S1). */
   stepperIndex?: number
+  /**
+   * Navigation kind (auxiliary-tools-navigation spec, design D4): 'stage' for
+   * pipeline areas (rendered by the stepper), 'tool' for auxiliary tools
+   * (grouped after a divider in the top-bar, excluded from the stepper).
+   * Default 'stage' — existing entries without an explicit kind stay stages.
+   */
+  kind?: 'stage' | 'tool'
 }
 
 /**

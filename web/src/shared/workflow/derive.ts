@@ -106,18 +106,28 @@ const FLAG_PHRASES: Record<WorkflowFlag, string> = {
   completed: 'a completed execution',
 }
 
-/** Registry entries that form the stepper pipeline, ordered by the registry
- *  `stage` field — the domain pipeline position (Robot=1 … Sesiones=6). This
- *  replaced the old PIPELINE_CAPABILITIES capability filter, which excluded
- *  Robot and Escena: the stepper is a PROJECTION of the area registry (ADR
- *  ui-as-domain-projection, criterion C1), never a parallel stage list. Areas
- *  with `stage: null` (knowledge; Configuración when it lands in S5 —
- *  area-configuration spec "not a stepper stage") are not pipeline stages.
- *  NOTE (C2, for verify): `stepperIndex` is currently redundant — it equals
- *  `stage` on every pipeline area; `stage` is the canonical order key. */
+/**
+ * Registry entries that form the stepper pipeline, ordered by the registry
+ * `stage` field — the domain pipeline position (Robot=1 … Sesiones=6). This
+ * replaced the old PIPELINE_CAPABILITIES capability filter, which excluded
+ * Robot and Escena: the stepper is a PROJECTION of the area registry (ADR
+ * ui-as-domain-projection, criterion C1), never a parallel stage list.
+ *
+ * Only `kind === 'stage'` (the default) entries render — auxiliary tools
+ * (`kind: 'tool'`, auxiliary-tools-navigation spec) are never pipeline stages.
+ * The `kind` check is DEFENSIVE: tools already carry `stage: null`, so the
+ * stage filter hides them today; the kind filter guarantees a future tool that
+ * mistakenly gains a stage number still never renders in the stepper. Areas
+ * with `stage: null` (knowledge; Configuración when it lands in S5 —
+ * area-configuration spec "not a stepper stage") are not pipeline stages.
+ * NOTE (C2, for verify): `stepperIndex` is currently redundant — it equals
+ * `stage` on every pipeline area; `stage` is the canonical order key. */
 export function stepperStages(registry: readonly WorkspaceEntry[]): WorkspaceEntry[] {
   return registry
-    .filter((entry): entry is WorkspaceEntry & { stage: number } => entry.stage !== null)
+    .filter(
+      (entry): entry is WorkspaceEntry & { stage: number } =>
+        (entry.kind ?? 'stage') === 'stage' && entry.stage !== null,
+    )
     .sort((a, b) => a.stage - b.stage)
 }
 
