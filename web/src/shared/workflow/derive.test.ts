@@ -584,10 +584,18 @@ describe('deriveStatusMessage — short status from workflow flags (S2)', () => 
     expect(deriveStatusMessage({ ...ALL_TRUE, programValid: false })).toBe('Task incomplete')
   })
 
-  it('reports recompilation required when the plan is stale', () => {
-    expect(deriveStatusMessage({ ...ALL_TRUE, compiled: false })).toBe(
-      'Task modified — recompilation required',
-    )
+  it('reports the Motion Program as ready when the preview plan is executable without a compile', () => {
+    // R3-001: {compiled:false, planReady:true, executable:true} is REACHABLE via
+    // the Motion Program preview path — it must NOT read as "Task modified".
+    const state = { ...ALL_TRUE, compiled: false, planReady: true, executable: true }
+    expect(deriveStatusMessage(state)).not.toContain('Task modified')
+    expect(deriveStatusMessage(state)).toBe('Motion Program ready — send to execution')
+  })
+
+  it('still reports recompilation required when the stale plan is not executable', () => {
+    expect(
+      deriveStatusMessage({ ...ALL_TRUE, compiled: false, planReady: false, executable: false }),
+    ).toBe('Task modified — recompilation required')
   })
 
   it('reports a running plan', () => {

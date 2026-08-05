@@ -208,10 +208,18 @@ export function deriveStatusMessage(state: WorkflowState): string {
   if (!state.robotLoaded) return 'No robot loaded'
   if (!state.sceneValid) return 'Scene incomplete'
   if (!state.programValid) return 'Task incomplete'
-  if (!state.compiled) return 'Task modified — recompilation required'
   if (state.running) return 'Plan running'
   if (state.completed) return 'Plan completed — review in Sessions'
-  if (state.executable) return 'Plan ready to run'
+  // R3-001: branch on executable BEFORE compiled — a previewed Motion Program is
+  // runnable with `compiled:false` (planReady via scene.activePlanPresent), so
+  // it must report as ready instead of the stale-compile message. The compiled
+  // check below only triggers when nothing runnable exists.
+  if (state.executable) {
+    return state.compiled
+      ? 'Plan ready to run'
+      : 'Motion Program ready — send to execution'
+  }
+  if (!state.compiled) return 'Task modified — recompilation required'
   if (state.analyzed) return 'Plan analyzed'
   return 'Robot loaded · Task compiled'
 }
