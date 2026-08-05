@@ -57,7 +57,9 @@ export function TcpPanel() {
 
   if (!data) return null
 
-  const selectableFrames = data.frames.filter((f) => Number.isFinite(Number(f.id)))
+  // Tests and partial stores may seed `data` without frames (e.g. `{}` cast)
+  // — tolerate a missing frames array instead of crashing on .filter.
+  const selectableFrames = (data.frames ?? []).filter((f) => Number.isFinite(Number(f.id)))
 
   return (
     <div className="flex flex-col gap-2">
