@@ -38,6 +38,14 @@ impl StrategyKind {
 /// - `region_id` MUST reference an existing `ProblemRegion`
 /// - `waypoint_range` MUST be a valid range within the original `CompiledPlan`
 /// - `replacement` SHOULD have the same number of waypoints as the original range
+///
+/// # Deprecation (design D7)
+/// `PlanDelta` was the pre-PR1 trajectory-splice representation. Materializers
+/// and advisors now produce [`crate::ProgramEdit`] (PR1) — `build_modified_program`
+/// serves as its `apply` helper. Deprecated in PR6, removed in a future change.
+#[deprecated(
+    note = "migrated to ProgramEdit (PR1): advisors/materializers produce ProgramEdit; removal planned after the legacy repair-session flow migrates (design D7)"
+)]
 #[derive(Debug, Clone)]
 pub struct PlanDelta {
     /// Región que se está reparando.

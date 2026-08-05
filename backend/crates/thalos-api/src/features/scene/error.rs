@@ -33,6 +33,29 @@ impl From<RuntimeError> for ApiError {
                 ),
                 code: code.into(),
             },
+            // Design D5: the scene-writeback surface is feature-flagged. A
+            // disabled flag is a configuration conflict, not a bad request.
+            RuntimeError::FeatureDisabled { feature } => ApiError::Conflict {
+                message: format!("feature is disabled: {feature}"),
+                code: code.into(),
+            },
+            RuntimeError::InvalidCompiledPlan { reason } => ApiError::Validation {
+                message: format!("invalid compiled plan: {reason}"),
+                code: code.into(),
+            },
+            // Spec command-endpoints "Undo with empty history": undo with no
+            // applied commands is a state conflict, not a bad request.
+            RuntimeError::EmptyCommandHistory => ApiError::Conflict {
+                message: "no applied command to undo".to_string(),
+                code: code.into(),
+            },
+            // R4-001: the active plan no longer matches the command's
+            // pre-state (re-scheduled by a non-commanded path) — applying the
+            // stale inverse would corrupt the plan. State conflict, 409.
+            RuntimeError::StaleUndo => ApiError::Conflict {
+                message: "stale undo: the active plan was replaced by a path that is not the command's pre-state".to_string(),
+                code: code.into(),
+            },
         }
     }
 }

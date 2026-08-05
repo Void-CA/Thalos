@@ -11,6 +11,8 @@ pub mod interpolate;
 pub mod knowledge;
 pub mod motion;
 pub mod optimizer;
+pub mod program_edit;
+pub mod recommendation;
 pub mod repair;
 pub mod resolver;
 pub mod timeline;

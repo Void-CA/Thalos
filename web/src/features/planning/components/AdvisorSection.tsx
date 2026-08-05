@@ -6,6 +6,7 @@ import type {
 } from '@/shared/contracts/analysis-report'
 import { severityCounts } from '@/shared/contracts/analysis-report'
 import { ChartBar } from 'lucide-react'
+import { RecommendationRow } from './RecommendationRow'
 
 /**
  * AdvisorSection — pure projection of the canonical `AnalysisReportWire`
@@ -13,9 +14,11 @@ import { ChartBar } from 'lucide-react'
  *
  * INVARIANTS (user criterion S4b):
  * - Consumes ONLY the `report` prop — zero imports of planning stores, zero
- *   backend hooks, zero domain-operation triggers.
+ *   backend hooks. The interactive leaves (RecommendationRow) own their
+ *   domain-operation triggers (Preview), mirroring OptimizationPanel; the
+ *   section itself never triggers them.
  * - Interpretation is STRUCTURAL: Observation.kind / severity / actions /
- *   summary (I3) — never by matching message text (no message.includes).
+ *   summary / recommendations (I3) — never by matching message text.
  * - API is `<AdvisorSection report={report} />` — no legacy props
  *   (findings/recommendations/health_score/flags).
  *
@@ -81,6 +84,24 @@ export function AdvisorSection({ report }: AdvisorSectionProps) {
           <ul className="flex flex-col gap-1">
             {report.actions.map(action => (
               <ActionRow key={action.id} action={action} />
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* Recommendations — N uniform RecommendationRow components (PR3, spec
+          advisor-projection): every row carries identical Preview/Apply/Undo
+          controls; no per-strategy buttons, no string dispatch. */}
+      <section>
+        <h3 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+          Recommendations
+        </h3>
+        {!report.recommendations || report.recommendations.length === 0 ? (
+          <p className="text-xs text-muted-foreground">None</p>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {report.recommendations.map(recommendation => (
+              <RecommendationRow key={recommendation.id} recommendation={recommendation} />
             ))}
           </ul>
         )}

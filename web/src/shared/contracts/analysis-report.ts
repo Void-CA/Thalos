@@ -89,6 +89,23 @@ export interface ManipulabilityPointWire {
   yoshikawa: number
 }
 
+/** A remediation recommendation (spec recommendation-model "Wire Contract").
+ *  Projection of `Recommendation { id, action, edit, status }` — the typed
+ *  `edit` is a semantic plan command (design D1) that the Preview/Apply/Undo
+ *  pipeline executes. The frontend treats `edit` as opaque in PR3 (Preview
+ *  only) — Apply/Undo (PR4/PR5) consume it verbatim from the wire. */
+export interface RecommendationWire {
+  /** Recommendation id within the analysis report (1-based advisor counter). */
+  id: number
+  /** The remediation this recommendation proposes (I5: targets by id). */
+  action: AnalysisActionWire
+  /** Semantic plan command (serde externally-tagged `ProgramEdit` variant). */
+  edit: Record<string, unknown>
+  /** Availability (design D8): "available" | "unavailable"; omitted when
+   *  not evaluated. Unavailable edits must not be applied (PR4 gates on it). */
+  status?: 'available' | 'unavailable'
+}
+
 /** The canonical /plan/analyze wire payload — projection of the domain
  *  `AnalysisReport` (spec motion-plan-endpoint). */
 export interface AnalysisReportWire {
@@ -108,6 +125,10 @@ export interface AnalysisReportWire {
    *  annotates it `#[serde(default, skip_serializing_if = "Vec::is_empty")]`,
    *  so old payloads and trivial plans omit it (I3 — additive delta). */
   manipulability_series?: ManipulabilityPointWire[]
+  /** Remediation recommendations (PR2). OPTIONAL on the wire (additive, I3):
+   *  old payloads omit the field; the advisor only produces recommendations
+   *  when the analysis flow carries program + solver context. */
+  recommendations?: RecommendationWire[]
 }
 
 // ─── Derived pure helpers (I3: interpretation derives from kind/severity) ───

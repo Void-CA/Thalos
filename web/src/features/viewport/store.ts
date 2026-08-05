@@ -3,7 +3,7 @@ import { useWorkspaceStore } from './store/workspace-store'
 import type { SceneData, RuntimeInfo, IkResult, IkTarget, ActivePlan, ToolFrame, ExecutionInfo, ObjectTransform, TransformSnapshot, FkFrameMap, SceneFrame } from './types'
 
 export type TrajectoryColorMode = 'segment' | 'trajectory-quality' | 'manipulability' | 'singularity'
-export type TrajectoryViewMode = 'original' | 'optimized'
+export type TrajectoryViewMode = 'original' | 'optimized' | 'preview'
 
 export interface SceneState {
   data: SceneData | null
@@ -15,6 +15,9 @@ export interface SceneState {
   ikTarget: IkTarget | null
   activePlan: ActivePlan | null
   optimizedPositions: number[][] | null
+  /** End-effector waypoints of the PREVIEWED recommendation edit (PR3) —
+   *  drives the same 3D overlay mechanism as `optimizedPositions`. */
+  previewPositions: number[][] | null
   trajectoryViewMode: TrajectoryViewMode
   activeTcp: ToolFrame | null
   loading: boolean
@@ -32,6 +35,7 @@ interface SceneActions {
   setTrajectoryColorMode: (mode: TrajectoryColorMode) => void
   setTrajectoryViewMode: (mode: TrajectoryViewMode) => void
   setOptimizedPositions: (positions: number[][] | null) => void
+  setPreviewPositions: (positions: number[][] | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   reset: () => void
@@ -47,6 +51,7 @@ const INITIAL: SceneState = {
   ikTarget: null,
   activePlan: null,
   optimizedPositions: null,
+  previewPositions: null,
   trajectoryViewMode: 'original',
   activeTcp: null,
   loading: false,
@@ -78,6 +83,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set) => ({
       data, runtime, transformSnapshot: { kind: 'idle' }, execution, ikResult,
       solvedQ: null, activePlan, activeTcp, loading: false, error: null,
       optimizedPositions: null,
+      previewPositions: null,
       trajectoryViewMode: 'original',
     })
   },
@@ -99,6 +105,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set) => ({
   setTrajectoryColorMode: (trajectoryColorMode) => set({ trajectoryColorMode }),
   setTrajectoryViewMode: (trajectoryViewMode) => set({ trajectoryViewMode }),
   setOptimizedPositions: (optimizedPositions) => set({ optimizedPositions }),
+  setPreviewPositions: (previewPositions) => set({ previewPositions }),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error, loading: false }),
   reset: () => set(INITIAL),

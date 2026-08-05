@@ -870,7 +870,7 @@ mod tests {
 
         let pipeline = OptimizationPipeline::new(PipelineConfig::default());
         let result = pipeline
-            .optimize(
+            .optimize_regions(
                 &operators,
                 &robot,
                 traj,

@@ -233,7 +233,10 @@ fn segment_index(observation: &Observation) -> Option<usize> {
 /// The original segment at `candidate.segment_id` is removed and replaced
 /// with `candidate.replacement_segments`. The replacement vec may have any
 /// length (one-to-one, one-to-many, or one-to-zero).
-fn build_modified_program(
+///
+/// `pub(crate)` so `ProgramEdit::ReplaceSegment::apply` can delegate to this
+/// splice engine (design: "build_modified_program becomes the splice engine").
+pub(crate) fn build_modified_program(
     original: &PlanningProgram,
     candidate: &TransformationCandidate,
 ) -> PlanningProgram {

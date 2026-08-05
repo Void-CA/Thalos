@@ -12,7 +12,8 @@ use thalos_core::{
     robot::serial_chain::SerialChain,
     spatial::frame::FrameId,
 };
-use thalos_planning::motion::program::CompiledPlan;
+use thalos_planning::motion::program::{CompiledPlan, PlanningProgram};
+use thalos_planning::program_edit::ProgramEdit;
 
 use crate::backends::RobotBackend;
 use crate::backends::controller::RobotController;
@@ -24,6 +25,7 @@ use crate::error::RuntimeError;
 use crate::motion_recorder::MotionRecorder;
 use crate::motion_trace::MotionTrace;
 use crate::plan::{PlanState, SessionStatus};
+use crate::services::command_history::{AppliedCommand, CommandMetrics};
 use crate::session::{ExecutionSource, SessionManager};
 use crate::snapshots::{RuntimeSnapshot, TickDelta};
 use crate::state::robot::{ActiveRobot, SceneRuntime};
@@ -241,7 +243,76 @@ impl SceneService {
         Ok(Self::build_snapshot(&runtime, None))
     }
 
-    // ── Execution control (delegates to controller via BackendManager) ──
+    // ── Scene write-back (PR4 — design-first, D4/D5) ──
+
+    /// Toggle the scene-writeback feature flag (design D5).
+    ///
+    /// OFF by default. Enabling it is the per-environment rollout step after
+    /// integration tests pass. Flipping it back OFF restores the read-only
+    /// behavior with zero code changes.
+    pub async fn set_scene_writeback(&self, enabled: bool) {
+        let mut runtime = self.runtime.write().await;
+        runtime.set_scene_writeback(enabled);
+    }
+
+    /// Apply a recompiled plan back to the runtime (design D4).
+    ///
+    /// Write-back path for `POST /plan/commands/apply`:
+    /// 1. `SceneRuntime::replace_active_plan` — feature-flagged, snapshot +
+    ///    atomic restore on failure.
+    /// 2. On success, the applied command, its pre-computed inverse and the
+    ///    plan metrics are recorded (D6) so PR5's `undo` can pop it in O(1)
+    ///    and report the restored health without re-analysis.
+    /// 3. `applied_program` links the entry to the program the apply wrote
+    ///    back (R4-001) — undo refuses a stale inverse.
+    ///
+    /// `trajectory_to_waypoints` reads `scheduled_plan` first, so the new
+    /// plan propagates to execution automatically.
+    pub async fn apply_compiled_plan(
+        &self,
+        compiled: CompiledPlan,
+        command: ProgramEdit,
+        inverse: ProgramEdit,
+        metrics: CommandMetrics,
+        applied_program: Vec<thalos_core::motion::segment::MotionSegment>,
+    ) -> Result<RuntimeSnapshot, RuntimeError> {
+        let mut runtime = self.runtime.write().await;
+        runtime.replace_active_plan(compiled)?;
+        runtime.record_applied_command(command, inverse, metrics, applied_program);
+        Ok(Self::build_snapshot(&runtime, None))
+    }
+
+    /// Number of applied commands with stored inverses (undo history size).
+    pub async fn history_len(&self) -> usize {
+        let runtime = self.runtime.read().await;
+        runtime.history_len()
+    }
+
+    /// Peek the last applied command (O(1)) — the undo endpoint resolves the
+    /// stored inverse to recompile the restored program.
+    pub async fn last_applied(&self) -> Option<AppliedCommand> {
+        let runtime = self.runtime.read().await;
+        runtime.last_applied_command().cloned()
+    }
+
+    /// Undo the last applied command (design D6): pop (O(1)) + write back the
+    /// recompiled inverse-applied plan WITHOUT recording a new entry.
+    ///
+    /// Atomic and feature-flagged via `SceneRuntime::undo_plan` (D4/D5). The
+    /// R4-001 stale guard lives in the runtime: `current_program` is the
+    /// program reconstructed from the active plan and must match the entry's
+    /// `applied_program`, else `StaleUndo` — no mutation, history intact.
+    /// The popped entry is returned so the API can report the restored
+    /// metrics; the snapshot carries the restored active plan.
+    pub async fn undo_compiled_plan(
+        &self,
+        current_program: &PlanningProgram,
+        compiled: CompiledPlan,
+    ) -> Result<(AppliedCommand, RuntimeSnapshot), RuntimeError> {
+        let mut runtime = self.runtime.write().await;
+        let popped = runtime.undo_plan(current_program, compiled)?;
+        Ok((popped, Self::build_snapshot(&runtime, None)))
+    }
 
     /// Extract waypoints from the active plan's trajectory.
     fn trajectory_to_waypoints(runtime: &SceneRuntime) -> (Vec<Vec<f64>>, f64) {

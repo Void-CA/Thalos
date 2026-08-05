@@ -10,6 +10,7 @@ use crate::{
     },
 };
 use thalos_core::{
+    analysis::{AnalysisReport, RegionGrouper},
     evaluation::PlanMetrics, operation::ConstraintQuery, robot::serial_chain::SerialChain,
     trajectory::Trajectory,
 };
@@ -49,7 +50,48 @@ impl OptimizationPipeline {
         Self { config }
     }
 
-    /// Run the optimization pipeline across all problem regions.
+    /// Run the optimization pipeline over an [`AnalysisReport`], deriving the
+    /// problem regions INTERNALLY from the report's observations via
+    /// [`RegionGrouper`] (spec trajectory-optimization-pipeline: "Direct report
+    /// consumption"). The public API takes the report directly — callers never
+    /// pre-derive regions. Operator behavior is unchanged: the derived regions
+    /// drive the exact same per-region ranking/apply/acceptance loop as
+    /// [`Self::optimize_regions`].
+    ///
+    /// # Parameters
+    /// - `operators`: Slice of operator trait objects to consider
+    /// - `robot`: The robot model (passed through to operators)
+    /// - `trajectory`: The initial trajectory to optimize
+    /// - `report`: The canonical analysis report (regions derived from
+    ///   `report.observations`)
+    /// - `metrics`: Current plan metrics for scoring
+    /// - `ctx`: Optimization context (joint limits, config)
+    /// - `constraints`: Optional `ConstraintQuery` forwarded to every
+    ///   operator `apply()` call in both the geometric pass and the
+    ///   temporal post-pass. `None` preserves the legacy behavior.
+    ///
+    /// Returns an `OptimizationResult` containing the report and
+    /// the final optimized trajectory.
+    pub fn optimize(
+        &self,
+        operators: &[&dyn TrajectoryOperator],
+        robot: &SerialChain,
+        trajectory: &Trajectory,
+        report: &AnalysisReport,
+        metrics: &PlanMetrics,
+        ctx: &OptimizationContext,
+        constraints: Option<&dyn ConstraintQuery>,
+    ) -> Result<OptimizationResult, OptimizationError> {
+        let regions = RegionGrouper::default().group(&report.observations);
+        self.optimize_regions(operators, robot, trajectory, &regions, metrics, ctx, constraints)
+    }
+
+    /// LEGACY regions-based entry point — the same per-region loop, fed with an
+    /// explicit region slice instead of a report.
+    ///
+    /// Retained for the repair-session flow (`TrajectoryOptimizer` wrapper) and
+    /// region-level tests, per the design's legacy fallback paths. New callers
+    /// MUST use [`Self::optimize`] with an `&AnalysisReport`.
     ///
     /// # Parameters
     /// - `operators`: Slice of operator trait objects to consider
@@ -64,7 +106,7 @@ impl OptimizationPipeline {
     ///
     /// Returns an `OptimizationResult` containing the report and
     /// the final optimized trajectory.
-    pub fn optimize(
+    pub fn optimize_regions(
         &self,
         operators: &[&dyn TrajectoryOperator],
         robot: &SerialChain,

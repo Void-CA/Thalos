@@ -76,6 +76,27 @@ pub enum RuntimeError {
 
     #[error("tool frame not found: frame {frame_id} does not exist in the robot chain")]
     ToolFrameNotFound { frame_id: u64 },
+
+    /// A feature-flagged surface was invoked while the flag is disabled (D5).
+    #[error("feature disabled: {feature}")]
+    FeatureDisabled { feature: &'static str },
+
+    /// A compiled plan failed replacement validation (D4): no waypoints or
+    /// zero duration — the runtime refuses to schedule a degenerate plan.
+    #[error("invalid compiled plan: {reason}")]
+    InvalidCompiledPlan { reason: String },
+
+    /// Undo was requested with an empty command history (spec command-endpoints
+    /// "Undo with empty history" → 409). No applied command carries an inverse.
+    #[error("no applied command to undo")]
+    EmptyCommandHistory,
+
+    /// Undo was requested for a STALE inverse (R4-001 → 409): the active plan
+    /// no longer matches the program the command produced (a non-commanded
+    /// path — e.g. a re-schedule — replaced it). Applying the inverse would
+    /// corrupt the plan, so the runtime refuses without mutation.
+    #[error("stale undo: the active plan was replaced by a path that is not the command's pre-state")]
+    StaleUndo,
 }
 
 impl RuntimeError {
@@ -112,8 +133,12 @@ impl RuntimeError {
             RuntimeError::Ik(e) => match e {
                 IkError::UnsupportedJointType(_) => "unsupported_joint_type",
             },
-            RuntimeError::JointCountMismatch { expected, received } => "joint_count_mismatch",
+            RuntimeError::JointCountMismatch { .. } => "joint_count_mismatch",
             RuntimeError::ToolFrameNotFound { .. } => "tool_frame_not_found",
+            RuntimeError::FeatureDisabled { .. } => "feature_disabled",
+            RuntimeError::InvalidCompiledPlan { .. } => "invalid_compiled_plan",
+            RuntimeError::EmptyCommandHistory => "empty_command_history",
+            RuntimeError::StaleUndo => "stale_undo",
         }
     }
 }

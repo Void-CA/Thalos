@@ -49,6 +49,7 @@ mod tests {
     use std::sync::Arc;
     use thalos_core::{
         analysis::region::{ProblemRegion, RegionId, RegionKind, RegionSeverity},
+        analysis::AnalysisReport,
         evaluation::PlanMetrics,
         models::{RobotModel, RobotRegistry},
         operation::{ConstraintQuery, PrecisionLevel},
@@ -230,6 +231,52 @@ mod tests {
         }
     }
 
+    /// Report builder for the report-consumption tests (PR6 6.1). Three
+    /// `Singularity` observations anchored at waypoints 0..3 group (via
+    /// `RegionGrouper`) into a single Critical region 0..3 — the
+    /// report-shaped equivalent of `test_region(0)`. Operators MUST see the
+    /// same regions they would have received directly.
+    fn test_report() -> AnalysisReport {
+        use std::collections::BTreeMap;
+        use thalos_core::analysis::{
+            AnalysisSummary, ArtifactRef, Grade, Location, Observation, ObservationId,
+            ObservationKind, Severity,
+        };
+        use thalos_core::ids::MotionPlanId;
+
+        let observation = |id: u32, waypoint: usize| Observation {
+            id: ObservationId(id),
+            kind: ObservationKind::Singularity,
+            severity: Severity::Error,
+            artifact: ArtifactRef::MotionPlan(MotionPlanId("test-report".to_string())),
+            location: Location::Waypoint(waypoint),
+            attributes: BTreeMap::new(),
+            causes: vec![],
+            related: vec![],
+        };
+        AnalysisReport {
+            artifact: ArtifactRef::MotionPlan(MotionPlanId("test-report".to_string())),
+            observations: vec![observation(0, 0), observation(1, 1), observation(2, 2)],
+            actions: vec![],
+            metrics: BTreeMap::new(),
+            summary: AnalysisSummary {
+                quality_index: 0.5,
+                observation_count: 3,
+                severity_distribution: BTreeMap::new(),
+                grade: Grade::Fair,
+            },
+        }
+    }
+
+    /// A report with NO observations — the pipeline must derive ZERO regions
+    /// (different code path than the populated report: no steps at all).
+    fn test_empty_report() -> AnalysisReport {
+        let mut report = test_report();
+        report.observations = vec![];
+        report.summary.observation_count = 0;
+        report
+    }
+
     /// Mock operator with configurable scores and apply behavior.
     struct ScoreMock {
         id: &'static str,
@@ -396,7 +443,7 @@ mod tests {
         let op = RecordingOperator::new("rec", OperatorFamily::Geometry);
         let operators: [&dyn TrajectoryOperator; 1] = [&op];
         pipeline
-            .optimize(
+            .optimize_regions(
                 &operators, &robot, &traj, &regions, &metrics, &ctx, Some(&query),
             )
             .expect("pipeline should succeed");
@@ -413,7 +460,7 @@ mod tests {
         let op2 = RecordingOperator::new("rec", OperatorFamily::Geometry);
         let operators2: [&dyn TrajectoryOperator; 1] = [&op2];
         pipeline
-            .optimize(&operators2, &robot, &traj, &regions, &metrics, &ctx, None)
+            .optimize_regions(&operators2, &robot, &traj, &regions, &metrics, &ctx, None)
             .expect("pipeline should succeed");
         assert_eq!(
             op2.constraints_seen
@@ -440,7 +487,7 @@ mod tests {
         let op = RecordingOperator::new("retime", OperatorFamily::Temporal);
         let operators: [&dyn TrajectoryOperator; 1] = [&op];
         let result = pipeline
-            .optimize(
+            .optimize_regions(
                 &operators, &robot, &traj, &regions, &metrics, &ctx, Some(&query),
             )
             .expect("pipeline should succeed");
@@ -464,7 +511,7 @@ mod tests {
         let op2 = RecordingOperator::new("retime", OperatorFamily::Temporal);
         let operators2: [&dyn TrajectoryOperator; 1] = [&op2];
         pipeline
-            .optimize(&operators2, &robot, &traj, &regions, &metrics, &ctx, None)
+            .optimize_regions(&operators2, &robot, &traj, &regions, &metrics, &ctx, None)
             .expect("pipeline should succeed");
         assert_eq!(
             op2.constraints_seen
@@ -579,12 +626,50 @@ mod tests {
         let ctx = test_ctx();
 
         let result = pipeline
-            .optimize(&[], &robot, &traj, &regions, &metrics, &ctx, None)
+            .optimize_regions(&[], &robot, &traj, &regions, &metrics, &ctx, None)
             .expect("pipeline should succeed with no operators");
 
         assert!(result.report.steps.is_empty(), "expected no steps");
         // Trajectory should be unchanged
         assert_eq!(result.trajectory.len(), traj.len());
+    }
+
+    #[test]
+    fn pipeline_optimize_consumes_analysis_report_and_derives_regions() {
+        // PR6 6.1: the pipeline's PRIMARY API takes `&AnalysisReport` and
+        // derives problem regions INTERNALLY via RegionGrouper — operator
+        // behavior is unchanged (same region → same ranking/apply).
+        let config = PipelineConfig::default();
+        let pipeline = OptimizationPipeline::new(config);
+        let robot = test_robot();
+        let traj = test_trajectory();
+        let metrics = test_metrics();
+        let ctx = test_ctx();
+
+        // Happy path: populated report → one derived Singularity region 0..3
+        // → exactly one accepted step from the operator.
+        let op = ScoreMock::new("report_op", OperatorFamily::Geometry, 1.0, 1.0, 1.0);
+        let operators: [&dyn TrajectoryOperator; 1] = [&op];
+        let result = pipeline
+            .optimize(&operators, &robot, &traj, &test_report(), &metrics, &ctx, None)
+            .expect("pipeline should succeed with a report input");
+
+        assert_eq!(result.report.steps.len(), 1);
+        assert_eq!(result.report.steps[0].operator_id, "report_op");
+        assert_eq!(result.report.steps[0].region_id, RegionId(0));
+        assert!(result.report.steps[0].accepted);
+        assert_eq!(result.trajectory.len(), traj.len());
+
+        // Empty report → zero derived regions → zero steps (proves the
+        // derivation is real: nothing to process, different code path).
+        let op2 = ScoreMock::new("report_op2", OperatorFamily::Geometry, 1.0, 1.0, 1.0);
+        let operators2: [&dyn TrajectoryOperator; 1] = [&op2];
+        let result2 = pipeline
+            .optimize(&operators2, &robot, &traj, &test_empty_report(), &metrics, &ctx, None)
+            .expect("pipeline should succeed with an empty report");
+
+        assert!(result2.report.steps.is_empty(), "no regions → no steps");
+        assert_eq!(result2.trajectory.len(), traj.len());
     }
 
     #[test]
@@ -601,7 +686,7 @@ mod tests {
         let operators: [&dyn TrajectoryOperator; 1] = [&op];
 
         let result = pipeline
-            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx, None)
+            .optimize_regions(&operators, &robot, &traj, &regions, &metrics, &ctx, None)
             .expect("pipeline should succeed");
 
         assert_eq!(result.report.steps.len(), 1);
@@ -624,7 +709,7 @@ mod tests {
         let operators: [&dyn TrajectoryOperator; 1] = [&op];
 
         let result = pipeline
-            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx, None)
+            .optimize_regions(&operators, &robot, &traj, &regions, &metrics, &ctx, None)
             .expect("pipeline should succeed");
 
         assert_eq!(result.report.steps.len(), 3);
@@ -649,7 +734,7 @@ mod tests {
         let operators: [&dyn TrajectoryOperator; 1] = [&op];
 
         let result = pipeline
-            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx, None)
+            .optimize_regions(&operators, &robot, &traj, &regions, &metrics, &ctx, None)
             .expect("pipeline should not error on operator failure");
 
         assert_eq!(result.report.steps.len(), 1);
@@ -678,7 +763,7 @@ mod tests {
         let operators: [&dyn TrajectoryOperator; 2] = [&succeed_op, &fail_op];
 
         let result = pipeline
-            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx, None)
+            .optimize_regions(&operators, &robot, &traj, &regions, &metrics, &ctx, None)
             .expect("pipeline should succeed");
 
         assert_eq!(result.report.steps.len(), 1);
@@ -713,7 +798,7 @@ mod tests {
         let operators: [&dyn TrajectoryOperator; 2] = [&low_score_succeeds, &high_score_fails];
 
         let result = pipeline
-            .optimize(&operators, &robot, &traj, &regions, &metrics, &ctx, None)
+            .optimize_regions(&operators, &robot, &traj, &regions, &metrics, &ctx, None)
             .expect("pipeline should succeed");
 
         assert_eq!(result.report.steps.len(), 1);

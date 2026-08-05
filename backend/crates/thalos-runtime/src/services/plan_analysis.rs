@@ -27,6 +27,8 @@ use thalos_core::{
 use thalos_planning::{
     advisor::PlanAdvisor,
     analysis::{PlanAnalysis, TrajectoryAnalyzer},
+    motion::program::PlanningProgram,
+    recommendation::Recommendation,
 };
 
 use crate::error::RuntimeError;
@@ -40,6 +42,13 @@ pub struct PlanAnalysisResult {
     /// Reporte canónico agregado (PR 3): observaciones + acciones + summary,
     /// `validate()`-safe. Es la proyección del wire de `/plan/analyze`.
     pub report: AnalysisReport,
+    /// Recomendaciones de remediación (PR2, spec recommendation-model): cada
+    /// una lleva `action` + `edit` (comando semántico de plan). ADITIVO — el
+    /// contrato wire la expone con `#[serde(default)]`. Se puebla cuando el
+    /// flujo de análisis dispone de un programa + solver (R3-001:
+    /// `analyze_plan_with_recommendations`); en el análisis puro queda vacía
+    /// (clientes antiguos no afectados).
+    pub recommendations: Vec<Recommendation>,
 }
 
 /// Servicio de análisis de planes.
@@ -107,7 +116,45 @@ impl PlanAnalysisService {
         // ADITIVO: solo llena un campo que llegaba vacío (`{}`).
         report.metrics = analysis.metrics.to_btree_map();
 
-        Ok(PlanAnalysisResult { analysis, report })
+        Ok(PlanAnalysisResult {
+            analysis,
+            report,
+            // PR2: aditivo — el análisis puro no dispone de programa+solver
+            // para materializar edits; los flujos con contexto de plan usan
+            // `analyze_plan_with_recommendations`. El wire lo expone con
+            // serde default, así que los clientes antiguos no cambian (I3).
+            recommendations: Vec::new(),
+        })
+    }
+
+    /// Variante de [`analyze_plan`] que además puebla `recommendations` desde
+    /// el contexto de plan disponible (programa semántico + solver IK + joints
+    /// actuales, PR2).
+    ///
+    /// Este es el camino del endpoint `/plan/analyze` (R3-001): la UI consume
+    /// SOLO la proyección de `analyze`, así que el flujo real debe producir las
+    /// filas de recomendación aquí. Un programa vacío produce
+    /// `recommendations` vacío (el advisor no puede resolver segmentos
+    /// objetivo) — nunca un vacío silencioso: los flujos sin contexto de plan
+    /// no proyectan el campo (aditivo en el wire).
+    pub fn analyze_plan_with_recommendations(
+        chain: &SerialChain,
+        trajectory: &thalos_core::trajectory::Trajectory,
+        tcp: Option<&ToolFrame>,
+        constraints: Option<&[Constraint]>,
+        artifact: ArtifactRef,
+        program: &PlanningProgram,
+        ik_solver: &dyn thalos_core::kinematics::inverse::IKSolver,
+        current_joints: &[f64],
+    ) -> Result<PlanAnalysisResult, RuntimeError> {
+        let mut result = Self::analyze_plan(chain, trajectory, tcp, constraints, artifact)?;
+        result.recommendations = PlanAdvisor.recommend(
+            &result.report.observations,
+            program,
+            ik_solver,
+            current_joints,
+        );
+        Ok(result)
     }
 }
 

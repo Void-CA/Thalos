@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// New variants (e.g. `Wait`, `SetTool`, `IO`) can be added without changing
 /// the compiler — only the dispatcher needs a new arm.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum MotionSegment {
     /// Joint-space move to a target configuration.
     MoveJ {

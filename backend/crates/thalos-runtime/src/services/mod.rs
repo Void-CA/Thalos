@@ -1,3 +1,4 @@
+pub mod command_history;
 pub mod manipulability;
 pub mod plan_analysis;
 pub mod scene;

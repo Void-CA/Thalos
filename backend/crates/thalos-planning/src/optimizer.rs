@@ -145,10 +145,12 @@ impl TrajectoryOptimizer {
             .chain(adapter_refs.iter().map(|a| a as &dyn TrajectoryOperator))
             .collect();
 
-        // 6. Run the optimization pipeline
+        // 6. Run the optimization pipeline (legacy regions entry — this
+        //    wrapper keeps the explicit-regions contract; the report-based
+        //    entry is used by the plan_analysis optimize endpoint).
         let result = self
             .pipeline
-            .optimize(&all_ops, chain, trajectory, regions, &metrics, &ctx, None)?;
+            .optimize_regions(&all_ops, chain, trajectory, regions, &metrics, &ctx, None)?;
 
         Ok(result.report)
     }

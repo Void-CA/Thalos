@@ -6,7 +6,7 @@ use axum::{
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
-use thalos_api::{app_router, new_default_state};
+use thalos_api::{app_router, new_default_state, new_state_with_scene_writeback};
 
 async fn test_app() -> Router {
     let state = new_default_state().await;
@@ -1629,6 +1629,655 @@ async fn e2e_full_pipeline() {
         .map(|a| a.len())
         .unwrap_or(0);
     assert!(actions > 0, "analyze should return at least one action");
+}
+
+// =========================================================================
+// Plan command preview (PR3 — read-only simulation)
+// =========================================================================
+
+/// Shared setup for preview tests: Scara robot + a compiled program that
+/// carries a Cartesian (MoveL) segment so the advisor can materialize
+/// recommendations (all materializers are Cartesian-only, PR2).
+async fn preview_setup(app: &Router) {
+    let (status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/robot",
+        Some(json!({"robot_id": "scara"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "load_robot should succeed");
+
+    let (status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/motion/plan",
+        Some(json!({
+            "segments": [
+                {"type": "movej", "target": [0.5, -0.3, -0.1, 0.0]},
+                {
+                    "type": "movel",
+                    "target": {
+                        "translation": [1.5, 0.3, 0.5],
+                        "rotation": {"kind": "Quaternion", "value": {"w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0}}
+                    }
+                }
+            ]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "preview_plan should succeed");
+}
+
+#[tokio::test]
+async fn analyze_command_populates_recommendations_with_edits() {
+    // R3-001: /plan/analyze must populate recommendations[] when the active
+    // plan produces observations that generate recommendations. The UI
+    // (AdvisorSection) is fed ONLY from planAnalysisApi.analyze() — an empty
+    // recommendations[] makes preview/apply/undo unreachable in the real flow.
+    let app = test_app().await;
+    preview_setup(&app).await;
+
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/plan/analyze",
+        Some(json!({})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "analyze should succeed");
+
+    let body = body.expect("analyze response must be valid JSON");
+    let recommendations = body["recommendations"]
+        .as_array()
+        .expect("recommendations must be an array");
+    assert!(
+        !recommendations.is_empty(),
+        "analyze must return recommendations when observations can generate them"
+    );
+    assert!(
+        recommendations.iter().any(|r| {
+            r["status"] == "available" && r["edit"]["ReplaceSegment"].is_object()
+        }),
+        "at least one available recommendation must carry a typed ReplaceSegment edit"
+    );
+}
+
+#[tokio::test]
+async fn preview_command_returns_simulation_without_mutation() {
+    // Spec command-endpoints "Preview returns simulation without mutation":
+    // a valid recommendation id returns waypoints + before/after metrics and
+    // leaves the SceneRuntime active_plan untouched (read-only preview).
+    let app = test_app().await;
+    preview_setup(&app).await;
+
+    // Snapshot the runtime state BEFORE the preview (GET /scene is read-only).
+    let (_, before) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before = before.expect("scene response must be valid JSON");
+    assert!(
+        before["active_plan"].is_object(),
+        "setup must leave an active plan"
+    );
+
+    // Advisor recommendation ids start at 1 (PR2 counter).
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/preview",
+        Some(json!({"recommendation_id": 1})),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "preview must succeed for a valid recommendation id"
+    );
+
+    let body = body.expect("preview response must be valid JSON");
+    let waypoints = body["waypoints"].as_array().expect("waypoints array");
+    assert!(
+        waypoints.len() >= 2,
+        "preview must return a 3D waypoint trajectory"
+    );
+    assert!(
+        waypoints
+            .iter()
+            .all(|w| w.as_array().is_some_and(|p| p.len() == 3)),
+        "each waypoint must be [x, y, z]"
+    );
+    assert!(
+        body["metrics_before"]["waypoint_count"].is_number(),
+        "metrics_before must carry aggregate metrics"
+    );
+    assert!(
+        body["metrics_after"]["waypoint_count"].is_number(),
+        "metrics_after must carry aggregate metrics"
+    );
+    assert!(
+        body["health_before"].is_number() && body["health_after"].is_number(),
+        "preview must report before/after health"
+    );
+    assert!(
+        body["continuity"].is_boolean(),
+        "preview must report trajectory continuity"
+    );
+
+    // Preview MUST NOT mutate SceneRuntime: the active plan is identical.
+    let (_, after) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after = after.expect("scene response must be valid JSON");
+    assert_eq!(
+        after["active_plan"], before["active_plan"],
+        "preview must not mutate the active plan (read-only simulation)"
+    );
+}
+
+#[tokio::test]
+async fn preview_command_unknown_recommendation_returns_404_without_state_change() {
+    // Spec command-endpoints "Preview with invalid recommendation": a
+    // non-existent recommendation_id returns 404 and changes no state.
+    let app = test_app().await;
+    preview_setup(&app).await;
+
+    let (_, before) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before = before.expect("scene response must be valid JSON");
+
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/preview",
+        Some(json!({"recommendation_id": 999_999})),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::NOT_FOUND,
+        "unknown recommendation id must 404"
+    );
+    let body = body.expect("error response must be valid JSON");
+    assert_eq!(
+        body["code"], "not_found",
+        "404 body must carry the not_found code"
+    );
+
+    let (_, after) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after = after.expect("scene response must be valid JSON");
+    assert_eq!(
+        after["active_plan"], before["active_plan"],
+        "a failed preview must not mutate the active plan"
+    );
+}
+
+// =========================================================================
+// Plan command apply (PR4 — scene write-back, design-first milestone)
+// =========================================================================
+
+/// App with the scene-writeback feature flag ENABLED (D5). The default
+/// `test_app` keeps the flag OFF (rollback-safe default); apply tests that
+/// must exercise the write-back surface use this builder.
+async fn writeback_app() -> Router {
+    let state = new_state_with_scene_writeback(true).await;
+    app_router().with_state(state)
+}
+
+#[tokio::test]
+async fn apply_command_writes_back_and_stores_inverse_without_preview() {
+    // Spec command-endpoints "Apply writes back to scene" + "Apply without
+    // prior preview": apply executes the edit, recompiles, writes back to
+    // SceneRuntime and stores the inverse — preview is NOT a prerequisite.
+    let app = writeback_app().await;
+    preview_setup(&app).await;
+
+    // Snapshot the active plan BEFORE the apply (GET /scene is read-only).
+    let (_, before) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before = before.expect("scene response must be valid JSON");
+    let before_plan_id = before["active_plan"]["plan_id"]
+        .as_str()
+        .expect("setup must leave an active plan with an id")
+        .to_string();
+
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/apply",
+        // Recommendation 3 is AVAILABLE in this scenario (ids 1-2 are
+        // LiftTcp/manipulability edits whose IK fails → unavailable, D8).
+        Some(json!({"recommendation_id": 3})),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "apply must succeed WITHOUT a prior preview (preview is not a prerequisite)"
+    );
+    let body = body.expect("apply response must be valid JSON");
+    assert_eq!(
+        body["history_length"], 1,
+        "apply must store the inverse for PR5's undo"
+    );
+    assert_eq!(
+        body["status"], "available",
+        "apply response must echo recommendation availability (D8)"
+    );
+    assert!(
+        body["plan_id"].is_string(),
+        "apply response must carry the new active plan id"
+    );
+
+    // Write-back is observable via GET /scene: the active plan CHANGED.
+    let (_, after) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after = after.expect("scene response must be valid JSON");
+    let after_plan_id = after["active_plan"]["plan_id"]
+        .as_str()
+        .expect("active plan must still exist after apply")
+        .to_string();
+    assert_ne!(
+        after_plan_id, before_plan_id,
+        "apply must write the new plan back to SceneRuntime"
+    );
+}
+
+#[tokio::test]
+async fn apply_command_unknown_recommendation_returns_404_without_state_change() {
+    // Spec command-endpoints "Preview with invalid recommendation" — the same
+    // contract applies to apply: unknown id → 404, no state change.
+    let app = writeback_app().await;
+    preview_setup(&app).await;
+
+    let (_, before) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before = before.expect("scene response must be valid JSON");
+
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/apply",
+        Some(json!({"recommendation_id": 999_999})),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::NOT_FOUND,
+        "unknown recommendation id must 404"
+    );
+    let body = body.expect("error response must be valid JSON");
+    assert_eq!(
+        body["code"], "not_found",
+        "404 body must carry the not_found code"
+    );
+
+    let (_, after) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after = after.expect("scene response must be valid JSON");
+    assert_eq!(
+        after["active_plan"], before["active_plan"],
+        "a failed apply must not mutate the active plan"
+    );
+}
+
+#[tokio::test]
+async fn apply_command_flag_off_returns_feature_disabled_without_mutation() {
+    // Design D5 at the API layer: the DEFAULT app has scene-writeback OFF, so
+    // apply fails with `feature_disabled` and mutates NOTHING — rollback-safe.
+    let app = test_app().await;
+    preview_setup(&app).await;
+
+    let (_, before) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before = before.expect("scene response must be valid JSON");
+
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/apply",
+        // Must pass the D8 gate (available recommendation) to reach the flag
+        // check — recommendation 3 is available in this scenario.
+        Some(json!({"recommendation_id": 3})),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "flag-off apply must fail with Conflict (feature_disabled)"
+    );
+    let body = body.expect("error response must be valid JSON");
+    assert_eq!(
+        body["code"], "feature_disabled",
+        "flag-off apply must carry the feature_disabled code"
+    );
+
+    let (_, after) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after = after.expect("scene response must be valid JSON");
+    assert_eq!(
+        after["active_plan"], before["active_plan"],
+        "flag-off apply must NOT mutate the active plan"
+    );
+}
+
+#[tokio::test]
+async fn apply_command_unavailable_recommendation_returns_409_without_mutation() {
+    // Design D8 at the API layer: an unavailable recommendation is NEVER
+    // applied — the handler rejects it explicitly (409) before any write.
+    let app = writeback_app().await;
+    preview_setup(&app).await;
+
+    let (_, before) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before = before.expect("scene response must be valid JSON");
+
+    // Recommendation 1 is unavailable in this scenario (LiftTcp IK fails).
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/apply",
+        Some(json!({"recommendation_id": 1})),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "unavailable recommendation must be rejected with Conflict"
+    );
+    let body = body.expect("error response must be valid JSON");
+    assert_eq!(
+        body["code"], "recommendation_unavailable",
+        "D8 rejection must carry the recommendation_unavailable code"
+    );
+
+    let (_, after) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after = after.expect("scene response must be valid JSON");
+    assert_eq!(
+        after["active_plan"], before["active_plan"],
+        "an unavailable recommendation must NOT mutate the active plan"
+    );
+}
+
+// =========================================================================
+// Plan command undo (PR5 — O(1) via stored inverse, design D6)
+// =========================================================================
+
+/// Trajectory signature of the active plan from a GET /scene response: the
+/// waypoint COUNT plus the FIRST and LAST joints. Proves an undo restored the
+/// previous plan without coupling to float-exact intermediate waypoints.
+fn active_trajectory_signature(scene: &serde_json::Value) -> (usize, Vec<Vec<f64>>) {
+    let wps = scene["active_plan"]["visualization"]["waypoints"]
+        .as_array()
+        .expect("active plan must carry trajectory visualization waypoints");
+    let joints: Vec<Vec<f64>> = wps
+        .iter()
+        .map(|w| {
+            w["joints"]
+                .as_array()
+                .map(|j| j.iter().map(|v| v.as_f64().expect("joint value")).collect())
+                .expect("waypoint must carry joints")
+        })
+        .collect();
+    assert!(!joints.is_empty(), "trajectory must not be empty");
+    (
+        joints.len(),
+        vec![joints.first().unwrap().clone(), joints.last().unwrap().clone()],
+    )
+}
+
+#[tokio::test]
+async fn undo_command_restores_previous_plan_via_inverse() {
+    // Spec command-endpoints "Undo restores previous plan": after an apply,
+    // undo pops the stored inverse, recompiles and writes the PREVIOUS plan
+    // back to SceneRuntime — the original trajectory comes back.
+    let app = writeback_app().await;
+    preview_setup(&app).await;
+
+    // Trajectory BEFORE the apply (the state the undo must restore).
+    let (_, before_scene) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before_scene = before_scene.expect("scene response must be valid JSON");
+    let original = active_trajectory_signature(&before_scene);
+
+    // Apply recommendation 3 (available in this scenario) → plan changes.
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/apply",
+        Some(json!({"recommendation_id": 3})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "apply must succeed");
+    let body = body.expect("apply response must be valid JSON");
+    assert_eq!(body["history_length"], 1, "apply stores the inverse");
+    let applied_plan_id = body["plan_id"].as_str().expect("plan id").to_string();
+
+    let (_, applied_scene) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let applied_scene = applied_scene.expect("scene response must be valid JSON");
+    let applied = active_trajectory_signature(&applied_scene);
+
+    // Undo — POST with NO body: the endpoint pops the last applied command.
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/undo",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "undo must succeed after an apply");
+    let body = body.expect("undo response must be valid JSON");
+    assert_eq!(
+        body["history_length"], 0,
+        "undo pops the entry — the history is empty again"
+    );
+    assert!(
+        body["plan_id"].is_string(),
+        "undo response must carry the restored plan id"
+    );
+    assert_ne!(
+        body["plan_id"].as_str().unwrap(),
+        applied_plan_id,
+        "undo must write a NEW restored plan back to the runtime"
+    );
+    assert!(
+        body["health_before"].as_f64().is_some() && body["health_after"].as_f64().is_some(),
+        "undo response must report the restored health from the stored metrics"
+    );
+
+    // The scene now carries the PREVIOUS trajectory (shape equality with the
+    // pre-apply plan), not the applied one.
+    let (_, after_scene) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after_scene = after_scene.expect("scene response must be valid JSON");
+    let restored = active_trajectory_signature(&after_scene);
+    assert_eq!(
+        restored, original,
+        "undo must restore the previous plan trajectory"
+    );
+    assert_ne!(restored, applied, "the applied trajectory must be gone");
+}
+
+#[tokio::test]
+async fn undo_command_one_to_many_insert_waypoint_restores_original() {
+    // R3-002: undo of a recommendation whose edit is one-to-many (InsertWaypoint
+    // splits one MoveL into TWO segments) must restore the EXACT original plan.
+    // The old inverse spliced only the first segment back, leaving an extra
+    // segment — a corrupted, mixed plan.
+    let app = writeback_app().await;
+    preview_setup(&app).await;
+
+    // Re-schedule a SINGLE-MoveL plan just inside the reach boundary
+    // ([1.75, 0.1, 0.5]): the analysis produces a LowManipulability
+    // observation anchored at waypoint 0 (the only segment is the MoveL), so
+    // recommendation 2 (Waypoint/InsertWaypoint) is AVAILABLE and materializes
+    // a 1→2 replacement that still recompiles.
+    let (status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/motion/plan",
+        Some(json!({
+            "segments": [
+                {
+                    "type": "movel",
+                    "target": {
+                        "translation": [1.75, 0.1, 0.5],
+                        "rotation": {"kind": "Quaternion", "value": {"w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0}}
+                    }
+                }
+            ]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "plan must compile");
+
+    // Trajectory BEFORE the apply (the state the undo must restore).
+    let (_, before_scene) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before_scene = before_scene.expect("scene response must be valid JSON");
+    let original = active_trajectory_signature(&before_scene);
+
+    // Recommendation 2 is the available InsertWaypoint (1→2) in this scenario.
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/apply",
+        Some(json!({"recommendation_id": 2})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "apply of the InsertWaypoint must succeed");
+    let body = body.expect("apply response must be valid JSON");
+    assert_eq!(
+        body["status"], "available",
+        "recommendation 2 must be the available InsertWaypoint"
+    );
+    assert_eq!(body["history_length"], 1, "apply stores the inverse");
+
+    let (_, applied_scene) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let applied_scene = applied_scene.expect("scene response must be valid JSON");
+    let applied = active_trajectory_signature(&applied_scene);
+    assert_ne!(applied, original, "the apply must change the trajectory");
+
+    // Undo — must restore the EXACT pre-apply plan (no leftover segment).
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/undo",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "undo must succeed after an apply");
+    let body = body.expect("undo response must be valid JSON");
+    assert_eq!(body["history_length"], 0, "undo pops the entry");
+
+    let (_, after_scene) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after_scene = after_scene.expect("scene response must be valid JSON");
+    let restored = active_trajectory_signature(&after_scene);
+    assert_eq!(
+        restored, original,
+        "undo of a 1→2 InsertWaypoint must restore the exact original trajectory"
+    );
+    assert_ne!(restored, applied, "the applied trajectory must be gone");
+}
+
+#[tokio::test]
+async fn undo_command_stale_inverse_rejected_after_reschedule() {
+    // R4-001: undo must NEVER apply an inverse to a plan that is not its
+    // pre-state. After an apply, re-scheduling the plan through a NON-commanded
+    // path (e.g. /scene/motion/plan) replaces active_plan WITHOUT touching the
+    // command history — a subsequent undo must be rejected (409 stale_undo),
+    // never write a mixed plan from the stale inverse.
+    let app = writeback_app().await;
+    preview_setup(&app).await;
+
+    // 1. Apply an available recommendation → history_length 1.
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/apply",
+        Some(json!({"recommendation_id": 3})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "apply must succeed");
+    let body = body.expect("apply response must be valid JSON");
+    assert_eq!(body["history_length"], 1, "apply stores the inverse");
+
+    // 2. Re-schedule the plan by a NON-commanded path (motion plan preview).
+    //    This replaces active_plan while the command history still holds the
+    //    stale entry from the apply.
+    let (status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/motion/plan",
+        Some(json!({
+            "segments": [
+                {"type": "movej", "target": [0.5, -0.3, -0.1, 0.0]},
+                {
+                    "type": "movel",
+                    "target": {
+                        "translation": [1.5, 0.3, 0.5],
+                        "rotation": {"kind": "Quaternion", "value": {"w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0}}
+                    }
+                }
+            ]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "re-schedule must succeed");
+
+    // The re-scheduled (unrelated) plan must survive — undo must NOT corrupt it.
+    let (_, rescheduled_scene) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let rescheduled_scene = rescheduled_scene.expect("scene response must be valid JSON");
+    let rescheduled = active_trajectory_signature(&rescheduled_scene);
+
+    // 3. Undo of the STALE entry must be rejected — never applied.
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/undo",
+        None,
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "undo of a stale inverse (plan re-scheduled by another path) must be rejected"
+    );
+    let body = body.expect("error response must be valid JSON");
+    assert_eq!(
+        body["code"], "stale_undo",
+        "stale-undo rejection must carry the stale_undo code"
+    );
+
+    // 4. The re-scheduled plan is untouched — no mixed/corrupted write-back.
+    let (_, after_scene) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after_scene = after_scene.expect("scene response must be valid JSON");
+    assert_eq!(
+        active_trajectory_signature(&after_scene),
+        rescheduled,
+        "the re-scheduled plan must remain intact after a rejected stale undo"
+    );
+}
+
+#[tokio::test]
+async fn undo_command_empty_history_returns_409_without_mutation() {
+    // Spec command-endpoints "Undo with empty history": no applied commands →
+    // 409 Conflict; the runtime is untouched.
+    let app = writeback_app().await;
+    preview_setup(&app).await;
+
+    let (_, before) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before = before.expect("scene response must be valid JSON");
+
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/undo",
+        None,
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "undo with empty history must fail with Conflict (409)"
+    );
+    let body = body.expect("error response must be valid JSON");
+    assert_eq!(
+        body["code"], "empty_command_history",
+        "empty-history undo must carry the empty_command_history code"
+    );
+
+    let (_, after) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after = after.expect("scene response must be valid JSON");
+    assert_eq!(
+        after["active_plan"], before["active_plan"],
+        "empty-history undo must NOT mutate the active plan"
+    );
 }
 
 // =========================================================================
