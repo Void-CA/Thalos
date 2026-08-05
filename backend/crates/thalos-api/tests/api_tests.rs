@@ -1632,6 +1632,148 @@ async fn e2e_full_pipeline() {
 }
 
 // =========================================================================
+// Plan command preview (PR3 — read-only simulation)
+// =========================================================================
+
+/// Shared setup for preview tests: Scara robot + a compiled program that
+/// carries a Cartesian (MoveL) segment so the advisor can materialize
+/// recommendations (all materializers are Cartesian-only, PR2).
+async fn preview_setup(app: &Router) {
+    let (status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/robot",
+        Some(json!({"robot_id": "scara"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "load_robot should succeed");
+
+    let (status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/motion/plan",
+        Some(json!({
+            "segments": [
+                {"type": "movej", "target": [0.5, -0.3, -0.1, 0.0]},
+                {
+                    "type": "movel",
+                    "target": {
+                        "translation": [1.5, 0.3, 0.5],
+                        "rotation": {"kind": "Quaternion", "value": {"w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0}}
+                    }
+                }
+            ]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "preview_plan should succeed");
+}
+
+#[tokio::test]
+async fn preview_command_returns_simulation_without_mutation() {
+    // Spec command-endpoints "Preview returns simulation without mutation":
+    // a valid recommendation id returns waypoints + before/after metrics and
+    // leaves the SceneRuntime active_plan untouched (read-only preview).
+    let app = test_app().await;
+    preview_setup(&app).await;
+
+    // Snapshot the runtime state BEFORE the preview (GET /scene is read-only).
+    let (_, before) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before = before.expect("scene response must be valid JSON");
+    assert!(
+        before["active_plan"].is_object(),
+        "setup must leave an active plan"
+    );
+
+    // Advisor recommendation ids start at 1 (PR2 counter).
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/preview",
+        Some(json!({"recommendation_id": 1})),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "preview must succeed for a valid recommendation id"
+    );
+
+    let body = body.expect("preview response must be valid JSON");
+    let waypoints = body["waypoints"].as_array().expect("waypoints array");
+    assert!(
+        waypoints.len() >= 2,
+        "preview must return a 3D waypoint trajectory"
+    );
+    assert!(
+        waypoints
+            .iter()
+            .all(|w| w.as_array().is_some_and(|p| p.len() == 3)),
+        "each waypoint must be [x, y, z]"
+    );
+    assert!(
+        body["metrics_before"]["waypoint_count"].is_number(),
+        "metrics_before must carry aggregate metrics"
+    );
+    assert!(
+        body["metrics_after"]["waypoint_count"].is_number(),
+        "metrics_after must carry aggregate metrics"
+    );
+    assert!(
+        body["health_before"].is_number() && body["health_after"].is_number(),
+        "preview must report before/after health"
+    );
+    assert!(
+        body["continuity"].is_boolean(),
+        "preview must report trajectory continuity"
+    );
+
+    // Preview MUST NOT mutate SceneRuntime: the active plan is identical.
+    let (_, after) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after = after.expect("scene response must be valid JSON");
+    assert_eq!(
+        after["active_plan"], before["active_plan"],
+        "preview must not mutate the active plan (read-only simulation)"
+    );
+}
+
+#[tokio::test]
+async fn preview_command_unknown_recommendation_returns_404_without_state_change() {
+    // Spec command-endpoints "Preview with invalid recommendation": a
+    // non-existent recommendation_id returns 404 and changes no state.
+    let app = test_app().await;
+    preview_setup(&app).await;
+
+    let (_, before) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before = before.expect("scene response must be valid JSON");
+
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/preview",
+        Some(json!({"recommendation_id": 999_999})),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::NOT_FOUND,
+        "unknown recommendation id must 404"
+    );
+    let body = body.expect("error response must be valid JSON");
+    assert_eq!(
+        body["code"], "not_found",
+        "404 body must carry the not_found code"
+    );
+
+    let (_, after) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after = after.expect("scene response must be valid JSON");
+    assert_eq!(
+        after["active_plan"], before["active_plan"],
+        "a failed preview must not mutate the active plan"
+    );
+}
+
+// =========================================================================
 // Semantic compile endpoint
 // =========================================================================
 

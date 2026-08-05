@@ -14,6 +14,8 @@ use axum::{Json, extract::State};
 use thalos_core::{
     analysis::RegionGrouper, analysis::observation::ArtifactRef, ids::MotionPlanId,
     kinematics::forward::ForwardKinematics,
+    kinematics::inverse::DampedLeastSquaresSolver,
+    robot::state::RobotState,
 };
 use thalos_optimization::{
     PlanMetrics,
@@ -24,14 +26,22 @@ use thalos_optimization::{
     },
     pipeline::OptimizationPipeline,
 };
-use thalos_planning::motion::program::PlannedSegment;
+use thalos_planning::{
+    advisor::PlanAdvisor,
+    motion::{
+        compiler::{DefaultPlannerDispatcher, PlanCompiler},
+        planner::SegmentPlanningContext,
+        program::{PlannedSegment, PlanningProgram},
+    },
+    recommendation::RecommendationId,
+};
 use thalos_runtime::PlanAnalysisService;
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
 use crate::features::plan_analysis::dto::{
     MetricsComparisonDto, OperatorAppliedDto, OptimizeResponse, PlanAnalysisRequest,
-    PlanAnalysisResponse,
+    PlanAnalysisResponse, PreviewRequest, PreviewResponse,
 };
 
 /// POST /api/v1/plan/analyze
@@ -79,6 +89,160 @@ pub async fn analyze_plan(
         segments,
         &result.recommendations,
     )))
+}
+
+/// POST /api/v1/plan/commands/preview
+///
+/// Simulación READ-ONLY de una recomendación (PR3, spec command-endpoints
+/// "Preview Endpoint"): la edición se aplica sobre un CLON del programa
+/// semántico, se recompila y se re-analiza, y se devuelven los waypoints de la
+/// trayectoria resultante + métricas antes/después. El `SceneRuntime` NUNCA se
+/// muta — no hay `replace_active_plan`, no hay snapshot de escena.
+///
+/// Data flow (design PR3): `clone program → edit.apply(clone) → recompile →
+/// re-analyze → return waypoints; NO state mutation`.
+pub async fn preview_command(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<PreviewRequest>,
+) -> ApiResult<PreviewResponse> {
+    let snapshot = state.services.scene.snapshot().await?;
+
+    // 1. Plan activo — la fuente del programa semántico (I1) y la trayectoria
+    //    "before" para las métricas.
+    let active_plan = snapshot
+        .active_plan
+        .as_ref()
+        .ok_or_else(|| ApiError::InvalidState {
+            message: "No active plan to preview".to_string(),
+            code: "no_active_plan".to_string(),
+        })?;
+    let artifact = ArtifactRef::MotionPlan(MotionPlanId(active_plan.plan_id.clone()));
+
+    // 2. Reconstruir el `PlanningProgram` desde los segmentos compilados
+    //    (`PlannedSegment.source` preserva el comando semántico, invariante
+    //    I2). Es un CLON — la edición nunca toca el plan del runtime.
+    let program = {
+        let segments = active_plan.segments.as_deref().ok_or_else(|| {
+            ApiError::InvalidState {
+                message: "Active plan carries no program segments".to_string(),
+                code: "no_program_segments".to_string(),
+            }
+        })?;
+        if segments.is_empty() {
+            return Err(ApiError::InvalidState {
+                message: "Active plan has no program segments".to_string(),
+                code: "no_program_segments".to_string(),
+            });
+        }
+        PlanningProgram::new(segments.iter().map(|s| s.source.clone()).collect())
+    };
+
+    // 3. Análisis "before" + materialización de recomendaciones (el mismo
+    //    determinismo del advisor: mismas observaciones + mismo programa →
+    //    mismas recomendaciones). El id del wire resuelve contra esta lista.
+    let before = PlanAnalysisService::analyze_plan(
+        &snapshot.chain,
+        &active_plan.trajectory,
+        snapshot.active_tcp.as_ref(),
+        None,
+        artifact.clone(),
+    )?;
+
+    let fk = ForwardKinematics::new(snapshot.chain.clone());
+    let solver = DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
+    let recommendations = PlanAdvisor.recommend(
+        &before.report.observations,
+        &program,
+        &solver,
+        &snapshot.joints,
+    );
+
+    let recommendation = recommendations
+        .iter()
+        .find(|r| r.id == RecommendationId(req.recommendation_id))
+        .ok_or_else(|| ApiError::NotFound {
+            message: format!(
+                "Recommendation {} not found in the active plan",
+                req.recommendation_id
+            ),
+        })?;
+
+    // 4. SIMULATE — aplicar la edición sobre el CLON y recompilar desde el
+    //    mismo estado inicial que el plan activo (el primer waypoint de su
+    //    trayectoria). `apply` es no-mutante por contrato (PR1).
+    let edited_program = recommendation
+        .edit
+        .apply(&program)
+        .map_err(|e| ApiError::Validation {
+            message: e.to_string(),
+            code: "edit_apply_failed".to_string(),
+        })?;
+
+    let start_joints = active_plan
+        .trajectory
+        .waypoints()
+        .first()
+        .map(|w| w.joints().to_vec())
+        .unwrap_or_else(|| snapshot.joints.clone());
+    let current_state = RobotState::new(start_joints);
+    let ctx = SegmentPlanningContext {
+        robot: &snapshot.chain,
+        current_state: &current_state,
+        ik_solver: &solver,
+        tcp: snapshot.active_tcp.as_ref(),
+    };
+    let compiled = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()))
+        .compile(&edited_program, &ctx)
+        .map_err(|e| ApiError::Validation {
+            message: e.to_string(),
+            code: "recompile_failed".to_string(),
+        })?;
+
+    // 5. Análisis "after" sobre la trayectoria editada.
+    let after = PlanAnalysisService::analyze_plan(
+        &snapshot.chain,
+        &compiled.merged_trajectory,
+        snapshot.active_tcp.as_ref(),
+        None,
+        artifact,
+    )?;
+
+    // 6. Waypoints del efector final para el overlay 3D (mismo patrón que
+    //    `OptimizeResponse.optimized_positions`).
+    let fk_out = ForwardKinematics::new(snapshot.chain.clone());
+    let waypoints: Vec<[f64; 3]> = compiled
+        .merged_trajectory
+        .waypoints()
+        .iter()
+        .filter_map(|wp| {
+            fk_out
+                .evaluate(wp.joints())
+                .ee_position()
+                .map(|p| [p.x, p.y, p.z])
+        })
+        .collect();
+
+    // 7. Continuidad: la trayectoria recompilada es un continuo sin huecos
+    //    (timestamps estrictamente crecientes — la compilación es atómica).
+    let continuity = {
+        let wps = compiled.merged_trajectory.waypoints();
+        !wps.is_empty() && wps.windows(2).all(|w| w[1].timestamp() > w[0].timestamp())
+    };
+
+    let health_before = before.report.summary.quality_index;
+    let health_after = after.report.summary.quality_index;
+
+    Ok(Json(PreviewResponse {
+        recommendation_id: recommendation.id.0,
+        status: recommendation.status,
+        waypoints,
+        metrics_before: before.report.metrics.clone(),
+        metrics_after: after.report.metrics.clone(),
+        health_before,
+        health_after,
+        improvement: health_after - health_before,
+        continuity,
+    }))
 }
 
 // ── Metrics helpers ──────────────────────────────────────────

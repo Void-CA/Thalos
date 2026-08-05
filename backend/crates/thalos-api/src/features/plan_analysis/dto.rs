@@ -51,6 +51,51 @@ pub struct PlanAnalysisRequest {
     pub plan_id: Option<String>,
 }
 
+/// Request para previsualizar el efecto de una recomendación (PR3).
+///
+/// `POST /plan/commands/preview` — simulación READ-ONLY: la edición se aplica
+/// sobre un CLON del programa semántico, se recompila y se re-analiza; el
+/// `SceneRuntime` nunca se muta (spec command-endpoints "Preview Endpoint").
+#[derive(Debug, Deserialize)]
+pub struct PreviewRequest {
+    /// Id de la recomendación a simular (ids del advisor, 1-based).
+    pub recommendation_id: u32,
+}
+
+/// Respuesta de la simulación de una recomendación (PR3).
+///
+/// Proyecta el resultado de `edit.apply(clone) + recompile + re-analyze`:
+/// waypoints de la trayectoria editada (para el overlay 3D, mismo patrón que
+/// `OptimizeResponse.optimized_positions`), métricas antes/después y la
+/// continuidad de la trayectoria resultante.
+#[derive(Debug, Serialize)]
+pub struct PreviewResponse {
+    /// Id de la recomendación simulada (eco del request).
+    pub recommendation_id: u32,
+    /// Disponibilidad del edit: `"available"` | `"unavailable"` (D8). La
+    /// simulación de un edit `unavailable` devuelve una trayectoria idéntica
+    /// (edit neutro) — el consumidor decide si la muestra.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<RecommendationStatus>,
+    /// Posiciones del efector final `[x, y, z]` de la trayectoria editada —
+    /// fuente del overlay 3D (spec advisor-projection "Preview overlay reuse").
+    pub waypoints: Vec<[f64; 3]>,
+    /// Métricas agregadas del plan ANTES de la edición (claves estables del
+    /// reporte canónico).
+    pub metrics_before: BTreeMap<String, f64>,
+    /// Métricas agregadas del plan DESPUÉS de aplicar la edición.
+    pub metrics_after: BTreeMap<String, f64>,
+    /// Calidad de salud (0..1) antes de la edición.
+    pub health_before: f64,
+    /// Calidad de salud (0..1) después de la edición.
+    pub health_after: f64,
+    /// Mejora de salud: `health_after - health_before` (negativo = degrada).
+    pub improvement: f64,
+    /// La trayectoria recompilada es continua: sin huecos y con timestamps
+    /// estrictamente crecientes (compilación atómica, sin interrupciones).
+    pub continuity: bool,
+}
+
 /// Respuesta completa del análisis de un plan — proyección del
 /// [`AnalysisReport`] del dominio (spec motion-plan-endpoint).
 #[derive(Debug, Serialize, Deserialize)]

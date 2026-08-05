@@ -10,6 +10,10 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/plan/analyze", post(handler::analyze_plan))
         .route("/plan/optimize", post(handler::handle_optimize))
         .route(
+            "/plan/commands/preview",
+            post(handler::preview_command),
+        )
+        .route(
             "/plan/analyze/alternatives",
             post(alternatives::analyze_alternatives),
         )
