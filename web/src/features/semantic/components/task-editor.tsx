@@ -1,5 +1,5 @@
 import { Play, Plus, RotateCcw, Send } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useSemanticEditor } from '../store'
 import { useDomainSceneStore } from '@/features/scene/store'
@@ -73,8 +73,13 @@ function describeError(err: unknown): string {
  *
  * Task is EXCLUSIVELY an authoring environment: edit scene objects, edit
  * program operations, validate, compile. It owns ZERO execution capabilities —
- * no Simulate/Stop, no progress footers, no tick loop. "Send to Execution"
- * hands the compiled plan to the Execution workspace: `POST /semantic/execute`
+ * no Simulate/Stop, no progress footers, no tick loop. A single header action
+ * (program-dual-editor spec "Unified Compile/Send Button") derives label +
+ * handler from `compiled`: "Compile" (green, `compileSemantic`) until a plan is
+ * compiled, then "Send to Execution" (purple, `executeSemantic`) with the SAME
+ * payload — the memoized `taskDocument` (`{ task: toTaskDocument(ops) }`).
+ * "Send to Execution" hands
+ * the compiled plan to the Execution workspace: `POST /semantic/execute`
  * WITHOUT `start()` (the plan is loaded into the runtime, execStatus → ready),
  * then navigates to /execution. The tick loop only ever starts from Execution
  * (execution-workspace spec, Invariant #5 / Tick Loop Ownership).
@@ -186,12 +191,27 @@ export function TaskEditor() {
   /** S3.3: no Apply while the buffer has parse errors. */
   const applyDisabled = scriptErrors.length > 0
 
-  const makeOps = () => operations.map((op, i) => ({ ...op, origin: op.origin ?? `op_${i}` }))
+  /**
+   * The SAME task document for Compile and Send (program-dual-editor spec
+   * "Unified Compile/Send Button": the payload MUST remain identical — the
+   * document compiled IS the document executed). Rebuilding it per call would
+   * regenerate id/created_at and hand Execution a DIFFERENT document identity
+   * than the one that was compiled. Recomputed only when the operation set
+   * changes — and any operation change bumps `dirty`, which reverts the button
+   * to "Compile" anyway, so the memo can never go stale behind a Send.
+   */
+  const taskDocument = useMemo(
+    () =>
+      toTaskDocument(
+        operations.map((op, i) => ({ ...op, origin: op.origin ?? `op_${i}` })),
+      ),
+    [operations, toTaskDocument],
+  )
 
   const handleCompile = async () => {
     setLoading(true); setError(null)
     try {
-      const res = await compileSemantic({ task: toTaskDocument(makeOps()) })
+      const res = await compileSemantic({ task: taskDocument })
       setResult(res)
     } catch (err) {
       setError(describeError(err))
@@ -204,7 +224,7 @@ export function TaskEditor() {
   const handleSendToExecution = async () => {
     setLoading(true); setError(null)
     try {
-      const res = await executeSemantic({ task: toTaskDocument(makeOps()) })
+      const res = await executeSemantic({ task: taskDocument })
       if (res.status !== 'ok') { setError('Execution handoff failed'); return }
       useExecutionStore.getState().receivePlan({
         instructionCount: result?.metadata.instruction_count ?? res.segment_count,
@@ -250,9 +270,15 @@ export function TaskEditor() {
           className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer">
           <RotateCcw className="size-3" /> Reset
         </button>
-        <button onClick={handleCompile} disabled={!canCompile}
-          className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-md bg-green-600/20 text-green-500 hover:bg-green-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
-          <Play className="size-3" /> Compile
+        <button onClick={compiled ? handleSendToExecution : handleCompile} disabled={!canCompile}
+          title={compiled ? 'Load the compiled plan into Execution' : 'Compile the program'}
+          className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-md cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+            compiled
+              ? 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
+              : 'bg-green-600/20 text-green-500 hover:bg-green-600/30'
+          }`}>
+          {compiled ? <Send className="size-3" /> : <Play className="size-3" />}
+          {compiled ? 'Send to Execution' : 'Compile'}
         </button>
       </div>
 
@@ -312,13 +338,6 @@ export function TaskEditor() {
               onMoveDown={(idx) => idx < operations.length - 1 && moveOperation(idx, idx + 1)} />
           ))
         )}
-        <div className="flex items-center justify-around gap-2 mt-3">
-        <button onClick={handleSendToExecution} disabled={!compiled}
-          title={compiled ? 'Load the compiled plan into Execution' : 'Compile first'}
-          className="inline-flex items-center gap-1 px-10 py-1 text-md font-medium rounded-md bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
-          <Send className="size-3" /> Send to Execution
-        </button>
-        </div>
       </div>
 
         

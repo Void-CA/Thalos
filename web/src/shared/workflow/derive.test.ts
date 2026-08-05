@@ -445,15 +445,15 @@ describe('deriveStepperStages — per-stage state from flags + active route', ()
     expect(execution.reason).toBe('Requires an executable plan')
   })
 
-  it('derives the reason from the first missing flag (compiled → planning)', () => {
+  it('derives the reason from the first missing flag (sceneValid → planning)', () => {
     const stages = deriveStepperStages(
-      { ...ALL_TRUE, compiled: false, executable: false },
+      { ...ALL_TRUE, sceneValid: false },
       '/task',
       WORKSPACE_REGISTRY,
     )
     const planning = stages.find((s) => s.entry.workspace === 'planning')!
     expect(planning.state).toBe('blocked')
-    expect(planning.reason).toBe('Requires a compiled plan')
+    expect(planning.reason).toBe('Requires a valid scene')
   })
 
   it('never blocks sessions — the guard is relaxed (no requirement gates the browser)', () => {
@@ -504,8 +504,8 @@ describe('requirementReason — derived from the registry, never per-workspace s
 
   it('names the missing flag when requirements are unmet', () => {
     const planning = WORKSPACE_REGISTRY.find((e) => e.workspace === 'planning')!
-    expect(requirementReason(planning, { ...ALL_TRUE, compiled: false })).toBe(
-      'Requires a compiled plan',
+    expect(requirementReason(planning, { ...ALL_TRUE, sceneValid: false })).toBe(
+      'Requires a valid scene',
     )
   })
 

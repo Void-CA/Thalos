@@ -97,6 +97,14 @@ export class SceneService {
     return toFkSnapshot(res)
   }
 
+  /** Select or clear the active TCP (spec tcp-resolved-pose R2). Returns the
+   *  full updated snapshot; `activeTcp.resolvedPose` reflects the backend FK
+   *  result when the TCP is active. */
+  async selectToolFrame(frameId?: number | null, offset?: [number, number, number] | null): Promise<SceneSnapshot> {
+    const res = await this.api.selectToolFrame(frameId, offset)
+    return toSnapshot(res)
+  }
+
   async moveToPosition(target: [number, number, number], frameId?: number): Promise<SceneSnapshot> {
     const res = await this.api.moveToPosition(target, frameId)
     return toSnapshot(res)

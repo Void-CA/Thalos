@@ -120,18 +120,23 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('GuardedRoute — behavior over real router routes', () => {
-  it('blocks /planning without a compiled plan, redirecting to the producer of compiled', async () => {
-    seedWorkflowState({ robotLoaded: true }) // compiled=false, robot loaded
+  it('blocks /planning without a valid scene, redirecting to the producer of sceneValid', async () => {
+    // sceneValid=false (objects cleared) but robot loaded → /planning requires
+    // sceneValid → redirect to the Escena area (produces sceneValid).
+    seedWorkflowState({ robotLoaded: true })
+    act(() => {
+      useDomainSceneStore.setState({ objects: [] })
+    })
     const router = renderRouter(['/planning'])
 
     // Registry is the source of truth for the redirect target.
-    const producer = producerOf('compiled')
-    expect(producer?.path).toBe('/task')
+    const producer = producerOf('sceneValid')
+    expect(producer?.path).toBe('/scene')
     await waitFor(() => expect(router.state.location.pathname).toBe(producer!.path))
 
-    // Planning panel must NOT render; Programación workspace is active.
+    // Planning panel must NOT render; Escena workspace is active.
     expect(screen.queryByRole('heading', { name: 'Motion Program' })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Programación' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Escena' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('chains to the root when the producer itself is blocked (no robot loaded)', async () => {
@@ -163,12 +168,31 @@ describe('GuardedRoute — behavior over real router routes', () => {
     expect(screen.queryByRole('heading', { name: 'Program' })).not.toBeInTheDocument()
   })
 
-  it('renders /planning normally when the plan is compiled', async () => {
-    seedWorkflowState({ robotLoaded: true, compiled: true })
+  it('renders /planning when the scene is valid, even without a compiled plan', async () => {
+    // sceneValid=true (default seed), compiled=false → /planning renders: the
+    // Motion Program is built from the scene (/scene/preview), not from the
+    // Task-compiled plan — compiled state SHALL NOT affect access.
+    seedWorkflowState({ robotLoaded: true })
     const router = renderRouter(['/planning'])
 
     expect(router.state.location.pathname).toBe('/planning')
     expect(screen.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
+  })
+
+  it('blocks /execution without a compiled plan, redirecting to the producer of compiled', async () => {
+    // compiled=false → executable=false. Execution KEEPS its compiled gate
+    // (executable = compiled && status), so the guard redirects to /task (the
+    // producer of compiled) instead of the root.
+    seedWorkflowState({ robotLoaded: true })
+    const router = renderRouter(['/execution'])
+
+    const producer = producerOf('compiled')
+    expect(producer?.path).toBe('/task')
+    await waitFor(() => expect(router.state.location.pathname).toBe(producer!.path))
+
+    // Execution panel must NOT render; Programación workspace is active.
+    expect(screen.queryByRole('heading', { name: 'Execution' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Program' })).toBeInTheDocument()
   })
 
   it('blocks /execution without an executable plan, redirecting to the producer', async () => {

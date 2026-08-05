@@ -32,3 +32,21 @@ describe('sceneApi.getScene — backend-derived initial identity (spec R7)', () 
     expect(mocks.get).toHaveBeenCalledWith('/scene')
   })
 })
+
+describe('sceneApi.selectToolFrame — POST /scene/tcp (tcp-resolved-pose R2)', () => {
+  it('selects frame_id=2 with offset [0,0,0.1] and returns the updated state', async () => {
+    mocks.post.mockResolvedValue({ data: runtimeResponse })
+
+    await sceneApi.selectToolFrame(2, [0, 0, 0.1])
+
+    expect(mocks.post).toHaveBeenCalledWith('/scene/tcp', { frame_id: 2, offset: [0, 0, 0.1] })
+  })
+
+  it('clears the TCP with null frame_id and null offset (R2 clear scenario)', async () => {
+    mocks.post.mockResolvedValue({ data: runtimeResponse })
+
+    await sceneApi.selectToolFrame(null)
+
+    expect(mocks.post).toHaveBeenCalledWith('/scene/tcp', { frame_id: null, offset: null })
+  })
+})

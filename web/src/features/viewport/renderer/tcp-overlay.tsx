@@ -2,18 +2,27 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useSceneStore } from '../store'
 import { TCP_COLOR } from '@/shared/tokens'
+import type { SceneData, ToolFrame, TransformSnapshot } from '../types'
 
-export function TcpOverlay() {
-  const activeTcp = useSceneStore(s => s.activeTcp)
-  const transformSnapshot = useSceneStore(s => s.transformSnapshot)
-  const data = useSceneStore(s => s.data)
-
-  if (!activeTcp || !data) return null
+/**
+ * Resolve the world-space position of the TCP marker.
+ *
+ * - When the backend FK result is present (`resolvedPose`), it wins — the
+ *   marker goes exactly where the resolved pose says (tcp-resolved-pose R5.1).
+ * - Otherwise fall back to the local derivation: base frame position from the
+ *   same transform source that drives the robot model (execution ticks, FK
+ *   frames, then the static scene) plus the TCP offset (R5.2).
+ * - `null` when the frame cannot be resolved at all.
+ */
+export function resolveTcpPosition(
+  activeTcp: ToolFrame,
+  transformSnapshot: TransformSnapshot,
+  data: SceneData | null,
+): [number, number, number] | null {
+  if (activeTcp.resolvedPose) return activeTcp.resolvedPose.position
 
   const frameId = String(activeTcp.baseFrameId)
 
-  // Resolve the TCP frame position from the same transform source that drives
-  // the robot model: execution ticks, FK frames, then the static scene.
   let framePosition: [number, number, number] | null = null
   if (transformSnapshot.kind === 'execution') {
     const tx = transformSnapshot.transforms.find(t => t.id === frameId)
@@ -22,22 +31,36 @@ export function TcpOverlay() {
     const frame = transformSnapshot.frames.get(frameId)
     if (frame) framePosition = frame.pos
   }
-  if (!framePosition) {
+  if (!framePosition && data) {
     const staticFrame = data.frames.find(f => f.id === frameId)
     if (staticFrame) framePosition = staticFrame.translation
   }
   if (!framePosition) return null
 
-  const position = new THREE.Vector3(...framePosition)
-
+  const [fx, fy, fz] = framePosition
   if (activeTcp.offset) {
-    position.add(new THREE.Vector3(...activeTcp.offset))
+    const [ox, oy, oz] = activeTcp.offset
+    return [fx + ox, fy + oy, fz + oz]
   }
+  return [fx, fy, fz]
+}
+
+export function TcpOverlay() {
+  const activeTcp = useSceneStore(s => s.activeTcp)
+  const transformSnapshot = useSceneStore(s => s.transformSnapshot)
+  const data = useSceneStore(s => s.data)
+
+  const position = useMemo(
+    () => (activeTcp ? resolveTcpPosition(activeTcp, transformSnapshot, data) : null),
+    [activeTcp, transformSnapshot, data],
+  )
+
+  if (!position) return null
 
   const lineLen = 0.08
 
   return (
-    <group position={position}>
+    <group position={new THREE.Vector3(...position)} data-testid="tcp-overlay-marker">
       <mesh rotation={[Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.06, 0.075, 32]} />
         <meshBasicMaterial color={TCP_COLOR} side={2} transparent opacity={0.6} />

@@ -80,9 +80,22 @@ export interface IkResultDto {
   final_error: number
 }
 
+export interface ResolvedPoseDto {
+  position: [number, number, number]
+  orientation: [number, number, number, number]
+}
+
 export interface ToolFrameDto {
   base_frame_id: number
   offset?: [number, number, number] | null
+  resolved_pose?: ResolvedPoseDto | null
+}
+
+/** Wire shape of `backend::thalos_api::features::scene::dto::requests::SelectToolFrameRequest`.
+ *  `frame_id: null` clears the TCP; `offset: null` means identity at the frame. */
+export interface SelectToolFrameRequest {
+  frame_id: number | null
+  offset: [number, number, number] | null
 }
 
 /** Execution info carried by the FULL-STATE response (`RuntimeStateResponse`,

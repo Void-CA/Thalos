@@ -11,6 +11,8 @@ export interface RuntimeInfo {
 export interface ToolFrame {
   baseFrameId: number
   offset: [number, number, number] | null
+  /** World-frame pose resolved by backend FK. `null` when TCP inactive or FK fails. */
+  resolvedPose: { position: [number, number, number]; orientation: [number, number, number, number] } | null
 }
 
 /** Resultado IK. */

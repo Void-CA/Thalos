@@ -5,12 +5,21 @@ import type {
   PoseTargetDto,
   RuntimeDelta,
   MotionPlanRequest,
+  SelectToolFrameRequest,
 } from './scene-api.types'
 
 export const sceneApi = {
   /** Fetch the current scene state — initial identity comes from the backend (spec R7). */
   getScene: () =>
     apiClient.get<RuntimeStateResponse>('/scene').then(r => r.data),
+
+  /** Select or clear the active TCP. `frame_id: null` clears it (R2 clear
+   *  scenario sends explicit nulls); `offset: null` means identity at frame. */
+  selectToolFrame: (frame_id?: number | null, offset?: [number, number, number] | null) =>
+    apiClient.post<RuntimeStateResponse>('/scene/tcp', {
+      frame_id: frame_id ?? null,
+      offset: offset ?? null,
+    } satisfies SelectToolFrameRequest).then(r => r.data),
 
   /** Load a robot into the scene. */
   loadRobot: (id: string) =>
