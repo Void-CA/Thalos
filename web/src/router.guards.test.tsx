@@ -13,7 +13,7 @@ import { useDomainSceneStore } from '@/features/scene/store'
 import { useSemanticEditor } from '@/features/semantic/store'
 import { useExecutionStore } from '@/features/execution/execution-store'
 import { useAnalysisStore } from '@/features/analysis/store'
-import type { SceneData } from '@/features/viewport/types'
+import type { SceneData, ActivePlan } from '@/features/viewport/types'
 import type { CompileResponse } from '@/features/semantic/types'
 import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 
@@ -68,6 +68,9 @@ function seedWorkflowState(opts: {
   executable?: boolean
   completed?: boolean
   analyzed?: boolean
+  /** PR2: planning-preview path — an active plan present in the scene store
+   *  unlocks planReady even without a compiled Task plan. */
+  activePlan?: boolean
 } = {}) {
   const {
     robotLoaded = false,
@@ -75,9 +78,13 @@ function seedWorkflowState(opts: {
     executable = false,
     completed = false,
     analyzed = false,
+    activePlan = false,
   } = opts
   act(() => {
-    useSceneStore.setState({ data: robotLoaded ? ({} as SceneData) : null })
+    useSceneStore.setState({
+      data: robotLoaded ? ({} as SceneData) : null,
+      activePlan: activePlan ? ({ planId: 'plan-1', state: 'ready', motionType: 'PTP', trajectoryProgress: null, visualization: null, createdAt: '2026-01-01T00:00:00Z', startedAt: null, completedAt: null } as ActivePlan) : null,
+    })
     useSemanticEditor.setState({
       result: compiled ? compileResult : null,
       dirty: 0,
@@ -179,20 +186,35 @@ describe('GuardedRoute — behavior over real router routes', () => {
     expect(screen.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
   })
 
-  it('blocks /execution without a compiled plan, redirecting to the producer of compiled', async () => {
-    // compiled=false → executable=false. Execution KEEPS its compiled gate
-    // (executable = compiled && status), so the guard redirects to /task (the
-    // producer of compiled) instead of the root.
+  it('blocks /execution when planReady=false (no compiled plan, no preview), redirecting to /task', async () => {
+    // PR2 (workflow-guards spec "No plan at all redirects to Task"): the gate
+    // is ['sceneValid','planReady','executable'] — with NO plan at all
+    // (compiled=false AND no activePlan in the scene store) planReady=false and
+    // the guard redirects to /task, the producer of planReady's origin
+    // (compiled), instead of the root.
     seedWorkflowState({ robotLoaded: true })
     const router = renderRouter(['/execution'])
 
-    const producer = producerOf('compiled')
+    const producer = producerOf('planReady')
     expect(producer?.path).toBe('/task')
     await waitFor(() => expect(router.state.location.pathname).toBe(producer!.path))
 
     // Execution panel must NOT render; Programación workspace is active.
     expect(screen.queryByRole('heading', { name: 'Execution' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Program' })).toBeInTheDocument()
+  })
+
+  it('renders /execution from a planning-preview plan (planReady without compiled)', async () => {
+    // PR2 (motion-program spec "Execution can start from Motion Program plan"):
+    // the planning preview wrote an activePlan into the scene store →
+    // planReady=true even though `compiled` is false → the guard ALLOWS access
+    // and the Start button is enabled (execStatus = ready).
+    seedWorkflowState({ robotLoaded: true, activePlan: true, executable: true })
+    const router = renderRouter(['/execution'])
+
+    expect(router.state.location.pathname).toBe('/execution')
+    expect(screen.getByRole('heading', { name: 'Execution' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
   })
 
   it('blocks /execution without an executable plan, redirecting to the producer', async () => {

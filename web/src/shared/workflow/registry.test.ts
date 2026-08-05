@@ -58,6 +58,7 @@ describe('WORKSPACE_REGISTRY (slice 3 — requires/produces/capability)', () => 
       'sceneValid',
       'programValid',
       'compiled',
+      'planReady',
       'analyzed',
       'executable',
       'running',
@@ -82,7 +83,10 @@ describe('WORKSPACE_REGISTRY (slice 3 — requires/produces/capability)', () => 
     expect(byWorkspace.task.requires).toEqual(['sceneValid'])
     expect(byWorkspace.planning.requires).toEqual(['sceneValid'])
     expect(byWorkspace.planning.requires).not.toContain('compiled')
-    expect(byWorkspace.execution.requires).toEqual(['compiled', 'executable'])
+    // PR2 (workflow-guards spec): /execution gates on planReady (compiled ∨
+    // sceneActivePlanPresent) so BOTH plan paths — Task handoff and Planning
+    // preview — satisfy the guard.
+    expect(byWorkspace.execution.requires).toEqual(['sceneValid', 'planReady', 'executable'])
     // Guard relaxed (area-sessions S5): the browser browses failed/running
     // sessions too — no `completed` gate on /sessions.
     expect(byWorkspace.sessions.requires).toEqual([])
@@ -228,7 +232,9 @@ describe('WORKSPACE_REGISTRY (slice S3.5 — typed domain graph, user criterion 
       ['scene', ['robotLoaded'], 'sceneValid'],
       ['task', ['sceneValid'], 'compiled'],
       ['planning', ['sceneValid'], 'analyzed'],
-      ['execution', ['compiled', 'executable'], 'completed'],
+      // PR2: planReady replaces the raw `compiled` prerequisite — the planning
+      // preview path (activePlanPresent) also unlocks /execution.
+      ['execution', ['sceneValid', 'planReady', 'executable'], 'completed'],
       ['sessions', [], null],
     ]
     for (const [workspace, requires, produces] of expected) {
@@ -257,6 +263,16 @@ describe('producerOf (registry helper)', () => {
     expect(producerOf('programValid')).toBeUndefined()
     expect(producerOf('executable')).toBeUndefined()
     expect(producerOf('running')).toBeUndefined()
+  })
+
+  it('resolves derived planReady to the producer of its origin (compiled → /task)', () => {
+    // PR2 (workflow-guards spec "No plan at all redirects to Task"): planReady
+    // is DERIVED (compiled ∨ activePlanPresent) — no workspace produces it
+    // directly, but the guard must keep redirecting to /task (the producer of
+    // compiled) when NO plan exists at all. producerOf resolves the origin so
+    // GuardedRoute stays declarative.
+    expect(producerOf('planReady')?.path).toBe('/task')
+    expect(producerOf('planReady')).toBe(producerOf('compiled'))
   })
 
   it('stays consistent with the registry (every produces is found)', () => {
