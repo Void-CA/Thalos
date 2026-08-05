@@ -1611,6 +1611,7 @@ name = "thalos-planning"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "proptest",
  "rand 0.8.6",
  "serde",
  "serde_json",

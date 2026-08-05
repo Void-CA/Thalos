@@ -13,7 +13,7 @@ use thalos_core::motion::segment::MotionSegment;
 /// it into a `CompiledPlan`. The name reflects the long-term role: a program
 /// may eventually include waits, tool changes, IO, and subroutines — just
 /// like industrial robot controllers.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PlanningProgram {
     pub segments: Vec<MotionSegment>,
 }
@@ -245,10 +245,9 @@ mod tests {
         let seg = segment_with_operation_metadata();
         let json = serde_json::to_string(&seg).expect("serialize");
         // Strip the new fields to simulate a legacy payload.
-        let legacy_json = json.replace("\"operation_id\":\"42\",", "").replace(
-            ",\"role\":\"Execution\"",
-            "",
-        );
+        let legacy_json = json
+            .replace("\"operation_id\":\"42\",", "")
+            .replace(",\"role\":\"Execution\"", "");
         let decoded: PlannedSegment = serde_json::from_str(&legacy_json).expect("deserialize");
         assert!(decoded.operation_id.is_none());
         assert!(decoded.role.is_none());
