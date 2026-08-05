@@ -27,10 +27,10 @@ export function RobotShell() {
             <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">
               Tools
             </h2>
-            <Accordion
-              className="w-full"
-              defaultValue={tools.filter((t) => t.defaultOpen).map((t) => t.id)}
-            >
+            {/* Todos los paneles cerrados por defecto (product-quality item 6):
+                Base UI ya es single-open (`multiple` false); sin defaultValue
+                el accordion arranca all-closed. */}
+            <Accordion className="w-full">
               {tools.map((tool) => (
                 <AccordionItem key={tool.id} value={tool.id} className="border-b border-border last:border-b-0">
                   <AccordionTrigger className="px-3 py-2 pr-2 text-xs font-semibold text-foreground hover:no-underline hover:bg-accent/40 cursor-pointer [&>svg]:text-muted-foreground [&>svg]:h-3.5 [&>svg]:w-3.5">
