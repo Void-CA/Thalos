@@ -1,0 +1,146 @@
+// @vitest-environment jsdom
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+import { act } from 'react'
+import '@testing-library/jest-dom/vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { PlanningPanel } from './planning-panel'
+import { usePlanningStore } from '../store'
+import { useExecutionStore } from '@/features/execution/execution-store'
+import { useSceneStore } from '@/features/viewport/store'
+import type { RuntimeStateResponse } from '@/features/viewport/api/scene-api.types'
+import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
+
+/**
+ * PR2 (motion-program spec "Preview success triggers receivePlan"): a
+ * successful planning preview mirrors the plan into the execution store —
+ * `receivePlan({instructionCount, durationSecs, source: 'Motion Program'})` —
+ * WITHOUT touching the backend runtime and WITHOUT starting the tick loop
+ * (execStatus = ready, never running). The backend is mocked; the assertion
+ * is the observable execution-store state after clicking Preview.
+ */
+
+const sceneApiMocks = vi.hoisted(() => ({
+  previewPlan: vi.fn(),
+}))
+
+vi.mock('@/features/viewport/api/scene-api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/viewport/api/scene-api')>()
+  return { ...actual, sceneApi: { ...actual.sceneApi, previewPlan: sceneApiMocks.previewPlan } }
+})
+
+const analysisApiMocks = vi.hoisted(() => ({
+  analyze: vi.fn(),
+}))
+
+vi.mock('@/features/analysis/api/plan-analysis-api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/analysis/api/plan-analysis-api')>()
+  return { ...actual, planAnalysisApi: { ...actual.planAnalysisApi, analyze: analysisApiMocks.analyze } }
+})
+
+/** Preview response with 2 segments — the mirrored plan carries count + duration. */
+const previewResponse: RuntimeStateResponse = {
+  robot: { id: 'r1', display_name: 'R1', dof: 2, joints: [] },
+  joints: [0, 0],
+  scene: { frames: [], links: [], joint_axes: [], twists: [], primitives: [] },
+  ik_result: null,
+  active_plan: {
+    plan_id: 'p1',
+    state: 'Ready',
+    motion_type: 'PTP',
+    trajectory_progress: null,
+    visualization: null,
+    segments: [
+      { segment_index: 0, motion_type: 'PTP', waypoint_start: 0, waypoint_end: 1, time_start: 0, time_end: 2.5 },
+      { segment_index: 1, motion_type: 'PTP', waypoint_start: 1, waypoint_end: 2, time_start: 2.5, time_end: 5 },
+    ],
+    created_at: '2026-01-01T00:00:00Z',
+    started_at: null,
+    completed_at: null,
+  },
+  active_tcp: null,
+  execution: null,
+  generated_at: '2026-01-01T00:00:00Z',
+}
+
+const analysisReport: AnalysisReportWire = {
+  artifact: { kind: 'MotionPlan', id: 'plan-1' },
+  observations: [],
+  actions: [],
+  metrics: {},
+  summary: {
+    quality_index: 0.9,
+    score: 90,
+    grade: 'Good',
+    observation_count: 0,
+    severity_distribution: {},
+  },
+}
+
+function renderPanel() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <PlanningPanel />
+    </QueryClientProvider>,
+  )
+}
+
+beforeEach(() => {
+  sceneApiMocks.previewPlan.mockReset()
+  analysisApiMocks.analyze.mockReset()
+  useExecutionStore.setState({ status: 'idle', activePlan: null, progress: 0, elapsedSecs: 0, error: null })
+  act(() => {
+    useSceneStore.setState({
+      runtime: { robot: { id: 'r1', display_name: 'R1', dof: 2, joints: [] }, joints: [0, 0], generatedAt: '2026-01-01T00:00:00Z' },
+      activePlan: null,
+    })
+    usePlanningStore.setState({
+      segments: [
+        {
+          kind: 'movej', expanded: false, joints: [0.1, 0.2],
+          txStr: '0.3', tyStr: '0', tzStr: '0', rotationFormat: 'euler',
+          yawStr: '0', pitchStr: '0', rollStr: '0',
+          qwStr: '1', qxStr: '0', qyStr: '0', qzStr: '0', velocityStr: '',
+        },
+      ],
+    })
+  })
+})
+afterEach(() => cleanup())
+
+describe('PlanningPanel — preview success mirrors the plan into the execution store (PR2)', () => {
+  it('calls receivePlan({instructionCount, durationSecs, source: Motion Program}) on preview success', async () => {
+    sceneApiMocks.previewPlan.mockResolvedValue(previewResponse)
+    analysisApiMocks.analyze.mockResolvedValue(analysisReport)
+    renderPanel()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+
+    await waitFor(() => {
+      expect(useExecutionStore.getState().activePlan).toEqual({
+        instructionCount: 2,
+        durationSecs: 5,
+        source: 'Motion Program',
+      })
+    })
+    // Handoff reception sets ready WITHOUT starting the tick loop (Invariant #5).
+    expect(useExecutionStore.getState().status).toBe('ready')
+  })
+
+  it('does not call receivePlan when the preview fails', async () => {
+    sceneApiMocks.previewPlan.mockRejectedValue(new Error('segment_0_failed'))
+    analysisApiMocks.analyze.mockResolvedValue(analysisReport)
+    renderPanel()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+
+    await waitFor(() => {
+      expect(sceneApiMocks.previewPlan).toHaveBeenCalledTimes(1)
+    })
+    expect(useExecutionStore.getState().activePlan).toBeNull()
+    expect(useExecutionStore.getState().status).not.toBe('ready')
+  })
+})
