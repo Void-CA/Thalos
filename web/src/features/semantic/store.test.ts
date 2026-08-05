@@ -28,6 +28,7 @@ function workflowSnapshot() {
       robotLoaded: true,
       objects: useDomainSceneStore.getState().objects,
       validHomePose: isValidHomePose(useDomainSceneStore.getState().homePose),
+      activePlanPresent: false,
     },
     task: { operations: useSemanticEditor.getState().operations },
     compile: {
