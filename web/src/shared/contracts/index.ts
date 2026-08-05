@@ -42,13 +42,48 @@ export interface RuntimeProgram {
   events: RuntimeEvent[]
 }
 
-/** A single IR-1 instruction - internally tagged `type` with an `origin`
- *  linking back to the source operation. Variant-specific fields (target,
- *  profile, duration, channel, value) ride alongside `type` + `origin`. */
-export interface ExecutionInstruction {
-  type: 'move_j' | 'move_l' | 'delay' | 'set_output'
-  origin: string
+/** `MotionTarget` — mirrors `thalos_core::motion::target::MotionTarget`
+ *  (serde `tag = "type"`, `rename_all = "snake_case"`). Currently a single
+ *  `Pose` variant carrying a robot-independent pose. */
+export type MotionTarget = {
+  type: 'pose'
+  position: [number, number, number]
+  orientation: [number, number, number, number]
+  frame: string
 }
+
+/** `MotionProfile` — mirrors `MotionProfile`: resolved numeric limits for an
+ *  instruction. `max_jerk` is optional because not all backends support jerk
+ *  limiting (serde `Option<f64>` → `number | null`). */
+export interface MotionProfile {
+  max_velocity: number
+  max_acceleration: number
+  max_jerk: number | null
+}
+
+/** `OutputChannel` — mirrors `OutputChannel`: human-readable `name` plus the
+ *  electrical/logical `channel_type` string. */
+export interface OutputChannel {
+  name: string
+  channel_type: string
+}
+
+/** `OutputValue` — mirrors `OutputValue` (serde externally-tagged enum):
+ *  `{ Bool: true }`, `{ Integer: 42 }` or `{ Float: 3.14 }`. */
+export type OutputValue =
+  | { Bool: boolean }
+  | { Integer: number }
+  | { Float: number }
+
+/** A single IR-1 instruction — internally tagged `type` (serde
+ *  `tag = "type"`, `rename_all = "snake_case"`) with an `origin` linking back
+ *  to the source operation. Discriminated union over the 4 backend variants:
+ *  MoveJ/MoveL (target+profile), Delay (duration), SetOutput (channel+value). */
+export type ExecutionInstruction =
+  | { type: 'move_j'; origin: string; target: MotionTarget; profile: MotionProfile }
+  | { type: 'move_l'; origin: string; target: MotionTarget; profile: MotionProfile }
+  | { type: 'delay'; origin: string; duration: DurationDto }
+  | { type: 'set_output'; origin: string; channel: OutputChannel; value: OutputValue }
 
 /** The core execution program - linear instructions plus provenance metadata. */
 export interface ExecutionProgram {
