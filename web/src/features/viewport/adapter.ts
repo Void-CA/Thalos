@@ -128,6 +128,7 @@ export function toToolFrame(dto: RuntimeStateResponse['active_tcp']): ToolFrame 
   return {
     baseFrameId: dto.base_frame_id,
     offset: dto.offset ?? null,
+    resolvedPose: dto.resolved_pose ?? null,
   }
 }
 
