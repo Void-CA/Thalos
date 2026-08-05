@@ -1,10 +1,13 @@
-use thalos_core::kinematics::inverse::result::IKResult;
+use thalos_core::{
+    kinematics::{forward::result::FKResult, inverse::result::IKResult},
+    robot::tool_frame::ToolFrame,
+};
 
 use crate::features::robots::dto::{JointMetadataDto, RobotMetadataDto};
 
 use super::super::{
-    ActivePlanDto, ExecutionDto, ExecutionStatusDto, IkResultDto, RuntimeStateResponse,
-    ToolFrameDto, VisualSceneDto,
+    ActivePlanDto, ExecutionDto, ExecutionStatusDto, IkResultDto, ResolvedPoseDto,
+    RuntimeStateResponse, ToolFrameDto, VisualSceneDto,
 };
 
 impl From<IKResult> for IkResultDto {
@@ -17,8 +20,8 @@ impl From<IKResult> for IkResultDto {
     }
 }
 
-impl From<&thalos_core::robot::tool_frame::ToolFrame> for ToolFrameDto {
-    fn from(tcp: &thalos_core::robot::tool_frame::ToolFrame) -> Self {
+impl From<(&ToolFrame, &FKResult)> for ToolFrameDto {
+    fn from((tcp, fk): (&ToolFrame, &FKResult)) -> Self {
         let base_frame_id = match tcp.base_frame {
             thalos_core::spatial::frame::FrameId::Id(id) => id,
             thalos_core::spatial::frame::FrameId::World => 0,
@@ -31,10 +34,150 @@ impl From<&thalos_core::robot::tool_frame::ToolFrame> for ToolFrameDto {
             None
         };
 
+        // Design D1: reuse the snapshot's FK result — zero-cost, no
+        // recomputation. `None` when the TCP base frame is absent from FK.
+        let resolved_pose = fk.tcp_pose(tcp).map(|pose| {
+            let t = pose.translation();
+            let q = pose.transform().rotation.inner();
+            ResolvedPoseDto {
+                position: [t.x, t.y, t.z],
+                // Quaternion [w, x, y, z] (matches RotationDto::Quaternion).
+                orientation: [q.w, q.x, q.y, q.z],
+            }
+        });
+
         ToolFrameDto {
             base_frame_id,
             offset,
+            resolved_pose,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use thalos_core::{
+        kinematics::forward::{ForwardKinematics, result::FKResult},
+        models::{RobotModel, RobotRegistry},
+        robot::tool_frame::ToolFrame,
+        spatial::{frame::FrameId, pose::Pose},
+    };
+    use thalos_math::{Transform3D, Vector3};
+
+    use super::super::super::VisualSceneDto;
+    use super::*;
+
+    /// FK result with a single frame whose transform is a pure translation
+    /// (identity rotation) — mirrors the fixture pattern in
+    /// `thalos-core/src/robot/tool_frame.rs`.
+    fn make_fk_with_frame(frame_id: u64, translation: Vector3) -> FKResult {
+        let mut poses = HashMap::new();
+        let frame = FrameId::new(frame_id);
+        let transform = Transform3D::from_translation(translation);
+        poses.insert(frame.clone(), Pose::new(FrameId::World, frame, transform));
+        FKResult::new(poses, FrameId::new(frame_id))
+    }
+
+    fn empty_scene() -> VisualSceneDto {
+        VisualSceneDto {
+            frames: vec![],
+            links: vec![],
+            joint_axes: vec![],
+            twists: vec![],
+            primitives: vec![],
+            reference_dimension: 1.0,
+        }
+    }
+
+    /// Minimal `RuntimeSnapshot` over the built-in Planar2R chain.
+    fn test_snapshot(active_tcp: Option<ToolFrame>) -> thalos_runtime::RuntimeSnapshot {
+        let chain = RobotRegistry::create_default(RobotModel::Planar2R);
+        let joints = vec![0.0, 0.0];
+        let fk_result = ForwardKinematics::new(chain.clone()).evaluate(&joints);
+        thalos_runtime::RuntimeSnapshot {
+            robot: Some(RobotModel::Planar2R),
+            robot_source: None,
+            robot_name: "test".into(),
+            robot_id: "planar_2r".into(),
+            joints_meta: vec![],
+            joints,
+            chain,
+            fk_result,
+            ik_result: None,
+            active_plan: None,
+            execution: None,
+            active_tcp,
+            generated_at: chrono::Utc::now(),
+        }
+    }
+
+    // ── Spec tcp-resolved-pose R1: resolved_pose in ToolFrameDto ──
+
+    /// R1.1: TCP active + FK succeeds → `resolved_pose` is `Some` with the
+    /// FK result (position = frame translation, orientation = identity).
+    #[test]
+    fn resolved_pose_some_when_fk_has_frame() {
+        let fk = make_fk_with_frame(42, Vector3::new(1.0, 2.0, 3.0));
+        let tcp = ToolFrame::identity(FrameId::new(42));
+
+        let dto = ToolFrameDto::from((&tcp, &fk));
+
+        let rp = dto
+            .resolved_pose
+            .expect("resolved_pose should be Some when FK has the TCP base frame");
+        assert_eq!(rp.position, [1.0, 2.0, 3.0]);
+        // FK fixture uses identity rotation → quaternion [w, x, y, z] = [1, 0, 0, 0]
+        assert_eq!(rp.orientation, [1.0, 0.0, 0.0, 0.0]);
+    }
+
+    /// R1.3: TCP base frame missing from FK → `resolved_pose` is `None`
+    /// (no crash, field present with null value).
+    #[test]
+    fn resolved_pose_none_when_frame_missing() {
+        let fk = make_fk_with_frame(42, Vector3::new(1.0, 2.0, 3.0));
+        let tcp = ToolFrame::identity(FrameId::new(99)); // not in FK
+
+        let dto = ToolFrameDto::from((&tcp, &fk));
+
+        assert!(
+            dto.resolved_pose.is_none(),
+            "resolved_pose should be None when FK lacks the TCP base frame"
+        );
+    }
+
+    /// R1.2: `active_tcp` is `None` → the response carries no ToolFrameDto
+    /// (and therefore no `resolved_pose`).
+    #[test]
+    fn active_tcp_none_yields_no_tool_frame_dto() {
+        let snapshot = test_snapshot(None);
+
+        let response = RuntimeStateResponse::from_snapshot(&snapshot, empty_scene(), None);
+
+        assert!(
+            response.active_tcp.is_none(),
+            "active_tcp must be None when the snapshot has no TCP"
+        );
+    }
+
+    /// R1.1 end-to-end: a real chain TCP (identity at the end effector)
+    /// resolves through `from_snapshot` into a `Some(resolved_pose)`.
+    #[test]
+    fn from_snapshot_active_tcp_carries_resolved_pose() {
+        let chain = RobotRegistry::create_default(RobotModel::Planar2R);
+        let tcp = ToolFrame::identity(*chain.end_effector());
+
+        let snapshot = test_snapshot(Some(tcp));
+        let response = RuntimeStateResponse::from_snapshot(&snapshot, empty_scene(), None);
+
+        let dto = response
+            .active_tcp
+            .expect("active_tcp should be present when the snapshot has a TCP");
+        assert!(
+            dto.resolved_pose.is_some(),
+            "resolved_pose should be Some when the TCP base frame is in the FK result"
+        );
     }
 }
 
@@ -97,7 +240,10 @@ impl RuntimeStateResponse {
                 final_error: ik.final_error,
             }),
             active_plan,
-            active_tcp: snapshot.active_tcp.as_ref().map(ToolFrameDto::from),
+            active_tcp: snapshot
+                .active_tcp
+                .as_ref()
+                .map(|tcp| ToolFrameDto::from((tcp, &snapshot.fk_result))),
             execution: snapshot.execution.as_ref().map(|exe| {
                 use thalos_runtime::SessionStatus;
                 let status = match exe.status {

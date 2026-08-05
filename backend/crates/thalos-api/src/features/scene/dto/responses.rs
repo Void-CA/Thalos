@@ -147,6 +147,22 @@ pub struct ToolFrameDto {
     /// Format: `[x, y, z]` translation in meters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub offset: Option<[f64; 3]>,
+    /// Pose of the TCP resolved by forward kinematics (world frame).
+    ///
+    /// `None` when the TCP is inactive or FK cannot resolve the base frame
+    /// (e.g. frame missing from the chain). Computed in the mapper via
+    /// `FKResult::tcp_pose` — zero-cost reuse of the snapshot's FK result.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_pose: Option<ResolvedPoseDto>,
+}
+
+/// Resolved TCP pose (world frame) — flat mirror of the frontend `PoseDef`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ResolvedPoseDto {
+    /// Translation `[x, y, z]` in meters.
+    pub position: [f64; 3],
+    /// Unit quaternion `[w, x, y, z]` (matches `RotationDto::Quaternion`).
+    pub orientation: [f64; 4],
 }
 
 // ── Plan and trajectory visualisation DTOs ──
