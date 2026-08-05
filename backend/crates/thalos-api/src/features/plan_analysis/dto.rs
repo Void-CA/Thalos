@@ -40,6 +40,8 @@ use thalos_core::{
 };
 use thalos_planning::analysis::PlanAnalysis;
 use thalos_planning::motion::program::PlannedSegment;
+use thalos_planning::program_edit::ProgramEdit;
+use thalos_planning::recommendation::{Recommendation, RecommendationStatus};
 
 /// Request para analizar un plan activo.
 #[derive(Debug, Deserialize)]
@@ -75,6 +77,12 @@ pub struct PlanAnalysisResponse {
     /// existentes que no leen el campo siguen funcionando sin cambios (I3).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub manipulability_series: Vec<ManipulabilityPointDto>,
+    /// Recomendaciones de remediación (spec recommendation-model "Wire
+    /// Contract"): cada una lleva `action` + `edit` (comando semántico de
+    /// plan). ADITIVO — `#[serde(default)]` + omitido cuando vacío: los
+    /// clientes antiguos (JSON sin el campo) deserializan a `[]`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recommendations: Vec<RecommendationDto>,
 }
 
 impl PlanAnalysisResponse {
@@ -87,10 +95,14 @@ impl PlanAnalysisResponse {
     /// `manipulability_series` es una PROYECCIÓN de `analysis.waypoints` (el
     /// análisis técnico ya computado por el runtime — P3): el DTO nunca
     /// recalcula manipulabilidad, solo la proyecta al wire.
+    ///
+    /// `recommendations` se proyecta tal cual desde el runtime (producidas por
+    /// el `PlanAdvisor` sobre el plan activo) — el DTO solo cambia de forma.
     pub fn from_report(
         report: &AnalysisReport,
         analysis: &PlanAnalysis,
         segments: &[PlannedSegment],
+        recommendations: &[Recommendation],
     ) -> Self {
         let regions = RegionGrouper::default().group(&report.observations);
         let manipulability_series = analysis
@@ -115,6 +127,10 @@ impl PlanAnalysisResponse {
             summary: SummaryDto::from(&report.summary),
             problem_regions: ProblemRegionsDtoAdapter::from_regions(&regions, segments),
             manipulability_series,
+            recommendations: recommendations
+                .iter()
+                .map(RecommendationDto::from)
+                .collect(),
         }
     }
 }
@@ -233,6 +249,37 @@ impl From<&Action> for ActionDto {
             priority: format!("{:?}", a.priority),
             impact: format!("{:?}", a.impact),
             parameters: a.parameters.clone(),
+        }
+    }
+}
+
+/// Recomendación de remediación proyectada al wire (spec recommendation-model
+/// "New client deserialization"): `id`, `action` (remediación que referencia
+/// la observación por id, I5) y `edit` (comando semántico de plan, D1).
+///
+/// `status` es opcional en el wire — `"available"` | `"unavailable"` (D8) —
+/// omitido cuando no fue evaluado, para compatibilidad con clientes que no lo
+/// conocen.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RecommendationDto {
+    /// Id de la recomendación dentro del reporte.
+    pub id: u32,
+    /// La remediación que recomienda (id, kind, target_observation, …).
+    pub action: ActionDto,
+    /// El comando de plan que aplica la remediación (edit tipado, D3).
+    pub edit: ProgramEdit,
+    /// Disponibilidad del edit: `"available"` | `"unavailable"` (D8).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<RecommendationStatus>,
+}
+
+impl From<&Recommendation> for RecommendationDto {
+    fn from(r: &Recommendation) -> Self {
+        Self {
+            id: r.id.0,
+            action: ActionDto::from(&r.action),
+            edit: r.edit.clone(),
+            status: r.status,
         }
     }
 }
@@ -606,7 +653,8 @@ mod tests {
         // observations[]/actions[]/metrics[]/summary.
         let report = sample_report();
         let segments: Vec<PlannedSegment> = Vec::new();
-        let response = PlanAnalysisResponse::from_report(&report, &sample_analysis(0), &segments);
+        let response =
+            PlanAnalysisResponse::from_report(&report, &sample_analysis(0), &segments, &[]);
         let value = serde_json::to_value(response).expect("serialize");
         let obj = value.as_object().expect("object");
         for field in ["observations", "actions", "metrics", "summary"] {
@@ -811,7 +859,10 @@ mod tests {
         let segments: Vec<PlannedSegment> = Vec::new();
 
         let value = serde_json::to_value(PlanAnalysisResponse::from_report(
-            &report, &analysis, &segments,
+            &report,
+            &analysis,
+            &segments,
+            &[],
         ))
         .expect("serialize");
         let series = value["manipulability_series"]
@@ -833,7 +884,7 @@ mod tests {
         let report = sample_report();
         let analysis = sample_analysis(20);
         let segments: Vec<PlannedSegment> = Vec::new();
-        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments);
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[]);
 
         let json = serde_json::to_string(&response).expect("serialize");
         let back: PlanAnalysisResponse = serde_json::from_str(&json).expect("deserialize");
@@ -853,7 +904,7 @@ mod tests {
         let report = sample_report();
         let analysis = sample_analysis(0);
         let segments: Vec<PlannedSegment> = Vec::new();
-        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments);
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[]);
 
         let value = serde_json::to_value(response).expect("serialize");
         assert!(
@@ -878,7 +929,7 @@ mod tests {
         let report = sample_report();
         let analysis = sample_analysis(2);
         let segments: Vec<PlannedSegment> = Vec::new();
-        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments);
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[]);
 
         let mut value = serde_json::to_value(response).expect("serialize");
         value
@@ -894,6 +945,121 @@ mod tests {
             "pre-existing fields keep their shape"
         );
         assert_eq!(back.observations.len(), 2);
+    }
+
+    // ─── PR2: recommendations[] additive wire field (spec recommendation-model
+    // "Wire Contract") ──────────────────────────────────────────────────────
+
+    use thalos_core::analysis::action::{
+        Action, ActionId, ActionImpact, ActionKind, ActionPriority,
+    };
+    use thalos_core::analysis::observation::ObservationId;
+    use thalos_core::motion::segment::MotionSegment;
+    use thalos_planning::program_edit::ProgramEdit;
+    use thalos_planning::recommendation::{Recommendation, RecommendationId};
+
+    fn sample_recommendation() -> Recommendation {
+        let mut parameters = BTreeMap::new();
+        parameters.insert("value".to_string(), AttributeValue::Number(0.12));
+        Recommendation {
+            id: RecommendationId(7),
+            action: Action {
+                id: ActionId(1),
+                kind: ActionKind::Manipulability,
+                target_observation: ObservationId(2),
+                priority: ActionPriority::High,
+                impact: ActionImpact::High,
+                parameters,
+            },
+            edit: ProgramEdit::ReplaceSegment {
+                index: 0,
+                replacement: vec![MotionSegment::MoveJ {
+                    origin: OperationId("op-j".to_string()),
+                    target: vec![0.5, 1.0],
+                    max_velocity: Some(500.0),
+                    max_acceleration: None,
+                }],
+                original: Some(MotionSegment::MoveJ {
+                    origin: OperationId("op-l".to_string()),
+                    target: vec![0.0, 0.0],
+                    max_velocity: Some(500.0),
+                    max_acceleration: None,
+                }),
+            },
+            status: Some(RecommendationStatus::Available),
+        }
+    }
+
+    #[test]
+    fn old_json_without_recommendations_deserializes_to_empty() {
+        // Spec recommendation-model "Old client deserialization": a response
+        // JSON without `recommendations` deserializes with the field defaulting
+        // to an empty vec (`#[serde(default)]`).
+        let report = sample_report();
+        let analysis = sample_analysis(2);
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[]);
+
+        let mut value = serde_json::to_value(response).expect("serialize");
+        value
+            .as_object_mut()
+            .expect("object")
+            .remove("recommendations");
+
+        let back: PlanAnalysisResponse = serde_json::from_value(value)
+            .expect("old JSON without recommendations must deserialize");
+        assert!(
+            back.recommendations.is_empty(),
+            "absent recommendations field must default to an empty vec"
+        );
+    }
+
+    #[test]
+    fn recommendations_populated_with_id_action_edit() {
+        // Spec recommendation-model "New client deserialization": with the
+        // field present, recommendations carry id, action and edit.
+        let report = sample_report();
+        let analysis = sample_analysis(2);
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let rec = sample_recommendation();
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[rec]);
+
+        let value = serde_json::to_value(&response).expect("serialize");
+        let arr = value["recommendations"].as_array().expect("array");
+        assert_eq!(arr.len(), 1);
+        assert_eq!(arr[0]["id"], 7);
+        assert_eq!(arr[0]["action"]["kind"], "Manipulability");
+        assert_eq!(arr[0]["action"]["target_observation"], 2);
+        assert!(
+            arr[0]["edit"]["ReplaceSegment"].is_object(),
+            "typed edit on the wire"
+        );
+        assert_eq!(arr[0]["status"], "available");
+
+        let json = serde_json::to_string(&response).expect("serialize");
+        let back: PlanAnalysisResponse = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.recommendations.len(), 1);
+        assert_eq!(back.recommendations[0].id, 7);
+        assert!(matches!(
+            back.recommendations[0].edit,
+            ProgramEdit::ReplaceSegment { .. }
+        ));
+    }
+
+    #[test]
+    fn empty_recommendations_are_omitted_on_the_wire() {
+        // Additive contract: an empty recommendations[] is skipped, so old
+        // clients never see a breaking shape change.
+        let report = sample_report();
+        let analysis = sample_analysis(0);
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[]);
+
+        let value = serde_json::to_value(response).expect("serialize");
+        assert!(
+            value.get("recommendations").is_none(),
+            "empty recommendations must be skipped on the wire (additive)"
+        );
     }
 
     #[test]

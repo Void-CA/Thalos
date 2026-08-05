@@ -77,6 +77,7 @@ pub async fn analyze_plan(
         &result.report,
         &result.analysis,
         segments,
+        &result.recommendations,
     )))
 }
 

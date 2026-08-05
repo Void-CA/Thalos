@@ -27,6 +27,7 @@ use thalos_core::{
 use thalos_planning::{
     advisor::PlanAdvisor,
     analysis::{PlanAnalysis, TrajectoryAnalyzer},
+    recommendation::Recommendation,
 };
 
 use crate::error::RuntimeError;
@@ -40,6 +41,13 @@ pub struct PlanAnalysisResult {
     /// Reporte canónico agregado (PR 3): observaciones + acciones + summary,
     /// `validate()`-safe. Es la proyección del wire de `/plan/analyze`.
     pub report: AnalysisReport,
+    /// Recomendaciones de remediación (PR2, spec recommendation-model): cada
+    /// una lleva `action` + `edit` (comando semántico de plan). ADITIVO — el
+    /// contrato wire la expone con `#[serde(default)]`. Se puebla cuando el
+    /// flujo de análisis dispone de un programa + solver (preview/apply,
+    /// PR3/PR4); en el análisis puro queda vacía (clientes antiguos no
+    /// afectados).
+    pub recommendations: Vec<Recommendation>,
 }
 
 /// Servicio de análisis de planes.
@@ -107,7 +115,15 @@ impl PlanAnalysisService {
         // ADITIVO: solo llena un campo que llegaba vacío (`{}`).
         report.metrics = analysis.metrics.to_btree_map();
 
-        Ok(PlanAnalysisResult { analysis, report })
+        Ok(PlanAnalysisResult {
+            analysis,
+            report,
+            // PR2: aditivo — el análisis puro no dispone de programa+solver
+            // para materializar edits; se puebla en los flujos con contexto de
+            // plan (preview/apply, PR3/PR4). El wire lo expone con serde
+            // default, así que los clientes antiguos no cambian (I3).
+            recommendations: Vec::new(),
+        })
     }
 }
 
