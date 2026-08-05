@@ -6,6 +6,7 @@ import type { IkTarget } from '../types'
 import type { RotationDto } from '../api/scene-api.types'
 import { CheckCircle2, XCircle, Loader2, Eye, Cpu, Play } from 'lucide-react'
 import { BTN_SOLVE_BG, BTN_EXECUTE_BG } from '@/shared/tokens'
+import { ErrorBox } from '@/components/ui/error-box'
 
 /**
  * IK Panel — Inverse Kinematics target control (3-step flow).
@@ -204,8 +205,8 @@ export function IkPanel() {
       )}
 
       {/* Errors */}
-      {solveErr && <ErrorBox message={solveErr instanceof Error ? solveErr.message : 'Solve failed'} />}
-      {execErr && <ErrorBox message={execErr instanceof Error ? execErr.message : 'Execute failed'} />}
+      {solveErr && <ErrorBox error={solveErr instanceof Error ? solveErr : 'Solve failed'} />}
+      {execErr && <ErrorBox error={execErr instanceof Error ? execErr : 'Execute failed'} />}
     </div>
   )
 }
@@ -293,14 +294,5 @@ function ActionButton({
       {Icon && <Icon className={`h-3.5 w-3.5 ${disabled && Icon === Loader2 ? 'animate-spin' : ''}`} />}
       {label}
     </button>
-  )
-}
-
-function ErrorBox({ message }: { message: string }) {
-  return (
-    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-destructive-weak border border-destructive-weak text-xs text-destructive">
-      <XCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-      <span>{message}</span>
-    </div>
   )
 }

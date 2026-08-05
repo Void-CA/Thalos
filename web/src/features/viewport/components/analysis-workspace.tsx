@@ -5,8 +5,8 @@ import { useSceneStore } from '../store'
 import { useWorkspaceStore, type PointCloudColorMode } from '../store/workspace-store'
 import { useWorkspaceService } from '../services/service-context'
 import { FlaskConical, Loader2 } from 'lucide-react'
+import { ErrorBox } from '@/components/ui/error-box'
 import {
-  ErrorBox,
   MetricRow,
   MetricValue,
   SectionHeader,
@@ -134,9 +134,9 @@ export function AnalysisWorkspace() {
       )}
 
       {/* ── Errors ── */}
-      {ws.error && <ErrorBox message={(ws.error as Error).message} />}
-      {sg.error && <ErrorBox message={(sg.error as Error).message} />}
-      {mp.error && <ErrorBox message={(mp.error as Error).message} />}
+      {ws.error && <ErrorBox error={(ws.error as Error)} />}
+      {sg.error && <ErrorBox error={(sg.error as Error)} />}
+      {mp.error && <ErrorBox error={(mp.error as Error)} />}
 
       {/* ── Inline results ── */}
       {ws.data && (

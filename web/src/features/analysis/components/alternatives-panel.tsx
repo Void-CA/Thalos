@@ -3,6 +3,7 @@ import { planAnalysisApi } from '../api/plan-analysis-api'
 import { repairOptionsBuilder } from '@/shared/charts/builders/repair-options'
 import type { RepairOptionCardView } from '@/shared/charts/builders/repair-options'
 import { Wrench, Loader2 } from 'lucide-react'
+import { ErrorBox } from '@/components/ui/error-box'
 
 /**
  * AlternativesPanel — repair options for the active plan (S4, spec
@@ -41,7 +42,7 @@ export function AlternativesPanel() {
       </button>
 
       {query.error && (
-        <div className="text-xs text-destructive">{(query.error as Error).message}</div>
+        <ErrorBox error={query.error} />
       )}
 
       {model?.empty && (
