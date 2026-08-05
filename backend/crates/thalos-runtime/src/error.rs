@@ -76,6 +76,15 @@ pub enum RuntimeError {
 
     #[error("tool frame not found: frame {frame_id} does not exist in the robot chain")]
     ToolFrameNotFound { frame_id: u64 },
+
+    /// A feature-flagged surface was invoked while the flag is disabled (D5).
+    #[error("feature disabled: {feature}")]
+    FeatureDisabled { feature: &'static str },
+
+    /// A compiled plan failed replacement validation (D4): no waypoints or
+    /// zero duration — the runtime refuses to schedule a degenerate plan.
+    #[error("invalid compiled plan: {reason}")]
+    InvalidCompiledPlan { reason: String },
 }
 
 impl RuntimeError {
@@ -112,8 +121,10 @@ impl RuntimeError {
             RuntimeError::Ik(e) => match e {
                 IkError::UnsupportedJointType(_) => "unsupported_joint_type",
             },
-            RuntimeError::JointCountMismatch { expected, received } => "joint_count_mismatch",
+            RuntimeError::JointCountMismatch { .. } => "joint_count_mismatch",
             RuntimeError::ToolFrameNotFound { .. } => "tool_frame_not_found",
+            RuntimeError::FeatureDisabled { .. } => "feature_disabled",
+            RuntimeError::InvalidCompiledPlan { .. } => "invalid_compiled_plan",
         }
     }
 }
