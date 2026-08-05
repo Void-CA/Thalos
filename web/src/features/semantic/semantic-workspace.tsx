@@ -1,5 +1,4 @@
 import { TaskEditor } from './components/task-editor'
-import { RobotSelector } from './components/robot-selector'
 import { PipelineStatus } from './components/pipeline-status'
 import { DiagnosticsPanel } from './components/diagnostics-panel'
 
@@ -12,19 +11,21 @@ import { DiagnosticsPanel } from './components/diagnostics-panel'
  * but renders ZERO Scene editing UI: the Scene editor lives exclusively in
  * the Escena area (`features/scene/SceneWorkspace`).
  *
- *   Task header (robot selector + workflow progress)
+ *   Task header (workflow progress)
  *   ├─ Program     — operations editor + compile + Send to Execution (TaskEditor)
  *   └─ Diagnostics — compile status / validation errors (DiagnosticsPanel)
  *
- * ZERO execution capabilities live here: no Simulate/Stop, no progress, no
- * tick loop. Execution owns the lifecycle (execution-workspace spec).
+ * Robot selection is unified in the catalog (`/`); the GET /scene default
+ * load covers the UX previously provided by the removed RobotSelector
+ * (frontend-task-workspace spec). ZERO execution capabilities live here: no
+ * Simulate/Stop, no progress, no tick loop. Execution owns the lifecycle
+ * (execution-workspace spec).
  */
 export function SemanticWorkspace() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* ── Task header: robot selection + workflow progress ── */}
+      {/* ── Task header: workflow progress ── */}
       <div className="px-3 py-2 border-b border-border/50 space-y-1.5">
-        <RobotSelector />
         <PipelineStatus />
       </div>
 
