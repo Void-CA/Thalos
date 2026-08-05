@@ -1670,6 +1670,40 @@ async fn preview_setup(app: &Router) {
 }
 
 #[tokio::test]
+async fn analyze_command_populates_recommendations_with_edits() {
+    // R3-001: /plan/analyze must populate recommendations[] when the active
+    // plan produces observations that generate recommendations. The UI
+    // (AdvisorSection) is fed ONLY from planAnalysisApi.analyze() — an empty
+    // recommendations[] makes preview/apply/undo unreachable in the real flow.
+    let app = test_app().await;
+    preview_setup(&app).await;
+
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/plan/analyze",
+        Some(json!({})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "analyze should succeed");
+
+    let body = body.expect("analyze response must be valid JSON");
+    let recommendations = body["recommendations"]
+        .as_array()
+        .expect("recommendations must be an array");
+    assert!(
+        !recommendations.is_empty(),
+        "analyze must return recommendations when observations can generate them"
+    );
+    assert!(
+        recommendations.iter().any(|r| {
+            r["status"] == "available" && r["edit"]["ReplaceSegment"].is_object()
+        }),
+        "at least one available recommendation must carry a typed ReplaceSegment edit"
+    );
+}
+
+#[tokio::test]
 async fn preview_command_returns_simulation_without_mutation() {
     // Spec command-endpoints "Preview returns simulation without mutation":
     // a valid recommendation id returns waypoints + before/after metrics and

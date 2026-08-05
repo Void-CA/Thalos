@@ -73,12 +73,28 @@ pub async fn analyze_plan(
         .and_then(|p| p.segments.as_deref())
         .unwrap_or(&[]);
 
-    let result = PlanAnalysisService::analyze_plan(
+    // R3-001: el flujo real analyze → UI debe producir filas de recomendación.
+    // Reconstruir el `PlanningProgram` desde los segmentos compilados
+    // (PlannedSegment.source preserva el comando semántico, invariante I2) y
+    // resolver las recomendaciones con el mismo determinismo que preview/apply
+    // (mismas observaciones + mismo programa → mismas recomendaciones). Un plan
+    // sin programa (single-shot legacy) no produce recomendaciones — contexto
+    // inexistente, documentado (campo aditivo en el wire).
+    let program =
+        PlanningProgram::new(segments.iter().map(|s| s.source.clone()).collect());
+    let fk = ForwardKinematics::new(snapshot.chain.clone());
+    let solver =
+        DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
+
+    let result = PlanAnalysisService::analyze_plan_with_recommendations(
         &snapshot.chain,
         trajectory,
         snapshot.active_tcp.as_ref(),
         None, // constraints opcionales
         artifact,
+        &program,
+        &solver,
+        &snapshot.joints,
     )?;
 
     // El wire es una proyección del reporte canónico (I6): el handler no
