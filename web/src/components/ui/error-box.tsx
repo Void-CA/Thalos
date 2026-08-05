@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react'
 import { XCircle } from 'lucide-react'
-import { describeError } from '@/shared/errors'
+import { describeError, isCodedError } from '@/shared/errors'
 
 /** Error shape carried by stores that preserve the backend machine-readable
  *  `code` alongside the display `message` (error-ux spec — ExecutionState). */
@@ -11,14 +11,16 @@ export interface ErrorBoxError {
 
 /** Resolve an arbitrary error input to a display string.
  *  - string → shown verbatim
- *  - coded error ({message, code?} / ApiError / CompileError) → describeError
- *    (code→CTA mapping, error-ux spec)
+ *  - coded error ({message, code?} with a REAL code / ApiError / CompileError)
+ *    → describeError (code→CTA mapping, error-ux spec)
+ *  - {message, code: undefined} (network errors) → the real message, NEVER the
+ *    generic fallback (R3-003 — `'code' in error` is true but the value is not
+ *    a string, so it must not be routed to describeError)
  *  - plain Error → its message
  */
 function errorText(error: ErrorBoxError | Error | string): string {
   if (typeof error === 'string') return error
-  if (error instanceof Error) return describeError(error)
-  if ('code' in error) return describeError(error)
+  if (isCodedError(error)) return describeError(error)
   return error.message
 }
 

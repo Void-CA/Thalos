@@ -70,8 +70,10 @@ interface CodedError {
 /** Structural guard: matches `ApiError` and the semantic feature's
  *  `CompileError` (both extend Error and carry optional `code`/`status`) and
  *  plain `{message, code?}` shapes (execution-store `ExecutionError`) WITHOUT
- *  importing either — shared/errors must not depend on features. */
-function isCodedError(err: unknown): err is CodedError {
+ *  importing either — shared/errors must not depend on features.
+ *  Exported so consumers can route an error to describeError only when it is
+ *  genuinely coded (R3-003: `{message, code: undefined}` is NOT coded). */
+export function isCodedError(err: unknown): err is CodedError {
   if (typeof err !== 'object' || err === null) return false
   const candidate = err as CodedError
   return (
