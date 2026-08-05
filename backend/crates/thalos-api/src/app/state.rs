@@ -67,9 +67,25 @@ pub fn parse_env_bool(var: &str) -> bool {
     parse_bool_value(std::env::var(var).ok().as_deref())
 }
 
+/// Read `var` from the process environment and parse it as a POSITIVE
+/// unsigned integer, falling back to `default` when absent, unparseable,
+/// zero, or negative (spec command-endpoints "History Cap": optional
+/// `THALOS_HISTORY_CAP` override).
+///
+/// Used ONLY at the binary entry point (`main.rs`) so that tests building
+/// state via `new_default_state()` stay hermetic regardless of the shell env.
+pub fn parse_env_usize(var: &str, default: usize) -> usize {
+    std::env::var(var)
+        .ok()
+        .and_then(|raw| raw.trim().parse::<usize>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(default)
+}
+
 pub async fn new_default_state() -> SharedState {
     // Design D5: scene-writeback is OFF by default (rollback-safe). The
     // first runtime-mutating surface (PR4 apply) requires explicit opt-in.
+    // History cap defaults to DEFAULT_HISTORY_CAP (PR3).
     new_state_with_scene_writeback(false).await
 }
 
@@ -80,6 +96,24 @@ pub async fn new_default_state() -> SharedState {
 /// the PR4 apply/write-back surface opt in via this constructor. Production
 /// rollout enables the flag per-environment after integration tests pass.
 pub async fn new_state_with_scene_writeback(scene_writeback: bool) -> SharedState {
+    new_state_with_scene_writeback_and_history_cap(
+        scene_writeback,
+        thalos_runtime::DEFAULT_HISTORY_CAP,
+    )
+    .await
+}
+
+/// State builder with both the scene-writeback flag (design D5) and the
+/// command-history capacity (spec command-endpoints "History Cap")
+/// configurable.
+///
+/// `new_state_with_scene_writeback` passes [`thalos_runtime::DEFAULT_HISTORY_CAP`];
+/// the binary entry point overrides it from the optional `THALOS_HISTORY_CAP`
+/// env var.
+pub async fn new_state_with_scene_writeback_and_history_cap(
+    scene_writeback: bool,
+    history_cap: usize,
+) -> SharedState {
     let backend = Box::new(InternalBackend);
 
     // Runtime controller DOF and scene robot model are named independently so
@@ -105,6 +139,7 @@ pub async fn new_state_with_scene_writeback(scene_writeback: bool) -> SharedStat
     if scene_writeback {
         scene.set_scene_writeback(true).await;
     }
+    scene.set_history_cap(history_cap).await;
     let robots = RobotService;
 
     Arc::new(AppState {
@@ -194,5 +229,37 @@ mod tests {
         // SAFETY: same isolation argument as the sibling test above.
         unsafe { std::env::set_var(VAR, "  Yes  ") };
         assert!(parse_env_bool(VAR));
+    }
+
+    // ── parse_env_usize (design D5 env wiring, PR3 — History Cap) ──
+
+    #[test]
+    fn parse_env_usize_absent_var_falls_back_to_default() {
+        // Unique name — never set in any shell; proves the None path of the
+        // wrapper that new_default_state relies on (hermeticity).
+        assert_eq!(parse_env_usize("THALOS_TEST_UNSET_USIZE_3c8a1f", 100), 100);
+    }
+
+    #[test]
+    fn parse_env_usize_reads_positive_var_from_process_environment() {
+        const VAR: &str = "THALOS_TEST_SET_USIZE_7d2b4e";
+        // SAFETY: process-global env mutation; the unique name isolates this
+        // test from every other test in the binary.
+        unsafe { std::env::set_var(VAR, "42") };
+        assert_eq!(parse_env_usize(VAR, 100), 42);
+    }
+
+    #[test]
+    fn parse_env_usize_rejects_zero_garbage_and_negative() {
+        const VAR: &str = "THALOS_TEST_SET_USIZE_9e4c2d";
+        // SAFETY: same isolation argument as the sibling test above.
+        unsafe { std::env::set_var(VAR, "0") };
+        assert_eq!(parse_env_usize(VAR, 100), 100, "zero cap is rejected");
+
+        unsafe { std::env::set_var(VAR, "abc") };
+        assert_eq!(parse_env_usize(VAR, 100), 100, "garbage is rejected");
+
+        unsafe { std::env::set_var(VAR, "-5") };
+        assert_eq!(parse_env_usize(VAR, 100), 100, "negative is rejected");
     }
 }
