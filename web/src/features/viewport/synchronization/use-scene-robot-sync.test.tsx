@@ -207,14 +207,11 @@ describe('useSceneRobotSync — backend-derived default (spec R7 / R6)', () => {
     expect(mocks.loadScene).toHaveBeenCalledTimes(1)
   })
 
-  it('requests GET /scene when a catalog hint is persisted but nothing is confirmed yet (deadlock fix)', () => {
-    // A persisted catalog id is only a REQUEST via RobotSelector's select() —
-    // which lives in /task and requires the scene loaded to mount. On '/' the
-    // selector never mounts, so GET /scene is the ONLY load path: skipping it
-    // on a valid hint deadlocked the boot (viewport empty, /scene and /task
-    // bounce back to '/'). The hint must never gate the backend-derived load.
-    localStorage.setItem('thalos:task:robotId', 'scara')
-
+  it('loads via GET /scene as the ONLY path when nothing is confirmed (no hint mechanism)', () => {
+    // RobotSelector (and its ROBOT_SELECTION_KEY hint) was removed — the catalog
+    // is the single source of selection (frontend-task-workspace spec). No
+    // localStorage hint exists anymore: GET /scene is the only load path for the
+    // backend-derived default, and it must fire exactly once on mount.
     renderHook(() => useSceneRobotSync())
 
     expect(mocks.loadScene).toHaveBeenCalledTimes(1)
