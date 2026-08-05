@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 
 use super::session_status::SessionStatus;
+use crate::session::execution_source::ExecutionSource;
 
 /// Mutable execution state for a compiled plan.
 ///
@@ -16,6 +17,10 @@ pub struct ExecutionSession {
     pub started_at: Option<DateTime<Utc>>,
     pub paused_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
+    /// Origin of the execution ("Simulation" | "Hardware" | "Replay #N") —
+    /// informational, exposed on the wire as `ExecutionDto.source` (PR4,
+    /// item 9). Defaults to `Simulation`; controllers override when known.
+    pub source: ExecutionSource,
 }
 
 impl ExecutionSession {
@@ -27,6 +32,7 @@ impl ExecutionSession {
             started_at: None,
             paused_at: None,
             completed_at: None,
+            source: ExecutionSource::Simulation,
         }
     }
 
@@ -124,6 +130,7 @@ impl ExecutionSession {
             } else {
                 None
             },
+            source: ExecutionSource::Simulation,
         }
     }
 }

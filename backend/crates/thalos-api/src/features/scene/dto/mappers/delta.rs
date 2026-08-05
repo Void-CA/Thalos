@@ -26,12 +26,14 @@ pub fn to_delta_response(delta: &TickDelta) -> RuntimeDelta {
                 status,
                 progress: exe.progress(delta.plan_duration),
                 elapsed_secs: exe.current_time,
+                source: Some(exe.source.to_string()),
             }
         })
         .unwrap_or(ExecutionDto {
             status: ExecutionStatusDto::Idle,
             progress: 0.0,
             elapsed_secs: 0.0,
+            source: None,
         });
 
     RuntimeDelta {

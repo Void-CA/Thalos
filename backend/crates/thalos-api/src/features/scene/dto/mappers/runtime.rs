@@ -258,6 +258,7 @@ impl RuntimeStateResponse {
                     status,
                     progress: exe.current_time,
                     elapsed_secs: exe.current_time,
+                    source: Some(exe.source.to_string()),
                 }
             }),
             generated_at: snapshot.generated_at,
