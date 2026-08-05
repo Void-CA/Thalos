@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { planAnalysisApi } from '@/features/analysis/api/plan-analysis-api'
-import type { PreviewResponse } from '@/features/analysis/api/plan-analysis.types'
+import type { ApplyResponse, PreviewResponse } from '@/features/analysis/api/plan-analysis.types'
 import { useSceneStore } from '@/features/viewport/store'
+import { sceneService } from '@/features/viewport/services/scene.service'
 import type { RecommendationWire } from '@/shared/contracts/analysis-report'
-import { Eye, Loader2, Play, RotateCcw } from 'lucide-react'
+import { Check, Eye, Loader2, Play, RotateCcw } from 'lucide-react'
 
 /**
  * RecommendationRow — proyección uniforme de UNA recomendación (spec
@@ -16,15 +17,21 @@ import { Eye, Loader2, Play, RotateCcw } from 'lucide-react'
  * - PR3 (read-only): Preview está ACTIVO — simula la edición en el backend
  *   (nunca muta el runtime) y muestra el overlay 3D con el mismo mecanismo
  *   que OptimizationPanel (`setPreviewPositions` + `trajectoryViewMode`).
- *   Apply/Undo llegan en PR4/PR5 — los botones existen pero deshabilitados.
- * - D8: un edit `unavailable` se muestra con su badge; nunca se aplica.
+ * - PR4 (write-back): Apply está ACTIVO para edits `available` — aplica la
+ *   edición en el backend (replace_active_plan, feature-flagged) y refresca
+ *   la escena para que el viewport muestre el plan activo resultante.
+ *   D8: un edit `unavailable` jamás se aplica — botón deshabilitado.
+ * - PR5: Undo llega en PR5 — el botón existe pero deshabilitado.
  */
 export function RecommendationRow({ recommendation }: { recommendation: RecommendationWire }) {
   const [previewing, setPreviewing] = useState(false)
   const [preview, setPreview] = useState<PreviewResponse | null>(null)
+  const [applying, setApplying] = useState(false)
+  const [applied, setApplied] = useState<ApplyResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const setPreviewPositions = useSceneStore(s => s.setPreviewPositions)
   const setTrajectoryViewMode = useSceneStore(s => s.setTrajectoryViewMode)
+  const applyScene = useSceneStore(s => s.applyScene)
 
   const unavailable = recommendation.status === 'unavailable'
 
@@ -42,6 +49,30 @@ export function RecommendationRow({ recommendation }: { recommendation: Recommen
       setError(err.message ?? 'Preview failed')
     } finally {
       setPreviewing(false)
+    }
+  }
+
+  const handleApply = async () => {
+    setApplying(true)
+    setError(null)
+    try {
+      const res = await planAnalysisApi.apply(recommendation.id)
+      setApplied(res)
+      // UI refleja el plan ACTIVO: refrescar la escena desde el backend (mismo
+      // patrón que use-scene-loader) — el viewport renderiza el write-back.
+      const snapshot = await sceneService.loadScene()
+      applyScene(
+        snapshot.scene,
+        snapshot.runtime,
+        snapshot.ikResult,
+        snapshot.activePlan,
+        snapshot.activeTcp,
+        snapshot.execution,
+      )
+    } catch (err: any) {
+      setError(err.message ?? 'Apply failed')
+    } finally {
+      setApplying(false)
     }
   }
 
@@ -69,11 +100,12 @@ export function RecommendationRow({ recommendation }: { recommendation: Recommen
             Preview
           </button>
           <button
-            disabled
-            title="Apply lands in PR4"
-            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-medium text-muted-foreground disabled:cursor-not-allowed"
+            onClick={handleApply}
+            disabled={applying || unavailable}
+            title={unavailable ? 'Edit unavailable (D8) — cannot apply' : 'Apply to the active plan'}
+            className="inline-flex items-center gap-1 rounded-md border border-primary-mid bg-primary-weak px-2 py-1 text-[10px] font-medium text-primary hover:bg-primary-weak transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Play className="h-3 w-3" />
+            {applying ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
             Apply
           </button>
           <button
@@ -86,6 +118,25 @@ export function RecommendationRow({ recommendation }: { recommendation: Recommen
           </button>
         </span>
       </div>
+
+      {applied && (
+        <div className="space-y-1 rounded bg-muted/40 px-2 py-1.5 text-[10px]">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded bg-green-600/15 px-1.5 py-0.5 font-semibold uppercase text-green-600">
+              <Check className="h-3 w-3" />
+              Applied
+            </span>
+            <span className="text-muted-foreground">Plan</span>
+            <span className="font-mono text-foreground">{applied.plan_id}</span>
+            <span className="ml-auto text-muted-foreground">
+              Health {applied.health_before.toFixed(0)}% →{' '}
+              <span className="font-mono tabular-nums font-semibold text-foreground">
+                {applied.health_after.toFixed(0)}%
+              </span>
+            </span>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="text-[10px] text-destructive bg-destructive-weak rounded px-2 py-1">{error}</div>

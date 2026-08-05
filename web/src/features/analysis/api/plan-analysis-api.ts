@@ -1,7 +1,7 @@
 import { apiClient } from '@/shared/api-client'
 import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 import type { RepairOptionsWire } from '@/shared/contracts/repair-options'
-import type { OptimizeResponse, PreviewResponse } from './plan-analysis.types'
+import type { OptimizeResponse, PreviewResponse, ApplyResponse } from './plan-analysis.types'
 
 /**
  * domain-areas S4: `/plan/analyze` returns the canonical AnalysisReport
@@ -34,5 +34,16 @@ export const planAnalysisApi = {
   preview: (recommendationId: number): Promise<PreviewResponse> =>
     apiClient
       .post<PreviewResponse>('/plan/commands/preview', { recommendation_id: recommendationId })
+      .then(r => r.data),
+
+  /**
+   * POST /plan/commands/apply (PR4) — WRITE-BACK: the backend executes the
+   * recommendation's edit, recompiles and replaces the active plan in
+   * SceneRuntime (feature-flagged scene-writeback). Preview is NOT a
+   * prerequisite. The inverse is stored server-side for PR5's undo.
+   */
+  apply: (recommendationId: number): Promise<ApplyResponse> =>
+    apiClient
+      .post<ApplyResponse>('/plan/commands/apply', { recommendation_id: recommendationId })
       .then(r => r.data),
 }

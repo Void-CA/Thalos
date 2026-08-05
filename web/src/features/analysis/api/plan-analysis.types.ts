@@ -61,3 +61,24 @@ export interface PreviewResponse {
   improvement: number
   continuity: boolean
 }
+
+// ── Plan command apply (PR4 — scene write-back) ──
+
+/** POST /plan/commands/apply response (backend ApplyResponse). The edit is
+ *  executed against the semantic program, recompiled and written back to
+ *  SceneRuntime via replace_active_plan; the inverse is stored in memory for
+ *  PR5's O(1) undo. */
+export interface ApplyResponse {
+  recommendation_id: number
+  /** Edit availability (D8). An unavailable edit is REJECTED by the backend
+   *  (409 recommendation_unavailable) — never sent from the row. */
+  status?: 'available' | 'unavailable'
+  /** New active plan id — proof the write-back happened. */
+  plan_id: string
+  health_before: number
+  health_after: number
+  /** health_after - health_before (negative = degrades). */
+  improvement: number
+  /** Undo-history size (inverses stored for PR5). */
+  history_length: number
+}

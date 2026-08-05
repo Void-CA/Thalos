@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, screen, within, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { AdvisorSection } from './AdvisorSection'
+import { planAnalysisApi } from '@/features/analysis/api/plan-analysis-api'
 import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 
 vi.mock('@/features/analysis/api/plan-analysis-api', () => ({
@@ -20,6 +21,41 @@ vi.mock('@/features/analysis/api/plan-analysis-api', () => ({
       health_after: 0.62,
       improvement: 0.12,
       continuity: true,
+    })),
+    apply: vi.fn(async (id: number) => ({
+      recommendation_id: id,
+      status: 'available',
+      plan_id: 'plan-2',
+      health_before: 0.5,
+      health_after: 0.62,
+      improvement: 0.12,
+      history_length: 1,
+    })),
+  },
+}))
+
+// PR4 (task 4.6): after a successful apply the row refreshes the scene so the
+// viewport reflects the ACTIVE plan written back by the backend. The singleton
+// service is mocked here; the row consumes `sceneService.loadScene()` exactly
+// like use-scene-loader.
+vi.mock('@/features/viewport/services/scene.service', () => ({
+  sceneService: {
+    loadScene: vi.fn(async () => ({
+      scene: {},
+      runtime: { robot: { id: 'scara' }, joints: [], generatedAt: '' },
+      ikResult: null,
+      activePlan: {
+        planId: 'plan-3',
+        state: 'created',
+        motionType: 'program',
+        trajectoryProgress: null,
+        visualization: null,
+        createdAt: '',
+        startedAt: null,
+        completedAt: null,
+      },
+      activeTcp: null,
+      execution: null,
     })),
   },
 }))
@@ -228,14 +264,32 @@ describe('AdvisorSection — RecommendationRow projection (PR3, task 3.4)', () =
     expect(screen.getAllByRole('button')).toHaveLength(9)
   })
 
-  it('leaves Apply/Undo ready but disabled until PR4/PR5', () => {
+  it('PR4: Apply is enabled for available recommendations; Undo stays disabled (PR5)', () => {
     render(<AdvisorSection report={recommendationReport} />)
-    for (const button of screen.getAllByRole('button', { name: /apply/i })) {
-      expect(button).toBeDisabled()
+    const applyButtons = screen.getAllByRole('button', { name: /apply/i })
+    expect(applyButtons).toHaveLength(3)
+    for (const button of applyButtons) {
+      expect(button).toBeEnabled()
     }
     for (const button of screen.getAllByRole('button', { name: /undo/i })) {
       expect(button).toBeDisabled()
     }
+  })
+
+  it('D8: an unavailable recommendation keeps Apply disabled (never applied)', () => {
+    const mixed = {
+      ...recommendationReport,
+      recommendations: recommendationReport.recommendations!.map((r, i) =>
+        i === 0 ? { ...r, status: 'unavailable' as const } : r,
+      ),
+    }
+    render(<AdvisorSection report={mixed} />)
+    const applyButtons = screen.getAllByRole('button', { name: /apply/i })
+    expect(applyButtons[0]).toBeDisabled()
+    expect(applyButtons[1]).toBeEnabled()
+    expect(applyButtons[2]).toBeEnabled()
+    // Preview stays available for diagnosis even when the edit is unavailable.
+    expect(screen.getAllByRole('button', { name: /preview/i })[0]).toBeEnabled()
   })
 
   it('triangulates: a report without recommendations renders the empty state', () => {
@@ -264,5 +318,42 @@ describe('AdvisorSection — RecommendationRow projection (PR3, task 3.4)', () =
     ])
     // The inline report renders the simulated health delta.
     expect(await screen.findByText('Health')).toBeInTheDocument()
+  })
+
+  it('PR4: Apply click applies the edit and the UI reflects the ACTIVE plan', async () => {
+    // Spec command-endpoints "Apply writes back to scene" + task 4.6 "UI
+    // reflects the active plan": clicking Apply calls the backend, shows the
+    // applied state, and refreshes the scene so the viewport renders the NEW
+    // active plan (the write-back result).
+    const { useSceneStore } = await import('@/features/viewport/store')
+    useSceneStore.getState().applyScene(
+      {} as any,
+      { robot: { id: 'scara' }, joints: [], generatedAt: '' } as any,
+      null,
+      { planId: 'plan-1', state: 'created', motionType: 'program', trajectoryProgress: null, visualization: null, createdAt: '', startedAt: null, completedAt: null },
+      null,
+      null,
+    )
+    expect(useSceneStore.getState().activePlan?.planId).toBe('plan-1')
+
+    render(<AdvisorSection report={recommendationReport} />)
+    fireEvent.click(screen.getAllByRole('button', { name: /apply/i })[0])
+
+    // The backend was called with the row's recommendation id.
+    await waitFor(() => {
+      expect(planAnalysisApi.apply).toHaveBeenCalledWith(1)
+    })
+
+    // The row reflects the applied state (Applied badge + new plan id).
+    expect(await screen.findByText('Applied')).toBeInTheDocument()
+    expect(screen.getByText('plan-2')).toBeInTheDocument()
+
+    // The scene was refreshed from the backend: the store's active plan is now
+    // the write-back result — the viewport renders the ACTIVE plan.
+    await waitFor(() => {
+      expect(useSceneStore.getState().activePlan?.planId).toBe('plan-3')
+    })
+    // The trajectory view returns to the original mode (new plan rendered).
+    expect(useSceneStore.getState().trajectoryViewMode).toBe('original')
   })
 })
