@@ -9,7 +9,6 @@
 use serde::{Deserialize, Serialize};
 use thalos_core::motion::segment::MotionSegment;
 
-use crate::feedback::orchestrator::{TransformationCandidate, build_modified_program};
 use crate::motion::program::PlanningProgram;
 
 /// Errors returned by [`ProgramEdit::apply`].
@@ -44,14 +43,17 @@ pub enum EditError {
 /// apply pipeline does, design D6).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ProgramEdit {
-    /// Replace the segment at `index` with `replacement` segments. Delegates
-    /// to the orchestrator's splice engine (`build_modified_program`), so the
-    /// replacement may be one-to-one, one-to-many, or one-to-zero.
-    /// `original` is the replaced segment, captured for the roundtrip inverse.
+    /// Replace the segment range at `index` — spanning `original.len()`
+    /// segments (1 when the capture is unset) — with `replacement` segments.
+    /// The replacement may be one-to-one, one-to-many, or one-to-zero.
+    /// `original` captures the FULL pre-apply range: a single segment in
+    /// forward edits (materializers replace one target), the whole replaced
+    /// range in the roundtrip inverse — so `inverse()` restores the exact
+    /// original program (R3-002, spec "inverse Operation").
     ReplaceSegment {
         index: usize,
         replacement: Vec<MotionSegment>,
-        original: Option<MotionSegment>,
+        original: Option<Vec<MotionSegment>>,
     },
     /// Insert `segments` at position `at` (boundary `at == len` appends).
     /// At least one segment is required.
@@ -94,15 +96,28 @@ impl ProgramEdit {
     pub fn apply(&self, program: &PlanningProgram) -> Result<PlanningProgram, EditError> {
         match self {
             ProgramEdit::ReplaceSegment {
-                index, replacement, ..
+                index, replacement, original,
             } => {
                 Self::check_index(program, *index)?;
-                let candidate = TransformationCandidate {
-                    operator_name: "replace_segment",
-                    segment_id: *index,
-                    replacement_segments: replacement.clone(),
-                };
-                Ok(build_modified_program(program, &candidate))
+                // The edit replaces `original.len()` segments (default 1 when
+                // the capture is unset). Forward materializers replace ONE
+                // target segment; the roundtrip inverse collapses the whole
+                // replaced range back (R3-002).
+                let replaced_len = original.as_ref().map_or(1, |o| o.len().max(1));
+                let end = index.checked_add(replaced_len - 1).ok_or_else(|| {
+                    EditError::InvalidRange {
+                        message: "segment index overflow".to_string(),
+                    }
+                })?;
+                if end >= program.segments.len() {
+                    return Err(EditError::IndexOutOfBounds {
+                        index: end,
+                        len: program.segments.len(),
+                    });
+                }
+                let mut next = program.segments.clone();
+                let _ = next.splice(*index..=end, replacement.clone());
+                Ok(PlanningProgram::new(next))
             }
             ProgramEdit::InsertSegments { at, segments } => {
                 if segments.is_empty() {
@@ -220,8 +235,8 @@ impl ProgramEdit {
                 original,
             } => ProgramEdit::ReplaceSegment {
                 index: *index,
-                replacement: original.clone().into_iter().collect(),
-                original: replacement.first().cloned(),
+                replacement: original.clone().unwrap_or_default(),
+                original: Some(replacement.clone()),
             },
             ProgramEdit::InsertSegments { at, segments } => ProgramEdit::RemoveSegments {
                 at: *at,
@@ -405,7 +420,7 @@ mod tests {
         let edit = ProgramEdit::ReplaceSegment {
             index: 2,
             replacement: vec![replacement.clone()],
-            original: Some(p.segments[2].clone()),
+            original: Some(vec![p.segments[2].clone()]),
         };
 
         let result = edit.apply(&p).expect("in-bounds replace must succeed");
@@ -707,13 +722,35 @@ mod tests {
     // ── Spec inverse scenarios (spec program-edit "inverse Operation") ─────
 
     #[test]
+    fn replace_segment_one_to_many_inverse_restores_original_program() {
+        // R3-002: a 1→N ReplaceSegment (the InsertWaypoint materializer
+        // produces TWO segments) must round-trip exactly — the inverse must
+        // restore the FULL replaced range, not just the first segment.
+        let p = five_segment_program();
+        let edit = ProgramEdit::ReplaceSegment {
+            index: 2,
+            replacement: vec![move_j(vec![9.0, 9.0]), move_j(vec![10.0, 10.0])],
+            original: Some(vec![p.segments[2].clone()]),
+        };
+
+        let p_prime = edit.apply(&p).expect("apply");
+        assert_eq!(p_prime.segments.len(), 6, "one segment becomes two");
+
+        let restored = edit.inverse().apply(&p_prime).expect("inverse apply");
+        assert_eq!(
+            restored, p,
+            "undo of a 1→2 replace must restore the exact original program"
+        );
+    }
+
+    #[test]
     fn replace_segment_inverse_restores_original_program() {
         // Spec "ReplaceSegment inverse": inverse applied to P' equals P.
         let p = five_segment_program();
         let edit = ProgramEdit::ReplaceSegment {
             index: 2,
             replacement: vec![move_j(vec![9.0, 9.0])],
-            original: Some(p.segments[2].clone()),
+            original: Some(vec![p.segments[2].clone()]),
         };
 
         let p_prime = edit.apply(&p).expect("apply");
@@ -827,7 +864,7 @@ mod tests {
             ProgramEdit::ReplaceSegment {
                 index: 1,
                 replacement: vec![move_j(vec![9.0, 9.0])],
-                original: Some(move_j(vec![1.0, 1.0])),
+                original: Some(vec![move_j(vec![1.0, 1.0])]),
             },
             ProgramEdit::InsertSegments {
                 at: 2,
@@ -910,7 +947,27 @@ mod property_tests {
             let edit = ProgramEdit::ReplaceSegment {
                 index: idx,
                 replacement: vec![replacement],
-                original: Some(p.segments[idx].clone()),
+                original: Some(vec![p.segments[idx].clone()]),
+            };
+            let p_prime = edit.apply(&p).expect("in-bounds replace must succeed");
+            let restored = edit.inverse().apply(&p_prime).expect("inverse must succeed");
+            prop_assert_eq!(restored, p);
+        }
+
+        // R3-002: one-to-many replacements (1→2, 1→3 — the InsertWaypoint
+        // materializer shape) must round-trip exactly. The inverse splices the
+        // WHOLE replaced range back, not just the first segment.
+        #[test]
+        fn replace_segment_one_to_many_roundtrip(
+            p in program_strategy(),
+            idx in 0usize..8,
+            replacement in prop::collection::vec(move_j_strategy(), 2..=3),
+        ) {
+            let idx = idx % p.segments.len();
+            let edit = ProgramEdit::ReplaceSegment {
+                index: idx,
+                replacement,
+                original: Some(vec![p.segments[idx].clone()]),
             };
             let p_prime = edit.apply(&p).expect("in-bounds replace must succeed");
             let restored = edit.inverse().apply(&p_prime).expect("inverse must succeed");

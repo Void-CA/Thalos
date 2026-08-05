@@ -138,7 +138,7 @@ impl PlanAdvisor {
                         ProgramEdit::ReplaceSegment {
                             index,
                             replacement: segments,
-                            original: Some(target.clone()),
+                            original: Some(vec![target.clone()]),
                         },
                         RecommendationStatus::Available,
                     ),
@@ -148,7 +148,7 @@ impl PlanAdvisor {
                         ProgramEdit::ReplaceSegment {
                             index,
                             replacement: vec![target.clone()],
-                            original: Some(target.clone()),
+                            original: Some(vec![target.clone()]),
                         },
                         RecommendationStatus::Unavailable,
                     ),

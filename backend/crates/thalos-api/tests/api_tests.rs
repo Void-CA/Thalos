@@ -2085,6 +2085,87 @@ async fn undo_command_restores_previous_plan_via_inverse() {
 }
 
 #[tokio::test]
+async fn undo_command_one_to_many_insert_waypoint_restores_original() {
+    // R3-002: undo of a recommendation whose edit is one-to-many (InsertWaypoint
+    // splits one MoveL into TWO segments) must restore the EXACT original plan.
+    // The old inverse spliced only the first segment back, leaving an extra
+    // segment — a corrupted, mixed plan.
+    let app = writeback_app().await;
+    preview_setup(&app).await;
+
+    // Re-schedule a SINGLE-MoveL plan just inside the reach boundary
+    // ([1.75, 0.1, 0.5]): the analysis produces a LowManipulability
+    // observation anchored at waypoint 0 (the only segment is the MoveL), so
+    // recommendation 2 (Waypoint/InsertWaypoint) is AVAILABLE and materializes
+    // a 1→2 replacement that still recompiles.
+    let (status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/motion/plan",
+        Some(json!({
+            "segments": [
+                {
+                    "type": "movel",
+                    "target": {
+                        "translation": [1.75, 0.1, 0.5],
+                        "rotation": {"kind": "Quaternion", "value": {"w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0}}
+                    }
+                }
+            ]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "plan must compile");
+
+    // Trajectory BEFORE the apply (the state the undo must restore).
+    let (_, before_scene) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before_scene = before_scene.expect("scene response must be valid JSON");
+    let original = active_trajectory_signature(&before_scene);
+
+    // Recommendation 2 is the available InsertWaypoint (1→2) in this scenario.
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/apply",
+        Some(json!({"recommendation_id": 2})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "apply of the InsertWaypoint must succeed");
+    let body = body.expect("apply response must be valid JSON");
+    assert_eq!(
+        body["status"], "available",
+        "recommendation 2 must be the available InsertWaypoint"
+    );
+    assert_eq!(body["history_length"], 1, "apply stores the inverse");
+
+    let (_, applied_scene) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let applied_scene = applied_scene.expect("scene response must be valid JSON");
+    let applied = active_trajectory_signature(&applied_scene);
+    assert_ne!(applied, original, "the apply must change the trajectory");
+
+    // Undo — must restore the EXACT pre-apply plan (no leftover segment).
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/commands/undo",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "undo must succeed after an apply");
+    let body = body.expect("undo response must be valid JSON");
+    assert_eq!(body["history_length"], 0, "undo pops the entry");
+
+    let (_, after_scene) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after_scene = after_scene.expect("scene response must be valid JSON");
+    let restored = active_trajectory_signature(&after_scene);
+    assert_eq!(
+        restored, original,
+        "undo of a 1→2 InsertWaypoint must restore the exact original trajectory"
+    );
+    assert_ne!(restored, applied, "the applied trajectory must be gone");
+}
+
+#[tokio::test]
 async fn undo_command_empty_history_returns_409_without_mutation() {
     // Spec command-endpoints "Undo with empty history": no applied commands →
     // 409 Conflict; the runtime is untouched.

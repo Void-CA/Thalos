@@ -1085,12 +1085,12 @@ mod tests {
                     max_velocity: Some(500.0),
                     max_acceleration: None,
                 }],
-                original: Some(MotionSegment::MoveJ {
+                original: Some(vec![MotionSegment::MoveJ {
                     origin: OperationId("op-l".to_string()),
                     target: vec![0.0, 0.0],
                     max_velocity: Some(500.0),
                     max_acceleration: None,
-                }),
+                }]),
             },
             status: Some(RecommendationStatus::Available),
         }
