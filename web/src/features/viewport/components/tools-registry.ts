@@ -26,7 +26,6 @@ export const TOOLS_BY_PERSPECTIVE: Record<string, ToolDef[]> = {
   ],
   sessions: [],
   planning: [],
-  analysis: [],
   execution: [],
   knowledge: [],
 }
