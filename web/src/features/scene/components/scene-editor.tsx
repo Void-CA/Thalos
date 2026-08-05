@@ -1,5 +1,6 @@
 import { Plus, Trash2 } from 'lucide-react'
-import { useDomainSceneStore } from '../store'
+import { useDomainSceneStore, defaultObjectPose, defaultLocationPose } from '../store'
+import { PoseInputs } from './pose-inputs'
 
 export function SceneEditor() {
   const objects = useDomainSceneStore((s) => s.objects)
@@ -31,13 +32,13 @@ export function SceneEditor() {
             Objects
           </span>
           <button
+            aria-label="Add object"
             onClick={() =>
               addObject({
                 id: `obj-${nextSeq.obj}`,
                 name: `Object ${nextSeq.obj}`,
-                // SCARA: base_height=0.5, J3 prismatic [-0.5,0.0]
-                // En reposo J3=0 → TCP Z=0.5. Approach offset +5cm = Z 0.45 (J3=-0.05) dentro del rango
-                pose: { position: [1.8, 0.0, 0.4], orientation: [0, 0, 0, 1] },
+                // Design D6: add defaults come from the store — no inline literals.
+                pose: { ...defaultObjectPose },
               })
             }
             className="text-muted-foreground hover:text-foreground cursor-pointer"
@@ -47,26 +48,27 @@ export function SceneEditor() {
         </div>
         <div className="space-y-1 max-h-40 overflow-y-auto">
           {objects.map((obj) => (
-            <div
-              key={obj.id}
-              className="flex items-center gap-1.5 group"
-            >
-              <input
-                value={obj.name}
-                onChange={(e) => updateObject(obj.id, { name: e.target.value })}
-                className="flex-1 px-1.5 py-0.5 text-[11px] rounded border border-border bg-background
-                           text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            <div key={obj.id} className="flex flex-col gap-0.5 group">
+              <div className="flex items-center gap-1.5">
+                <input
+                  value={obj.name}
+                  onChange={(e) => updateObject(obj.id, { name: e.target.value })}
+                  className="flex-1 px-1.5 py-0.5 text-[11px] rounded border border-border bg-background
+                             text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+                <button
+                  aria-label={`Remove ${obj.name}`}
+                  onClick={() => removeObject(obj.id)}
+                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive cursor-pointer"
+                >
+                  <Trash2 className="size-3" />
+                </button>
+              </div>
+              <PoseInputs
+                pose={obj.pose}
+                onChange={(pose) => updateObject(obj.id, { pose })}
+                idPrefix={obj.id}
               />
-              <span className="text-[10px] text-muted-foreground font-mono w-16 text-right truncate"
-                title={`${obj.pose.position[0]}, ${obj.pose.position[1]}, ${obj.pose.position[2]}`}>
-                {obj.pose.position[0].toFixed(1)}, {obj.pose.position[1].toFixed(1)}
-              </span>
-              <button
-                onClick={() => removeObject(obj.id)}
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive cursor-pointer"
-              >
-                <Trash2 className="size-3" />
-              </button>
             </div>
           ))}
           {objects.length === 0 && (
@@ -84,11 +86,13 @@ export function SceneEditor() {
             Locations
           </span>
           <button
+            aria-label="Add location"
             onClick={() =>
               addLocation({
                 id: `loc-${nextSeq.loc}`,
                 name: `Location ${nextSeq.loc}`,
-                pose: { position: [0.8, -0.3, 0], orientation: [0, 0, 0, 1] },
+                // Design D6: add defaults come from the store — no inline literals.
+                pose: { ...defaultLocationPose },
               })
             }
             className="text-muted-foreground hover:text-foreground cursor-pointer"
@@ -98,22 +102,27 @@ export function SceneEditor() {
         </div>
         <div className="space-y-1 max-h-40 overflow-y-auto">
           {locations.map((loc) => (
-            <div key={loc.id} className="flex items-center gap-1.5 group">
-              <input
-                value={loc.name}
-                onChange={(e) => updateLocation(loc.id, { name: e.target.value })}
-                className="flex-1 px-1.5 py-0.5 text-[11px] rounded border border-border bg-background
-                           text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            <div key={loc.id} className="flex flex-col gap-0.5 group">
+              <div className="flex items-center gap-1.5">
+                <input
+                  value={loc.name}
+                  onChange={(e) => updateLocation(loc.id, { name: e.target.value })}
+                  className="flex-1 px-1.5 py-0.5 text-[11px] rounded border border-border bg-background
+                             text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+                <button
+                  aria-label={`Remove ${loc.name}`}
+                  onClick={() => removeLocation(loc.id)}
+                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive cursor-pointer"
+                >
+                  <Trash2 className="size-3" />
+                </button>
+              </div>
+              <PoseInputs
+                pose={loc.pose}
+                onChange={(pose) => updateLocation(loc.id, { pose })}
+                idPrefix={loc.id}
               />
-              <span className="text-[10px] text-muted-foreground font-mono w-16 text-right truncate">
-                {loc.pose.position[0].toFixed(1)}, {loc.pose.position[1].toFixed(1)}
-              </span>
-              <button
-                onClick={() => removeLocation(loc.id)}
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive cursor-pointer"
-              >
-                <Trash2 className="size-3" />
-              </button>
             </div>
           ))}
           {locations.length === 0 && (
@@ -131,6 +140,7 @@ export function SceneEditor() {
             Tools
           </span>
           <button
+            aria-label="Add tool"
             onClick={() =>
               addTool({ id: `tool-${nextSeq.tool}`, name: `Tool ${nextSeq.tool}` })
             }

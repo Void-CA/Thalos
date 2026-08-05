@@ -47,12 +47,19 @@ interface SceneState {
 const defaultPose: PoseDef = { position: [1.8, 0.0, 0.5], orientation: [0, 0, 0, 1] }
 
 // Canonical SCARA scene — seeded so a fresh Task is immediately runnable.
-// Values match the SceneEditor "+" handlers so edits behave identically.
-const seededObjects: SceneObject[] = [
-  { id: 'bolt-1', name: 'Bolt', pose: { position: [1.8, 0, 0.4], orientation: [0, 0, 0, 1] } },
+// Design D6: SEEDED_OBJECTS/SEEDED_LOCATIONS and the add-handler defaults are
+// a SINGLE source of truth — the seeds derive from the default poses, and the
+// SceneEditor "+" handlers import the same constants (no duplicate literals).
+// Orientation is the identity quaternion `[w,x,y,z] = [1,0,0,0]` (spec R3),
+// matching the backend RotationDto::Quaternion wire format.
+export const defaultObjectPose: PoseDef = { position: [1.8, 0, 0.4], orientation: [1, 0, 0, 0] }
+export const defaultLocationPose: PoseDef = { position: [0.8, -0.3, 0], orientation: [1, 0, 0, 0] }
+
+export const SEEDED_OBJECTS: SceneObject[] = [
+  { id: 'bolt-1', name: 'Bolt', pose: { ...defaultObjectPose } },
 ]
-const seededLocations: SceneLocation[] = [
-  { id: 'tray-1', name: 'Tray', pose: { position: [0.8, -0.3, 0], orientation: [0, 0, 0, 1] } },
+export const SEEDED_LOCATIONS: SceneLocation[] = [
+  { id: 'tray-1', name: 'Tray', pose: { ...defaultLocationPose } },
 ]
 
 /**
@@ -68,8 +75,8 @@ const seededLocations: SceneLocation[] = [
 export const useDomainSceneStore = create<SceneState>()(
   devtools(
     (set, get) => ({
-      objects: seededObjects.map((o) => ({ ...o })),
-      locations: seededLocations.map((l) => ({ ...l })),
+      objects: SEEDED_OBJECTS.map((o) => ({ ...o })),
+      locations: SEEDED_LOCATIONS.map((l) => ({ ...l })),
       tools: [],
       homePose: { ...defaultPose },
 
