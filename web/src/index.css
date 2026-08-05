@@ -146,6 +146,20 @@
     @apply border-border outline-ring/50;
   }
 
+  /* Ocultar spinners nativos de inputs numéricos (product-quality item 5):
+     una regla global cubre los 11 inputs existentes y futuros. Firefox usa
+     -moz-appearance: textfield; WebKit los pseudo-elementos spin-button.
+     step/min/max siguen funcionando. */
+  input[type="number"] {
+    appearance: none;
+    -moz-appearance: textfield;
+  }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
   html, body, #root {
     @apply bg-background text-foreground;
     height: 100%;
