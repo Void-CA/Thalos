@@ -8,7 +8,15 @@ import {
 } from '@/components/ui/dialog'
 import { useWorkspaceService } from '../services/service-context'
 import { useWorkspaceStore } from '../store/workspace-store'
-import { CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import {
+  ErrorBox,
+  MetricRow,
+  MetricValue,
+  SectionHeader,
+  gradeBadge,
+  gradeBadgeInverse,
+} from './analysis-metrics'
 
 interface AnalysisDialogProps {
   open: boolean
@@ -202,112 +210,5 @@ export function AnalysisDialog({ open, onClose, samples, seed, tolerance }: Anal
         </div>
       </DialogContent>
     </Dialog>
-  )
-}
-
-// ── Subcomponents ──
-
-function SectionHeader({ title, badge }: { title: string; badge?: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between mb-2">
-      <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">{title}</h3>
-      {badge}
-    </div>
-  )
-}
-
-function MetricRow({
-  label, value, max, unit, inverse, pct,
-}: {
-  label: string
-  value: number
-  max: number
-  unit?: string
-  inverse?: boolean
-  pct?: boolean
-}) {
-  const pctVal = pct ? (value ?? 0) * 100 : inverse
-    ? Math.max(0, Math.min(100, ((max - (value ?? 0)) / max) * 100))
-    : Math.max(0, Math.min(100, ((value ?? 0) / max) * 100))
-
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between text-xs">
-        <span className="text-muted-foreground">{label}</span>
-        <span className="font-mono tabular-nums text-foreground font-semibold">
-          {value?.toFixed?.(4) ?? '—'}
-          {unit && <span className="text-muted-foreground font-normal ml-0.5">{unit}</span>}
-          {pct && <span className="text-muted-foreground font-normal">%</span>}
-        </span>
-      </div>
-      <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-300"
-          style={{
-            width: `${pctVal}%`,
-            backgroundColor: inverse
-              ? pctVal > 60 ? '#44cc44' : pctVal > 30 ? '#eebb22' : '#ee3333'
-              : pctVal > 60 ? '#44cc44' : pctVal > 30 ? '#eebb22' : '#ee3333',
-          }}
-        />
-      </div>
-    </div>
-  )
-}
-
-function MetricValue({
-  label, value, color, pct,
-}: {
-  label: string
-  value?: number
-  color?: string
-  pct?: boolean
-}) {
-  return (
-    <div className="flex flex-col gap-0.5 bg-secondary/20 rounded-md px-2.5 py-2">
-      <span className="text-[10px] text-muted-foreground truncate">{label}</span>
-      <span className="text-sm font-mono font-semibold tabular-nums" style={{ color: color ?? 'var(--foreground)' }}>
-        {value?.toFixed?.(4) ?? '—'}
-        {pct && <span className="text-[10px] text-muted-foreground font-normal">%</span>}
-      </span>
-    </div>
-  )
-}
-
-function gradeBadge(singularCount: number, total: number): React.ReactNode {
-  if (!total) return null
-  const ratio = singularCount / total
-  const isGood = ratio < 0.01
-  const isWarn = ratio < 0.05
-  return (
-    <span className={`inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
-      isGood ? 'bg-success-weak text-chart-3' : isWarn ? 'bg-warning-weak text-chart-4' : 'bg-destructive-weak text-destructive'
-    }`}>
-      {isGood ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-      {isGood ? 'Good' : isWarn ? 'Fair' : 'Poor'}
-    </span>
-  )
-}
-
-function gradeBadgeInverse(value: number): React.ReactNode {
-  if (value === undefined) return null
-  const isGood = value >= 0.5
-  const isWarn = value >= 0.3
-  return (
-    <span className={`inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
-      isGood ? 'bg-success-weak text-chart-3' : isWarn ? 'bg-warning-weak text-chart-4' : 'bg-destructive-weak text-destructive'
-    }`}>
-      {isGood ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-      {isGood ? 'Good' : isWarn ? 'Fair' : 'Poor'}
-    </span>
-  )
-}
-
-function ErrorBox({ message }: { message: string }) {
-  return (
-    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-destructive-weak border border-destructive-weak text-xs text-destructive">
-      <XCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-      <span>{message}</span>
-    </div>
   )
 }
