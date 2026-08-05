@@ -136,7 +136,7 @@ describe('AnalysisWorkspace — explicit trigger runs 3 mutations (spec: Explici
     mocks.analyzeManipulability.mockResolvedValue({
       metrics: {
         avg_yoshikawa: 0.42, min_yoshikawa: 0.1, max_yoshikawa: 0.9,
-        avg_isotropy: 0.55, min_isotropy: 0.12, max_isotropy: 0.8, total_samples: 10000,
+        avg_isotropy: 0.55, min_isotropy: 0.12, max_isotropy: 0.85, total_samples: 10000,
       },
       samples: [{ position: [0.1, 0.2, 0.3], yoshikawa: 0.42 }],
     })
