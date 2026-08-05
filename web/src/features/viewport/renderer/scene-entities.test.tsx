@@ -61,6 +61,14 @@ const raisedTrayAt: SceneLocation = {
   pose: { position: [0.8, -0.3, 0.5], orientation: [1, 0, 0, 0] },
 }
 
+/** Location with a NON-IDENTITY orientation (180° about Z, store [w,x,y,z]) —
+ *  the R3-002 regression: a separate `rotation` prop used to discard it. */
+const tiltedTrayAt: SceneLocation = {
+  id: 'tray-3',
+  name: 'Tray Tilted',
+  pose: { position: [0.8, -0.3, 0.5], orientation: [0, 0, 0, 1] },
+}
+
 beforeEach(() => {
   useDomainSceneStore.setState({ objects: [], locations: [], tools: [] })
 })
@@ -89,8 +97,10 @@ describe('SceneEntities — renders objects/locations from the domain store (R1)
     expect(mesh).toBeInTheDocument()
     // z-nudge: tray seed z=0 → ENTITY_SIZE/2 (sits on the floor, no intersection)
     expect(mesh.getAttribute('position')).toBe(`0.8,-0.3,${ENTITY_SIZE / 2}`)
-    // cylinder rotated π/2 about X → axis lies along Z, tray renders flat
-    expect(mesh.getAttribute('rotation')).toBe(`${Math.PI / 2},0,0`)
+    // R3-002: the π/2 flat-lay is composed INTO the quaternion (q_π2_x × identity
+    // = q_π2_x) — a single transform, so no separate rotation prop remains.
+    expect(mesh.getAttribute('quaternion')).toBe(`${Math.SQRT1_2},0,0,${Math.SQRT1_2}`)
+    expect(mesh.getAttribute('rotation')).toBeNull()
     expect(screen.getByText('Tray')).toBeInTheDocument()
   })
 })
@@ -115,7 +125,23 @@ describe('SceneEntities — tolerates an empty store (R2)', () => {
     render(<SceneEntities />)
     const mesh = screen.getByTestId('scene-entity-mesh-tray-2')
     expect(mesh.getAttribute('position')).toBe('0.8,-0.3,0.5')
-    expect(mesh.getAttribute('rotation')).toBe(`${Math.PI / 2},0,0`)
+    expect(mesh.getAttribute('quaternion')).toBe(`${Math.SQRT1_2},0,0,${Math.SQRT1_2}`)
+    expect(mesh.getAttribute('rotation')).toBeNull()
+  })
+
+  it('preserves a non-identity location orientation composed with the flat-lay rotation (R3-002)', () => {
+    act(() => {
+      useDomainSceneStore.setState({ locations: [tiltedTrayAt] })
+    })
+    render(<SceneEntities />)
+    const mesh = screen.getByTestId('scene-entity-mesh-tray-3')
+    // locationQuaternion(pose) = q_π2_x ⊗ q_pose with q_pose = 180° about Z
+    // → [x,y,z,w] = [0, -√2/2, √2/2, 0]. The mesh must carry this SINGLE
+    // quaternion — a separate rotation prop would overwrite pose.orientation.
+    expect(mesh.getAttribute('quaternion')).toBe(
+      `0,${-Math.SQRT1_2},${Math.SQRT1_2},0`,
+    )
+    expect(mesh.getAttribute('rotation')).toBeNull()
   })
 
   it('re-nudges a location edited to z=0 (R1.3 + Z-up delta)', () => {
