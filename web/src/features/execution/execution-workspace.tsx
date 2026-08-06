@@ -1,7 +1,8 @@
-import { Activity, Clock, Play, Square, RefreshCw, Pause, Gauge, ListOrdered, Cpu } from 'lucide-react'
+import { Activity, Clock, Play, Square, RefreshCw, Pause, Gauge, ListOrdered } from 'lucide-react'
 import { useExecutionStore } from './execution-store'
+import { useBackendStore } from './backend-store'
+import { BackendSelector } from './components/backend-selector'
 import { ErrorBox } from '@/components/ui/error-box'
-import { useSceneStore } from '@/features/viewport/store'
 
 /**
  * ExecutionWorkspace — the single owner of execution lifecycle and runtime
@@ -25,9 +26,6 @@ export function ExecutionWorkspace() {
   const elapsedSecs = useExecutionStore((s) => s.elapsedSecs)
   const error = useExecutionStore((s) => s.error)
   const activePlan = useExecutionStore((s) => s.activePlan)
-  /** Backend execution source ("Simulation" | "Hardware") — informational
-   *  badge only, from the runtime full-state `execution.source` (PR4). */
-  const executionSource = useSceneStore((s) => s.execution?.source)
 
   const start = useExecutionStore((s) => s.start)
   const pause = useExecutionStore((s) => s.pause)
@@ -42,20 +40,31 @@ export function ExecutionWorkspace() {
   const canCancel = status === 'running' || status === 'paused'
   const canReset = status === 'completed' || status === 'failed'
 
+  /** connection_lost gets the Reconectar CTA (reconnect + retry); every other
+   *  failure gets Reintentar (reset + start) — execution-workspace spec. */
+  const isConnectionLost = error?.code === 'connection_lost'
+
+  const handleRetry = () => {
+    void reset().then(() => start())
+  }
+
+  const handleReconnect = async () => {
+    // Reconnect the active hardware backend with its current port first.
+    const { backends, activeId, connect } = useBackendStore.getState()
+    const active = backends.find((b) => b.id === activeId)
+    if (active?.id === 'esp32') {
+      await connect(active.id, active.port ?? '')
+    }
+    await reset()
+    await start()
+  }
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Header ── */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
         <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider flex-1">Execution</h2>
-        {executionSource && (
-          <span
-            data-testid="execution-source-badge"
-            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-blue-600/20 text-blue-400"
-          >
-            <Cpu className="size-2.5" />
-            {executionSource}
-          </span>
-        )}
+        <BackendSelector />
         <span
           className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide
             ${status === 'running' ? 'bg-green-600/20 text-green-500'
@@ -129,14 +138,19 @@ export function ExecutionWorkspace() {
                 {status === 'failed' && (
                   <button
                     onClick={() => {
-                      // Resilience-matrix "Reintentar" (reset + start): the
-                      // retry affordance on network/timeout failures — resets
-                      // the execution session and immediately starts it again.
-                      void reset().then(() => start())
+                      // Resilience-matrix retry: Reintentar (reset + start) for
+                      // network/timeout failures; Reconectar (reconnect the
+                      // active hardware backend, then reset + start) for
+                      // connection_lost — execution-workspace spec.
+                      if (isConnectionLost) {
+                        void handleReconnect()
+                      } else {
+                        handleRetry()
+                      }
                     }}
                     className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-green-600/20 text-green-500 hover:bg-green-600/30 cursor-pointer"
                   >
-                    <RefreshCw className="size-3" /> Reintentar
+                    <RefreshCw className="size-3" /> {isConnectionLost ? 'Reconectar' : 'Reintentar'}
                   </button>
                 )}
               </>

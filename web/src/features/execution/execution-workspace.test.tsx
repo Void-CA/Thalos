@@ -5,6 +5,7 @@ import { act } from 'react'
 import '@testing-library/jest-dom/vitest'
 import { ExecutionWorkspace } from './execution-workspace'
 import { useExecutionStore } from './execution-store'
+import { useBackendStore } from './backend-store'
 import type { ActivePlanInfo, ExecutionStatus } from './execution-store'
 import { useSceneStore } from '@/features/viewport/store'
 
@@ -35,6 +36,20 @@ vi.mock('@/features/execution/execution-client', async (importOriginal) => {
   return { ...actual, executionClient: execClientMocks }
 })
 
+const backendApiMocks = vi.hoisted(() => ({
+  list: vi.fn(),
+  activate: vi.fn(),
+  connect: vi.fn(),
+  disconnect: vi.fn(),
+}))
+
+vi.mock('@/features/execution/backend-api', () => ({
+  backendApi: backendApiMocks,
+}))
+
+const SIM_BACKEND = { id: 'simulation', name: 'Simulation', status: 'active', connected: true, port: null }
+const ESP_BACKEND = { id: 'esp32', name: 'Hardware (ESP32)', status: 'inactive', connected: false, port: '/dev/ttyUSB0' }
+
 const plan: ActivePlanInfo = { instructionCount: 4, durationSecs: 12.5, source: 'TaskDocument' }
 /** PR2: a plan mirrored from the Planning workspace preview (motion-program spec). */
 const motionProgramPlan: ActivePlanInfo = { instructionCount: 3, durationSecs: 8.0, source: 'Motion Program' }
@@ -59,6 +74,8 @@ function setStatus(status: ExecutionStatus, extra: Partial<typeof useExecutionSt
 
 beforeEach(() => {
   Object.values(execClientMocks).forEach((m) => m.mockClear())
+  Object.values(backendApiMocks).forEach((m) => m.mockReset())
+  backendApiMocks.list.mockResolvedValue([SIM_BACKEND, ESP_BACKEND])
   useExecutionStore.setState({
     status: 'idle',
     activePlan: null,
@@ -68,6 +85,7 @@ beforeEach(() => {
   })
   act(() => {
     useSceneStore.setState({ execution: null } as never)
+    useBackendStore.setState({ backends: [SIM_BACKEND, ESP_BACKEND], activeId: 'simulation', loading: false, error: null })
   })
 })
 afterEach(() => cleanup())
@@ -209,37 +227,61 @@ describe('Progress and status display (execution-workspace spec)', () => {
   })
 })
 
-describe('Backend source badge (execution-workspace spec, ADDED)', () => {
-  function setRuntimeExecutionSource(source: string) {
+describe('Backend selector replaces the informational badge (execution-workspace spec)', () => {
+  it('renders the interactive selector instead of the old source badge', () => {
+    renderWorkspace()
+    // The selector (Simulation/Hardware options) replaces the badge.
+    expect(screen.getByRole('button', { name: /Simulation/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Hardware/ })).toBeInTheDocument()
+    expect(screen.queryByTestId('execution-source-badge')).not.toBeInTheDocument()
+  })
+
+  it('reflects the active backend from the store — Simulation selected, no port input', async () => {
+    renderWorkspace()
+    await waitFor(() => expect(useBackendStore.getState().activeId).toBe('simulation'))
+    expect(screen.queryByLabelText('Puerto')).not.toBeInTheDocument()
+  })
+})
+
+describe('Reconectar — reconnect + retry on connection_lost (execution-workspace spec)', () => {
+  it('shows a Reconectar button (not Reintentar) when the tick fails with connection_lost', () => {
+    setStatus('failed', {
+      error: { message: 'Connection lost', code: 'connection_lost' },
+    } as never)
+    renderWorkspace()
+    expect(screen.getByText(/Connection lost/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reconectar' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
+  })
+
+  it('Reconectar reconnects the hardware backend, then resets and starts execution', async () => {
+    backendApiMocks.connect.mockResolvedValue({ status: 'ok' })
+    backendApiMocks.list.mockResolvedValue([
+      { ...SIM_BACKEND, status: 'inactive' },
+      { ...ESP_BACKEND, status: 'active', connected: true },
+    ])
+    execClientMocks.reset.mockResolvedValue(undefined)
+    execClientMocks.start.mockResolvedValue(undefined)
+    execClientMocks.tick.mockResolvedValue(completedDelta)
     act(() => {
-      useSceneStore.setState({
-        execution: {
-          status: 'running',
-          progress: 0.5,
-          elapsedSecs: 6.25,
-          source,
-        },
-      } as never)
+      useBackendStore.setState({ backends: [{ ...SIM_BACKEND, status: 'inactive' }, { ...ESP_BACKEND, status: 'active', connected: true }], activeId: 'esp32' })
     })
-  }
-
-  it('shows a Simulation badge when the runtime reports execution.source = Simulation', () => {
-    setRuntimeExecutionSource('Simulation')
+    setStatus('failed', {
+      error: { message: 'Connection lost', code: 'connection_lost' },
+      activePlan: plan,
+    } as never)
     renderWorkspace()
-    expect(screen.getByText('Simulation')).toBeInTheDocument()
-  })
 
-  it('shows a Hardware badge when the runtime reports execution.source = Hardware', () => {
-    setRuntimeExecutionSource('Hardware')
-    renderWorkspace()
-    expect(screen.getByText('Hardware')).toBeInTheDocument()
-  })
+    // The selector's fetch resolves; the active backend stays esp32.
+    await waitFor(() => expect(useBackendStore.getState().activeId).toBe('esp32'))
 
-  it('shows no source badge when execution has no source', () => {
-    setStatus('idle')
-    renderWorkspace()
-    expect(screen.queryByText('Simulation')).not.toBeInTheDocument()
-    expect(screen.queryByText('Hardware')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Reconectar' }))
+
+    // Reconnect with the active hardware backend's port, then reset+start.
+    await waitFor(() => expect(backendApiMocks.connect).toHaveBeenCalledWith('esp32', '/dev/ttyUSB0'))
+    await waitFor(() => expect(execClientMocks.reset).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(execClientMocks.start).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(useExecutionStore.getState().status).toBe('completed'))
   })
 })
 
