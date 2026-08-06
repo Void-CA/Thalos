@@ -12,8 +12,8 @@ import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 /**
  * ProgrammingWorkspace — the UNIFIED programming area (hotfix: /task + /planning
  * merged into ONE workspace under /task, stage 3). The three ways to command
- * the robot — semantic editor (Programa, with internal Visual/Text), motion
- * program by segments (Motion Program), and the analysis view (Analysis) — are
+ * the robot — semantic editor (Tasks, with internal Visual/Text), motion
+ * program by segments (Motion), and the analysis view (Analysis) — are
  * tabs of the same workspace, communicating that they are ONE interaction
  * medium to send orders to the robot.
  *
@@ -68,15 +68,15 @@ beforeEach(() => {
 })
 afterEach(() => cleanup())
 
-describe('ProgrammingWorkspace — unified tabs (Programa | Motion Program | Analysis)', () => {
+describe('ProgrammingWorkspace — unified tabs (Tasks | Motion | Analysis)', () => {
   it('renders the three tabs of the single programming workspace', () => {
     renderWorkspace()
-    expect(screen.getByRole('tab', { name: 'Programa' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Motion Program' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Tasks' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Motion' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Analysis' })).toBeInTheDocument()
   })
 
-  it('Programa is the default tab — the TaskEditor (Visual/Text) + Diagnostics', () => {
+  it('Tasks is the default tab — the TaskEditor (Visual/Text) + Diagnostics', () => {
     renderWorkspace()
     expect(screen.getByRole('heading', { name: 'Program' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Diagnostics' })).toBeInTheDocument()
@@ -92,10 +92,9 @@ describe('ProgrammingWorkspace — unified tabs (Programa | Motion Program | Ana
     expect(screen.queryByText(/objects · locations · tools · home/i)).not.toBeInTheDocument()
   })
 
-  it('switches to the Motion Program tab (PlanningPanel + TrajectoryColorPicker)', () => {
+  it('switches to the Motion tab (PlanningPanel + TrajectoryColorPicker)', () => {
     renderWorkspace()
-    fireEvent.click(screen.getByRole('tab', { name: 'Motion Program' }))
-    expect(screen.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Motion' }))
     expect(screen.getByRole('heading', { name: 'Trajectory Color' })).toBeInTheDocument()
     expect(screen.getByText(/No segments\. Add a motion command/)).toBeInTheDocument()
   })

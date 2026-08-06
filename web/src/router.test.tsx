@@ -236,24 +236,23 @@ describe('analysis content lives inside the unified programming workspace (slice
     seedPrerequisites()
     renderRouter(['/task'])
     const main = within(screen.getByRole('main'))
-    fireEvent.click(main.getByRole('tab', { name: 'Motion Program' }))
-    expect(screen.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
+    fireEvent.click(main.getByRole('tab', { name: 'Motion' }))
+    expect(screen.getByRole('heading', { name: 'Trajectory Color' })).toBeInTheDocument()
     expect(main.queryByRole('button', { name: 'Analyze trajectory' })).not.toBeInTheDocument()
   })
 
-  it('renders the Motion Program content under its tab (Programa is the default)', () => {
+  it('renders the Motion content under its tab (Tasks is the default)', () => {
     seedPrerequisites()
     renderRouter(['/task'])
     const main = within(screen.getByRole('main'))
-    // The Programa tab is the default — it renders the TaskEditor.
+    // The Tasks tab is the default — it renders the TaskEditor.
     expect(main.getByRole('heading', { name: 'Program' })).toBeInTheDocument()
-    // The Motion Program + Trajectory Color sections live under their own tab.
-    fireEvent.click(main.getByRole('tab', { name: 'Motion Program' }))
-    expect(main.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
+    // The Motion + Trajectory Color sections live under their own tab.
+    fireEvent.click(main.getByRole('tab', { name: 'Motion' }))
     expect(main.getByRole('heading', { name: 'Trajectory Color' })).toBeInTheDocument()
     // The analysis content moved into the Analysis tab.
     fireEvent.click(main.getByRole('tab', { name: 'Analysis' }))
-    expect(main.getByRole('heading', { name: 'Analysis' })).toBeInTheDocument()
+    expect(main.getByText('No analysis available')).toBeInTheDocument()
   })
 
   it('shows the simple empty state when nothing is analyzed yet (no cross-nav)', () => {

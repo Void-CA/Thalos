@@ -165,8 +165,8 @@ describe('GuardedRoute — behavior over real router routes', () => {
     const router = renderRouter(['/task'])
 
     expect(router.state.location.pathname).toBe('/task')
-    fireEvent.click(screen.getByRole('tab', { name: 'Motion Program' }))
-    expect(screen.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Motion' }))
+    expect(screen.getByRole('heading', { name: 'Trajectory Color' })).toBeInTheDocument()
   })
 
   it('blocks /execution when planReady=false (no compiled plan, no preview), redirecting to /task', async () => {
