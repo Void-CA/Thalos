@@ -4,6 +4,8 @@
 >
 > **Status**: ✅ **17/17 PASS (2026-08-05, final)** — first execution: 6/6 steps PASS with `scene-writeback` as the sole gap. Fase 2 (`mvp-maintenance`) wired `THALOS_SCENE_WRITEBACK`; E2E re-run (task 4.1) with the flag enabled confirmed Apply/Undo moved from 409 `feature_disabled` to 200 OK, and Undo restores the program byte-identical in segments. Criterion 5 of `mvp-freeze-criteria.md` is VERIFIED.
 
+> **Status (quality re-run, 2026-08-05)**: ✅ **17/17 PASS** — Fase de calidad (PR #97) re-verificada en checkout limpio (commit `807f7c7`): flujo E2E idéntico (scara dof=4, `urdf:223bd687330e`, compile 2 instr, 57/58 analyze, 241 wps preview, apply plan-1, undo plan-2 byte-idéntico), cargo 1770 + pnpm 598 verdes. Sin regresiones. Único hallazgo: 1 test flaky en `thalos_runtime` (1/6 corridas, sin reproducir, timing bajo carga) — warning post-merge, no bloquea.
+
 ## Procedure
 
 ```
@@ -268,4 +270,4 @@ directorio actual del cache).
 
 All rows in the Evidence Table green, with commands and observed outputs recorded in the Notes column. When green, criterion 5 of `mvp-freeze-criteria.md` is verified and the MVP freeze declaration can proceed.
 
-**Current state**: ✅ **17/17 PASS (2026-08-05)** — Apply/Undo verified working with `THALOS_SCENE_WRITEBACK=true` (E2E task 4.1): apply mutates plan (plan-0→plan-1), undo restores byte-identical segments (plan-2), 58 recommendations + 241 preview waypoints unchanged from the first smoke. Criterion 5 of `mvp-freeze-criteria.md` is VERIFIED. For the formal freeze declaration, re-run on a truly clean checkout (this run used cached builds).
+**Current state**: ✅ **17/17 PASS (2026-08-05)** — Apply/Undo verified working with `THALOS_SCENE_WRITEBACK=true` (E2E task 4.1): apply mutates plan (plan-0→plan-1), undo restores byte-identical segments (plan-2), 58 recommendations + 241 preview waypoints unchanged from the first smoke. Criterion 5 of `mvp-freeze-criteria.md` is VERIFIED. Quality re-run (PR #97, commit `807f7c7`, clean checkout): **17/17 PASS** — the demo-quality phase introduced no regressions.
