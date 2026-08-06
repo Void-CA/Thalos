@@ -19,15 +19,6 @@ import { describeError } from '@/shared/errors'
 import type { TaskDocument } from '@/shared/contracts'
 import { serialize } from '../script/serializer'
 import { parse } from '../script/parser'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 
 /**
  * Hotfix (unify-programming): preview a compiled Task program like the Motion
@@ -107,7 +98,11 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
   /** S1 dual mode (frontend-task-workspace spec): 'visual' is the default;
    *  the workspace picks the entry mode per tab (initialMode); switching only
    *  changes the projection, never the store. */
-  const [mode, setMode] = useState<'visual' | 'text'>(initialMode ?? 'visual')
+  /** The editor mode is FIXED per tab via `initialMode` (the Code tab mounts
+   *  <TaskEditor initialMode="text" />) — there is no runtime toggle anymore.
+   *  A plain const keeps the render branching (`mode === 'text'`) working
+   *  without a state setter that nothing invokes. */
+  const mode = initialMode ?? 'visual'
 
   /**
    * S2 text buffer (design P4): component-LOCAL state. The store remains the
@@ -126,39 +121,15 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
    */
   const bufferBaseRef = useRef<string>(serialize(operations))
 
-  /** S3.1/S3.2 dirty-guard confirm dialog (P5): Text→Visual with an
-   *  uncommitted buffer asks the user before discarding. */
-  const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false)
-
   /** Text mode renders EXACTLY serialize(operations) on entry; once editing,
-   *  the buffer is the working copy until a successful atomic Apply. */
-  const switchToText = () => {
-    const text = serialize(operations)
-    bufferBaseRef.current = text
-    setBuffer(text)
-    setMode('text')
-    setScriptErrors([])
-  }
-
-  const switchToVisual = () => {
-    setConfirmDiscardOpen(false)
-    setMode('visual')
-    setScriptErrors([])
-  }
-
-  /**
-   * Dirty guard (program-dual-editor spec I6, design P5): switching away from
-   * Text only risks losing the buffer when it actually holds uncommitted
-   * edits (`buffer !== serialize(operations)`). Visual→Text is always safe —
-   * it re-serializes the current ops into the buffer.
+   *  the buffer is the working copy until a successful atomic Apply.
+   *
+   *  NOTE (hotfix): the mode is fixed per tab via `initialMode` (the Code tab
+   *  mounts <TaskEditor initialMode="text" />). There is no runtime
+   *  visual↔text toggle anymore, so the old `switchToText`/dirty-guard path
+   *  was removed — leaving the tab discards the uncommitted buffer by design
+   *  (the store stays the canonical source; the buffer re-serializes on entry).
    */
-  const requestSwitchToVisual = () => {
-    if (mode === 'text' && buffer !== serialize(operations)) {
-      setConfirmDiscardOpen(true)
-      return
-    }
-    switchToVisual()
-  }
 
   /**
    * Atomic commit (program-dual-editor spec I5, R2):
@@ -347,28 +318,6 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
           ))
         )}
       </div>
-
-        
-      {/* S3.1/S3.2 dirty guard (P5): the store is NOT touched until the user
-       *  confirms — discard only discards the uncommitted buffer. */}
-      <Dialog open={confirmDiscardOpen} onOpenChange={(open) => { if (!open) setConfirmDiscardOpen(false) }}>
-        <DialogContent showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>Uncommitted changes will be lost</DialogTitle>
-            <DialogDescription>
-              Your text edits have not been applied to the program. Switch to Visual and discard them?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDiscardOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={switchToVisual}>
-              Discard changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
