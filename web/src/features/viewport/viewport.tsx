@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import { useSceneStore } from './store'
 import { SceneCanvas } from './renderer/scene-canvas'
+import { useLoadScene } from './synchronization/use-scene-loader'
+import { ErrorBox } from '@/components/ui/error-box'
 import { Loader2, Move } from 'lucide-react'
 
 // ── Helpers (mismos que en optimization-panel, sin dependencias externas) ──
@@ -41,10 +43,13 @@ function fmtDelta(meters: number): string {
 export function Viewport() {
   const loading = useSceneStore(s => s.loading)
   const error = useSceneStore(s => s.error)
+  const errorCode = useSceneStore(s => s.errorCode)
   const hasData = useSceneStore(s => s.data !== null)
   const viewMode = useSceneStore(s => s.trajectoryViewMode)
   const originalWp = useSceneStore(s => s.activePlan?.visualization?.waypoints)
   const optimized = useSceneStore(s => s.optimizedPositions)
+  const setError = useSceneStore(s => s.setError)
+  const loadScene = useLoadScene()
 
   const diff = useMemo(() => {
     if (!originalWp?.length || !optimized?.length) return null
@@ -53,8 +58,18 @@ export function Viewport() {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-destructive">
-        <p className="text-sm font-medium">{error}</p>
+      <div className="flex flex-col items-center justify-center h-full p-4">
+        <div className="w-full max-w-sm">
+          <ErrorBox
+            error={{ message: error, code: errorCode ?? undefined }}
+            onRetry={() => {
+              // Retry the scene load immediately (resilience-matrix spec):
+              // clear the error so a success can paint, then re-fire GET /scene.
+              setError(null)
+              loadScene.mutate()
+            }}
+          />
+        </div>
       </div>
     )
   }
@@ -71,22 +86,6 @@ export function Viewport() {
   return (
     <div className="relative w-full h-full">
       <SceneCanvas />
-
-      {/* Toolbar flotante sobre el canvas */}
-      {hasData && (
-        <div className="absolute top-2 right-2 flex gap-1">
-          <button
-            className="px-2 py-1 text-[11px] font-medium rounded bg-background/80 border border-border 
-                       text-foreground/70 hover:text-foreground hover:bg-background transition-colors
-                       backdrop-blur-sm cursor-pointer"
-            onClick={() => {
-              // TODO: fit robot to view
-            }}
-          >
-            Fit Robot
-          </button>
-        </div>
-      )}
 
       {/* Numerical diff overlay when viewing optimized trajectory */}
       {viewMode === 'optimized' && diff && (

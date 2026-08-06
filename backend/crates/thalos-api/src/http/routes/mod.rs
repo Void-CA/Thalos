@@ -1,3 +1,4 @@
+pub mod backend;
 pub mod motion;
 pub mod plan;
 pub mod repair;

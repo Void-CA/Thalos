@@ -49,6 +49,41 @@ export const CTA_BY_CODE: Record<string, string> = {
   lowering_error: 'Define the referenced objects/locations in Scene',
   planning_error: 'Planning failed — check the robot and scene targets',
   dof_mismatch: 'The loaded robot does not match this task\'s degrees of freedom — select a compatible robot',
+  // Resilience matrix (resilience-presentation): network/timeout come from the
+  // interceptor wrapping; firmware/port/connection codes come from the backend
+  // execution-management API. All flow through describeError → CTA_BY_CODE.
+  network_error: 'Backend is offline — check the connection and retry',
+  timeout_error: 'Request timed out — retry or check backend health',
+  no_firmware: 'No firmware detected — switch to Simulation or check the port',
+  port_in_use: 'Port is in use — choose another port or disconnect the other process',
+  connection_lost: 'Connection lost — reconnect to resume',
+  // R3-001: start without a connected hardware backend (esp32 active but never
+  // connected, or disconnected while active) — the CTA connects the backend.
+  not_connected: 'Hardware backend is not connected — connect it to start',
+  not_found: 'Robot not found — return to the catalog',
+}
+
+/** Short actionable button label for an error code (error-ux spec, "ErrorBox
+ *  with Retry Button"). Falls back to "Reintentar" for unknown codes. */
+export function ctaLabelForCode(code: string | undefined): string {
+  switch (code) {
+    case 'no_firmware':
+      return 'Cambiar a simulación'
+    case 'port_in_use':
+      return 'Elegir otro puerto'
+    case 'connection_lost':
+      return 'Reconectar'
+    case 'not_connected':
+      return 'Conectar'
+    case 'not_found':
+      return 'Volver al catálogo'
+    case 'semantic_validation_error':
+    case 'lowering_error':
+    case 'planning_error':
+      return 'Recompilar'
+    default:
+      return 'Reintentar'
+  }
 }
 
 /** `planning_error` is a generic code — the message is the only signal. IK

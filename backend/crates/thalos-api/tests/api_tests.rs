@@ -3301,3 +3301,252 @@ async fn catalog_load_emits_metadata_id() {
     );
     assert_eq!(body["robot"]["dof"], 3, "Planar3R metadata carries dof 3");
 }
+
+// ── Backend management (resilience-presentation PR2a) ─────────────────────
+
+#[tokio::test]
+async fn get_backends_lists_only_simulation_without_env() {
+    let state = new_default_state().await;
+    let app = app_router().with_state(state);
+    let (status, body) = get_json(app, http::Method::GET, "/api/v1/backends", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("body");
+    let arr = body.as_array().expect("array");
+    assert_eq!(arr.len(), 1, "only Simulation is registered without env");
+    assert_eq!(arr[0]["id"], "simulation");
+    assert_eq!(arr[0]["status"], "active");
+    assert_eq!(arr[0]["connected"], true);
+}
+
+#[tokio::test]
+async fn get_backends_includes_esp32_when_registered() {
+    let state = new_default_state().await;
+    state.services.manager.register_esp32("/dev/ttyUSB0").await;
+    let app = app_router().with_state(state);
+    let (status, body) = get_json(app, http::Method::GET, "/api/v1/backends", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("body");
+    let arr = body.as_array().expect("array");
+    assert_eq!(arr.len(), 2);
+    let esp = arr
+        .iter()
+        .find(|b| b["id"] == "esp32")
+        .expect("esp32 entry present");
+    assert_eq!(esp["status"], "inactive");
+    assert_eq!(esp["connected"], false);
+    assert_eq!(esp["port"], "/dev/ttyUSB0");
+}
+
+#[tokio::test]
+async fn activate_simulation_backend_returns_ok() {
+    let state = new_default_state().await;
+    let app = app_router().with_state(state);
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/backends/simulation/activate",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body.expect("body")["status"], "ok");
+}
+
+#[tokio::test]
+async fn activate_unknown_backend_returns_404_not_found() {
+    let state = new_default_state().await;
+    let app = app_router().with_state(state);
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/backends/unknown/activate",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body.expect("body")["code"], "not_found");
+}
+
+#[tokio::test]
+async fn connect_esp32_with_invalid_port_returns_400_port_in_use() {
+    let state = new_default_state().await;
+    state.services.manager.register_esp32("/dev/ttyUSB0").await;
+    let app = app_router().with_state(state);
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/backends/esp32/connect",
+        Some(json!({"port": "/dev/thalos-tests-nonexistent-abc"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body.expect("body")["code"], "port_in_use");
+}
+
+/// R4-002 integration: connecting to a REAL silent serial device (a virtual
+/// PTY whose slave path the handler opens) must answer 400 `no_firmware` FAST
+/// — not hang until the frontend timeout — and leave the device released so a
+/// retry works (no `port_in_use` wedge, no backend restart needed).
+#[tokio::test]
+async fn connect_esp32_to_silent_port_returns_400_no_firmware_without_wedging() {
+    use tokio_serial::SerialPort;
+
+    // Virtual serial device: hold the master open and never write to it — the
+    // slave read blocks, so the handshake hits the transport read timeout.
+    let (mut master, slave) = tokio_serial::SerialStream::pair().unwrap();
+    let port = slave.name().expect("PTY slave must expose its device path");
+
+    let state = new_default_state().await;
+    state.services.manager.register_esp32(&port).await;
+    let app = app_router().with_state(state);
+
+    // First connect against the silent device → 400 no_firmware, no hang.
+    let start = std::time::Instant::now();
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/backends/esp32/connect",
+        Some(json!({ "port": port })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body.expect("body")["code"], "no_firmware");
+    assert!(
+        start.elapsed() < std::time::Duration::from_secs(10),
+        "connect against a silent device must not hang past the frontend timeout"
+    );
+
+    // Drain the HELLO bytes the failed connect wrote to the master.
+    let mut drain = [0u8; 128];
+    loop {
+        match master.try_read(&mut drain) {
+            Ok(0) | Err(_) => break,
+            Ok(_) => continue,
+        }
+    }
+
+    // Retry → still 400 no_firmware, NOT port_in_use (device was released).
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/backends/esp32/connect",
+        Some(json!({ "port": port })),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "retry must not wedge with port_in_use"
+    );
+    assert_eq!(body.expect("body")["code"], "no_firmware");
+}
+
+#[tokio::test]
+async fn disconnect_not_connected_backend_returns_400_not_connected() {
+    let state = new_default_state().await;
+    state.services.manager.register_esp32("/dev/ttyUSB0").await;
+    let app = app_router().with_state(state);
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/backends/esp32/disconnect",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body.expect("body")["code"], "not_connected");
+}
+
+/// R3-001: `POST /scene/motion/start` with the hardware backend active but
+/// never connected must answer 409 `not_connected` — NOT a silent 200 that the
+/// frontend misreads as 'running' and the first tick then drops to 'idle'.
+#[tokio::test]
+async fn start_execution_with_active_but_disconnected_hardware_returns_409_not_connected() {
+    let state = new_default_state().await;
+    state.services.manager.register_esp32("/dev/ttyUSB0").await;
+    state
+        .services
+        .manager
+        .activate("esp32")
+        .await
+        .expect("esp32 activate must succeed");
+    assert!(
+        state.services.manager.get_controller().await.is_none(),
+        "esp32 active-but-not-connected leaves the runtime without a controller"
+    );
+
+    let app = app_router().with_state(state);
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/motion/start",
+        None,
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "start without a controller must NOT be a silent 200"
+    );
+    assert_eq!(body.expect("body")["code"], "not_connected");
+}
+
+/// R4-001 integration: a real Esp32Backend whose transport drops MID-EXECUTION
+/// surfaces `connection_lost` on the wire — the frontend tick loop keys on
+/// that code to offer the Reconectar CTA. Proves the ConnectionLost path is
+/// reachable end-to-end (HTTP 409, NOT the collapsed joint_count_mismatch).
+#[tokio::test]
+async fn start_execution_with_lost_connection_returns_409_connection_lost() {
+    let state = new_default_state().await;
+    state.services.manager.register_esp32("/dev/ttyUSB0").await;
+
+    // FakeTransport answers HELLO, then reports the device disconnected on the
+    // next receive (mid-upload) — the ConnectionLost seam.
+    let transport = thalos_runtime::backends::transport::FakeTransport::new();
+    transport.inject_response(b"HELLO 1 OK\n".to_vec());
+    transport.disconnect_on_empty_queue();
+    state
+        .services
+        .manager
+        .connect_with_transport("esp32", "/dev/ttyUSB0", Box::new(transport))
+        .await
+        .expect("esp32 connect must succeed");
+    state
+        .services
+        .manager
+        .activate("esp32")
+        .await
+        .expect("esp32 activate must succeed");
+
+    // A real scheduled plan so `execute` actually hits the wire.
+    let plan = {
+        let points = vec![
+            thalos_core::trajectory::TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            thalos_core::trajectory::TrajectoryPoint::new(vec![1.0, 1.0], 1.0),
+        ];
+        thalos_planning::motion::program::CompiledPlan::new(
+            thalos_core::trajectory::Trajectory::new(points),
+            vec![],
+        )
+    };
+    state
+        .services
+        .scene
+        .schedule_program(plan, Default::default())
+        .await
+        .expect("schedule_program must succeed");
+
+    let app = app_router().with_state(state);
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/motion/start",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "connection_lost must be a conflict");
+    assert_eq!(
+        body.expect("body")["code"], "connection_lost",
+        "the real code must reach the frontend, not a collapsed joint_count_mismatch"
+    );
+}

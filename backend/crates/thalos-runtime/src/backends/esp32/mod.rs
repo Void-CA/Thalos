@@ -11,7 +11,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use crate::backends::controller::{BackendCapabilities, RobotController};
-use crate::backends::transport::Transport;
+use crate::backends::transport::{Transport, TransportError};
 use crate::error::ControllerError;
 use crate::execution_boundary::manifest::{
     ExecutionManifest, ManifestInstruction, ManifestMetadata, ManifestSegment, TimedWaypoint,
@@ -147,6 +147,19 @@ impl Esp32Backend {
         self.protocol.as_mut().ok_or(ControllerError::NotConnected)
     }
 
+    /// Map a protocol-layer failure to a `ControllerError` (R4-001): a
+    /// transport that reports `Disconnected` means the device vanished
+    /// mid-operation → `ConnectionLost` (so the frontend offers Reconectar);
+    /// everything else stays a generic `Protocol` error.
+    fn map_protocol_error(context: &str, e: ProtocolError) -> ControllerError {
+        match e {
+            ProtocolError::Transport(TransportError::Disconnected) => {
+                ControllerError::ConnectionLost
+            }
+            other => ControllerError::Protocol(format!("{context}: {other}")),
+        }
+    }
+
     /// Validate that the waypoints are acceptable before any wire traffic.
     ///
     /// Returns `Ok(())` or `Err(ControllerError::InvalidManifest)` with
@@ -193,7 +206,7 @@ impl RobotController for Esp32Backend {
         protocol
             .handshake()
             .await
-            .map_err(|e| ControllerError::Protocol(format!("handshake failed: {e}")))?;
+            .map_err(|e| Self::map_protocol_error("handshake failed", e))?;
 
         self.connected = true;
         Ok(())
@@ -233,18 +246,13 @@ impl RobotController for Esp32Backend {
         protocol
             .upload_manifest(&manifest)
             .await
-            .map_err(|e| match e {
-                ProtocolError::EspError(reason) => {
-                    ControllerError::Protocol(format!("upload rejected: {reason}"))
-                }
-                other => ControllerError::Protocol(format!("upload failed: {other}")),
-            })?;
+            .map_err(|e| Self::map_protocol_error("upload failed", e))?;
 
         // Execute → OK
         protocol
             .start_execution()
             .await
-            .map_err(|e| ControllerError::Protocol(format!("execute failed: {e}")))?;
+            .map_err(|e| Self::map_protocol_error("execute failed", e))?;
 
         // Return immediately per RobotController contract
         Ok(())
@@ -258,7 +266,7 @@ impl RobotController for Esp32Backend {
         protocol
             .stop()
             .await
-            .map_err(|e| ControllerError::Protocol(format!("stop failed: {e}")))?;
+            .map_err(|e| Self::map_protocol_error("stop failed", e))?;
         Ok(())
     }
 
@@ -319,7 +327,7 @@ mod tests {
     #![allow(deprecated)] // build_manifest is deprecated by design (PR 3)
 
     use super::*;
-    use crate::backends::transport::FakeTransport;
+    use crate::backends::transport::{FakeTransport, TransportError};
     use crate::execution_boundary::manifest::ManifestInstruction;
     use crate::execution_boundary::manifest_builder::ExecutionManifestBuilder;
     use thalos_core::execution::plan::{
@@ -339,6 +347,86 @@ mod tests {
         backend.connect().await.expect("connect should succeed");
         assert!(backend.is_connected());
         backend
+    }
+
+    /// Test transport that answers the HELLO handshake once, then reports the
+    /// device disconnected on every subsequent `receive` (mid-operation drop).
+    struct DisconnectAfterHandshake {
+        handshaken: std::sync::atomic::AtomicBool,
+    }
+
+    impl DisconnectAfterHandshake {
+        fn new() -> Self {
+            Self {
+                handshaken: std::sync::atomic::AtomicBool::new(false),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl Transport for DisconnectAfterHandshake {
+        async fn connect(&mut self) -> Result<(), TransportError> {
+            Ok(())
+        }
+        async fn disconnect(&mut self) -> Result<(), TransportError> {
+            Ok(())
+        }
+        async fn send(&mut self, _data: &[u8]) -> Result<(), TransportError> {
+            Ok(())
+        }
+        async fn receive(&mut self) -> Result<Vec<u8>, TransportError> {
+            if !self
+                .handshaken
+                .swap(true, std::sync::atomic::Ordering::SeqCst)
+            {
+                Ok(b"HELLO 1 OK\n".to_vec())
+            } else {
+                Err(TransportError::Disconnected)
+            }
+        }
+    }
+
+    /// Test transport that is disconnected from the start — every receive
+    /// reports the transport lost.
+    struct AlwaysDisconnected;
+
+    #[async_trait]
+    impl Transport for AlwaysDisconnected {
+        async fn connect(&mut self) -> Result<(), TransportError> {
+            Ok(())
+        }
+        async fn disconnect(&mut self) -> Result<(), TransportError> {
+            Ok(())
+        }
+        async fn send(&mut self, _data: &[u8]) -> Result<(), TransportError> {
+            Ok(())
+        }
+        async fn receive(&mut self) -> Result<Vec<u8>, TransportError> {
+            Err(TransportError::Disconnected)
+        }
+    }
+
+    /// R4-001: a transport that reports `Disconnected` mid-operation must
+    /// surface as `ControllerError::ConnectionLost` (not a generic Protocol
+    /// error) so the execution flow can offer the Reconectar CTA.
+    #[tokio::test]
+    async fn connect_with_disconnected_transport_returns_connection_lost() {
+        let mut backend = Esp32Backend::new(Box::new(AlwaysDisconnected));
+        let err = backend.connect().await.unwrap_err();
+        assert_eq!(err, ControllerError::ConnectionLost);
+    }
+
+    /// R4-001: same contract for `execute` — the device dropping during
+    /// upload/execute reports `ConnectionLost`, not `Protocol`.
+    #[tokio::test]
+    async fn execute_with_disconnected_transport_returns_connection_lost() {
+        let mut backend = Esp32Backend::new(Box::new(DisconnectAfterHandshake::new()));
+        backend.connect().await.expect("handshake should succeed");
+        let err = backend
+            .execute(vec![vec![0.0, 0.0], vec![1.0, 1.0]], 1.0)
+            .await
+            .unwrap_err();
+        assert_eq!(err, ControllerError::ConnectionLost);
     }
 
     // ── Task 2.5: RED — full upload→execute→collect cycle ────────────

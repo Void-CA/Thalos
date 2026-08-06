@@ -185,6 +185,13 @@ pub mod tests {
         /// Reported `ExecutionSource` (R4-001) — lets tests simulate a
         /// hardware controller without a real transport.
         pub source: ExecutionSource,
+        /// Optional `execute` failure to inject (R4-001): when set, `execute`
+        /// returns this error instead of succeeding — tests exercise the
+        /// ConnectionLost propagation path without a real device.
+        pub execute_error: Option<ControllerError>,
+        /// Optional `advance` failure to inject (R4-001): when set, `advance`
+        /// returns this error instead of succeeding.
+        pub advance_error: Option<ControllerError>,
     }
 
     impl MockController {
@@ -197,6 +204,8 @@ pub mod tests {
                 paused: AtomicBool::new(false),
                 capabilities: BackendCapabilities::full(),
                 source: ExecutionSource::Simulation,
+                execute_error: None,
+                advance_error: None,
             }
         }
     }
@@ -230,6 +239,9 @@ pub mod tests {
             if !self.connected.load(Ordering::SeqCst) {
                 return Err(ControllerError::NotConnected);
             }
+            if let Some(ref err) = self.execute_error {
+                return Err(err.clone());
+            }
             self.executed.store(true, Ordering::SeqCst);
             Ok(())
         }
@@ -256,6 +268,9 @@ pub mod tests {
         }
 
         async fn advance(&self, _dt: f64) -> Result<(), ControllerError> {
+            if let Some(ref err) = self.advance_error {
+                return Err(err.clone());
+            }
             Ok(())
         }
 

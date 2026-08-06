@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ApiError, describeError, CTA_BY_CODE } from './errors'
+import { ApiError, describeError, CTA_BY_CODE, ctaLabelForCode } from './errors'
 
 /**
  * describeError contract (error-ux spec, requirement "Centralized describeError
@@ -74,5 +74,72 @@ describe('describeError — non-ApiError fallback (error-ux spec)', () => {
   it('returns a neutral fallback for non-error input', () => {
     expect(describeError(null)).toBe('Operation failed')
     expect(describeError('plain string')).toBe('Operation failed')
+  })
+})
+
+// ── Resilience matrix codes (PR1/PR2 — resilience-presentation) ────────────
+
+describe('CTA_BY_CODE — resilience matrix codes (error-ux spec)', () => {
+  it('maps network_error to the backend-offline guide', () => {
+    expect(CTA_BY_CODE.network_error).toContain('Backend is offline')
+  })
+
+  it('maps timeout_error to the retry guide', () => {
+    expect(CTA_BY_CODE.timeout_error).toContain('Request timed out')
+  })
+
+  it('maps no_firmware to the simulation-switch guide', () => {
+    expect(CTA_BY_CODE.no_firmware).toContain('No firmware detected')
+  })
+
+  it('maps port_in_use to the port-selection guide', () => {
+    expect(CTA_BY_CODE.port_in_use).toContain('Port is in use')
+  })
+
+  it('maps connection_lost to the reconnect guide', () => {
+    expect(CTA_BY_CODE.connection_lost).toContain('Connection lost')
+  })
+
+  it('maps not_connected to the connect-backend guide (R3-001)', () => {
+    expect(CTA_BY_CODE.not_connected).toContain('backend')
+  })
+
+  it('maps not_found to the catalog-return guide', () => {
+    expect(CTA_BY_CODE.not_found).toContain('Robot not found')
+  })
+})
+
+describe('ctaLabelForCode — short actionable button labels (error-ux spec)', () => {
+  it('network_error → Reintentar', () => {
+    expect(ctaLabelForCode('network_error')).toBe('Reintentar')
+  })
+
+  it('timeout_error → Reintentar', () => {
+    expect(ctaLabelForCode('timeout_error')).toBe('Reintentar')
+  })
+
+  it('no_firmware → Cambiar a simulación', () => {
+    expect(ctaLabelForCode('no_firmware')).toBe('Cambiar a simulación')
+  })
+
+  it('port_in_use → Elegir otro puerto', () => {
+    expect(ctaLabelForCode('port_in_use')).toBe('Elegir otro puerto')
+  })
+
+  it('connection_lost → Reconectar', () => {
+    expect(ctaLabelForCode('connection_lost')).toBe('Reconectar')
+  })
+
+  it('not_connected → Conectar (R3-001)', () => {
+    expect(ctaLabelForCode('not_connected')).toBe('Conectar')
+  })
+
+  it('not_found → Volver al catálogo', () => {
+    expect(ctaLabelForCode('not_found')).toBe('Volver al catálogo')
+  })
+
+  it('unknown or missing code → Reintentar fallback', () => {
+    expect(ctaLabelForCode('weird_code')).toBe('Reintentar')
+    expect(ctaLabelForCode(undefined)).toBe('Reintentar')
   })
 })

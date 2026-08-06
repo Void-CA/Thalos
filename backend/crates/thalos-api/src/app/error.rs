@@ -9,6 +9,11 @@ use crate::app::dto::ErrorResponse;
 pub enum ApiError {
     NotFound { message: String },
 
+    /// 400 — backend-management failures carrying a machine-readable code
+    /// (resilience-presentation PR2a: `no_firmware`, `port_in_use`,
+    /// `not_connected`, `connection_lost`).
+    BadRequest { message: String, code: String },
+
     Validation { message: String, code: String },
 
     Conflict { message: String, code: String },
@@ -29,6 +34,11 @@ impl IntoResponse for ApiError {
                     error: message,
                     code: "not_found".into(),
                 }),
+            ),
+
+            ApiError::BadRequest { message, code } => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse { error: message, code }),
             ),
 
             ApiError::Validation { message, code } => (

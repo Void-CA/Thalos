@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react'
 import { XCircle } from 'lucide-react'
-import { describeError, isCodedError } from '@/shared/errors'
+import { ctaLabelForCode, describeError, isCodedError } from '@/shared/errors'
 
 /** Error shape carried by stores that preserve the backend machine-readable
  *  `code` alongside the display `message` (error-ux spec — ExecutionState). */
@@ -25,17 +25,40 @@ function errorText(error: ErrorBoxError | Error | string): string {
 }
 
 /** Shared ErrorBox — the single styled error container used by all workspaces.
- *  Accepts the structured execution-store error, any Error, or a plain string. */
+ *  Accepts the structured execution-store error, any Error, or a plain string.
+ *
+ *  When `onRetry` is provided AND the error carries a machine-readable code,
+ *  a CTA button with the code-specific label ("Reintentar", "Reconectar",
+ *  "Cambiar a simulación", …) is rendered — the resilience-matrix retry
+ *  affordance (error-ux spec, "ErrorBox with Retry Button"). Without a code,
+ *  `onRetry` renders a plain "Reintentar" fallback. Without `onRetry` the box
+ *  stays read-only (R3-003 non-coded fallback untouched). */
 export function ErrorBox({
   error,
+  onRetry,
 }: {
   error: ErrorBoxError | Error | string | null
+  onRetry?: () => void
 }): ReactElement | null {
   if (error == null) return null
+  const coded = typeof error !== 'string' ? isCodedError(error) : false
+  const label = coded && typeof error === 'object' && error !== null
+    ? ctaLabelForCode((error as ErrorBoxError).code)
+    : 'Reintentar'
   return (
-    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-destructive-weak border border-destructive-weak text-xs text-destructive">
-      <XCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-      <span>{errorText(error)}</span>
+    <div className="flex flex-col items-start gap-2 px-3 py-2 rounded-lg bg-destructive-weak border border-destructive-weak text-xs text-destructive">
+      <div className="flex items-start gap-2 w-full">
+        <XCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+        <span>{errorText(error)}</span>
+      </div>
+      {onRetry && (
+        <button
+          onClick={onRetry}
+          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border border-destructive-mid text-destructive hover:bg-destructive/10 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+        >
+          {label}
+        </button>
+      )}
     </div>
   )
 }

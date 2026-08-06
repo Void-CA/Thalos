@@ -7,6 +7,8 @@ import { toSceneData, toRuntimeInfo, toIkResult, toActivePlan, toToolFrame, toEx
 import { planAnalysisApi } from '@/features/analysis/api/plan-analysis-api'
 import { useAnalysisStore } from '@/features/analysis/store'
 import { useExecutionStore } from '@/features/execution/execution-store'
+import { ErrorBox } from '@/components/ui/error-box'
+import { isCodedError } from '@/shared/errors'
 import type { RuntimeStateResponse } from '@/features/viewport/api/scene-api.types'
 import { Loader2, Plus, Trash2, Play, ChevronDown, ChevronRight } from 'lucide-react'
 import { PLAN_SEGMENT_PALETTE } from '@/shared/tokens'
@@ -167,7 +169,21 @@ export function PlanningPanel() {
         )}
       </div>
 
-      {handleError && (
+      {preview.error && isCodedError(preview.error) && (
+        <div className="flex flex-col items-start gap-2">
+          <ErrorBox
+            error={preview.error}
+            onRetry={() => {
+              // Recompilar (resilience-matrix spec, preview path): a failed
+              // manifest compile shows the code→CTA message plus a button that
+              // re-runs the preview — re-enabling the compile path immediately.
+              setError(null)
+              preview.mutate(segments)
+            }}
+          />
+        </div>
+      )}
+      {!preview.error && handleError && (
         <div className="text-xs text-destructive bg-destructive-weak border border-destructive-weak rounded-lg px-3 py-2">
           {handleError}
         </div>

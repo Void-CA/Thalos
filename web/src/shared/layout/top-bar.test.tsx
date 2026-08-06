@@ -95,3 +95,12 @@ describe('TopBar — pipeline stages, divider, then tool links (auxiliary-tools-
     expect(router.state.location.pathname).toBe('/')
   })
 })
+
+describe('TopBar — version label (visual audit V5)', () => {
+  it('shows the MVP version v1.0.0-mvp (was v0.1.0)', () => {
+    seedFlags({ robotLoaded: true })
+    renderTopBar('/')
+    expect(screen.getByText('v1.0.0-mvp')).toBeInTheDocument()
+    expect(screen.queryByText('v0.1.0')).not.toBeInTheDocument()
+  })
+})

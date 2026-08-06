@@ -1,5 +1,6 @@
 use crate::app::error::ApiError;
 
+use thalos_runtime::error::ControllerError;
 use thalos_runtime::RuntimeError;
 
 impl From<RuntimeError> for ApiError {
@@ -63,6 +64,25 @@ impl From<RuntimeError> for ApiError {
                 message: format!("undo version mismatch: expected {expected}, got {actual}"),
                 code: code.into(),
             },
+            // R4-001: a controller-level failure keeps its REAL code. State
+            // conflicts (not_connected / connection_lost / already_connected)
+            // are 409 so the frontend can branch on the code and offer the
+            // reconnect CTA instead of a silent 200.
+            RuntimeError::ControllerFailed { source } => match source {
+                ControllerError::NotFound(_) => ApiError::NotFound {
+                    message: source.to_string(),
+                },
+                ControllerError::NotConnected
+                | ControllerError::AlreadyConnected
+                | ControllerError::ConnectionLost => ApiError::Conflict {
+                    message: source.to_string(),
+                    code: source.error_code().into(),
+                },
+                _ => ApiError::BadRequest {
+                    message: source.to_string(),
+                    code: source.error_code().into(),
+                },
+            },
         }
     }
 }
@@ -101,5 +121,51 @@ mod tests {
             StatusCode::CONFLICT,
             "the mapped Conflict must answer HTTP 409"
         );
+    }
+
+    /// R4-001: a `ControllerFailed(ConnectionLost)` runtime error must surface
+    /// as HTTP 409 with the real `connection_lost` code — the frontend tick
+    /// loop keys on it to offer the Reconectar CTA.
+    #[test]
+    fn controller_failed_connection_lost_maps_to_conflict_409_with_connection_lost_code() {
+        let api: ApiError = RuntimeError::ControllerFailed {
+            source: ControllerError::ConnectionLost,
+        }
+        .into();
+
+        let code = match &api {
+            ApiError::Conflict { message, code } => {
+                assert_eq!(message, "connection to the execution backend was lost");
+                code.as_str()
+            }
+            _ => panic!("ControllerFailed(ConnectionLost) must map to ApiError::Conflict (409)"),
+        };
+        assert_eq!(code, "connection_lost");
+
+        let response = api.into_response();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    /// R4-001: a `ControllerFailed(NotConnected)` runtime error (start with an
+    /// active-but-not-connected hardware backend) must surface as HTTP 409
+    /// with the real `not_connected` code — NOT a silent 200.
+    #[test]
+    fn controller_failed_not_connected_maps_to_conflict_409_with_not_connected_code() {
+        let api: ApiError = RuntimeError::ControllerFailed {
+            source: ControllerError::NotConnected,
+        }
+        .into();
+
+        let code = match &api {
+            ApiError::Conflict { message, code } => {
+                assert_eq!(message, "controller is not connected");
+                code.as_str()
+            }
+            _ => panic!("ControllerFailed(NotConnected) must map to ApiError::Conflict (409)"),
+        };
+        assert_eq!(code, "not_connected");
+
+        let response = api.into_response();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
     }
 }

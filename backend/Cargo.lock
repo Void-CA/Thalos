@@ -1644,6 +1644,7 @@ dependencies = [
  "thalos_semantic",
  "thalos_visual",
  "tokio",
+ "tokio-serial",
  "tower",
  "tower-http",
  "tracing",

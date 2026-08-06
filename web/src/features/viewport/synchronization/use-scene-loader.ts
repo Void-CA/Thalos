@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query'
 import { useSceneStore } from '../store'
 import { useSceneService } from '../services/service-context'
+import { ApiError } from '@/shared/errors'
 
 /**
  * Tokens de orden de requests (fix review): compartidos entre loadRobot,
@@ -63,7 +64,7 @@ export function useLoadRobot() {
       // que falla después de que loadRobot(B) o un import URDF aplicó) no debe
       // sobrescribir el estado de error de la escena.
       if (token !== requestOrdering.identitySeq) return
-      setError(err.message)
+      setError(err.message, err instanceof ApiError ? err.code : null)
     },
   })
 }
@@ -108,7 +109,7 @@ export function useLoadScene() {
       // Stale guard (onError): un GET /scene superado por un request de
       // identidad más nuevo no debe pintar un error stale sobre una escena sana.
       if (requestOrdering.sceneLoadSeqAtFire !== requestOrdering.identitySeq) return
-      setError(err.message)
+      setError(err.message, err instanceof ApiError ? err.code : null)
     },
   })
 }
@@ -144,7 +145,7 @@ export function useLoadRobotFromUrdf() {
       // Stale guard (onError): un fallo de un import superado no debe
       // sobrescribir el estado de error con el de una identidad obsoleta.
       if (token !== requestOrdering.identitySeq) return
-      setError(err.message)
+      setError(err.message, err instanceof ApiError ? err.code : null)
     },
   })
 }

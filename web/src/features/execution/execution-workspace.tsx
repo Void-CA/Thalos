@@ -1,7 +1,8 @@
-import { Activity, Clock, Play, Square, RefreshCw, Pause, Gauge, ListOrdered, Cpu } from 'lucide-react'
+import { Activity, Clock, Play, Square, RefreshCw, Pause, Gauge, ListOrdered } from 'lucide-react'
 import { useExecutionStore } from './execution-store'
+import { useBackendStore } from './backend-store'
+import { BackendSelector } from './components/backend-selector'
 import { ErrorBox } from '@/components/ui/error-box'
-import { useSceneStore } from '@/features/viewport/store'
 
 /**
  * ExecutionWorkspace — the single owner of execution lifecycle and runtime
@@ -25,9 +26,6 @@ export function ExecutionWorkspace() {
   const elapsedSecs = useExecutionStore((s) => s.elapsedSecs)
   const error = useExecutionStore((s) => s.error)
   const activePlan = useExecutionStore((s) => s.activePlan)
-  /** Backend execution source ("Simulation" | "Hardware") — informational
-   *  badge only, from the runtime full-state `execution.source` (PR4). */
-  const executionSource = useSceneStore((s) => s.execution?.source)
 
   const start = useExecutionStore((s) => s.start)
   const pause = useExecutionStore((s) => s.pause)
@@ -42,20 +40,39 @@ export function ExecutionWorkspace() {
   const canCancel = status === 'running' || status === 'paused'
   const canReset = status === 'completed' || status === 'failed'
 
+  // Unified control-button base (visual audit V3): every lifecycle control
+  // shares the same shape; only the semantic color varies.
+  const controlBtn =
+    'inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer'
+
+  /** connection_lost / not_connected get the connect CTA (reconnect the
+   *  hardware backend + retry); every other failure gets Reintentar
+   *  (reset + start) — execution-workspace spec + R3-001. */
+  const isConnectionLost = error?.code === 'connection_lost'
+  const isNotConnected = error?.code === 'not_connected'
+  const needsConnect = isConnectionLost || isNotConnected
+
+  const handleRetry = () => {
+    void reset().then(() => start())
+  }
+
+  const handleReconnect = async () => {
+    // Reconnect the active hardware backend with its current port first.
+    const { backends, activeId, connect } = useBackendStore.getState()
+    const active = backends.find((b) => b.id === activeId)
+    if (active?.id === 'esp32') {
+      await connect(active.id, active.port ?? '')
+    }
+    await reset()
+    await start()
+  }
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Header ── */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
         <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider flex-1">Execution</h2>
-        {executionSource && (
-          <span
-            data-testid="execution-source-badge"
-            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-blue-600/20 text-blue-400"
-          >
-            <Cpu className="size-2.5" />
-            {executionSource}
-          </span>
-        )}
+        <BackendSelector />
         <span
           className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide
             ${status === 'running' ? 'bg-green-600/20 text-green-500'
@@ -95,23 +112,23 @@ export function ExecutionWorkspace() {
           </h3>
           <div className="flex flex-wrap gap-1.5">
             <button onClick={() => void start()} disabled={!canStart}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-green-600/20 text-green-500 hover:bg-green-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+              className={`${controlBtn} bg-green-600/20 text-green-500 hover:bg-green-600/30`}>
               <Play className="size-3" /> Start
             </button>
             <button onClick={() => void pause()} disabled={!canPause}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+              className={`${controlBtn} text-foreground hover:bg-accent`}>
               <Pause className="size-3" /> Pause
             </button>
             <button onClick={() => void resume()} disabled={!canResume}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+              className={`${controlBtn} text-foreground hover:bg-accent`}>
               <Play className="size-3" /> Resume
             </button>
             <button onClick={() => void cancel()} disabled={!canCancel}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md text-red-400 hover:bg-red-950/20 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+              className={`${controlBtn} text-red-400 hover:bg-red-950/20`}>
               <Square className="size-3" /> Cancel
             </button>
             <button onClick={() => void reset()} disabled={!canReset}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md text-muted-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+              className={`${controlBtn} text-muted-foreground hover:bg-accent`}>
               <RefreshCw className="size-3" /> Reset
             </button>
           </div>
@@ -122,9 +139,30 @@ export function ExecutionWorkspace() {
           <h3 className="flex items-center gap-1.5 text-[11px] font-semibold text-foreground uppercase tracking-wider mb-1.5">
             <Gauge className="size-3 text-muted-foreground" /> Execution Status
           </h3>
-          <div className="text-xs text-foreground">
+          <div className="flex flex-col items-start gap-2 text-xs text-foreground">
             {error ? (
-              <ErrorBox error={error} />
+              <>
+                <ErrorBox error={error} />
+                {status === 'failed' && (
+                  <button
+                    onClick={() => {
+                      // Resilience-matrix retry: Reintentar (reset + start) for
+                      // network/timeout failures; Reconectar/Conectar (reconnect
+                      // the active hardware backend, then reset + start) for
+                      // connection_lost / not_connected — execution-workspace
+                      // spec + R3-001.
+                      if (needsConnect) {
+                        void handleReconnect()
+                      } else {
+                        handleRetry()
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-green-600/20 text-green-500 hover:bg-green-600/30 cursor-pointer"
+                  >
+                    <RefreshCw className="size-3" /> {isConnectionLost ? 'Reconectar' : isNotConnected ? 'Conectar' : 'Reintentar'}
+                  </button>
+                )}
+              </>
             ) : (
               `Status: ${status}`
             )}
@@ -146,26 +184,6 @@ export function ExecutionWorkspace() {
             <span>{(progress * 100).toFixed(0)}%</span>
             <span>{elapsedSecs.toFixed(1)}s elapsed</span>
           </div>
-        </section>
-
-        {/* ── Timeline (change 2) ── */}
-        <section>
-          <h3 className="text-[11px] font-semibold text-foreground uppercase tracking-wider mb-1">
-            Timeline
-          </h3>
-          <p className="text-[10px] text-muted-foreground/60 italic">
-            Timeline visualization arrives with change 2.
-          </p>
-        </section>
-
-        {/* ── Telemetry (change 2) ── */}
-        <section>
-          <h3 className="text-[11px] font-semibold text-foreground uppercase tracking-wider mb-1">
-            Telemetry
-          </h3>
-          <p className="text-[10px] text-muted-foreground/60 italic">
-            Telemetry stream arrives with change 2.
-          </p>
         </section>
       </div>
     </div>

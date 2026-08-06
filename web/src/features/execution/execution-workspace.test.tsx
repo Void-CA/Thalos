@@ -5,6 +5,8 @@ import { act } from 'react'
 import '@testing-library/jest-dom/vitest'
 import { ExecutionWorkspace } from './execution-workspace'
 import { useExecutionStore } from './execution-store'
+import { useBackendStore } from './backend-store'
+import { ApiError } from '@/shared/errors'
 import type { ActivePlanInfo, ExecutionStatus } from './execution-store'
 import { useSceneStore } from '@/features/viewport/store'
 
@@ -35,6 +37,20 @@ vi.mock('@/features/execution/execution-client', async (importOriginal) => {
   return { ...actual, executionClient: execClientMocks }
 })
 
+const backendApiMocks = vi.hoisted(() => ({
+  list: vi.fn(),
+  activate: vi.fn(),
+  connect: vi.fn(),
+  disconnect: vi.fn(),
+}))
+
+vi.mock('@/features/execution/backend-api', () => ({
+  backendApi: backendApiMocks,
+}))
+
+const SIM_BACKEND = { id: 'simulation', name: 'Simulation', status: 'active', connected: true, port: null }
+const ESP_BACKEND = { id: 'esp32', name: 'Hardware (ESP32)', status: 'inactive', connected: false, port: '/dev/ttyUSB0' }
+
 const plan: ActivePlanInfo = { instructionCount: 4, durationSecs: 12.5, source: 'TaskDocument' }
 /** PR2: a plan mirrored from the Planning workspace preview (motion-program spec). */
 const motionProgramPlan: ActivePlanInfo = { instructionCount: 3, durationSecs: 8.0, source: 'Motion Program' }
@@ -59,6 +75,8 @@ function setStatus(status: ExecutionStatus, extra: Partial<typeof useExecutionSt
 
 beforeEach(() => {
   Object.values(execClientMocks).forEach((m) => m.mockClear())
+  Object.values(backendApiMocks).forEach((m) => m.mockReset())
+  backendApiMocks.list.mockResolvedValue([SIM_BACKEND, ESP_BACKEND])
   useExecutionStore.setState({
     status: 'idle',
     activePlan: null,
@@ -68,6 +86,7 @@ beforeEach(() => {
   })
   act(() => {
     useSceneStore.setState({ execution: null } as never)
+    useBackendStore.setState({ backends: [SIM_BACKEND, ESP_BACKEND], activeId: 'simulation', loading: false, error: null })
   })
 })
 afterEach(() => cleanup())
@@ -209,36 +228,164 @@ describe('Progress and status display (execution-workspace spec)', () => {
   })
 })
 
-describe('Backend source badge (execution-workspace spec, ADDED)', () => {
-  function setRuntimeExecutionSource(source: string) {
-    act(() => {
-      useSceneStore.setState({
-        execution: {
-          status: 'running',
-          progress: 0.5,
-          elapsedSecs: 6.25,
-          source,
-        },
-      } as never)
-    })
-  }
-
-  it('shows a Simulation badge when the runtime reports execution.source = Simulation', () => {
-    setRuntimeExecutionSource('Simulation')
-    renderWorkspace()
-    expect(screen.getByText('Simulation')).toBeInTheDocument()
-  })
-
-  it('shows a Hardware badge when the runtime reports execution.source = Hardware', () => {
-    setRuntimeExecutionSource('Hardware')
-    renderWorkspace()
-    expect(screen.getByText('Hardware')).toBeInTheDocument()
-  })
-
-  it('shows no source badge when execution has no source', () => {
+describe('Placeholder panels removed (visual audit V1)', () => {
+  it('shows no Timeline or Telemetry placeholder panels', () => {
     setStatus('idle')
     renderWorkspace()
-    expect(screen.queryByText('Simulation')).not.toBeInTheDocument()
-    expect(screen.queryByText('Hardware')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Timeline visualization arrives with change 2/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Telemetry stream arrives with change 2/)).not.toBeInTheDocument()
+  })
+})
+
+describe('Backend selector replaces the informational badge (execution-workspace spec)', () => {
+  it('renders the interactive selector instead of the old source badge', () => {
+    renderWorkspace()
+    // The selector (Simulation/Hardware options) replaces the badge.
+    expect(screen.getByRole('button', { name: /Simulation/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Hardware/ })).toBeInTheDocument()
+    expect(screen.queryByTestId('execution-source-badge')).not.toBeInTheDocument()
+  })
+
+  it('reflects the active backend from the store — Simulation selected, no port input', async () => {
+    renderWorkspace()
+    await waitFor(() => expect(useBackendStore.getState().activeId).toBe('simulation'))
+    expect(screen.queryByLabelText('Puerto')).not.toBeInTheDocument()
+  })
+})
+
+describe('Reconectar — reconnect + retry on connection_lost (execution-workspace spec)', () => {
+  it('shows a Reconectar button (not Reintentar) when the tick fails with connection_lost', () => {
+    setStatus('failed', {
+      error: { message: 'Connection lost', code: 'connection_lost' },
+    } as never)
+    renderWorkspace()
+    expect(screen.getByText(/Connection lost/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reconectar' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
+  })
+
+  it('Reconectar reconnects the hardware backend, then resets and starts execution', async () => {
+    backendApiMocks.connect.mockResolvedValue({ status: 'ok' })
+    backendApiMocks.list.mockResolvedValue([
+      { ...SIM_BACKEND, status: 'inactive' },
+      { ...ESP_BACKEND, status: 'active', connected: true },
+    ])
+    execClientMocks.reset.mockResolvedValue(undefined)
+    execClientMocks.start.mockResolvedValue(undefined)
+    execClientMocks.tick.mockResolvedValue(completedDelta)
+    act(() => {
+      useBackendStore.setState({ backends: [{ ...SIM_BACKEND, status: 'inactive' }, { ...ESP_BACKEND, status: 'active', connected: true }], activeId: 'esp32' })
+    })
+    setStatus('failed', {
+      error: { message: 'Connection lost', code: 'connection_lost' },
+      activePlan: plan,
+    } as never)
+    renderWorkspace()
+
+    // The selector's fetch resolves; the active backend stays esp32.
+    await waitFor(() => expect(useBackendStore.getState().activeId).toBe('esp32'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reconectar' }))
+
+    // Reconnect with the active hardware backend's port, then reset+start.
+    await waitFor(() => expect(backendApiMocks.connect).toHaveBeenCalledWith('esp32', '/dev/ttyUSB0'))
+    await waitFor(() => expect(execClientMocks.reset).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(execClientMocks.start).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(useExecutionStore.getState().status).toBe('completed'))
+  })
+})
+
+describe('Reintentar — reset+start retry on execution failure (resilience-matrix spec)', () => {
+  it('shows the code→CTA error and a Reintentar button when a tick fails with network_error', () => {
+    setStatus('failed', {
+      error: { message: 'Backend is offline', code: 'network_error' },
+    } as never)
+    renderWorkspace()
+    expect(screen.getByText(/Backend is offline/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+  })
+
+  it('shows a Reintentar button for timeout_error', () => {
+    setStatus('failed', {
+      error: { message: 'Request timed out', code: 'timeout_error' },
+    } as never)
+    renderWorkspace()
+    expect(screen.getByText(/Request timed out/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+  })
+
+  it('clicking Reintentar performs the reset + start sequence', async () => {
+    execClientMocks.reset.mockResolvedValue(undefined)
+    execClientMocks.start.mockResolvedValue(undefined)
+    execClientMocks.tick.mockResolvedValue(completedDelta)
+    setStatus('failed', {
+      error: { message: 'Backend is offline', code: 'network_error' },
+      activePlan: plan,
+    } as never)
+    renderWorkspace()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
+
+    await waitFor(() => expect(execClientMocks.reset).toHaveBeenCalledTimes(1))
+    // Coherent state: start() is triggered immediately after the reset and the
+    // tick loop resumes — the plan runs to its terminal Completed state.
+    await waitFor(() => expect(execClientMocks.start).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(useExecutionStore.getState().status).toBe('completed'))
+  })
+})
+
+describe('Conectar — connect+retry when start fails with not_connected (R3-001)', () => {
+  it('a start failure with not_connected surfaces the error and a Conectar CTA (not a silent 200)', async () => {
+    execClientMocks.start.mockRejectedValue(
+      new ApiError('controller is not connected', { status: 409, code: 'not_connected' }),
+    )
+    setStatus('ready', { activePlan: plan })
+    renderWorkspace()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+
+    // The backend 409 must NOT be read as 'running' — it lands in failed with
+    // the machine-readable code preserved.
+    await waitFor(() => expect(useExecutionStore.getState().status).toBe('failed'))
+    expect(useExecutionStore.getState().error?.code).toBe('not_connected')
+    // describeError renders the not_connected CTA + the Conectar button.
+    expect(screen.getByText(/backend/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Conectar' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reconectar' })).not.toBeInTheDocument()
+  })
+
+  it('Conectar reconnects the active hardware backend, then resets and starts', async () => {
+    backendApiMocks.connect.mockResolvedValue({ status: 'ok' })
+    backendApiMocks.list.mockResolvedValue([
+      { ...SIM_BACKEND, status: 'inactive' },
+      { ...ESP_BACKEND, status: 'active', connected: true },
+    ])
+    execClientMocks.reset.mockResolvedValue(undefined)
+    execClientMocks.start.mockResolvedValue(undefined)
+    execClientMocks.tick.mockResolvedValue(completedDelta)
+    act(() => {
+      useBackendStore.setState({
+        backends: [
+          { ...SIM_BACKEND, status: 'inactive' },
+          { ...ESP_BACKEND, status: 'active', connected: true },
+        ],
+        activeId: 'esp32',
+      })
+    })
+    setStatus('failed', {
+      error: { message: 'controller is not connected', code: 'not_connected' },
+      activePlan: plan,
+    } as never)
+    renderWorkspace()
+
+    await waitFor(() => expect(useBackendStore.getState().activeId).toBe('esp32'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Conectar' }))
+
+    // Connect with the active hardware backend's port, then reset+start.
+    await waitFor(() => expect(backendApiMocks.connect).toHaveBeenCalledWith('esp32', '/dev/ttyUSB0'))
+    await waitFor(() => expect(execClientMocks.reset).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(execClientMocks.start).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(useExecutionStore.getState().status).toBe('completed'))
   })
 })

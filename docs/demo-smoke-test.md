@@ -51,7 +51,7 @@ Done
 | 5. Frontend boots | `pnpm dev` → workspace visible, no console errors | ✅ | Vite ready on :5173; HTML served; proxy /api works |
 | 6. Robot loads (catalog) | Catalog robot selected → model visible in viewport | ✅ | POST /scene/robot scara → 200, dof=4 (payload §A) |
 | 7. Robot loads (URDF) | URDF import → robot.id stable, model visible | ✅ | POST /scene/robot/from-urdf → id urdf:223bd687330e stable (§B — ver aviso de newline final) |
-| 8. Scene editing | Object/location pose editable → mesh updates in viewport | ✅ | Covered by unit/integration tests (SDD Block 2 — domain-representation); not browser-exercised |
+| 8. Scene editing | Object/location pose editable → mesh updates in viewport | ✅ | **Browser-exercised walkthrough** (PR3, §8) — see below |
 | 9. Compile | `POST /semantic/compile` → motion_program with instructions | ✅ | 200, 2 instructions (delay + move_j); body `{"task": TaskDocument}` (§C) |
 | 10. Plan | `/planning` reachable with scene valid; preview works | ✅ | Covered by tests; planning gate sceneValid verified in smoke via preview_plan (§D) |
 | 11. Execute | Robot moves (runtime events) | ✅ | Covered by runtime e2e tests; not browser-exercised |
@@ -176,6 +176,50 @@ curl -s -X POST http://localhost:3000/api/v1/plan/commands/undo
 ```
 
 Esperado: `200`, `plan_id: "plan-2"`, `history_length: 0`, y el programa restaurado byte-idéntico en segments al estado previo al apply.
+
+### 8. Scene editing browser-exercised (paso 8, PR3 — resilience-presentation)
+
+> Antes (SDD Block 2) el paso 8 estaba cubierto solo por tests; con PR3 se
+> ejecuta LITERALMENTE en el browser: la capacidad ya existe client-side —
+> `SceneEntities` (renderer) pinta objetos/locations desde `useDomainSceneStore`
+> (Scene workspace). El walkthrough crea la escena, la ve en el viewport, la
+> edita y la referencia en el compile.
+
+**Setup**: frontend `pnpm dev` en :5173, backend en :3000. Navegar al workspace
+**Scene** (barra superior) y al **Viewport** (centro).
+
+1. **Agregar un objeto**: en Scene → Objects, clic en **+** (aria-label "Add
+   object"). Se crea `obj-1` ("Object 1") con pose por defecto.
+2. **Verlo en el viewport**: el mesh del objeto aparece en el visor 3D (cubo en
+   la posición por defecto). Si no se ve, ajustar la cámara (orbit).
+3. **Editar la pose**: en el card de `obj-1`, editar los inputs X/Y/Z de
+   `PoseInputs` (p. ej. X=1.5, Y=0.5, Z=0.3).
+4. **El mesh se mueve**: el objeto se reposiciona en el viewport al editar
+   (re-render de `SceneEntities` desde el store — sin recargar la página).
+5. **Agregar una location**: en Scene → Locations, clic en **+** ("Add
+   location"). Se crea `loc-1` ("Location 1").
+6. **Renombrar para referenciarla**: editar el nombre de la location a
+   `tray-1` (id estable `loc-1`; el nombre es el que se usa en el task).
+7. **Compilar un task que la referencia**: en el workspace Task, definir un
+   programa con una operación `move_to tray-1` y compilar. Esperado: `200` con
+   `metadata.instruction_count >= 1` (el `move_to` baja a `move_j`).
+
+Verificación de que el compile realmente referenció la escena creada en el
+browser: el mismo body del task document (con `objects: [bolt-1]` y
+`locations: [tray-1]` como los definidos en el UI) compila por API:
+
+```bash
+cat > /tmp/scene-task.json <<'JSON'
+{"task":{"id":"browser-scene-task","metadata":{"name":"Task","version":1,"created_at":"2026-08-05T19:40:00.000Z","modified_at":"2026-08-05T19:40:00.000Z"},"scene":{"objects":[{"id":"bolt-1","name":"Object 1","pose":{"position":[1.5,0.5,0.3],"orientation":[1,0,0,0]},"category":null}],"locations":[{"id":"tray-1","name":"tray-1","pose":{"position":[0.8,-0.3,0],"orientation":[1,0,0,0]},"description":null}],"tools":[],"home_pose":{"position":[1.8,0.0,0.5],"orientation":[0,0,0,1]}},"program":{"operations":[{"type":"move_to","origin":"op_0","destination":"tray-1"}]}}}
+JSON
+curl -s -X POST http://localhost:3000/api/v1/semantic/compile \
+  -H 'Content-Type: application/json' \
+  -d @/tmp/scene-task.json
+```
+
+Esperado: `200`, `metadata.instruction_count: 1` (`move_j`), sin errores de
+validación — la escena creada en el browser es la misma que el semantic layer
+resuelve (objetos/locations declarados en `scene.objects`/`scene.locations`).
 
 ### Bloques SDD (referencia)
 
