@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, screen, cleanup } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { ErrorBox } from './error-box'
+
+afterEach(() => cleanup())
 
 /**
  * ErrorBox render contract (error-ux spec, R3-003): the shared error container
@@ -38,5 +40,31 @@ describe('ErrorBox — renders the real message for every error shape (R3-003)',
   it('renders nothing for a null error', () => {
     const { container } = render(<ErrorBox error={null} />)
     expect(container.firstChild).toBeNull()
+  })
+})
+
+describe('ErrorBox — retry button (error-ux spec, resilience-presentation)', () => {
+  it('renders a Reintentar button for network_error when onRetry is provided', () => {
+    const onRetry = vi.fn()
+    render(<ErrorBox error={{ message: 'Backend is offline', code: 'network_error' }} onRetry={onRetry} />)
+    const button = screen.getByRole('button', { name: 'Reintentar' })
+    expect(button).toBeInTheDocument()
+    button.click()
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders a Reintentar button for timeout_error when onRetry is provided', () => {
+    render(<ErrorBox error={{ message: 'Request timed out', code: 'timeout_error' }} onRetry={() => {}} />)
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+  })
+
+  it('renders the code-specific CTA label for no_firmware (Cambiar a simulación)', () => {
+    render(<ErrorBox error={{ message: 'No firmware detected', code: 'no_firmware' }} onRetry={() => {}} />)
+    expect(screen.getByRole('button', { name: 'Cambiar a simulación' })).toBeInTheDocument()
+  })
+
+  it('shows no button when onRetry is omitted (R3-003 non-coded fallback untouched)', () => {
+    render(<ErrorBox error={{ message: 'Backend is offline', code: 'network_error' }} />)
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 })
