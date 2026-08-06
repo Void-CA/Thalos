@@ -17,22 +17,36 @@ use crate::execution_boundary::manifest::{
     ExecutionManifest, ManifestInstruction, ManifestMetadata, ManifestSegment, TimedWaypoint,
 };
 use crate::execution_boundary::manifest_builder::ExecutionManifestBuilder;
+use crate::execution_boundary::ExecutionSample;
 use crate::session::execution_source::ExecutionSource;
-use crate::state::robot_state::RobotState;
+use crate::state::robot_state::{MotionMode, RobotState};
 use thalos_core::execution::plan::{
     ExecutionInstruction, ExecutionPlan, ExecutionSegment, ExecutionWaypoint,
 };
 
-use protocol::{Esp32Protocol, ProtocolError};
+use protocol::{Esp32Protocol, FirmwareState, ProtocolError};
 
 /// ESP32 hardware backend.
 ///
 /// Implements `RobotController` by delegating all wire communication to
 /// `Esp32Protocol`. The protocol tracks firmware state and handles text
 /// encoding/decoding.
+///
+/// Interior mutability: `robot_state(&self)` must poll STATUS and collect
+/// samples through `&mut Esp32Protocol`, so the protocol lives behind a
+/// `tokio::sync::Mutex`. Polled states are cached for a 75ms TTL so the UI's
+/// ~60Hz tick loop does not hammer the wire.
 pub struct Esp32Backend {
-    protocol: Option<Esp32Protocol>,
+    protocol: tokio::sync::Mutex<Option<Esp32Protocol>>,
     connected: bool,
+    /// Total trajectory duration (seconds) of the current execution — set by
+    /// `execute()`, reset on `disconnect()`. Used to convert the firmware's
+    /// 0..1 progress fraction into SECONDS (R2.4/R2.5 pinned decision).
+    plan_duration: f64,
+    /// Throttled poll cache: last polled state + poll timestamp (75ms TTL).
+    cached_state: tokio::sync::Mutex<Option<(std::time::Instant, Arc<RobotState>)>>,
+    /// Samples collected on COMPLETED, consumed once by `take_execution_trace`.
+    collected_samples: tokio::sync::Mutex<Option<Vec<ExecutionSample>>>,
 }
 
 impl Esp32Backend {
@@ -43,8 +57,11 @@ impl Esp32Backend {
     /// until `connect()` is called.
     pub fn new(transport: Box<dyn Transport>) -> Self {
         Self {
-            protocol: Some(Esp32Protocol::new(transport, 1)),
+            protocol: tokio::sync::Mutex::new(Some(Esp32Protocol::new(transport, 1))),
             connected: false,
+            plan_duration: 0.0,
+            cached_state: tokio::sync::Mutex::new(None),
+            collected_samples: tokio::sync::Mutex::new(None),
         }
     }
 
@@ -143,8 +160,59 @@ impl Esp32Backend {
     }
 
     /// Get a mutable reference to the protocol, if connected.
+    ///
+    /// `&mut self` callers use `tokio::sync::Mutex::get_mut` (no await needed);
+    /// `&self` callers (`robot_state`, `take_execution_trace`) lock instead.
     fn protocol_mut(&mut self) -> Result<&mut Esp32Protocol, ControllerError> {
-        self.protocol.as_mut().ok_or(ControllerError::NotConnected)
+        self.protocol
+            .get_mut()
+            .as_mut()
+            .ok_or(ControllerError::NotConnected)
+    }
+
+    /// Map a firmware state to a runtime [`RobotState`] — the single source
+    /// of truth for the firmware → runtime mapping (design decision table).
+    ///
+    /// | Firmware | motion.mode | execution.progress | joints |
+    /// |---|---|---|---|
+    /// | IDLE / RECEIVING / READY | Idle | 0.0 | [] |
+    /// | RUNNING (→ Executing) | Moving | fraction × plan_duration (SECONDS) | commanded |
+    /// | COMPLETED | Idle | plan_duration, or 1.0 if < 1.0s | [] |
+    /// | ERROR | EStop | 0.0 | [] |
+    async fn map_firmware_state(&self, fs: &FirmwareState) -> RobotState {
+        let mut state = RobotState::default();
+        match fs {
+            FirmwareState::Idle | FirmwareState::Receiving | FirmwareState::Ready => {
+                state.motion.mode = MotionMode::Idle;
+                state.execution.progress = 0.0;
+            }
+            FirmwareState::Executing { progress, joints } => {
+                state.motion.mode = MotionMode::Moving;
+                // R2.4/R2.5 (pinned): progress is SECONDS (fraction × plan_duration)
+                // so the DTO mapper (current_time / plan_duration) yields the
+                // correct 0..1 fraction on the wire.
+                state.execution.progress = progress * self.plan_duration;
+                state.joints.positions = joints.clone();
+            }
+            FirmwareState::Completed { .. } => {
+                state.motion.mode = MotionMode::Idle;
+                // COMPLETED → full progress. For plans ≥ 1s this is
+                // plan_duration (seconds); short plans (< 1s) map to 1.0 so
+                // completion detection (`progress >= 1.0`) still fires.
+                state.execution.progress = if self.plan_duration >= 1.0 {
+                    self.plan_duration
+                } else {
+                    1.0
+                };
+            }
+            FirmwareState::Error(_) => {
+                // ERROR → EStop so the existing `EStop → Failed` path in
+                // session_from_robot_state works unchanged.
+                state.motion.mode = MotionMode::EStop;
+                state.execution.progress = 0.0;
+            }
+        }
+        state
     }
 
     /// Map a protocol-layer failure to a `ControllerError` (R4-001): a
@@ -198,10 +266,7 @@ impl RobotController for Esp32Backend {
             return Err(ControllerError::AlreadyConnected);
         }
 
-        let protocol = self
-            .protocol
-            .as_mut()
-            .ok_or(ControllerError::NotConnected)?;
+        let protocol = self.protocol_mut()?;
 
         protocol
             .handshake()
@@ -214,7 +279,11 @@ impl RobotController for Esp32Backend {
 
     async fn disconnect(&mut self) -> Result<(), ControllerError> {
         self.connected = false;
-        if let Some(protocol) = self.protocol.as_mut() {
+        self.plan_duration = 0.0;
+        // Stale poll cache / collected samples must not leak across connects.
+        *self.cached_state.lock().await = None;
+        *self.collected_samples.lock().await = None;
+        if let Some(protocol) = self.protocol.get_mut().as_mut() {
             let _ = protocol.stop().await;
         }
         Ok(())
@@ -235,6 +304,8 @@ impl RobotController for Esp32Backend {
 
         // Task 2.10: Validate manifest before any wire traffic
         Self::validate_manifest(&waypoints, duration)?;
+        // Store the plan duration so STATUS polls can map fraction → seconds.
+        self.plan_duration = duration;
 
         let protocol = self.protocol_mut()?;
         // The legacy shim is deprecated; execute() still consumes it until the
@@ -270,9 +341,63 @@ impl RobotController for Esp32Backend {
         Ok(())
     }
 
+    /// Live state via a throttled STATUS poll (75ms TTL cache).
+    ///
+    /// Infallible: poll errors fall back to the cached state, else a default
+    /// state. A not-connected backend returns a default state immediately.
     async fn robot_state(&self) -> Arc<RobotState> {
-        // MVP: return a minimal default state
-        Arc::new(RobotState::default())
+        const POLL_TTL: std::time::Duration = std::time::Duration::from_millis(75);
+
+        // Cache hit within TTL → no wire traffic (UI ticks at ~60Hz).
+        {
+            let cached = self.cached_state.lock().await;
+            if let Some((at, state)) = cached.as_ref() {
+                if at.elapsed() < POLL_TTL {
+                    return state.clone();
+                }
+            }
+        }
+
+        if !self.connected {
+            return Arc::new(RobotState::default());
+        }
+
+        let poll_result = {
+            let mut guard = self.protocol.lock().await;
+            match guard.as_mut() {
+                Some(protocol) => protocol.query_status().await,
+                None => {
+                    return Arc::new(RobotState::default());
+                }
+            }
+        };
+
+        let state = match poll_result {
+            Ok(fs) => {
+                let mut state = self.map_firmware_state(&fs).await;
+                // COMPLETED: carry over the last commanded joints from the
+                // previous cached RUNNING state, if any (design table: "last
+                // commanded").
+                if matches!(fs, FirmwareState::Completed { .. }) {
+                    if let Some((_, cached)) = self.cached_state.lock().await.as_ref() {
+                        state.joints.positions = cached.joints.positions.clone();
+                    }
+                }
+                let state = Arc::new(state);
+                *self.cached_state.lock().await = Some((std::time::Instant::now(), state.clone()));
+                state
+            }
+            // Poll error (timeout / disconnected) → cached state, else default.
+            Err(_) => {
+                let cached = self.cached_state.lock().await;
+                match cached.as_ref() {
+                    Some((_, state)) => state.clone(),
+                    None => Arc::new(RobotState::default()),
+                }
+            }
+        };
+
+        state
     }
 
     fn capabilities(&self) -> BackendCapabilities {
@@ -297,11 +422,9 @@ impl Esp32Backend {
     /// This method is intended for integration tests ONLY. It provides access
     /// to the raw wire commands sent by the backend for verification purposes.
     /// Production code MUST NOT depend on this method.
-    pub fn test_sent_commands(&self) -> Vec<Vec<u8>> {
-        self.protocol
-            .as_ref()
-            .map(|p| p.test_sent_commands())
-            .unwrap_or_default()
+    pub async fn test_sent_commands(&self) -> Vec<Vec<u8>> {
+        let guard = self.protocol.lock().await;
+        guard.as_ref().map(|p| p.test_sent_commands()).unwrap_or_default()
     }
 
     /// Expose the protocol for integration test response injection.
@@ -311,8 +434,9 @@ impl Esp32Backend {
     /// This method is intended for integration tests ONLY. It allows
     /// pre-loading response data into the underlying transport for
     /// simulating firmware interactions.
-    pub fn test_inject_response(&self, data: Vec<u8>) {
-        if let Some(ref protocol) = self.protocol {
+    pub async fn test_inject_response(&self, data: Vec<u8>) {
+        let guard = self.protocol.lock().await;
+        if let Some(protocol) = guard.as_ref() {
             protocol.test_inject_response(data);
         }
     }
@@ -340,7 +464,7 @@ mod tests {
         let mut backend = Esp32Backend::new(Box::new(transport));
         // Inject the HELLO response BEFORE connect
         backend
-            .protocol
+            .protocol.lock().await
             .as_ref()
             .unwrap()
             .test_inject_response(b"HELLO 1 OK\n".to_vec());
@@ -438,32 +562,32 @@ mod tests {
 
         // Inject responses for the full upload→execute flow
         backend
-            .protocol
+            .protocol.lock().await
             .as_ref()
             .unwrap()
             .test_inject_response(b"OK\n".to_vec()); // MANIFEST
         backend
-            .protocol
+            .protocol.lock().await
             .as_ref()
             .unwrap()
             .test_inject_response(b"OK\n".to_vec()); // SEGMENT
         backend
-            .protocol
+            .protocol.lock().await
             .as_ref()
             .unwrap()
             .test_inject_response(b"OK\n".to_vec()); // SAMPLE 0
         backend
-            .protocol
+            .protocol.lock().await
             .as_ref()
             .unwrap()
             .test_inject_response(b"OK\n".to_vec()); // SAMPLE 1
         backend
-            .protocol
+            .protocol.lock().await
             .as_ref()
             .unwrap()
             .test_inject_response(b"READY\n".to_vec()); // END_UPLOAD
         backend
-            .protocol
+            .protocol.lock().await
             .as_ref()
             .unwrap()
             .test_inject_response(b"OK\n".to_vec()); // EXECUTE
@@ -477,7 +601,7 @@ mod tests {
         assert!(backend.is_connected());
 
         // Verify commands were sent
-        let sent = backend.protocol.as_ref().unwrap().test_sent_commands();
+        let sent = backend.protocol.lock().await.as_ref().unwrap().test_sent_commands();
         assert!(!sent.is_empty(), "commands should have been sent");
 
         // HELLO was first (from connect)
@@ -497,7 +621,7 @@ mod tests {
         let transport = FakeTransport::new();
         let mut backend = Esp32Backend::new(Box::new(transport));
         backend
-            .protocol
+            .protocol.lock().await
             .as_ref()
             .unwrap()
             .test_inject_response(b"HELLO 1 OK\n".to_vec());
@@ -524,7 +648,7 @@ mod tests {
         // Inject HELLO response BUT NOT any manifest responses
         let mut backend = Esp32Backend::new(Box::new(transport));
         backend
-            .protocol
+            .protocol.lock().await
             .as_ref()
             .unwrap()
             .test_inject_response(b"HELLO 1 OK\n".to_vec());
@@ -542,7 +666,7 @@ mod tests {
 
         // Verify NO upload commands were sent over the transport
         // Only the 1 HELLO from connect should exist
-        let sent = backend.protocol.as_ref().unwrap().test_sent_commands();
+        let sent = backend.protocol.lock().await.as_ref().unwrap().test_sent_commands();
         assert_eq!(sent.len(), 1, "only HELLO should have been sent");
         assert_eq!(String::from_utf8(sent[0].clone()).unwrap(), "HELLO 1\n");
     }
@@ -552,7 +676,7 @@ mod tests {
         let transport = FakeTransport::new();
         let mut backend = Esp32Backend::new(Box::new(transport));
         backend
-            .protocol
+            .protocol.lock().await
             .as_ref()
             .unwrap()
             .test_inject_response(b"HELLO 1 OK\n".to_vec());
@@ -569,7 +693,7 @@ mod tests {
         // Only HELLO was sent (from connect)
         assert_eq!(
             backend
-                .protocol
+                .protocol.lock().await
                 .as_ref()
                 .unwrap()
                 .test_sent_commands()
@@ -583,7 +707,7 @@ mod tests {
         let transport = FakeTransport::new();
         let mut backend = Esp32Backend::new(Box::new(transport));
         backend
-            .protocol
+            .protocol.lock().await
             .as_ref()
             .unwrap()
             .test_inject_response(b"HELLO 1 OK\n".to_vec());
@@ -602,7 +726,7 @@ mod tests {
         // Only HELLO was sent
         assert_eq!(
             backend
-                .protocol
+                .protocol.lock().await
                 .as_ref()
                 .unwrap()
                 .test_sent_commands()
@@ -618,7 +742,7 @@ mod tests {
         let transport = FakeTransport::new();
         let mut backend = Esp32Backend::new(Box::new(transport));
         backend
-            .protocol
+            .protocol.lock().await
             .as_ref()
             .unwrap()
             .test_inject_response(b"HELLO 1 OK\n".to_vec());

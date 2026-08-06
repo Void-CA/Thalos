@@ -63,6 +63,14 @@ Executor::State Executor::current_state() const {
     return exec_state_;
 }
 
+std::vector<float> Executor::current_joints() const {
+    if (exec_state_ != RUNNING || manifest_ptr_ == nullptr ||
+        current_sample_index_ >= manifest_ptr_->samples.size()) {
+        return {};
+    }
+    return manifest_ptr_->samples[current_sample_index_].joints;
+}
+
 const std::vector<ExecutionSample>& Executor::samples() const {
     return recorded_samples_;
 }

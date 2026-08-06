@@ -231,9 +231,19 @@ void Protocol::handle_status() {
         case READY:
             response += F("READY");
             break;
-        case EXECUTING:
-            response += F("RUNNING");
+        case EXECUTING: {
+            // S2.2: `STATUS RUNNING <progress> <j0> <j1> ... <jN>` — progress
+            // fraction plus commanded joints so the host can render live
+            // progress and positions. Wire token stays RUNNING (never EXECUTING).
+            response += F("RUNNING ");
+            response += String(executor_.progress(), 4);
+            const std::vector<float>& joints = executor_.current_joints();
+            for (size_t i = 0; i < joints.size(); ++i) {
+                response += ' ';
+                response += String(joints[i], 6);
+            }
             break;
+        }
         case COMPLETED:
             response += F("COMPLETED");
             break;
