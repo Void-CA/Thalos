@@ -30,15 +30,18 @@ describe('manipulability_series (S1 additive delta, spec motion-plan-endpoint)',
     const report: AnalysisReportWire = {
       ...baseReport(),
       manipulability_series: [
-        { waypoint: 0, yoshikawa: 0.42 },
+        { waypoint: 0, yoshikawa: 0.42, det_jtj: 0.18 },
         { waypoint: 1, yoshikawa: 0.31 },
         { waypoint: 2, yoshikawa: 0.18 },
       ],
     }
 
     expect(report.manipulability_series).toHaveLength(3)
-    expect(report.manipulability_series?.[0]).toEqual({ waypoint: 0, yoshikawa: 0.42 })
+    expect(report.manipulability_series?.[0]).toEqual({ waypoint: 0, yoshikawa: 0.42, det_jtj: 0.18 })
+    expect(report.manipulability_series?.[0]?.det_jtj).toBeCloseTo(0.18)
     expect(report.manipulability_series?.[2]?.yoshikawa).toBeCloseTo(0.18)
+    // Additive field: older payloads omit it — consumers must tolerate absence.
+    expect(report.manipulability_series?.[1]?.det_jtj).toBeUndefined()
   })
 
   it('old payloads without the field degrade to an empty series (I3)', () => {

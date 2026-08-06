@@ -111,6 +111,22 @@ describe('manipulabilityBuilder', () => {
     expect(model.series[0].dataColors).toEqual(['manip.high', 'manip.low', 'manip.high'])
   })
 
+  it('marks the low-manipulability warning threshold as a reference line', () => {
+    const report = reportWith(
+      [
+        { waypoint: 0, yoshikawa: 0.2 },
+        { waypoint: 1, yoshikawa: 0.05 },
+      ],
+      [],
+    )
+
+    const model = manipulabilityBuilder(report)
+
+    expect(model.markLine).toHaveLength(1)
+    expect(model.markLine?.[0].yAxis).toBeCloseTo(0.3)
+    expect(model.markLine?.[0].label).toMatch(/threshold/i)
+  })
+
   it('returns an explicit empty state for an absent/empty series instead of a chart', () => {
     const report = reportWith([], [])
 

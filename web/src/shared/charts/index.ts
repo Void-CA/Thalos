@@ -13,6 +13,7 @@
 export * from './types'
 export * from './theme'
 export { manipulabilityBuilder } from './builders/manipulability'
+export { determinantBuilder } from './builders/determinant'
 export { metricsDashboardBuilder, scoreBreakdownBuilder } from './builders/metrics-dashboard'
 export { comparisonBuilder } from './builders/comparison'
 export { timelineBuilder } from './builders/timeline'

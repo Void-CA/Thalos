@@ -20,6 +20,15 @@ import type { ChartModel } from '../types'
 
 type Severity = 'Error' | 'Warning' | 'Info'
 
+/**
+ * Low-manipulability warning threshold — mirrors the backend's
+ * `manip_threshold = 0.3` (thalos-planning/src/analysis/mod.rs:475): an
+ * average yoshikawa below it emits a LowManipulability warning. Marked as a
+ * reference line so the user sees how close the trajectory gets to the
+ * threshold the backend classifies against.
+ */
+export const YOSHIKAWA_THRESHOLD = 0.3
+
 /** Worst observation severity per waypoint (Error > Warning > Info). */
 function worstSeverityByWaypoint(report: AnalysisReportWire): Map<number, Severity> {
   const worst = new Map<number, Severity>()
@@ -79,5 +88,12 @@ export function manipulabilityBuilder(report: AnalysisReportWire): ChartModel {
       { type: 'slider', start: 0, end: 100 },
     ],
     tooltip: { trigger: 'axis' },
+    markLine: [
+      {
+        yAxis: YOSHIKAWA_THRESHOLD,
+        label: `Threshold ${YOSHIKAWA_THRESHOLD.toFixed(1)}`,
+        color: 'severity.warning',
+      },
+    ],
   }
 }

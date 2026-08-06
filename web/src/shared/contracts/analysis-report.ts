@@ -87,6 +87,10 @@ export interface ManipulabilityPointWire {
   waypoint: number
   /** Yoshikawa manipulability measure at that waypoint. */
   yoshikawa: number
+  /** Jacobian determinant det(J·Jᵀ) at that waypoint (additive — OPTIONAL for
+   *  backward compatibility: older backends omit it, so consumers must
+   *  tolerate its absence). */
+  det_jtj?: number
 }
 
 /** A remediation recommendation (spec recommendation-model "Wire Contract").
