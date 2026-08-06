@@ -257,3 +257,83 @@ describe('EvaluationWorkspace — recommendations with uniform Preview/Apply/Und
     expect(screen.queryByTestId('recommendation-row')).not.toBeInTheDocument()
   })
 })
+
+describe('EvaluationWorkspace — 3-column layout (problem regions | trajectory | inspector)', () => {
+  it('keeps the region list, trajectory and recommendations visible while inspecting a region', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: recommendationReport })
+      useSceneStore.setState({ activePlan })
+    })
+    renderWorkspace()
+    // Selecting a region opens the RegionInspector (right column) WITHOUT
+    // hiding the grouped regions list (left) or the trajectory (center) —
+    // previously the drill-down replaced the whole view.
+    fireEvent.click(screen.getByRole('button', { name: /Singularity near waypoint 10/i }))
+    expect(screen.getByRole('heading', { name: 'Region Details' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Singularity near waypoint 10/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('img', { name: /Trajectory with problem regions/i }),
+    ).toBeInTheDocument()
+    // The inspector co-renders with the recommendations in the same layout.
+    expect(screen.getByTestId('recommendation-row')).toBeInTheDocument()
+  })
+
+  it('renders a placeholder when no region is selected (inspector column stays put)', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: cleanReport })
+      useSceneStore.setState({ activePlan })
+    })
+    renderWorkspace()
+    expect(screen.getByText(/select/i)).toBeInTheDocument()
+  })
+})
+
+describe('EvaluationWorkspace — recommendation dedup (frontend safety net)', () => {
+  const row = (id: number, kind: string, edit: Record<string, unknown>) => ({
+    id,
+    action: {
+      id,
+      kind,
+      target_observation: 3,
+      priority: 'high',
+      impact: 'reposition',
+      parameters: {},
+    },
+    edit,
+    status: 'available' as const,
+  })
+
+  it('collapses duplicate recommendations sharing kind + edit variant into one row', () => {
+    act(() => {
+      useAnalysisStore.setState({
+        report: {
+          ...cleanReport,
+          recommendations: [
+            row(1, 'MoveWaypoint', { MoveWaypoint: { waypoint: 3 } }),
+            row(2, 'MoveWaypoint', { MoveWaypoint: { waypoint: 3 } }),
+          ],
+        },
+      })
+    })
+    renderWorkspace()
+    expect(screen.getAllByTestId('recommendation-row')).toHaveLength(1)
+  })
+
+  it('keeps recommendations whose kind or edit variant differs', () => {
+    act(() => {
+      useAnalysisStore.setState({
+        report: {
+          ...cleanReport,
+          recommendations: [
+            row(1, 'MoveWaypoint', { MoveWaypoint: { waypoint: 3 } }),
+            row(2, 'RotateTool', { ReplaceSegment: { index: 0 } }),
+          ],
+        },
+      })
+    })
+    renderWorkspace()
+    expect(screen.getAllByTestId('recommendation-row')).toHaveLength(2)
+  })
+})

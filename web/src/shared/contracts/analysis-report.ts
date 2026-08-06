@@ -218,3 +218,28 @@ export function waypointAnalysisFromReport(report: AnalysisReportWire): Waypoint
   }
   return entries.sort((a, b) => a.index - b.index)
 }
+
+/** Stable dedup key for a recommendation row: action kind + edit variant
+ *  (hotfix frontend safety net). The backend dedupes by (target segment,
+ *  kind); this key mirrors that intent so a leaked duplicate — same failing
+ *  segment, same remediation — collapses into a single row. */
+export function recommendationKey(recommendation: RecommendationWire): string {
+  const variant = Object.keys(recommendation.edit ?? {})[0] ?? ''
+  return `${recommendation.action.kind}|${variant}`
+}
+
+/** First-wins dedup of recommendation rows by [`recommendationKey`]. Keeps the
+ *  original order; distinct kinds / edit variants are never collapsed. */
+export function dedupeRecommendations(
+  recommendations: RecommendationWire[],
+): RecommendationWire[] {
+  const seen = new Set<string>()
+  const unique: RecommendationWire[] = []
+  for (const recommendation of recommendations) {
+    const key = recommendationKey(recommendation)
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push(recommendation)
+  }
+  return unique
+}

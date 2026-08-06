@@ -6,6 +6,7 @@ import { RegionInspector } from '@/features/analysis/components/region-inspector
 import { RecommendationRow } from '@/features/planning/components/RecommendationRow'
 import { useSemanticEditor } from '@/features/semantic/store'
 import { useSceneStore } from '@/features/viewport/store'
+import { dedupeRecommendations, recommendationKey } from '@/shared/contracts/analysis-report'
 import { TrajectoryView } from './components/trajectory-view'
 import { ShieldCheck } from 'lucide-react'
 
@@ -19,9 +20,16 @@ import { ShieldCheck } from 'lucide-react'
  * un-actionable dump of up-to-200 observations.
  *
  * Layout + gating decisions:
- *  - Plan summary FIRST: what is about to execute (source Tasks/Motion, plan
- *    id, waypoints, duration, instructions) — the user must see the plan
- *    before deciding.
+ *  - Plan summary FIRST, compact full-width top row: what is about to execute
+ *    (source Tasks/Motion, plan id, waypoints, duration, instructions) — the
+ *    user must see the plan before deciding.
+ *  - 3-column grid at lg (hotfix evaluation-layout, /evaluation now uses the
+ *    full space): LEFT = problem regions + warnings (StatusBanner), CENTER =
+ *    the trajectory view (the visual focus) + recommendations, RIGHT =
+ *    RegionInspector detail for the selected region. On small screens the grid
+ *    collapses to a stacked column. The click↔select wiring is preserved:
+ *    clicking a region (list or trajectory) opens its detail in the right
+ *    column WITHOUT hiding the list or the trajectory.
  *  - Trajectory view: the FULL evaluated trajectory in a lightweight chart
  *    (NOT the R3F viewport — hidden on /evaluation by design), with problem
  *    regions colored by severity and click↔select wiring to the region list.
@@ -35,7 +43,8 @@ import { ShieldCheck } from 'lucide-react'
  *    (AlternativesPanel/OptimizationPanel) unused by this view.
  *  - Recommendations render with their uniform Preview/Apply/Undo rows
  *    (RecommendationRow) when the report carries them — THIS is the base of
- *    the post-MVP resolution strategy.
+ *    the post-MVP resolution strategy. Duplicates (same kind + edit variant)
+ *    are deduped as a frontend safety net.
  *  - Empty state when there is no report yet (analyzed=false): invite to
  *    program first + a way back to Programación.
  *
@@ -68,7 +77,7 @@ export function EvaluationWorkspace() {
   }
 
   const hasProblemRegions = (report.problem_regions ?? []).length > 0
-  const recommendations = report.recommendations ?? []
+  const recommendations = dedupeRecommendations(report.recommendations ?? [])
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -82,43 +91,65 @@ export function EvaluationWorkspace() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-4 min-h-0">
+        {/* Compact top row: what is about to execute. */}
         <PlanSummary />
-        <StatusBanner />
-        <TrajectoryView />
 
-        {selectedRegion ? (
-          <RegionInspector />
-        ) : (
-          <>
-            {/* Problem regions grouped (never the 200-observation dump). */}
-            <section className="flex flex-col gap-2">
-              <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
-                Problem Regions
-              </h2>
-              {hasProblemRegions ? (
-                <ProblemRegions />
-              ) : (
-                <p className="text-xs text-muted-foreground text-center py-4 rounded-lg border border-border bg-card/50">
-                  No se detectaron problemas — el plan está listo.
-                </p>
-              )}
-            </section>
+        {/* 3-column grid at lg; stacked below. Trajectory is the visual focus
+            (center); problem regions + warnings sit on the left; the selected
+            region's detail lives on the right. */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 items-start">
+          {/* ── Left: problem regions + warnings ── */}
+          <section className="flex flex-col gap-2 min-w-0">
+            <StatusBanner />
+            <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+              Problem Regions
+            </h2>
+            {hasProblemRegions ? (
+              <ProblemRegions />
+            ) : (
+              <p className="text-xs text-muted-foreground text-center py-4 rounded-lg border border-border bg-card/50">
+                No se detectaron problemas — el plan está listo.
+              </p>
+            )}
+          </section>
 
-            {/* Recommendations — uniform Preview/Apply/Undo rows. */}
+          {/* ── Center: trajectory (focus) + recommendations ── */}
+          <section className="flex flex-col gap-2 min-w-0">
+            <TrajectoryView />
+
             {recommendations.length > 0 && (
-              <section className="flex flex-col gap-2">
+              <>
                 <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
                   Recommendations
                 </h2>
                 <ul className="flex flex-col gap-1.5">
                   {recommendations.map((recommendation) => (
-                    <RecommendationRow key={recommendation.id} recommendation={recommendation} />
+                    <RecommendationRow
+                      key={recommendationKey(recommendation)}
+                      recommendation={recommendation}
+                    />
                   ))}
                 </ul>
-              </section>
+              </>
             )}
-          </>
-        )}
+          </section>
+
+          {/* ── Right: detail of the selected region ── */}
+          <section className="flex flex-col gap-2 min-w-0">
+            {selectedRegion ? (
+              <RegionInspector />
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border bg-card/30 px-3 py-6 text-center">
+                <span className="text-xs text-muted-foreground">
+                  Select a region to inspect its details
+                </span>
+                <span className="text-[10px] text-muted-foreground/70">
+                  Click a region in the list or on the trajectory.
+                </span>
+              </div>
+            )}
+          </section>
+        </div>
       </div>
     </div>
   )
