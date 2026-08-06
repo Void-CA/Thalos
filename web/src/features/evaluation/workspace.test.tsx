@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import { act } from 'react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -22,22 +22,38 @@ import type { ActivePlan } from '@/features/viewport/types'
  * - empty state when there is no report yet (analyzed=false) → invites to
  *   program first, with a way back to Programación;
  * - plan summary (source Tasks/Motion, plan id, waypoints, duration);
+ * - trajectory view: the FULL evaluated trajectory with problem regions colored;
  * - problem regions GROUPS from `problem_regions` — the 200-observation dump
  *   is gone; a clean verdict when the plan has no problem regions;
- * - repair options are GATED: only meaningful when problem regions exist;
- * - recommendations render with their uniform Preview/Apply/Undo rows.
- *
- * AlternativesPanel/OptimizationPanel are stubbed: this suite verifies the
- * evaluation LAYOUT + GATING, not their internals (covered by their own tests).
+ * - recommendations render with their uniform Preview/Apply/Undo rows;
+ * - repair options + optimization are HIDDEN (post-MVP): they showed but did
+ *   not communicate, and offered no real way to correct the trajectory — the
+ *   post-MVP strategy returns a resolved Motion/Task program instead.
  */
 
-vi.mock('@/features/analysis/components/alternatives-panel', () => ({
-  AlternativesPanel: () => <div data-testid="alternatives-panel-stub">AlternativesPanel</div>,
-}))
+function waypoints(count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    position: [i, 0, 0] as [number, number, number],
+    orientation: [1, 0, 0, 0] as [number, number, number, number],
+    joints: [] as number[],
+    timestamp: i,
+    waypoint_type: (i === 0 ? 'Start' : i === count - 1 ? 'Goal' : 'Via') as 'Start' | 'Goal' | 'Via',
+  }))
+}
 
-vi.mock('@/features/analysis/components/optimization-panel', () => ({
-  OptimizationPanel: () => <div data-testid="optimization-panel-stub">OptimizationPanel</div>,
-}))
+const activePlan: ActivePlan = {
+  planId: 'plan-1',
+  state: 'ready',
+  motionType: 'PTP',
+  trajectoryProgress: null,
+  visualization: { waypoints: waypoints(5), motionType: 'PTP' },
+  segments: [
+    { segmentIndex: 0, motionType: 'PTP', waypointStart: 0, waypointEnd: 1, timeStart: 0, timeEnd: 42 },
+  ],
+  createdAt: '2026-01-01T00:00:00Z',
+  startedAt: null,
+  completedAt: null,
+}
 
 const compileResult: CompileResponse = {
   status: 'ok',
@@ -106,20 +122,6 @@ const recommendationReport: AnalysisReportWire = {
   ],
 }
 
-const activePlan: ActivePlan = {
-  planId: 'plan-1',
-  state: 'ready',
-  motionType: 'PTP',
-  trajectoryProgress: null,
-  visualization: { waypoints: Array.from({ length: 5 }, () => ({ x: 0, y: 0, z: 0 })) as never, motionType: 'PTP' },
-  segments: [
-    { segmentIndex: 0, motionType: 'PTP', waypointStart: 0, waypointEnd: 1, timeStart: 0, timeEnd: 42 },
-  ],
-  createdAt: '2026-01-01T00:00:00Z',
-  startedAt: null,
-  completedAt: null,
-}
-
 function renderWorkspace(initialPath = '/evaluation') {
   const router = createMemoryRouter([{ path: '*', element: <EvaluationWorkspace /> }], {
     initialEntries: [initialPath],
@@ -183,22 +185,33 @@ describe('EvaluationWorkspace — plan summary (what is about to execute)', () =
   })
 })
 
-describe('EvaluationWorkspace — decision focus: grouped regions + gated actions', () => {
-  it('shows a clean verdict when there are NO problem regions — and NO repair options', () => {
+describe('EvaluationWorkspace — decision focus: trajectory + grouped regions, no dead actions', () => {
+  it('shows a clean verdict when there are NO problem regions', () => {
     act(() => {
       useAnalysisStore.setState({ report: cleanReport })
+      useSceneStore.setState({ activePlan })
     })
     renderWorkspace()
     expect(screen.getByText(/No se detectaron problemas/i)).toBeInTheDocument()
-    // Repair options only make sense when the plan HAS problem regions.
-    expect(screen.queryByTestId('alternatives-panel-stub')).not.toBeInTheDocument()
-    // Optimization is still a contextual action over the plan.
-    expect(screen.getByTestId('optimization-panel-stub')).toBeInTheDocument()
   })
 
-  it('groups problem regions and GATES repair options on their presence', () => {
+  it('renders the trajectory view with colored-region legend for the evaluated plan', () => {
     act(() => {
       useAnalysisStore.setState({ report: regionReport })
+      useSceneStore.setState({ activePlan })
+    })
+    renderWorkspace()
+    expect(
+      screen.getByRole('img', { name: /Trajectory with problem regions/i }),
+    ).toBeInTheDocument()
+    // Legend swatch (also matches the Critical tier header in ProblemRegions).
+    expect(screen.getAllByText('Critical').length).toBeGreaterThan(0)
+  })
+
+  it('groups problem regions and KEEPS repair options and optimization hidden', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: regionReport })
+      useSceneStore.setState({ activePlan })
     })
     renderWorkspace()
     // ProblemRegions renders the grouped region card.
@@ -206,12 +219,16 @@ describe('EvaluationWorkspace — decision focus: grouped regions + gated action
       screen.getByRole('button', { name: /Singularity near waypoint 10/i }),
     ).toBeInTheDocument()
     expect(screen.queryByText(/No se detectaron problemas/i)).not.toBeInTheDocument()
-    expect(screen.getByTestId('alternatives-panel-stub')).toBeInTheDocument()
+    // Post-MVP: repair/optimization SHOWED but did not communicate and had no
+    // real way to fix the trajectory — hidden from the evaluation view.
+    expect(screen.queryByText('Repair Options')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Optimize Trajectory/i)).not.toBeInTheDocument()
   })
 
   it('keeps the region drill-down within the evaluation workspace', () => {
     act(() => {
       useAnalysisStore.setState({ report: regionReport })
+      useSceneStore.setState({ activePlan })
     })
     const router = renderWorkspace()
     fireEvent.click(screen.getByRole('button', { name: /Singularity near waypoint 10/i }))

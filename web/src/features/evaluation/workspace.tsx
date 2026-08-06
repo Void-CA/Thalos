@@ -3,11 +3,10 @@ import { useAnalysisStore, useSelectedRegion } from '@/features/analysis/store'
 import { StatusBanner } from '@/features/analysis/components/status-banner'
 import { ProblemRegions } from '@/features/analysis/components/problem-regions'
 import { RegionInspector } from '@/features/analysis/components/region-inspector'
-import { OptimizationPanel } from '@/features/analysis/components/optimization-panel'
-import { AlternativesPanel } from '@/features/analysis/components/alternatives-panel'
 import { RecommendationRow } from '@/features/planning/components/RecommendationRow'
 import { useSemanticEditor } from '@/features/semantic/store'
 import { useSceneStore } from '@/features/viewport/store'
+import { TrajectoryView } from './components/trajectory-view'
 import { ShieldCheck } from 'lucide-react'
 
 /**
@@ -20,19 +19,25 @@ import { ShieldCheck } from 'lucide-react'
  * un-actionable dump of up-to-200 observations.
  *
  * Layout + gating decisions:
- * - Plan summary FIRST: what is about to execute (source Tasks/Motion, plan
- *   id, waypoints, duration, instructions) — the user must see the plan
- *   before deciding.
- * - Problem regions GROUPED from `problem_regions` (never the raw
- *   observations list): a clean verdict ("no se detectaron problemas") when
- *   the plan has none.
- * - Repair options GATED on problem regions: "Generate repair options" only
- *   makes sense when the plan HAS problem regions (hasProblemRegions).
- * - Recommendations render with their uniform Preview/Apply/Undo rows
- *   (RecommendationRow) when the report carries them.
- * - Optimization stays a contextual action over the plan (OptimizationPanel).
- * - Empty state when there is no report yet (analyzed=false): invite to
- *   program first + a way back to Programación.
+ *  - Plan summary FIRST: what is about to execute (source Tasks/Motion, plan
+ *    id, waypoints, duration, instructions) — the user must see the plan
+ *    before deciding.
+ *  - Trajectory view: the FULL evaluated trajectory in a lightweight chart
+ *    (NOT the R3F viewport — hidden on /evaluation by design), with problem
+ *    regions colored by severity and click↔select wiring to the region list.
+ *  - Problem regions GROUPED from `problem_regions` (never the raw
+ *    observations list): a clean verdict ("no se detectaron problemas") when
+ *    the plan has none.
+ *  - Repair options + Optimization are HIDDEN (post-MVP): they SHOWED but did
+ *    not communicate, and offered no real way to correct the trajectory. The
+ *    post-MVP strategy returns a resolved Motion/Task program for the user to
+ *    adopt, seeing how the trajectory changes. Code stays in the repo
+ *    (AlternativesPanel/OptimizationPanel) unused by this view.
+ *  - Recommendations render with their uniform Preview/Apply/Undo rows
+ *    (RecommendationRow) when the report carries them — THIS is the base of
+ *    the post-MVP resolution strategy.
+ *  - Empty state when there is no report yet (analyzed=false): invite to
+ *    program first + a way back to Programación.
  *
  * The workspace produces `analyzed` via the registry (the report lives in the
  * analysis store, populated by the programming flow); this view consumes it.
@@ -79,6 +84,7 @@ export function EvaluationWorkspace() {
       <div className="flex-1 overflow-y-auto p-3 space-y-4 min-h-0">
         <PlanSummary />
         <StatusBanner />
+        <TrajectoryView />
 
         {selectedRegion ? (
           <RegionInspector />
@@ -111,19 +117,6 @@ export function EvaluationWorkspace() {
                 </ul>
               </section>
             )}
-
-            {/* Repair options GATED: only meaningful when the plan has problems. */}
-            {hasProblemRegions && (
-              <section className="flex flex-col gap-2">
-                <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
-                  Repair Options
-                </h2>
-                <AlternativesPanel />
-              </section>
-            )}
-
-            {/* Optimization — contextual action over the evaluated plan. */}
-            <OptimizationPanel />
           </>
         )}
       </div>
