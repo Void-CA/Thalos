@@ -123,8 +123,8 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('layout route: persistent viewport (invariant #1)', () => {
-  it('keeps the viewport mounted when navigating /task → /planning', async () => {
-    seedPrerequisites() // robotLoaded + compiled → /task and /planning pass guards
+  it('keeps the viewport mounted when navigating /task → /execution', async () => {
+    seedPrerequisites({ executable: true }) // robotLoaded + compiled → guards pass
     const { router } = renderRouter(['/task'])
 
     // Full shell resolves at /task; viewport mounted exactly once.
@@ -133,21 +133,21 @@ describe('layout route: persistent viewport (invariant #1)', () => {
     expect(screen.getByRole('link', { name: 'Programación' })).toHaveAttribute('aria-current', 'page')
 
     // URL-driven navigation via the TopBar nav link.
-    fireEvent.click(screen.getByRole('link', { name: 'Planificación' }))
-    await waitFor(() => expect(router.state.location.pathname).toBe('/planning'))
+    fireEvent.click(screen.getByRole('link', { name: 'Ejecución' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/execution'))
 
     // Only the Outlet content changed; the viewport was never unmounted/remounted.
-    expect(screen.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Planificación' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('heading', { name: 'Execution' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ejecución' })).toHaveAttribute('aria-current', 'page')
     expect(viewportMetrics.mounts).toBe(1)
     expect(viewportMetrics.unmounts).toBe(0)
   })
 
   it('supports browser back/forward while the viewport persists', async () => {
-    seedPrerequisites()
-    const { router } = renderRouter(['/', '/task', '/planning'])
+    seedPrerequisites({ executable: true })
+    const { router } = renderRouter(['/', '/task', '/execution'])
 
-    expect(router.state.location.pathname).toBe('/planning')
+    expect(router.state.location.pathname).toBe('/execution')
 
     act(() => {
       router.navigate(-1)
@@ -159,8 +159,8 @@ describe('layout route: persistent viewport (invariant #1)', () => {
     act(() => {
       router.navigate(1)
     })
-    await waitFor(() => expect(router.state.location.pathname).toBe('/planning'))
-    expect(screen.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/execution'))
+    expect(screen.getByRole('heading', { name: 'Execution' })).toBeInTheDocument()
     expect(viewportMetrics.mounts).toBe(1)
     expect(viewportMetrics.unmounts).toBe(0)
   })
@@ -206,8 +206,8 @@ describe('hidden routes render placeholders (no 404)', () => {
 
 describe('top-bar — nav links reflect guard state (slice 5, task 5.2)', () => {
   it('disables links whose requirements are unmet (aria-disabled, no navigation)', async () => {
-    // Robot loaded (sceneValid=true) but NOT compiled → Planning (requires
-    // sceneValid) navigates; Execution (requires compiled) must not.
+    // Robot loaded (sceneValid=true) but NOT compiled → Execution (requires
+    // executable) must not navigate; Sesiones (guard relaxed) must.
     act(() => {
       useSceneStore.setState({ data: {} as SceneData })
       useSemanticEditor.setState({ result: null, dirty: 0 })
@@ -215,53 +215,57 @@ describe('top-bar — nav links reflect guard state (slice 5, task 5.2)', () => 
       useAnalysisStore.setState({ report: null })
     })
     const { router } = renderRouter(['/task'])
-    const planningLink = screen.getByRole('link', { name: 'Planificación' })
-    expect(planningLink).not.toHaveAttribute('aria-disabled')
     const executionLink = screen.getByRole('link', { name: 'Ejecución' })
     expect(executionLink).toHaveAttribute('aria-disabled', 'true')
     fireEvent.click(executionLink)
     expect(router.state.location.pathname).toBe('/task')
+    const sessionsLink = screen.getByRole('link', { name: 'Sesiones' })
+    expect(sessionsLink).not.toHaveAttribute('aria-disabled')
   })
 
   it('keeps links enabled when their requirements are met', () => {
     seedPrerequisites({ executable: true })
     renderRouter(['/task'])
-    expect(screen.getByRole('link', { name: 'Planificación' })).not.toHaveAttribute('aria-disabled')
     expect(screen.getByRole('link', { name: 'Ejecución' })).not.toHaveAttribute('aria-disabled')
+    expect(screen.getByRole('link', { name: 'Sesiones' })).not.toHaveAttribute('aria-disabled')
   })
 })
 
-describe('analysis content lives inside planning (slice 6 — absorbed section)', () => {
-  it('planning workspace has no "Analyze trajectory" cross-nav button', () => {
+describe('analysis content lives inside the unified programming workspace (slice 6 + absorbed section)', () => {
+  it('task workspace has no "Analyze trajectory" cross-nav button', () => {
     seedPrerequisites()
-    renderRouter(['/planning'])
+    renderRouter(['/task'])
     const main = within(screen.getByRole('main'))
+    fireEvent.click(main.getByRole('tab', { name: 'Motion Program' }))
     expect(screen.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
     expect(main.queryByRole('button', { name: 'Analyze trajectory' })).not.toBeInTheDocument()
   })
 
-  it('renders the analysis content under the Analysis tab (PR2 tabs layout)', () => {
+  it('renders the Motion Program content under its tab (Programa is the default)', () => {
     seedPrerequisites()
-    renderRouter(['/planning'])
+    renderRouter(['/task'])
     const main = within(screen.getByRole('main'))
-    // Motion Program tab is the default — its panel shows both sections.
+    // The Programa tab is the default — it renders the TaskEditor.
+    expect(main.getByRole('heading', { name: 'Program' })).toBeInTheDocument()
+    // The Motion Program + Trajectory Color sections live under their own tab.
+    fireEvent.click(main.getByRole('tab', { name: 'Motion Program' }))
     expect(main.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
     expect(main.getByRole('heading', { name: 'Trajectory Color' })).toBeInTheDocument()
-    // The analysis content moved into the Analysis tab (workspace-analysis spec).
+    // The analysis content moved into the Analysis tab.
     fireEvent.click(main.getByRole('tab', { name: 'Analysis' }))
     expect(main.getByRole('heading', { name: 'Analysis' })).toBeInTheDocument()
   })
 
   it('shows the simple empty state when nothing is analyzed yet (no cross-nav)', () => {
     seedPrerequisites()
-    renderRouter(['/planning'])
+    renderRouter(['/task'])
     const main = within(screen.getByRole('main'))
     fireEvent.click(main.getByRole('tab', { name: 'Analysis' }))
     expect(main.getByText('Compile and preview a motion program to see analysis')).toBeInTheDocument()
     expect(main.queryByRole('button', { name: 'Planning' })).not.toBeInTheDocument()
   })
 
-  it('renders StatusBanner + problem regions + optimization inside planning when analyzed', () => {
+  it('renders StatusBanner + problem regions + optimization in the Analysis tab when analyzed', () => {
     seedPrerequisites({ analyzed: true })
     act(() => {
       useAnalysisStore.setState({
@@ -286,7 +290,7 @@ describe('analysis content lives inside planning (slice 6 — absorbed section)'
         },
       })
     })
-    renderRouter(['/planning'])
+    renderRouter(['/task'])
     const main = within(screen.getByRole('main'))
     fireEvent.click(main.getByRole('tab', { name: 'Analysis' }))
     expect(main.getByText('Good')).toBeInTheDocument() // StatusBanner state label
@@ -297,7 +301,7 @@ describe('analysis content lives inside planning (slice 6 — absorbed section)'
     expect(main.getByRole('button', { name: 'Optimize Trajectory' })).toBeInTheDocument() // OptimizationPanel
   })
 
-  it('keeps intra-workspace region drill-down within planning (URL unchanged)', () => {
+  it('keeps intra-workspace region drill-down within the programming workspace (URL unchanged)', () => {
     seedPrerequisites({ analyzed: true })
     act(() => {
       useAnalysisStore.setState({
@@ -322,29 +326,29 @@ describe('analysis content lives inside planning (slice 6 — absorbed section)'
         },
       })
     })
-    const { router } = renderRouter(['/planning'])
+    const { router } = renderRouter(['/task'])
     const main = within(screen.getByRole('main'))
     fireEvent.click(main.getByRole('tab', { name: 'Analysis' }))
 
     // Drill down: click the region card → Region Details inspector opens.
     fireEvent.click(main.getByRole('button', { name: /Singularity near waypoint 10/i }))
     expect(main.getByRole('heading', { name: 'Region Details' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/planning')
+    expect(router.state.location.pathname).toBe('/task')
 
-    // Back control: close the inspector → overview returns, still on /planning.
+    // Back control: close the inspector → overview returns, still on /task.
     fireEvent.click(main.getByRole('button', { name: '' }))
     expect(main.queryByRole('heading', { name: 'Region Details' })).not.toBeInTheDocument()
     expect(
       main.getByRole('button', { name: /Singularity near waypoint 10/i }),
     ).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/planning')
+    expect(router.state.location.pathname).toBe('/task')
   })
 })
 
 describe('the /analysis route renders the AnalysisWorkspace tool (PR-D — kind nav model)', () => {
   it('shows an Analysis link in the top-bar tools group', () => {
     seedPrerequisites()
-    renderRouter(['/planning'])
+    renderRouter(['/task'])
     expect(screen.getByRole('link', { name: 'Analysis' })).toBeInTheDocument()
   })
 

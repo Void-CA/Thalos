@@ -222,7 +222,7 @@ describe('Progress and status display (execution-workspace spec)', () => {
     renderWorkspace()
     // error-ux spec: display the CTA from describeError, not the raw message
     expect(
-      screen.getByText(/Preview a motion program in Planificación first/),
+      screen.getByText(/Preview a motion program in Programación first/),
     ).toBeInTheDocument()
     expect(screen.queryByText(/^No plan$/)).not.toBeInTheDocument()
   })

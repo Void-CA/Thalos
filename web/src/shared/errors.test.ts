@@ -15,7 +15,7 @@ describe('describeError — known code maps to CTA (error-ux spec)', () => {
   it('maps no_active_plan to the actionable planning CTA, keeping the backend message', () => {
     const err = new ApiError('No plan', { code: 'no_active_plan', status: 412 })
     expect(describeError(err)).toBe(
-      'Preview a motion program in Planificación first — No plan',
+      'Preview a motion program in Programación first — No plan',
     )
   })
 

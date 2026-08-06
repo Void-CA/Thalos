@@ -56,7 +56,6 @@ describe('TopBar — pipeline stages, divider, then tool links (auxiliary-tools-
       'Robot',
       'Escena',
       'Programación',
-      'Planificación',
       'Ejecución',
       'Sesiones',
       'Configuración',

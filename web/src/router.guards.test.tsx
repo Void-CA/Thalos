@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import { act } from 'react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -127,30 +127,11 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('GuardedRoute — behavior over real router routes', () => {
-  it('blocks /planning without a valid scene, redirecting to the producer of sceneValid', async () => {
-    // sceneValid=false (objects cleared) but robot loaded → /planning requires
-    // sceneValid → redirect to the Escena area (produces sceneValid).
-    seedWorkflowState({ robotLoaded: true })
-    act(() => {
-      useDomainSceneStore.setState({ objects: [] })
-    })
-    const router = renderRouter(['/planning'])
-
-    // Registry is the source of truth for the redirect target.
-    const producer = producerOf('sceneValid')
-    expect(producer?.path).toBe('/scene')
-    await waitFor(() => expect(router.state.location.pathname).toBe(producer!.path))
-
-    // Planning panel must NOT render; Escena workspace is active.
-    expect(screen.queryByRole('heading', { name: 'Motion Program' })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Escena' })).toHaveAttribute('aria-current', 'page')
-  })
-
   it('chains to the root when the producer itself is blocked (no robot loaded)', async () => {
     // robotLoaded=false → /scene is also blocked → its producer (Robot '/') is
     // the chain terminal → the guard chain lands on the root.
     seedWorkflowState({})
-    const router = renderRouter(['/planning'])
+    const router = renderRouter(['/task'])
 
     expect(producerOf('robotLoaded')?.path).toBe('/')
     await waitFor(() => expect(router.state.location.pathname).toBe('/'))
@@ -175,14 +156,16 @@ describe('GuardedRoute — behavior over real router routes', () => {
     expect(screen.queryByRole('heading', { name: 'Program' })).not.toBeInTheDocument()
   })
 
-  it('renders /planning when the scene is valid, even without a compiled plan', async () => {
-    // sceneValid=true (default seed), compiled=false → /planning renders: the
+  it('renders /task with the Motion Program tab when the scene is valid, even without a compiled plan', async () => {
+    // sceneValid=true (default seed), compiled=false → /task renders: the
     // Motion Program is built from the scene (/scene/preview), not from the
-    // Task-compiled plan — compiled state SHALL NOT affect access.
+    // Task-compiled plan — compiled state SHALL NOT affect access. This is the
+    // D2 rule the old /planning carried, now inside the unified workspace.
     seedWorkflowState({ robotLoaded: true })
-    const router = renderRouter(['/planning'])
+    const router = renderRouter(['/task'])
 
-    expect(router.state.location.pathname).toBe('/planning')
+    expect(router.state.location.pathname).toBe('/task')
+    fireEvent.click(screen.getByRole('tab', { name: 'Motion Program' }))
     expect(screen.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
   })
 
