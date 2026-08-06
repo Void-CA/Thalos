@@ -252,17 +252,6 @@ export function TaskEditor() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
-        <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider flex-1">Program</h2>
-        <div className="inline-flex items-center rounded-md border border-border bg-background overflow-hidden" role="group" aria-label="Editor mode">
-          <button onClick={requestSwitchToVisual} aria-pressed={mode === 'visual'}
-            className={`px-2 py-1 text-xs font-medium transition-colors cursor-pointer ${mode === 'visual' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
-            Visual
-          </button>
-          <button onClick={switchToText} aria-pressed={mode === 'text'}
-            className={`px-2 py-1 text-xs font-medium transition-colors cursor-pointer ${mode === 'text' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
-            Text
-          </button>
-        </div>
         {mode === 'text' && (
           <button onClick={handleApply} disabled={applyDisabled}
             title={applyDisabled ? 'Fix the parse errors before applying' : 'Apply the script to the program'}
