@@ -3,6 +3,7 @@ use thalos_core::{
     robot::state::RobotState,
     spatial::pose::Pose,
 };
+use thalos_math::Vector3;
 
 #[derive(Debug, Clone)]
 pub struct JointGoal(pub Vec<f64>);
@@ -19,6 +20,14 @@ impl JointGoal {
 #[derive(Debug, Clone)]
 pub struct ResolvedPoseGoal {
     pub pose: Pose,
+    pub state: RobotState,
+}
+
+/// A translation-only resolved goal: `position` is the target, `state` is
+/// the converged joint configuration (orientation is left unconstrained).
+#[derive(Debug, Clone)]
+pub struct ResolvedPositionGoal {
+    pub position: Vector3,
     pub state: RobotState,
 }
 

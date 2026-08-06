@@ -192,6 +192,7 @@ impl RuntimeError {
             },
             RuntimeError::Planning(e) => match e {
                 PlanningError::IkFailed { .. } => "ik_failed",
+                PlanningError::IkFailedPosition { .. } => "ik_failed",
                 PlanningError::JointLimitViolation { .. } => "joint_limit_violation",
                 PlanningError::InvalidGoal(_) => "invalid_goal",
                 PlanningError::UnreachableGoal { .. } => "unreachable_goal",

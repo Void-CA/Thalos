@@ -12,6 +12,12 @@ pub enum PlanningError {
         reason: IkFailureReason,
     },
 
+    #[error("Inverse kinematics failed for target position")]
+    IkFailedPosition {
+        target_position: [f64; 3],
+        reason: IkFailureReason,
+    },
+
     #[error("IK error: {0}")]
     Ik(#[from] IkError),
 

@@ -15,7 +15,9 @@ use crate::{
 };
 
 use super::policy::PlanningPolicy;
-use super::types::{GoalMetadata, JointGoal, MetricAction, ResolvedPoseGoal, ValidatedGoal};
+use super::types::{
+    GoalMetadata, JointGoal, MetricAction, ResolvedPoseGoal, ResolvedPositionGoal, ValidatedGoal,
+};
 
 #[derive(Debug, Clone)]
 pub struct GoalResolverConfig {
@@ -75,6 +77,49 @@ impl GoalResolver {
         Ok(ValidatedGoal {
             goal: ResolvedPoseGoal {
                 pose: pose.clone(),
+                state: RobotState::new(ik_result.q),
+            },
+            metadata,
+            assessment,
+        })
+    }
+
+    /// Resolve a translation-only target via `IKGoal::Position` — orientation
+    /// is unconstrained. Robots that cannot reach a full 6-DOF pose (e.g.
+    /// SCARA, yaw-only) converge on a position goal when a full-pose goal
+    /// would hit `MaxIterations`.
+    pub fn resolve_position(
+        &self,
+        ctx: &PlanningContext,
+        position: thalos_math::Vector3,
+    ) -> Result<ValidatedGoal<ResolvedPositionGoal>, PlanningError> {
+        let ik_result = ctx
+            .ik_solver
+            .solve(ctx.current_state.as_slice(), IKGoal::Position(position))?;
+
+        match ik_result.status {
+            IKStatus::Converged => {}
+            IKStatus::MaxIterations => {
+                return Err(PlanningError::IkFailedPosition {
+                    target_position: [position.x, position.y, position.z],
+                    reason: IkFailureReason::MaxIterationsReached,
+                });
+            }
+        }
+
+        let mut metadata = GoalMetadata::default();
+
+        if self.config.check_joint_limits {
+            self.validate_joint_limits(ctx, &ik_result.q)?;
+        }
+
+        let q = &ik_result.q;
+        self.enrich_metadata(ctx, q, &mut metadata);
+        let assessment = self.config.policy.evaluate(&metadata);
+
+        Ok(ValidatedGoal {
+            goal: ResolvedPositionGoal {
+                position,
                 state: RobotState::new(ik_result.q),
             },
             metadata,
@@ -170,5 +215,62 @@ impl GoalResolver {
         let singularity = SingularityReport::analyze(&jacobian);
         let manipulability = ManipulabilityReport::compute(&singularity);
         Some((singularity, manipulability))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::goal::types::ResolvedPositionGoal;
+    use crate::motion::planner::PlanningContext;
+    use thalos_core::{
+        kinematics::inverse::DampedLeastSquaresSolver,
+        models::{RobotModel, RobotRegistry},
+        robot::state::RobotState,
+    };
+    use thalos_math::Vector3;
+
+    /// `resolve_position` must drive IK with `IKGoal::Position` so a SCARA
+    /// (4 DOF, all Z axes — yaw only) converges on a translation target even
+    /// though it can never reach a full 6-DOF pose.
+    #[test]
+    fn resolve_position_converges_scara() {
+        let robot = RobotRegistry::create_default(RobotModel::Scara);
+        let state = RobotState::zero(4);
+        let fk = ForwardKinematics::new(robot.clone());
+        let solver = DampedLeastSquaresSolver::new(
+            fk,
+            robot.end_effector().clone(),
+            500,
+            1e-6,
+            0.1,
+        );
+        let ctx = PlanningContext {
+            robot: &robot,
+            current_state: &state,
+            ik_solver: &solver,
+            tcp: None,
+        };
+
+        let resolver = GoalResolver::new(GoalResolverConfig {
+            policy: PlanningPolicy::default(),
+            check_joint_limits: true,
+            strict_limits: true,
+        });
+        let target = Vector3::new(0.6, 0.5, 0.25);
+        let validated = resolver
+            .resolve_position(&ctx, target)
+            .expect("position-only IK must converge on SCARA");
+
+        let ResolvedPositionGoal { position, state } = &validated.goal;
+        assert_eq!(position, &target);
+
+        let fk2 = ForwardKinematics::new(robot.clone());
+        let ee = fk2.evaluate(state.as_slice()).ee_pose().unwrap().translation();
+        let error = (ee - target).magnitude();
+        assert!(
+            error < 0.02,
+            "resolved state EE error {error:.4} (target {target:?}, got {ee:?})"
+        );
     }
 }

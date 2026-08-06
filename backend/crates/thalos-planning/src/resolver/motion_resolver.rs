@@ -130,13 +130,25 @@ impl<'a> MotionResolver<'a> {
                     profile,
                 } => {
                     let frame = resolve_frame(target, self.frame_registry)?;
-                    let pose = motion_target_to_pose(target, self.frame_registry)?;
-                    planning_segments.push(MotionSegment::MoveL {
-                        origin: origin.clone(),
-                        frame,
-                        target_pose: pose,
-                        max_velocity: Some(profile.max_velocity),
-                    });
+                    match target {
+                        MotionTarget::Position(pos) => {
+                            planning_segments.push(MotionSegment::MoveLPosition {
+                                origin: origin.clone(),
+                                frame,
+                                target_position: pos.position,
+                                max_velocity: Some(profile.max_velocity),
+                            });
+                        }
+                        MotionTarget::Pose(_) => {
+                            let pose = motion_target_to_pose(target, self.frame_registry)?;
+                            planning_segments.push(MotionSegment::MoveL {
+                                origin: origin.clone(),
+                                frame,
+                                target_pose: pose,
+                                max_velocity: Some(profile.max_velocity),
+                            });
+                        }
+                    }
                 }
 
                 ExecutionInstruction::Delay { origin, duration } => {
@@ -199,6 +211,12 @@ fn motion_target_to_pose(
             let target_frame = resolve_frame_by_name(&mp.frame, frame_registry)?;
             Ok(Pose::new(FrameId::World, target_frame, transform))
         }
+        MotionTarget::Position(pos) => {
+            let translation = Vector3::new(pos.position[0], pos.position[1], pos.position[2]);
+            let transform = Transform3D::from_translation(translation);
+            let target_frame = resolve_frame_by_name(&pos.frame, frame_registry)?;
+            Ok(Pose::new(FrameId::World, target_frame, transform))
+        }
     }
 }
 
@@ -209,6 +227,7 @@ fn resolve_frame(
 ) -> Result<FrameId, ResolutionError> {
     match target {
         MotionTarget::Pose(mp) => resolve_frame_by_name(&mp.frame, frame_registry),
+        MotionTarget::Position(pos) => resolve_frame_by_name(&pos.frame, frame_registry),
     }
 }
 

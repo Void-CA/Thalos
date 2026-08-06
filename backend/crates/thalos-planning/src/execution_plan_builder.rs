@@ -24,6 +24,7 @@ impl ExecutionPlanBuilder {
                 instruction: match &seg.source {
                     MotionSegment::MoveJ { .. } => ExecutionInstruction::MoveJ,
                     MotionSegment::MoveL { .. } => ExecutionInstruction::MoveL,
+                    MotionSegment::MoveLPosition { .. } => ExecutionInstruction::MoveL,
                 },
                 waypoint_range: seg.waypoint_range.clone(),
             })

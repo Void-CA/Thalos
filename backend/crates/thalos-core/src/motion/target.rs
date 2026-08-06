@@ -19,15 +19,25 @@ pub struct MotionPose {
     pub frame: String,
 }
 
+/// A robot-independent position target — translation only, orientation is
+/// left unconstrained (resolved from the robot's current configuration).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MotionPosition {
+    pub position: [f64; 3],
+    pub frame: String,
+}
+
 /// An extensible motion target.
 ///
-/// Currently only supports `Pose(MotionPose)`. New variants (e.g.
-/// `JointConfiguration`, `ExternalAxis`) can be added without breaking
-/// `ExecutionInstruction`.
+/// `Pose` constrains position **and** orientation; `Position` constrains
+/// only the translation — the planner drives IK with `IKGoal::Position`.
+/// New variants (e.g. `JointConfiguration`, `ExternalAxis`) can be added
+/// without breaking `ExecutionInstruction`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum MotionTarget {
     Pose(MotionPose),
+    Position(MotionPosition),
 }
 
 /// Concrete motion limits for an instruction.
@@ -82,6 +92,7 @@ mod tests {
                 assert_eq!(inner.frame, "world");
                 assert_eq!(inner, pose);
             }
+            MotionTarget::Position(_) => panic!("expected Pose"),
         }
     }
 
@@ -102,6 +113,7 @@ mod tests {
                 assert_eq!(inner.frame, "flange");
                 assert_eq!(inner, pose);
             }
+            MotionTarget::Position(_) => panic!("expected Pose"),
         }
     }
 
@@ -363,6 +375,38 @@ mod tests {
             decoded.is_ok(),
             "Should tolerate unknown fields for forward compatibility"
         );
+    }
+
+    #[test]
+    fn position_target_holds_supplied_position() {
+        let pos = MotionPosition {
+            position: [0.4, 0.3, 0.2],
+            frame: "world".into(),
+        };
+        let target = MotionTarget::Position(pos.clone());
+        match target {
+            MotionTarget::Position(inner) => {
+                assert_eq!(inner.position, [0.4, 0.3, 0.2]);
+                assert_eq!(inner.frame, "world");
+                assert_eq!(inner, pos);
+            }
+            other => panic!("expected Position, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn position_target_serde_round_trip() {
+        let target = MotionTarget::Position(MotionPosition {
+            position: [0.4, 0.3, 0.2],
+            frame: "base".into(),
+        });
+        let json = serde_json::to_string(&target).expect("serialize");
+        assert!(
+            json.contains(r#""type":"position""#),
+            "JSON should use internally-tagged type: {json}"
+        );
+        let decoded: MotionTarget = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(target, decoded);
     }
 
     #[test]

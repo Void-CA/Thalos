@@ -313,6 +313,7 @@ fn split_move(segment: &MotionSegment, point: &[f64]) -> Option<(MotionSegment, 
             },
         )),
         MotionSegment::MoveL { .. } => None,
+        MotionSegment::MoveLPosition { .. } => None,
     }
 }
 
@@ -367,6 +368,7 @@ fn move_waypoint(segment: &MotionSegment, new_target: &[f64]) -> Option<MotionSe
             max_acceleration: *max_acceleration,
         }),
         MotionSegment::MoveL { .. } => None,
+        MotionSegment::MoveLPosition { .. } => None,
     }
 }
 
@@ -1038,6 +1040,9 @@ mod property_tests {
             let old_target = match &p.segments[seg_idx] {
                 MotionSegment::MoveJ { target, .. } => target.clone(),
                 MotionSegment::MoveL { .. } => unreachable!("property programs are MoveJ-only"),
+                MotionSegment::MoveLPosition { .. } => {
+                    unreachable!("property programs are MoveJ-only")
+                }
             };
             let edit = ProgramEdit::MoveWaypoint {
                 segment_index: seg_idx,

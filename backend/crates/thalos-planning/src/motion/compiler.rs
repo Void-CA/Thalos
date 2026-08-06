@@ -11,7 +11,10 @@ use thalos_core::{
 };
 
 use crate::error::{CompileError, PlanningError};
-use crate::goal::{GoalResolver, GoalResolverConfig, JointGoal, ResolvedPoseGoal, ValidatedGoal};
+use crate::goal::{
+    GoalResolver, GoalResolverConfig, JointGoal, ResolvedPoseGoal, ResolvedPositionGoal,
+    ValidatedGoal,
+};
 use crate::motion::move_j::{MoveJConfig, MoveJPlanner};
 use crate::motion::move_l::{MoveLConfig, MoveLPlanner};
 use crate::motion::planner::{SegmentPlanner, SegmentPlanningContext};
@@ -98,6 +101,31 @@ impl MotionPlannerDispatcher for DefaultPlannerDispatcher {
                     cartesian_step: 0.01,
                 });
                 planner.plan(ctx, &goal)
+            }
+
+            MotionSegment::MoveLPosition {
+                frame: _,
+                target_position,
+                max_velocity,
+                ..
+            } => {
+                let resolver = GoalResolver::new(self.goal_resolver_config.clone());
+                let goal: ValidatedGoal<ResolvedPositionGoal> = resolver.resolve_position(
+                    ctx,
+                    thalos_math::Vector3::new(
+                        target_position[0],
+                        target_position[1],
+                        target_position[2],
+                    ),
+                )?;
+
+                let planner = MoveLPlanner::new(MoveLConfig {
+                    max_velocity: max_velocity.unwrap_or(0.25),
+                    max_acceleration: 0.125,
+                    time_step: 0.01,
+                    cartesian_step: 0.01,
+                });
+                planner.plan_position(ctx, &goal)
             }
         }
     }

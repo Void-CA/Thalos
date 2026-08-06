@@ -34,13 +34,26 @@ pub enum MotionSegment {
         target_pose: Pose,
         max_velocity: Option<f64>,
     },
+    /// Cartesian linear move to a target **position** — orientation is
+    /// unconstrained (resolved from the current configuration via
+    /// `IKGoal::Position`). Required for robots that cannot reach a full
+    /// 6-DOF pose (e.g. SCARA: yaw-only).
+    MoveLPosition {
+        /// The IR-0 operation this segment was derived from.
+        origin: OperationId,
+        frame: FrameId,
+        target_position: [f64; 3],
+        max_velocity: Option<f64>,
+    },
 }
 
 impl MotionSegment {
     /// The `OperationId` this segment was derived from (invariant I2).
     pub fn origin(&self) -> &OperationId {
         match self {
-            MotionSegment::MoveJ { origin, .. } | MotionSegment::MoveL { origin, .. } => origin,
+            MotionSegment::MoveJ { origin, .. }
+            | MotionSegment::MoveL { origin, .. }
+            | MotionSegment::MoveLPosition { origin, .. } => origin,
         }
     }
 }
