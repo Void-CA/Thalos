@@ -357,7 +357,19 @@ impl SceneService {
     }
 
     pub async fn start_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
-        if let Some(ctrl) = self.manager.get_controller().await {
+        // R3-001: with NO active controller (e.g. the hardware backend is
+        // active but was never connected, or the device was disconnected while
+        // active) start must fail EXPLICITLY with `not_connected` — a silent
+        // 200 made the frontend report 'running' until the first tick dropped
+        // it to 'idle' with no error and no CTA.
+        let ctrl = self
+            .manager
+            .get_controller()
+            .await
+            .ok_or_else(|| RuntimeError::ControllerFailed {
+                source: crate::error::ControllerError::NotConnected,
+            })?;
+        {
             let (waypoints, duration) = {
                 let runtime = self.runtime.read().await;
                 Self::trajectory_to_waypoints(&runtime)
@@ -420,11 +432,9 @@ impl SceneService {
                 execution_recorder: exec_recorder,
                 start_time: std::time::Duration::ZERO,
             });
-
-            return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
         }
-        let runtime = self.runtime.read().await;
-        Ok(Self::build_snapshot(&runtime, None))
+
+        Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await)
     }
 
     /// Seek the active controller to a position (fraction 0.0–1.0).

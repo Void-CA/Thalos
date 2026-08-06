@@ -1161,3 +1161,35 @@ async fn tick_ignores_unsupported_capability_from_advance() {
         "tick must return a normal delta for hardware backends"
     );
 }
+
+/// R3-001: `start_execution` with NO active controller (hardware backend
+/// activated but never connected) must fail EXPLICITLY with `not_connected` —
+/// never return a silent 200 snapshot.
+#[tokio::test]
+async fn start_execution_without_controller_returns_not_connected() {
+    let manager = Arc::new(BackendManager::new());
+    manager.register_esp32("/dev/ttyUSB0").await;
+    manager.activate("esp32").await.unwrap();
+    assert!(
+        manager.get_controller().await.is_none(),
+        "esp32 active-but-not-connected has no controller"
+    );
+
+    let svc = SceneService::new(
+        Box::new(InternalBackend),
+        manager.clone(),
+        RobotModel::Scara,
+    );
+
+    let err = match svc.start_execution().await {
+        Err(e) => e,
+        Ok(_) => panic!("start_execution must NOT return a silent 200 without a controller"),
+    };
+    match err {
+        crate::RuntimeError::ControllerFailed { source } => {
+            assert_eq!(source, crate::error::ControllerError::NotConnected);
+            assert_eq!(source.error_code(), "not_connected");
+        }
+        other => panic!("expected ControllerFailed(NotConnected), got {other:?}"),
+    }
+}

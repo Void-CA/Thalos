@@ -3457,6 +3457,40 @@ async fn disconnect_not_connected_backend_returns_400_not_connected() {
     assert_eq!(body.expect("body")["code"], "not_connected");
 }
 
+/// R3-001: `POST /scene/motion/start` with the hardware backend active but
+/// never connected must answer 409 `not_connected` — NOT a silent 200 that the
+/// frontend misreads as 'running' and the first tick then drops to 'idle'.
+#[tokio::test]
+async fn start_execution_with_active_but_disconnected_hardware_returns_409_not_connected() {
+    let state = new_default_state().await;
+    state.services.manager.register_esp32("/dev/ttyUSB0").await;
+    state
+        .services
+        .manager
+        .activate("esp32")
+        .await
+        .expect("esp32 activate must succeed");
+    assert!(
+        state.services.manager.get_controller().await.is_none(),
+        "esp32 active-but-not-connected leaves the runtime without a controller"
+    );
+
+    let app = app_router().with_state(state);
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/motion/start",
+        None,
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "start without a controller must NOT be a silent 200"
+    );
+    assert_eq!(body.expect("body")["code"], "not_connected");
+}
+
 /// R4-001 integration: a real Esp32Backend whose transport drops MID-EXECUTION
 /// surfaces `connection_lost` on the wire — the frontend tick loop keys on
 /// that code to offer the Reconectar CTA. Proves the ConnectionLost path is

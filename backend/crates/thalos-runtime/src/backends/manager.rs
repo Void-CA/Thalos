@@ -205,6 +205,9 @@ impl BackendManager {
         }
         if self.active_id.read().await.as_deref() == Some(id) {
             *self.active.write().await = None;
+            // R3-001: keep active_id consistent with active — the runtime now
+            // has NO controller, so no backend can be reported active.
+            *self.active_id.write().await = None;
         }
         Ok(())
     }
@@ -212,6 +215,10 @@ impl BackendManager {
     // ── Legacy lifecycle (unchanged) ──────────────────────────────────────
 
     /// Register a controller as the active one (sets it connected).
+    ///
+    /// Legacy lifecycle path: the controller it installs is the simulation
+    /// controller, so `active_id` tracks the `simulation` entry (R3-001) —
+    /// keeping `active_id` consistent with the controller the runtime uses.
     pub async fn set_active(
         &self,
         controller: Arc<RwLock<dyn RobotController + Send + Sync>>,
@@ -222,6 +229,7 @@ impl BackendManager {
         }
         controller.write().await.connect().await?;
         *active = Some(controller);
+        *self.active_id.write().await = Some("simulation".to_string());
         Ok(())
     }
 
@@ -230,6 +238,7 @@ impl BackendManager {
         let mut active = self.active.write().await;
         if let Some(ctrl) = active.take() {
             ctrl.write().await.disconnect().await?;
+            *self.active_id.write().await = None;
         }
         Ok(())
     }
@@ -238,6 +247,11 @@ impl BackendManager {
     ///
     /// Disconnects and removes the previous controller, then connects
     /// and sets the new one. Useful when the robot changes (e.g., new DOF).
+    ///
+    /// R3-001: keeps `active_id` consistent with `active` — the replacement
+    /// controller is the simulation controller (the registered `simulation`
+    /// entry is synced below), so `active_id` points at `simulation` instead
+    /// of diverging (e.g. staying `esp32` after a robot change).
     pub async fn replace_controller(
         &self,
         controller: Arc<RwLock<dyn RobotController + Send + Sync>>,
@@ -251,6 +265,7 @@ impl BackendManager {
         // Connect and set the new one
         controller.write().await.connect().await?;
         *active = Some(controller.clone());
+        *self.active_id.write().await = Some("simulation".to_string());
         // Keep the registered Simulation entry in sync so `GET /backends`
         // reflects the controller the runtime actually uses (PR2a).
         if let Some(entry) = self
@@ -570,6 +585,93 @@ mod tests {
 
         manager.replace_controller(ctrl2).await.unwrap();
         assert!(manager.is_connected().await);
+    }
+
+    /// R3-001: after a robot change with a hardware backend active-but-not-
+    /// connected, `replace_controller` must point `active_id` at the controller
+    /// the runtime ACTUALLY uses (simulation) — no active_id/active divergence.
+    #[tokio::test]
+    async fn replace_controller_after_robot_change_syncs_active_id() {
+        let manager = BackendManager::new();
+        let sim = make_controller().await;
+        manager
+            .register(BackendEntry {
+                id: "simulation".into(),
+                name: "Simulation".into(),
+                controller: Some(sim),
+                port: None,
+            })
+            .await;
+        manager.register_esp32("/dev/ttyUSB0").await;
+        manager.activate("simulation").await.unwrap();
+        manager.activate("esp32").await.unwrap();
+
+        assert_eq!(manager.active_id().await.as_deref(), Some("esp32"));
+        assert!(
+            manager.get_controller().await.is_none(),
+            "esp32 active-but-not-connected has no runtime controller"
+        );
+
+        // Robot change (SceneService.execute) silently replaces with a fresh
+        // SimulationController.
+        manager
+            .replace_controller(make_controller().await)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            manager.active_id().await.as_deref(),
+            Some("simulation"),
+            "active_id must follow the controller the runtime actually uses"
+        );
+        assert!(manager.get_controller().await.is_some());
+    }
+
+    /// R3-001: `set_active` must keep `active_id` consistent with `active`.
+    #[tokio::test]
+    async fn set_active_syncs_active_id() {
+        let manager = BackendManager::new();
+        let sim = make_controller().await;
+        manager
+            .register(BackendEntry {
+                id: "simulation".into(),
+                name: "Simulation".into(),
+                controller: Some(sim),
+                port: None,
+            })
+            .await;
+        manager.set_active(make_controller().await).await.unwrap();
+        assert!(manager.get_controller().await.is_some());
+        assert_eq!(
+            manager.active_id().await.as_deref(),
+            Some("simulation"),
+            "set_active must point active_id at the simulation entry"
+        );
+    }
+
+    /// R3-001: `disconnect` must clear `active_id` alongside `active`.
+    #[tokio::test]
+    async fn disconnect_clears_active_id() {
+        let manager = BackendManager::new();
+        let sim = make_controller().await;
+        manager
+            .register(BackendEntry {
+                id: "simulation".into(),
+                name: "Simulation".into(),
+                controller: Some(sim),
+                port: None,
+            })
+            .await;
+        manager.activate("simulation").await.unwrap();
+        assert_eq!(manager.active_id().await.as_deref(), Some("simulation"));
+
+        manager.disconnect().await.unwrap();
+        assert!(manager.get_controller().await.is_none());
+        assert_eq!(
+            manager.active_id().await,
+            None,
+            "disconnect must clear active_id (no active/active_id divergence)"
+        );
     }
 
     #[tokio::test]

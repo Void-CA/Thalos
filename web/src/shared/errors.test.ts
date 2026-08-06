@@ -100,6 +100,10 @@ describe('CTA_BY_CODE — resilience matrix codes (error-ux spec)', () => {
     expect(CTA_BY_CODE.connection_lost).toContain('Connection lost')
   })
 
+  it('maps not_connected to the connect-backend guide (R3-001)', () => {
+    expect(CTA_BY_CODE.not_connected).toContain('backend')
+  })
+
   it('maps not_found to the catalog-return guide', () => {
     expect(CTA_BY_CODE.not_found).toContain('Robot not found')
   })
@@ -124,6 +128,10 @@ describe('ctaLabelForCode — short actionable button labels (error-ux spec)', (
 
   it('connection_lost → Reconectar', () => {
     expect(ctaLabelForCode('connection_lost')).toBe('Reconectar')
+  })
+
+  it('not_connected → Conectar (R3-001)', () => {
+    expect(ctaLabelForCode('not_connected')).toBe('Conectar')
   })
 
   it('not_found → Volver al catálogo', () => {
