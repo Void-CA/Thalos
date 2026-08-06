@@ -35,7 +35,9 @@ export type RotationDto =
 
 export interface PoseTargetDto {
   translation: [number, number, number]
-  rotation: RotationDto
+  /** `None` (omitted) means position-only targeting — orientation is left
+   *  unconstrained and the planner drives IK with `IKGoal::Position`. */
+  rotation?: RotationDto | null
 }
 
 export interface VisualJointAxisDto {

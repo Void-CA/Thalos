@@ -2,6 +2,8 @@ import { create } from 'zustand'
 
 export type SegmentKind = 'movej' | 'movel'
 
+export type MoveLMode = 'position' | 'pose'
+
 export interface SegmentModel {
   kind: SegmentKind
   expanded: boolean
@@ -18,6 +20,9 @@ export interface SegmentModel {
   qyStr: string
   qzStr: string
   velocityStr: string
+  /** MoveL target mode: 'position' (translation-only, no rotation on the wire)
+   *  or 'pose' (full pose, default — keeps existing segments unchanged). */
+  moveLMode: MoveLMode
 }
 
 const STORAGE_KEY = 'thalos-planning'
@@ -32,6 +37,7 @@ function createSegment(kind: SegmentKind, dof: number): SegmentModel {
     yawStr: '0', pitchStr: '0', rollStr: '0',
     qwStr: '1', qxStr: '0', qyStr: '0', qzStr: '0',
     velocityStr: '',
+    moveLMode: 'pose',
   }
 }
 

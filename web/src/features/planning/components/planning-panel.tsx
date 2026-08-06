@@ -15,7 +15,13 @@ import { PLAN_SEGMENT_PALETTE } from '@/shared/tokens'
 
 type MotionSegmentDto =
   | { type: 'movej'; target: number[] }
-  | { type: 'movel'; target: { translation: [number, number, number]; rotation: any } }
+  | {
+      type: 'movel'
+      target: {
+        translation: [number, number, number]
+        rotation?: { kind: 'Ypr'; value: { roll: number; pitch: number; yaw: number } } | { kind: 'Quaternion'; value: { w: number; x: number; y: number; z: number } }
+      }
+    }
 
 /**
  * Plan metadata mirrored into the execution store after a successful preview
@@ -39,10 +45,16 @@ function buildRequest(segments: SegmentModel[], dof: number): { segments: Motion
       const t: [number, number, number] = [
         parseFloat(seg.txStr) || 0, parseFloat(seg.tyStr) || 0, parseFloat(seg.tzStr) || 0,
       ]
-      const r = seg.rotationFormat === 'euler'
-        ? { kind: 'Ypr' as const, value: { yaw: (parseFloat(seg.yawStr)||0)*Math.PI/180, pitch: (parseFloat(seg.pitchStr)||0)*Math.PI/180, roll: (parseFloat(seg.rollStr)||0)*Math.PI/180 } }
-        : { kind: 'Quaternion' as const, value: { w: parseFloat(seg.qwStr)||1, x: parseFloat(seg.qxStr)||0, y: parseFloat(seg.qyStr)||0, z: parseFloat(seg.qzStr)||0 } }
-      segs.push({ type: 'movel', target: { translation: t, rotation: r } })
+      if (seg.moveLMode === 'position') {
+        // Position-only target: omit rotation so the backend plans with
+        // IKGoal::Position (SCARA-safe). No full 6-DOF pose is requested.
+        segs.push({ type: 'movel', target: { translation: t } })
+      } else {
+        const r = seg.rotationFormat === 'euler'
+          ? { kind: 'Ypr' as const, value: { yaw: (parseFloat(seg.yawStr)||0)*Math.PI/180, pitch: (parseFloat(seg.pitchStr)||0)*Math.PI/180, roll: (parseFloat(seg.rollStr)||0)*Math.PI/180 } }
+          : { kind: 'Quaternion' as const, value: { w: parseFloat(seg.qwStr)||1, x: parseFloat(seg.qxStr)||0, y: parseFloat(seg.qyStr)||0, z: parseFloat(seg.qzStr)||0 } }
+        segs.push({ type: 'movel', target: { translation: t, rotation: r } })
+      }
     }
   }
   return { segments: segs }
@@ -274,6 +286,14 @@ function MoveLEditor({ segment, onUpdateField }: {
 }) {
   return (
     <div className="flex flex-col gap-2">
+      <SegmentedControl
+        options={[
+          { key: 'position', label: 'Position' },
+          { key: 'pose', label: 'Pose' },
+        ]}
+        value={segment.moveLMode}
+        onChange={(v) => onUpdateField('moveLMode', v)}
+      />
       <div>
         <span className="text-[10px] font-medium text-muted-foreground mb-1 block">Translation</span>
         <div className="grid grid-cols-3 gap-1.5">
@@ -290,40 +310,68 @@ function MoveLEditor({ segment, onUpdateField }: {
           })}
         </div>
       </div>
-      <div>
-        <span className="text-[10px] font-medium text-muted-foreground mb-1 block">Rotation</span>
-        <div className="flex rounded-md border border-border overflow-hidden mb-1.5">
-          {[{ k: 'euler' as const, l: 'Euler' }, { k: 'quaternion' as const, l: 'Quat' }].map(f => (
-            <button key={f.k} onClick={() => onUpdateField('rotationFormat', f.k)}
-              className={`flex-1 px-2 py-1 text-xs font-medium transition-colors cursor-pointer ${segment.rotationFormat === f.k ? 'bg-primary text-primary-foreground' : 'bg-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>
-              {f.l}
-            </button>
-          ))}
+      {segment.moveLMode === 'pose' && (
+        <div>
+          <span className="text-[10px] font-medium text-muted-foreground mb-1 block">Rotation</span>
+          <div className="flex rounded-md border border-border overflow-hidden mb-1.5">
+            {[{ k: 'euler' as const, l: 'Euler' }, { k: 'quaternion' as const, l: 'Quat' }].map(f => (
+              <button key={f.k} onClick={() => onUpdateField('rotationFormat', f.k)}
+                className={`flex-1 px-2 py-1 text-xs font-medium transition-colors cursor-pointer ${segment.rotationFormat === f.k ? 'bg-primary text-primary-foreground' : 'bg-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>
+                {f.l}
+              </button>
+            ))}
+          </div>
+          {segment.rotationFormat === 'euler' ? (
+            <div className="grid grid-cols-3 gap-1.5">
+              {[['Yaw °Z', 'yawStr'], ['Pitch °Y', 'pitchStr'], ['Roll °X', 'rollStr']].map(([label, field]) => (
+                <label key={field} className="flex flex-col gap-0.5">
+                  <span className="text-[10px] text-muted-foreground">{label}</span>
+                  <input type="number" step={1} value={segment[field as keyof SegmentModel] as string}
+                    onChange={e => onUpdateField(field as any, e.target.value)}
+                    className="w-full text-xs font-mono bg-input border-border rounded-md px-2 py-1 text-left tabular-nums focus:outline-none focus:border-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                </label>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-4 gap-1.5">
+              {['qwStr', 'qxStr', 'qyStr', 'qzStr'].map((field, i) => (
+                <label key={field} className="flex flex-col gap-0.5">
+                  <span className="text-[10px] text-muted-foreground">{['W', 'X', 'Y', 'Z'][i]}</span>
+                  <input type="number" step={0.01} value={segment[field as keyof SegmentModel] as string}
+                    onChange={e => onUpdateField(field as any, e.target.value)}
+                    className="w-full text-xs font-mono bg-input border-border rounded-md px-2 py-1 text-left tabular-nums focus:outline-none focus:border-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                </label>
+              ))}
+            </div>
+          )}
         </div>
-        {segment.rotationFormat === 'euler' ? (
-          <div className="grid grid-cols-3 gap-1.5">
-            {[['Yaw °Z', 'yawStr'], ['Pitch °Y', 'pitchStr'], ['Roll °X', 'rollStr']].map(([label, field]) => (
-              <label key={field} className="flex flex-col gap-0.5">
-                <span className="text-[10px] text-muted-foreground">{label}</span>
-                <input type="number" step={1} value={segment[field as keyof SegmentModel] as string}
-                  onChange={e => onUpdateField(field as any, e.target.value)}
-                  className="w-full text-xs font-mono bg-input border-border rounded-md px-2 py-1 text-left tabular-nums focus:outline-none focus:border-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-              </label>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-4 gap-1.5">
-            {['qwStr', 'qxStr', 'qyStr', 'qzStr'].map((field, i) => (
-              <label key={field} className="flex flex-col gap-0.5">
-                <span className="text-[10px] text-muted-foreground">{['W', 'X', 'Y', 'Z'][i]}</span>
-                <input type="number" step={0.01} value={segment[field as keyof SegmentModel] as string}
-                  onChange={e => onUpdateField(field as any, e.target.value)}
-                  className="w-full text-xs font-mono bg-input border-border rounded-md px-2 py-1 text-left tabular-nums focus:outline-none focus:border-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-              </label>
-            ))}
-          </div>
-        )}
-      </div>
+      )}
+    </div>
+  )
+}
+
+function SegmentedControl<T extends string>({
+  options, value, onChange,
+}: {
+  options: { key: T; label: string }[]
+  value: T
+  onChange: (v: T) => void
+}) {
+  return (
+    <div className="flex rounded-lg border border-border overflow-hidden bg-card">
+      {options.map(o => (
+        <button
+          key={o.key}
+          onClick={() => onChange(o.key)}
+          className={`flex-1 px-2.5 py-1.5 text-xs font-medium transition-all cursor-pointer
+            ${value === o.key
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'bg-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+            }`}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   )
 }

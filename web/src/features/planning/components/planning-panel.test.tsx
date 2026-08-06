@@ -6,7 +6,7 @@ import '@testing-library/jest-dom/vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { PlanningPanel } from './planning-panel'
 import { ApiError } from '@/shared/errors'
-import { usePlanningStore } from '../store'
+import { usePlanningStore, type SegmentModel } from '../store'
 import { useExecutionStore } from '@/features/execution/execution-store'
 import { useSceneStore } from '@/features/viewport/store'
 import type { RuntimeStateResponse } from '@/features/viewport/api/scene-api.types'
@@ -105,6 +105,7 @@ beforeEach(() => {
           txStr: '0.3', tyStr: '0', tzStr: '0', rotationFormat: 'euler',
           yawStr: '0', pitchStr: '0', rollStr: '0',
           qwStr: '1', qxStr: '0', qyStr: '0', qzStr: '0', velocityStr: '',
+          moveLMode: 'pose',
         },
       ],
     })
@@ -219,5 +220,64 @@ describe('PlanningPanel — Recompilar CTA on manifest validation error (PR1)', 
         source: 'Motion Program',
       })
     })
+  })
+})
+
+describe('PlanningPanel — MoveL position-only mode (CDD hotfix: moveL on SCARA)', () => {
+  function movelSegment(moveLMode: 'position' | 'pose'): SegmentModel {
+    return {
+      kind: 'movel', expanded: true, joints: [],
+      txStr: '0.6', tyStr: '0.5', tzStr: '0.25', rotationFormat: 'euler',
+      yawStr: '0', pitchStr: '0', rollStr: '0',
+      qwStr: '1', qxStr: '0', qyStr: '0', qzStr: '0', velocityStr: '',
+      moveLMode,
+    }
+  }
+
+  it('MoveLEditor shows a Position|Pose SegmentedControl', async () => {
+    act(() => {
+      usePlanningStore.setState({ segments: [movelSegment('pose')] })
+    })
+    renderPanel()
+
+    expect(screen.getByRole('button', { name: 'Position' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Pose' })).toBeInTheDocument()
+  })
+
+  it('position mode sends no rotation in buildRequest', async () => {
+    sceneApiMocks.previewPlan.mockResolvedValue(previewResponse)
+    analysisApiMocks.analyze.mockResolvedValue(analysisReport)
+    act(() => {
+      usePlanningStore.setState({ segments: [movelSegment('position')] })
+    })
+    renderPanel()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+
+    await waitFor(() => {
+      expect(sceneApiMocks.previewPlan).toHaveBeenCalledTimes(1)
+    })
+    const request = sceneApiMocks.previewPlan.mock.calls[0][0]
+    const target = request.segments[0].target
+    expect(target.translation).toEqual([0.6, 0.5, 0.25])
+    expect('rotation' in target).toBe(false)
+  })
+
+  it('pose mode keeps sending rotation as before', async () => {
+    sceneApiMocks.previewPlan.mockResolvedValue(previewResponse)
+    analysisApiMocks.analyze.mockResolvedValue(analysisReport)
+    act(() => {
+      usePlanningStore.setState({ segments: [movelSegment('pose')] })
+    })
+    renderPanel()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+
+    await waitFor(() => {
+      expect(sceneApiMocks.previewPlan).toHaveBeenCalledTimes(1)
+    })
+    const request = sceneApiMocks.previewPlan.mock.calls[0][0]
+    const target = request.segments[0].target
+    expect('rotation' in target).toBe(true)
   })
 })
