@@ -72,13 +72,22 @@ pub trait Transport: Send + Sync {
 pub struct TcpTransport {
     addr: String,
     stream: Option<tokio::sync::Mutex<tokio::net::TcpStream>>,
+    /// Max time to wait for a response line, in milliseconds (S1.3).
+    receive_timeout_ms: u64,
 }
 
 impl TcpTransport {
     pub fn new(addr: impl Into<String>) -> Self {
+        Self::with_receive_timeout(addr, 500)
+    }
+
+    /// Create a TCP transport with an explicit receive timeout (ms).
+    /// `receive()` returns `Error::Timeout` if no data arrives in time.
+    pub fn with_receive_timeout(addr: impl Into<String>, receive_timeout_ms: u64) -> Self {
         Self {
             addr: addr.into(),
             stream: None,
+            receive_timeout_ms,
         }
     }
 }
@@ -111,7 +120,19 @@ impl Transport for TcpTransport {
         let mut guard = stream.lock().await;
         let mut reader = tokio::io::BufReader::new(&mut *guard);
         let mut line = String::new();
-        reader.read_line(&mut line).await?;
+        // S1.3: bound the read — a silent peer must surface `Timeout` instead
+        // of blocking the request forever (mirrors SerialTransport R4-002).
+        match tokio::time::timeout(
+            std::time::Duration::from_millis(self.receive_timeout_ms),
+            reader.read_line(&mut line),
+        )
+        .await
+        {
+            Err(_) => return Err(TransportError::Timeout),
+            Ok(Err(e)) => return Err(TransportError::Io(e)),
+            Ok(Ok(0)) => return Err(TransportError::Disconnected),
+            Ok(Ok(_)) => {}
+        }
         if line.is_empty() {
             return Err(TransportError::Disconnected);
         }
@@ -353,5 +374,29 @@ mod tests {
         slave.flush().await.unwrap();
         let resp = transport.receive().await.unwrap();
         assert_eq!(String::from_utf8(resp).unwrap(), "HELLO 1 OK\n");
+    }
+
+    /// S1.3/S1.5 (RED): `TcpTransport::receive()` on a silent peer MUST return
+    /// `Error::Timeout` after `receive_timeout_ms` instead of blocking forever.
+    /// Uses a `with_receive_timeout` constructor that does not exist yet —
+    /// guaranteed failure until the timeout is implemented.
+    #[tokio::test]
+    async fn tcp_receive_times_out_without_data() {
+        use tokio::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        // 100ms timeout so the test is fast; default is 500ms.
+        let mut transport = TcpTransport::with_receive_timeout(addr.to_string(), 100);
+        transport.connect().await.unwrap();
+
+        // Do NOT accept/write on the listener: the peer stays silent.
+        let start = std::time::Instant::now();
+        let err = transport.receive().await.unwrap_err();
+        assert!(matches!(err, TransportError::Timeout), "got {err:?}");
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "receive must not block forever"
+        );
     }
 }

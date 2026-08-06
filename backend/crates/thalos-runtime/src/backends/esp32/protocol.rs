@@ -44,7 +44,10 @@ pub enum ProtocolError {
 }
 
 /// Firmware-side execution state as tracked by the host protocol codec.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// The wire token stays `RUNNING` (firmware never emits `EXECUTING`); the
+/// host maps `STATUS RUNNING <progress> <j0..jN>` to `Executing` internally.
+#[derive(Debug, Clone, PartialEq)]
 pub enum FirmwareState {
     /// No manifest loaded, idle.
     Idle,
@@ -52,8 +55,14 @@ pub enum FirmwareState {
     Receiving,
     /// Manifest uploaded and validated, ready to execute.
     Ready,
-    /// Execution in progress.
-    Executing,
+    /// Execution in progress — carries the progress fraction (0..1) and the
+    /// commanded joint positions reported by `STATUS RUNNING`.
+    Executing { progress: f64, joints: Vec<f64> },
+    /// Execution finished — carries how many recorded samples the host can
+    /// collect via `SAMPLES <count>`.
+    Completed { sample_count: u32 },
+    /// Firmware error state with a human-readable reason.
+    Error(String),
 }
 
 /// Internal parsed representation of an ESP32 response line.
@@ -63,8 +72,13 @@ enum ParsedResponse {
     Ready,
     HandshakeOk(u32),
     Error(String),
-    StatusRunning,
-    StatusCompleted,
+    StatusIdle,
+    StatusReceiving,
+    StatusReady,
+    /// `STATUS RUNNING <progress> <j0..jN>` — wire token RUNNING.
+    StatusRunning { progress: f64, joints: Vec<f64> },
+    /// `STATUS COMPLETED <count>`.
+    StatusCompleted { sample_count: u32 },
     Sample(ExecutionSample),
 }
 
@@ -154,27 +168,63 @@ impl Esp32Protocol {
                     return Err(ProtocolError::MalformedResponse(line.to_string()));
                 }
                 match parts[1] {
-                    "RUNNING" => Ok(ParsedResponse::StatusRunning),
-                    "COMPLETED" => Ok(ParsedResponse::StatusCompleted),
-                    _ => Ok(ParsedResponse::Error(parts[1..].join(" "))),
+                    "IDLE" => Ok(ParsedResponse::StatusIdle),
+                    "RECEIVING" => Ok(ParsedResponse::StatusReceiving),
+                    "READY" => Ok(ParsedResponse::StatusReady),
+                    "RUNNING" => {
+                        // STATUS RUNNING <progress> <j0> <j1> ... <jN>
+                        if parts.len() < 4 {
+                            return Err(ProtocolError::MalformedResponse(line.to_string()));
+                        }
+                        let progress: f64 = parts[2]
+                            .parse()
+                            .map_err(|_| ProtocolError::MalformedResponse(line.to_string()))?;
+                        let joints = parts[3..]
+                            .iter()
+                            .map(|s| {
+                                s.parse::<f64>()
+                                    .map_err(|_| ProtocolError::MalformedResponse(line.to_string()))
+                            })
+                            .collect::<Result<Vec<f64>, _>>()?;
+                        Ok(ParsedResponse::StatusRunning { progress, joints })
+                    }
+                    "COMPLETED" => {
+                        // STATUS COMPLETED <count>
+                        if parts.len() < 3 {
+                            return Err(ProtocolError::MalformedResponse(line.to_string()));
+                        }
+                        let sample_count: u32 = parts[2]
+                            .parse()
+                            .map_err(|_| ProtocolError::MalformedResponse(line.to_string()))?;
+                        Ok(ParsedResponse::StatusCompleted { sample_count })
+                    }
+                    "ERROR" => {
+                        // STATUS ERROR <reason>
+                        let reason = if parts.len() > 2 {
+                            parts[2..].join(" ")
+                        } else {
+                            "unknown".into()
+                        };
+                        Ok(ParsedResponse::Error(reason))
+                    }
+                    other => Ok(ParsedResponse::Error(other.to_string())),
                 }
             }
             "SAMPLE" => {
-                // SAMPLE <j0> <j1> ... <ts_us>
+                // SAMPLE <ts_us> <j0> <j1> ... <jN>  (collect direction, ts-first)
                 if parts.len() < 3 {
                     return Err(ProtocolError::MalformedResponse(line.to_string()));
                 }
-                let n_joint_values = parts.len() - 2; // skip "SAMPLE" and timestamp
-                let mut joints = Vec::with_capacity(n_joint_values);
-                for s in &parts[1..parts.len() - 1] {
-                    let val: f64 = s
-                        .parse()
-                        .map_err(|_| ProtocolError::MalformedResponse(line.to_string()))?;
-                    joints.push(val);
-                }
-                let timestamp: u64 = parts[parts.len() - 1]
+                let timestamp: u64 = parts[1]
                     .parse()
                     .map_err(|_| ProtocolError::MalformedResponse(line.to_string()))?;
+                let joints = parts[2..]
+                    .iter()
+                    .map(|s| {
+                        s.parse::<f64>()
+                            .map_err(|_| ProtocolError::MalformedResponse(line.to_string()))
+                    })
+                    .collect::<Result<Vec<f64>, _>>()?;
                 Ok(ParsedResponse::Sample(ExecutionSample {
                     timestamp_us: timestamp,
                     joints,
@@ -314,7 +364,10 @@ impl Esp32Protocol {
             .map_err(|e| ProtocolError::MalformedResponse(format!("invalid UTF-8: {e}")))?;
         match Self::parse_response(&line)? {
             ParsedResponse::Ok => {
-                self.firmware_state = FirmwareState::Executing;
+                self.firmware_state = FirmwareState::Executing {
+                    progress: 0.0,
+                    joints: Vec::new(),
+                };
                 Ok(())
             }
             ParsedResponse::Error(reason) => Err(ProtocolError::EspError(reason)),
@@ -324,20 +377,32 @@ impl Esp32Protocol {
 
     /// Query the current execution status.
     ///
-    /// Sends `STATUS` and parses the response. Returns `"RUNNING"`,
-    /// `"COMPLETED"`, or an error.
-    pub async fn query_status(&mut self) -> Result<String, ProtocolError> {
+    /// Sends `STATUS` and parses the response into a [`FirmwareState`]. The
+    /// wire token `RUNNING` is mapped internally to `Executing { progress, joints }`.
+    pub async fn query_status(&mut self) -> Result<FirmwareState, ProtocolError> {
         self.transport.send(&Self::format_line(&["STATUS"])).await?;
         let response = self.transport.receive().await?;
         let line = String::from_utf8(response)
             .map_err(|e| ProtocolError::MalformedResponse(format!("invalid UTF-8: {e}")))?;
         match Self::parse_response(&line)? {
-            ParsedResponse::StatusRunning => Ok("RUNNING".into()),
-            ParsedResponse::StatusCompleted => {
-                self.firmware_state = FirmwareState::Idle;
-                Ok("COMPLETED".into())
+            ParsedResponse::StatusIdle => Ok(FirmwareState::Idle),
+            ParsedResponse::StatusReceiving => Ok(FirmwareState::Receiving),
+            ParsedResponse::StatusReady => Ok(FirmwareState::Ready),
+            ParsedResponse::StatusRunning { progress, joints } => {
+                self.firmware_state = FirmwareState::Executing {
+                    progress,
+                    joints: joints.clone(),
+                };
+                Ok(FirmwareState::Executing { progress, joints })
             }
-            ParsedResponse::Error(reason) => Err(ProtocolError::EspError(reason)),
+            ParsedResponse::StatusCompleted { sample_count } => {
+                self.firmware_state = FirmwareState::Idle;
+                Ok(FirmwareState::Completed { sample_count })
+            }
+            // `STATUS ERROR <reason>` — a real firmware error state, NOT a
+            // transport/protocol failure. Return it so the backend maps it to
+            // EStop/Failed (design: ERROR → EStop).
+            ParsedResponse::Error(reason) => Ok(FirmwareState::Error(reason)),
             other => Err(ProtocolError::UnexpectedResponse(format!("{other:?}"))),
         }
     }
@@ -383,7 +448,7 @@ impl Esp32Protocol {
 
     /// The current firmware state as tracked by the host.
     pub fn firmware_state(&self) -> FirmwareState {
-        self.firmware_state
+        self.firmware_state.clone()
     }
 
     /// The firmware protocol version, if the handshake completed.
@@ -639,7 +704,9 @@ mod tests {
 
     #[test]
     fn parse_sample_line_with_two_joints() {
-        let line = "SAMPLE 0.0 0.5 1000\n";
+        // S1.1: collect-direction SAMPLE is timestamp-FIRST (firmware emits
+        // `SAMPLE <ts_us> <j0..jN>`, protocol doc line 113).
+        let line = "SAMPLE 1000 0.0 0.5\n";
         let parsed = Esp32Protocol::parse_response(line).unwrap();
 
         match parsed {
@@ -655,7 +722,7 @@ mod tests {
 
     #[test]
     fn parse_sample_line_with_six_joints() {
-        let line = "SAMPLE 0.1 0.2 0.3 0.4 0.5 0.6 5000000\n";
+        let line = "SAMPLE 5000000 0.1 0.2 0.3 0.4 0.5 0.6\n";
         let parsed = Esp32Protocol::parse_response(line).unwrap();
 
         match parsed {
@@ -669,9 +736,26 @@ mod tests {
         }
     }
 
+    /// S1.1 — the exact spec scenario: firmware emits
+    /// `SAMPLE 1000000 0.5 0.3 0.1 -0.1 0.0 0.0` and the host must parse
+    /// timestamp-first (currently the parser reads ts-LAST → RED).
+    #[test]
+    fn parse_sample_ts_first_spec_scenario() {
+        let line = "SAMPLE 1000000 0.5 0.3 0.1 -0.1 0.0 0.0\n";
+        let parsed = Esp32Protocol::parse_response(line).unwrap();
+
+        match parsed {
+            ParsedResponse::Sample(sample) => {
+                assert_eq!(sample.timestamp_us, 1_000_000);
+                assert_eq!(sample.joints, vec![0.5, 0.3, 0.1, -0.1, 0.0, 0.0]);
+            }
+            other => panic!("Expected Sample, got {other:?}"),
+        }
+    }
+
     #[test]
     fn parse_sample_line_zero_timestamp() {
-        let line = "SAMPLE 1.0 2.0 0\n";
+        let line = "SAMPLE 0 1.0 2.0\n";
         let parsed = Esp32Protocol::parse_response(line).unwrap();
 
         match parsed {
@@ -852,14 +936,63 @@ mod tests {
 
     #[test]
     fn parse_status_running() {
-        let parsed = Esp32Protocol::parse_response("STATUS RUNNING\n").unwrap();
-        assert_eq!(parsed, ParsedResponse::StatusRunning);
+        // S1.2: EXECUTING payload — `STATUS RUNNING <progress> <j0..jN>`.
+        // Wire token stays RUNNING; the host maps it to Executing internally.
+        let parsed = Esp32Protocol::parse_response("STATUS RUNNING 0.45 0.5 0.3 0.1 -0.1 0.0 0.0\n")
+            .unwrap();
+        match parsed {
+            ParsedResponse::StatusRunning { progress, joints } => {
+                assert!((progress - 0.45).abs() < 1e-9);
+                assert_eq!(joints, vec![0.5, 0.3, 0.1, -0.1, 0.0, 0.0]);
+            }
+            other => panic!("Expected StatusRunning, got {other:?}"),
+        }
     }
 
     #[test]
     fn parse_status_completed() {
-        let parsed = Esp32Protocol::parse_response("STATUS COMPLETED\n").unwrap();
-        assert_eq!(parsed, ParsedResponse::StatusCompleted);
+        // S1.2/S3.1: `STATUS COMPLETED <count>` — how many samples to request.
+        let parsed = Esp32Protocol::parse_response("STATUS COMPLETED 5\n").unwrap();
+        match parsed {
+            ParsedResponse::StatusCompleted { sample_count } => assert_eq!(sample_count, 5),
+            other => panic!("Expected StatusCompleted, got {other:?}"),
+        }
+    }
+
+    // ── S1.3 RED: STATUS full-state parse (IDLE/RECEIVING/READY + ERROR) ──
+
+    #[test]
+    fn parse_status_idle() {
+        let parsed = Esp32Protocol::parse_response("STATUS IDLE\n").unwrap();
+        assert_eq!(parsed, ParsedResponse::StatusIdle);
+    }
+
+    #[test]
+    fn parse_status_receiving() {
+        let parsed = Esp32Protocol::parse_response("STATUS RECEIVING\n").unwrap();
+        assert_eq!(parsed, ParsedResponse::StatusReceiving);
+    }
+
+    #[test]
+    fn parse_status_ready() {
+        let parsed = Esp32Protocol::parse_response("STATUS READY\n").unwrap();
+        assert_eq!(parsed, ParsedResponse::StatusReady);
+    }
+
+    #[test]
+    fn parse_status_error_with_reason() {
+        let parsed = Esp32Protocol::parse_response("STATUS ERROR MOTOR_FAULT\n").unwrap();
+        match parsed {
+            ParsedResponse::Error(reason) => assert_eq!(reason, "MOTOR_FAULT"),
+            other => panic!("Expected Error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_status_running_without_payload_is_malformed() {
+        // The payload is required once the firmware emits progress + joints.
+        let result = Esp32Protocol::parse_response("STATUS RUNNING\n");
+        assert!(result.is_err());
     }
 
     #[test]
