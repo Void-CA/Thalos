@@ -139,9 +139,13 @@ describe('PlanCharts — planning charts as siblings of AdvisorSection (S3)', ()
     await flushEffects()
 
     // Manipulability — line, N waypoints in → N points out (spec full series),
-    // value axis spanning [0, N-1], dataZoom slider + inside.
+    // value axis spanning [0, N-1], dataZoom slider + inside. Y values are the
+    // -log10 transform (hotfix: linear scale flattened real 6-order variation).
     const manip = optionOf(els[0])
-    expect(valuesOf(manip)).toEqual([0.2, 0.05, 0.3])
+    const yoshikawaExpected = [-Math.log10(0.2), -Math.log10(0.05), -Math.log10(0.3)]
+    valuesOf(manip).forEach((value, index) =>
+      expect(value).toBeCloseTo(yoshikawaExpected[index], 10),
+    )
     expect(manip.series[0].type).toBe('line')
     expect(manip.xAxis?.[0]).toMatchObject({ name: 'Waypoint', min: 0, max: 2 })
     const zooms = (manip.dataZoom ?? []).map((z) => z.type)

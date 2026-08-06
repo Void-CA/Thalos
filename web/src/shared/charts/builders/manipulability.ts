@@ -4,11 +4,13 @@
  * Input: canonical AnalysisReportWire (never a hand-built shape — I1).
  * Output: ChartModel. NO ECharts, NO React, NO DOM (O2).
  *
- * Presentation transformations only (I2): projects the yoshikawa series
- * verbatim, colors each waypoint by the severity of the observations anchored
- * there (Error → low, Warning → med, otherwise high — MANIP tokens), and adds
- * the dataZoom slider+inside the spec requires. It never interpolates or
- * recomputes manipulability values.
+ * Presentation transformations only (I2): projects the yoshikawa series as
+ * -log10 (hotfix manipulability-logscale — a linear axis flattens the real
+ * multi-order-of-magnitude variation against zero), colors each waypoint by
+ * the severity of the observations anchored there (Error → low, Warning → med,
+ * otherwise high — MANIP tokens), and adds the dataZoom slider+inside the spec
+ * requires. It never interpolates or recomputes manipulability values; the log
+ * transform is a pure presentation change.
  */
 
 import type {
@@ -17,6 +19,7 @@ import type {
 } from '@/shared/contracts/analysis-report'
 import { manipulabilitySeriesOf, waypointOf } from '@/shared/contracts/analysis-report'
 import type { ChartModel } from '../types'
+import { toLogScale } from './log-scale'
 
 type Severity = 'Error' | 'Warning' | 'Info'
 
@@ -28,6 +31,9 @@ type Severity = 'Error' | 'Warning' | 'Info'
  * threshold the backend classifies against.
  */
 export const YOSHIKAWA_THRESHOLD = 0.3
+
+/** YOSHIKAWA_THRESHOLD converted to the -log10 y axis: -log10(0.3) ≈ 0.523. */
+export const LOG_YOSHIKAWA_THRESHOLD = toLogScale(YOSHIKAWA_THRESHOLD)
 
 /** Worst observation severity per waypoint (Error > Warning > Info). */
 function worstSeverityByWaypoint(report: AnalysisReportWire): Map<number, Severity> {
@@ -68,21 +74,21 @@ export function manipulabilityBuilder(report: AnalysisReportWire): ChartModel {
   const severityByWaypoint = worstSeverityByWaypoint(report)
 
   const series = {
-    name: 'Manipulability',
+    name: '-log10(Manipulability)',
     type: 'line' as const,
-    data: points.map((point: ManipulabilityPointWire) => point.yoshikawa),
+    data: points.map((point: ManipulabilityPointWire) => toLogScale(point.yoshikawa)),
     color: 'chart-1',
-    smooth: true,
+    smooth: false,
     dataColors: points.map((point) =>
       manipColorOf(severityByWaypoint.get(point.waypoint)),
     ),
   }
 
   return {
-    title: 'Manipulability',
+    title: 'Manipulability (-log10)',
     series: [series],
     xAxis: [{ type: 'value', name: 'Waypoint', min: 0, max: Math.max(0, points.length - 1) }],
-    yAxis: [{ type: 'value', name: 'Yoshikawa' }],
+    yAxis: [{ type: 'value', name: '-log10(Yoshikawa)', scale: true }],
     dataZoom: [
       { type: 'inside', start: 0, end: 100 },
       { type: 'slider', start: 0, end: 100 },
@@ -90,8 +96,8 @@ export function manipulabilityBuilder(report: AnalysisReportWire): ChartModel {
     tooltip: { trigger: 'axis' },
     markLine: [
       {
-        yAxis: YOSHIKAWA_THRESHOLD,
-        label: `Threshold ${YOSHIKAWA_THRESHOLD.toFixed(1)}`,
+        yAxis: LOG_YOSHIKAWA_THRESHOLD,
+        label: `Threshold ${YOSHIKAWA_THRESHOLD} → ${LOG_YOSHIKAWA_THRESHOLD.toFixed(3)}`,
         color: 'severity.warning',
       },
     ],
