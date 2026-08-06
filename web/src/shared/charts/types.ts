@@ -19,12 +19,15 @@ export type SeriesType = 'line' | 'bar' | 'scatter'
 export type AxisType = 'category' | 'value' | 'time'
 
 /** One chart series. `data` is the Y axis; X is the array index projected
- *  onto the first xAxis (category label, value, or time). */
+ *  onto the first xAxis (category label, value, or time). A value may also be
+ *  an explicit `[x, y]` pair (ECharts scatter/line semantics) for temporal
+ *  series whose x is a timestamp, not the point index. */
 export interface ChartSeries {
   name: string
   type: SeriesType
-  /** Y values. X position is the array index. */
-  data: number[]
+  /** Y values — or explicit `[x, y]` pairs when the x is not the array index
+   *  (e.g. time-series charts). X position of a plain number is the index. */
+  data: Array<number | [number, number]>
   /** Series color — theme token reference (e.g. 'chart-1', 'severity.good'). */
   color?: string
   /** Per-point color token references, parallel to `data`. */
@@ -48,6 +51,9 @@ export interface AxisConfig {
   categories?: string[]
   min?: number
   max?: number
+  /** Minimum spacing between axis ticks (ECharts minInterval — value/time
+   *  axes). Keeps a temporal x axis from over-ticking at small time steps. */
+  minInterval?: number
   /** Do not force the origin into view — ECharts scale. Needed for log-scale
    *  axes where forcing 0 would flatten the data. */
   scale?: boolean

@@ -15,10 +15,10 @@
  * builder returns an explicit empty state (I3 additive).
  */
 
-import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
+import type { AnalysisReportWire, ManipulabilityPointWire } from '@/shared/contracts/analysis-report'
 import { manipulabilitySeriesOf, waypointOf } from '@/shared/contracts/analysis-report'
 import type { ChartModel } from '../types'
-import { YOSHIKAWA_THRESHOLD } from './manipulability'
+import { seriesXAxis, xCoordinateOf, YOSHIKAWA_THRESHOLD } from './manipulability'
 import { toLogScale } from './log-scale'
 
 /**
@@ -65,7 +65,7 @@ function detColorOf(severity: Severity | undefined): string {
 /** Line chart of per-waypoint det(J·Jᵀ) with dataZoom + threshold markLine. */
 export function determinantBuilder(report: AnalysisReportWire): ChartModel {
   const points = manipulabilitySeriesOf(report).filter(
-    (point): point is { waypoint: number; yoshikawa: number; det_jtj: number } =>
+    (point): point is ManipulabilityPointWire & { det_jtj: number } =>
       point.det_jtj !== undefined,
   )
   if (points.length === 0) {
@@ -77,7 +77,9 @@ export function determinantBuilder(report: AnalysisReportWire): ChartModel {
   const series = {
     name: '-log10(Det(J·Jᵀ))',
     type: 'line' as const,
-    data: points.map((point) => toLogScale(point.det_jtj)),
+    data: points.map(
+      (point) => [xCoordinateOf(point), toLogScale(point.det_jtj)] as [number, number],
+    ),
     color: 'chart-2',
     smooth: false,
     dataColors: points.map((point) => detColorOf(severityByWaypoint.get(point.waypoint))),
@@ -86,7 +88,7 @@ export function determinantBuilder(report: AnalysisReportWire): ChartModel {
   return {
     title: 'Jacobian determinant (-log10)',
     series: [series],
-    xAxis: [{ type: 'value', name: 'Waypoint', min: 0, max: Math.max(0, points.length - 1) }],
+    xAxis: [seriesXAxis(points)],
     yAxis: [{ type: 'value', name: '-log10(Det(J·Jᵀ))', scale: true }],
     dataZoom: [
       { type: 'inside', start: 0, end: 100 },

@@ -85,6 +85,12 @@ export interface ProblemRegionWire {
 export interface ManipulabilityPointWire {
   /** 0-based waypoint index in the analyzed plan. */
   waypoint: number
+  /** Trajectory time of the waypoint in seconds (additive — OPTIONAL for
+   *  backward compatibility: older backends omit it, so consumers fall back
+   *  to the waypoint index on the x axis). The honest temporal scale: waypoint
+   *  index compresses dense segments (e.g. a trapezoidal MoveJ samples at 4×
+   *  the spacing of a MoveL). */
+  timestamp?: number
   /** Yoshikawa manipulability measure at that waypoint. */
   yoshikawa: number
   /** Jacobian determinant det(J·Jᵀ) at that waypoint (additive — OPTIONAL for

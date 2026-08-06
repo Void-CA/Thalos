@@ -18,7 +18,7 @@ import type {
   ManipulabilityPointWire,
 } from '@/shared/contracts/analysis-report'
 import { manipulabilitySeriesOf, waypointOf } from '@/shared/contracts/analysis-report'
-import type { ChartModel } from '../types'
+import type { AxisConfig, ChartModel } from '../types'
 import { toLogScale } from './log-scale'
 
 type Severity = 'Error' | 'Warning' | 'Info'
@@ -64,6 +64,31 @@ function manipColorOf(severity: Severity | undefined): string {
   }
 }
 
+/** X coordinate of a series point: trajectory time in seconds when the wire
+ *  carries it, else the waypoint index (hotfix temporal-axis fallback for
+ *  payloads from older backends that predate the timestamp field). */
+export function xCoordinateOf(point: ManipulabilityPointWire): number {
+  return point.timestamp ?? point.waypoint
+}
+
+/** X axis for a per-waypoint series. With timestamps it is an honest temporal
+ *  scale (`Time (s)`, minInterval 0.5 so dense trapezoidal samples don't
+ *  over-tick); without them it falls back to the waypoint index axis of older
+ *  payloads — a pure compatibility projection, never data synthesis. */
+export function seriesXAxis(points: ManipulabilityPointWire[]): AxisConfig {
+  const hasTimestamps = points.some((point) => point.timestamp !== undefined)
+  if (!hasTimestamps) {
+    return { type: 'value', name: 'Waypoint', min: 0, max: Math.max(0, points.length - 1) }
+  }
+  return {
+    type: 'value',
+    name: 'Time (s)',
+    min: 0,
+    max: Math.max(...points.map(xCoordinateOf)),
+    minInterval: 0.5,
+  }
+}
+
 /** Line chart of per-waypoint yoshikawa manipulability with dataZoom. */
 export function manipulabilityBuilder(report: AnalysisReportWire): ChartModel {
   const points = manipulabilitySeriesOf(report)
@@ -76,7 +101,12 @@ export function manipulabilityBuilder(report: AnalysisReportWire): ChartModel {
   const series = {
     name: '-log10(Manipulability)',
     type: 'line' as const,
-    data: points.map((point: ManipulabilityPointWire) => toLogScale(point.yoshikawa)),
+    data: points.map(
+      (point: ManipulabilityPointWire) => [xCoordinateOf(point), toLogScale(point.yoshikawa)] as [
+        number,
+        number,
+      ],
+    ),
     color: 'chart-1',
     smooth: false,
     dataColors: points.map((point) =>
@@ -87,7 +117,7 @@ export function manipulabilityBuilder(report: AnalysisReportWire): ChartModel {
   return {
     title: 'Manipulability (-log10)',
     series: [series],
-    xAxis: [{ type: 'value', name: 'Waypoint', min: 0, max: Math.max(0, points.length - 1) }],
+    xAxis: [seriesXAxis(points)],
     yAxis: [{ type: 'value', name: '-log10(Yoshikawa)', scale: true }],
     dataZoom: [
       { type: 'inside', start: 0, end: 100 },

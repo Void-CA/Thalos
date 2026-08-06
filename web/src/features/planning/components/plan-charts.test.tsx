@@ -89,7 +89,7 @@ function baseReport(overrides: Partial<AnalysisReportWire> = {}): AnalysisReport
  *  option — ECharts merges many defaults). */
 interface RenderedSeries {
   type?: string
-  data: Array<number | { value: number; itemStyle?: { color?: string } }>
+  data: Array<number | { value: number | [number, number]; itemStyle?: { color?: string } }>
 }
 interface RenderedOption {
   series: RenderedSeries[]
@@ -105,11 +105,13 @@ function optionOf(el: HTMLElement): RenderedOption {
 }
 
 /** ChartModel data may be wrapped as {value, itemStyle} (dataColors path) or
- *  plain numbers — normalize to the numeric Y values. */
+ *  plain numbers — normalize to the numeric Y values. A wrapped value may also
+ *  be an explicit [x, y] pair (temporal axis), unwrapped to its y component. */
 function valuesOf(option: RenderedOption, seriesIndex = 0): number[] {
-  return option.series[seriesIndex].data.map((point) =>
-    typeof point === 'object' ? point.value : point,
-  )
+  return option.series[seriesIndex].data.map((point) => {
+    if (typeof point !== 'object') return point
+    return Array.isArray(point.value) ? point.value[1] : point.value
+  })
 }
 
 /** The lazy ECharts chunk resolves and mount effects run outside act(); one
@@ -229,7 +231,10 @@ describe('PlanCharts — planning charts as siblings of AdvisorSection (S3)', ()
       realMetricsBuilder(report),
     ]
     expected.forEach((model, index) => {
-      expect(valuesOf(optionOf(els[index]))).toEqual(model.series[0].data)
+      const yValues = model.series[0].data.map((point) =>
+        Array.isArray(point) ? point[1] : point,
+      )
+      expect(valuesOf(optionOf(els[index]))).toEqual(yValues)
     })
   })
 })
