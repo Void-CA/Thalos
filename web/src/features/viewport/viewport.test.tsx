@@ -56,6 +56,26 @@ describe('Viewport — retry button on load error (resilience-matrix spec)', () 
     expect(useSceneStore.getState().error).toBeNull()
   })
 
+  it('shows the catalog CTA when the scene load fails with a not_found code (matrix Esc 5)', () => {
+    // Robot inexistente: el backend responde 404 not_found; el ErrorBox debe
+    // ofrecer "Volver al catálogo" (describeError code→CTA), no un Reintentar genérico.
+    act(() => {
+      useSceneStore.setState({
+        error: 'Robot not found',
+        errorCode: 'not_found',
+        loading: false,
+        data: null,
+      } as never)
+    })
+    render(<Viewport />)
+    // describeError renderiza el CTA del código not_found + el mensaje del backend.
+    expect(screen.getByText('Robot not found — return to the catalog — Robot not found')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Volver al catálogo' })).toBeInTheDocument()
+    // Coherent state: no spinner, retry not mislabeled.
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Loading scene...')).not.toBeInTheDocument()
+  })
+
   it('shows no dead Fit Robot button when the scene is loaded (visual audit V2)', () => {
     act(() => {
       useSceneStore.setState({ error: null, loading: false, data: { frames: [] } as never } as never)

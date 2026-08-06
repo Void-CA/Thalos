@@ -43,6 +43,7 @@ function fmtDelta(meters: number): string {
 export function Viewport() {
   const loading = useSceneStore(s => s.loading)
   const error = useSceneStore(s => s.error)
+  const errorCode = useSceneStore(s => s.errorCode)
   const hasData = useSceneStore(s => s.data !== null)
   const viewMode = useSceneStore(s => s.trajectoryViewMode)
   const originalWp = useSceneStore(s => s.activePlan?.visualization?.waypoints)
@@ -60,7 +61,7 @@ export function Viewport() {
       <div className="flex flex-col items-center justify-center h-full p-4">
         <div className="w-full max-w-sm">
           <ErrorBox
-            error={{ message: error, code: undefined }}
+            error={{ message: error, code: errorCode ?? undefined }}
             onRetry={() => {
               // Retry the scene load immediately (resilience-matrix spec):
               // clear the error so a success can paint, then re-fire GET /scene.

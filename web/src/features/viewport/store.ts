@@ -22,6 +22,10 @@ export interface SceneState {
   activeTcp: ToolFrame | null
   loading: boolean
   error: string | null
+  /** Machine-readable error code from the backend (resilience-matrix spec).
+   *  Kept separate so ErrorBox can render the correct CTA (e.g. not_found →
+   *  "Volver al catálogo") without breaking string-only callers. */
+  errorCode: string | null
   trajectoryColorMode: TrajectoryColorMode
 }
 
@@ -37,7 +41,9 @@ interface SceneActions {
   setOptimizedPositions: (positions: number[][] | null) => void
   setPreviewPositions: (positions: number[][] | null) => void
   setLoading: (loading: boolean) => void
-  setError: (error: string | null) => void
+  /** Preserve the machine-readable code so ErrorBox renders the right CTA.
+   *  `setError(msg)` keeps code as-is; `setError(msg, code)` updates both. */
+  setError: (error: string | null, code?: string | null) => void
   reset: () => void
 }
 
@@ -56,6 +62,7 @@ const INITIAL: SceneState = {
   activeTcp: null,
   loading: false,
   error: null,
+  errorCode: null,
   trajectoryColorMode: 'segment',
 }
 
@@ -107,6 +114,10 @@ export const useSceneStore = create<SceneState & SceneActions>((set) => ({
   setOptimizedPositions: (optimizedPositions) => set({ optimizedPositions }),
   setPreviewPositions: (previewPositions) => set({ previewPositions }),
   setLoading: (loading) => set({ loading }),
-  setError: (error) => set({ error, loading: false }),
+  setError: (error, code) => set((state) => ({
+    error,
+    errorCode: code === undefined ? state.errorCode : code,
+    loading: false,
+  })),
   reset: () => set(INITIAL),
 }))
