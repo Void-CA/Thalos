@@ -232,20 +232,21 @@ describe('top-bar — nav links reflect guard state (slice 5, task 5.2)', () => 
 })
 
 describe('the analysis check left the programming workspace (evaluation-workspace hotfix)', () => {
-  it('task workspace has only the two authoring tabs — no Analysis tab', () => {
+  it('task workspace has the three authoring tabs — no Analysis tab', () => {
     seedPrerequisites()
     renderRouter(['/task'])
     const main = within(screen.getByRole('main'))
-    expect(main.getByRole('tab', { name: 'Tasks' })).toBeInTheDocument()
+    expect(main.getByRole('tab', { name: 'Task' })).toBeInTheDocument()
     expect(main.getByRole('tab', { name: 'Motion' })).toBeInTheDocument()
+    expect(main.getByRole('tab', { name: 'Code' })).toBeInTheDocument()
     expect(main.queryByRole('tab', { name: 'Analysis' })).not.toBeInTheDocument()
   })
 
-  it('renders the Motion content under its tab (Tasks is the default)', () => {
+  it('renders the Motion content under its tab (Task is the default)', () => {
     seedPrerequisites()
     renderRouter(['/task'])
     const main = within(screen.getByRole('main'))
-    // The Tasks tab is the default — it renders the TaskEditor (compile seed
+    // The Task tab is the default — it renders the TaskEditor (compile seed
     // makes the header action "Send to Execution"; the Add action is stable).
     expect(main.getByRole('button', { name: 'Add' })).toBeInTheDocument()
     expect(main.getByRole('heading', { name: 'Diagnostics' })).toBeInTheDocument()

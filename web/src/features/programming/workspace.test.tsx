@@ -11,13 +11,13 @@ import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 
 /**
  * ProgrammingWorkspace — the UNIFIED programming area (hotfix: /task +
- * /planning merged into ONE workspace under /task, stage 3). The two ways to
- * author an order — semantic editor (Tasks, with internal Visual/Text) and
- * motion program by segments (Motion) — are tabs of the same workspace,
- * communicating that they are ONE interaction medium.
+ * /planning merged into ONE workspace under /task, stage 3). The ways to
+ * author an order — semantic editor in visual mode (Task), motion program by
+ * segments (Motion), and the semantic editor in TEXT mode (Code) — are tabs
+ * of the same workspace, communicating that they are ONE interaction medium.
  *
  * HOTFIX (evaluation-workspace): the Analysis tab was REMOVED — the analysis
- * check is now the /evaluation VISTA. This suite pins the two-tab layout.
+ * check is now the /evaluation VISTA. This suite pins the three-tab layout.
  */
 
 const report: AnalysisReportWire = {
@@ -54,21 +54,31 @@ beforeEach(() => {
 })
 afterEach(() => cleanup())
 
-describe('ProgrammingWorkspace — unified tabs (Tasks | Motion)', () => {
-  it('renders the two authoring tabs — the analysis tab is gone (moved to /evaluation)', () => {
+describe('ProgrammingWorkspace — unified tabs (Task | Motion | Code)', () => {
+  it('renders the three authoring tabs — the analysis tab is gone (moved to /evaluation)', () => {
     renderWorkspace()
-    expect(screen.getByRole('tab', { name: 'Tasks' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Task' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Motion' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Code' })).toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Analysis' })).not.toBeInTheDocument()
   })
 
-  it('Tasks is the default tab — the TaskEditor (Visual/Text) + Diagnostics', () => {
+  it('Task is the default tab — the TaskEditor (visual mode) + Diagnostics', () => {
     renderWorkspace()
     // TaskEditor presence: the unified compile action + operation rows.
     expect(screen.getByRole('button', { name: 'Compile' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Diagnostics' })).toBeInTheDocument()
     expect(screen.getByText(/No compile result/)).toBeInTheDocument()
+  })
+
+  it('Code tab mounts the TaskEditor in text mode — canonical textarea, no rows', () => {
+    renderWorkspace()
+    fireEvent.click(screen.getByRole('tab', { name: 'Code' }))
+    const textarea = screen.getByTestId('program-textarea') as HTMLTextAreaElement
+    expect(textarea).toBeInTheDocument()
+    expect(textarea.value).toBe('pick bolt-1\nwait 1s\nplace bolt-1 at tray-1\nhome')
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
   })
 
   it('shows zero Scene editing UI in the programming workspace (SceneEditor lives in /scene)', () => {
