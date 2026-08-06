@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import '@testing-library/jest-dom/vitest'
-import { RegionInspector } from './region-inspector'
+import { RegionInspector, manipulabilityStatsInRange } from './region-inspector'
 import { useAnalysisStore } from '../store'
 import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 
@@ -29,8 +29,16 @@ const report: AnalysisReportWire = {
       kind: 'singularity',
       severity: 'critical',
       waypoint_start: 10,
-      waypoint_end: 20,
-      waypoint_count: 11,
+      waypoint_end: 12,
+      waypoint_count: 3,
+      metrics: {
+        waypoint_count: 3,
+        average_value: 0.42,
+        min_value: 0.3,
+        max_value: 0.55,
+        error_count: 1,
+        warning_count: 0,
+      },
       explanation: {
         cause: 'Singularity near waypoint 10',
         consequence: 'Tool flips near the goal',
@@ -38,6 +46,13 @@ const report: AnalysisReportWire = {
         confidence: 0.9,
       },
     },
+  ],
+  // In-range points 10/11/12 → avg 0.2, min 0.1; out-of-range 30 → excluded.
+  manipulability_series: [
+    { waypoint: 10, yoshikawa: 0.1 },
+    { waypoint: 11, yoshikawa: 0.2 },
+    { waypoint: 12, yoshikawa: 0.3 },
+    { waypoint: 30, yoshikawa: 0.9 },
   ],
 }
 
@@ -77,6 +92,67 @@ describe('RegionInspector (PR6 6.5 — zero per-strategy buttons)', () => {
 
     expect(screen.getByText('Singularity near waypoint 10')).toBeInTheDocument()
     expect(screen.getByText('Tool flips near the goal')).toBeInTheDocument()
-    expect(screen.getByText('wp10–wp20')).toBeInTheDocument()
+    expect(screen.getByText('wp10–wp12')).toBeInTheDocument()
+  })
+
+  it('enriches the region detail with manipulability (Jacobian) stats from the series', () => {
+    seedSelectedRegion()
+    renderInspector()
+
+    // Yoshikawa index IS a jacobian property (det(J·Jᵀ)) — the enriched panel
+    // must surface it per region, not just the singular-value avg/min/max.
+    expect(
+      screen.getByRole('heading', { name: 'Manipulability (Jacobian)' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('0.2000')).toBeInTheDocument() // average of in-range points
+    expect(screen.getByText('0.1000')).toBeInTheDocument() // min of in-range points
+    expect(screen.getByText('3 of 3 analyzed')).toBeInTheDocument() // coverage of the span
+    // Out-of-range waypoint 30 must NOT leak into the region stats.
+    expect(screen.queryByText('0.9000')).not.toBeInTheDocument()
+  })
+
+  it('still shows the singular-value metrics with context labels', () => {
+    seedSelectedRegion()
+    renderInspector()
+    expect(screen.getByText('0.4200')).toBeInTheDocument()
+    expect(screen.getByText('0.3000')).toBeInTheDocument()
+    expect(screen.getByText('0.5500')).toBeInTheDocument()
+  })
+
+  it('renders recommended strategies as read-only chips and the confidence', () => {
+    seedSelectedRegion()
+    renderInspector()
+    expect(screen.getByText('Joint centering')).toBeInTheDocument()
+    expect(screen.getByText('Lift TCP')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Joint centering/i })).not.toBeInTheDocument()
+    expect(screen.getByText('90% confidence')).toBeInTheDocument()
+  })
+
+  it('handles a region without manipulability coverage gracefully', () => {
+    useAnalysisStore.setState({
+      report: { ...report, manipulability_series: [] },
+      selectedRegionId: 7,
+    })
+    renderInspector()
+    expect(screen.getByText(/no manipulability data/i)).toBeInTheDocument()
+  })
+})
+
+describe('manipulabilityStatsInRange — pure aggregation', () => {
+  it('aggregates only the waypoints inside the region span', () => {
+    const series = [
+      { waypoint: 10, yoshikawa: 0.1 },
+      { waypoint: 11, yoshikawa: 0.2 },
+      { waypoint: 12, yoshikawa: 0.3 },
+      { waypoint: 30, yoshikawa: 0.9 },
+    ]
+    const stats = manipulabilityStatsInRange(series, 10, 12)
+    expect(stats?.count).toBe(3)
+    expect(stats?.average).toBeCloseTo(0.2)
+    expect(stats?.min).toBeCloseTo(0.1)
+  })
+
+  it('returns null when the span has no covered waypoints', () => {
+    expect(manipulabilityStatsInRange([{ waypoint: 0, yoshikawa: 1 }], 5, 10)).toBeNull()
   })
 })

@@ -1,5 +1,39 @@
 import { useAnalysisStore, useSelectedRegion } from '../store'
+import { manipulabilitySeriesOf } from '@/shared/contracts/analysis-report'
+import type { ManipulabilityPointWire } from '@/shared/contracts/analysis-report'
 import { X } from 'lucide-react'
+
+/** Aggregated Yoshikawa manipulability over a waypoint span. */
+export interface ManipulabilityStats {
+  count: number
+  /** Fraction of the region's waypoints that carry a measured value. */
+  coverage: number
+  average: number
+  min: number
+}
+
+/**
+ * Manipulability (Yoshikawa) stats over the region's waypoint span — a
+ * JACOBIAN property (det(J·Jᵀ)) derived from the canonical
+ * `manipulability_series` (I2: the UI never recomputes it, it aggregates the
+ * backend's per-waypoint projection). Excludes out-of-range points.
+ */
+export function manipulabilityStatsInRange(
+  series: ManipulabilityPointWire[],
+  start: number,
+  end: number,
+): ManipulabilityStats | null {
+  const covered = series.filter((p) => p.waypoint >= start && p.waypoint <= end)
+  if (covered.length === 0) return null
+  const values = covered.map((p) => p.yoshikawa)
+  const totalWaypoints = end - start + 1
+  return {
+    count: covered.length,
+    coverage: covered.length / Math.max(totalWaypoints, 1),
+    average: values.reduce((a, b) => a + b, 0) / values.length,
+    min: Math.min(...values),
+  }
+}
 
 /**
  * RegionInspector — read-only contextual detail panel for the selected
@@ -10,16 +44,30 @@ import { X } from 'lucide-react'
  * strategy: `RecommendationRow` (planning workspace) is the only projection of
  * recommendations and owns preview/apply/undo. This panel stays as the
  * drill-down detail view (selectRegion → RegionInspector).
+ *
+ * Evaluation hotfix CDD: enriched with what happened AND why — jacobian
+ * manipulability (Yoshikawa, det(J·Jᵀ)) over the region span, the concrete
+ * cause/consequence, and read-only recommended strategies + confidence.
  */
 export function RegionInspector() {
   const region = useSelectedRegion()
-  const selectRegion = useAnalysisStore(s => s.selectRegion)
+  const report = useAnalysisStore((s) => s.report)
+  const selectRegion = useAnalysisStore((s) => s.selectRegion)
 
   if (!region) return null
 
   const wpRange = region.waypoint_end > region.waypoint_start
     ? `wp${region.waypoint_start}–wp${region.waypoint_end}`
     : `wp${region.waypoint_start}`
+
+  // Region derives from the report, so when `region` is set the report is too —
+  // default the series to [] defensively for the typechecker.
+  const series = report ? manipulabilitySeriesOf(report) : []
+  const manipulability = manipulabilityStatsInRange(
+    series,
+    region.waypoint_start,
+    region.waypoint_end,
+  )
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3">
@@ -31,12 +79,12 @@ export function RegionInspector() {
         </button>
       </div>
 
-      {/* Cause */}
+      {/* Cause — WHAT happened, stated by the backend explanation. */}
       {region.explanation?.cause && (
         <p className="text-sm font-semibold text-foreground">{region.explanation.cause}</p>
       )}
 
-      {/* Metrics */}
+      {/* Singular-value metrics (min/max/avg of the analyzed quantity). */}
       {region.metrics && (
         <div>
           <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Metrics</h4>
@@ -54,7 +102,34 @@ export function RegionInspector() {
         </div>
       )}
 
-      {/* Impact */}
+      {/* Manipulability — the JACOBIAN property that led to the problem
+          (Yoshikawa index = det(J·Jᵀ), lower ⇒ closer to singularity). */}
+      <div>
+        <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+          Manipulability (Jacobian)
+        </h4>
+        {manipulability ? (
+          <>
+            <p className="text-[10px] text-muted-foreground mb-1.5">
+              Yoshikawa index = det(J·Jᵀ) — lower means closer to singularity.
+            </p>
+            <div className="grid grid-cols-3 gap-1.5">
+              <MetricCard label="Average" value={fmt(manipulability.average)} />
+              <MetricCard label="Min" value={fmt(manipulability.min)} />
+              <MetricCard
+                label="Coverage"
+                value={`${manipulability.count} of ${region.waypoint_count} analyzed`}
+              />
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            No manipulability data for this region.
+          </p>
+        )}
+      </div>
+
+      {/* Impact — why it matters. */}
       {region.explanation?.consequence && (
         <div>
           <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Impact</h4>
@@ -62,10 +137,33 @@ export function RegionInspector() {
         </div>
       )}
 
-      {/* Location */}
-      <div>
-        <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Location</h4>
-        <span className="text-xs font-mono text-primary bg-primary-weak px-2 py-0.5 rounded">{wpRange}</span>
+      {/* Strategies — read-only chips (PR6 6.5: zero dispatch). */}
+      {region.explanation?.recommended_strategies?.length ? (
+        <div>
+          <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+            Recommended strategies
+          </h4>
+          <div className="flex flex-wrap gap-1.5">
+            {region.explanation.recommended_strategies.map((strategy) => (
+              <span key={strategy} className="rounded-md border border-border bg-secondary/30 px-2 py-0.5 text-[10px] font-medium text-foreground">
+                {strategy}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Location + confidence. */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Location</h4>
+          <span className="text-xs font-mono text-primary bg-primary-weak px-2 py-0.5 rounded">{wpRange}</span>
+        </div>
+        {region.explanation?.confidence != null && (
+          <span className="text-[10px] text-muted-foreground">
+            {Math.round(region.explanation.confidence * 100)}% confidence
+          </span>
+        )}
       </div>
     </div>
   )
