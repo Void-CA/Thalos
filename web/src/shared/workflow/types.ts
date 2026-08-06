@@ -87,7 +87,7 @@ export type WorkspaceName =
   | 'robot'
   | 'scene'
   | 'task'
-  | 'planning'
+  | 'evaluation'
   | 'execution'
   | 'sessions'
   | 'knowledge'
@@ -128,6 +128,14 @@ export interface WorkspaceEntry {
    * Default 'stage' — existing entries without an explicit kind stay stages.
    */
   kind?: 'stage' | 'tool'
+  /**
+   * Shell layout mode (hotfix evaluation-workspace): 'panel' renders the
+   * workspace beside the persistent viewport (default — every area today);
+   * 'full' takes the whole body so the workspace IS the focus and the
+   * viewport is not rendered. Used by /evaluation: the pre-execution decision
+   * must not compete with the 3D view for attention.
+   */
+  layout?: 'panel' | 'full'
 }
 
 /**

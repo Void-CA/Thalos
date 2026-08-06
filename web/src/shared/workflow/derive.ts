@@ -92,10 +92,10 @@ export function deriveWorkflowState(snapshot: WorkflowSnapshot): WorkflowState {
 // ── Stepper + status derivations (global-stepper spec) ──────────────────────
 //
 // The stepper is the workflow pipeline (Robot → Escena → Programación →
-// Planificación → Ejecución → Sesiones) and everything it shows derives from
-// the registry + WorkflowState: stage order and labels come from
-// WORKSPACE_REGISTRY (the `stage` field), stage states from the flags. No
-// per-workspace strings live in the views.
+// Evaluación → Ejecución → Sesiones — 6 steps since the evaluation-workspace
+// hotfix) and everything it shows derives from the registry + WorkflowState:
+// stage order and labels come from WORKSPACE_REGISTRY (the `stage` field),
+// stage states from the flags. No per-workspace strings live in the views.
 
 /**
  * Human-readable phrase per workflow flag — the ONLY string source for blocked

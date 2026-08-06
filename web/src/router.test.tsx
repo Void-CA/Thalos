@@ -123,8 +123,8 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('layout route: persistent viewport (invariant #1)', () => {
-  it('keeps the viewport mounted when navigating /task → /planning', async () => {
-    seedPrerequisites() // robotLoaded + compiled → /task and /planning pass guards
+  it('keeps the viewport mounted when navigating /task → /execution', async () => {
+    seedPrerequisites({ executable: true }) // robotLoaded + compiled → guards pass
     const { router } = renderRouter(['/task'])
 
     // Full shell resolves at /task; viewport mounted exactly once.
@@ -133,21 +133,21 @@ describe('layout route: persistent viewport (invariant #1)', () => {
     expect(screen.getByRole('link', { name: 'Programación' })).toHaveAttribute('aria-current', 'page')
 
     // URL-driven navigation via the TopBar nav link.
-    fireEvent.click(screen.getByRole('link', { name: 'Planificación' }))
-    await waitFor(() => expect(router.state.location.pathname).toBe('/planning'))
+    fireEvent.click(screen.getByRole('link', { name: 'Ejecución' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/execution'))
 
     // Only the Outlet content changed; the viewport was never unmounted/remounted.
-    expect(screen.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Planificación' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('heading', { name: 'Execution' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ejecución' })).toHaveAttribute('aria-current', 'page')
     expect(viewportMetrics.mounts).toBe(1)
     expect(viewportMetrics.unmounts).toBe(0)
   })
 
   it('supports browser back/forward while the viewport persists', async () => {
-    seedPrerequisites()
-    const { router } = renderRouter(['/', '/task', '/planning'])
+    seedPrerequisites({ executable: true })
+    const { router } = renderRouter(['/', '/task', '/execution'])
 
-    expect(router.state.location.pathname).toBe('/planning')
+    expect(router.state.location.pathname).toBe('/execution')
 
     act(() => {
       router.navigate(-1)
@@ -159,8 +159,8 @@ describe('layout route: persistent viewport (invariant #1)', () => {
     act(() => {
       router.navigate(1)
     })
-    await waitFor(() => expect(router.state.location.pathname).toBe('/planning'))
-    expect(screen.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/execution'))
+    expect(screen.getByRole('heading', { name: 'Execution' })).toBeInTheDocument()
     expect(viewportMetrics.mounts).toBe(1)
     expect(viewportMetrics.unmounts).toBe(0)
   })
@@ -206,8 +206,8 @@ describe('hidden routes render placeholders (no 404)', () => {
 
 describe('top-bar — nav links reflect guard state (slice 5, task 5.2)', () => {
   it('disables links whose requirements are unmet (aria-disabled, no navigation)', async () => {
-    // Robot loaded (sceneValid=true) but NOT compiled → Planning (requires
-    // sceneValid) navigates; Execution (requires compiled) must not.
+    // Robot loaded (sceneValid=true) but NOT compiled → Execution (requires
+    // executable) must not navigate; Sesiones (guard relaxed) must.
     act(() => {
       useSceneStore.setState({ data: {} as SceneData })
       useSemanticEditor.setState({ result: null, dirty: 0 })
@@ -215,136 +215,116 @@ describe('top-bar — nav links reflect guard state (slice 5, task 5.2)', () => 
       useAnalysisStore.setState({ report: null })
     })
     const { router } = renderRouter(['/task'])
-    const planningLink = screen.getByRole('link', { name: 'Planificación' })
-    expect(planningLink).not.toHaveAttribute('aria-disabled')
     const executionLink = screen.getByRole('link', { name: 'Ejecución' })
     expect(executionLink).toHaveAttribute('aria-disabled', 'true')
     fireEvent.click(executionLink)
     expect(router.state.location.pathname).toBe('/task')
+    const sessionsLink = screen.getByRole('link', { name: 'Sesiones' })
+    expect(sessionsLink).not.toHaveAttribute('aria-disabled')
   })
 
   it('keeps links enabled when their requirements are met', () => {
     seedPrerequisites({ executable: true })
     renderRouter(['/task'])
-    expect(screen.getByRole('link', { name: 'Planificación' })).not.toHaveAttribute('aria-disabled')
     expect(screen.getByRole('link', { name: 'Ejecución' })).not.toHaveAttribute('aria-disabled')
+    expect(screen.getByRole('link', { name: 'Sesiones' })).not.toHaveAttribute('aria-disabled')
   })
 })
 
-describe('analysis content lives inside planning (slice 6 — absorbed section)', () => {
-  it('planning workspace has no "Analyze trajectory" cross-nav button', () => {
+describe('the analysis check left the programming workspace (evaluation-workspace hotfix)', () => {
+  it('task workspace has the three authoring tabs — no Analysis tab', () => {
     seedPrerequisites()
-    renderRouter(['/planning'])
+    renderRouter(['/task'])
     const main = within(screen.getByRole('main'))
-    expect(screen.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
-    expect(main.queryByRole('button', { name: 'Analyze trajectory' })).not.toBeInTheDocument()
+    expect(main.getByRole('tab', { name: 'Task' })).toBeInTheDocument()
+    expect(main.getByRole('tab', { name: 'Motion' })).toBeInTheDocument()
+    expect(main.getByRole('tab', { name: 'Code' })).toBeInTheDocument()
+    expect(main.queryByRole('tab', { name: 'Analysis' })).not.toBeInTheDocument()
   })
 
-  it('renders the analysis content under the Analysis tab (PR2 tabs layout)', () => {
+  it('renders the Motion content under its tab (Task is the default)', () => {
     seedPrerequisites()
-    renderRouter(['/planning'])
+    renderRouter(['/task'])
     const main = within(screen.getByRole('main'))
-    // Motion Program tab is the default — its panel shows both sections.
-    expect(main.getByRole('heading', { name: 'Motion Program' })).toBeInTheDocument()
+    // The Task tab is the default — it renders the TaskEditor (compile seed
+    // makes the header action "Send to Execution"; the Add action is stable).
+    expect(main.getByRole('button', { name: 'Add' })).toBeInTheDocument()
+    expect(main.getByRole('heading', { name: 'Diagnostics' })).toBeInTheDocument()
+    // The Motion + Trajectory Color sections live under their own tab.
+    fireEvent.click(main.getByRole('tab', { name: 'Motion' }))
     expect(main.getByRole('heading', { name: 'Trajectory Color' })).toBeInTheDocument()
-    // The analysis content moved into the Analysis tab (workspace-analysis spec).
-    fireEvent.click(main.getByRole('tab', { name: 'Analysis' }))
-    expect(main.getByRole('heading', { name: 'Analysis' })).toBeInTheDocument()
   })
 
-  it('shows the simple empty state when nothing is analyzed yet (no cross-nav)', () => {
+  it('renders NO analysis content inside the programming workspace anymore', () => {
+    seedPrerequisites({ analyzed: true })
+    renderRouter(['/task'])
+    const main = within(screen.getByRole('main'))
+    expect(main.queryByText('No analysis available')).not.toBeInTheDocument()
+    expect(
+      main.queryByText(/Compile and preview a motion program to see analysis/),
+    ).not.toBeInTheDocument()
+  })
+})
+
+describe('the /evaluation route renders the pre-execution EVALUACIÓN', () => {
+  it('shows an Evaluación link in the top-bar between Programación and Ejecución', () => {
     seedPrerequisites()
-    renderRouter(['/planning'])
-    const main = within(screen.getByRole('main'))
-    fireEvent.click(main.getByRole('tab', { name: 'Analysis' }))
-    expect(main.getByText('Compile and preview a motion program to see analysis')).toBeInTheDocument()
-    expect(main.queryByRole('button', { name: 'Planning' })).not.toBeInTheDocument()
+    renderRouter(['/task'])
+    const links = screen.getAllByRole('link').map((l) => l.textContent?.trim() ?? '')
+    const idx = (name: string) => links.indexOf(name)
+    expect(idx('Programación')).toBeGreaterThanOrEqual(0)
+    expect(idx('Evaluación')).toBe(idx('Programación') + 1)
+    expect(idx('Ejecución')).toBe(idx('Evaluación') + 1)
   })
 
-  it('renders StatusBanner + problem regions + optimization inside planning when analyzed', () => {
-    seedPrerequisites({ analyzed: true })
-    act(() => {
-      useAnalysisStore.setState({
-        report: {
-          ...analysisReport,
-          problem_regions: [
-            {
-              id: 7,
-              kind: 'singularity',
-              severity: 'critical',
-              waypoint_start: 10,
-              waypoint_end: 20,
-              waypoint_count: 11,
-              explanation: {
-                cause: 'Singularity near waypoint 10',
-                consequence: 'Tool flips near the goal',
-                recommended_strategies: ['Joint centering'],
-                confidence: 0.9,
-              },
-            },
-          ],
-        },
-      })
-    })
-    renderRouter(['/planning'])
-    const main = within(screen.getByRole('main'))
-    fireEvent.click(main.getByRole('tab', { name: 'Analysis' }))
-    expect(main.getByText('Good')).toBeInTheDocument() // StatusBanner state label
-    expect(main.getByText('92 / 100')).toBeInTheDocument() // StatusBanner score
-    expect(
-      main.getByRole('button', { name: /Singularity near waypoint 10/i }),
-    ).toBeInTheDocument() // ProblemRegions region card
-    expect(main.getByRole('button', { name: 'Optimize Trajectory' })).toBeInTheDocument() // OptimizationPanel
+  it('renders /evaluation full-width WITHOUT the viewport (the decision is the focus)', () => {
+    seedPrerequisites()
+    renderRouter(['/evaluation'])
+    expect(screen.getByRole('heading', { name: 'Evaluación' })).toBeInTheDocument()
+    // layout 'full': the viewport is dropped so the decision owns the screen.
+    expect(screen.queryByTestId('viewport-stub')).not.toBeInTheDocument()
   })
 
-  it('keeps intra-workspace region drill-down within planning (URL unchanged)', () => {
-    seedPrerequisites({ analyzed: true })
-    act(() => {
-      useAnalysisStore.setState({
-        report: {
-          ...analysisReport,
-          problem_regions: [
-            {
-              id: 7,
-              kind: 'singularity',
-              severity: 'critical',
-              waypoint_start: 10,
-              waypoint_end: 20,
-              waypoint_count: 11,
-              explanation: {
-                cause: 'Singularity near waypoint 10',
-                consequence: 'Tool flips near the goal',
-                recommended_strategies: ['Joint centering'],
-                confidence: 0.9,
-              },
-            },
-          ],
-        },
-      })
-    })
-    const { router } = renderRouter(['/planning'])
-    const main = within(screen.getByRole('main'))
-    fireEvent.click(main.getByRole('tab', { name: 'Analysis' }))
-
-    // Drill down: click the region card → Region Details inspector opens.
-    fireEvent.click(main.getByRole('button', { name: /Singularity near waypoint 10/i }))
-    expect(main.getByRole('heading', { name: 'Region Details' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/planning')
-
-    // Back control: close the inspector → overview returns, still on /planning.
-    fireEvent.click(main.getByRole('button', { name: '' }))
-    expect(main.queryByRole('heading', { name: 'Region Details' })).not.toBeInTheDocument()
+  it('shows the empty state when the plan is not evaluated yet (analyzed=false)', () => {
+    seedPrerequisites()
+    renderRouter(['/evaluation'])
     expect(
-      main.getByRole('button', { name: /Singularity near waypoint 10/i }),
+      screen.getByText(/Evaluá el plan antes de ejecutar/i),
     ).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/planning')
+    expect(screen.getByRole('button', { name: 'Volver a Programación' })).toBeInTheDocument()
+  })
+
+  it('shows the evaluation content once the report exists (regions + clean verdict)', () => {
+    seedPrerequisites({ analyzed: true })
+    renderRouter(['/evaluation'])
+    // The clean report has no problem regions → the "no problems" verdict.
+    expect(screen.getByText(/No se detectaron problemas/i)).toBeInTheDocument()
+  })
+
+  it('unmounts the viewport on /evaluation and remounts it on return (documented invariant #1 exception)', async () => {
+    seedPrerequisites({ executable: true })
+    const { router } = renderRouter(['/task'])
+    expect(viewportMetrics.mounts).toBe(1)
+
+    fireEvent.click(screen.getByRole('link', { name: 'Evaluación' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/evaluation'))
+    expect(screen.queryByTestId('viewport-stub')).not.toBeInTheDocument()
+    expect(viewportMetrics.unmounts).toBe(1)
+
+    // Back to Programación → the viewport returns (remounted fresh).
+    act(() => {
+      router.navigate('/task')
+    })
+    await waitFor(() => expect(router.state.location.pathname).toBe('/task'))
+    expect(screen.getByTestId('viewport-stub')).toBeInTheDocument()
+    expect(viewportMetrics.mounts).toBe(2)
   })
 })
 
 describe('the /analysis route renders the AnalysisWorkspace tool (PR-D — kind nav model)', () => {
   it('shows an Analysis link in the top-bar tools group', () => {
     seedPrerequisites()
-    renderRouter(['/planning'])
+    renderRouter(['/task'])
     expect(screen.getByRole('link', { name: 'Analysis' })).toBeInTheDocument()
   })
 
@@ -381,14 +361,19 @@ describe('router covers every registered workspace', () => {
   })
 
   it.each(WORKSPACE_REGISTRY.filter((e) => !e.hidden))(
-    'renders $path ($workspace) with the full shell and an active nav link',
+    'renders $path ($workspace) with the shell and an active nav link',
     (entry) => {
       // Sessions requires `completed` (status 'completed' — which makes
       // `executable` false), every other visible area needs `executable`.
       seedPrerequisites({ executable: true, completed: entry.workspace === 'sessions' })
       sessionsApiMocks.list.mockResolvedValue([])
       renderRouter([entry.path])
-      expect(screen.getByTestId('viewport-stub')).toBeInTheDocument()
+      // layout 'full' areas (evaluation) drop the viewport; all others render it.
+      if (entry.layout === 'full') {
+        expect(screen.queryByTestId('viewport-stub')).not.toBeInTheDocument()
+      } else {
+        expect(screen.getByTestId('viewport-stub')).toBeInTheDocument()
+      }
       expect(screen.getByRole('link', { name: entry.label })).toHaveAttribute('aria-current', 'page')
     },
   )

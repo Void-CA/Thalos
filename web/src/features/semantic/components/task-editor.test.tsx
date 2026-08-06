@@ -2,16 +2,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
 import { act } from 'react'
-import { createMemoryRouter, RouterProvider } from 'react-router'
+import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import '@testing-library/jest-dom/vitest'
 import { routerConfig } from '@/router'
 import { ServicesProvider } from '@/features/viewport/services/service-context'
+import { TaskEditor } from './task-editor'
 import { useSceneStore } from '@/features/viewport/store'
 import { useSemanticEditor } from '@/features/semantic/store'
 import { useExecutionStore } from '@/features/execution/execution-store'
+import { useAnalysisStore } from '@/features/analysis/store'
 import type { SceneData } from '@/features/viewport/types'
 import type { CompileResponse } from '@/features/semantic/types'
+import type { RuntimeStateResponse } from '@/features/viewport/api/scene-api.types'
+import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 
 /**
  * Behavior tests for the frontend-task-workspace spec (slice 4, task 4.1) and
@@ -37,6 +41,23 @@ const apiMocks = vi.hoisted(() => ({
 vi.mock('@/features/semantic/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/features/semantic/api')>()
   return { ...actual, executeSemantic: apiMocks.executeSemantic, compileSemantic: apiMocks.compileSemantic }
+})
+
+/** Scene read + plan analysis — the compile preview path (hotfix
+ *  unify-programming) consumes both after a successful compile. */
+const previewMocks = vi.hoisted(() => ({
+  getScene: vi.fn(),
+  analyze: vi.fn(),
+}))
+
+vi.mock('@/features/viewport/api/scene-api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/viewport/api/scene-api')>()
+  return { ...actual, sceneApi: { ...actual.sceneApi, getScene: previewMocks.getScene } }
+})
+
+vi.mock('@/features/analysis/api/plan-analysis-api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/analysis/api/plan-analysis-api')>()
+  return { ...actual, planAnalysisApi: { ...actual.planAnalysisApi, analyze: previewMocks.analyze } }
 })
 
 /** The tick loop is owned by the Execution workspace — assert it never fires from Task. */
@@ -80,6 +101,49 @@ const executeResponse = {
   event_count: 3,
 }
 
+/** Full scene state after the compiled Task plan is scheduled into the
+ *  runtime — what `getScene()` returns on the compile-preview path. */
+const sceneWithPlan: RuntimeStateResponse = {
+  robot: { id: 'r1', display_name: 'R1', dof: 2, joints: [] },
+  joints: [0, 0],
+  scene: { frames: [], links: [], joint_axes: [], twists: [], primitives: [] },
+  ik_result: null,
+  active_plan: {
+    plan_id: 'plan-1',
+    state: 'Ready',
+    motion_type: 'PTP',
+    trajectory_progress: null,
+    visualization: {
+      motion_type: 'PTP',
+      waypoints: [
+        { position: [0, 0, 0], orientation: [0, 0, 0, 1], joints: [0, 0], timestamp: 0, waypoint_type: 'Start' },
+        { position: [1, 0, 0], orientation: [0, 0, 0, 1], joints: [0.5, 0.5], timestamp: 2.5, waypoint_type: 'Goal' },
+      ],
+    },
+    segments: null,
+    created_at: '2026-01-01T00:00:00Z',
+    started_at: null,
+    completed_at: null,
+  },
+  active_tcp: null,
+  execution: null,
+  generated_at: '2026-01-01T00:00:00Z',
+}
+
+const analysisReport: AnalysisReportWire = {
+  artifact: { kind: 'MotionPlan', id: 'plan-1' },
+  observations: [],
+  actions: [],
+  metrics: {},
+  summary: {
+    quality_index: 0.9,
+    score: 90,
+    grade: 'Good',
+    observation_count: 0,
+    severity_distribution: {},
+  },
+}
+
 function renderRouter(initialEntries: string[]) {
   const router = createMemoryRouter(routerConfig, { initialEntries })
   const queryClient = new QueryClient({
@@ -93,6 +157,25 @@ function renderRouter(initialEntries: string[]) {
     </QueryClientProvider>,
   )
   return router
+}
+
+/** Direct render of the TaskEditor — the unit-test entry for text-mode
+ *  behaviors. The workspace's Code tab mounts exactly
+ *  `<TaskEditor initialMode="text" />`; `renderEditor('text')` is the
+ *  focused equivalent without the workspace shell. */
+function renderEditor(initialMode?: 'visual' | 'text') {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  render(
+    <QueryClientProvider client={queryClient}>
+      <ServicesProvider>
+        <MemoryRouter>
+          <TaskEditor initialMode={initialMode} />
+        </MemoryRouter>
+      </ServicesProvider>
+    </QueryClientProvider>,
+  )
 }
 
 /** Seed robotLoaded + a compiled (or stale) program — the guards pass for /task. */
@@ -116,6 +199,8 @@ const textarea = () =>
 beforeEach(() => {
   apiMocks.executeSemantic.mockClear()
   apiMocks.compileSemantic.mockClear()
+  previewMocks.getScene.mockReset()
+  previewMocks.analyze.mockReset()
   execClientMocks.start.mockClear()
   execClientMocks.pause.mockClear()
   execClientMocks.resume.mockClear()
@@ -125,6 +210,7 @@ beforeEach(() => {
   useSceneStore.getState().reset()
   useSemanticEditor.getState().reset()
   useExecutionStore.setState({ status: 'idle', activePlan: null })
+  useAnalysisStore.setState({ report: null })
 })
 afterEach(() => cleanup())
 
@@ -206,9 +292,12 @@ describe('Unified Compile/Send button (program-dual-editor spec)', () => {
 
     fireEvent.click(send)
 
-    await waitFor(() => expect(apiMocks.executeSemantic).toHaveBeenCalledTimes(1))
-    // Payload identity (spec): execute sends exactly what compile sent.
-    expect(apiMocks.executeSemantic).toHaveBeenCalledWith(compilePayload)
+    // executeSemantic fires TWICE: once for the compile preview (hotfix
+    // unify-programming — load the plan so the viewport draws it), once for
+    // the handoff. Payload identity (spec): the LAST call (the handoff) sends
+    // exactly what compile sent.
+    await waitFor(() => expect(apiMocks.executeSemantic).toHaveBeenCalledTimes(2))
+    expect(apiMocks.executeSemantic).toHaveBeenLastCalledWith(compilePayload)
     await waitFor(() => expect(router.state.location.pathname).toBe('/execution'))
   })
 
@@ -286,6 +375,50 @@ describe('Send to Execution handoff (execution-workspace spec, Invariant #5)', (
   })
 })
 
+describe('Task compile previews the plan — trajectory + analysis (hotfix unify-programming)', () => {
+  it('draws the compiled Task plan (applyScene with activePlan) and fires the analysis', async () => {
+    apiMocks.compileSemantic.mockResolvedValue(compileResult)
+    apiMocks.executeSemantic.mockResolvedValue(executeResponse)
+    previewMocks.getScene.mockResolvedValue(sceneWithPlan)
+    previewMocks.analyze.mockResolvedValue(analysisReport)
+    seedTask()
+    renderRouter(['/task'])
+
+    fireEvent.click(await screen.findByRole('button', { name: /Compile/ }))
+
+    // Compile still stores the result (unchanged contract)…
+    await waitFor(() => expect(apiMocks.compileSemantic).toHaveBeenCalledTimes(1))
+    expect(useSemanticEditor.getState().result).toEqual(compileResult)
+
+    // …and the compiled plan is applied to the scene store — the viewport
+    // draws its trajectory (the Motion-tab preview pattern, now on Tasks).
+    await waitFor(() => expect(useSceneStore.getState().activePlan).not.toBeNull())
+    expect(useSceneStore.getState().activePlan?.planId).toBe('plan-1')
+    expect(useSceneStore.getState().activePlan?.visualization?.waypoints).toHaveLength(2)
+
+    // The plan analysis fired and populated the Analysis tab report.
+    expect(previewMocks.analyze).toHaveBeenCalledTimes(1)
+    expect(useAnalysisStore.getState().report).toEqual(analysisReport)
+  })
+
+  it('keeps the compile result when the plan/analysis preview fails (non-blocking)', async () => {
+    apiMocks.compileSemantic.mockResolvedValue(compileResult)
+    apiMocks.executeSemantic.mockRejectedValue(new Error('preview failed'))
+    seedTask()
+    renderRouter(['/task'])
+
+    fireEvent.click(await screen.findByRole('button', { name: /Compile/ }))
+
+    // The compile result stands — the preview failure never blocks it.
+    await waitFor(() => expect(apiMocks.compileSemantic).toHaveBeenCalledTimes(1))
+    expect(useSemanticEditor.getState().result).toEqual(compileResult)
+    expect(useSceneStore.getState().activePlan).toBeNull()
+    expect(useAnalysisStore.getState().report).toBeNull()
+    // The failure surfaces as an error (DiagnosticsPanel) without navigating.
+    await waitFor(() => expect(screen.getByText(/preview failed/i)).toBeInTheDocument())
+  })
+})
+
 describe('Task stays an authoring workspace (compile still works)', () => {
   it('compiles the program via compileSemantic and stores the result', async () => {
     apiMocks.compileSemantic.mockResolvedValue(compileResult)
@@ -300,20 +433,21 @@ describe('Task stays an authoring workspace (compile still works)', () => {
   })
 })
 
-describe('Program panel Visual/Text toggle — editable text mode with atomic commit (S2)', () => {
+describe('Code tab — editable text mode with atomic commit (S2)', () => {
   /** The store's canonical sample program serialized by `serialize` (P7). */
   const SAMPLE_TEXT = 'pick bolt-1\nwait 1s\nplace bolt-1 at tray-1\nhome'
 
-  it('defaults to Visual mode with editable rows; Text toggles to an editable textarea with canonical text', async () => {
+  it('defaults to Visual mode (Task tab) with editable rows and no text surface', () => {
     seedTask()
-    renderRouter(['/task'])
+    renderEditor()
 
-    // Visual mode is default: editable rows render, no text surface yet.
-    expect(await screen.findByRole('button', { name: 'Text' })).toBeInTheDocument()
     expect(rowComboboxes().length).toBeGreaterThan(0)
     expect(screen.queryByTestId('program-textarea')).not.toBeInTheDocument()
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Text' }))
+  it('enters text mode (Code tab) with an editable textarea holding canonical text', () => {
+    seedTask()
+    renderEditor('text')
 
     // Single editable surface (spec "Text mode editable, Visual read-only"):
     // the textarea holds EXACTLY serialize(operations) — the canonical form —
@@ -323,13 +457,12 @@ describe('Program panel Visual/Text toggle — editable text mode with atomic co
     expect(rowComboboxes()).toHaveLength(0)
   })
 
-  it('typing into the buffer never touches the store (R3 buffer/model separation)', async () => {
+  it('typing into the buffer never touches the store (R3 buffer/model separation)', () => {
     seedTask()
-    renderRouter(['/task'])
+    renderEditor('text')
     const opsBefore = JSON.stringify(useSemanticEditor.getState().operations)
     const dirtyBefore = useSemanticEditor.getState().dirty
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Text' }))
     fireEvent.change(textarea(), { target: { value: 'pick bolt-1\n' } })
 
     // Buffer advanced locally; the store program + dirty are byte-identical.
@@ -338,12 +471,11 @@ describe('Program panel Visual/Text toggle — editable text mode with atomic co
     expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
   })
 
-  it('Apply with valid text commits the WHOLE program in one atomic replace (I5)', async () => {
+  it('Apply with valid text commits the WHOLE program in one atomic replace (I5)', () => {
     seedTask()
-    renderRouter(['/task'])
+    renderEditor('text')
     const dirtyBefore = useSemanticEditor.getState().dirty
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Text' }))
     fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
@@ -356,13 +488,12 @@ describe('Program panel Visual/Text toggle — editable text mode with atomic co
     expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore + 1)
   })
 
-  it('Apply with invalid text shows inline errors and performs ZERO program writes (R2)', async () => {
+  it('Apply with invalid text shows inline errors and performs ZERO program writes (R2)', () => {
     seedTask()
-    renderRouter(['/task'])
+    renderEditor('text')
     const opsBefore = JSON.stringify(useSemanticEditor.getState().operations)
     const dirtyBefore = useSemanticEditor.getState().dirty
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Text' }))
     fireEvent.change(textarea(), { target: { value: 'pick bolt-1\njump 10' } })
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
@@ -380,9 +511,10 @@ describe('Program panel Visual/Text toggle — editable text mode with atomic co
   it('parse errors also surface in the DiagnosticsPanel summary (I5)', async () => {
     seedTask()
     renderRouter(['/task'])
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Text' }))
-    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait forever' } })
+    fireEvent.click(await screen.findByRole('tab', { name: 'Code' }))
+    fireEvent.change(await screen.findByTestId('program-textarea'), {
+      target: { value: 'pick bolt-1\nwait forever' },
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
     const diagnostics = screen.getByRole('region', { name: 'Diagnostics' })
@@ -390,98 +522,90 @@ describe('Program panel Visual/Text toggle — editable text mode with atomic co
     expect(diagnostics.textContent).toContain("invalid duration 'forever'")
   })
 
-  it('repeated Visual<->Text toggles never mutate the store (model intact)', async () => {
+  it('switching Code<->Task tabs never mutates the store (model intact)', async () => {
     seedTask()
     const opsBefore = JSON.stringify(useSemanticEditor.getState().operations)
     const dirtyBefore = useSemanticEditor.getState().dirty
     renderRouter(['/task'])
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Text' }))
+    fireEvent.click(await screen.findByRole('tab', { name: 'Code' }))
+    expect(await screen.findByTestId('program-textarea')).toBeInTheDocument()
     expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
     expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Visual' }))
-    expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
-    expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
-
-    // Rows are back in Visual mode — the same single editable surface.
-    expect(rowComboboxes().length).toBeGreaterThan(0)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Text' }))
-    expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
-    expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
-  })
-})
-
-describe('S3.1 — dirty guard: Text→Visual with uncommitted buffer (I6, P5)', () => {
-  const enterTextMode = async () => {
-    renderRouter(['/task'])
-    fireEvent.click(await screen.findByRole('button', { name: 'Text' }))
-  }
-
-  it('shows the confirm dialog when switching Text→Visual with a dirty buffer', async () => {
-    seedTask()
-    await enterTextMode()
-    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
-
-    fireEvent.click(screen.getByRole('button', { name: 'Visual' }))
-
-    // I6: warning SHALL appear "Uncommitted changes will be lost" and the
-    // user SHALL confirm or cancel — the switch is NOT performed yet.
-    expect(await screen.findByRole('dialog')).toHaveTextContent('Uncommitted changes will be lost')
-    expect(screen.getByTestId('program-textarea')).toBeInTheDocument()
-  })
-
-  it('cancel keeps the buffer, stays in Text mode and touches nothing', async () => {
-    seedTask()
-    await enterTextMode()
-    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
-    const opsBefore = JSON.stringify(useSemanticEditor.getState().operations)
-    const dirtyBefore = useSemanticEditor.getState().dirty
-
-    fireEvent.click(screen.getByRole('button', { name: 'Visual' }))
-    fireEvent.click(await screen.findByRole('button', { name: /Cancel/i }))
-
-    // Cancel → remain in Text mode, buffer intact, store byte-identical.
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(textarea().value).toBe('pick bolt-1\nwait 2s\nhome')
-    expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
-    expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
-  })
-
-  it('confirm discards the buffer and switches to Visual without committing', async () => {
-    seedTask()
-    await enterTextMode()
-    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
-    const opsBefore = JSON.stringify(useSemanticEditor.getState().operations)
-    const dirtyBefore = useSemanticEditor.getState().dirty
-
-    fireEvent.click(screen.getByRole('button', { name: 'Visual' }))
-    fireEvent.click(await screen.findByRole('button', { name: /Discard changes/i }))
-
-    // Confirm → buffer discarded (NOT committed), rows are back in Visual.
+    fireEvent.click(screen.getByRole('tab', { name: 'Task' }))
     expect(screen.queryByTestId('program-textarea')).not.toBeInTheDocument()
     expect(rowComboboxes().length).toBeGreaterThan(0)
     expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
     expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Code' }))
+    expect(await screen.findByTestId('program-textarea')).toBeInTheDocument()
+    expect(textarea().value).toBe(SAMPLE_TEXT)
+    expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
+    expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
+  })
+})
+
+describe('S3.1 — leaving Code with an uncommitted buffer never corrupts the store (I6, P5)', () => {
+  it('discards the uncommitted buffer on tab switch WITHOUT committing (model intact)', async () => {
+    seedTask()
+    const opsBefore = JSON.stringify(useSemanticEditor.getState().operations)
+    const dirtyBefore = useSemanticEditor.getState().dirty
+    renderRouter(['/task'])
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Code' }))
+    fireEvent.change(await screen.findByTestId('program-textarea'), {
+      target: { value: 'pick bolt-1\nwait 2s\nhome' },
+    })
+
+    // The buffer holds uncommitted text; leaving the Code tab must NEVER write
+    // it — no partial replace, no dirty bump, no silent commit.
+    fireEvent.click(screen.getByRole('tab', { name: 'Task' }))
+    expect(screen.queryByTestId('program-textarea')).not.toBeInTheDocument()
+    expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
+    expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
   })
 
-  it('switches silently when the buffer is clean (no dialog)', async () => {
+  it('returning to Code re-serializes the canonical store text (fresh buffer)', async () => {
     seedTask()
-    await enterTextMode()
+    renderRouter(['/task'])
 
-    fireEvent.click(screen.getByRole('button', { name: 'Visual' }))
+    fireEvent.click(await screen.findByRole('tab', { name: 'Code' }))
+    fireEvent.change(await screen.findByTestId('program-textarea'), {
+      target: { value: 'pick bolt-1\nwait 2s\nhome' },
+    })
+    fireEvent.click(screen.getByRole('tab', { name: 'Task' }))
+
+    // Re-entry re-serializes serialize(operations): the discarded buffer is
+    // gone, the canonical text is back — text can never drift from the model.
+    fireEvent.click(screen.getByRole('tab', { name: 'Code' }))
+    expect(await screen.findByTestId('program-textarea')).toBeInTheDocument()
+    expect(
+      (screen.getByTestId('program-textarea') as HTMLTextAreaElement).value,
+    ).toBe('pick bolt-1\nwait 1s\nplace bolt-1 at tray-1\nhome')
+  })
+
+  it('switching tabs with a clean buffer behaves identically (no data at risk)', async () => {
+    seedTask()
+    const opsBefore = JSON.stringify(useSemanticEditor.getState().operations)
+    const dirtyBefore = useSemanticEditor.getState().dirty
+    renderRouter(['/task'])
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Code' }))
+    await screen.findByTestId('program-textarea')
+    fireEvent.click(screen.getByRole('tab', { name: 'Task' }))
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(rowComboboxes().length).toBeGreaterThan(0)
+    expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
+    expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
   })
 })
 
 describe('S3.3 — external store change does not silently overwrite a dirty buffer', () => {
-  it('warns when the program changed outside the editor while the buffer is dirty', async () => {
+  it('warns when the program changed outside the editor while the buffer is dirty', () => {
     seedTask()
-    renderRouter(['/task'])
-    fireEvent.click(await screen.findByRole('button', { name: 'Text' }))
+    renderEditor('text')
     fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
 
     // External change (e.g. a visual edit elsewhere / a program mutation that
@@ -501,10 +625,9 @@ describe('S3.3 — external store change does not silently overwrite a dirty buf
     ])
   })
 
-  it('shows no warning while the store is unchanged', async () => {
+  it('shows no warning while the store is unchanged', () => {
     seedTask()
-    renderRouter(['/task'])
-    fireEvent.click(await screen.findByRole('button', { name: 'Text' }))
+    renderEditor('text')
     fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
 
     // User typed only — the store never moved, so no sync indicator.
@@ -513,10 +636,9 @@ describe('S3.3 — external store change does not silently overwrite a dirty buf
 })
 
 describe('S3.3 — Apply disabled while parse errors are present', () => {
-  it('disables Apply for an invalid buffer and re-enables once fixed', async () => {
+  it('disables Apply for an invalid buffer and re-enables once fixed', () => {
     seedTask()
-    renderRouter(['/task'])
-    fireEvent.click(await screen.findByRole('button', { name: 'Text' }))
+    renderEditor('text')
 
     // Clean canonical buffer → Apply enabled.
     expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled()
@@ -535,11 +657,9 @@ describe('S3.3 — Apply disabled while parse errors are present', () => {
 })
 
 describe('S3.5 — editor help in Text mode', () => {
-  it('renders the canonical grammar, an example and the canonical-text note in Text mode', async () => {
+  it('renders the canonical grammar, an example and the canonical-text note in Text mode', () => {
     seedTask()
-    renderRouter(['/task'])
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Text' }))
+    renderEditor('text')
 
     // Grammar summary: all 5 ops + at + tool= + duration forms + comments.
     const help = within(screen.getByTestId('script-help'))
@@ -555,9 +675,9 @@ describe('S3.5 — editor help in Text mode', () => {
     expect(help.getByText(/not preserved/i)).toBeInTheDocument()
   })
 
-  it('is hidden in Visual mode', async () => {
+  it('is hidden in Visual mode', () => {
     seedTask()
-    renderRouter(['/task'])
+    renderEditor()
 
     expect(screen.queryByText('pick <object> [tool=<name>]')).not.toBeInTheDocument()
   })

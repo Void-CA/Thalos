@@ -17,11 +17,13 @@ import type { CompileResponse } from '@/features/semantic/types'
 import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 
 /**
- * Integration tests for the global-stepper spec (delta MODIFIED — 6 stages,
- * "Robot is root" REVERTED: Robot is stage 1).
+ * Integration tests for the global-stepper spec (delta MODIFIED — 6 stages:
+ * the evaluation-workspace hotfix added Evaluación between Programación and
+ * Ejecución; the unified programming workspace merged /planning into /task —
+ * Programación is ONE step).
  *
  * The stepper renders the six domain pipeline stages Robot → Escena →
- * Programación → Planificación → Ejecución → Sesiones DERIVED from the area
+ * Programación → Evaluación → Ejecución → Sesiones DERIVED from the area
  * registry (`stage` order — no parallel stage list, user criterion C1) and
  * marks each stage passed/current/pending/blocked purely from the
  * `WorkflowState` it consumes (C4 — it never re-derives store flags).
@@ -63,7 +65,7 @@ const PIPELINE_LABELS = [
   'Robot',
   'Escena',
   'Programación',
-  'Planificación',
+  'Evaluación',
   'Ejecución',
   'Sesiones',
 ] as const
@@ -121,12 +123,14 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('Stepper — six registry-derived stages (global-stepper spec S3)', () => {
-  it('renders the six pipeline stages Robot → Escena → Programación → Planificación → Ejecución → Sesiones', () => {
+  it('renders the six pipeline stages Robot → Escena → Programación → Evaluación → Ejecución → Sesiones', () => {
     seedFlags({ robotLoaded: true, compiled: true, executable: true, completed: true, analyzed: true })
     renderStepper('/sessions')
     for (const label of PIPELINE_LABELS) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
     }
+    // Planificación no longer exists — /planning was absorbed into /task.
+    expect(screen.queryByRole('button', { name: 'Planificación' })).not.toBeInTheDocument()
   })
 
   it('orders the stages by registry stage (Robot=1 … Sesiones=6), not by capability', () => {
@@ -136,7 +140,7 @@ describe('Stepper — six registry-derived stages (global-stepper spec S3)', () 
       'Robot',
       'Escena',
       'Programación',
-      'Planificación',
+      'Evaluación',
       'Ejecución',
       'Sesiones',
     ])
@@ -152,20 +156,20 @@ describe('Stepper — six registry-derived stages (global-stepper spec S3)', () 
 
   it('marks each stage passed/current/pending/blocked from the derived WorkflowState (spec progress scenario)', () => {
     seedFlags({ robotLoaded: true, compiled: true, executable: true, analyzed: true })
-    renderStepper('/planning')
+    renderStepper('/task')
     expect(glyph('Robot')).toBe('✓') // passed — robotLoaded produced
     expect(glyph('Escena')).toBe('✓') // passed — sceneValid produced
-    expect(glyph('Programación')).toBe('✓') // passed — compiled produced
-    expect(glyph('Planificación')).toBe('●') // current — active route
+    expect(glyph('Programación')).toBe('●') // current — active route
+    expect(glyph('Evaluación')).toBe('✓') // passed — analyzed produced
     expect(glyph('Ejecución')).toBe('○') // pending — requirements met, not reached
     expect(glyph('Sesiones')).toBe('○') // pending — guard relaxed, nothing blocks the browser
   })
 
   it('marks the active route stage as current (S4: I know where I am)', () => {
     seedFlags({ robotLoaded: true, compiled: true })
-    renderStepper('/planning')
-    expect(screen.getByRole('button', { name: 'Planificación' })).toHaveAttribute('aria-current', 'step')
-    expect(screen.getByRole('button', { name: 'Programación' })).not.toHaveAttribute('aria-current')
+    renderStepper('/task')
+    expect(screen.getByRole('button', { name: 'Programación' })).toHaveAttribute('aria-current', 'step')
+    expect(screen.getByRole('button', { name: 'Ejecución' })).not.toHaveAttribute('aria-current')
   })
 
   it('excludes non-stage areas from the stepper (knowledge; Configuración is not a stage)', () => {
@@ -208,7 +212,7 @@ describe('Stepper — six registry-derived stages (global-stepper spec S3)', () 
 
   it('shows future stages whose requirements are met as pending (next step visible)', () => {
     seedFlags({ robotLoaded: true, compiled: true, executable: true, analyzed: true })
-    renderStepper('/planning')
+    renderStepper('/task')
     const execution = screen.getByRole('button', { name: 'Ejecución' })
     expect(execution).not.toBeDisabled()
     expect(execution).not.toHaveAttribute('aria-current')
@@ -216,7 +220,7 @@ describe('Stepper — six registry-derived stages (global-stepper spec S3)', () 
 
   it('derives a blocked reason from the missing flag (not a fixed string)', () => {
     seedFlags({ robotLoaded: true, compiled: true }) // executable=false
-    renderStepper('/planning')
+    renderStepper('/task')
     expect(screen.getByText('Requires an executable plan')).toBeInTheDocument()
     // Sessions is no longer blocked (guard relaxed) — no completed reason exists.
     expect(screen.queryByText(/Requires a completed execution/)).not.toBeInTheDocument()
@@ -225,10 +229,10 @@ describe('Stepper — six registry-derived stages (global-stepper spec S3)', () 
 
 describe('Stepper — click = navigation, availability is separate (C3, threat "stepper click when blocked")', () => {
   it('navigates when a stage is clickable (requirements met)', async () => {
-    seedFlags({ robotLoaded: true, compiled: true })
+    seedFlags({ robotLoaded: true, compiled: true, executable: true })
     const router = renderStepper('/task')
-    fireEvent.click(screen.getByRole('button', { name: 'Planificación' }))
-    await waitFor(() => expect(router.state.location.pathname).toBe('/planning'))
+    fireEvent.click(screen.getByRole('button', { name: 'Ejecución' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/execution'))
   })
 
   it('does not navigate on a blocked stage and shows the derived reason', async () => {

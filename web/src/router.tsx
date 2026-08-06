@@ -1,12 +1,12 @@
 import { createElement, type ComponentType } from 'react'
 import { createBrowserRouter, type RouteObject } from 'react-router'
 import { ConfigurationWorkspace } from '@/features/configuration/workspace'
+import { EvaluationWorkspace } from '@/features/evaluation/workspace'
 import { ExecutionWorkspace } from '@/features/execution/execution-workspace'
 import { KnowledgeWorkspace } from '@/features/knowledge/workspace'
-import { PlanningWorkspace } from '@/features/planning/workspace'
+import { ProgrammingWorkspace } from '@/features/programming/workspace'
 import { RobotShell } from '@/features/robots/workspace'
 import { SceneWorkspace } from '@/features/scene/SceneWorkspace'
-import { SemanticWorkspace } from '@/features/semantic/semantic-workspace'
 import { SessionsWorkspace } from '@/features/sessions/workspace'
 import { AnalysisWorkspace } from '@/features/viewport/components/analysis-workspace'
 import { AppShell } from '@/shared/layout/app-shell'
@@ -19,15 +19,20 @@ import { WORKSPACE_REGISTRY, type WorkspaceName } from '@/shared/workflow/regist
  *
  * PR-D registers `analysis` (kind 'tool', /analysis) to the inline
  * AnalysisWorkspace (features/viewport/components) — the sampling tool,
- * distinct from plan-analysis which renders inside PlanningWorkspace. `scene`
- * renders the Escena area (features/scene/SceneWorkspace) — the exclusive
- * owner of the Scene editor since S2; /task renders zero Scene UI.
+ * distinct from plan-analysis which renders inside the unified
+ * ProgrammingWorkspace. `scene` renders the Escena area
+ * (features/scene/SceneWorkspace) — the exclusive owner of the Scene editor
+ * since S2; /task renders zero Scene UI. Hotfix (unify-programming): `task`
+ * maps to ProgrammingWorkspace — /task AND the old /planning content live in
+ * one area (Task / Motion / Code tabs). Hotfix (evaluation-workspace): `evaluation`
+ * maps to EvaluationWorkspace — the pre-execution EVALUACIÓN view at
+ * /evaluation (stage 4); the analysis TAB left the programming workspace.
  */
 export const VIEW_REGISTRY: Record<WorkspaceName, ComponentType> = {
   robot: RobotShell,
   scene: SceneWorkspace,
-  task: SemanticWorkspace,
-  planning: PlanningWorkspace,
+  task: ProgrammingWorkspace,
+  evaluation: EvaluationWorkspace,
   execution: ExecutionWorkspace,
   sessions: SessionsWorkspace,
   knowledge: KnowledgeWorkspace,

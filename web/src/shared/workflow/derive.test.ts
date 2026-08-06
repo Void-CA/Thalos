@@ -416,12 +416,12 @@ describe('isValidHomePose — home-pose validity feeding sceneValid', () => {
 })
 
 describe('stepperStages — six stages derived from the registry `stage` order (global-stepper spec S3)', () => {
-  it('exposes the six pipeline areas in stage order: robot … sessions', () => {
+  it('exposes the six pipeline areas in stage order: robot … sessions (no planning tab)', () => {
     expect(stepperStages(WORKSPACE_REGISTRY).map((e) => e.workspace)).toEqual([
       'robot',
       'scene',
       'task',
-      'planning',
+      'evaluation',
       'execution',
       'sessions',
     ])
@@ -460,11 +460,11 @@ describe('deriveStepperStages — per-stage state from flags + active route', ()
   it('marks the active route stage as current', () => {
     const stages = deriveStepperStages(
       { ...ALL_TRUE, executable: false },
-      '/planning',
+      '/task',
       WORKSPACE_REGISTRY,
     )
-    expect(stages.find((s) => s.entry.workspace === 'planning')?.state).toBe('current')
-    expect(stages.find((s) => s.entry.workspace === 'planning')?.reason).toBeNull()
+    expect(stages.find((s) => s.entry.workspace === 'task')?.state).toBe('current')
+    expect(stages.find((s) => s.entry.workspace === 'task')?.reason).toBeNull()
   })
 
   it('marks the Robot stage current on the root route (Robot is stage 1, its own area)', () => {
@@ -475,14 +475,14 @@ describe('deriveStepperStages — per-stage state from flags + active route', ()
   it('derives the full spec progress scenario (Robot passed … Ejecución pending)', () => {
     const stages = deriveStepperStages(
       { ...ALL_TRUE, executable: true },
-      '/planning',
+      '/task',
       WORKSPACE_REGISTRY,
     )
     const byWs = Object.fromEntries(stages.map((s) => [s.entry.workspace, s]))
     expect(byWs.robot.state).toBe('passed') // robotLoaded produced
     expect(byWs.scene.state).toBe('passed') // sceneValid produced
-    expect(byWs.task.state).toBe('passed') // compiled produced
-    expect(byWs.planning.state).toBe('current') // active route
+    expect(byWs.task.state).toBe('current') // active route
+    expect(byWs.evaluation.state).toBe('passed') // analyzed produced
     expect(byWs.execution.state).toBe('pending') // requirements met, not reached
     expect(byWs.sessions.state).toBe('pending') // guard relaxed — nothing blocks the browser
     expect(byWs.sessions.reason).toBeNull()
@@ -499,15 +499,15 @@ describe('deriveStepperStages — per-stage state from flags + active route', ()
     expect(execution.reason).toBe('Requires an executable plan')
   })
 
-  it('derives the reason from the first missing flag (sceneValid → planning)', () => {
+  it('derives the reason from the first missing flag (sceneValid → execution)', () => {
     const stages = deriveStepperStages(
       { ...ALL_TRUE, sceneValid: false },
       '/task',
       WORKSPACE_REGISTRY,
     )
-    const planning = stages.find((s) => s.entry.workspace === 'planning')!
-    expect(planning.state).toBe('blocked')
-    expect(planning.reason).toBe('Requires a valid scene')
+    const execution = stages.find((s) => s.entry.workspace === 'execution')!
+    expect(execution.state).toBe('blocked')
+    expect(execution.reason).toBe('Requires a valid scene')
   })
 
   it('never blocks sessions — the guard is relaxed (no requirement gates the browser)', () => {
@@ -523,7 +523,7 @@ describe('deriveStepperStages — per-stage state from flags + active route', ()
   it('passes a stage whose produces flag is already true', () => {
     const stages = deriveStepperStages(
       { ...ALL_TRUE, executable: false },
-      '/planning',
+      '/execution',
       WORKSPACE_REGISTRY,
     )
     const task = stages.find((s) => s.entry.workspace === 'task')!
@@ -533,7 +533,7 @@ describe('deriveStepperStages — per-stage state from flags + active route', ()
 
   it('passes stages that come before the current one (position)', () => {
     const stages = deriveStepperStages({ ...ALL_TRUE, completed: true }, '/sessions', WORKSPACE_REGISTRY)
-    for (const ws of ['task', 'planning', 'execution']) {
+    for (const ws of ['task', 'execution']) {
       expect(stages.find((s) => s.entry.workspace === ws)?.state).toBe('passed')
     }
   })
@@ -541,7 +541,7 @@ describe('deriveStepperStages — per-stage state from flags + active route', ()
   it('keeps a future stage pending when requirements are met', () => {
     const stages = deriveStepperStages(
       { ...ALL_TRUE, executable: true },
-      '/planning',
+      '/task',
       WORKSPACE_REGISTRY,
     )
     const execution = stages.find((s) => s.entry.workspace === 'execution')!
@@ -552,13 +552,13 @@ describe('deriveStepperStages — per-stage state from flags + active route', ()
 
 describe('requirementReason — derived from the registry, never per-workspace strings', () => {
   it('returns null when every requirement is met', () => {
-    const planning = WORKSPACE_REGISTRY.find((e) => e.workspace === 'planning')!
-    expect(requirementReason(planning, ALL_TRUE)).toBeNull()
+    const task = WORKSPACE_REGISTRY.find((e) => e.workspace === 'task')!
+    expect(requirementReason(task, ALL_TRUE)).toBeNull()
   })
 
   it('names the missing flag when requirements are unmet', () => {
-    const planning = WORKSPACE_REGISTRY.find((e) => e.workspace === 'planning')!
-    expect(requirementReason(planning, { ...ALL_TRUE, sceneValid: false })).toBe(
+    const task = WORKSPACE_REGISTRY.find((e) => e.workspace === 'task')!
+    expect(requirementReason(task, { ...ALL_TRUE, sceneValid: false })).toBe(
       'Requires a valid scene',
     )
   })

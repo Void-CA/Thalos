@@ -22,8 +22,8 @@ const STATE_GLYPH: Record<StageState, string> = {
  *
  * A slim strip below the TopBar, mounted in the layout route OUTSIDE the
  * <Outlet/> — like the viewport, it persists across workspace transitions. It
- * renders the six pipeline stages (Robot → Escena → Programación →
- * Planificación → Ejecución → Sesiones) as a PROJECTION of the area registry
+ * renders the six pipeline stages (Robot → Escena → Programación → Evaluación
+ * → Ejecución → Sesiones) as a PROJECTION of the area registry
  * (`deriveStepperStages` orders by the `stage` field — no parallel stage
  * list, criterion C1) and derives each stage's state purely from
  * `useWorkflowState()` (criterion C4 — it never re-derives store flags):

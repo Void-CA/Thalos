@@ -4,11 +4,19 @@ import { useNavigate } from 'react-router'
 import { useSemanticEditor } from '../store'
 import { useDomainSceneStore } from '@/features/scene/store'
 import { useExecutionStore } from '@/features/execution/execution-store'
+import { useSceneStore } from '@/features/viewport/store'
+import { sceneApi } from '@/features/viewport/api/scene-api'
+import {
+  toSceneData, toRuntimeInfo, toIkResult, toActivePlan, toToolFrame, toExecutionInfo,
+} from '@/features/viewport/adapter'
+import { planAnalysisApi } from '@/features/analysis/api/plan-analysis-api'
+import { useAnalysisStore } from '@/features/analysis/store'
 import { useWorkflowState } from '@/shared/workflow/use-workflow-state'
 import { hasMissingFields } from '@/shared/workflow/derive'
 import { OperationRow } from './operation-row'
 import { compileSemantic, executeSemantic } from '../api'
 import { describeError } from '@/shared/errors'
+import type { TaskDocument } from '@/shared/contracts'
 import { serialize } from '../script/serializer'
 import { parse } from '../script/parser'
 import {
@@ -20,6 +28,39 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+
+/**
+ * Hotfix (unify-programming): preview a compiled Task program like the Motion
+ * tab does — load it into the scene runtime WITHOUT starting it, so the
+ * always-mounted viewport draws the trajectory and the Analysis tab populates.
+ *
+ * The vehicle is `executeSemantic` (`POST /semantic/execute`): the canonical
+ * compile + plan path that SCHEDULES the plan into the scene runtime
+ * (`schedule_program`), which is what `/plan/analyze` reads the active plan
+ * from. `POST /motion/plan` was NOT used: it returns only `compiled_plan` +
+ * `runtime_program`, never schedules, so neither `applyScene` (no scene state)
+ * nor the analysis endpoint (no active plan) could work. After the plan is
+ * scheduled, `getScene()` returns the full state with `active_plan`, and the
+ * standard planning-panel adapters project it onto the scene store.
+ *
+ * Rejections are NON-BLOCKING: callers treat a failure as "compile ok, preview
+ * failed" — the plan never starts (the tick loop only runs from Execution).
+ */
+async function previewTaskPlan(task: TaskDocument): Promise<void> {
+  const execute = await executeSemantic({ task })
+  if (execute.status !== 'ok') throw new Error('Plan preview failed')
+  const scene = await sceneApi.getScene()
+  useSceneStore.getState().applyScene(
+    toSceneData(scene.scene),
+    toRuntimeInfo(scene),
+    toIkResult(scene.ik_result),
+    toActivePlan(scene.active_plan),
+    toToolFrame(scene.active_tcp),
+    toExecutionInfo(scene.execution),
+  )
+  const analysis = await planAnalysisApi.analyze()
+  useAnalysisStore.getState().setAnalysis(analysis)
+}
 
 /**
  * TaskEditor — the Program panel of the Task workspace (frontend-task-workspace
@@ -37,8 +78,22 @@ import { Button } from '@/components/ui/button'
  * WITHOUT `start()` (the plan is loaded into the runtime, execStatus → ready),
  * then navigates to /execution. The tick loop only ever starts from Execution
  * (execution-workspace spec, Invariant #5 / Tick Loop Ownership).
+ *
+ * Hotfix (unify-programming): Compile ALSO previews the plan — see
+ * `previewTaskPlan` — drawing the Task trajectory in the viewport and
+ * populating the Analysis tab, non-blocking on preview failure.
  */
-export function TaskEditor() {
+/** TaskEditor props (hotfix unify-programming): the workspace mounts TWO
+ *  instances — the Task tab in the default 'visual' mode and the Code tab
+ *  forced into 'text' via `initialMode`. The mode is chosen ONCE at mount;
+ *  the tab layout owns switching (each instance keeps its own local buffer,
+ *  and only the active tab mounts). */
+export interface TaskEditorProps {
+  /** Entry mode for this instance. Defaults to 'visual'. */
+  initialMode?: 'visual' | 'text'
+}
+
+export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
   const {
     operations, result, loading, scriptErrors,
     addOperation, removeOperation, moveOperation, updateOperation,
@@ -50,8 +105,9 @@ export function TaskEditor() {
   const navigate = useNavigate()
 
   /** S1 dual mode (frontend-task-workspace spec): 'visual' is the default;
-   *  toggling only changes the projection, never the store. */
-  const [mode, setMode] = useState<'visual' | 'text'>('visual')
+   *  the workspace picks the entry mode per tab (initialMode); switching only
+   *  changes the projection, never the store. */
+  const [mode, setMode] = useState<'visual' | 'text'>(initialMode ?? 'visual')
 
   /**
    * S2 text buffer (design P4): component-LOCAL state. The store remains the
@@ -167,6 +223,15 @@ export function TaskEditor() {
     try {
       const res = await compileSemantic({ task: taskDocument })
       setResult(res)
+      // Hotfix (unify-programming): a compiled Task must behave like the Motion
+      // tab — draw its trajectory in the viewport and populate the Analysis
+      // tab. Non-blocking: the compile result is already set, so a failed
+      // preview only surfaces the error (requirement: no plan → compile ok).
+      try {
+        await previewTaskPlan(taskDocument)
+      } catch (err) {
+        setError(describeError(err))
+      }
     } catch (err) {
       setError(describeError(err))
     } finally { setLoading(false) }
@@ -198,17 +263,6 @@ export function TaskEditor() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
-        <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider flex-1">Program</h2>
-        <div className="inline-flex items-center rounded-md border border-border bg-background overflow-hidden" role="group" aria-label="Editor mode">
-          <button onClick={requestSwitchToVisual} aria-pressed={mode === 'visual'}
-            className={`px-2 py-1 text-xs font-medium transition-colors cursor-pointer ${mode === 'visual' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
-            Visual
-          </button>
-          <button onClick={switchToText} aria-pressed={mode === 'text'}
-            className={`px-2 py-1 text-xs font-medium transition-colors cursor-pointer ${mode === 'text' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
-            Text
-          </button>
-        </div>
         {mode === 'text' && (
           <button onClick={handleApply} disabled={applyDisabled}
             title={applyDisabled ? 'Fix the parse errors before applying' : 'Apply the script to the program'}

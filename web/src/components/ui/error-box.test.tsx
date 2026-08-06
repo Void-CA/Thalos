@@ -28,7 +28,7 @@ describe('ErrorBox — renders the real message for every error shape (R3-003)',
   it('renders the code-to-CTA for a coded error (error-ux spec)', () => {
     render(<ErrorBox error={{ message: 'No plan', code: 'no_active_plan' }} />)
     expect(
-      screen.getByText(/Preview a motion program in Planificación first/),
+      screen.getByText(/Preview a motion program in Programación first/),
     ).toBeInTheDocument()
   })
 
