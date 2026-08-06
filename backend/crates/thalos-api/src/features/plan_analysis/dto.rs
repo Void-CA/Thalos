@@ -11,7 +11,7 @@
 //!   "metrics": { "waypoint_count": 20, "avg_manipulability": 0.42, ... },
 //!   "summary": { "quality_index": 0.85, "score": 85, "grade": "Good", ... },
 //!   "problem_regions": [ ... ],   // contrato legacy, vía ProblemRegionsDtoAdapter
-//!   "manipulability_series": [ { "waypoint": 0, "yoshikawa": 0.42 }, ... ]  // S1 (P3), opcional
+//!   "manipulability_series": [ { "waypoint": 0, "yoshikawa": 0.42, "det_jtj": 0.18 }, ... ]  // S1 (P3), opcional
 //! }
 //! ```
 //!
@@ -218,6 +218,15 @@ impl PlanAnalysisResponse {
                 w.manipulability.as_ref().map(|m| ManipulabilityPointDto {
                     waypoint: w.index as u32,
                     yoshikawa: m.yoshikawa,
+                    // Proyección del det(J·Jᵀ) ya computado por el runtime en el
+                    // SingularityReport del mismo waypoint (singularity.rs:51).
+                    // Fallback yoshikawa² (matemáticamente idéntico: det(J·Jᵀ) =
+                    // ∏σᵢ² = (∏σᵢ)²) solo si el reporte de singularidad faltara.
+                    det_jtj: w
+                        .singularity
+                        .as_ref()
+                        .map(|s| s.det_jtj)
+                        .unwrap_or_else(|| m.yoshikawa * m.yoshikawa),
                 })
             })
             .collect();
@@ -244,14 +253,19 @@ impl PlanAnalysisResponse {
 /// Punto de la serie de manipulabilidad por waypoint (P3).
 ///
 /// `waypoint` es el índice 0-based del waypoint en el plan; `yoshikawa` es la
-/// medida de manipulabilidad del análisis técnico (proyección, nunca
-/// recomputada por el DTO).
+/// medida de manipulabilidad del análisis técnico y `det_jtj` es el
+/// determinante de `J·Jᵀ` (ambos proyecciones del mismo SVD — nunca
+/// recomputados por el DTO). `det_jtj` es ADITIVO (`#[serde(default)]`): un
+/// backend viejo sin el campo no rompe a los clientes (I3).
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct ManipulabilityPointDto {
     /// Índice del waypoint en el plan (0-based).
     pub waypoint: u32,
     /// Medida de manipulabilidad de Yoshikawa en ese waypoint.
     pub yoshikawa: f64,
+    /// Determinante de J·Jᵀ (producto de los valores singulares al cuadrado).
+    #[serde(default)]
+    pub det_jtj: f64,
 }
 
 /// Ancla de artefacto en el wire — kind + id real (O3).
@@ -921,23 +935,33 @@ mod tests {
     // analysis), never recomputed by the DTO.
 
     use thalos_core::kinematics::jacobian::manipulability::ManipulabilityReport;
+    use thalos_core::kinematics::jacobian::singularity::SingularityReport;
     use thalos_planning::analysis::{AnalysisMetrics, WaypointAnalysis};
 
     /// `PlanAnalysis` con `count` waypoints, cada uno con manipulabilidad
-    /// determinística `yoshikawa = 0.1 + i * 0.01` (i = índice del waypoint).
+    /// determinística `yoshikawa = 0.1 + i * 0.01` (i = índice del waypoint) y
+    /// su singularidad consistente (`det_jtj = yoshikawa²`, mismo SVD).
     fn sample_analysis(count: usize) -> PlanAnalysis {
         PlanAnalysis {
             waypoints: (0..count)
-                .map(|i| WaypointAnalysis {
-                    index: i,
-                    timestamp: i as f64 * 0.5,
-                    joints: vec![0.0, 0.0],
-                    singularity: None,
-                    manipulability: Some(ManipulabilityReport {
-                        yoshikawa: 0.1 + i as f64 * 0.01,
-                        isotropy: 1.0,
-                    }),
-                    min_collision_distance: None,
+                .map(|i| {
+                    let yoshikawa = 0.1 + i as f64 * 0.01;
+                    WaypointAnalysis {
+                        index: i,
+                        timestamp: i as f64 * 0.5,
+                        joints: vec![0.0, 0.0],
+                        singularity: Some(SingularityReport {
+                            det_jtj: yoshikawa * yoshikawa,
+                            condition_number: 1.0,
+                            rank: 2,
+                            singular_values: vec![yoshikawa.sqrt(), yoshikawa.sqrt()],
+                        }),
+                        manipulability: Some(ManipulabilityReport {
+                            yoshikawa,
+                            isotropy: 1.0,
+                        }),
+                        min_collision_distance: None,
+                    }
                 })
                 .collect(),
             metrics: AnalysisMetrics {
@@ -977,9 +1001,17 @@ mod tests {
         assert_eq!(series.len(), 20, "20 waypoints → 20 series entries");
         assert_eq!(series[0]["waypoint"], 0);
         assert!((series[0]["yoshikawa"].as_f64().expect("f64") - 0.1).abs() < 1e-12);
+        assert!(
+            (series[0]["det_jtj"].as_f64().expect("f64") - 0.1 * 0.1).abs() < 1e-12,
+            "each point must carry the Jacobian determinant (det(J·Jᵀ))"
+        );
         assert_eq!(series[19]["waypoint"], 19);
         assert!(
             (series[19]["yoshikawa"].as_f64().expect("f64") - (0.1 + 19.0 * 0.01)).abs() < 1e-12
+        );
+        assert!(
+            (series[19]["det_jtj"].as_f64().expect("f64") - (0.29 * 0.29)).abs() < 1e-12,
+            "det_jtj = (yoshikawa)² when both derive from the same SVD"
         );
     }
 
@@ -999,6 +1031,10 @@ mod tests {
         assert!(
             (back.manipulability_series[3].yoshikawa - (0.1 + 3.0 * 0.01)).abs() < 1e-12,
             "round-trip must preserve yoshikawa"
+        );
+        assert!(
+            (back.manipulability_series[3].det_jtj - (0.13 * 0.13)).abs() < 1e-12,
+            "round-trip must preserve det_jtj"
         );
     }
 
@@ -1051,6 +1087,33 @@ mod tests {
             "pre-existing fields keep their shape"
         );
         assert_eq!(back.observations.len(), 2);
+    }
+
+    #[test]
+    fn old_series_point_without_det_jtj_deserializes() {
+        // Additive field (I3): a series point from an older backend that lacks
+        // `det_jtj` must deserialize — the field defaults instead of failing.
+        let report = sample_report();
+        let analysis = sample_analysis(2);
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[]);
+
+        let mut value = serde_json::to_value(response).expect("serialize");
+        value["manipulability_series"][0]
+            .as_object_mut()
+            .expect("series point")
+            .remove("det_jtj");
+
+        let back: PlanAnalysisResponse =
+            serde_json::from_value(value).expect("old series point must deserialize");
+        assert_eq!(
+            back.manipulability_series[0].det_jtj, 0.0,
+            "missing det_jtj must default to 0.0 (serde default)"
+        );
+        assert!(
+            (back.manipulability_series[0].yoshikawa - 0.1).abs() < 1e-12,
+            "pre-existing series fields keep their values"
+        );
     }
 
     // ─── PR2: recommendations[] additive wire field (spec recommendation-model
