@@ -6,6 +6,7 @@ use tracing_subscriber::EnvFilter;
 use thalos_api::{
     app::{
         new_state_with_scene_writeback_and_history_cap, parse_env_bool, parse_env_usize,
+        register_esp32_from_env,
     },
     http::app_router,
 };
@@ -25,6 +26,11 @@ async fn main() {
         parse_env_usize("THALOS_HISTORY_CAP", DEFAULT_HISTORY_CAP),
     )
     .await;
+
+    // PR2a: THALOS_EXECUTION_BACKEND + THALOS_SERIAL_PORT register the Esp32
+    // backend at the binary entry point (hermetic tests untouched). The lazy
+    // factory opens no serial port here — only connect does.
+    register_esp32_from_env(&app_state).await;
 
     let app = app_router()
         .layer(CorsLayer::permissive())

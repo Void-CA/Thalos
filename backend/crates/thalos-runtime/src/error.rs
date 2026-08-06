@@ -26,6 +26,25 @@ pub enum ControllerError {
 
     #[error("invalid manifest: {0}")]
     InvalidManifest(String),
+
+    /// Backend management (resilience-presentation PR2a): the requested
+    /// backend is not registered.
+    #[error("backend not found: {0}")]
+    NotFound(String),
+
+    /// Backend management (PR2a): the serial port opened but no firmware
+    /// answered the handshake.
+    #[error("no firmware detected on the serial port — switch to Simulation or check the port")]
+    NoFirmware,
+
+    /// Backend management (PR2a): the serial port could not be opened
+    /// (missing or occupied device).
+    #[error("serial port is in use or cannot be opened: {0}")]
+    PortInUse(String),
+
+    /// Backend management (PR2a): the serial connection was lost mid-operation.
+    #[error("connection to the execution backend was lost")]
+    ConnectionLost,
 }
 
 impl ControllerError {
@@ -37,6 +56,10 @@ impl ControllerError {
             ControllerError::Timeout => "timeout",
             ControllerError::Protocol(_) => "protocol_error",
             ControllerError::InvalidManifest(_) => "invalid_manifest",
+            ControllerError::NotFound(_) => "not_found",
+            ControllerError::NoFirmware => "no_firmware",
+            ControllerError::PortInUse(_) => "port_in_use",
+            ControllerError::ConnectionLost => "connection_lost",
         }
     }
 }
@@ -49,7 +72,11 @@ impl From<ControllerError> for RuntimeError {
             | ControllerError::UnsupportedCapability
             | ControllerError::Timeout
             | ControllerError::Protocol(_)
-            | ControllerError::InvalidManifest(_) => RuntimeError::JointCountMismatch {
+            | ControllerError::InvalidManifest(_)
+            | ControllerError::NotFound(_)
+            | ControllerError::NoFirmware
+            | ControllerError::PortInUse(_)
+            | ControllerError::ConnectionLost => RuntimeError::JointCountMismatch {
                 expected: 0,
                 received: 0,
             },

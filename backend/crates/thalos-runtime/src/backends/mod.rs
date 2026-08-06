@@ -9,7 +9,7 @@ pub mod replay;
 pub mod transport;
 
 pub use internal::InternalBackend;
-pub use manager::BackendManager;
+pub use manager::{BackendEntry, BackendManager};
 
 use thalos_core::models::RobotModel;
 

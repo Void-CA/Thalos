@@ -6,7 +6,8 @@ use thalos_core::models::RobotModel;
 use thalos_runtime::{
     RobotController, SceneService, SessionManager,
     backends::{
-        InternalBackend, controller::simulation::SimulationController, manager::BackendManager,
+        BackendEntry, InternalBackend, controller::simulation::SimulationController,
+        manager::BackendManager,
     },
 };
 
@@ -82,6 +83,32 @@ pub fn parse_env_usize(var: &str, default: usize) -> usize {
         .unwrap_or(default)
 }
 
+/// Pure decision for the hardware-backend env wiring (PR2a): register the
+/// Esp32 backend only when BOTH `THALOS_EXECUTION_BACKEND=esp32` AND
+/// `THALOS_SERIAL_PORT` are set. Kept pure so the env policy is unit-testable
+/// without mutating the process environment.
+pub fn should_register_esp32(backend: Option<&str>, serial_port: Option<&str>) -> bool {
+    backend.is_some_and(|b| b == "esp32") && serial_port.is_some()
+}
+
+/// Register the hardware execution backend from the process environment
+/// (resilience-presentation PR2a: `THALOS_EXECUTION_BACKEND` +
+/// `THALOS_SERIAL_PORT`). Called ONLY at the binary entry point (`main.rs`)
+/// so tests building state via `new_default_state()` stay hermetic regardless
+/// of the shell env. No serial port is opened — the lazy Esp32 factory only
+/// connects on the first `connect_with_port` call.
+pub async fn register_esp32_from_env(state: &SharedState) {
+    let backend = std::env::var("THALOS_EXECUTION_BACKEND").ok();
+    let port = std::env::var("THALOS_SERIAL_PORT").ok();
+    if should_register_esp32(backend.as_deref(), port.as_deref()) {
+        state
+            .services
+            .manager
+            .register_esp32(port.as_deref().unwrap_or_default())
+            .await;
+    }
+}
+
 pub async fn new_default_state() -> SharedState {
     // Design D5: scene-writeback is OFF by default (rollback-safe). The
     // first runtime-mutating surface (PR4 apply) requires explicit opt-in.
@@ -128,8 +155,19 @@ pub async fn new_state_with_scene_writeback_and_history_cap(
         as Arc<RwLock<dyn RobotController + Send + Sync>>;
 
     let manager = Arc::new(BackendManager::new());
+    // PR2a: the Simulation backend is ALWAYS registered and active by default.
+    // `activate` connects the controller and records `active_id` so the
+    // `GET /backends` status is coherent from boot.
     manager
-        .set_active(controller)
+        .register(BackendEntry {
+            id: "simulation".into(),
+            name: "Simulation".into(),
+            controller: Some(controller.clone()),
+            port: None,
+        })
+        .await;
+    manager
+        .activate("simulation")
         .await
         .expect("Failed to register simulation controller");
 
@@ -261,5 +299,25 @@ mod tests {
 
         unsafe { std::env::set_var(VAR, "-5") };
         assert_eq!(parse_env_usize(VAR, 100), 100, "negative is rejected");
+    }
+
+    // ── should_register_esp32 (resilience-presentation PR2a env wiring) ──
+
+    #[test]
+    fn should_register_esp32_requires_both_env_vars() {
+        assert!(should_register_esp32(Some("esp32"), Some("/dev/ttyUSB0")));
+        assert!(
+            !should_register_esp32(Some("esp32"), None),
+            "missing port → no hardware backend"
+        );
+        assert!(
+            !should_register_esp32(Some("simulation"), Some("/dev/ttyUSB0")),
+            "non-esp32 backend value → no hardware backend"
+        );
+        assert!(
+            !should_register_esp32(None, Some("/dev/ttyUSB0")),
+            "missing backend id → no hardware backend"
+        );
+        assert!(!should_register_esp32(None, None));
     }
 }

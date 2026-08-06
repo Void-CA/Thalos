@@ -3301,3 +3301,100 @@ async fn catalog_load_emits_metadata_id() {
     );
     assert_eq!(body["robot"]["dof"], 3, "Planar3R metadata carries dof 3");
 }
+
+// ── Backend management (resilience-presentation PR2a) ─────────────────────
+
+#[tokio::test]
+async fn get_backends_lists_only_simulation_without_env() {
+    let state = new_default_state().await;
+    let app = app_router().with_state(state);
+    let (status, body) = get_json(app, http::Method::GET, "/api/v1/backends", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("body");
+    let arr = body.as_array().expect("array");
+    assert_eq!(arr.len(), 1, "only Simulation is registered without env");
+    assert_eq!(arr[0]["id"], "simulation");
+    assert_eq!(arr[0]["status"], "active");
+    assert_eq!(arr[0]["connected"], true);
+}
+
+#[tokio::test]
+async fn get_backends_includes_esp32_when_registered() {
+    let state = new_default_state().await;
+    state.services.manager.register_esp32("/dev/ttyUSB0").await;
+    let app = app_router().with_state(state);
+    let (status, body) = get_json(app, http::Method::GET, "/api/v1/backends", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("body");
+    let arr = body.as_array().expect("array");
+    assert_eq!(arr.len(), 2);
+    let esp = arr
+        .iter()
+        .find(|b| b["id"] == "esp32")
+        .expect("esp32 entry present");
+    assert_eq!(esp["status"], "inactive");
+    assert_eq!(esp["connected"], false);
+    assert_eq!(esp["port"], "/dev/ttyUSB0");
+}
+
+#[tokio::test]
+async fn activate_simulation_backend_returns_ok() {
+    let state = new_default_state().await;
+    let app = app_router().with_state(state);
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/backends/simulation/activate",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body.expect("body")["status"], "ok");
+}
+
+#[tokio::test]
+async fn activate_unknown_backend_returns_404_not_found() {
+    let state = new_default_state().await;
+    let app = app_router().with_state(state);
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/backends/unknown/activate",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body.expect("body")["code"], "not_found");
+}
+
+#[tokio::test]
+async fn connect_esp32_with_invalid_port_returns_400_port_in_use() {
+    let state = new_default_state().await;
+    state.services.manager.register_esp32("/dev/ttyUSB0").await;
+    let app = app_router().with_state(state);
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/backends/esp32/connect",
+        Some(json!({"port": "/dev/thalos-tests-nonexistent-abc"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body.expect("body")["code"], "port_in_use");
+}
+
+#[tokio::test]
+async fn disconnect_not_connected_backend_returns_400_not_connected() {
+    let state = new_default_state().await;
+    state.services.manager.register_esp32("/dev/ttyUSB0").await;
+    let app = app_router().with_state(state);
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/backends/esp32/disconnect",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body.expect("body")["code"], "not_connected");
+}
