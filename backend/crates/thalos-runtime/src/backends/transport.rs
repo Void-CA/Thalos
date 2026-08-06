@@ -190,6 +190,10 @@ pub struct FakeTransport {
     sent: std::sync::Mutex<Vec<Vec<u8>>>,
     responses: std::sync::Mutex<Vec<Vec<u8>>>,
     connected: std::sync::atomic::AtomicBool,
+    /// When set, the next `receive` that finds an empty response queue reports
+    /// the transport disconnected (R4-001 test seam: simulate a device that
+    /// drops mid-operation AFTER answering the HELLO handshake).
+    disconnect_on_empty: std::sync::atomic::AtomicBool,
 }
 
 impl FakeTransport {
@@ -198,7 +202,16 @@ impl FakeTransport {
             sent: std::sync::Mutex::new(Vec::new()),
             responses: std::sync::Mutex::new(Vec::new()),
             connected: std::sync::atomic::AtomicBool::new(false),
+            disconnect_on_empty: std::sync::atomic::AtomicBool::new(false),
         }
+    }
+
+    /// Arm the transport to report `TransportError::Disconnected` on the next
+    /// `receive` that has no queued response — i.e. right after the injected
+    /// HELLO response is consumed. Test seam for the ConnectionLost path.
+    pub fn disconnect_on_empty_queue(&self) {
+        self.disconnect_on_empty
+            .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Inyectar una respuesta que se devolverá en el próximo `receive()`.
@@ -239,6 +252,12 @@ impl Transport for FakeTransport {
     async fn receive(&mut self) -> Result<Vec<u8>, TransportError> {
         let mut responses = self.responses.lock().unwrap();
         if responses.is_empty() {
+            if self
+                .disconnect_on_empty
+                .swap(false, std::sync::atomic::Ordering::SeqCst)
+            {
+                return Err(TransportError::Disconnected);
+            }
             return Err(TransportError::Timeout);
         }
         Ok(responses.remove(0))

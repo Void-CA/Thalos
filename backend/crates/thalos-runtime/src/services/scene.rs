@@ -436,10 +436,7 @@ impl SceneService {
             ctrl_guard
                 .seek(position)
                 .await
-                .map_err(|e| RuntimeError::JointCountMismatch {
-                    expected: 0,
-                    received: 0,
-                })?;
+                .map_err(|e| RuntimeError::ControllerFailed { source: e })?;
             drop(ctrl_guard);
             return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
         }
@@ -536,10 +533,20 @@ impl SceneService {
     /// Also records the state into the active MotionRecorder if recording
     /// is in progress, and finalizes the session when execution completes.
     pub async fn tick_execution_delta(&self, dt: f64) -> Result<TickDelta, RuntimeError> {
-        // 1. Advance simulation time via the controller trait
+        // 1. Advance simulation time via the controller trait.
+        // R4-001: a real failure (e.g. `ConnectionLost`) from `advance` must
+        // PROPAGATE as an execution failure — not be swallowed — so the code
+        // reaches the frontend and the session can be marked failed. The only
+        // ignorable case is `UnsupportedCapability`: real hardware backends
+        // implement `advance` as the default `Err(UnsupportedCapability)` — time
+        // is real, the tick reads state back below.
         if let Some(ctrl) = self.manager.get_controller().await {
             let ctrl_guard = ctrl.read().await;
-            let _ = ctrl_guard.advance(dt).await; // non-fatal for real backends
+            if let Err(e) = ctrl_guard.advance(dt).await {
+                if !matches!(e, crate::error::ControllerError::UnsupportedCapability) {
+                    return Err(RuntimeError::ControllerFailed { source: e });
+                }
+            }
         }
 
         // 2. Read state back & update runtime joints

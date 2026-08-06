@@ -7,7 +7,7 @@ use thalos_core::models::RobotModelError;
 use thalos_planning::error::PlanningError;
 
 /// Errors specific to the RobotController trait.
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq, Clone)]
 pub enum ControllerError {
     #[error("controller is already connected")]
     AlreadyConnected,
@@ -66,21 +66,11 @@ impl ControllerError {
 
 impl From<ControllerError> for RuntimeError {
     fn from(e: ControllerError) -> Self {
-        match e {
-            ControllerError::AlreadyConnected
-            | ControllerError::NotConnected
-            | ControllerError::UnsupportedCapability
-            | ControllerError::Timeout
-            | ControllerError::Protocol(_)
-            | ControllerError::InvalidManifest(_)
-            | ControllerError::NotFound(_)
-            | ControllerError::NoFirmware
-            | ControllerError::PortInUse(_)
-            | ControllerError::ConnectionLost => RuntimeError::JointCountMismatch {
-                expected: 0,
-                received: 0,
-            },
-        }
+        // R4-001: a controller failure must preserve the REAL error code so the
+        // API can surface e.g. `connection_lost` / `not_connected` to the
+        // frontend — never degrade into the meaningless joint_count_mismatch
+        // placeholder the previous mapping produced.
+        RuntimeError::ControllerFailed { source: e }
     }
 }
 
@@ -131,6 +121,55 @@ pub enum RuntimeError {
     /// runtime refuses without mutation; the caller must re-read the pair.
     #[error("undo version mismatch: expected {expected}, got {actual}")]
     UndoVersionMismatch { expected: u64, actual: u64 },
+
+    /// A controller-level failure (R4-001): the underlying `RobotController`
+    /// returned an error that must reach the API with its REAL machine-readable
+    /// code (`connection_lost`, `not_connected`, `no_firmware`, …). Previously
+    /// every controller error collapsed into a meaningless
+    /// `JointCountMismatch{0,0}` (422) that the frontend could not act on.
+    #[error("{source}")]
+    ControllerFailed { source: ControllerError },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// R4-001: a controller error must NOT collapse into `JointCountMismatch{0,0}`.
+    /// `ConnectionLost` maps to `ControllerFailed`, preserving the real code so
+    /// the frontend can offer the Reconectar CTA.
+    #[test]
+    fn from_controller_connection_lost_preserves_connection_lost_code() {
+        let err: RuntimeError = ControllerError::ConnectionLost.into();
+        match err {
+            RuntimeError::ControllerFailed { source } => {
+                assert_eq!(source, ControllerError::ConnectionLost);
+                assert_eq!(source.error_code(), "connection_lost");
+            }
+            other => panic!("ConnectionLost must map to ControllerFailed, got {other:?}"),
+        }
+    }
+
+    /// R4-001: every `ControllerError` keeps its real machine-readable code
+    /// through the `RuntimeError` conversion — none may degrade to the
+    /// meaningless `joint_count_mismatch` placeholder.
+    #[test]
+    fn from_controller_preserves_real_error_codes() {
+        fn code(e: ControllerError) -> &'static str {
+            let err: RuntimeError = e.into();
+            match err {
+                RuntimeError::ControllerFailed { source } => source.error_code(),
+                other => panic!("must be ControllerFailed, got {other:?}"),
+            }
+        }
+        assert_eq!(code(ControllerError::AlreadyConnected), "already_connected");
+        assert_eq!(code(ControllerError::NotConnected), "not_connected");
+        assert_eq!(code(ControllerError::Timeout), "timeout");
+        assert_eq!(code(ControllerError::Protocol("boom".into())), "protocol_error");
+        assert_eq!(code(ControllerError::NoFirmware), "no_firmware");
+        assert_eq!(code(ControllerError::PortInUse("busy".into())), "port_in_use");
+        assert_eq!(code(ControllerError::ConnectionLost), "connection_lost");
+    }
 }
 
 impl RuntimeError {
@@ -174,6 +213,7 @@ impl RuntimeError {
             RuntimeError::EmptyCommandHistory => "empty_command_history",
             RuntimeError::StaleUndo => "stale_undo",
             RuntimeError::UndoVersionMismatch { .. } => "undo_version_mismatch",
+            RuntimeError::ControllerFailed { source } => source.error_code(),
         }
     }
 }

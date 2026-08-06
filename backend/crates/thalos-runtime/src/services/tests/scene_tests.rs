@@ -21,6 +21,18 @@ use thalos_math::{Transform3D, UnitQuaternion, Vector3};
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
+/// A VALID compiled plan: two waypoints, non-zero duration, target `[t, t]`.
+fn compiled_plan(t: f64) -> thalos_planning::motion::program::CompiledPlan {
+    let points = vec![
+        thalos_core::trajectory::TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+        thalos_core::trajectory::TrajectoryPoint::new(vec![t, t], 1.0),
+    ];
+    thalos_planning::motion::program::CompiledPlan::new(
+        thalos_core::trajectory::Trajectory::new(points),
+        vec![],
+    )
+}
+
 /// Create a SceneService with the given model and a BackendManager (simulation).
 async fn make_service(model: RobotModel) -> (SceneService, Arc<BackendManager>) {
     let controller = Arc::new(RwLock::new(SimulationController::new(model.metadata().dof)))
@@ -1062,4 +1074,90 @@ async fn start_execution_reports_active_controller_source() {
         .execution
         .expect("start_execution must report an execution session");
     assert_eq!(exe.source, ExecutionSource::Hardware);
+}
+
+/// R4-001: `start_execution` MUST propagate a `ConnectionLost` failure from
+/// the controller's `execute` instead of swallowing it — the code has to
+/// reach the API so the frontend can offer the Reconectar CTA.
+#[tokio::test]
+async fn start_execution_propagates_connection_lost_from_controller() {
+    let mut mock = MockController::new();
+    mock.execute_error = Some(crate::error::ControllerError::ConnectionLost);
+    let controller = Arc::new(RwLock::new(mock)) as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let manager = Arc::new(BackendManager::new());
+    manager.set_active(controller).await.unwrap();
+    let svc = SceneService::new(
+        Box::new(InternalBackend),
+        manager.clone(),
+        RobotModel::Scara,
+    );
+
+    // A real scheduled plan so `execute` is actually invoked.
+    svc.schedule_program(compiled_plan(1.0), Default::default())
+        .await
+        .unwrap();
+
+    let err = match svc.start_execution().await {
+        Err(e) => e,
+        Ok(_) => panic!("start_execution must fail when the controller reports ConnectionLost"),
+    };
+    match err {
+        crate::RuntimeError::ControllerFailed { source } => {
+            assert_eq!(source, crate::error::ControllerError::ConnectionLost);
+        }
+        other => panic!("expected ControllerFailed(ConnectionLost), got {other:?}"),
+    }
+}
+
+/// R4-001: `tick_execution_delta` must NOT swallow a `ConnectionLost` from
+/// the controller's `advance` — it propagates as an execution failure so the
+/// frontend tick loop marks the session failed with `connection_lost`.
+#[tokio::test]
+async fn tick_propagates_connection_lost_from_advance() {
+    let mut mock = MockController::new();
+    mock.advance_error = Some(crate::error::ControllerError::ConnectionLost);
+    let controller = Arc::new(RwLock::new(mock)) as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let manager = Arc::new(BackendManager::new());
+    manager.set_active(controller).await.unwrap();
+    let svc = SceneService::new(
+        Box::new(InternalBackend),
+        manager.clone(),
+        RobotModel::Scara,
+    );
+
+    let err = match svc.tick_execution_delta(0.01).await {
+        Err(e) => e,
+        Ok(_) => panic!("tick must fail when the controller reports ConnectionLost"),
+    };
+    match err {
+        crate::RuntimeError::ControllerFailed { source } => {
+            assert_eq!(source, crate::error::ControllerError::ConnectionLost);
+        }
+        other => panic!("expected ControllerFailed(ConnectionLost), got {other:?}"),
+    }
+}
+
+/// R4-001: a hardware backend's default `advance` (`UnsupportedCapability` —
+/// time is real) must NOT fail the tick; it is the normal, ignorable case.
+#[tokio::test]
+async fn tick_ignores_unsupported_capability_from_advance() {
+    let mut mock = MockController::new();
+    mock.advance_error = Some(crate::error::ControllerError::UnsupportedCapability);
+    let controller = Arc::new(RwLock::new(mock)) as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let manager = Arc::new(BackendManager::new());
+    manager.set_active(controller).await.unwrap();
+    let svc = SceneService::new(
+        Box::new(InternalBackend),
+        manager.clone(),
+        RobotModel::Scara,
+    );
+
+    let delta = svc
+        .tick_execution_delta(0.01)
+        .await
+        .expect("UnsupportedCapability from advance must not fail the tick");
+    assert!(
+        delta.execution.is_none() || delta.execution.as_ref().is_some_and(|e| !e.status.is_terminal()),
+        "tick must return a normal delta for hardware backends"
+    );
 }

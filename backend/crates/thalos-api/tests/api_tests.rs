@@ -3398,3 +3398,63 @@ async fn disconnect_not_connected_backend_returns_400_not_connected() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body.expect("body")["code"], "not_connected");
 }
+
+/// R4-001 integration: a real Esp32Backend whose transport drops MID-EXECUTION
+/// surfaces `connection_lost` on the wire — the frontend tick loop keys on
+/// that code to offer the Reconectar CTA. Proves the ConnectionLost path is
+/// reachable end-to-end (HTTP 409, NOT the collapsed joint_count_mismatch).
+#[tokio::test]
+async fn start_execution_with_lost_connection_returns_409_connection_lost() {
+    let state = new_default_state().await;
+    state.services.manager.register_esp32("/dev/ttyUSB0").await;
+
+    // FakeTransport answers HELLO, then reports the device disconnected on the
+    // next receive (mid-upload) — the ConnectionLost seam.
+    let transport = thalos_runtime::backends::transport::FakeTransport::new();
+    transport.inject_response(b"HELLO 1 OK\n".to_vec());
+    transport.disconnect_on_empty_queue();
+    state
+        .services
+        .manager
+        .connect_with_transport("esp32", "/dev/ttyUSB0", Box::new(transport))
+        .await
+        .expect("esp32 connect must succeed");
+    state
+        .services
+        .manager
+        .activate("esp32")
+        .await
+        .expect("esp32 activate must succeed");
+
+    // A real scheduled plan so `execute` actually hits the wire.
+    let plan = {
+        let points = vec![
+            thalos_core::trajectory::TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            thalos_core::trajectory::TrajectoryPoint::new(vec![1.0, 1.0], 1.0),
+        ];
+        thalos_planning::motion::program::CompiledPlan::new(
+            thalos_core::trajectory::Trajectory::new(points),
+            vec![],
+        )
+    };
+    state
+        .services
+        .scene
+        .schedule_program(plan, Default::default())
+        .await
+        .expect("schedule_program must succeed");
+
+    let app = app_router().with_state(state);
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/motion/start",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "connection_lost must be a conflict");
+    assert_eq!(
+        body.expect("body")["code"], "connection_lost",
+        "the real code must reach the frontend, not a collapsed joint_count_mismatch"
+    );
+}
