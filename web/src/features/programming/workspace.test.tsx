@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { act } from 'react'
 import { MemoryRouter } from 'react-router'
@@ -10,29 +10,15 @@ import { useAnalysisStore } from '@/features/analysis/store'
 import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 
 /**
- * ProgrammingWorkspace — the UNIFIED programming area (hotfix: /task + /planning
- * merged into ONE workspace under /task, stage 3). The three ways to command
- * the robot — semantic editor (Tasks, with internal Visual/Text), motion
- * program by segments (Motion), and the analysis view (Analysis) — are
- * tabs of the same workspace, communicating that they are ONE interaction
- * medium to send orders to the robot.
+ * ProgrammingWorkspace — the UNIFIED programming area (hotfix: /task +
+ * /planning merged into ONE workspace under /task, stage 3). The two ways to
+ * author an order — semantic editor (Tasks, with internal Visual/Text) and
+ * motion program by segments (Motion) — are tabs of the same workspace,
+ * communicating that they are ONE interaction medium.
  *
- * PR2 (workspace-analysis spec "Tabs Layout"): the Analysis tab shows a badge
- * when `report !== null`, and PlanCharts/AlternativesPanel are data-gated:
- * they SHALL NOT render when `report === null`.
- *
- * PlanCharts/AlternativesPanel are mocked with stubs: this suite verifies the
- * LAYOUT contract (presence/absence by report), not their internals (covered
- * by plan-charts.test.tsx / alternatives-panel tests).
+ * HOTFIX (evaluation-workspace): the Analysis tab was REMOVED — the analysis
+ * check is now the /evaluation VISTA. This suite pins the two-tab layout.
  */
-
-vi.mock('../planning/components/PlanCharts', () => ({
-  PlanCharts: () => <div data-testid="plan-charts-stub">PlanCharts</div>,
-}))
-
-vi.mock('@/features/analysis/components/alternatives-panel', () => ({
-  AlternativesPanel: () => <div data-testid="alternatives-panel-stub">AlternativesPanel</div>,
-}))
 
 const report: AnalysisReportWire = {
   artifact: { kind: 'MotionPlan', id: 'plan-1' },
@@ -68,20 +54,21 @@ beforeEach(() => {
 })
 afterEach(() => cleanup())
 
-describe('ProgrammingWorkspace — unified tabs (Tasks | Motion | Analysis)', () => {
-  it('renders the three tabs of the single programming workspace', () => {
+describe('ProgrammingWorkspace — unified tabs (Tasks | Motion)', () => {
+  it('renders the two authoring tabs — the analysis tab is gone (moved to /evaluation)', () => {
     renderWorkspace()
     expect(screen.getByRole('tab', { name: 'Tasks' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Motion' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Analysis' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Analysis' })).not.toBeInTheDocument()
   })
 
   it('Tasks is the default tab — the TaskEditor (Visual/Text) + Diagnostics', () => {
     renderWorkspace()
-    expect(screen.getByRole('heading', { name: 'Program' })).toBeInTheDocument()
+    // TaskEditor presence: the unified compile action + operation rows.
+    expect(screen.getByRole('button', { name: 'Compile' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Diagnostics' })).toBeInTheDocument()
     expect(screen.getByText(/No compile result/)).toBeInTheDocument()
-    expect(screen.getByRole('group', { name: 'Editor mode' })).toBeInTheDocument()
   })
 
   it('shows zero Scene editing UI in the programming workspace (SceneEditor lives in /scene)', () => {
@@ -99,41 +86,21 @@ describe('ProgrammingWorkspace — unified tabs (Tasks | Motion | Analysis)', ()
     expect(screen.getByText(/No segments\. Add a motion command/)).toBeInTheDocument()
   })
 
-  it('shows no Analysis badge when report === null', () => {
+  it('renders NO analysis content inside the programming workspace anymore', () => {
     renderWorkspace()
-    expect(screen.queryByTestId('analysis-tab-badge')).not.toBeInTheDocument()
+    // Neither the AdvisorSection null-state nor the AnalysisSection empty
+    // state renders — the evaluation view owns that content now.
+    expect(screen.queryByText('No analysis available')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/Compile and preview a motion program to see analysis/),
+    ).not.toBeInTheDocument()
   })
 
-  it('shows the Analysis badge when report !== null', () => {
+  it('a report in the store does NOT resurrect an Analysis tab', () => {
     act(() => {
       useAnalysisStore.setState({ report })
     })
     renderWorkspace()
-    expect(screen.getByTestId('analysis-tab-badge')).toBeInTheDocument()
-  })
-
-  it('data-gates PlanCharts and AlternativesPanel: hidden when report === null', () => {
-    renderWorkspace()
-    fireEvent.click(screen.getByRole('tab', { name: 'Analysis' }))
-    // AdvisorSection + AnalysisSection keep their null-state behavior…
-    expect(screen.getByText('No analysis available')).toBeInTheDocument()
-    expect(screen.getByText(/Compile and preview a motion program to see analysis/)).toBeInTheDocument()
-    // …but the data-gated components SHALL NOT render.
-    expect(screen.queryByTestId('plan-charts-stub')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('alternatives-panel-stub')).not.toBeInTheDocument()
-  })
-
-  it('renders PlanCharts, AlternativesPanel, AdvisorSection and AnalysisSection with a report', () => {
-    act(() => {
-      useAnalysisStore.setState({ report })
-    })
-    renderWorkspace()
-    fireEvent.click(screen.getByRole('tab', { name: 'Analysis' }))
-    expect(screen.getByTestId('plan-charts-stub')).toBeInTheDocument()
-    expect(screen.getByTestId('alternatives-panel-stub')).toBeInTheDocument()
-    // AdvisorSection projects the report (score)…
-    expect(screen.getByText(/Score: 90/)).toBeInTheDocument()
-    // …and AnalysisSection renders its analysis UI (StatusBanner score).
-    expect(screen.getByText(/90 \/ 100/)).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Analysis' })).not.toBeInTheDocument()
   })
 })

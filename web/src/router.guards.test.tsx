@@ -184,7 +184,7 @@ describe('GuardedRoute — behavior over real router routes', () => {
 
     // Execution panel must NOT render; Programación workspace is active.
     expect(screen.queryByRole('heading', { name: 'Execution' })).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Program' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Diagnostics' })).toBeInTheDocument()
   })
 
   it('renders /execution from a planning-preview plan (planReady without compiled)', async () => {
@@ -216,6 +216,40 @@ describe('GuardedRoute — behavior over real router routes', () => {
 
     expect(router.state.location.pathname).toBe('/execution')
     expect(screen.getByRole('heading', { name: 'Execution' })).toBeInTheDocument()
+  })
+
+  it('blocks /evaluation when no plan exists at all, redirecting to /task (producer of planReady)', async () => {
+    // evaluation.requires = ['sceneValid','planReady'] — with NO plan at all
+    // (compiled=false AND no activePlan) planReady=false and the guard lands
+    // on the producer of planReady's origin (compiled → /task).
+    seedWorkflowState({ robotLoaded: true })
+    const router = renderRouter(['/evaluation'])
+
+    expect(producerOf('planReady')?.path).toBe('/task')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/task'))
+    expect(screen.queryByRole('heading', { name: 'Evaluación' })).not.toBeInTheDocument()
+  })
+
+  it('renders /evaluation from a compiled plan even WITHOUT a report (analyzed is NOT a gate)', async () => {
+    // The evaluation view is a RECOMMENDED checkpoint, not a block: an
+    // uncompiled-... rather, an UNANALYZED plan still opens /evaluation —
+    // the view shows its "program first" empty state.
+    seedWorkflowState({ robotLoaded: true, compiled: true })
+    const router = renderRouter(['/evaluation'])
+
+    expect(router.state.location.pathname).toBe('/evaluation')
+    expect(screen.getByRole('heading', { name: 'Evaluación' })).toBeInTheDocument()
+    expect(screen.getByText(/Evaluá el plan antes de ejecutar/i)).toBeInTheDocument()
+  })
+
+  it('renders /evaluation from a planning-preview plan (planReady without compiled)', async () => {
+    // PR2 parity with /execution: a Motion Program preview (activePlan present)
+    // unlocks planReady → /evaluation renders without a compiled Task plan.
+    seedWorkflowState({ robotLoaded: true, activePlan: true })
+    const router = renderRouter(['/evaluation'])
+
+    expect(router.state.location.pathname).toBe('/evaluation')
+    expect(screen.getByRole('heading', { name: 'Evaluación' })).toBeInTheDocument()
   })
 
   it('renders /sessions directly without a completed execution (guard relaxed)', async () => {

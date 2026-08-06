@@ -17,12 +17,13 @@ import type { CompileResponse } from '@/features/semantic/types'
 import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 
 /**
- * Integration tests for the global-stepper spec (delta MODIFIED — 5 stages,
- * "Robot is root" REVERTED: Robot is stage 1; the unified programming
- * workspace merged /planning into /task — Programación is ONE step).
+ * Integration tests for the global-stepper spec (delta MODIFIED — 6 stages:
+ * the evaluation-workspace hotfix added Evaluación between Programación and
+ * Ejecución; the unified programming workspace merged /planning into /task —
+ * Programación is ONE step).
  *
- * The stepper renders the five domain pipeline stages Robot → Escena →
- * Programación → Ejecución → Sesiones DERIVED from the area
+ * The stepper renders the six domain pipeline stages Robot → Escena →
+ * Programación → Evaluación → Ejecución → Sesiones DERIVED from the area
  * registry (`stage` order — no parallel stage list, user criterion C1) and
  * marks each stage passed/current/pending/blocked purely from the
  * `WorkflowState` it consumes (C4 — it never re-derives store flags).
@@ -64,6 +65,7 @@ const PIPELINE_LABELS = [
   'Robot',
   'Escena',
   'Programación',
+  'Evaluación',
   'Ejecución',
   'Sesiones',
 ] as const
@@ -120,8 +122,8 @@ beforeEach(() => {
 })
 afterEach(() => cleanup())
 
-describe('Stepper — five registry-derived stages (global-stepper spec S3)', () => {
-  it('renders the five pipeline stages Robot → Escena → Programación → Ejecución → Sesiones', () => {
+describe('Stepper — six registry-derived stages (global-stepper spec S3)', () => {
+  it('renders the six pipeline stages Robot → Escena → Programación → Evaluación → Ejecución → Sesiones', () => {
     seedFlags({ robotLoaded: true, compiled: true, executable: true, completed: true, analyzed: true })
     renderStepper('/sessions')
     for (const label of PIPELINE_LABELS) {
@@ -131,13 +133,14 @@ describe('Stepper — five registry-derived stages (global-stepper spec S3)', ()
     expect(screen.queryByRole('button', { name: 'Planificación' })).not.toBeInTheDocument()
   })
 
-  it('orders the stages by registry stage (Robot=1 … Sesiones=5), not by capability', () => {
+  it('orders the stages by registry stage (Robot=1 … Sesiones=6), not by capability', () => {
     seedFlags({ robotLoaded: true, compiled: true })
     renderStepper('/task')
     expect(renderedStageLabels()).toEqual([
       'Robot',
       'Escena',
       'Programación',
+      'Evaluación',
       'Ejecución',
       'Sesiones',
     ])
@@ -157,6 +160,7 @@ describe('Stepper — five registry-derived stages (global-stepper spec S3)', ()
     expect(glyph('Robot')).toBe('✓') // passed — robotLoaded produced
     expect(glyph('Escena')).toBe('✓') // passed — sceneValid produced
     expect(glyph('Programación')).toBe('●') // current — active route
+    expect(glyph('Evaluación')).toBe('✓') // passed — analyzed produced
     expect(glyph('Ejecución')).toBe('○') // pending — requirements met, not reached
     expect(glyph('Sesiones')).toBe('○') // pending — guard relaxed, nothing blocks the browser
   })
@@ -173,16 +177,16 @@ describe('Stepper — five registry-derived stages (global-stepper spec S3)', ()
     renderStepper('/sessions')
     expect(screen.queryByRole('button', { name: 'Knowledge' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Configuración' })).not.toBeInTheDocument()
-    expect(screen.getAllByRole('button')).toHaveLength(5)
+    expect(screen.getAllByRole('button')).toHaveLength(6)
   })
 
   it('excludes the /analysis tool from the stepper (kind:tool — tools are not pipeline stages)', () => {
     seedFlags({ robotLoaded: true, compiled: true, executable: true, completed: true, analyzed: true })
     renderStepper('/sessions')
     // The auxiliary tool must not render as a stage button (spec: Tools
-    // excluded from stepper — exactly the 5 pipeline stages remain).
+    // excluded from stepper — exactly the 6 pipeline stages remain).
     expect(screen.queryByRole('button', { name: 'Analysis' })).not.toBeInTheDocument()
-    expect(screen.getAllByRole('button')).toHaveLength(5)
+    expect(screen.getAllByRole('button')).toHaveLength(6)
   })
 
   it('stepperStages drops kind:tool entries even when a stage number is present (defensive filter)', () => {

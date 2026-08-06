@@ -3,11 +3,12 @@ import { WORKSPACE_REGISTRY, producerOf } from './registry'
 import type { ArtifactKind, Capability, WorkflowFlag } from './types'
 
 describe('WORKSPACE_REGISTRY (slice 1 — navigation contract)', () => {
-  it('registers the 8 sitemap paths in order (/planning absorbed into /task)', () => {
+  it('registers the 9 sitemap paths in order (/planning absorbed into /task, /evaluation added)', () => {
     expect(WORKSPACE_REGISTRY.map((e) => e.path)).toEqual([
       '/',
       '/scene',
       '/task',
+      '/evaluation',
       '/execution',
       '/sessions',
       '/knowledge',
@@ -83,9 +84,15 @@ describe('WORKSPACE_REGISTRY (slice 3 — requires/produces/capability)', () => 
     // gates on sceneValid (the Motion Program is built from /scene/preview,
     // NOT from the Task-compiled plan — same D2 rule that /planning carried).
     expect(byWorkspace.task.requires).toEqual(['sceneValid'])
+    // Evaluation (hotfix evaluation-workspace): evaluates an EXISTING plan —
+    // Tasks compile or Motion preview — so it gates on sceneValid + planReady,
+    // NOT on executable (a plan is evaluated before it is runnable).
+    expect(byWorkspace.evaluation.requires).toEqual(['sceneValid', 'planReady'])
     // PR2 (workflow-guards spec): /execution gates on planReady (compiled ∨
     // sceneActivePlanPresent) so BOTH plan paths — Program handoff and Motion
-    // Program preview — satisfy the guard.
+    // Program preview — satisfy the guard. `analyzed` is deliberately NOT a
+    // requirement: evaluation is a RECOMMENDED pre-flight checkpoint, not a
+    // hard gate — the fast path (compile → execute) keeps working.
     expect(byWorkspace.execution.requires).toEqual(['sceneValid', 'planReady', 'executable'])
     // Guard relaxed (area-sessions S5): the browser browses failed/running
     // sessions too — no `completed` gate on /sessions.
@@ -96,6 +103,7 @@ describe('WORKSPACE_REGISTRY (slice 3 — requires/produces/capability)', () => 
     expect(byWorkspace.robot.produces).toBe('robotLoaded')
     expect(byWorkspace.scene.produces).toBe('sceneValid')
     expect(byWorkspace.task.produces).toBe('compiled')
+    expect(byWorkspace.evaluation.produces).toBe('analyzed')
     expect(byWorkspace.execution.produces).toBe('completed')
     expect(byWorkspace.sessions.produces).toBeNull()
     expect(byWorkspace.knowledge.produces).toBeNull()
@@ -135,14 +143,15 @@ describe('WORKSPACE_REGISTRY (slice S1.7 — scene entry, Robot stage marker, la
     expect(robot.stepperIndex).toBe(1)
   })
 
-  it('carries a stage marker per pipeline area in chain order (Robot=1 … Sesiones=5; tools are stage null)', () => {
+  it('carries a stage marker per pipeline area in chain order (Robot=1 … Sesiones=6; tools are stage null)', () => {
     const stages = WORKSPACE_REGISTRY.map((e) => [e.workspace, e.stage] as const)
     expect(stages).toEqual([
       ['robot', 1],
       ['scene', 2],
       ['task', 3],
-      ['execution', 4],
-      ['sessions', 5],
+      ['evaluation', 4],
+      ['execution', 5],
+      ['sessions', 6],
       ['knowledge', null],
       ['configuration', null],
       ['analysis', null],
@@ -160,6 +169,10 @@ describe('WORKSPACE_REGISTRY (slice S1.7 — scene entry, Robot stage marker, la
       // (MotionPlan — handed to /execution); SemanticProgram is the
       // intermediate artifact authored inside the Programa tab.
       ['task', 'Scene', 'MotionPlan'],
+      // Evaluation passes the plan through unchanged (consumes MotionPlan,
+      // produces MotionPlan) — evaluating a plan does not transform it, and
+      // the C3 artifact chain stays contiguous (… → MotionPlan → Runtime).
+      ['evaluation', 'MotionPlan', 'MotionPlan'],
       ['execution', 'MotionPlan', 'Runtime'],
       ['sessions', 'Runtime', 'ExecutionSession'],
       ['knowledge', null, null],
@@ -176,6 +189,7 @@ describe('WORKSPACE_REGISTRY (slice S1.7 — scene entry, Robot stage marker, la
       'Robot',
       'Escena',
       'Programación',
+      'Evaluación',
       'Ejecución',
       'Sesiones',
       'Knowledge',
@@ -196,15 +210,16 @@ describe('WORKSPACE_REGISTRY (slice S3.5 — typed domain graph, user criterion 
     (e): e is typeof e & { stage: number } => e.stage !== null,
   ).sort((a, b) => a.stage - b.stage)
 
-  it('has exactly the five pipeline areas with contiguous stages 1-5', () => {
+  it('has exactly the six pipeline areas with contiguous stages 1-6', () => {
     expect(staged.map((e) => e.workspace)).toEqual([
       'robot',
       'scene',
       'task',
+      'evaluation',
       'execution',
       'sessions',
     ])
-    expect(staged.map((e) => e.stage)).toEqual([1, 2, 3, 4, 5])
+    expect(staged.map((e) => e.stage)).toEqual([1, 2, 3, 4, 5, 6])
   })
 
   it('C3 — contiguous artifact graph: produces(area_i) === consumes(area_{i+1})', () => {
@@ -216,8 +231,11 @@ describe('WORKSPACE_REGISTRY (slice S3.5 — typed domain graph, user criterion 
     // Spot-check the typed chain (R2: RobotModel → Scene → MotionPlan → …).
     expect(staged[1].consumes).toBe('RobotModel')
     expect(staged[2].consumes).toBe('Scene')
+    // Evaluation is a MotionPlan pass-through between Programación and Ejecución.
     expect(staged[3].consumes).toBe('MotionPlan')
-    expect(staged[4].producesArtifact).toBe('ExecutionSession')
+    expect(staged[3].producesArtifact).toBe('MotionPlan')
+    expect(staged[4].consumes).toBe('MotionPlan')
+    expect(staged[5].producesArtifact).toBe('ExecutionSession')
   })
 
   it('C2 observation — stepperIndex equals stage on every pipeline area (redundant, flagged for verify)', () => {
@@ -231,6 +249,7 @@ describe('WORKSPACE_REGISTRY (slice S3.5 — typed domain graph, user criterion 
       ['robot', [], 'robotLoaded'],
       ['scene', ['robotLoaded'], 'sceneValid'],
       ['task', ['sceneValid'], 'compiled'],
+      ['evaluation', ['sceneValid', 'planReady'], 'analyzed'],
       // PR2: planReady replaces the raw `compiled` prerequisite — the Motion
       // Program preview path (activePlanPresent) also unlocks /execution.
       ['execution', ['sceneValid', 'planReady', 'executable'], 'completed'],
@@ -261,10 +280,15 @@ describe('producerOf (registry helper)', () => {
     expect(producerOf('programValid')).toBeUndefined()
     expect(producerOf('executable')).toBeUndefined()
     expect(producerOf('running')).toBeUndefined()
-    // The unified programming workspace produces `compiled` (origin of
-    // planReady); `analyzed` lost its producer when /planning was absorbed —
-    // Knowledge's guard now falls back to the root when not analyzed.
-    expect(producerOf('analyzed')).toBeUndefined()
+  })
+
+  it('maps analyzed to the /evaluation workspace (the restored producer)', () => {
+    // The `analyzed` flag regained its producer when the evaluation view was
+    // added — Knowledge's guard (requires analyzed) now redirects there.
+    expect(producerOf('analyzed')?.path).toBe('/evaluation')
+    expect(producerOf('analyzed')).toBe(
+      WORKSPACE_REGISTRY.find((e) => e.workspace === 'evaluation'),
+    )
   })
 
   it('resolves derived planReady to the producer of its origin (compiled → /task)', () => {
@@ -287,9 +311,9 @@ describe('producerOf (registry helper)', () => {
 })
 
 describe('WORKSPACE_REGISTRY (PR-D — kind nav model, auxiliary-tools-navigation spec)', () => {
-  it('defaults kind to stage on the five pipeline entries (no explicit kind — backward compatible)', () => {
+  it('defaults kind to stage on the six pipeline entries (no explicit kind — backward compatible)', () => {
     const pipeline = WORKSPACE_REGISTRY.filter((e) => e.stage !== null)
-    expect(pipeline).toHaveLength(5)
+    expect(pipeline).toHaveLength(6)
     for (const entry of pipeline) {
       expect(entry.kind).toBeUndefined()
     }
@@ -340,5 +364,54 @@ describe('WORKSPACE_REGISTRY (unified programming workspace — /planning absorb
   it('keeps the compile capability (planning\'s optimize is dropped with the area)', () => {
     expect(task.capability).toBe('compile')
     expect(WORKSPACE_REGISTRY.some((e) => e.capability === 'optimize')).toBe(false)
+  })
+})
+
+describe('WORKSPACE_REGISTRY (evaluation workspace — pre-execution VISTA, hotfix)', () => {
+  const evaluation = WORKSPACE_REGISTRY.find((e) => e.workspace === 'evaluation')!
+
+  it('is a first-class pipeline stage between Programación and Ejecución', () => {
+    expect(evaluation).toBeDefined()
+    expect(evaluation.path).toBe('/evaluation')
+    expect(evaluation.label).toBe('Evaluación')
+    expect(evaluation.stage).toBe(4)
+    expect(evaluation.stepperIndex).toBe(4)
+    expect(evaluation.hidden).toBe(false)
+  })
+
+  it('execution and sessions are renumbered after the new stage (5 and 6)', () => {
+    const execution = WORKSPACE_REGISTRY.find((e) => e.workspace === 'execution')!
+    const sessions = WORKSPACE_REGISTRY.find((e) => e.workspace === 'sessions')!
+    expect(execution.stage).toBe(5)
+    expect(execution.stepperIndex).toBe(5)
+    expect(sessions.stage).toBe(6)
+    expect(sessions.stepperIndex).toBe(6)
+  })
+
+  it('restores the analyzed producer — the flag chain is contiguous again', () => {
+    expect(evaluation.produces).toBe('analyzed')
+    expect(producerOf('analyzed')?.path).toBe('/evaluation')
+  })
+
+  it('gates on sceneValid + planReady (evaluates an existing plan), not executable', () => {
+    expect(evaluation.requires).toEqual(['sceneValid', 'planReady'])
+  })
+
+  it('does NOT make analyzed a hard gate on /execution (recommended checkpoint, not a block)', () => {
+    const execution = WORKSPACE_REGISTRY.find((e) => e.workspace === 'execution')!
+    expect(execution.requires).not.toContain('analyzed')
+  })
+
+  it('is a MotionPlan pass-through for the C3 artifact chain', () => {
+    expect(evaluation.consumes).toBe('MotionPlan')
+    expect(evaluation.producesArtifact).toBe('MotionPlan')
+  })
+
+  it('claims no exclusive capability (optimize stays unclaimed — dead capability)', () => {
+    expect(evaluation.capability).toBeNull()
+  })
+
+  it('renders full-width in the shell (layout full — no viewport competing)', () => {
+    expect(evaluation.layout).toBe('full')
   })
 })

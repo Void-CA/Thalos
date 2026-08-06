@@ -415,12 +415,13 @@ describe('isValidHomePose — home-pose validity feeding sceneValid', () => {
   })
 })
 
-describe('stepperStages — five stages derived from the registry `stage` order (global-stepper spec S3)', () => {
-  it('exposes the five pipeline areas in stage order: robot … sessions (no planning)', () => {
+describe('stepperStages — six stages derived from the registry `stage` order (global-stepper spec S3)', () => {
+  it('exposes the six pipeline areas in stage order: robot … sessions (no planning tab)', () => {
     expect(stepperStages(WORKSPACE_REGISTRY).map((e) => e.workspace)).toEqual([
       'robot',
       'scene',
       'task',
+      'evaluation',
       'execution',
       'sessions',
     ])
@@ -434,7 +435,7 @@ describe('stepperStages — five stages derived from the registry `stage` order 
 
   it('orders the stages by the registry `stage` field (canonical order), not by capability', () => {
     const stages = stepperStages(WORKSPACE_REGISTRY)
-    expect(stages.map((e) => e.stage)).toEqual([1, 2, 3, 4, 5])
+    expect(stages.map((e) => e.stage)).toEqual([1, 2, 3, 4, 5, 6])
   })
 
   it('C2 observation: stepperIndex is redundant — equals stage on every pipeline area (flagged for verify)', () => {
@@ -481,6 +482,7 @@ describe('deriveStepperStages — per-stage state from flags + active route', ()
     expect(byWs.robot.state).toBe('passed') // robotLoaded produced
     expect(byWs.scene.state).toBe('passed') // sceneValid produced
     expect(byWs.task.state).toBe('current') // active route
+    expect(byWs.evaluation.state).toBe('passed') // analyzed produced
     expect(byWs.execution.state).toBe('pending') // requirements met, not reached
     expect(byWs.sessions.state).toBe('pending') // guard relaxed — nothing blocks the browser
     expect(byWs.sessions.reason).toBeNull()
