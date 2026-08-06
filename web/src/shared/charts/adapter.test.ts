@@ -146,6 +146,26 @@ describe('toEChartsOption — ChartModel → EChartsOption mapping', () => {
     ])
   })
 
+  it('passes scale:true through to the axis (log-scale charts must not force the origin)', () => {
+    const model: ChartModel = {
+      series: [{ name: 's', type: 'line', data: [1, 2] }],
+      xAxis: [{ type: 'value' }],
+      yAxis: [{ type: 'value', name: '-log10(Yoshikawa)', scale: true }],
+    }
+    const option = toEChartsOption(model)
+    expect(option.yAxis).toEqual([
+      {
+        type: 'value',
+        name: '-log10(Yoshikawa)',
+        scale: true,
+        axisLabel: { color: '#888888', fontSize: 11 },
+        splitLine: { lineStyle: { color: 'rgba(136, 136, 136, 0.25)' } },
+        axisLine: { show: false },
+        axisTick: { show: false },
+      },
+    ])
+  })
+
   it('attaches chart-level markLine references to the first series', () => {
     const model: ChartModel = {
       series: [{ name: 'err', type: 'line', data: [1, 2, 3] }],

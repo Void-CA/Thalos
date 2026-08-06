@@ -48,6 +48,9 @@ export interface AxisConfig {
   categories?: string[]
   min?: number
   max?: number
+  /** Do not force the origin into view — ECharts scale. Needed for log-scale
+   *  axes where forcing 0 would flatten the data. */
+  scale?: boolean
 }
 
 /** Horizontal reference line (design markLine, e.g. RMSE on a comparison

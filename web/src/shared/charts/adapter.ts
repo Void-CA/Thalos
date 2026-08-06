@@ -55,6 +55,7 @@ function mapAxis(axis: AxisConfig, isX: boolean): Record<string, unknown> {
     ...(axis.name !== undefined ? { name: axis.name } : {}),
     ...(axis.min !== undefined ? { min: axis.min } : {}),
     ...(axis.max !== undefined ? { max: axis.max } : {}),
+    ...(axis.scale !== undefined ? { scale: axis.scale } : {}),
     axisLabel: { color: MUTED, fontSize: 11 },
   }
   if (isX) {
