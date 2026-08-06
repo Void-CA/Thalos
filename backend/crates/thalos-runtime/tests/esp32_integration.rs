@@ -163,4 +163,64 @@ fn dto_progress_is_seconds_over_plan_duration() {
     assert_eq!(completed.progress(2.0), 1.0);
 }
 
-// ── S3.x (Stage 3): SAMPLES collection — added in Work Unit 3 ─────────────
+// ── S3.1 RED: SAMPLES collection on COMPLETED ─────────────────────────────
+
+#[tokio::test]
+async fn completed_collects_samples_and_exposes_trace() {
+    let backend = make_executing_backend().await;
+
+    // Scripted completion: STATUS COMPLETED 5 → OK → 5 ts-first SAMPLE lines.
+    backend.test_inject_response(b"STATUS COMPLETED 5\n".to_vec()).await;
+    backend.test_inject_response(b"OK\n".to_vec()).await;
+    for i in 0..5u64 {
+        let ts = i * 500_000;
+        let j = i as f64 * 0.1;
+        backend
+            .test_inject_response(format!("SAMPLE {ts} {j} 0.5\n").into_bytes())
+            .await;
+    }
+
+    let state = backend.robot_state().await;
+    // After collection the backend reports Idle with full progress.
+    assert_eq!(state.motion.mode, MotionMode::Idle);
+    assert!(state.execution.progress >= 1.0);
+
+    // `SAMPLES 5` was sent over the wire.
+    let sent = backend.test_sent_commands().await;
+    assert!(
+        sent.iter().any(|c| c.starts_with(b"SAMPLES 5")),
+        "SAMPLES 5 must be sent"
+    );
+
+    // The collected trace is returned ONCE, then None (clear-on-collect).
+    let trace = backend.take_execution_trace().await.expect("trace available");
+    assert_eq!(trace.len(), 5);
+    assert_eq!(trace[0].timestamp_us, 0);
+    assert_eq!(trace[4].timestamp_us, 2_000_000);
+    assert_eq!(trace[0].joints, vec![0.0, 0.5]);
+    assert!(backend.take_execution_trace().await.is_none());
+}
+
+#[tokio::test]
+async fn completed_zero_samples_skips_send_and_collect() {
+    let backend = make_executing_backend().await;
+
+    // S3.2+S3.3: firmware rejects `SAMPLES 0` as MALFORMED — the host MUST
+    // NOT send it; completion is still handled.
+    backend.test_inject_response(b"STATUS COMPLETED 0\n".to_vec()).await;
+
+    let state = backend.robot_state().await;
+    assert_eq!(state.motion.mode, MotionMode::Idle);
+    assert!(state.execution.progress >= 1.0);
+
+    let sent = backend.test_sent_commands().await;
+    assert!(
+        !sent.iter().any(|c| c.starts_with(b"SAMPLES")),
+        "SAMPLES must never be sent for count <= 0"
+    );
+    assert!(backend.take_execution_trace().await.is_none());
+}
+
+// ── S3.3 (part of S3.1): collect-direction format is ts-first ─────────────
+// Covered by completed_collects_samples_and_exposes_trace asserting
+// timestamp_us / joints parsed from `SAMPLE <ts> <j0..jN>` lines.

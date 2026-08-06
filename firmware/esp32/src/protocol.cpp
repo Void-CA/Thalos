@@ -245,7 +245,10 @@ void Protocol::handle_status() {
             break;
         }
         case COMPLETED:
-            response += F("COMPLETED");
+            // S3.1: `STATUS COMPLETED <count>` — lets the host know how many
+            // recorded samples to request via `SAMPLES <count>`.
+            response += F("COMPLETED ");
+            response += String(executor_.samples().size());
             break;
         case ERROR:
             response += F("ERROR ");

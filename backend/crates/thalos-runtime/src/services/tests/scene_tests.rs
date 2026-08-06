@@ -1193,3 +1193,59 @@ async fn start_execution_without_controller_returns_not_connected() {
         other => panic!("expected ControllerFailed(NotConnected), got {other:?}"),
     }
 }
+
+/// S3.6: on a completed tick, the scene drains the controller's hardware
+/// execution trace (SAMPLES) and persists it as an `ExecutionTrace` JSON with
+/// µs-derived timestamps — even for a hardware source that reports progress
+/// in SECONDS (recording timestamp must use seconds directly, not
+/// fraction × plan_duration).
+#[tokio::test]
+async fn hardware_execution_trace_is_persisted_on_completion() {
+    use crate::execution_boundary::ExecutionSample;
+    use crate::session::SessionManager;
+
+    let mut mock = MockController::new();
+    mock.source = ExecutionSource::Hardware;
+    mock.execution_trace = Some(vec![
+        ExecutionSample {
+            timestamp_us: 0,
+            joints: vec![0.1, 0.2],
+        },
+        ExecutionSample {
+            timestamp_us: 1_000_000,
+            joints: vec![0.5, 0.3],
+        },
+    ]);
+    let controller = Arc::new(RwLock::new(mock)) as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let manager = Arc::new(BackendManager::new());
+    manager.set_active(controller).await.unwrap();
+
+    // Dedicated session store in a temp dir — do not pollute ~/.thalos.
+    let dir = std::env::temp_dir().join(format!("thalos-scene-hw-trace-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let sessions = Arc::new(SessionManager::with_path(dir.clone()));
+    let svc = SceneService::with_session_manager(
+        Box::new(InternalBackend),
+        manager.clone(),
+        RobotModel::Scara,
+        sessions.clone(),
+    );
+
+    svc.start_execution().await.unwrap();
+    // MockController reports a default state (Idle) → completion detected on
+    // the first tick, which must drain + persist the hardware trace.
+    svc.tick_execution_delta(0.1).await.unwrap();
+
+    let trace = sessions
+        .get_execution_trace(1)
+        .await
+        .expect("hardware execution trace must be persisted");
+    assert_eq!(trace.samples.len(), 2);
+    assert_eq!(trace.samples[0].timestamp, Duration::from_micros(0));
+    assert_eq!(trace.samples[1].timestamp, Duration::from_micros(1_000_000));
+    assert_eq!(trace.samples[0].joints, vec![0.1, 0.2]);
+    assert!(trace.samples[0].velocities.is_empty());
+    assert_eq!(trace.metadata.source, ExecutionSource::Hardware);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -374,6 +374,22 @@ impl RobotController for Esp32Backend {
 
         let state = match poll_result {
             Ok(fs) => {
+                // On COMPLETED, collect the recorded samples (S3.5). Guard on
+                // `sample_count > 0`: the firmware rejects `SAMPLES 0` as
+                // MALFORMED (protocol.cpp), so the host must never send it.
+                if let FirmwareState::Completed { sample_count } = &fs {
+                    if *sample_count > 0 {
+                        let mut guard = self.protocol.lock().await;
+                        if let Some(protocol) = guard.as_mut() {
+                            if let Ok(samples) =
+                                protocol.collect_samples(*sample_count as usize).await
+                            {
+                                *self.collected_samples.lock().await = Some(samples);
+                            }
+                        }
+                    }
+                }
+
                 let mut state = self.map_firmware_state(&fs).await;
                 // COMPLETED: carry over the last commanded joints from the
                 // previous cached RUNNING state, if any (design table: "last
@@ -398,6 +414,15 @@ impl RobotController for Esp32Backend {
         };
 
         state
+    }
+
+    /// Take the collected execution samples (SAMPLES) exactly once.
+    ///
+    /// The scene service drains this after completion detection; `mem::take`
+    /// clears the buffer so a subsequent call returns `None`.
+    async fn take_execution_trace(&self) -> Option<Vec<ExecutionSample>> {
+        let mut guard = self.collected_samples.lock().await;
+        std::mem::take(&mut *guard)
     }
 
     fn capabilities(&self) -> BackendCapabilities {
