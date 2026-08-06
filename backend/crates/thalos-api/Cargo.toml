@@ -27,3 +27,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
+# R4-002: the no_firmware-over-real-serial integration test opens a virtual
+# serial pair (SerialStream::pair) whose slave path is a real /dev/pts/N.
+tokio-serial = "5"

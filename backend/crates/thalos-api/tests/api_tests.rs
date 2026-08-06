@@ -3383,6 +3383,64 @@ async fn connect_esp32_with_invalid_port_returns_400_port_in_use() {
     assert_eq!(body.expect("body")["code"], "port_in_use");
 }
 
+/// R4-002 integration: connecting to a REAL silent serial device (a virtual
+/// PTY whose slave path the handler opens) must answer 400 `no_firmware` FAST
+/// — not hang until the frontend timeout — and leave the device released so a
+/// retry works (no `port_in_use` wedge, no backend restart needed).
+#[tokio::test]
+async fn connect_esp32_to_silent_port_returns_400_no_firmware_without_wedging() {
+    use tokio_serial::SerialPort;
+
+    // Virtual serial device: hold the master open and never write to it — the
+    // slave read blocks, so the handshake hits the transport read timeout.
+    let (mut master, slave) = tokio_serial::SerialStream::pair().unwrap();
+    let port = slave.name().expect("PTY slave must expose its device path");
+
+    let state = new_default_state().await;
+    state.services.manager.register_esp32(&port).await;
+    let app = app_router().with_state(state);
+
+    // First connect against the silent device → 400 no_firmware, no hang.
+    let start = std::time::Instant::now();
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/backends/esp32/connect",
+        Some(json!({ "port": port })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body.expect("body")["code"], "no_firmware");
+    assert!(
+        start.elapsed() < std::time::Duration::from_secs(10),
+        "connect against a silent device must not hang past the frontend timeout"
+    );
+
+    // Drain the HELLO bytes the failed connect wrote to the master.
+    let mut drain = [0u8; 128];
+    loop {
+        match master.try_read(&mut drain) {
+            Ok(0) | Err(_) => break,
+            Ok(_) => continue,
+        }
+    }
+
+    // Retry → still 400 no_firmware, NOT port_in_use (device was released).
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/backends/esp32/connect",
+        Some(json!({ "port": port })),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "retry must not wedge with port_in_use"
+    );
+    assert_eq!(body.expect("body")["code"], "no_firmware");
+}
+
 #[tokio::test]
 async fn disconnect_not_connected_backend_returns_400_not_connected() {
     let state = new_default_state().await;

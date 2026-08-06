@@ -123,10 +123,22 @@ impl Transport for TcpTransport {
 ///
 /// Lee línea por línea usando un `BufReader` interno. La velocidad y
 /// configuración del puerto se definen en `new()`.
+///
+/// # Timeout de lectura (R4-002)
+///
+/// `receive()` espera una línea hasta `read_timeout`; si el dispositivo no
+/// responde (TTY silencioso) devuelve `TransportError::Timeout` en vez de
+/// bloquear para siempre. Sin esto, un `POST /backends/esp32/connect` contra
+/// un puerto sin firmware cuelga la request y deja el dispositivo abierto
+/// (el retry choca con `port_in_use` hasta reiniciar el proceso).
 pub struct SerialTransport {
     port: String,
     baud: u32,
     stream: Option<tokio::sync::Mutex<tokio_serial::SerialStream>>,
+    /// Max wait for a response line in `receive`. Defaults to 2s — short
+    /// enough to beat the frontend 10s timeout and return `no_firmware` fast,
+    /// long enough for a real device to answer the HELLO handshake.
+    read_timeout: std::time::Duration,
 }
 
 impl SerialTransport {
@@ -139,6 +151,29 @@ impl SerialTransport {
             port: port.into(),
             baud,
             stream: None,
+            read_timeout: std::time::Duration::from_secs(2),
+        }
+    }
+
+    /// Override the receive read timeout (R4-002). Tests use a short value so
+    /// the silent-device path is exercised fast; production keeps the 2s default.
+    pub fn with_read_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.read_timeout = timeout;
+        self
+    }
+}
+
+#[cfg(test)]
+impl SerialTransport {
+    /// Build a transport over an already-open stream (test seam): the virtual
+    /// serial pair from `SerialStream::pair()` exercises the REAL read path
+    /// without a physical device.
+    pub fn from_stream(stream: tokio_serial::SerialStream, read_timeout: std::time::Duration) -> Self {
+        Self {
+            port: String::new(),
+            baud: 0,
+            stream: Some(tokio::sync::Mutex::new(stream)),
+            read_timeout,
         }
     }
 }
@@ -146,6 +181,10 @@ impl SerialTransport {
 #[async_trait]
 impl Transport for SerialTransport {
     async fn connect(&mut self) -> Result<(), TransportError> {
+        // Idempotent: a stream already injected (test seam) stays open.
+        if self.stream.is_some() {
+            return Ok(());
+        }
         let builder = tokio_serial::new(&self.port, self.baud);
         let port = tokio_serial::SerialStream::open(&builder)
             .map_err(|e| TransportError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
@@ -173,9 +212,13 @@ impl Transport for SerialTransport {
         let mut guard = stream.lock().await;
         let mut reader = tokio::io::BufReader::new(&mut *guard);
         let mut line = String::new();
-        let n = reader.read_line(&mut line).await?;
-        if n == 0 {
-            return Err(TransportError::Disconnected);
+        // R4-002: bound the read — a silent device must surface `Timeout`
+        // (→ `no_firmware`) instead of blocking the request forever.
+        match tokio::time::timeout(self.read_timeout, reader.read_line(&mut line)).await {
+            Err(_) => return Err(TransportError::Timeout),
+            Ok(Err(e)) => return Err(TransportError::Io(e)),
+            Ok(Ok(0)) => return Err(TransportError::Disconnected),
+            Ok(Ok(_)) => {}
         }
         // Strip trailing \r\n or \n (ESP firmware envía \r\n)
         let trimmed = line.trim_end_matches('\n').trim_end_matches('\r');
@@ -267,6 +310,7 @@ impl Transport for FakeTransport {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     #[tokio::test]
     async fn fake_transport_roundtrip() {
@@ -276,5 +320,38 @@ mod tests {
         transport.send(b"CMD MOVEJ 1.0 2.0\n").await.unwrap();
         let resp = transport.receive().await.unwrap();
         assert_eq!(String::from_utf8(resp).unwrap(), "STATE 1.0 2.0\n");
+    }
+
+    /// R4-002: `SerialTransport::receive` on a SILENT device must time out
+    /// instead of blocking forever — the no_firmware handshake depends on it
+    /// (a silent TTY currently hangs the connect request indefinitely).
+    #[tokio::test]
+    async fn serial_receive_times_out_on_silent_port() {
+        let (master, _slave) = tokio_serial::SerialStream::pair().unwrap();
+        let mut transport =
+            SerialTransport::from_stream(master, Duration::from_millis(150));
+        let start = std::time::Instant::now();
+        let err = transport.receive().await.unwrap_err();
+        assert!(matches!(err, TransportError::Timeout), "got {err:?}");
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "receive must not hang forever"
+        );
+    }
+
+    /// R4-002: a device that DOES answer must still read its line — the timeout
+    /// must not break the healthy path.
+    #[tokio::test]
+    async fn serial_receive_reads_line_when_data_arrives() {
+        let (master, slave) = tokio_serial::SerialStream::pair().unwrap();
+        let mut transport =
+            SerialTransport::from_stream(master, Duration::from_secs(2));
+        // Write from the OTHER end of the virtual pair; the transport reads it.
+        use tokio::io::AsyncWriteExt;
+        let mut slave = slave;
+        slave.write_all(b"HELLO 1 OK\r\n").await.unwrap();
+        slave.flush().await.unwrap();
+        let resp = transport.receive().await.unwrap();
+        assert_eq!(String::from_utf8(resp).unwrap(), "HELLO 1 OK\n");
     }
 }

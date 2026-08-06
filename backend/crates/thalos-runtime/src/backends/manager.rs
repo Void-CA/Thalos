@@ -79,6 +79,13 @@ impl BackendManager {
     /// one. A hardware entry that is not yet connected leaves the runtime with
     /// no controller until `connect_with_port` succeeds — execution then
     /// reports the backend's connection state.
+    ///
+    /// R4-002: the controller `connect` (a serial handshake that can take up
+    /// to the read timeout) runs WITHOUT the `active` write lock — a slow or
+    /// hung handshake must not block `get_controller()` consumers (the tick
+    /// loop, scene ops). On failure the previous active controller is already
+    /// disconnected and `active`/`active_id` stay consistently empty (clean
+    /// rollback, nothing wedged).
     pub async fn activate(&self, id: &str) -> Result<(), ControllerError> {
         let entry = {
             let entries = self.registered.read().await;
@@ -86,17 +93,33 @@ impl BackendManager {
         };
         let entry = entry.ok_or_else(|| ControllerError::NotFound(id.to_string()))?;
 
-        let mut active = self.active.write().await;
         // Disconnect the previous active controller (if any) — closes its port.
-        if let Some(prev) = active.take() {
-            let _ = prev.write().await.disconnect().await;
+        {
+            let mut active = self.active.write().await;
+            if let Some(prev) = active.take() {
+                let _ = prev.write().await.disconnect().await;
+            }
         }
-        if let Some(ctrl) = &entry.controller {
+
+        // Connect the new controller OUTSIDE the active write lock.
+        let connected = if let Some(ctrl) = &entry.controller {
             let mut guard = ctrl.write().await;
             if !guard.is_connected() {
-                guard.connect().await?;
+                if let Err(e) = guard.connect().await {
+                    // Clean rollback: the runtime is left without a controller
+                    // and the id reflects it (consistent empty state).
+                    *self.active_id.write().await = None;
+                    return Err(e);
+                }
             }
-            *active = Some(ctrl.clone());
+            Some(ctrl.clone())
+        } else {
+            None
+        };
+
+        {
+            let mut active = self.active.write().await;
+            *active = connected;
         }
         *self.active_id.write().await = Some(id.to_string());
         Ok(())
@@ -138,11 +161,14 @@ impl BackendManager {
             .map_err(|e| ControllerError::PortInUse(e.to_string()))?;
 
         // Port opened but no firmware answers the HELLO handshake → no_firmware.
+        // R4-002: the handshake read is bounded by the transport timeout, so
+        // this returns FAST on a silent device, and the explicit `drop` closes
+        // the serial device — a retry does NOT hit port_in_use.
         let mut backend = Esp32Backend::new(transport);
-        backend
-            .connect()
-            .await
-            .map_err(|_| ControllerError::NoFirmware)?;
+        if let Err(e) = backend.connect().await {
+            drop(backend);
+            return Err(ControllerError::NoFirmware);
+        }
 
         let ctrl = Arc::new(RwLock::new(backend))
             as Arc<RwLock<dyn RobotController + Send + Sync>>;
@@ -267,6 +293,8 @@ mod tests {
     use crate::backends::controller::tests::MockController;
     use crate::backends::transport::FakeTransport;
     use crate::error::ControllerError;
+    use std::time::Duration;
+    use tokio_serial::SerialPort;
 
     async fn make_controller() -> Arc<RwLock<dyn RobotController + Send + Sync>> {
         let ctrl = MockController::new();
@@ -401,6 +429,60 @@ mod tests {
         assert!(
             entry.controller.is_none(),
             "failed connect must not leave a controller"
+        );
+    }
+
+    /// R4-002: a REAL `SerialTransport` over a silent serial device must fail
+    /// the handshake FAST (`NoFirmware`, no infinite hang) AND release the
+    /// device — a retry on the same path must work (no `port_in_use` wedge).
+    #[tokio::test]
+    async fn connect_to_silent_serial_device_returns_no_firmware_without_wedging() {
+        let manager = BackendManager::new();
+        manager.register_esp32("/dev/thalos-silent-ptty").await;
+        // Real virtual serial device: hold the master open (never written to →
+        // the slave read blocks) and use the slave's PTY path as the port.
+        let (mut master, slave) = tokio_serial::SerialStream::pair().unwrap();
+        let port = slave.name().expect("PTY slave must expose its device path");
+
+        // First connect: silent device → handshake read timeout → NoFirmware.
+        let t1 = SerialTransport::new(&port, 115200).with_read_timeout(Duration::from_millis(150));
+        let start = std::time::Instant::now();
+        let err = manager
+            .connect_with_transport("esp32", &port, Box::new(t1))
+            .await
+            .unwrap_err();
+        assert_eq!(err, ControllerError::NoFirmware);
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "handshake against a silent device must not hang"
+        );
+
+        // Drain the HELLO bytes the failed connect wrote to the master so the
+        // retry genuinely re-exercises the silent-device read timeout.
+        let mut drain = [0u8; 128];
+        loop {
+            match master.try_read(&mut drain) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => continue,
+            }
+        }
+
+        // Retry on the SAME path: the failed connect must have closed the
+        // device (no port_in_use wedge) — the retry also fails fast.
+        let t2 = SerialTransport::new(&port, 115200).with_read_timeout(Duration::from_millis(150));
+        let start = std::time::Instant::now();
+        let err = manager
+            .connect_with_transport("esp32", &port, Box::new(t2))
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err,
+            ControllerError::NoFirmware,
+            "retry must NOT fail with port_in_use (device released after failure)"
+        );
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "retry handshake must not hang"
         );
     }
 
