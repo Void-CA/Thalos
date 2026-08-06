@@ -38,7 +38,11 @@ use protocol::{Esp32Protocol, FirmwareState, ProtocolError};
 /// ~60Hz tick loop does not hammer the wire.
 pub struct Esp32Backend {
     protocol: tokio::sync::Mutex<Option<Esp32Protocol>>,
-    connected: bool,
+    connected: std::sync::atomic::AtomicBool,
+    /// RES-02: consecutive `robot_state` poll failures — after 3 the
+    /// connection is declared lost (`connected` cleared) so the next
+    /// tick/snapshot surfaces a connection problem instead of freezing.
+    consecutive_poll_failures: std::sync::atomic::AtomicU32,
     /// Total trajectory duration (seconds) of the current execution — set by
     /// `execute()`, reset on `disconnect()`. Used to convert the firmware's
     /// 0..1 progress fraction into SECONDS (R2.4/R2.5 pinned decision).
@@ -58,7 +62,8 @@ impl Esp32Backend {
     pub fn new(transport: Box<dyn Transport>) -> Self {
         Self {
             protocol: tokio::sync::Mutex::new(Some(Esp32Protocol::new(transport, 1))),
-            connected: false,
+            connected: std::sync::atomic::AtomicBool::new(false),
+            consecutive_poll_failures: std::sync::atomic::AtomicU32::new(0),
             plan_duration: 0.0,
             cached_state: tokio::sync::Mutex::new(None),
             collected_samples: tokio::sync::Mutex::new(None),
@@ -177,7 +182,7 @@ impl Esp32Backend {
     /// |---|---|---|---|
     /// | IDLE / RECEIVING / READY | Idle | 0.0 | [] |
     /// | RUNNING (→ Executing) | Moving | fraction × plan_duration (SECONDS) | commanded |
-    /// | COMPLETED | Idle | plan_duration, or 1.0 if < 1.0s | [] |
+    /// | COMPLETED | Idle | plan_duration, or 1.0 if < 1.0s | last commanded joints from cached RUNNING, else [] |
     /// | ERROR | EStop | 0.0 | [] |
     async fn map_firmware_state(&self, fs: &FirmwareState) -> RobotState {
         let mut state = RobotState::default();
@@ -262,7 +267,7 @@ impl Esp32Backend {
 #[async_trait]
 impl RobotController for Esp32Backend {
     async fn connect(&mut self) -> Result<(), ControllerError> {
-        if self.connected {
+        if self.is_connected() {
             return Err(ControllerError::AlreadyConnected);
         }
 
@@ -273,12 +278,15 @@ impl RobotController for Esp32Backend {
             .await
             .map_err(|e| Self::map_protocol_error("handshake failed", e))?;
 
-        self.connected = true;
+        self.connected.store(true, std::sync::atomic::Ordering::SeqCst);
+        // RES-02: a fresh connection resets the poll-failure streak.
+        self.consecutive_poll_failures
+            .store(0, std::sync::atomic::Ordering::SeqCst);
         Ok(())
     }
 
     async fn disconnect(&mut self) -> Result<(), ControllerError> {
-        self.connected = false;
+        self.connected.store(false, std::sync::atomic::Ordering::SeqCst);
         self.plan_duration = 0.0;
         // Stale poll cache / collected samples must not leak across connects.
         *self.cached_state.lock().await = None;
@@ -290,7 +298,7 @@ impl RobotController for Esp32Backend {
     }
 
     fn is_connected(&self) -> bool {
-        self.connected
+        self.connected.load(std::sync::atomic::Ordering::SeqCst)
     }
 
     async fn execute(
@@ -298,7 +306,7 @@ impl RobotController for Esp32Backend {
         waypoints: Vec<Vec<f64>>,
         duration: f64,
     ) -> Result<(), ControllerError> {
-        if !self.connected {
+        if !self.is_connected() {
             return Err(ControllerError::NotConnected);
         }
 
@@ -330,7 +338,7 @@ impl RobotController for Esp32Backend {
     }
 
     async fn stop(&mut self) -> Result<(), ControllerError> {
-        if !self.connected {
+        if !self.is_connected() {
             return Err(ControllerError::NotConnected);
         }
         let protocol = self.protocol_mut()?;
@@ -358,7 +366,7 @@ impl RobotController for Esp32Backend {
             }
         }
 
-        if !self.connected {
+        if !self.is_connected() {
             return Arc::new(RobotState::default());
         }
 
@@ -374,6 +382,9 @@ impl RobotController for Esp32Backend {
 
         let state = match poll_result {
             Ok(fs) => {
+                // A successful poll breaks the failure streak (RES-02).
+                self.consecutive_poll_failures
+                    .store(0, std::sync::atomic::Ordering::SeqCst);
                 // On COMPLETED, collect the recorded samples (S3.5). Guard on
                 // `sample_count > 0`: the firmware rejects `SAMPLES 0` as
                 // MALFORMED (protocol.cpp), so the host must never send it.
@@ -404,7 +415,16 @@ impl RobotController for Esp32Backend {
                 state
             }
             // Poll error (timeout / disconnected) → cached state, else default.
+            // RES-02: after 3 CONSECUTIVE failures clear `connected` so the
+            // next tick/snapshot surfaces a connection problem instead of a
+            // frozen stale Running state; this call still serves the cache.
             Err(_) => {
+                self.consecutive_poll_failures
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                if self.consecutive_poll_failures.load(std::sync::atomic::Ordering::SeqCst) >= 3 {
+                    self.connected
+                        .store(false, std::sync::atomic::Ordering::SeqCst);
+                }
                 let cached = self.cached_state.lock().await;
                 match cached.as_ref() {
                     Some((_, state)) => state.clone(),
@@ -576,6 +596,27 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(err, ControllerError::ConnectionLost);
+    }
+
+    /// RES-02 (RED): N consecutive poll failures must clear `connected` so
+    /// the next tick/snapshot surfaces a connection problem instead of
+    /// serving the stale cached state (or default) forever with the session
+    /// stuck Running.
+    #[tokio::test]
+    async fn consecutive_poll_failures_clear_connected() {
+        let mut backend = Esp32Backend::new(Box::new(DisconnectAfterHandshake::new()));
+        backend.connect().await.expect("handshake succeeds");
+        assert!(backend.is_connected());
+
+        // Each poll sleeps past the 75ms cache TTL so it actually hits the wire.
+        for _ in 0..3 {
+            tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+            let _ = backend.robot_state().await;
+        }
+        assert!(
+            !backend.is_connected(),
+            "3 consecutive poll failures must clear connected"
+        );
     }
 
     // ── Task 2.5: RED — full upload→execute→collect cycle ────────────

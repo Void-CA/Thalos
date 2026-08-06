@@ -71,7 +71,17 @@ pub trait Transport: Send + Sync {
 /// Transporte TCP — conecta a un ESP32 (o simulador) por socket.
 pub struct TcpTransport {
     addr: String,
-    stream: Option<tokio::sync::Mutex<tokio::net::TcpStream>>,
+    stream: Option<tokio::sync::Mutex<tokio::net::tcp::OwnedWriteHalf>>,
+    /// REL-04 / RES-05: the read buffer persists across `receive()` calls —
+    /// a fresh `BufReader` per call threw away partially-buffered line bytes
+    /// on timeout and desynced the protocol permanently.
+    reader: Option<tokio::io::BufReader<tokio::net::tcp::OwnedReadHalf>>,
+    /// In-progress response line carried across `receive()` calls so a
+    /// timed-out partial line is never lost. NOTE: `read_until` appends
+    /// DIRECTLY to this Vec (cancellation-safe), unlike `read_line`, which
+    /// mem::takes the String into a future-owned buffer that is dropped on
+    /// timeout.
+    partial_line: Option<Vec<u8>>,
     /// Max time to wait for a response line, in milliseconds (S1.3).
     receive_timeout_ms: u64,
 }
@@ -87,6 +97,8 @@ impl TcpTransport {
         Self {
             addr: addr.into(),
             stream: None,
+            reader: None,
+            partial_line: Some(Vec::new()),
             receive_timeout_ms,
         }
     }
@@ -96,12 +108,19 @@ impl TcpTransport {
 impl Transport for TcpTransport {
     async fn connect(&mut self) -> Result<(), TransportError> {
         let stream = tokio::net::TcpStream::connect(&self.addr).await?;
-        self.stream = Some(tokio::sync::Mutex::new(stream));
+        // Split the socket: the owned read half feeds the persistent BufReader
+        // (which keeps partially-read line bytes across receive() calls); the
+        // owned write half stays behind the mutex for send().
+        let (read_half, write_half) = stream.into_split();
+        self.reader = Some(tokio::io::BufReader::new(read_half));
+        self.stream = Some(tokio::sync::Mutex::new(write_half));
         Ok(())
     }
 
     async fn disconnect(&mut self) -> Result<(), TransportError> {
         self.stream = None;
+        self.reader = None;
+        self.partial_line = None;
         Ok(())
     }
 
@@ -116,15 +135,16 @@ impl Transport for TcpTransport {
 
     async fn receive(&mut self) -> Result<Vec<u8>, TransportError> {
         use tokio::io::AsyncBufReadExt;
-        let stream = self.stream.as_ref().ok_or(TransportError::Disconnected)?;
-        let mut guard = stream.lock().await;
-        let mut reader = tokio::io::BufReader::new(&mut *guard);
-        let mut line = String::new();
+        let reader = self.reader.as_mut().ok_or(TransportError::Disconnected)?;
+        let line = self.partial_line.as_mut().ok_or(TransportError::Disconnected)?;
         // S1.3: bound the read — a silent peer must surface `Timeout` instead
         // of blocking the request forever (mirrors SerialTransport R4-002).
+        // REL-04: `read_until` accumulates into `line` directly, so on timeout
+        // the partially-read prefix SURVIVES in `line` and is resumed by the
+        // next call (unlike `read_line`, whose future-owned buffer is dropped).
         match tokio::time::timeout(
             std::time::Duration::from_millis(self.receive_timeout_ms),
-            reader.read_line(&mut line),
+            reader.read_until(b'\n', line),
         )
         .await
         {
@@ -136,7 +156,8 @@ impl Transport for TcpTransport {
         if line.is_empty() {
             return Err(TransportError::Disconnected);
         }
-        Ok(line.into_bytes())
+        // Take the completed line; the next call starts a fresh line.
+        Ok(std::mem::take(line))
     }
 }
 
@@ -376,10 +397,34 @@ mod tests {
         assert_eq!(String::from_utf8(resp).unwrap(), "HELLO 1 OK\n");
     }
 
+    /// REL-04 / RES-05 (RED): a partial line buffered by `read_line` when the
+    /// receive timeout fires must NOT be lost — the BufReader AND the
+    /// in-progress line persist across `receive()` calls, so a slow/partial
+    /// write never desyncs the protocol permanently. (A fresh BufReader per
+    /// call throws the prefix away and the next line starts mid-token.)
+    #[tokio::test]
+    async fn tcp_partial_line_survives_receive_timeout() {
+        use tokio::io::AsyncWriteExt;
+        use tokio::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let mut transport = TcpTransport::with_receive_timeout(addr.to_string(), 100);
+        transport.connect().await.unwrap();
+
+        let (mut socket, _) = listener.accept().await.unwrap();
+        // Half a line, then silence: the first receive() times out mid-line.
+        socket.write_all(b"STATUS RUN").await.unwrap();
+        let err = transport.receive().await.unwrap_err();
+        assert!(matches!(err, TransportError::Timeout), "got {err:?}");
+
+        // The rest arrives later — the buffered prefix must be kept.
+        socket.write_all(b"NING 0.5\n").await.unwrap();
+        let resp = transport.receive().await.unwrap();
+        assert_eq!(String::from_utf8(resp).unwrap(), "STATUS RUNNING 0.5\n");
+    }
+
     /// S1.3/S1.5 (RED): `TcpTransport::receive()` on a silent peer MUST return
     /// `Error::Timeout` after `receive_timeout_ms` instead of blocking forever.
-    /// Uses a `with_receive_timeout` constructor that does not exist yet —
-    /// guaranteed failure until the timeout is implemented.
     #[tokio::test]
     async fn tcp_receive_times_out_without_data() {
         use tokio::net::TcpListener;

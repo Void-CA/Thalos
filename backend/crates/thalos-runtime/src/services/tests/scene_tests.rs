@@ -4,6 +4,7 @@ use tokio::sync::RwLock;
 
 use crate::backends::controller::tests::MockController;
 use crate::session::ExecutionSource;
+use crate::state::robot_state::{MotionMode, RobotState};
 use crate::{
     Command, RobotController, RuntimeSnapshot, SceneService,
     backends::{
@@ -1206,6 +1207,13 @@ async fn hardware_execution_trace_is_persisted_on_completion() {
 
     let mut mock = MockController::new();
     mock.source = ExecutionSource::Hardware;
+    // RISK-1 gate: hardware completion fires on SECONDS progress reaching
+    // plan_duration (floor 1.0) — report a completing state, not the default
+    // Idle (which would never finalize a hardware session mid-run).
+    let mut done = RobotState::default();
+    done.motion.mode = MotionMode::Moving;
+    done.execution.progress = 2.0;
+    mock.state = Some(done);
     mock.execution_trace = Some(vec![
         ExecutionSample {
             timestamp_us: 0,
@@ -1232,7 +1240,7 @@ async fn hardware_execution_trace_is_persisted_on_completion() {
     );
 
     svc.start_execution().await.unwrap();
-    // MockController reports a default state (Idle) → completion detected on
+    // The mock reports a completing hardware state → completion detected on
     // the first tick, which must drain + persist the hardware trace.
     svc.tick_execution_delta(0.1).await.unwrap();
 
@@ -1246,6 +1254,142 @@ async fn hardware_execution_trace_is_persisted_on_completion() {
     assert_eq!(trace.samples[0].joints, vec![0.1, 0.2]);
     assert!(trace.samples[0].velocities.is_empty());
     assert_eq!(trace.metadata.source, ExecutionSource::Hardware);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// Review correction — RISK-1 / REL-01 + REL-03 / RES-06 (completion gate)
+// ═════════════════════════════════════════════════════════════════════
+
+/// RISK-1 / REL-01 (RED): for a HARDWARE source, `execution.progress` is in
+/// SECONDS. A Moving state with seconds-progress >= 1.0 but < plan_duration
+/// must NOT finalize the session mid-run — the old fraction gate
+/// (`progress >= 1.0`) did exactly that on any plan > 1s, and the trace was
+/// then drained-and-dropped at true completion. The hardware trace must be
+/// persisted on the TRUE-completion tick (progress == plan_duration).
+#[tokio::test]
+async fn hardware_running_seconds_progress_below_plan_duration_does_not_finalize() {
+    use crate::execution_boundary::ExecutionSample;
+    use crate::session::SessionManager;
+
+    let mut mock = MockController::new();
+    mock.source = ExecutionSource::Hardware;
+    let mut running = RobotState::default();
+    running.motion.mode = MotionMode::Moving;
+    running.execution.progress = 1.2; // seconds — >= 1.0 but < 2.0s plan
+    mock.state = Some(running);
+    mock.execution_trace = Some(vec![ExecutionSample {
+        timestamp_us: 0,
+        joints: vec![0.1, 0.2],
+    }]);
+
+    let concrete = Arc::new(RwLock::new(mock));
+    let controller = concrete.clone() as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let manager = Arc::new(BackendManager::new());
+    manager.set_active(controller).await.unwrap();
+
+    let dir = std::env::temp_dir().join(format!("thalos-scene-hw-gate-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let sessions = Arc::new(SessionManager::with_path(dir.clone()));
+    let svc = SceneService::with_session_manager(
+        Box::new(InternalBackend),
+        manager.clone(),
+        RobotModel::Scara,
+        sessions.clone(),
+    );
+
+    // 2.0s plan → plan_duration = 2.0; hardware progress is seconds.
+    let plan = CompiledPlan::new(
+        thalos_core::trajectory::Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0, 0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![0.5, -0.3, 0.1, 0.0], 2.0),
+        ]),
+        vec![],
+    );
+    svc.schedule_program(plan, Default::default()).await.unwrap();
+    svc.start_execution().await.unwrap();
+
+    // Tick with 1.2s progress (>= 1.0, < 2.0s plan): MUST NOT finalize.
+    svc.tick_execution_delta(0.1).await.unwrap();
+    let session = sessions.get(1).await.expect("session registered");
+    assert_eq!(
+        session.status,
+        crate::plan::SessionStatus::Running,
+        "mid-run seconds progress must NOT finalize the session"
+    );
+    assert!(
+        sessions.get_execution_trace(1).await.is_none(),
+        "hardware trace must not be drained before true completion"
+    );
+
+    // True completion: progress reaches plan_duration → finalize + persist.
+    let mut done = RobotState::default();
+    done.motion.mode = MotionMode::Moving;
+    done.execution.progress = 2.0;
+    concrete.write().await.state = Some(done);
+    svc.tick_execution_delta(0.1).await.unwrap();
+    let session = sessions.get(1).await.expect("session registered");
+    assert_eq!(
+        session.status,
+        crate::plan::SessionStatus::Completed,
+        "completion at plan_duration must finalize"
+    );
+    let trace = sessions
+        .get_execution_trace(1)
+        .await
+        .expect("hardware trace persisted on the true-completion tick");
+    assert_eq!(trace.samples.len(), 1);
+    assert_eq!(trace.samples[0].joints, vec![0.1, 0.2]);
+    assert_eq!(trace.metadata.source, ExecutionSource::Hardware);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// REL-03 / RES-06 (RED): an EStop state must be a TERMINAL Failed
+/// finalization in the tick — not leave the session Running forever.
+#[tokio::test]
+async fn estop_state_finalizes_session_as_failed() {
+    use crate::session::SessionManager;
+
+    let mut mock = MockController::new();
+    mock.source = ExecutionSource::Hardware;
+    let mut stopped = RobotState::default();
+    stopped.motion.mode = MotionMode::EStop;
+    mock.state = Some(stopped);
+
+    let concrete = Arc::new(RwLock::new(mock));
+    let controller = concrete.clone() as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let manager = Arc::new(BackendManager::new());
+    manager.set_active(controller).await.unwrap();
+
+    let dir = std::env::temp_dir().join(format!("thalos-scene-estop-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let sessions = Arc::new(SessionManager::with_path(dir.clone()));
+    let svc = SceneService::with_session_manager(
+        Box::new(InternalBackend),
+        manager.clone(),
+        RobotModel::Scara,
+        sessions.clone(),
+    );
+
+    let plan = CompiledPlan::new(
+        thalos_core::trajectory::Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0, 0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![0.5, -0.3, 0.1, 0.0], 2.0),
+        ]),
+        vec![],
+    );
+    svc.schedule_program(plan, Default::default()).await.unwrap();
+    svc.start_execution().await.unwrap();
+
+    svc.tick_execution_delta(0.1).await.unwrap();
+    let session = sessions.get(1).await.expect("session registered");
+    assert_eq!(
+        session.status,
+        crate::plan::SessionStatus::Failed,
+        "EStop must finalize the session as Failed"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }

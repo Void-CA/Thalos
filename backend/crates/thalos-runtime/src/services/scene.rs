@@ -615,19 +615,43 @@ impl SceneService {
                 .map(|p| p.trajectory.duration())
                 .unwrap_or(0.0);
 
+            // Active source determines progress UNITS (S3.6 / RISK-1):
+            // hardware backends populate `execution.progress` in SECONDS
+            // (esp32 map_firmware_state: fraction × plan_duration); simulation
+            // keeps a 0..1 fraction.
+            let active_source = self.manager.active_source().await;
+
             // Hoisted completion detection — evaluated on EVERY tick, outside
             // the recording gate, so the hardware execution trace is drained
             // and saved even when recording is not active (S3.6).
-            let completed = state.execution.progress >= 1.0
-                || matches!(
-                    state.motion.mode,
-                    crate::state::robot_state::MotionMode::Idle
-                );
+            //
+            // RISK-1 / REL-01: for Hardware the gate compares SECONDS against
+            // the active plan's duration (`>= plan_duration.max(1.0)`) — the
+            // old fraction threshold (`>= 1.0`) finalized mid-run on any plan
+            // > 1s and dropped the trace at true completion. Simulation keeps
+            // the historical fraction/Idle gate.
+            //
+            // REL-03 / RES-06: EStop is a TERMINAL condition — it must
+            // finalize the session (as Failed), never leave it Running.
+            let estop = matches!(
+                state.motion.mode,
+                crate::state::robot_state::MotionMode::EStop
+            );
+            let completed = estop
+                || match active_source {
+                    ExecutionSource::Hardware => {
+                        state.execution.progress >= plan_duration.max(1.0)
+                    }
+                    _ => {
+                        state.execution.progress >= 1.0
+                            || matches!(
+                                state.motion.mode,
+                                crate::state::robot_state::MotionMode::Idle
+                            )
+                    }
+                };
 
-            // Backend-conditional recording timestamp (S3.6): hardware
-            // backends populate `execution.progress` in SECONDS; simulation
-            // keeps the fraction → seconds formula (must not regress).
-            let active_source = self.manager.active_source().await;
+            // Backend-conditional recording timestamp (S3.6).
             let progress_in_seconds = match active_source {
                 ExecutionSource::Hardware => state.execution.progress,
                 _ => state.execution.progress * plan_duration.max(1.0),
@@ -647,14 +671,23 @@ impl SceneService {
                     rec_state.recorder.record(timestamp, &state);
                     rec_state.execution_recorder.on_sample(timestamp, &state);
 
-                    // Check if execution completed — finalize recording
+                    // Check if execution completed — finalize recording.
+                    // REL-03 / RES-06: EStop finalizes as FAILED, not
+                    // Completed — a stopped-by-error run must not report done.
                     if completed {
                         let trace = rec_state.recorder.stop();
                         rec_state
                             .execution_recorder
                             .on_execution_finished(timestamp);
                         let exec_trace = rec_state.execution_recorder.trace();
-                        self.sessions.complete(rec_state.session_id, trace).await;
+                        let status = if estop {
+                            SessionStatus::Failed
+                        } else {
+                            SessionStatus::Completed
+                        };
+                        self.sessions
+                            .complete_with_status(rec_state.session_id, trace, status)
+                            .await;
                         if let Some(et) = exec_trace {
                             self.sessions
                                 .save_execution_trace(rec_state.session_id, et)
@@ -704,7 +737,6 @@ impl SceneService {
             );
             // R4-001: tick deltas carry the ACTIVE controller's source so the
             // running badge keeps reflecting the real backend (Hardware/Esp32).
-            let active_source = self.manager.active_source().await;
             if let Some(ref exe) = delta.execution {
                 delta.execution = Some(exe.clone().with_source(active_source));
             }

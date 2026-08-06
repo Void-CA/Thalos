@@ -206,6 +206,11 @@ pub mod tests {
         /// (S3.6) — lets scene tests exercise the hardware-trace drain
         /// without a real device.
         pub execution_trace: Option<Vec<ExecutionSample>>,
+        /// Optional `robot_state` override (review correction) — when set,
+        /// `robot_state` returns this state instead of the default, letting
+        /// scene tests simulate Moving/EStop/Completed states without a
+        /// real device.
+        pub state: Option<RobotState>,
     }
 
     impl MockController {
@@ -221,6 +226,7 @@ pub mod tests {
                 execute_error: None,
                 advance_error: None,
                 execution_trace: None,
+                state: None,
             }
         }
     }
@@ -290,7 +296,7 @@ pub mod tests {
         }
 
         async fn robot_state(&self) -> Arc<RobotState> {
-            Arc::new(RobotState::default())
+            Arc::new(self.state.clone().unwrap_or_default())
         }
 
         async fn take_execution_trace(&self) -> Option<Vec<ExecutionSample>> {
