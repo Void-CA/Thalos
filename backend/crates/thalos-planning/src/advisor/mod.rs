@@ -12,7 +12,7 @@
 //! PR 7a: el camino legacy `advise_findings`/`Recommendation` fue eliminado —
 //! todo el wire format habla observaciones; la remediación son [`Action`]s.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use thalos_core::analysis::action::{Action, ActionId, ActionImpact, ActionKind, ActionPriority};
 use thalos_core::analysis::location::Location;
@@ -106,6 +106,13 @@ impl PlanAdvisor {
     /// D8: cuando la materialización falla (IK sin solución, segmento no
     /// soportado) la recomendación NO se descarta — se marca
     /// `status: unavailable` y permanece en la salida con un edit neutro.
+    ///
+    /// Dedup (hotfix): UNA recomendación por `(segmento objetivo, kind)`. Si
+    /// varias observaciones apuntan al mismo segmento con la misma remediación
+    /// (p.ej. 4 singularidades sobre el segmento 2), el usuario no necesita 4
+    /// filas idénticas "segment 2 failed" — gana la primera observación por
+    /// clave y los duplicados se descartan. Kinds distintos sobre el mismo
+    /// segmento se mantienen (proponen edits distintos).
     pub fn recommend(
         &self,
         observations: &[Observation],
@@ -114,6 +121,7 @@ impl PlanAdvisor {
         current_joints: &[f64],
     ) -> Vec<Recommendation> {
         let mut recommendations = Vec::new();
+        let mut seen: HashSet<(usize, ActionKind)> = HashSet::new();
         let mut counter: u32 = 0;
         for observation in observations {
             for &(kind, priority, impact) in Self::remediation(observation.kind) {
@@ -125,6 +133,9 @@ impl PlanAdvisor {
                 else {
                     continue;
                 };
+                if !seen.insert((index, kind)) {
+                    continue; // ya hay una recomendación para este segmento+kind
+                }
                 let proposal = ActionProposal {
                     kind,
                     target_observation: observation.id,
@@ -400,6 +411,74 @@ mod tests {
             );
             assert_eq!(rec.action.target_observation, observations[0].id);
         }
+    }
+
+    #[test]
+    fn recommend_deduplicates_by_target_segment() {
+        // Hotfix (duplicate recommendations): the SAME failing segment must
+        // produce ONE recommendation, not one per observation. 4 singularity
+        // observations anchored to segment 0 collapse into a single
+        // "segment failed" row; a segment that ALSO fails keeps its own row.
+        use thalos_core::analysis::action::ActionKind;
+        use thalos_core::analysis::observation::ObservationKind;
+        use thalos_core::spatial::frame::FrameId;
+
+        let program = crate::motion::program::PlanningProgram::new(vec![
+            MotionSegment::MoveL {
+                origin: thalos_core::ids::OperationId("op-a".to_string()),
+                frame: FrameId::World,
+                target_pose: Pose::new(
+                    FrameId::World,
+                    FrameId::Id(1),
+                    Transform3D::identity(),
+                ),
+                max_velocity: Some(200.0),
+            },
+            MotionSegment::MoveL {
+                origin: thalos_core::ids::OperationId("op-b".to_string()),
+                frame: FrameId::World,
+                target_pose: Pose::new(
+                    FrameId::World,
+                    FrameId::Id(2),
+                    Transform3D::identity(),
+                ),
+                max_velocity: Some(200.0),
+            },
+        ]);
+
+        let mut observations = Vec::new();
+        for i in 0..4 {
+            let mut obs = observation(i + 1, ObservationKind::Singularity);
+            obs.location = Location::Waypoint(0); // all anchor segment 0
+            observations.push(obs);
+        }
+        let mut other = observation(5, ObservationKind::Singularity);
+        other.location = Location::Waypoint(1); // a second segment that fails
+        observations.push(other);
+
+        let advisor = PlanAdvisor;
+        let recommendations = advisor.recommend(&observations, &program, &FailingIKSolver, &[0.0, 0.0]);
+
+        let singularity = recommendations
+            .iter()
+            .filter(|r| r.action.kind == ActionKind::Singularity)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            singularity.len(),
+            2,
+            "one recommendation per distinct target segment, got {}",
+            singularity.len()
+        );
+
+        let mut indexes = singularity
+            .iter()
+            .map(|r| match r.edit {
+                crate::program_edit::ProgramEdit::ReplaceSegment { index, .. } => index,
+                _ => usize::MAX,
+            })
+            .collect::<Vec<_>>();
+        indexes.sort();
+        assert_eq!(indexes, vec![0, 1]);
     }
 
     #[test]
