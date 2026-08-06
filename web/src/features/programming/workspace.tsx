@@ -20,14 +20,14 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
  * they are alternate representations of the same interaction medium:
  *
  *   Programación (workflow progress)
- *   ├─ Programa       — semantic editor (TaskEditor, internal Visual/Text) +
- *   │                   compile status (DiagnosticsPanel)
- *   ├─ Motion Program — segment-by-segment motion program (PlanningPanel +
- *   │                   TrajectoryColorPicker), built from /scene/preview
- *   └─ Analysis       — AdvisorSection + PlanCharts + AlternativesPanel +
- *                       AnalysisSection (report-gated: badge when report
- *                       exists; PlanCharts/AlternativesPanel render only when
- *                       `report !== null`)
+ *   ├─ Tasks    — semantic editor (TaskEditor, internal Visual/Text) +
+ *   │             compile status (DiagnosticsPanel)
+ *   ├─ Motion   — segment-by-segment motion program (PlanningPanel +
+ *   │             TrajectoryColorPicker), built from /scene/preview
+ *   └─ Analysis — AdvisorSection + PlanCharts + AlternativesPanel +
+ *                 AnalysisSection (report-gated: badge when report
+ *                 exists; PlanCharts/AlternativesPanel render only when
+ *                 `report !== null`)
  *
  * The workspace consumes the Scene ARTIFACT (`sceneValid` via WorkflowState)
  * and renders ZERO Scene editing UI (the Scene editor lives exclusively in
@@ -46,10 +46,10 @@ export function ProgrammingWorkspace() {
         <PipelineStatus />
       </div>
 
-      <Tabs defaultValue="programa" className="flex flex-col h-full overflow-hidden min-h-0">
+      <Tabs defaultValue="tasks" className="flex flex-col h-full overflow-hidden min-h-0">
         <TabsList className="mx-3 mt-3 shrink-0">
-          <TabsTrigger value="programa">Programa</TabsTrigger>
-          <TabsTrigger value="motion-program">Motion Program</TabsTrigger>
+          <TabsTrigger value="tasks">Tasks</TabsTrigger>
+          <TabsTrigger value="motion">Motion</TabsTrigger>
           <TabsTrigger value="analysis">
             Analysis
             {report !== null && (
@@ -63,7 +63,7 @@ export function ProgrammingWorkspace() {
         </TabsList>
 
         {/* Tab 1 — semantic editor (Visual/Text) + compile diagnostics. */}
-        <TabsContent value="programa" className="flex-1 overflow-hidden min-h-0 flex flex-col">
+        <TabsContent value="tasks" className="flex-1 overflow-hidden min-h-0 flex flex-col">
           <div className="flex-1 overflow-hidden min-h-0">
             <TaskEditor />
           </div>
@@ -71,13 +71,8 @@ export function ProgrammingWorkspace() {
         </TabsContent>
 
         {/* Tab 2 — motion program by segments + trajectory color. */}
-        <TabsContent value="motion-program" className="flex-1 overflow-y-auto p-3 space-y-4">
-          <section>
-            <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">
-              Motion Program
-            </h2>
-            <PlanningPanel />
-          </section>
+        <TabsContent value="motion" className="flex-1 overflow-y-auto p-3 space-y-4">
+          <PlanningPanel />
 
           <section>
             <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">
@@ -89,15 +84,10 @@ export function ProgrammingWorkspace() {
 
         {/* Tab 3 — analysis (absorbed from /planning; kept in the workspace). */}
         <TabsContent value="analysis" className="flex-1 overflow-y-auto p-3 space-y-4">
-          <section>
-            <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">
-              Analysis
-            </h2>
-            <AdvisorSection report={report} />
-            {report !== null && <PlanCharts report={report} />}
-            {report !== null && <AlternativesPanel />}
-            <AnalysisSection />
-          </section>
+          <AdvisorSection report={report} />
+          {report !== null && <PlanCharts report={report} />}
+          {report !== null && <AlternativesPanel />}
+          <AnalysisSection />
         </TabsContent>
       </Tabs>
     </div>
