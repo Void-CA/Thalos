@@ -24,7 +24,7 @@ import { WORKSPACE_REGISTRY, type WorkspaceName } from '@/shared/workflow/regist
  * (features/scene/SceneWorkspace) — the exclusive owner of the Scene editor
  * since S2; /task renders zero Scene UI. Hotfix (unify-programming): `task`
  * maps to ProgrammingWorkspace — /task AND the old /planning content live in
- * one area (Tasks / Motion tabs). Hotfix (evaluation-workspace): `evaluation`
+ * one area (Task / Motion / Code tabs). Hotfix (evaluation-workspace): `evaluation`
  * maps to EvaluationWorkspace — the pre-execution EVALUACIÓN view at
  * /evaluation (stage 4); the analysis TAB left the programming workspace.
  */

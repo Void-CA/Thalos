@@ -83,7 +83,17 @@ async function previewTaskPlan(task: TaskDocument): Promise<void> {
  * `previewTaskPlan` — drawing the Task trajectory in the viewport and
  * populating the Analysis tab, non-blocking on preview failure.
  */
-export function TaskEditor() {
+/** TaskEditor props (hotfix unify-programming): the workspace mounts TWO
+ *  instances — the Task tab in the default 'visual' mode and the Code tab
+ *  forced into 'text' via `initialMode`. The mode is chosen ONCE at mount;
+ *  the tab layout owns switching (each instance keeps its own local buffer,
+ *  and only the active tab mounts). */
+export interface TaskEditorProps {
+  /** Entry mode for this instance. Defaults to 'visual'. */
+  initialMode?: 'visual' | 'text'
+}
+
+export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
   const {
     operations, result, loading, scriptErrors,
     addOperation, removeOperation, moveOperation, updateOperation,
@@ -95,8 +105,9 @@ export function TaskEditor() {
   const navigate = useNavigate()
 
   /** S1 dual mode (frontend-task-workspace spec): 'visual' is the default;
-   *  toggling only changes the projection, never the store. */
-  const [mode, setMode] = useState<'visual' | 'text'>('visual')
+   *  the workspace picks the entry mode per tab (initialMode); switching only
+   *  changes the projection, never the store. */
+  const [mode, setMode] = useState<'visual' | 'text'>(initialMode ?? 'visual')
 
   /**
    * S2 text buffer (design P4): component-LOCAL state. The store remains the

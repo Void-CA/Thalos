@@ -10,20 +10,22 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
  *
  * Hotfix (unify-programming): /task (semantic editor) and /planning (motion
  * program) were the SAME thing — commanding the robot with different
- * syntaxes — so they merge into ONE workspace with two tabs. Each tab is one
- * of the two ways to express an order, making it explicit that they are
+ * syntaxes — so they merge into ONE workspace with three tabs. Each tab is
+ * one of the ways to express an order, making it explicit that they are
  * alternate representations of the same interaction medium:
  *
  *   Programación (workflow progress)
- *   ├─ Tasks   — semantic editor (TaskEditor, internal Visual/Text) +
- *   │            compile status (DiagnosticsPanel)
- *   └─ Motion  — segment-by-segment motion program (PlanningPanel +
- *                TrajectoryColorPicker), built from /scene/preview
+ *   ├─ Task   — semantic editor, visual mode (TaskEditor) + compile status
+ *   │            (DiagnosticsPanel)
+ *   ├─ Motion — segment-by-segment motion program (PlanningPanel +
+ *   │            TrajectoryColorPicker), built from /scene/preview
+ *   └─ Code   — the SAME TaskEditor in TEXT mode (initialMode="text"): the
+ *                script-as-canonical representation of the program
  *
  * HOTFIX (evaluation-workspace): the Analysis TAB was REMOVED — the analysis
  * check is now the /evaluation VISTA (pre-execution EVALUACIÓN, stage 4).
  * The evaluation content (regions, recommendations, repair options,
- * optimization) moved there; this workspace keeps ONLY the two plan-authoring
+ * optimization) moved there; this workspace keeps ONLY the three plan-authoring
  * tabs. The workspace consumes the Scene ARTIFACT (`sceneValid` via
  * WorkflowState) and renders ZERO Scene editing UI (the Scene editor lives
  * exclusively in Escena, features/scene/SceneWorkspace). It produces the
@@ -40,11 +42,12 @@ export function ProgrammingWorkspace() {
 
       <Tabs defaultValue="tasks" className="flex flex-col h-full overflow-hidden min-h-0">
         <TabsList className="mx-3 mt-3 shrink-0">
-          <TabsTrigger value="tasks">Tasks</TabsTrigger>
+          <TabsTrigger value="tasks">Task</TabsTrigger>
           <TabsTrigger value="motion">Motion</TabsTrigger>
+          <TabsTrigger value="code">Code</TabsTrigger>
         </TabsList>
 
-        {/* Tab 1 — semantic editor (Visual/Text) + compile diagnostics. */}
+        {/* Tab 1 — semantic editor, visual mode + compile diagnostics. */}
         <TabsContent value="tasks" className="flex-1 overflow-hidden min-h-0 flex flex-col">
           <div className="flex-1 overflow-hidden min-h-0">
             <TaskEditor />
@@ -62,6 +65,19 @@ export function ProgrammingWorkspace() {
             </h2>
             <TrajectoryColorPicker />
           </section>
+        </TabsContent>
+
+        {/* Tab 3 — the SAME semantic editor in TEXT mode (initialMode="text"):
+         * the script-as-canonical representation of the program. Separate
+         * mount per tab keeps each instance's local buffer independent; only
+         * the active tab mounts (Base UI Tabs), so no duplicated state is
+         * live at once. The store (operations) stays the canonical source —
+         * the buffer re-serializes on every entry. */}
+        <TabsContent value="code" className="flex-1 overflow-hidden min-h-0 flex flex-col">
+          <div className="flex-1 overflow-hidden min-h-0">
+            <TaskEditor initialMode="text" />
+          </div>
+          <DiagnosticsPanel />
         </TabsContent>
       </Tabs>
     </div>
