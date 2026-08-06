@@ -13,7 +13,7 @@ export function YoshikawaChart() {
 
   return (
     <section className="flex min-w-0 rounded-lg border border-border bg-card px-3 py-2.5">
-      <EChart model={manipulabilityBuilder(report)} className="h-64 w-full" />
+      <EChart model={manipulabilityBuilder(report)} className="h-80 w-full" />
     </section>
   )
 }
