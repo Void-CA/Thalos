@@ -8,6 +8,8 @@ import { useSemanticEditor } from '@/features/semantic/store'
 import { useSceneStore } from '@/features/viewport/store'
 import { dedupeRecommendations, recommendationKey } from '@/shared/contracts/analysis-report'
 import { TrajectoryView } from './components/trajectory-view'
+import { YoshikawaChart } from './components/yoshikawa-chart'
+import { DeterminantChart } from './components/determinant-chart'
 import { ShieldCheck } from 'lucide-react'
 
 /**
@@ -19,32 +21,19 @@ import { ShieldCheck } from 'lucide-react'
  * between Programación and Ejecución, with concrete actions instead of an
  * un-actionable dump of up-to-200 observations.
  *
- * Layout + gating decisions:
- *  - Plan summary FIRST, compact full-width top row: what is about to execute
- *    (source Tasks/Motion, plan id, waypoints, duration, instructions) — the
- *    user must see the plan before deciding.
- *  - 3-column grid at lg (hotfix evaluation-layout, /evaluation now uses the
- *    full space): LEFT = problem regions + warnings (StatusBanner), CENTER =
- *    the trajectory view (the visual focus) + recommendations, RIGHT =
- *    RegionInspector detail for the selected region. On small screens the grid
- *    collapses to a stacked column. The click↔select wiring is preserved:
- *    clicking a region (list or trajectory) opens its detail in the right
- *    column WITHOUT hiding the list or the trajectory.
- *  - Trajectory view: the FULL evaluated trajectory in a lightweight chart
- *    (NOT the R3F viewport — hidden on /evaluation by design), with problem
- *    regions colored by severity and click↔select wiring to the region list.
- *  - Problem regions GROUPED from `problem_regions` (never the raw
- *    observations list): a clean verdict ("no se detectaron problemas") when
- *    the plan has none.
- *  - Repair options + Optimization are HIDDEN (post-MVP): they SHOWED but did
- *    not communicate, and offered no real way to correct the trajectory. The
- *    post-MVP strategy returns a resolved Motion/Task program for the user to
- *    adopt, seeing how the trajectory changes. Code stays in the repo
- *    (AlternativesPanel/OptimizationPanel) unused by this view.
- *  - Recommendations render with their uniform Preview/Apply/Undo rows
- *    (RecommendationRow) when the report carries them — THIS is the base of
- *    the post-MVP resolution strategy. Duplicates (same kind + edit variant)
- *    are deduped as a frontend safety net.
+ * Layout + gating decisions (hotfix evaluation-layout):
+ *  - StatusBanner full-width verdict FIRST, then the decision context:
+ *    Plan summary (what is about to execute) + the trajectory view.
+ *  - 3-portion grid at lg (collapses to stacked below): porción 1 = Yoshikawa
+ *    manipulability chart, porción 2 = Jacobian determinant chart (both with
+ *    their threshold reference lines), porción 3 = problem regions list + the
+ *    selected region's detail (RegionInspector). Charts are now prominent
+ *    instead of buried; region selection drives the detail in-place.
+ *  - Recommendations render below the grid with their uniform
+ *    Preview/Apply/Undo rows (RecommendationRow) when the report carries them.
+ *    Duplicates (same kind + edit variant) are deduped as a frontend safety net.
+ *  - Recommended strategies are NOT shown in the region inspector (the user
+ *    does not use them); repair options + optimization stay hidden (post-MVP).
  *  - Empty state when there is no report yet (analyzed=false): invite to
  *    program first + a way back to Programación.
  *
@@ -91,16 +80,22 @@ export function EvaluationWorkspace() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-4 min-h-0">
-        {/* Compact top row: what is about to execute. */}
-        <PlanSummary />
-
-        {/* 3-column grid at lg; stacked below. Trajectory is the visual focus
-            (center); problem regions + warnings sit on the left; the selected
-            region's detail lives on the right. */}
+        {/* Verdict + decision context: plan summary and trajectory. */}
+        <StatusBanner />
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 items-start">
-          {/* ── Left: problem regions + warnings ── */}
+          <PlanSummary />
+          <div className="lg:col-span-2 min-w-0">
+            <TrajectoryView />
+          </div>
+        </div>
+
+        {/* 3-portion grid at lg (stacked below): the two jacobian charts are
+            the visual focus, the third portion is the problem regions list +
+            the selected region's detail. */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 items-start">
+          <YoshikawaChart />
+          <DeterminantChart />
           <section className="flex flex-col gap-2 min-w-0">
-            <StatusBanner />
             <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
               Problem Regions
             </h2>
@@ -111,31 +106,6 @@ export function EvaluationWorkspace() {
                 No se detectaron problemas — el plan está listo.
               </p>
             )}
-          </section>
-
-          {/* ── Center: trajectory (focus) + recommendations ── */}
-          <section className="flex flex-col gap-2 min-w-0">
-            <TrajectoryView />
-
-            {recommendations.length > 0 && (
-              <>
-                <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
-                  Recommendations
-                </h2>
-                <ul className="flex flex-col gap-1.5">
-                  {recommendations.map((recommendation) => (
-                    <RecommendationRow
-                      key={recommendationKey(recommendation)}
-                      recommendation={recommendation}
-                    />
-                  ))}
-                </ul>
-              </>
-            )}
-          </section>
-
-          {/* ── Right: detail of the selected region ── */}
-          <section className="flex flex-col gap-2 min-w-0">
             {selectedRegion ? (
               <RegionInspector />
             ) : (
@@ -150,6 +120,23 @@ export function EvaluationWorkspace() {
             )}
           </section>
         </div>
+
+        {/* Recommendations — the base of the post-MVP resolution strategy. */}
+        {recommendations.length > 0 && (
+          <section className="flex flex-col gap-2">
+            <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+              Recommendations
+            </h2>
+            <ul className="flex flex-col gap-1.5">
+              {recommendations.map((recommendation) => (
+                <RecommendationRow
+                  key={recommendationKey(recommendation)}
+                  recommendation={recommendation}
+                />
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
     </div>
   )
@@ -158,8 +145,9 @@ export function EvaluationWorkspace() {
 /**
  * PlanSummary — what is about to execute. Derived from the stores the
  * programming flow already populates: semantic editor (Tasks source +
- * instruction count), viewport scene store (waypoints + duration) and the
- * analysis report (analyzed waypoints fallback, plan id).
+ * instruction count), viewport scene store (waypoints + duration + robot DOF +
+ * initial joints) and the analysis report (analyzed waypoints fallback, plan
+ * id, score/grade).
  */
 function PlanSummary() {
   const report = useAnalysisStore((s) => s.report)
@@ -167,28 +155,44 @@ function PlanSummary() {
   const instructionCount = useSemanticEditor((s) => s.result?.metadata.instruction_count)
   const visualization = useSceneStore((s) => s.activePlan?.visualization)
   const segments = useSceneStore((s) => s.activePlan?.segments)
+  const runtime = useSceneStore((s) => s.runtime)
 
   const waypoints =
     visualization?.waypoints?.length ?? report?.manipulability_series?.length ?? 0
   const durationSecs = segments
     ? segments.reduce((max, segment) => Math.max(max, segment.timeEnd), 0)
     : null
+  const dof = runtime?.robot.dof ?? null
+  const initialJoints = runtime?.joints?.length
+    ? `[${runtime.joints.map((j) => j.toFixed(2)).join(', ')}]`
+    : null
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border bg-card px-3 py-2.5">
-      <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
-        Plan
-      </span>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+    <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-card px-3 py-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
+          Plan
+        </span>
+        {report && (
+          <span className="text-[10px] font-mono font-semibold text-primary bg-primary-weak px-2 py-0.5 rounded tabular-nums">
+            Score {report.summary.score} · {report.summary.grade}
+          </span>
+        )}
+      </div>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-3">
         <SummaryItem label="Fuente" value={source} />
         <SummaryItem label="Plan" value={report?.artifact.id ?? '—'} />
         <SummaryItem label="Waypoints" value={String(waypoints)} />
         <SummaryItem label="Duración" value={durationSecs !== null ? formatDuration(durationSecs) : '—'} />
-        <SummaryItem
-          label="Instrucciones"
-          value={instructionCount !== undefined ? String(instructionCount) : '—'}
-        />
+        <SummaryItem label="Instrucciones" value={instructionCount !== undefined ? String(instructionCount) : '—'} />
+        <SummaryItem label="DOF" value={dof !== null ? String(dof) : '—'} />
       </dl>
+      {initialJoints && (
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <span>Joints iniciales</span>
+          <code className="font-mono text-foreground/80 tabular-nums">{initialJoints}</code>
+        </div>
+      )}
     </div>
   )
 }

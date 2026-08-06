@@ -49,9 +49,9 @@ const report: AnalysisReportWire = {
   ],
   // In-range points 10/11/12 → avg 0.2, min 0.1; out-of-range 30 → excluded.
   manipulability_series: [
-    { waypoint: 10, yoshikawa: 0.1 },
-    { waypoint: 11, yoshikawa: 0.2 },
-    { waypoint: 12, yoshikawa: 0.3 },
+    { waypoint: 10, yoshikawa: 0.1, det_jtj: 0.01 },
+    { waypoint: 11, yoshikawa: 0.2, det_jtj: 0.04 },
+    { waypoint: 12, yoshikawa: 0.3, det_jtj: 0.09 },
     { waypoint: 30, yoshikawa: 0.9 },
   ],
 }
@@ -119,13 +119,25 @@ describe('RegionInspector (PR6 6.5 — zero per-strategy buttons)', () => {
     expect(screen.getByText('0.5500')).toBeInTheDocument()
   })
 
-  it('renders recommended strategies as read-only chips and the confidence', () => {
+  it('keeps the region drill-down free of recommended strategies (user does not use them)', () => {
     seedSelectedRegion()
     renderInspector()
-    expect(screen.getByText('Joint centering')).toBeInTheDocument()
-    expect(screen.getByText('Lift TCP')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Joint centering/i })).not.toBeInTheDocument()
+    // The user asked to drop recommended strategies from the evaluation view —
+    // the block is gone even though the payload still carries them.
+    expect(screen.queryByText('Recommended strategies')).not.toBeInTheDocument()
+    expect(screen.queryByText('Joint centering')).not.toBeInTheDocument()
+    expect(screen.queryByText('Lift TCP')).not.toBeInTheDocument()
     expect(screen.getByText('90% confidence')).toBeInTheDocument()
+  })
+
+  it('surfaces the Jacobian determinant (det_jtj) for the region when available', () => {
+    seedSelectedRegion()
+    renderInspector()
+
+    // det_jtj = yoshikawa² over the in-range span 10/11/12: 0.01, 0.04, 0.09.
+    expect(screen.getByText('0.0467')).toBeInTheDocument() // average
+    expect(screen.getByText('0.0100')).toBeInTheDocument() // min
+    expect(screen.queryByText('0.8100')).not.toBeInTheDocument() // wp30 out of range
   })
 
   it('handles a region without manipulability coverage gracefully', () => {

@@ -9,6 +9,7 @@ import { EvaluationWorkspace } from './workspace'
 import { useAnalysisStore } from '@/features/analysis/store'
 import { useSemanticEditor } from '@/features/semantic/store'
 import { useSceneStore } from '@/features/viewport/store'
+import { installCanvasMock } from '@/test/canvas-mock'
 import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 import type { CompileResponse } from '@/features/semantic/types'
 import type { ActivePlan } from '@/features/viewport/types'
@@ -21,8 +22,10 @@ import type { ActivePlan } from '@/features/viewport/types'
  * This suite pins the layout + gating contract (CDD evaluation-workspace):
  * - empty state when there is no report yet (analyzed=false) → invites to
  *   program first, with a way back to Programación;
- * - plan summary (source Tasks/Motion, plan id, waypoints, duration);
+ * - plan summary (source Tasks/Motion, plan id, waypoints, duration, DOF);
  * - trajectory view: the FULL evaluated trajectory with problem regions colored;
+ * - 3-portion grid: Yoshikawa chart | Jacobian determinant chart | problem
+ *   regions list + selected region detail (RegionInspector);
  * - problem regions GROUPS from `problem_regions` — the 200-observation dump
  *   is gone; a clean verdict when the plan has no problem regions;
  * - recommendations render with their uniform Preview/Apply/Undo rows;
@@ -78,8 +81,8 @@ const cleanReport: AnalysisReportWire = {
     severity_distribution: {},
   },
   manipulability_series: [
-    { waypoint: 0, yoshikawa: 0.9 },
-    { waypoint: 1, yoshikawa: 0.8 },
+    { waypoint: 0, yoshikawa: 0.9, det_jtj: 0.81 },
+    { waypoint: 1, yoshikawa: 0.8, det_jtj: 0.64 },
   ],
 }
 
@@ -138,6 +141,9 @@ function renderWorkspace(initialPath = '/evaluation') {
 }
 
 beforeEach(() => {
+  // The 3-portion grid renders the two jacobian charts (lazy ECharts) — the
+  // jsdom canvas needs the no-op 2D context + forced layout shims.
+  installCanvasMock()
   act(() => {
     useAnalysisStore.getState().clear()
     useSemanticEditor.getState().reset()
@@ -182,6 +188,23 @@ describe('EvaluationWorkspace — plan summary (what is about to execute)', () =
     renderWorkspace()
     expect(screen.getByText('Motion')).toBeInTheDocument()
     expect(screen.queryByText('Tasks')).not.toBeInTheDocument()
+  })
+
+  it('shows the robot DOF and initial joints when the runtime is known', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: cleanReport })
+      useSceneStore.setState({
+        activePlan,
+        runtime: {
+          robot: { id: 'planar_2r', display_name: 'Planar 2R', dof: 2, joints: [] },
+          joints: [0.1, 0.2],
+          generatedAt: '2026-01-01T00:00:00Z',
+        },
+      })
+    })
+    renderWorkspace()
+    expect(screen.getByText('2')).toBeInTheDocument() // DOF
+    expect(screen.getByText('[0.10, 0.20]')).toBeInTheDocument() // initial joints
   })
 })
 
@@ -258,16 +281,31 @@ describe('EvaluationWorkspace — recommendations with uniform Preview/Apply/Und
   })
 })
 
-describe('EvaluationWorkspace — 3-column layout (problem regions | trajectory | inspector)', () => {
+describe('EvaluationWorkspace — 3-portion grid (charts | charts | region detail)', () => {
+  it('renders the two jacobian charts, the problem regions list and the region detail placeholder', async () => {
+    act(() => {
+      useAnalysisStore.setState({ report: cleanReport })
+      useSceneStore.setState({ activePlan })
+    })
+    renderWorkspace()
+
+    // The lazy ECharts chunk resolves asynchronously — the two chart cards
+    // mount once the module loads (explicit timeout under parallel load).
+    const charts = await screen.findAllByTestId('chart', {}, { timeout: 5000 })
+    expect(charts).toHaveLength(2)
+    // Porción 3: problem regions list + the "select a region" placeholder.
+    expect(screen.getByText('Problem Regions')).toBeInTheDocument()
+    expect(screen.getByText(/select a region/i)).toBeInTheDocument()
+  })
+
   it('keeps the region list, trajectory and recommendations visible while inspecting a region', () => {
     act(() => {
       useAnalysisStore.setState({ report: recommendationReport })
       useSceneStore.setState({ activePlan })
     })
     renderWorkspace()
-    // Selecting a region opens the RegionInspector (right column) WITHOUT
-    // hiding the grouped regions list (left) or the trajectory (center) —
-    // previously the drill-down replaced the whole view.
+    // Selecting a region opens the RegionInspector in porción 3 WITHOUT
+    // hiding the grouped regions list or the trajectory (charts stay put).
     fireEvent.click(screen.getByRole('button', { name: /Singularity near waypoint 10/i }))
     expect(screen.getByRole('heading', { name: 'Region Details' })).toBeInTheDocument()
     expect(
@@ -280,7 +318,7 @@ describe('EvaluationWorkspace — 3-column layout (problem regions | trajectory 
     expect(screen.getByTestId('recommendation-row')).toBeInTheDocument()
   })
 
-  it('renders a placeholder when no region is selected (inspector column stays put)', () => {
+  it('renders a placeholder when no region is selected (porción 3 stays put)', () => {
     act(() => {
       useAnalysisStore.setState({ report: cleanReport })
       useSceneStore.setState({ activePlan })

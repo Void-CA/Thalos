@@ -12,6 +12,13 @@ export interface ManipulabilityStats {
   min: number
 }
 
+/** Aggregated Jacobian determinant det(J·Jᵀ) over a waypoint span. */
+export interface DeterminantStats {
+  count: number
+  average: number
+  min: number
+}
+
 /**
  * Manipulability (Yoshikawa) stats over the region's waypoint span — a
  * JACOBIAN property (det(J·Jᵀ)) derived from the canonical
@@ -36,6 +43,27 @@ export function manipulabilityStatsInRange(
 }
 
 /**
+ * det(J·Jᵀ) stats over the region's waypoint span, computed ONLY from points
+ * that carry `det_jtj` (older payloads omit it — those points are skipped).
+ */
+export function determinantStatsInRange(
+  series: ManipulabilityPointWire[],
+  start: number,
+  end: number,
+): DeterminantStats | null {
+  const covered = series.filter(
+    (p) => p.det_jtj !== undefined && p.waypoint >= start && p.waypoint <= end,
+  )
+  if (covered.length === 0) return null
+  const values = covered.map((p) => p.det_jtj as number)
+  return {
+    count: covered.length,
+    average: values.reduce((a, b) => a + b, 0) / values.length,
+    min: Math.min(...values),
+  }
+}
+
+/**
  * RegionInspector — read-only contextual detail panel for the selected
  * problem region (cause, metrics, impact, location).
  *
@@ -46,8 +74,9 @@ export function manipulabilityStatsInRange(
  * drill-down detail view (selectRegion → RegionInspector).
  *
  * Evaluation hotfix CDD: enriched with what happened AND why — jacobian
- * manipulability (Yoshikawa, det(J·Jᵀ)) over the region span, the concrete
- * cause/consequence, and read-only recommended strategies + confidence.
+ * manipulability (Yoshikawa, det(J·Jᵀ)) over the region span and the concrete
+ * cause/consequence. Recommended strategies are NOT shown (the user does not
+ * use them in this view); confidence remains.
  */
 export function RegionInspector() {
   const region = useSelectedRegion()
@@ -64,6 +93,11 @@ export function RegionInspector() {
   // default the series to [] defensively for the typechecker.
   const series = report ? manipulabilitySeriesOf(report) : []
   const manipulability = manipulabilityStatsInRange(
+    series,
+    region.waypoint_start,
+    region.waypoint_end,
+  )
+  const determinant = determinantStatsInRange(
     series,
     region.waypoint_start,
     region.waypoint_end,
@@ -121,6 +155,12 @@ export function RegionInspector() {
                 value={`${manipulability.count} of ${region.waypoint_count} analyzed`}
               />
             </div>
+            {determinant && (
+              <div className="grid grid-cols-2 gap-1.5 mt-1.5">
+                <MetricCard label="det(J·Jᵀ) avg" value={fmt(determinant.average)} />
+                <MetricCard label="det(J·Jᵀ) min" value={fmt(determinant.min)} />
+              </div>
+            )}
           </>
         ) : (
           <p className="text-xs text-muted-foreground">
@@ -136,22 +176,6 @@ export function RegionInspector() {
           <p className="text-xs text-muted-foreground leading-relaxed">{region.explanation.consequence}</p>
         </div>
       )}
-
-      {/* Strategies — read-only chips (PR6 6.5: zero dispatch). */}
-      {region.explanation?.recommended_strategies?.length ? (
-        <div>
-          <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-            Recommended strategies
-          </h4>
-          <div className="flex flex-wrap gap-1.5">
-            {region.explanation.recommended_strategies.map((strategy) => (
-              <span key={strategy} className="rounded-md border border-border bg-secondary/30 px-2 py-0.5 text-[10px] font-medium text-foreground">
-                {strategy}
-              </span>
-            ))}
-          </div>
-        </div>
-      ) : null}
 
       {/* Location + confidence. */}
       <div className="flex items-center justify-between">
