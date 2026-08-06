@@ -49,10 +49,16 @@ export function isValidHomePose(pose: PoseDef | null | undefined): boolean {
  * The flags form the artifact chain (R2: RobotModel → Scene → SemanticProgram
  * → MotionPlan → Runtime), so each downstream flag requires the upstream one:
  * `sceneValid ⇒ robotLoaded`, `programValid ⇒ sceneValid`,
- * `compiled ⇒ programValid`, `executable ⇒ compiled` — impossible states are
+ * `compiled ⇒ programValid`, `executable ⇒ planReady` — impossible states are
  * impossible by construction (tasks.md C1). The scene/program split keeps the
  * two validities separately meaningful: a scene can be valid while the program
  * is still incomplete.
+ *
+ * PR2: `planReady` covers BOTH plan sources — the Task compile handoff
+ * (`compiled`) and the Planning preview path (`scene.activePlanPresent`, a
+ * plan mirrored into the viewport scene store). `executable` is rebased on
+ * `planReady` so a previewed Motion Program is runnable even though `compiled`
+ * stays false.
  */
 export function deriveWorkflowState(snapshot: WorkflowSnapshot): WorkflowState {
   const sceneValid =
@@ -67,6 +73,7 @@ export function deriveWorkflowState(snapshot: WorkflowSnapshot): WorkflowState {
     programValid &&
     snapshot.compile.result !== null &&
     snapshot.compile.dirty === 0
+  const planReady = compiled || snapshot.scene.activePlanPresent
   const status = snapshot.execution.status
 
   return {
@@ -74,8 +81,9 @@ export function deriveWorkflowState(snapshot: WorkflowSnapshot): WorkflowState {
     sceneValid,
     programValid,
     compiled,
+    planReady,
     analyzed: snapshot.analysis.report !== null,
-    executable: compiled && EXECUTABLE_STATUSES.includes(status),
+    executable: planReady && EXECUTABLE_STATUSES.includes(status),
     running: RUNNING_STATUSES.includes(status),
     completed: status === 'completed',
   }
@@ -100,6 +108,7 @@ const FLAG_PHRASES: Record<WorkflowFlag, string> = {
   sceneValid: 'a valid scene',
   programValid: 'a valid program',
   compiled: 'a compiled plan',
+  planReady: 'a plan',
   analyzed: 'an analyzed plan',
   executable: 'an executable plan',
   running: 'a running execution',
@@ -199,10 +208,18 @@ export function deriveStatusMessage(state: WorkflowState): string {
   if (!state.robotLoaded) return 'No robot loaded'
   if (!state.sceneValid) return 'Scene incomplete'
   if (!state.programValid) return 'Task incomplete'
-  if (!state.compiled) return 'Task modified — recompilation required'
   if (state.running) return 'Plan running'
   if (state.completed) return 'Plan completed — review in Sessions'
-  if (state.executable) return 'Plan ready to run'
+  // R3-001: branch on executable BEFORE compiled — a previewed Motion Program is
+  // runnable with `compiled:false` (planReady via scene.activePlanPresent), so
+  // it must report as ready instead of the stale-compile message. The compiled
+  // check below only triggers when nothing runnable exists.
+  if (state.executable) {
+    return state.compiled
+      ? 'Plan ready to run'
+      : 'Motion Program ready — send to execution'
+  }
+  if (!state.compiled) return 'Task modified — recompilation required'
   if (state.analyzed) return 'Plan analyzed'
   return 'Robot loaded · Task compiled'
 }

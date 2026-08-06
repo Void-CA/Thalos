@@ -45,12 +45,15 @@ const validOps: SemanticOp[] = [
 ]
 
 /** All-good snapshot: every flag derives true (workflow-state spec, "Flags
- *  reflect store state" scenario). Individual tests override one domain. */
+ *  reflect store state" scenario). Individual tests override one domain.
+ *  `activePlanPresent` defaults to false — the all-good snapshot uses the
+ *  compiled path; the planning-preview path is exercised by dedicated tests. */
 const base: WorkflowSnapshot = {
   scene: {
     robotLoaded: true,
     objects: [{ id: 'bolt-1', name: 'Bolt', pose: { position: [1.8, 0, 0.4], orientation: [0, 0, 0, 1] } }],
     validHomePose: true,
+    activePlanPresent: false,
   },
   task: { operations: validOps },
   compile: { result: compileResult, dirty: 0 },
@@ -63,6 +66,7 @@ const ALL_TRUE: WorkflowState = {
   sceneValid: true,
   programValid: true,
   compiled: true,
+  planReady: true,
   analyzed: true,
   executable: true,
   running: false,
@@ -143,19 +147,64 @@ describe('deriveWorkflowState — derivation table (workflow-state spec)', () =>
   )
 
   it.each(['idle', 'loading', 'cancelled', 'failed', 'completed'] as const)(
-    'executable is false when compiled but execStatus = %s',
+    'executable is false when planReady but execStatus = %s',
     (status) => {
       expect(deriveWorkflowState({ ...base, execution: { status } }).executable).toBe(false)
     },
   )
 
-  it('executable is false when not compiled, even at execStatus = ready', () => {
+  it('executable is false when not planReady (no compiled, no active plan), even at execStatus = ready', () => {
     const snap = {
       ...base,
       compile: { result: null, dirty: 0 },
+      scene: { ...base.scene, activePlanPresent: false },
       execution: { status: 'ready' as const },
     }
     expect(deriveWorkflowState(snap).compiled).toBe(false)
+    expect(deriveWorkflowState(snap).planReady).toBe(false)
+    expect(deriveWorkflowState(snap).executable).toBe(false)
+  })
+
+  // ── planReady (workflow-state spec: compiled ∨ sceneActivePlanPresent) ────
+  // The flag covers BOTH plan sources: the Task compile handoff and the
+  // Planning preview path. executable is rebased on planReady, so a previewed
+  // plan is runnable even though `compiled` stays false.
+
+  it('planReady is true from the compiled path (compiled && !dirty)', () => {
+    expect(deriveWorkflowState(base).planReady).toBe(true)
+  })
+
+  it('planReady is true from the planning preview path (activePlanPresent) even without compiled', () => {
+    const snap = {
+      ...base,
+      compile: { result: null, dirty: 0 },
+      scene: { ...base.scene, activePlanPresent: true },
+      execution: { status: 'ready' as const },
+    }
+    const state = deriveWorkflowState(snap)
+    expect(state.compiled).toBe(false)
+    expect(state.planReady).toBe(true)
+    // The previewed plan is runnable: executable does NOT require compiled.
+    expect(state.executable).toBe(true)
+  })
+
+  it('planReady is false when no plan exists at all', () => {
+    const snap = {
+      ...base,
+      compile: { result: null, dirty: 0 },
+      scene: { ...base.scene, activePlanPresent: false },
+    }
+    expect(deriveWorkflowState(snap).planReady).toBe(false)
+  })
+
+  it('executable is false from a previewed plan when execStatus is not runnable', () => {
+    const snap = {
+      ...base,
+      compile: { result: null, dirty: 0 },
+      scene: { ...base.scene, activePlanPresent: true },
+      execution: { status: 'idle' as const },
+    }
+    expect(deriveWorkflowState(snap).planReady).toBe(true)
     expect(deriveWorkflowState(snap).executable).toBe(false)
   })
 
@@ -199,18 +248,19 @@ describe('deriveWorkflowState — dirty invalidates compiled (workflow-state spe
 //
 // MECHANISM (decision): fast-check is NOT installed in this project, so this
 // suite does deterministic EXHAUSTIVE enumeration instead of generative
-// property testing: all 2^8 = 256 combinations of the eight boolean store
+// property testing: all 2^9 = 512 combinations of the nine boolean store
 // facts that feed deriveWorkflowState. No dependency, fully reproducible.
 //
-// The 8 inputs: robotLoaded, objects>=1, validHomePose, operations>=1,
-// hasMissingFields, compileResult!=null, dirty>0, execStatus∈EXECUTABLE.
+// The 9 inputs: robotLoaded, objects>=1, validHomePose, operations>=1,
+// hasMissingFields, compileResult!=null, dirty>0, execStatus∈EXECUTABLE,
+// activePlanPresent (the planning-preview plan path).
 //
 // Invariants asserted over EVERY combination (workflow-state spec R2 +
 // tasks.md C1 — the artifact chain makes impossible states impossible):
 //   sceneValid ⇒ robotLoaded
 //   programValid ⇒ sceneValid
 //   compiled ⇒ programValid
-//   executable ⇒ compiled
+//   executable ⇒ planReady   (REBASED in PR2: planReady = compiled ∨ activePlanPresent)
 
 interface InputCombo {
   robotLoaded: boolean
@@ -221,12 +271,13 @@ interface InputCombo {
   compileResult: boolean
   dirty: boolean
   execStatus: 'ready' | 'idle'
+  activePlanPresent: boolean
 }
 
-/** Exhaustive 2^8 enumeration — each bit of the mask is one input. */
+/** Exhaustive 2^9 enumeration — each bit of the mask is one input. */
 function allInputCombos(): InputCombo[] {
   const combos: InputCombo[] = []
-  for (let mask = 0; mask < 256; mask++) {
+  for (let mask = 0; mask < 512; mask++) {
     combos.push({
       robotLoaded: (mask & 1) !== 0,
       objects: (mask & 2) !== 0 ? 1 : 0,
@@ -236,6 +287,7 @@ function allInputCombos(): InputCombo[] {
       compileResult: (mask & 32) !== 0,
       dirty: (mask & 64) !== 0,
       execStatus: (mask & 128) !== 0 ? 'ready' : 'idle',
+      activePlanPresent: (mask & 256) !== 0,
     })
   }
   return combos
@@ -256,32 +308,33 @@ function snapshotFrom(input: InputCombo): WorkflowSnapshot {
           ? [{ id: 'bolt-1', name: 'Bolt', pose: { position: [1.8, 0, 0.4], orientation: [0, 0, 0, 1] } }]
           : [],
       validHomePose: input.validHomePose,
+      activePlanPresent: input.activePlanPresent,
     },
     task: { operations },
     compile: { result: input.compileResult ? compileResult : null, dirty: input.dirty ? 2 : 0 },
     execution: { status: input.execStatus },
-    // `analyzed` is NOT part of the 2^8 enumeration (9th input, boolean-collapsed):
+    // `analyzed` is NOT part of the 2^9 enumeration (10th input, boolean-collapsed):
     // the report is always present so `analyzed` derives true uniformly.
     analysis: { report: analysisReport },
   }
 }
 
-describe('C1 property — exhaustive 2^8 impossible-state invariants (tasks.md S1.3)', () => {
+describe('C1 property — exhaustive 2^9 impossible-state invariants (tasks.md S1.3)', () => {
   const combos = allInputCombos()
 
-  it('enumerates exactly 2^8 = 256 distinct input combinations', () => {
-    expect(combos).toHaveLength(256)
-    expect(new Set(combos.map((c) => JSON.stringify(c))).size).toBe(256)
+  it('enumerates exactly 2^9 = 512 distinct input combinations', () => {
+    expect(combos).toHaveLength(512)
+    expect(new Set(combos.map((c) => JSON.stringify(c))).size).toBe(512)
   })
 
-  it('never yields an impossible state: every chain implication holds for all 256 combinations', () => {
+  it('never yields an impossible state: every chain implication holds for all 512 combinations', () => {
     let violations = 0
     for (const input of combos) {
       const state = deriveWorkflowState(snapshotFrom(input))
       if (state.sceneValid && !state.robotLoaded) violations++
       if (state.programValid && !state.sceneValid) violations++
       if (state.compiled && !state.programValid) violations++
-      if (state.executable && !state.compiled) violations++
+      if (state.executable && !state.planReady) violations++
     }
     expect(violations).toBe(0)
   })
@@ -289,9 +342,9 @@ describe('C1 property — exhaustive 2^8 impossible-state invariants (tasks.md S
   it('the invariants are not vacuous: every chain flag is reachable true AND false', () => {
     const derived = combos.map((input) => deriveWorkflowState(snapshotFrom(input)))
     // running/completed/analyzed are excluded: their inputs (specific
-    // execStatus values, analysis.summary) are boolean-collapsed in the 2^8
+    // execStatus values, analysis.summary) are boolean-collapsed in the 2^9
     // space and are enumerated by the derivation-table it.each tests above.
-    for (const flag of ['robotLoaded', 'sceneValid', 'programValid', 'compiled', 'executable'] as const) {
+    for (const flag of ['robotLoaded', 'sceneValid', 'programValid', 'compiled', 'planReady', 'executable'] as const) {
       expect(derived.some((s) => s[flag]), `${flag} is never true across the space`).toBe(true)
       expect(derived.some((s) => !s[flag]), `${flag} is never false across the space`).toBe(true)
     }
@@ -301,6 +354,7 @@ describe('C1 property — exhaustive 2^8 impossible-state invariants (tasks.md S
     const noRobotButScene = snapshotFrom({
       robotLoaded: false, objects: 1, validHomePose: true, operations: 1,
       hasMissingFields: false, compileResult: true, dirty: false, execStatus: 'ready',
+      activePlanPresent: false,
     })
     const state = deriveWorkflowState(noRobotButScene)
     expect(state.sceneValid).toBe(false)
@@ -530,10 +584,18 @@ describe('deriveStatusMessage — short status from workflow flags (S2)', () => 
     expect(deriveStatusMessage({ ...ALL_TRUE, programValid: false })).toBe('Task incomplete')
   })
 
-  it('reports recompilation required when the plan is stale', () => {
-    expect(deriveStatusMessage({ ...ALL_TRUE, compiled: false })).toBe(
-      'Task modified — recompilation required',
-    )
+  it('reports the Motion Program as ready when the preview plan is executable without a compile', () => {
+    // R3-001: {compiled:false, planReady:true, executable:true} is REACHABLE via
+    // the Motion Program preview path — it must NOT read as "Task modified".
+    const state = { ...ALL_TRUE, compiled: false, planReady: true, executable: true }
+    expect(deriveStatusMessage(state)).not.toContain('Task modified')
+    expect(deriveStatusMessage(state)).toBe('Motion Program ready — send to execution')
+  })
+
+  it('still reports recompilation required when the stale plan is not executable', () => {
+    expect(
+      deriveStatusMessage({ ...ALL_TRUE, compiled: false, planReady: false, executable: false }),
+    ).toBe('Task modified — recompilation required')
   })
 
   it('reports a running plan', () => {

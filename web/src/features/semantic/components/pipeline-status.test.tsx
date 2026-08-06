@@ -29,6 +29,7 @@ const allGood: WorkflowState = {
   programValid: true,
   compiled: true,
   analyzed: true,
+  planReady: true,
   executable: true,
   running: false,
   completed: false,

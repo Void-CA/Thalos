@@ -5,8 +5,20 @@ import { useWorkflowState } from './use-workflow-state'
 import { useSemanticEditor } from '@/features/semantic/store'
 import { useSceneStore } from '@/features/viewport/store'
 import { useDomainSceneStore } from '@/features/scene/store'
-import type { SceneData } from '@/features/viewport/types'
+import type { SceneData, ActivePlan } from '@/features/viewport/types'
 import type { CompileResponse } from '@/features/semantic/types'
+
+/** PR2: a plan present in the scene store — the planning-preview path. */
+const activePlan: ActivePlan = {
+  planId: 'plan-1',
+  state: 'ready',
+  motionType: 'PTP',
+  trajectoryProgress: null,
+  visualization: null,
+  createdAt: '2026-01-01T00:00:00Z',
+  startedAt: null,
+  completedAt: null,
+}
 
 const compileResult: CompileResponse = {
   status: 'ok',
@@ -87,5 +99,43 @@ describe('useWorkflowState — selector hook over the real stores', () => {
     expect(useDomainSceneStore).toBeDefined()
     expect(useSceneStore).toBeDefined()
     expect(useDomainSceneStore).not.toBe(useSceneStore)
+  })
+
+  it('derives planReady from the planning preview path (activePlanPresent) without compiled', () => {
+    // PR2 (workflow-state spec "planReady from planning preview path"): the
+    // planning preview mirrors an activePlan into the scene store →
+    // activePlanPresent=true → planReady=true even though no Task compile
+    // exists. The selector reads `activePlan !== null` from the scene store.
+    const { result } = renderHook(() => useWorkflowState())
+
+    // No plan at all → planReady false (sceneValid may be true).
+    act(() => {
+      useSceneStore.setState({ data: {} as SceneData })
+    })
+    expect(result.current.sceneValid).toBe(true)
+    expect(result.current.planReady).toBe(false)
+
+    // A planning preview arrives → planReady flips without compiled.
+    act(() => {
+      useSceneStore.setState({ activePlan })
+    })
+    expect(result.current.compiled).toBe(false)
+    expect(result.current.planReady).toBe(true)
+
+    // Clearing the preview (reset) removes the plan → planReady false again.
+    act(() => {
+      useSceneStore.setState({ activePlan: null })
+    })
+    expect(result.current.planReady).toBe(false)
+  })
+
+  it('keeps planReady true from the compiled path when no active plan is present', () => {
+    const { result } = renderHook(() => useWorkflowState())
+    act(() => {
+      useSceneStore.setState({ data: {} as SceneData })
+      useSemanticEditor.getState().setResult(compileResult)
+    })
+    expect(result.current.compiled).toBe(true)
+    expect(result.current.planReady).toBe(true)
   })
 })

@@ -104,11 +104,11 @@ function seedTask(opts: { compiled?: boolean; dirty?: number } = {}) {
   })
 }
 
-/** Operation-row comboboxes = editable row controls. The workspace-header
- *  robot selector (aria-label="Task robot") stays regardless of mode, so
- *  scope the "rows hidden" assertion to the row selects only. */
-const rowComboboxes = () =>
-  screen.getAllByRole('combobox').filter((cb) => !cb.hasAttribute('aria-label'))
+/** Operation-row comboboxes = editable row controls. RobotSelector — the only
+ *  aria-labeled combobox ("Task robot") — was removed (product-quality PR1), so
+ *  every combobox in the Task workspace is a row control; queryAll* keeps the
+ *  "zero rows in text mode" assertion meaningful instead of throwing. */
+const rowComboboxes = () => screen.queryAllByRole('combobox')
 
 const textarea = () =>
   screen.getByTestId('program-textarea') as HTMLTextAreaElement

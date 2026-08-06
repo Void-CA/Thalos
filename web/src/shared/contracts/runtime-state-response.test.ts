@@ -77,4 +77,39 @@ describe('RuntimeStateResponse — robot.id identity contract (spec robot-identi
     expect(urdf.startsWith('urdf:')).toBe(true)
     expect(catalog.startsWith('urdf:')).toBe(false)
   })
+
+  it('carries the optional execution.source wire field (PR4 — backend source badge)', () => {
+    const wire = JSON.stringify({
+      robot: { id: 'scara', display_name: 'SCARA', dof: 4, joints: [] },
+      joints: [0.0, 0.1, 0.2, 0.3],
+      scene: { frames: [], links: [], joint_axes: [], twists: [], primitives: [] },
+      ik_result: null,
+      active_plan: null,
+      execution: {
+        status: 'Active',
+        progress: 0.4,
+        elapsed_secs: 1.25,
+        source: 'Simulation',
+      },
+      generated_at: '2026-08-04T00:00:00Z',
+    })
+
+    const res = decode(wire)
+    expect(res.execution?.source).toBe('Simulation')
+  })
+
+  it('decodes execution without source as absent (additive field)', () => {
+    const wire = JSON.stringify({
+      robot: { id: 'scara', display_name: 'SCARA', dof: 4, joints: [] },
+      joints: [0.0, 0.1, 0.2, 0.3],
+      scene: { frames: [], links: [], joint_axes: [], twists: [], primitives: [] },
+      ik_result: null,
+      active_plan: null,
+      execution: { status: 'Idle', progress: 0, elapsed_secs: 0 },
+      generated_at: '2026-08-04T00:00:00Z',
+    })
+
+    const res = decode(wire)
+    expect(res.execution?.source).toBeUndefined()
+  })
 })

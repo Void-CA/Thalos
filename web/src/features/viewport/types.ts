@@ -25,11 +25,13 @@ export interface IkResult {
 /** Execution state. `progress` is a fraction 0..1 of the plan when fed from
  *  the execution-loop ticks (`RuntimeDelta`); `elapsedSecs` is seconds since
  *  plan start. (Full-state backend previews map `progress` = elapsed seconds —
- *  see `ExecutionInfoDto`.) */
+ *  see `ExecutionInfoDto`.) `source` is the backend execution source badge
+ *  ("Simulation" | "Hardware") when the runtime reports it (PR4). */
 export interface ExecutionInfo {
   status: string
   progress: number
   elapsedSecs: number
+  source?: string
 }
 
 /** Escena lista para renderizar. */

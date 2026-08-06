@@ -4,6 +4,7 @@ use tokio::sync::RwLock;
 
 use super::controller::RobotController;
 use crate::error::ControllerError;
+use crate::session::execution_source::ExecutionSource;
 
 /// Infrastructure layer that owns controller connections and lifecycle.
 ///
@@ -73,6 +74,16 @@ impl BackendManager {
     /// Returns `None` if no controller is connected.
     pub async fn get_controller(&self) -> Option<Arc<RwLock<dyn RobotController + Send + Sync>>> {
         self.active.read().await.clone()
+    }
+
+    /// Execution source of the ACTIVE controller (R4-001) — reflects the real
+    /// backend (Simulation vs Hardware) on the wire instead of a hardcoded
+    /// value. Falls back to Simulation when no controller is connected.
+    pub async fn active_source(&self) -> ExecutionSource {
+        match self.get_controller().await {
+            Some(ctrl) => ctrl.read().await.execution_source(),
+            None => ExecutionSource::Simulation,
+        }
     }
 }
 

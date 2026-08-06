@@ -279,6 +279,11 @@ pub struct ExecutionDto {
     pub status: ExecutionStatusDto,
     pub progress: f64,
     pub elapsed_secs: f64,
+    /// Origen de la ejecución ("Simulation" | "Hardware" | "Replay #N") —
+    /// informativo para el badge de backend source (PR4, item 9).
+    /// Aditivo y opcional: los clientes antiguos ignoran el campo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// Status de la sesión — tipado hasta el borde de la API.

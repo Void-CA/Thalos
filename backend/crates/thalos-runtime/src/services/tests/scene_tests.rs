@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use tokio::sync::RwLock;
 
+use crate::backends::controller::tests::MockController;
+use crate::session::ExecutionSource;
 use crate::{
     Command, RobotController, RuntimeSnapshot, SceneService,
     backends::{
@@ -1037,4 +1039,27 @@ async fn scheduled_delay_freezes_execution_through_tick() {
         (resumed - 0.625).abs() < 1e-9,
         "trajectory resumes from held state (joint[0] = {resumed})"
     );
+}
+
+/// R4-001: the execution source must reflect the ACTIVE controller — a
+/// non-simulation controller (Hardware) reports Hardware on the snapshot's
+/// execution session, not the hardcoded Simulation.
+#[tokio::test]
+async fn start_execution_reports_active_controller_source() {
+    let mut mock = MockController::new();
+    mock.source = ExecutionSource::Hardware;
+    let controller = Arc::new(RwLock::new(mock)) as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let manager = Arc::new(BackendManager::new());
+    manager.set_active(controller).await.unwrap();
+    let svc = SceneService::new(
+        Box::new(InternalBackend),
+        manager.clone(),
+        RobotModel::Scara,
+    );
+
+    let snap = svc.start_execution().await.unwrap();
+    let exe = snap
+        .execution
+        .expect("start_execution must report an execution session");
+    assert_eq!(exe.source, ExecutionSource::Hardware);
 }

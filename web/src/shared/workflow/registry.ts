@@ -37,10 +37,12 @@ export const WORKSPACE_REGISTRY: Area[] = [
   // consumes the Task-compiled plan); ArtifactKind re-model is a documented
   // follow-up, out of scope for this block.
   { path: '/planning', workspace: 'planning', label: 'Planificación', requires: ['sceneValid'], produces: 'analyzed', capability: 'optimize', hidden: false, consumes: 'SemanticProgram', producesArtifact: 'MotionPlan', stage: 4, stepperIndex: 4 },
-  // Execution KEEPS its compiled gate (executable = compiled && status): the
-  // explicit `compiled` prerequisite lets the guard redirect to /task (the
-  // producer of compiled) when no plan has been compiled, instead of the root.
-  { path: '/execution', workspace: 'execution', label: 'Ejecución', requires: ['compiled', 'executable'], produces: 'completed', capability: 'execute', hidden: false, consumes: 'MotionPlan', producesArtifact: 'Runtime', stage: 5, stepperIndex: 5 },
+  // PR2 (workflow-guards spec): Execution gates on planReady (compiled ∨
+  // sceneActivePlanPresent) so BOTH plan paths — Task handoff and Planning
+  // preview — satisfy the guard. producerOf('planReady') resolves to the
+  // producer of its origin (compiled) so "no plan at all" still redirects to
+  // /task, the workspace that compiles a plan.
+  { path: '/execution', workspace: 'execution', label: 'Ejecución', requires: ['sceneValid', 'planReady', 'executable'], produces: 'completed', capability: 'execute', hidden: false, consumes: 'MotionPlan', producesArtifact: 'Runtime', stage: 5, stepperIndex: 5 },
   // S5.1 AUDIT verdict (area-sessions spec): the `completed` requirement was
   // REMOVED from /sessions — the browser must show failed/running sessions
   // (status filters), so the guard no longer gates the area. `completed` stays
@@ -57,10 +59,24 @@ export const WORKSPACE_REGISTRY: Area[] = [
 ]
 
 /**
+ * Derived flags no workspace produces directly — mapped to the flag whose
+ * producer the guard should land on. `planReady` is DERIVED (`compiled ∨
+ * sceneActivePlanPresent`): when NO plan exists at all, the guard redirects to
+ * the producer of its compiled origin (/task) instead of the root — keeping
+ * the "no plan → Task" UX (workflow-guards spec, "No plan at all redirects to
+ * Task").
+ */
+const DERIVED_FLAG_ORIGIN: Partial<Record<WorkflowFlag, WorkflowFlag>> = {
+  planReady: 'compiled',
+}
+
+/**
  * Find the workspace that produces a given flag — used by guard redirects
  * (design: producerOf). Fully declarative: maps WorkflowFlag → WorkspaceEntry;
- * knows nothing about components or ad-hoc routes.
+ * knows nothing about components or ad-hoc routes. Derived flags (planReady)
+ * resolve through their origin flag (compiled).
  */
 export function producerOf(flag: WorkflowFlag): WorkspaceEntry | undefined {
-  return WORKSPACE_REGISTRY.find((entry) => entry.produces === flag)
+  const origin = DERIVED_FLAG_ORIGIN[flag] ?? flag
+  return WORKSPACE_REGISTRY.find((entry) => entry.produces === origin)
 }

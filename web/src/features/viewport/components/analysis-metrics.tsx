@@ -104,12 +104,3 @@ export function gradeBadgeInverse(value: number): ReactNode {
     </span>
   )
 }
-
-export function ErrorBox({ message }: { message: string }) {
-  return (
-    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-destructive-weak border border-destructive-weak text-xs text-destructive">
-      <XCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-      <span>{message}</span>
-    </div>
-  )
-}

@@ -24,6 +24,9 @@ export function useWorkflowState(): WorkflowState {
       robotLoaded: useSceneStore((s) => s.data !== null),
       objects: useDomainSceneStore((s) => s.objects),
       validHomePose: isValidHomePose(useDomainSceneStore((s) => s.homePose)),
+      // PR2: the planning preview mirrors an active plan into the viewport
+      // scene store — its presence unlocks `planReady` without a Task compile.
+      activePlanPresent: useSceneStore((s) => s.activePlan !== null),
     },
     task: {
       operations: useSemanticEditor((s) => s.operations),

@@ -139,14 +139,14 @@ export function useSceneRobotSync() {
     initialSceneRequested.current = false
   }, [loadScene.isError, loadScene.isPending, loadRobot.isPending, confirmedId])
 
-  // Spec R7/R6 — default derivado del backend. GET /scene se dispara siempre que
-  // NO haya identidad confirmada ni un request de identidad en vuelo,
-  // INDEPENDIENTE del hint persistido (fix review): el hint es solo una REQUEST
-  // vía el select() de RobotSelector — montado únicamente en /task — nunca la
-  // única vía de carga. Sin esto, arrancar en '/' con un hint persistido dejaba
-  // la escena sin cargar (viewport vacío y redirect a '/'), y un fallo de GET
-  // /robots también bloqueaba la escena. El load extra de GET /scene es seguro:
-  // use-scene-loader descarta respuestas stale vía tokens de orden.
+  // Spec R7/R6 — default derivado del backend. GET /scene es la ÚNICA vía de
+  // carga: se dispara siempre que no haya identidad confirmada ni un request
+  // de identidad en vuelo. El RobotSelector (y su hint persistido
+  // ROBOT_SELECTION_KEY) fue eliminado — el catálogo es la única fuente de
+  // selección (spec frontend-task-workspace). Sin este load, arrancar en '/'
+  // dejaba la escena sin cargar (viewport vacío y redirect a '/'), y un fallo
+  // de GET /robots también bloqueaba la escena. El load extra de GET /scene es
+  // seguro: use-scene-loader descarta respuestas stale vía tokens de orden.
   useEffect(() => {
     if (confirmedId) return
     if (loadScene.isPending || loadRobot.isPending) return
