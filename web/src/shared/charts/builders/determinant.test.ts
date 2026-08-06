@@ -47,14 +47,28 @@ const full = [
   { waypoint: 4, yoshikawa: 0.5, det_jtj: 0.25 },
 ]
 
+function expectCloseTo(expected: number[], actual: number[]): void {
+  expect(actual).toHaveLength(expected.length)
+  expected.forEach((value, index) => expect(actual[index]).toBeCloseTo(value, 10))
+}
+
 describe('determinantBuilder', () => {
-  it('projects the full det_jtj series onto a line ChartModel with waypoint value axis', () => {
+  it('projects the det_jtj series as -log10 with scale:true yAxis and no smoothing', () => {
     const model = determinantBuilder(reportWith(full, []))
 
     expect(model.series).toHaveLength(1)
     expect(model.series[0].type).toBe('line')
-    expect(model.series[0].data).toEqual([0.25, 0.04, 0.36, 0.09, 0.25])
+    expectCloseTo(
+      full.map((p) => -Math.log10(p.det_jtj!)),
+      model.series[0].data,
+    )
+    expect(model.series[0].smooth).toBe(false)
     expect(model.xAxis[0]).toEqual({ type: 'value', name: 'Waypoint', min: 0, max: 4 })
+    expect(model.yAxis?.[0]).toEqual({
+      type: 'value',
+      name: '-log10(Det(J·Jᵀ))',
+      scale: true,
+    })
     expect(model.dataZoom).toEqual([
       { type: 'inside', start: 0, end: 100 },
       { type: 'slider', start: 0, end: 100 },
@@ -62,11 +76,25 @@ describe('determinantBuilder', () => {
     expect(model.tooltip).toEqual({ trigger: 'axis' })
   })
 
-  it('marks the det_jtj warning threshold as a reference line', () => {
+  it('maps an exactly-zero det_jtj to the log floor (visible singularity spike)', () => {
+    const model = determinantBuilder(
+      reportWith(
+        [
+          { waypoint: 0, yoshikawa: 0.5, det_jtj: 0.25 },
+          { waypoint: 1, yoshikawa: 0, det_jtj: 0 },
+        ],
+        [],
+      ),
+    )
+
+    expect(model.series[0].data).toEqual([-Math.log10(0.25), 6])
+  })
+
+  it('marks the det_jtj warning threshold converted to the log scale', () => {
     const model = determinantBuilder(reportWith(full, []))
 
     expect(model.markLine).toHaveLength(1)
-    expect(model.markLine?.[0].yAxis).toBeCloseTo(DET_JTJ_THRESHOLD)
+    expect(model.markLine?.[0].yAxis).toBeCloseTo(-Math.log10(DET_JTJ_THRESHOLD), 5)
     expect(model.markLine?.[0].label).toMatch(/threshold/i)
   })
 
@@ -96,7 +124,7 @@ describe('determinantBuilder', () => {
     ]
     const model = determinantBuilder(reportWith(sparse, []))
 
-    expect(model.series[0].data).toEqual([0.04])
+    expectCloseTo([-Math.log10(0.04)], model.series[0].data)
     expect(model.xAxis[0]).toEqual({ type: 'value', name: 'Waypoint', min: 0, max: 0 })
   })
 
