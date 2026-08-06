@@ -4,11 +4,19 @@ import { useNavigate } from 'react-router'
 import { useSemanticEditor } from '../store'
 import { useDomainSceneStore } from '@/features/scene/store'
 import { useExecutionStore } from '@/features/execution/execution-store'
+import { useSceneStore } from '@/features/viewport/store'
+import { sceneApi } from '@/features/viewport/api/scene-api'
+import {
+  toSceneData, toRuntimeInfo, toIkResult, toActivePlan, toToolFrame, toExecutionInfo,
+} from '@/features/viewport/adapter'
+import { planAnalysisApi } from '@/features/analysis/api/plan-analysis-api'
+import { useAnalysisStore } from '@/features/analysis/store'
 import { useWorkflowState } from '@/shared/workflow/use-workflow-state'
 import { hasMissingFields } from '@/shared/workflow/derive'
 import { OperationRow } from './operation-row'
 import { compileSemantic, executeSemantic } from '../api'
 import { describeError } from '@/shared/errors'
+import type { TaskDocument } from '@/shared/contracts'
 import { serialize } from '../script/serializer'
 import { parse } from '../script/parser'
 import {
@@ -20,6 +28,39 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+
+/**
+ * Hotfix (unify-programming): preview a compiled Task program like the Motion
+ * tab does — load it into the scene runtime WITHOUT starting it, so the
+ * always-mounted viewport draws the trajectory and the Analysis tab populates.
+ *
+ * The vehicle is `executeSemantic` (`POST /semantic/execute`): the canonical
+ * compile + plan path that SCHEDULES the plan into the scene runtime
+ * (`schedule_program`), which is what `/plan/analyze` reads the active plan
+ * from. `POST /motion/plan` was NOT used: it returns only `compiled_plan` +
+ * `runtime_program`, never schedules, so neither `applyScene` (no scene state)
+ * nor the analysis endpoint (no active plan) could work. After the plan is
+ * scheduled, `getScene()` returns the full state with `active_plan`, and the
+ * standard planning-panel adapters project it onto the scene store.
+ *
+ * Rejections are NON-BLOCKING: callers treat a failure as "compile ok, preview
+ * failed" — the plan never starts (the tick loop only runs from Execution).
+ */
+async function previewTaskPlan(task: TaskDocument): Promise<void> {
+  const execute = await executeSemantic({ task })
+  if (execute.status !== 'ok') throw new Error('Plan preview failed')
+  const scene = await sceneApi.getScene()
+  useSceneStore.getState().applyScene(
+    toSceneData(scene.scene),
+    toRuntimeInfo(scene),
+    toIkResult(scene.ik_result),
+    toActivePlan(scene.active_plan),
+    toToolFrame(scene.active_tcp),
+    toExecutionInfo(scene.execution),
+  )
+  const analysis = await planAnalysisApi.analyze()
+  useAnalysisStore.getState().setAnalysis(analysis)
+}
 
 /**
  * TaskEditor — the Program panel of the Task workspace (frontend-task-workspace
@@ -37,6 +78,10 @@ import { Button } from '@/components/ui/button'
  * WITHOUT `start()` (the plan is loaded into the runtime, execStatus → ready),
  * then navigates to /execution. The tick loop only ever starts from Execution
  * (execution-workspace spec, Invariant #5 / Tick Loop Ownership).
+ *
+ * Hotfix (unify-programming): Compile ALSO previews the plan — see
+ * `previewTaskPlan` — drawing the Task trajectory in the viewport and
+ * populating the Analysis tab, non-blocking on preview failure.
  */
 export function TaskEditor() {
   const {
@@ -167,6 +212,15 @@ export function TaskEditor() {
     try {
       const res = await compileSemantic({ task: taskDocument })
       setResult(res)
+      // Hotfix (unify-programming): a compiled Task must behave like the Motion
+      // tab — draw its trajectory in the viewport and populate the Analysis
+      // tab. Non-blocking: the compile result is already set, so a failed
+      // preview only surfaces the error (requirement: no plan → compile ok).
+      try {
+        await previewTaskPlan(taskDocument)
+      } catch (err) {
+        setError(describeError(err))
+      }
     } catch (err) {
       setError(describeError(err))
     } finally { setLoading(false) }
