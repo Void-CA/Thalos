@@ -217,6 +217,11 @@ impl PlanAnalysisResponse {
             .filter_map(|w| {
                 w.manipulability.as_ref().map(|m| ManipulabilityPointDto {
                     waypoint: w.index as u32,
+                    // Tiempo del waypoint en segundos dentro de la trayectoria
+                    // del plan (WaypointAnalysis.timestamp) — el eje temporal
+                    // honesto para el gráfico (hotfix: la densidad de muestreo
+                    // difiere entre segmentos, el índice de waypoint distorsiona).
+                    timestamp: w.timestamp,
                     yoshikawa: m.yoshikawa,
                     // Proyección del det(J·Jᵀ) ya computado por el runtime en el
                     // SingularityReport del mismo waypoint (singularity.rs:51).
@@ -261,6 +266,11 @@ impl PlanAnalysisResponse {
 pub struct ManipulabilityPointDto {
     /// Índice del waypoint en el plan (0-based).
     pub waypoint: u32,
+    /// Tiempo del waypoint en segundos dentro de la trayectoria (eje X temporal
+    /// del gráfico). ADITIVO (`#[serde(default)]`): un backend viejo sin el
+    /// campo no rompe a los clientes (I3) — los builders caen al índice.
+    #[serde(default)]
+    pub timestamp: f64,
     /// Medida de manipulabilidad de Yoshikawa en ese waypoint.
     pub yoshikawa: f64,
     /// Determinante de J·Jᵀ (producto de los valores singulares al cuadrado).
@@ -1001,6 +1011,11 @@ mod tests {
         assert_eq!(series.len(), 20, "20 waypoints → 20 series entries");
         assert_eq!(series[0]["waypoint"], 0);
         assert!((series[0]["yoshikawa"].as_f64().expect("f64") - 0.1).abs() < 1e-12);
+        assert_eq!(
+            series[0]["timestamp"].as_f64().expect("f64"),
+            0.0,
+            "each point must carry its trajectory time in seconds"
+        );
         assert!(
             (series[0]["det_jtj"].as_f64().expect("f64") - 0.1 * 0.1).abs() < 1e-12,
             "each point must carry the Jacobian determinant (det(J·Jᵀ))"
@@ -1008,6 +1023,11 @@ mod tests {
         assert_eq!(series[19]["waypoint"], 19);
         assert!(
             (series[19]["yoshikawa"].as_f64().expect("f64") - (0.1 + 19.0 * 0.01)).abs() < 1e-12
+        );
+        assert_eq!(
+            series[19]["timestamp"].as_f64().expect("f64"),
+            19.0 * 0.5,
+            "the last point carries the end-of-trajectory timestamp"
         );
         assert!(
             (series[19]["det_jtj"].as_f64().expect("f64") - (0.29 * 0.29)).abs() < 1e-12,
@@ -1109,6 +1129,34 @@ mod tests {
         assert_eq!(
             back.manipulability_series[0].det_jtj, 0.0,
             "missing det_jtj must default to 0.0 (serde default)"
+        );
+        assert!(
+            (back.manipulability_series[0].yoshikawa - 0.1).abs() < 1e-12,
+            "pre-existing series fields keep their values"
+        );
+    }
+
+    #[test]
+    fn old_series_point_without_timestamp_deserializes() {
+        // Additive field (I3): a series point from an older backend that lacks
+        // `timestamp` must deserialize — the field defaults (0.0) instead of
+        // failing, so the chart can fall back to the waypoint index.
+        let report = sample_report();
+        let analysis = sample_analysis(2);
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[]);
+
+        let mut value = serde_json::to_value(response).expect("serialize");
+        value["manipulability_series"][0]
+            .as_object_mut()
+            .expect("series point")
+            .remove("timestamp");
+
+        let back: PlanAnalysisResponse =
+            serde_json::from_value(value).expect("old series point must deserialize");
+        assert_eq!(
+            back.manipulability_series[0].timestamp, 0.0,
+            "missing timestamp must default to 0.0 (serde default)"
         );
         assert!(
             (back.manipulability_series[0].yoshikawa - 0.1).abs() < 1e-12,
