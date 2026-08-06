@@ -70,6 +70,7 @@ describe('determinantBuilder', () => {
       yValuesOf(model.series[0].data),
     )
     expect(model.series[0].smooth).toBe(false)
+    expect(model.series[0].areaStyle).toBe(true)
     expect(model.yAxis?.[0]).toEqual({
       type: 'value',
       name: '-log10(Det(J·Jᵀ))',

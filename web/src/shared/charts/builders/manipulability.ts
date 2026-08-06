@@ -8,9 +8,11 @@
  * -log10 (hotfix manipulability-logscale — a linear axis flattens the real
  * multi-order-of-magnitude variation against zero), colors each waypoint by
  * the severity of the observations anchored there (Error → low, Warning → med,
- * otherwise high — MANIP tokens), and adds the dataZoom slider+inside the spec
- * requires. It never interpolates or recomputes manipulability values; the log
- * transform is a pure presentation change.
+ * otherwise high — MANIP tokens), fills the area under the line (hotfix
+ * area-charts — the threshold reference line reads against a filled region,
+ * not a hairline), and adds the dataZoom slider+inside the spec requires. It
+ * never interpolates or recomputes manipulability values; the log transform is
+ * a pure presentation change.
  */
 
 import type {
@@ -109,6 +111,7 @@ export function manipulabilityBuilder(report: AnalysisReportWire): ChartModel {
     ),
     color: 'chart-1',
     smooth: false,
+    areaStyle: true,
     dataColors: points.map((point) =>
       manipColorOf(severityByWaypoint.get(point.waypoint)),
     ),

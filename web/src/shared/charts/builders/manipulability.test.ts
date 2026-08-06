@@ -68,6 +68,7 @@ describe('manipulabilityBuilder', () => {
     expect(model.series[0].type).toBe('line')
     expectCloseTo(series.map((p) => -Math.log10(p.yoshikawa)), yValuesOf(model.series[0].data))
     expect(model.series[0].smooth).toBe(false)
+    expect(model.series[0].areaStyle).toBe(true)
     expect(model.yAxis?.[0]).toEqual({ type: 'value', name: '-log10(Yoshikawa)', scale: true })
     expect(model.dataZoom).toEqual([
       { type: 'inside', start: 0, end: 100 },

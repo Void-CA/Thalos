@@ -146,6 +146,27 @@ describe('toEChartsOption — ChartModel → EChartsOption mapping', () => {
     ])
   })
 
+  it('maps a line series areaStyle to a translucent area fill (area charts)', () => {
+    const model: ChartModel = {
+      series: [{ name: 's', type: 'line', data: [1, 2], areaStyle: true }],
+      xAxis: [{ type: 'value' }],
+    }
+    const option = toEChartsOption(model)
+    expect(option.series).toEqual([
+      {
+        name: 's',
+        type: 'line',
+        data: [1, 2],
+        smooth: false,
+        symbol: 'circle',
+        symbolSize: 5,
+        lineStyle: { color: '#3b82f6', width: 2 },
+        itemStyle: { color: '#3b82f6' },
+        areaStyle: { opacity: 0.12 },
+      },
+    ])
+  })
+
   it('passes scale:true through to the axis (log-scale charts must not force the origin)', () => {
     const model: ChartModel = {
       series: [{ name: 's', type: 'line', data: [1, 2] }],

@@ -7,7 +7,9 @@
  * manipulability-logscale — a linear axis flattens the real
  * multi-order-of-magnitude variation against zero), colors each waypoint by
  * the severity of the observations anchored there, adds the dataZoom slider+
- * inside, and marks the warning threshold as a reference line (markLine).
+ * inside, fills the area under the line (hotfix area-charts, mirroring the
+ * manipulability chart), and marks the warning threshold as a reference line
+ * (markLine).
  *
  * I2: the builder NEVER recomputes the determinant — it only projects what the
  * backend shipped (the log transform is a pure presentation change). Points
@@ -82,6 +84,7 @@ export function determinantBuilder(report: AnalysisReportWire): ChartModel {
     ),
     color: 'chart-2',
     smooth: false,
+    areaStyle: true,
     dataColors: points.map((point) => detColorOf(severityByWaypoint.get(point.waypoint))),
   }
 
