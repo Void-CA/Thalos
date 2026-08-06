@@ -1284,6 +1284,91 @@ async fn preview_plan_without_operations_keeps_legacy_path() {
 }
 
 #[tokio::test]
+async fn preview_plan_movel_position_only_succeeds_on_scara() {
+    // CDD hotfix: MoveL with NO rotation is position-only. A SCARA (4 DOF,
+    // yaw-only) cannot reach a full 6-DOF pose, so a pose-locked MoveL used
+    // to fail with 422 segment_n_failed. Position-only planning converges.
+    let app = test_app().await;
+    let (status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/robot",
+        Some(json!({"robot_id": "scara"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "load scara should succeed");
+
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/motion/plan",
+        Some(json!({
+            "segments": [
+                { "type": "movel", "target": { "translation": [0.6, 0.5, 0.25] } }
+            ]
+        })),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "position-only MoveL must compile on SCARA, got {status}"
+    );
+    let body = body.expect("response must be valid JSON");
+    let plan = body["active_plan"]
+        .as_object()
+        .expect("active_plan must be present");
+    assert_eq!(plan["state"], "Created");
+    let segments = plan["segments"]
+        .as_array()
+        .expect("segments must be an array");
+    assert_eq!(segments.len(), 1, "one movel segment must produce one plan segment");
+}
+
+#[tokio::test]
+async fn preview_plan_movel_with_rotation_still_succeeds_on_scara() {
+    // Regression: the pose-complete MoveL path (rotation present) keeps
+    // working exactly as before the position-only change.
+    let app = test_app().await;
+    let (status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/robot",
+        Some(json!({"robot_id": "scara"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "load scara should succeed");
+
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/scene/motion/plan",
+        Some(json!({
+            "segments": [
+                {
+                    "type": "movel",
+                    "target": {
+                        "translation": [1.5, 0.3, 0.5],
+                        "rotation": { "kind": "Quaternion", "value": { "w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0 } }
+                    }
+                }
+            ]
+        })),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "pose-complete MoveL must keep compiling on SCARA, got {status}"
+    );
+    let body = body.expect("response must be valid JSON");
+    let segments = body["active_plan"]["segments"]
+        .as_array()
+        .expect("segments must be an array");
+    assert_eq!(segments.len(), 1, "one movel segment must produce one plan segment");
+}
+
+#[tokio::test]
 async fn operations_plan_propagates_semantic_context_to_analysis() {
     let app = test_app().await;
 

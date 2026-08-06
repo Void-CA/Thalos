@@ -68,10 +68,11 @@ pub struct MoveToPoseRequest {
 pub struct PoseTargetDto {
     /// Translation `[x, y, z]` in world coordinates.
     pub translation: [f64; 3],
-    /// Rotation expressed in the chosen representation. Conversion to
-    /// `UnitQuaternion` happens once in `to_pose`, so all downstream code
-    /// (IK solver, scene building) keeps working in the canonical form.
-    pub rotation: RotationDto,
+    /// Rotation expressed in the chosen representation. `None` means
+    /// position-only targeting — orientation is left unconstrained (the
+    /// planner drives IK with `IKGoal::Position`).
+    #[serde(default)]
+    pub rotation: Option<RotationDto>,
 }
 
 /// Rotation input — the client picks the representation that fits the user.
@@ -175,12 +176,21 @@ impl MotionSegmentDto {
                 max_velocity,
             } => {
                 let frame = frame_id.map_or(default_ee, FrameId::Id);
-                let pose = target.to_pose(frame);
-                MotionSegment::MoveL {
-                    origin: OperationId(Self::MANUAL_ORIGIN.into()),
-                    frame,
-                    target_pose: pose,
-                    max_velocity,
+                if target.rotation.is_some() {
+                    let pose = target.to_pose(frame);
+                    MotionSegment::MoveL {
+                        origin: OperationId(Self::MANUAL_ORIGIN.into()),
+                        frame,
+                        target_pose: pose,
+                        max_velocity,
+                    }
+                } else {
+                    MotionSegment::MoveLPosition {
+                        origin: OperationId(Self::MANUAL_ORIGIN.into()),
+                        frame,
+                        target_position: target.translation,
+                        max_velocity,
+                    }
                 }
             }
         }
@@ -410,12 +420,16 @@ impl PoseTargetDto {
         // quaternion goes through the core (`UnitQuaternion::new` /
         // `UnitQuaternion::from_euler`). No duplicated trig here.
         let rotation = match self.rotation {
-            RotationDto::Quaternion { w, x, y, z } => {
+            Some(RotationDto::Quaternion { w, x, y, z }) => {
                 let q = Quaternion::new(w, x, y, z);
                 UnitQuaternion::new(q.normalize_or_identity())
                     .unwrap_or_else(|_| UnitQuaternion::identity())
             }
-            RotationDto::Ypr { roll, pitch, yaw } => UnitQuaternion::from_euler(roll, pitch, yaw),
+            Some(RotationDto::Ypr { roll, pitch, yaw }) => {
+                UnitQuaternion::from_euler(roll, pitch, yaw)
+            }
+            // Position-only target: identity rotation, only the translation is meaningful.
+            None => UnitQuaternion::identity(),
         };
 
         let transform = Transform3D {

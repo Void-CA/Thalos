@@ -24,7 +24,10 @@ impl From<&thalos_runtime::ActiveMotionPlan> for ActivePlanDto {
                     .map(|(i, seg)| {
                         let motion_type = match &seg.source {
                             thalos_core::motion::segment::MotionSegment::MoveJ { .. } => "movej",
-                            thalos_core::motion::segment::MotionSegment::MoveL { .. } => "movel",
+                            thalos_core::motion::segment::MotionSegment::MoveL { .. }
+                            | thalos_core::motion::segment::MotionSegment::MoveLPosition {
+                                ..
+                            } => "movel",
                         };
                         SegmentInfoDto {
                             segment_index: i,
