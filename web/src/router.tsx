@@ -1,6 +1,7 @@
 import { createElement, type ComponentType } from 'react'
 import { createBrowserRouter, type RouteObject } from 'react-router'
 import { ConfigurationWorkspace } from '@/features/configuration/workspace'
+import { EvaluationWorkspace } from '@/features/evaluation/workspace'
 import { ExecutionWorkspace } from '@/features/execution/execution-workspace'
 import { KnowledgeWorkspace } from '@/features/knowledge/workspace'
 import { ProgrammingWorkspace } from '@/features/programming/workspace'
@@ -23,12 +24,15 @@ import { WORKSPACE_REGISTRY, type WorkspaceName } from '@/shared/workflow/regist
  * (features/scene/SceneWorkspace) — the exclusive owner of the Scene editor
  * since S2; /task renders zero Scene UI. Hotfix (unify-programming): `task`
  * maps to ProgrammingWorkspace — /task AND the old /planning content live in
- * one area (Programa / Motion Program / Analysis tabs).
+ * one area (Tasks / Motion tabs). Hotfix (evaluation-workspace): `evaluation`
+ * maps to EvaluationWorkspace — the pre-execution EVALUACIÓN view at
+ * /evaluation (stage 4); the analysis TAB left the programming workspace.
  */
 export const VIEW_REGISTRY: Record<WorkspaceName, ComponentType> = {
   robot: RobotShell,
   scene: SceneWorkspace,
   task: ProgrammingWorkspace,
+  evaluation: EvaluationWorkspace,
   execution: ExecutionWorkspace,
   sessions: SessionsWorkspace,
   knowledge: KnowledgeWorkspace,
