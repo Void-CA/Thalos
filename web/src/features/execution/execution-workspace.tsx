@@ -122,9 +122,24 @@ export function ExecutionWorkspace() {
           <h3 className="flex items-center gap-1.5 text-[11px] font-semibold text-foreground uppercase tracking-wider mb-1.5">
             <Gauge className="size-3 text-muted-foreground" /> Execution Status
           </h3>
-          <div className="text-xs text-foreground">
+          <div className="flex flex-col items-start gap-2 text-xs text-foreground">
             {error ? (
-              <ErrorBox error={error} />
+              <>
+                <ErrorBox error={error} />
+                {status === 'failed' && (
+                  <button
+                    onClick={() => {
+                      // Resilience-matrix "Reintentar" (reset + start): the
+                      // retry affordance on network/timeout failures — resets
+                      // the execution session and immediately starts it again.
+                      void reset().then(() => start())
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-green-600/20 text-green-500 hover:bg-green-600/30 cursor-pointer"
+                  >
+                    <RefreshCw className="size-3" /> Reintentar
+                  </button>
+                )}
+              </>
             ) : (
               `Status: ${status}`
             )}

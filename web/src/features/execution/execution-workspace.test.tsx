@@ -242,3 +242,42 @@ describe('Backend source badge (execution-workspace spec, ADDED)', () => {
     expect(screen.queryByText('Hardware')).not.toBeInTheDocument()
   })
 })
+
+describe('Reintentar — reset+start retry on execution failure (resilience-matrix spec)', () => {
+  it('shows the code→CTA error and a Reintentar button when a tick fails with network_error', () => {
+    setStatus('failed', {
+      error: { message: 'Backend is offline', code: 'network_error' },
+    } as never)
+    renderWorkspace()
+    expect(screen.getByText(/Backend is offline/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+  })
+
+  it('shows a Reintentar button for timeout_error', () => {
+    setStatus('failed', {
+      error: { message: 'Request timed out', code: 'timeout_error' },
+    } as never)
+    renderWorkspace()
+    expect(screen.getByText(/Request timed out/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+  })
+
+  it('clicking Reintentar performs the reset + start sequence', async () => {
+    execClientMocks.reset.mockResolvedValue(undefined)
+    execClientMocks.start.mockResolvedValue(undefined)
+    execClientMocks.tick.mockResolvedValue(completedDelta)
+    setStatus('failed', {
+      error: { message: 'Backend is offline', code: 'network_error' },
+      activePlan: plan,
+    } as never)
+    renderWorkspace()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
+
+    await waitFor(() => expect(execClientMocks.reset).toHaveBeenCalledTimes(1))
+    // Coherent state: start() is triggered immediately after the reset and the
+    // tick loop resumes — the plan runs to its terminal Completed state.
+    await waitFor(() => expect(execClientMocks.start).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(useExecutionStore.getState().status).toBe('completed'))
+  })
+})

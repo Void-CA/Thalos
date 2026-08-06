@@ -3,7 +3,8 @@ import { useRobots } from '../api/use-robots'
 import { useRobotStore, useSelectedRobot } from '../store'
 import { useLoadRobotFromUrdf } from '@/features/viewport/synchronization/use-scene-loader'
 import { RobotCard } from './robot-card'
-import { Loader2, AlertCircle, ChevronRight, ChevronDown, Upload } from 'lucide-react'
+import { ErrorBox } from '@/components/ui/error-box'
+import { Loader2, ChevronRight, ChevronDown, Upload } from 'lucide-react'
 
 /** IDs de robots a excluir del catálogo. */
 const EXCLUDED_IDS = new Set([
@@ -14,7 +15,8 @@ const EXCLUDED_IDS = new Set([
 ])
 
 export function RobotCatalog() {
-  const { isLoading, error } = useRobots()
+  const query = useRobots()
+  const { isLoading, error, refetch } = query
   const robots = useRobotStore(s => s.robots)
   const selectedId = useRobotStore(s => s.selectedId)
   const select = useRobotStore(s => s.select)
@@ -53,9 +55,11 @@ export function RobotCatalog() {
 
   if (error) {
     return (
-      <div className="flex items-start gap-2 p-3 text-sm text-destructive bg-destructive-weak rounded-md border border-destructive-weak">
-        <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-        <span>{String(error)}</span>
+      <div className="p-3">
+        <ErrorBox
+          error={error instanceof Error ? error : { message: String(error) }}
+          onRetry={() => void refetch()}
+        />
       </div>
     )
   }

@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import { useSceneStore } from './store'
 import { SceneCanvas } from './renderer/scene-canvas'
+import { useLoadScene } from './synchronization/use-scene-loader'
+import { ErrorBox } from '@/components/ui/error-box'
 import { Loader2, Move } from 'lucide-react'
 
 // ── Helpers (mismos que en optimization-panel, sin dependencias externas) ──
@@ -45,6 +47,8 @@ export function Viewport() {
   const viewMode = useSceneStore(s => s.trajectoryViewMode)
   const originalWp = useSceneStore(s => s.activePlan?.visualization?.waypoints)
   const optimized = useSceneStore(s => s.optimizedPositions)
+  const setError = useSceneStore(s => s.setError)
+  const loadScene = useLoadScene()
 
   const diff = useMemo(() => {
     if (!originalWp?.length || !optimized?.length) return null
@@ -53,8 +57,18 @@ export function Viewport() {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-destructive">
-        <p className="text-sm font-medium">{error}</p>
+      <div className="flex flex-col items-center justify-center h-full p-4">
+        <div className="w-full max-w-sm">
+          <ErrorBox
+            error={{ message: error, code: undefined }}
+            onRetry={() => {
+              // Retry the scene load immediately (resilience-matrix spec):
+              // clear the error so a success can paint, then re-fire GET /scene.
+              setError(null)
+              loadScene.mutate()
+            }}
+          />
+        </div>
       </div>
     )
   }

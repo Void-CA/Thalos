@@ -5,6 +5,7 @@ import { act } from 'react'
 import '@testing-library/jest-dom/vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { PlanningPanel } from './planning-panel'
+import { ApiError } from '@/shared/errors'
 import { usePlanningStore } from '../store'
 import { useExecutionStore } from '@/features/execution/execution-store'
 import { useSceneStore } from '@/features/viewport/store'
@@ -169,5 +170,54 @@ describe('PlanningPanel — preview success mirrors the plan into the execution 
     })
     expect(useExecutionStore.getState().activePlan).toBeNull()
     expect(useExecutionStore.getState().status).not.toBe('ready')
+  })
+})
+
+describe('PlanningPanel — Recompilar CTA on manifest validation error (PR1)', () => {
+  it('shows a Recompilar button when the preview fails with semantic_validation_error', async () => {
+    sceneApiMocks.previewPlan.mockRejectedValue(
+      new ApiError('Segment 0 references unknown object', {
+        code: 'semantic_validation_error',
+        status: 422,
+      }),
+    )
+    renderPanel()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Recompilar' })).toBeInTheDocument()
+    })
+    // planReady is cleared: the failed plan is NOT mirrored executable.
+    expect(useExecutionStore.getState().activePlan).toBeNull()
+    expect(useExecutionStore.getState().status).not.toBe('ready')
+  })
+
+  it('clicking Recompilar re-runs the preview (compile button path)', async () => {
+    sceneApiMocks.previewPlan.mockRejectedValueOnce(
+      new ApiError('Segment 0 references unknown object', {
+        code: 'semantic_validation_error',
+        status: 422,
+      }),
+    )
+    sceneApiMocks.previewPlan.mockResolvedValueOnce(previewResponse)
+    analysisApiMocks.analyze.mockResolvedValue(analysisReport)
+    renderPanel()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Recompilar' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Recompilar' }))
+
+    await waitFor(() => {
+      expect(sceneApiMocks.previewPlan).toHaveBeenCalledTimes(2)
+      expect(useExecutionStore.getState().activePlan).toEqual({
+        instructionCount: 2,
+        durationSecs: 5,
+        source: 'Motion Program',
+      })
+    })
   })
 })
