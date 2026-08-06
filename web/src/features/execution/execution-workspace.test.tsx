@@ -227,6 +227,15 @@ describe('Progress and status display (execution-workspace spec)', () => {
   })
 })
 
+describe('Placeholder panels removed (visual audit V1)', () => {
+  it('shows no Timeline or Telemetry placeholder panels', () => {
+    setStatus('idle')
+    renderWorkspace()
+    expect(screen.queryByText(/Timeline visualization arrives with change 2/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Telemetry stream arrives with change 2/)).not.toBeInTheDocument()
+  })
+})
+
 describe('Backend selector replaces the informational badge (execution-workspace spec)', () => {
   it('renders the interactive selector instead of the old source badge', () => {
     renderWorkspace()

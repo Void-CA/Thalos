@@ -28,9 +28,9 @@ export function SceneEditor() {
       {/* Objects */}
       <section className="px-3 py-2 border-b border-border/50">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
+          <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
             Objects
-          </span>
+          </h3>
           <button
             aria-label="Add object"
             onClick={() =>
@@ -46,7 +46,7 @@ export function SceneEditor() {
             <Plus className="size-3.5" />
           </button>
         </div>
-        <div className="space-y-1 max-h-40 overflow-y-auto">
+        <div className="space-y-1">
           {objects.map((obj) => (
             <div key={obj.id} className="flex flex-col gap-0.5 group">
               <div className="flex items-center gap-1.5">
@@ -82,9 +82,9 @@ export function SceneEditor() {
       {/* Locations */}
       <section className="px-3 py-2 border-b border-border/50">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
+          <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
             Locations
-          </span>
+          </h3>
           <button
             aria-label="Add location"
             onClick={() =>
@@ -100,7 +100,7 @@ export function SceneEditor() {
             <Plus className="size-3.5" />
           </button>
         </div>
-        <div className="space-y-1 max-h-40 overflow-y-auto">
+        <div className="space-y-1">
           {locations.map((loc) => (
             <div key={loc.id} className="flex flex-col gap-0.5 group">
               <div className="flex items-center gap-1.5">
@@ -136,9 +136,9 @@ export function SceneEditor() {
       {/* Tools */}
       <section className="px-3 py-2 border-b border-border/50">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
+          <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
             Tools
-          </span>
+          </h3>
           <button
             aria-label="Add tool"
             onClick={() =>
@@ -149,7 +149,7 @@ export function SceneEditor() {
             <Plus className="size-3.5" />
           </button>
         </div>
-        <div className="space-y-1 max-h-32 overflow-y-auto">
+        <div className="space-y-1">
           {tools.map((tool) => (
             <div key={tool.id} className="flex items-center gap-1.5 group">
               <span className="flex-1 text-[11px] text-foreground truncate px-1">
@@ -173,9 +173,9 @@ export function SceneEditor() {
 
       {/* Home pose */}
       <section className="px-3 py-2">
-        <span className="text-xs font-semibold text-foreground uppercase tracking-wider block mb-1.5">
+        <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider block mb-1.5">
           Home
-        </span>
+        </h3>
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-muted-foreground font-mono">X</span>
           <input
@@ -188,7 +188,7 @@ export function SceneEditor() {
               })
             }
             step={0.1}
-            className="w-14 px-1 py-0.5 text-[11px] rounded border border-border bg-background text-foreground"
+            className="w-14 px-1.5 py-0.5 text-[11px] rounded border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
           <span className="text-[10px] text-muted-foreground font-mono">Y</span>
           <input
@@ -201,7 +201,7 @@ export function SceneEditor() {
               })
             }
             step={0.1}
-            className="w-14 px-1 py-0.5 text-[11px] rounded border border-border bg-background text-foreground"
+            className="w-14 px-1.5 py-0.5 text-[11px] rounded border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
           <span className="text-[10px] text-muted-foreground font-mono">Z</span>
           <input
@@ -214,7 +214,7 @@ export function SceneEditor() {
               })
             }
             step={0.1}
-            className="w-14 px-1 py-0.5 text-[11px] rounded border border-border bg-background text-foreground"
+            className="w-14 px-1.5 py-0.5 text-[11px] rounded border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
       </section>

@@ -86,22 +86,6 @@ export function Viewport() {
     <div className="relative w-full h-full">
       <SceneCanvas />
 
-      {/* Toolbar flotante sobre el canvas */}
-      {hasData && (
-        <div className="absolute top-2 right-2 flex gap-1">
-          <button
-            className="px-2 py-1 text-[11px] font-medium rounded bg-background/80 border border-border 
-                       text-foreground/70 hover:text-foreground hover:bg-background transition-colors
-                       backdrop-blur-sm cursor-pointer"
-            onClick={() => {
-              // TODO: fit robot to view
-            }}
-          >
-            Fit Robot
-          </button>
-        </div>
-      )}
-
       {/* Numerical diff overlay when viewing optimized trajectory */}
       {viewMode === 'optimized' && diff && (
         <div className="absolute bottom-3 left-3 flex items-center gap-3 px-3 py-2 rounded-lg

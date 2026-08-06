@@ -56,7 +56,7 @@ export function TopBar() {
 
       <div className="ml-auto flex items-center gap-2">
         {/* Placeholder for future widgets */}
-        <span className="text-xs text-muted-foreground">v0.1.0</span>
+        <span className="text-xs text-muted-foreground">v1.0.0-mvp</span>
       </div>
     </header>
   )

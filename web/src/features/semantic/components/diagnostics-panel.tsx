@@ -1,6 +1,7 @@
 import { useSemanticEditor } from '../store'
 import { useWorkflowState } from '@/shared/workflow/use-workflow-state'
 import { CompiledInstructions } from './compiled-instructions'
+import { ErrorBox } from '@/components/ui/error-box'
 
 /**
  * DiagnosticsPanel — compile status of the Task workspace
@@ -25,7 +26,7 @@ export function DiagnosticsPanel() {
       </h2>
       <div className="px-3 pb-2 space-y-1 text-xs">
         {loading && <p className="text-muted-foreground">Processing...</p>}
-        {error && <p className="text-red-400">{error}</p>}
+        {error && <ErrorBox error={error} />}
         {scriptErrors.length > 0 && (
           <div className="space-y-0.5">
             <p className="text-red-400 font-medium">Script errors</p>

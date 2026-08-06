@@ -40,6 +40,11 @@ export function ExecutionWorkspace() {
   const canCancel = status === 'running' || status === 'paused'
   const canReset = status === 'completed' || status === 'failed'
 
+  // Unified control-button base (visual audit V3): every lifecycle control
+  // shares the same shape; only the semantic color varies.
+  const controlBtn =
+    'inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer'
+
   /** connection_lost gets the Reconectar CTA (reconnect + retry); every other
    *  failure gets Reintentar (reset + start) — execution-workspace spec. */
   const isConnectionLost = error?.code === 'connection_lost'
@@ -104,23 +109,23 @@ export function ExecutionWorkspace() {
           </h3>
           <div className="flex flex-wrap gap-1.5">
             <button onClick={() => void start()} disabled={!canStart}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-green-600/20 text-green-500 hover:bg-green-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+              className={`${controlBtn} bg-green-600/20 text-green-500 hover:bg-green-600/30`}>
               <Play className="size-3" /> Start
             </button>
             <button onClick={() => void pause()} disabled={!canPause}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+              className={`${controlBtn} text-foreground hover:bg-accent`}>
               <Pause className="size-3" /> Pause
             </button>
             <button onClick={() => void resume()} disabled={!canResume}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+              className={`${controlBtn} text-foreground hover:bg-accent`}>
               <Play className="size-3" /> Resume
             </button>
             <button onClick={() => void cancel()} disabled={!canCancel}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md text-red-400 hover:bg-red-950/20 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+              className={`${controlBtn} text-red-400 hover:bg-red-950/20`}>
               <Square className="size-3" /> Cancel
             </button>
             <button onClick={() => void reset()} disabled={!canReset}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md text-muted-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+              className={`${controlBtn} text-muted-foreground hover:bg-accent`}>
               <RefreshCw className="size-3" /> Reset
             </button>
           </div>
@@ -175,26 +180,6 @@ export function ExecutionWorkspace() {
             <span>{(progress * 100).toFixed(0)}%</span>
             <span>{elapsedSecs.toFixed(1)}s elapsed</span>
           </div>
-        </section>
-
-        {/* ── Timeline (change 2) ── */}
-        <section>
-          <h3 className="text-[11px] font-semibold text-foreground uppercase tracking-wider mb-1">
-            Timeline
-          </h3>
-          <p className="text-[10px] text-muted-foreground/60 italic">
-            Timeline visualization arrives with change 2.
-          </p>
-        </section>
-
-        {/* ── Telemetry (change 2) ── */}
-        <section>
-          <h3 className="text-[11px] font-semibold text-foreground uppercase tracking-wider mb-1">
-            Telemetry
-          </h3>
-          <p className="text-[10px] text-muted-foreground/60 italic">
-            Telemetry stream arrives with change 2.
-          </p>
         </section>
       </div>
     </div>

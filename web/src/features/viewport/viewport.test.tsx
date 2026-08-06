@@ -55,4 +55,12 @@ describe('Viewport — retry button on load error (resilience-matrix spec)', () 
     // The error is cleared so a retry that succeeds can paint the scene.
     expect(useSceneStore.getState().error).toBeNull()
   })
+
+  it('shows no dead Fit Robot button when the scene is loaded (visual audit V2)', () => {
+    act(() => {
+      useSceneStore.setState({ error: null, loading: false, data: { frames: [] } as never } as never)
+    })
+    render(<Viewport />)
+    expect(screen.queryByRole('button', { name: 'Fit Robot' })).not.toBeInTheDocument()
+  })
 })
