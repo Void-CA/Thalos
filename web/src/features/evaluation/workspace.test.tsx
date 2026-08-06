@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import { act } from 'react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -13,6 +13,17 @@ import { installCanvasMock } from '@/test/canvas-mock'
 import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 import type { CompileResponse } from '@/features/semantic/types'
 import type { ActivePlan } from '@/features/viewport/types'
+
+// The trajectory view mounts ECharts GL, which needs a WebGL context jsdom
+// cannot provide. This suite only asserts the trajectory DOM surface, so the
+// whole GL frontier is stubbed (no echarts-gl transform under full-parallel
+// load); the real option mapping is covered by trajectory-view.test.tsx.
+vi.mock('@/shared/charts/gl-adapter', () => ({
+  buildTrajectoryOption: vi.fn(() => ({})),
+  mountGLChart: vi.fn(() => ({ on: vi.fn(), off: vi.fn() })),
+  resizeGLChart: vi.fn(),
+  disposeGLChart: vi.fn(),
+}))
 
 /**
  * EvaluationWorkspace — the pre-execution EVALUACIÓN (hotfix
@@ -218,14 +229,14 @@ describe('EvaluationWorkspace — decision focus: trajectory + grouped regions, 
     expect(screen.getByText(/No se detectaron problemas/i)).toBeInTheDocument()
   })
 
-  it('renders the trajectory view with colored-region legend for the evaluated plan', () => {
+  it('renders the trajectory view with colored-region legend for the evaluated plan', async () => {
     act(() => {
       useAnalysisStore.setState({ report: regionReport })
       useSceneStore.setState({ activePlan })
     })
     renderWorkspace()
     expect(
-      screen.getByRole('img', { name: /Trajectory with problem regions/i }),
+      await screen.findByRole('img', { name: /Trajectory with problem regions/i }, { timeout: 5000 }),
     ).toBeInTheDocument()
     // Legend swatch (also matches the Critical tier header in ProblemRegions).
     expect(screen.getAllByText('Critical').length).toBeGreaterThan(0)
@@ -298,7 +309,7 @@ describe('EvaluationWorkspace — 3-portion grid (charts | charts | region detai
     expect(screen.getByText(/select a region/i)).toBeInTheDocument()
   })
 
-  it('keeps the region list, trajectory and recommendations visible while inspecting a region', () => {
+  it('keeps the region list, trajectory and recommendations visible while inspecting a region', async () => {
     act(() => {
       useAnalysisStore.setState({ report: recommendationReport })
       useSceneStore.setState({ activePlan })
@@ -312,7 +323,7 @@ describe('EvaluationWorkspace — 3-portion grid (charts | charts | region detai
       screen.getByRole('button', { name: /Singularity near waypoint 10/i }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('img', { name: /Trajectory with problem regions/i }),
+      await screen.findByRole('img', { name: /Trajectory with problem regions/i }, { timeout: 5000 }),
     ).toBeInTheDocument()
     // The inspector co-renders with the recommendations in the same layout.
     expect(screen.getByTestId('recommendation-row')).toBeInTheDocument()

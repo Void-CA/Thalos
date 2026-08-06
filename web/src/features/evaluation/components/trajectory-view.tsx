@@ -1,124 +1,82 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useAnalysisStore } from '@/features/analysis/store'
 import { useSceneStore } from '@/features/viewport/store'
 import {
-  buildTrajectorySegments,
-  createProjector,
-  hitTestSegment,
-  ORBIT_IDENTITY,
-  severityAtWaypoint,
-  severityColor,
+  buildTrajectoryOption,
+  disposeGLChart,
+  mountGLChart,
+  resizeGLChart,
+} from '@/shared/charts/gl-adapter'
+import {
+  buildTrajectoryRuns,
+  regionAtWaypoint,
   TRAJECTORY_COLOR_CRITICAL,
   TRAJECTORY_COLOR_NEUTRAL,
   TRAJECTORY_COLOR_WARNING,
-  type Orbit,
   type Vec3,
-} from './trajectory-projection'
-
-const CANVAS_WIDTH = 640
-const CANVAS_HEIGHT = 240
-const ORBIT_STEP = 0.025
+} from '@/shared/charts/trajectory3d'
 
 /**
- * TrajectoryView — lightweight standalone trajectory chart for /evaluation.
+ * TrajectoryView — ECharts GL line3D trajectory chart for /evaluation
+ * (evaluation hotfix CDD).
  *
  * The R3F viewport is hidden on this route by design, so this view renders the
- * FULL evaluated trajectory on a small dedicated 2D canvas with a weak
- * perspective projection (see trajectory-projection.ts): orbitable by drag
- * (yaw/pitch), problem regions colored by severity (red/amber/blue) over a
- * neutral base, single-waypoint regions highlighted as colored dots.
+ * FULL evaluated trajectory on a dedicated 3D chart instead of the old
+ * hand-rolled 2D canvas projection. It mounts ECharts GL directly through
+ * `gl-adapter.ts` (the single echarts-gl frontier — ChartModel is a frozen 2D
+ * contract and cannot express line3D). Problem regions are rendered as
+ * contiguous line3D runs colored by severity over a neutral base; grid3D gives
+ * orbit/rotate/zoom for free.
  *
- * Click-picking is wired to the analysis store's `selectRegion` so chart and
- * ProblemRegions/RegionInspector stay in sync (select ↔ select).
+ * Click-picking maps the clicked line3D point back to its global waypoint
+ * index and selects the covering problem region via the analysis store, so the
+ * chart and ProblemRegions/RegionInspector stay in sync (select ↔ select).
  */
 export function TrajectoryView() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const [orbit, setOrbit] = useState<Orbit>(ORBIT_IDENTITY)
-  const dragRef = useRef<{ x: number; y: number; yaw: number; pitch: number } | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const chartRef = useRef<ReturnType<typeof mountGLChart> | null>(null)
 
   const waypoints = useSceneStore((s) => s.activePlan?.visualization?.waypoints)
   const report = useAnalysisStore((s) => s.report)
   const selectedRegionId = useAnalysisStore((s) => s.selectedRegionId)
   const selectRegion = useAnalysisStore((s) => s.selectRegion)
 
-  const points: Vec3[] = (waypoints ?? []).map((w) => ({
-    x: w.position[0],
-    y: w.position[1],
-    z: w.position[2],
-  }))
-  const regions = report?.problem_regions ?? []
+  const points = useMemo<Vec3[]>(
+    () => (waypoints ?? []).map((w) => ({ x: w.position[0], y: w.position[1], z: w.position[2] })),
+    [waypoints],
+  )
+  const regions = useMemo(() => report?.problem_regions ?? [], [report])
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    const context = canvas?.getContext('2d')
-    if (!canvas || !context) return
+    const el = containerRef.current
+    if (el === null) return
 
-    const { width, height } = canvas
-    context.clearRect(0, 0, width, height)
+    const chart = mountGLChart(el, buildTrajectoryOption(points, regions, selectedRegionId))
+    chartRef.current = chart
 
-    const segments = buildTrajectorySegments(points, regions, width, height, orbit)
-
-    // Base grid is implicit: draw neutral segments first (thin), then severity
-    // segments (thicker), then the selected segment highlighted on top.
-    for (const segment of segments) {
-      const selected = segment.regionId !== null && segment.regionId === selectedRegionId
-      context.strokeStyle = selected ? '#ffffff' : segment.color
-      context.lineWidth = selected ? 3.5 : segment.severity === 'clean' ? 1.5 : 2.5
-      context.globalAlpha = selected ? 1 : segment.severity === 'clean' ? 0.65 : 1
-      context.beginPath()
-      context.moveTo(segment.projectedStart.x, segment.projectedStart.y)
-      context.lineTo(segment.projectedEnd.x, segment.projectedEnd.y)
-      context.stroke()
+    const handleClick = (params: { seriesIndex?: number; dataIndex?: number }) => {
+      if (params.seriesIndex === undefined || params.dataIndex === undefined) return
+      const run = buildTrajectoryRuns(points, regions)[params.seriesIndex]
+      if (run === undefined) return
+      const globalIndex = run.waypointStart + params.dataIndex
+      selectRegion(regionAtWaypoint(regions, globalIndex)?.id ?? null)
     }
-    context.globalAlpha = 1
+    chart.on('click', handleClick)
 
-    // Waypoint dots — severity color inside a region, neutral otherwise.
-    const projector = createProjector(points, width, height, orbit)
-    for (let i = 0; i < points.length; i++) {
-      const severity = severityAtWaypoint(regions, i)
-      const p = projector(points[i])
-      context.fillStyle = severity === 'clean'
-        ? TRAJECTORY_COLOR_NEUTRAL
-        : severityColor(severity)
-      context.beginPath()
-      context.arc(p.x, p.y, severity === 'clean' ? 2 : 3, 0, Math.PI * 2)
-      context.fill()
+    const observer = new ResizeObserver(() => {
+      resizeGLChart(el)
+    })
+    observer.observe(el)
+
+    return () => {
+      observer.disconnect()
+      chart.off('click', handleClick)
+      disposeGLChart(el)
+      chartRef.current = null
     }
-  }, [points, regions, orbit, selectedRegionId])
+  }, [points, regions, selectedRegionId, selectRegion])
 
-  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    canvas.setPointerCapture(e.pointerId)
-    dragRef.current = { x: e.clientX, y: e.clientY, yaw: orbit.yaw, pitch: orbit.pitch }
-  }
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const drag = dragRef.current
-    if (!drag) return
-    const dx = e.clientX - drag.x
-    const dy = e.clientY - drag.y
-    setOrbit({ yaw: drag.yaw + dx * ORBIT_STEP, pitch: drag.pitch + dy * ORBIT_STEP })
-  }
-
-  const endDrag = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current
-    if (canvas && canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId)
-    dragRef.current = null
-  }
-
-  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    const segments = buildTrajectorySegments(points, regions, canvas.width, canvas.height, orbit)
-    const hit = hitTestSegment(segments, x, y)
-    selectRegion(hit?.regionId ?? null)
-  }
-
-  if (!points.length) {
+  if (points.length === 0) {
     return (
       <div className="text-xs text-muted-foreground text-center py-6 rounded-lg border border-border bg-card/50">
         No trajectory data to display.
@@ -132,20 +90,14 @@ export function TrajectoryView() {
         <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
           Trajectory
         </span>
-        <span className="text-[10px] text-muted-foreground">drag to orbit</span>
+        <span className="text-[10px] text-muted-foreground">drag to orbit · scroll to zoom</span>
       </div>
-      <canvas
-        ref={canvasRef}
-        width={CANVAS_WIDTH}
-        height={CANVAS_HEIGHT}
+      <div
+        ref={containerRef}
+        data-testid="trajectory-chart"
         role="img"
         aria-label="Trajectory with problem regions"
-        className="w-full h-48 cursor-grab active:cursor-grabbing touch-none"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        onClick={handleClick}
+        className="h-64 w-full"
       />
       <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
         <LegendSwatch color={TRAJECTORY_COLOR_NEUTRAL} label="Clean" />

@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs'
 const PURE_MODULES = [
   new URL('./types.ts', import.meta.url),
   new URL('./theme.ts', import.meta.url),
+  new URL('./trajectory3d.ts', import.meta.url),
   new URL('./builders/manipulability.ts', import.meta.url),
   new URL('./builders/metrics-dashboard.ts', import.meta.url),
   new URL('./builders/comparison.ts', import.meta.url),
@@ -22,7 +23,7 @@ const PURE_MODULES = [
 /** Every builder module — the pure-projection frontier of the chart system. */
 const BUILDER_MODULES = PURE_MODULES.filter((url) => url.pathname.includes('/builders/'))
 
-const BOUNDARY_MODULES = [new URL('./adapter.ts', import.meta.url)]
+const BOUNDARY_MODULES = [new URL('./adapter.ts', import.meta.url), new URL('./gl-adapter.ts', import.meta.url)]
 
 /** Source without comments — the purity contract is about code, not docs. */
 function codeOf(url: URL): string {

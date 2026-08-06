@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { useNavigate } from 'react-router'
 import { useAnalysisStore, useSelectedRegion } from '@/features/analysis/store'
 import { StatusBanner } from '@/features/analysis/components/status-banner'
@@ -7,10 +8,15 @@ import { RecommendationRow } from '@/features/planning/components/Recommendation
 import { useSemanticEditor } from '@/features/semantic/store'
 import { useSceneStore } from '@/features/viewport/store'
 import { dedupeRecommendations, recommendationKey } from '@/shared/contracts/analysis-report'
-import { TrajectoryView } from './components/trajectory-view'
 import { YoshikawaChart } from './components/yoshikawa-chart'
 import { DeterminantChart } from './components/determinant-chart'
 import { ShieldCheck } from 'lucide-react'
+
+// TrajectoryView mounts ECharts GL — lazy like the 2D EChart wrapper (C2:
+// ECharts/echarts-gl stay out of the eager initial bundle).
+const TrajectoryView = lazy(() =>
+  import('./components/trajectory-view').then((module) => ({ default: module.TrajectoryView })),
+)
 
 /**
  * EvaluationWorkspace — the pre-execution EVALUACIÓN (hotfix
@@ -85,7 +91,9 @@ export function EvaluationWorkspace() {
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 items-start">
           <PlanSummary />
           <div className="lg:col-span-2 min-w-0">
-            <TrajectoryView />
+            <Suspense fallback={<div className="h-64 w-full" aria-label="Trajectory with problem regions" />}>
+              <TrajectoryView />
+            </Suspense>
           </div>
         </div>
 
