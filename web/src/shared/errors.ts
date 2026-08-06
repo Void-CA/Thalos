@@ -44,7 +44,7 @@ export function isApiError(e: unknown): e is ApiError {
  *  and the execution flow). The HTTP status is complementary only — decisions
  *  key on `code`. Lifted from task-editor.tsx (PR4, item 7). */
 export const CTA_BY_CODE: Record<string, string> = {
-  no_active_plan: 'Preview a motion program in Planificación first',
+  no_active_plan: 'Preview a motion program in Programación first',
   semantic_validation_error: 'Fix the program errors',
   lowering_error: 'Define the referenced objects/locations in Scene',
   planning_error: 'Planning failed — check the robot and scene targets',
