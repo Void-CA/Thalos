@@ -10,8 +10,11 @@ import { ServicesProvider } from '@/features/viewport/services/service-context'
 import { useSceneStore } from '@/features/viewport/store'
 import { useSemanticEditor } from '@/features/semantic/store'
 import { useExecutionStore } from '@/features/execution/execution-store'
+import { useAnalysisStore } from '@/features/analysis/store'
 import type { SceneData } from '@/features/viewport/types'
 import type { CompileResponse } from '@/features/semantic/types'
+import type { RuntimeStateResponse } from '@/features/viewport/api/scene-api.types'
+import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 
 /**
  * Behavior tests for the frontend-task-workspace spec (slice 4, task 4.1) and
@@ -37,6 +40,23 @@ const apiMocks = vi.hoisted(() => ({
 vi.mock('@/features/semantic/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/features/semantic/api')>()
   return { ...actual, executeSemantic: apiMocks.executeSemantic, compileSemantic: apiMocks.compileSemantic }
+})
+
+/** Scene read + plan analysis — the compile preview path (hotfix
+ *  unify-programming) consumes both after a successful compile. */
+const previewMocks = vi.hoisted(() => ({
+  getScene: vi.fn(),
+  analyze: vi.fn(),
+}))
+
+vi.mock('@/features/viewport/api/scene-api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/viewport/api/scene-api')>()
+  return { ...actual, sceneApi: { ...actual.sceneApi, getScene: previewMocks.getScene } }
+})
+
+vi.mock('@/features/analysis/api/plan-analysis-api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/analysis/api/plan-analysis-api')>()
+  return { ...actual, planAnalysisApi: { ...actual.planAnalysisApi, analyze: previewMocks.analyze } }
 })
 
 /** The tick loop is owned by the Execution workspace — assert it never fires from Task. */
@@ -80,6 +100,49 @@ const executeResponse = {
   event_count: 3,
 }
 
+/** Full scene state after the compiled Task plan is scheduled into the
+ *  runtime — what `getScene()` returns on the compile-preview path. */
+const sceneWithPlan: RuntimeStateResponse = {
+  robot: { id: 'r1', display_name: 'R1', dof: 2, joints: [] },
+  joints: [0, 0],
+  scene: { frames: [], links: [], joint_axes: [], twists: [], primitives: [] },
+  ik_result: null,
+  active_plan: {
+    plan_id: 'plan-1',
+    state: 'Ready',
+    motion_type: 'PTP',
+    trajectory_progress: null,
+    visualization: {
+      motion_type: 'PTP',
+      waypoints: [
+        { position: [0, 0, 0], orientation: [0, 0, 0, 1], joints: [0, 0], timestamp: 0, waypoint_type: 'Start' },
+        { position: [1, 0, 0], orientation: [0, 0, 0, 1], joints: [0.5, 0.5], timestamp: 2.5, waypoint_type: 'Goal' },
+      ],
+    },
+    segments: null,
+    created_at: '2026-01-01T00:00:00Z',
+    started_at: null,
+    completed_at: null,
+  },
+  active_tcp: null,
+  execution: null,
+  generated_at: '2026-01-01T00:00:00Z',
+}
+
+const analysisReport: AnalysisReportWire = {
+  artifact: { kind: 'MotionPlan', id: 'plan-1' },
+  observations: [],
+  actions: [],
+  metrics: {},
+  summary: {
+    quality_index: 0.9,
+    score: 90,
+    grade: 'Good',
+    observation_count: 0,
+    severity_distribution: {},
+  },
+}
+
 function renderRouter(initialEntries: string[]) {
   const router = createMemoryRouter(routerConfig, { initialEntries })
   const queryClient = new QueryClient({
@@ -116,6 +179,8 @@ const textarea = () =>
 beforeEach(() => {
   apiMocks.executeSemantic.mockClear()
   apiMocks.compileSemantic.mockClear()
+  previewMocks.getScene.mockReset()
+  previewMocks.analyze.mockReset()
   execClientMocks.start.mockClear()
   execClientMocks.pause.mockClear()
   execClientMocks.resume.mockClear()
@@ -125,6 +190,7 @@ beforeEach(() => {
   useSceneStore.getState().reset()
   useSemanticEditor.getState().reset()
   useExecutionStore.setState({ status: 'idle', activePlan: null })
+  useAnalysisStore.setState({ report: null })
 })
 afterEach(() => cleanup())
 
@@ -206,9 +272,12 @@ describe('Unified Compile/Send button (program-dual-editor spec)', () => {
 
     fireEvent.click(send)
 
-    await waitFor(() => expect(apiMocks.executeSemantic).toHaveBeenCalledTimes(1))
-    // Payload identity (spec): execute sends exactly what compile sent.
-    expect(apiMocks.executeSemantic).toHaveBeenCalledWith(compilePayload)
+    // executeSemantic fires TWICE: once for the compile preview (hotfix
+    // unify-programming — load the plan so the viewport draws it), once for
+    // the handoff. Payload identity (spec): the LAST call (the handoff) sends
+    // exactly what compile sent.
+    await waitFor(() => expect(apiMocks.executeSemantic).toHaveBeenCalledTimes(2))
+    expect(apiMocks.executeSemantic).toHaveBeenLastCalledWith(compilePayload)
     await waitFor(() => expect(router.state.location.pathname).toBe('/execution'))
   })
 
@@ -283,6 +352,50 @@ describe('Send to Execution handoff (execution-workspace spec, Invariant #5)', (
     )
     expect(router.state.location.pathname).toBe('/task')
     expect(useExecutionStore.getState().status).toBe('idle')
+  })
+})
+
+describe('Task compile previews the plan — trajectory + analysis (hotfix unify-programming)', () => {
+  it('draws the compiled Task plan (applyScene with activePlan) and fires the analysis', async () => {
+    apiMocks.compileSemantic.mockResolvedValue(compileResult)
+    apiMocks.executeSemantic.mockResolvedValue(executeResponse)
+    previewMocks.getScene.mockResolvedValue(sceneWithPlan)
+    previewMocks.analyze.mockResolvedValue(analysisReport)
+    seedTask()
+    renderRouter(['/task'])
+
+    fireEvent.click(await screen.findByRole('button', { name: /Compile/ }))
+
+    // Compile still stores the result (unchanged contract)…
+    await waitFor(() => expect(apiMocks.compileSemantic).toHaveBeenCalledTimes(1))
+    expect(useSemanticEditor.getState().result).toEqual(compileResult)
+
+    // …and the compiled plan is applied to the scene store — the viewport
+    // draws its trajectory (the Motion-tab preview pattern, now on Tasks).
+    await waitFor(() => expect(useSceneStore.getState().activePlan).not.toBeNull())
+    expect(useSceneStore.getState().activePlan?.planId).toBe('plan-1')
+    expect(useSceneStore.getState().activePlan?.visualization?.waypoints).toHaveLength(2)
+
+    // The plan analysis fired and populated the Analysis tab report.
+    expect(previewMocks.analyze).toHaveBeenCalledTimes(1)
+    expect(useAnalysisStore.getState().report).toEqual(analysisReport)
+  })
+
+  it('keeps the compile result when the plan/analysis preview fails (non-blocking)', async () => {
+    apiMocks.compileSemantic.mockResolvedValue(compileResult)
+    apiMocks.executeSemantic.mockRejectedValue(new Error('preview failed'))
+    seedTask()
+    renderRouter(['/task'])
+
+    fireEvent.click(await screen.findByRole('button', { name: /Compile/ }))
+
+    // The compile result stands — the preview failure never blocks it.
+    await waitFor(() => expect(apiMocks.compileSemantic).toHaveBeenCalledTimes(1))
+    expect(useSemanticEditor.getState().result).toEqual(compileResult)
+    expect(useSceneStore.getState().activePlan).toBeNull()
+    expect(useAnalysisStore.getState().report).toBeNull()
+    // The failure surfaces as an error (DiagnosticsPanel) without navigating.
+    await waitFor(() => expect(screen.getByText(/preview failed/i)).toBeInTheDocument())
   })
 })
 
