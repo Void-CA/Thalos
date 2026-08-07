@@ -22,7 +22,6 @@ import type { AnalysisReportWire, ManipulabilityPointWire } from '@/shared/contr
 import { manipulabilitySeriesOf, waypointOf } from '@/shared/contracts/analysis-report'
 import type { ChartModel } from '../types'
 import { seriesXAxis, xCoordinateOf, YOSHIKAWA_THRESHOLD } from './manipulability'
-import { toLogScale } from './log-scale'
 
 /**
  * det(J·Jᵀ) warning threshold. Mathematically identical to the backend's
@@ -30,9 +29,6 @@ import { toLogScale } from './log-scale'
  * same condition "yoshikawa < 0.3" reads "det_jtj < 0.09" (analysis/mod.rs).
  */
 export const DET_JTJ_THRESHOLD = YOSHIKAWA_THRESHOLD ** 2
-
-/** DET_JTJ_THRESHOLD converted to the -log10 y axis: -log10(0.09) ≈ 1.046. */
-export const LOG_DET_JTJ_THRESHOLD = toLogScale(DET_JTJ_THRESHOLD)
 
 type Severity = 'Error' | 'Warning' | 'Info'
 

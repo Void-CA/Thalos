@@ -21,7 +21,6 @@ import type {
 } from '@/shared/contracts/analysis-report'
 import { manipulabilitySeriesOf, waypointOf } from '@/shared/contracts/analysis-report'
 import type { AxisConfig, ChartModel } from '../types'
-import { toLogScale } from './log-scale'
 
 type Severity = 'Error' | 'Warning' | 'Info'
 
@@ -33,9 +32,6 @@ type Severity = 'Error' | 'Warning' | 'Info'
  * threshold the backend classifies against.
  */
 export const YOSHIKAWA_THRESHOLD = 0.3
-
-/** YOSHIKAWA_THRESHOLD converted to the -log10 y axis: -log10(0.3) ≈ 0.523. */
-export const LOG_YOSHIKAWA_THRESHOLD = toLogScale(YOSHIKAWA_THRESHOLD)
 
 /** Worst observation severity per waypoint (Error > Warning > Info). */
 function worstSeverityByWaypoint(report: AnalysisReportWire): Map<number, Severity> {
