@@ -10,6 +10,7 @@ import { useSceneStore } from '@/features/viewport/store'
 import { dedupeRecommendations, recommendationKey } from '@/shared/contracts/analysis-report'
 import { YoshikawaChart } from './components/yoshikawa-chart'
 import { DeterminantChart } from './components/determinant-chart'
+import { ProgramView } from './components/program-view'
 import { ShieldCheck } from 'lucide-react'
 
 // TrajectoryView mounts ECharts GL — lazy like the 2D EChart wrapper (C2:
@@ -128,6 +129,11 @@ export function EvaluationWorkspace() {
             )}
           </section>
         </div>
+
+        {/* Program — the structured, non-editable state of the plan's motion
+            program, connected to the problem regions above (step 2 CDD:
+            "which segment is the one I must edit"). */}
+        <ProgramView />
 
         {/* Recommendations — the base of the post-MVP resolution strategy. */}
         {recommendations.length > 0 && (

@@ -123,6 +123,10 @@ export interface SegmentInfo {
   waypointEnd: number
   timeStart: number
   timeEnd: number
+  /** Canonical program representation of this segment (`MotionSegment` serde).
+   *  Carried through from `SegmentInfoDto.source` (the wire exposes the
+   *  editable intent alongside the compiled waypoint range). */
+  source: import('./api/scene-api.types').MotionSegmentSourceDto
 }
 
 export interface TrajectoryVisualization {

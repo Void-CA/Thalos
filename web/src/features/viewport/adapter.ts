@@ -116,6 +116,7 @@ export function toActivePlan(dto: RuntimeStateResponse['active_plan']): ActivePl
       waypointEnd: s.waypoint_end,
       timeStart: s.time_start,
       timeEnd: s.time_end,
+      source: s.source,
     })) ?? null,
     createdAt: dto.created_at,
     startedAt: dto.started_at,

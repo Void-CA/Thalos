@@ -62,7 +62,15 @@ const activePlan: ActivePlan = {
   trajectoryProgress: null,
   visualization: { waypoints: waypoints(5), motionType: 'PTP' },
   segments: [
-    { segmentIndex: 0, motionType: 'PTP', waypointStart: 0, waypointEnd: 1, timeStart: 0, timeEnd: 42 },
+    {
+      segmentIndex: 0,
+      motionType: 'PTP',
+      waypointStart: 0,
+      waypointEnd: 1,
+      timeStart: 0,
+      timeEnd: 42,
+      source: { MoveJ: { origin: 'base', target: [0.1, 0.2, 0.3], max_velocity: null, max_acceleration: null } },
+    },
   ],
   createdAt: '2026-01-01T00:00:00Z',
   startedAt: null,
@@ -292,6 +300,30 @@ describe('EvaluationWorkspace — recommendations with uniform Preview/Apply/Und
   })
 })
 
+describe('EvaluationWorkspace — structured program view (Program)', () => {
+  it('renders the Program section with the active plan segment rows inside /evaluation', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: regionReport })
+      useSceneStore.setState({ activePlan })
+    })
+    renderWorkspace()
+
+    expect(screen.getByText('Program')).toBeInTheDocument()
+    expect(screen.getByTestId('program-segment-0')).toBeInTheDocument()
+    expect(screen.getByTestId('program-segment-0')).toHaveTextContent('MoveJ')
+  })
+
+  it('renders the Program empty state when the active plan carries no segments', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: regionReport })
+      useSceneStore.setState({ activePlan: { ...activePlan, segments: null } })
+    })
+    renderWorkspace()
+
+    expect(screen.getByTestId('program-empty')).toBeInTheDocument()
+  })
+})
+
 describe('EvaluationWorkspace — 3-portion grid (charts | charts | region detail)', () => {
   it('renders the two jacobian charts, the problem regions list and the region detail placeholder', async () => {
     act(() => {
@@ -335,7 +367,7 @@ describe('EvaluationWorkspace — 3-portion grid (charts | charts | region detai
       useSceneStore.setState({ activePlan })
     })
     renderWorkspace()
-    expect(screen.getByText(/select/i)).toBeInTheDocument()
+    expect(screen.getByText(/Select a region to inspect its details/i)).toBeInTheDocument()
   })
 })
 
