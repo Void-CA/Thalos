@@ -3,16 +3,17 @@
  *
  * Mirror of `manipulabilityBuilder` for the determinant of J·Jᵀ. Same pipeline
  * (canonical AnalysisReportWire → ChartModel), same presentation rules:
- * projects the per-waypoint `det_jtj` series as -log10 (hotfix
- * manipulability-logscale — a linear axis flattens the real
- * multi-order-of-magnitude variation against zero), colors each waypoint by
+ * projects the per-waypoint `det_jtj` series on its NATURAL linear scale
+ * (hotfix manipulability-linear — an experimental, reversible switch away from
+ * the -log10 axis; scale:true keeps the real dynamic range visible instead of
+ * flattening it against zero), colors each waypoint by
  * the severity of the observations anchored there, adds the dataZoom slider+
  * inside, fills the area under the line (hotfix area-charts, mirroring the
  * manipulability chart), and marks the warning threshold as a reference line
  * (markLine).
  *
  * I2: the builder NEVER recomputes the determinant — it only projects what the
- * backend shipped (the log transform is a pure presentation change). Points
+ * backend shipped. Points
  * without `det_jtj` (older payloads) are dropped; if none carry it, the
  * builder returns an explicit empty state (I3 additive).
  */
@@ -77,10 +78,10 @@ export function determinantBuilder(report: AnalysisReportWire): ChartModel {
   const severityByWaypoint = worstSeverityByWaypoint(report)
 
   const series = {
-    name: '-log10(Det(J·Jᵀ))',
+    name: 'Det(J·Jᵀ)',
     type: 'line' as const,
     data: points.map(
-      (point) => [xCoordinateOf(point), toLogScale(point.det_jtj)] as [number, number],
+      (point) => [xCoordinateOf(point), point.det_jtj] as [number, number],
     ),
     color: 'chart-2',
     smooth: false,
@@ -89,10 +90,10 @@ export function determinantBuilder(report: AnalysisReportWire): ChartModel {
   }
 
   return {
-    title: 'Jacobian determinant (-log10)',
+    title: 'Jacobian determinant',
     series: [series],
     xAxis: [seriesXAxis(points)],
-    yAxis: [{ type: 'value', name: '-log10(Det(J·Jᵀ))', scale: true }],
+    yAxis: [{ type: 'value', name: 'det(J·Jᵀ)', scale: true }],
     dataZoom: [
       { type: 'inside', start: 0, end: 100 },
       { type: 'slider', start: 0, end: 100 },
@@ -100,8 +101,8 @@ export function determinantBuilder(report: AnalysisReportWire): ChartModel {
     tooltip: { trigger: 'axis' },
     markLine: [
       {
-        yAxis: LOG_DET_JTJ_THRESHOLD,
-        label: `Threshold ${DET_JTJ_THRESHOLD} → ${LOG_DET_JTJ_THRESHOLD.toFixed(3)}`,
+        yAxis: DET_JTJ_THRESHOLD,
+        label: `Threshold ${DET_JTJ_THRESHOLD}`,
         color: 'severity.warning',
       },
     ],

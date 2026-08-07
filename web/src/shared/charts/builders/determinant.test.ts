@@ -60,20 +60,22 @@ function yValuesOf(data: Array<number | [number, number]>): number[] {
 }
 
 describe('determinantBuilder', () => {
-  it('projects the det_jtj series as -log10 with scale:true yAxis and no smoothing', () => {
+  it('projects the raw det_jtj series with scale:true yAxis and no smoothing', () => {
     const model = determinantBuilder(reportWith(full, []))
 
     expect(model.series).toHaveLength(1)
     expect(model.series[0].type).toBe('line')
     expectCloseTo(
-      full.map((p) => -Math.log10(p.det_jtj!)),
+      full.map((p) => p.det_jtj!),
       yValuesOf(model.series[0].data),
     )
+    expect(model.series[0].name).toBe('Det(J·Jᵀ)')
     expect(model.series[0].smooth).toBe(false)
     expect(model.series[0].areaStyle).toBe(true)
+    expect(model.title).toBe('Jacobian determinant')
     expect(model.yAxis?.[0]).toEqual({
       type: 'value',
-      name: '-log10(Det(J·Jᵀ))',
+      name: 'det(J·Jᵀ)',
       scale: true,
     })
     expect(model.dataZoom).toEqual([
@@ -99,9 +101,9 @@ describe('determinantBuilder', () => {
       minInterval: 0.5,
     })
     expect(model.series[0].data).toEqual([
-      [0, -Math.log10(0.25)],
-      [0.01, -Math.log10(0.04)],
-      [2, -Math.log10(0.36)],
+      [0, 0.25],
+      [0.01, 0.04],
+      [2, 0.36],
     ])
   })
 
@@ -110,15 +112,15 @@ describe('determinantBuilder', () => {
 
     expect(model.xAxis[0]).toEqual({ type: 'value', name: 'Waypoint', min: 0, max: 4 })
     expect(model.series[0].data).toEqual([
-      [0, -Math.log10(0.25)],
-      [1, -Math.log10(0.04)],
-      [2, -Math.log10(0.36)],
-      [3, -Math.log10(0.09)],
-      [4, -Math.log10(0.25)],
+      [0, 0.25],
+      [1, 0.04],
+      [2, 0.36],
+      [3, 0.09],
+      [4, 0.25],
     ])
   })
 
-  it('maps an exactly-zero det_jtj to the log floor (visible singularity spike)', () => {
+  it('keeps an exactly-zero det_jtj as a raw 0 (no log floor)', () => {
     const model = determinantBuilder(
       reportWith(
         [
@@ -130,17 +132,17 @@ describe('determinantBuilder', () => {
     )
 
     expect(model.series[0].data).toEqual([
-      [0, -Math.log10(0.25)],
-      [0.01, 6],
+      [0, 0.25],
+      [0.01, 0],
     ])
   })
 
-  it('marks the det_jtj warning threshold converted to the log scale', () => {
+  it('marks the det_jtj warning threshold on the raw scale', () => {
     const model = determinantBuilder(reportWith(full, []))
 
     expect(model.markLine).toHaveLength(1)
-    expect(model.markLine?.[0].yAxis).toBeCloseTo(-Math.log10(DET_JTJ_THRESHOLD), 5)
-    expect(model.markLine?.[0].label).toMatch(/threshold/i)
+    expect(model.markLine?.[0].yAxis).toBe(DET_JTJ_THRESHOLD)
+    expect(model.markLine?.[0].label).toBe('Threshold 0.09')
   })
 
   it('maps observation severity at each waypoint to MANIP color tokens, parallel to the data', () => {
@@ -170,7 +172,7 @@ describe('determinantBuilder', () => {
     ]
     const model = determinantBuilder(reportWith(sparse, []))
 
-    expectCloseTo([-Math.log10(0.04)], yValuesOf(model.series[0].data))
+    expectCloseTo([0.04], yValuesOf(model.series[0].data))
     expect(model.xAxis[0]).toEqual({ type: 'value', name: 'Waypoint', min: 0, max: 0 })
   })
 

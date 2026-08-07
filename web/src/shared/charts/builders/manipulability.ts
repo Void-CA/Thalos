@@ -4,15 +4,15 @@
  * Input: canonical AnalysisReportWire (never a hand-built shape — I1).
  * Output: ChartModel. NO ECharts, NO React, NO DOM (O2).
  *
- * Presentation transformations only (I2): projects the yoshikawa series as
- * -log10 (hotfix manipulability-logscale — a linear axis flattens the real
- * multi-order-of-magnitude variation against zero), colors each waypoint by
- * the severity of the observations anchored there (Error → low, Warning → med,
- * otherwise high — MANIP tokens), fills the area under the line (hotfix
- * area-charts — the threshold reference line reads against a filled region,
- * not a hairline), and adds the dataZoom slider+inside the spec requires. It
- * never interpolates or recomputes manipulability values; the log transform is
- * a pure presentation change.
+ * Presentation transformations only (I2): projects the yoshikawa series on its
+ * NATURAL linear scale (hotfix manipulability-linear — an experimental,
+ * reversible switch away from the -log10 axis; scale:true keeps the real
+ * dynamic range visible instead of flattening it against zero), colors each
+ * waypoint by the severity of the observations anchored there (Error → low,
+ * Warning → med, otherwise high — MANIP tokens), fills the area under the line
+ * (hotfix area-charts — the threshold reference line reads against a filled
+ * region, not a hairline), and adds the dataZoom slider+inside the spec
+ * requires. It never interpolates or recomputes manipulability values.
  */
 
 import type {
@@ -101,10 +101,10 @@ export function manipulabilityBuilder(report: AnalysisReportWire): ChartModel {
   const severityByWaypoint = worstSeverityByWaypoint(report)
 
   const series = {
-    name: '-log10(Manipulability)',
+    name: 'Manipulability',
     type: 'line' as const,
     data: points.map(
-      (point: ManipulabilityPointWire) => [xCoordinateOf(point), toLogScale(point.yoshikawa)] as [
+      (point: ManipulabilityPointWire) => [xCoordinateOf(point), point.yoshikawa] as [
         number,
         number,
       ],
@@ -118,10 +118,12 @@ export function manipulabilityBuilder(report: AnalysisReportWire): ChartModel {
   }
 
   return {
-    title: 'Manipulability (-log10)',
+    title: 'Manipulability',
     series: [series],
     xAxis: [seriesXAxis(points)],
-    yAxis: [{ type: 'value', name: '-log10(Yoshikawa)', scale: true }],
+    // scale:true is deliberate — an axis that starts at the minimum shows the
+    // real dynamic range of the linear series instead of squashing it against 0.
+    yAxis: [{ type: 'value', name: 'Yoshikawa', scale: true }],
     dataZoom: [
       { type: 'inside', start: 0, end: 100 },
       { type: 'slider', start: 0, end: 100 },
@@ -129,8 +131,8 @@ export function manipulabilityBuilder(report: AnalysisReportWire): ChartModel {
     tooltip: { trigger: 'axis' },
     markLine: [
       {
-        yAxis: LOG_YOSHIKAWA_THRESHOLD,
-        label: `Threshold ${YOSHIKAWA_THRESHOLD} → ${LOG_YOSHIKAWA_THRESHOLD.toFixed(3)}`,
+        yAxis: YOSHIKAWA_THRESHOLD,
+        label: `Threshold ${YOSHIKAWA_THRESHOLD}`,
         color: 'severity.warning',
       },
     ],

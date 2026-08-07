@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
-import { manipulabilityBuilder } from './manipulability'
-import { toLogScale } from './log-scale'
+import { manipulabilityBuilder, YOSHIKAWA_THRESHOLD } from './manipulability'
 
 function observation(
   id: number,
@@ -61,15 +60,17 @@ function yValuesOf(data: Array<number | [number, number]>): number[] {
 }
 
 describe('manipulabilityBuilder', () => {
-  it('projects the yoshikawa series as -log10 with scale:true yAxis and no smoothing', () => {
+  it('projects the raw yoshikawa series with scale:true yAxis and no smoothing', () => {
     const model = manipulabilityBuilder(reportWith(series, []))
 
     expect(model.series).toHaveLength(1)
     expect(model.series[0].type).toBe('line')
-    expectCloseTo(series.map((p) => -Math.log10(p.yoshikawa)), yValuesOf(model.series[0].data))
+    expectCloseTo(series.map((p) => p.yoshikawa), yValuesOf(model.series[0].data))
+    expect(model.series[0].name).toBe('Manipulability')
     expect(model.series[0].smooth).toBe(false)
     expect(model.series[0].areaStyle).toBe(true)
-    expect(model.yAxis?.[0]).toEqual({ type: 'value', name: '-log10(Yoshikawa)', scale: true })
+    expect(model.title).toBe('Manipulability')
+    expect(model.yAxis?.[0]).toEqual({ type: 'value', name: 'Yoshikawa', scale: true })
     expect(model.dataZoom).toEqual([
       { type: 'inside', start: 0, end: 100 },
       { type: 'slider', start: 0, end: 100 },
@@ -93,9 +94,9 @@ describe('manipulabilityBuilder', () => {
       minInterval: 0.5,
     })
     expect(model.series[0].data).toEqual([
-      [0, -Math.log10(0.2)],
-      [0.01, -Math.log10(0.05)],
-      [2, -Math.log10(0.3)],
+      [0, 0.2],
+      [0.01, 0.05],
+      [2, 0.3],
     ])
   })
 
@@ -104,15 +105,15 @@ describe('manipulabilityBuilder', () => {
 
     expect(model.xAxis[0]).toEqual({ type: 'value', name: 'Waypoint', min: 0, max: 4 })
     expect(model.series[0].data).toEqual([
-      [0, -Math.log10(0.2)],
-      [1, -Math.log10(0.05)],
-      [2, -Math.log10(0.3)],
-      [3, -Math.log10(0.12)],
-      [4, -Math.log10(0.25)],
+      [0, 0.2],
+      [1, 0.05],
+      [2, 0.3],
+      [3, 0.12],
+      [4, 0.25],
     ])
   })
 
-  it('maps an exactly-zero yoshikawa to the log floor (visible singularity spike)', () => {
+  it('keeps an exactly-zero yoshikawa as a raw 0 (no log floor)', () => {
     const model = manipulabilityBuilder(
       reportWith(
         [
@@ -124,8 +125,8 @@ describe('manipulabilityBuilder', () => {
     )
 
     expect(model.series[0].data).toEqual([
-      [0, toLogScale(0.2)],
-      [0.01, 6],
+      [0, 0.2],
+      [0.01, 0],
     ])
   })
 
@@ -167,12 +168,12 @@ describe('manipulabilityBuilder', () => {
     expect(model.series[0].dataColors).toEqual(['manip.high', 'manip.low', 'manip.high'])
   })
 
-  it('marks the low-manipulability warning threshold converted to the log scale', () => {
+  it('marks the low-manipulability warning threshold on the raw yoshikawa scale', () => {
     const model = manipulabilityBuilder(reportWith(series, []))
 
     expect(model.markLine).toHaveLength(1)
-    expect(model.markLine?.[0].yAxis).toBeCloseTo(-Math.log10(0.3), 5)
-    expect(model.markLine?.[0].label).toMatch(/threshold/i)
+    expect(model.markLine?.[0].yAxis).toBe(YOSHIKAWA_THRESHOLD)
+    expect(model.markLine?.[0].label).toBe('Threshold 0.3')
   })
 
   it('returns an explicit empty state for an absent/empty series instead of a chart', () => {

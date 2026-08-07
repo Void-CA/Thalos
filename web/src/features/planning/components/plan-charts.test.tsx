@@ -142,9 +142,10 @@ describe('PlanCharts — planning charts as siblings of AdvisorSection (S3)', ()
 
     // Manipulability — line, N waypoints in → N points out (spec full series),
     // value axis spanning [0, N-1], dataZoom slider + inside. Y values are the
-    // -log10 transform (hotfix: linear scale flattened real 6-order variation).
+    // raw yoshikawa values (hotfix manipulability-linear: experimental
+    // reversible switch from the -log10 transform back to the natural scale).
     const manip = optionOf(els[0])
-    const yoshikawaExpected = [-Math.log10(0.2), -Math.log10(0.05), -Math.log10(0.3)]
+    const yoshikawaExpected = [0.2, 0.05, 0.3]
     valuesOf(manip).forEach((value, index) =>
       expect(value).toBeCloseTo(yoshikawaExpected[index], 10),
     )
