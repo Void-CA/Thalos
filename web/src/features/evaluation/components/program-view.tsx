@@ -10,7 +10,6 @@ import { Check, Loader2, Pencil, RotateCcw, X } from 'lucide-react'
 import {
   buildSegmentEdit,
   clickRegionId,
-  isSegmentEditable,
   overlappingRegions,
   segmentType,
   sourceSummary,
@@ -29,7 +28,8 @@ import {
  *
  * Step 3 closes the PROGRAM-LEVEL editing circuit: an inline form per segment
  * builds a semantic `ProgramEdit` (MoveWaypoint for MoveJ, ReplaceSegment for
- * MoveLPosition; MoveL is disabled — full-pose editing is deferred), sends it
+ * MoveLPosition and for MoveL via the position-only fallback — translation
+ * only, resolved as IKGoal::Position), sends it
  * through `POST /plan/program/edit` (same backend apply cycle as
  * apply_command) and refreshes the scene exactly like RecommendationRow
  * (loadScene + applyScene). Feedback shows health before→after; Undo pops the
@@ -70,10 +70,15 @@ export function ProgramView() {
   const startEdit = (segment: SegmentInfo) => {
     if ('MoveJ' in segment.source) {
       setDraft(segment.source.MoveJ.target.map(String))
-    } else if ('MoveLPosition' in segment.source) {
-      setDraft(segment.source.MoveLPosition.target_position.map(String))
+    } else if ('MoveL' in segment.source) {
+      // Position-only fallback: the form edits ONLY the translation — a MoveL
+      // has no clean full-pose variant, so the retarget goes through
+      // MoveLPosition (IKGoal::Position). Orientation is intentionally not
+      // editable (documented tradeoff).
+      const t = segment.source.MoveL.target_pose.transform.translation
+      setDraft([String(t.x), String(t.y), String(t.z)])
     } else {
-      return
+      setDraft(segment.source.MoveLPosition.target_position.map(String))
     }
     setEditingIndex(segment.segmentIndex)
     setError(null)
@@ -159,7 +164,6 @@ export function ProgramView() {
           const overlapping = overlappingRegions(segment, regions)
           const worst = worstRegion(overlapping)
           const selected = selectedRegionId !== null && overlapping.some((r) => r.id === selectedRegionId)
-          const editable = isSegmentEditable(segment.source)
           const editing = editingIndex === segment.segmentIndex
           return (
             <li key={segment.segmentIndex} className="flex flex-col gap-1">
@@ -189,13 +193,12 @@ export function ProgramView() {
                 <button
                   data-testid={`program-edit-${segment.segmentIndex}`}
                   onClick={() => startEdit(segment)}
-                  disabled={!editable}
                   title={
-                    editable
-                      ? 'Edit this segment (free-form ProgramEdit)'
-                      : 'MoveL editing (full pose) is not supported yet'
+                    'MoveL' in segment.source
+                      ? 'Edit position (position-only fallback)'
+                      : 'Edit this segment (free-form ProgramEdit)'
                   }
-                  className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-2 text-[10px] text-muted-foreground hover:bg-muted/40 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-2 text-[10px] text-muted-foreground hover:bg-muted/40 transition-colors cursor-pointer"
                 >
                   <Pencil className="h-3 w-3" />
                 </button>

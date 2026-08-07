@@ -11,8 +11,9 @@ import type { SegmentInfo, ActivePlan } from '@/features/viewport/types'
 /**
  * CDD step 3 — ProgramView edit trigger: the minimal program-level editing
  * circuit. Pins:
- * - an Edit button per segment (disabled for MoveL — full-pose editing is
- *   deferred);
+ * - an Edit button per segment (MoveL included via the position-only
+ *   fallback — editing a MoveL translation builds a `ReplaceSegment` whose
+ *   replacement is a `MoveLPosition` derived from the source MoveL);
  * - editing a MoveLPosition target_position builds the correct semantic
  *   `ReplaceSegment` ProgramEdit and refreshes the scene through the SAME
  *   pattern as RecommendationRow (loadScene + applyScene);
@@ -141,12 +142,46 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('ProgramView — step 3 edit trigger', () => {
-  it('renders an Edit button per segment, disabled for MoveL', () => {
+  it('renders an Edit button per segment — MoveL included via position-only fallback', () => {
     render(<ProgramView />)
 
     expect(screen.getByTestId('program-edit-0')).toBeEnabled()
     expect(screen.getByTestId('program-edit-2')).toBeEnabled()
-    expect(screen.getByTestId('program-edit-1')).toBeDisabled()
+    expect(screen.getByTestId('program-edit-1')).toBeEnabled()
+    expect(screen.getByTestId('program-edit-1')).toHaveAttribute(
+      'title',
+      'Edit position (position-only fallback)',
+    )
+  })
+
+  it('editing a MoveL translation builds a ReplaceSegment with a MoveLPosition (position-only fallback)', async () => {
+    apiMocks.editProgram.mockResolvedValue(applyResponse)
+    render(<ProgramView />)
+
+    fireEvent.click(screen.getByTestId('program-edit-1'))
+    expect(screen.getByTestId('program-edit-form-1')).toBeInTheDocument()
+
+    // The form seeds the CURRENT translation as defaults.
+    expect(screen.getByTestId('program-edit-input-1-0')).toHaveValue(1.25)
+    expect(screen.getByTestId('program-edit-input-1-1')).toHaveValue(-0.5)
+    expect(screen.getByTestId('program-edit-input-1-2')).toHaveValue(0.75)
+
+    fireEvent.change(screen.getByTestId('program-edit-input-1-0'), { target: { value: '2' } })
+    fireEvent.click(screen.getByTestId('program-edit-save-1'))
+
+    await waitFor(() => {
+      expect(apiMocks.editProgram).toHaveBeenCalledTimes(1)
+    })
+    // origin/frame/max_velocity carried over from the source MoveL, only the
+    // translation retargeted.
+    expect(apiMocks.editProgram).toHaveBeenCalledWith({
+      ReplaceSegment: {
+        index: 1,
+        replacement: [
+          { MoveLPosition: { origin: 'base', frame: 'World', target_position: [2, -0.5, 0.75], max_velocity: null } },
+        ],
+      },
+    })
   })
 
   it('editing a MoveLPosition target_position builds the ReplaceSegment ProgramEdit and refreshes the scene', async () => {

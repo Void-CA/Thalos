@@ -89,8 +89,10 @@ export function clickRegionId(
  * - MoveLPosition → `ReplaceSegment` (swap the segment payload — `MoveWaypoint`
  *   rejects MoveL/MoveLPosition with `WrongSegmentKind`, and no other variant
  *   retargets a Cartesian position cleanly).
- * - MoveL → unsupported (a full pose edit needs orientation + translation;
- *   no single clean variant — the ProgramView disables the button).
+ * - MoveL → `ReplaceSegment` position-only fallback (hotfix): no variant
+ *   expresses a full pose edit cleanly, but the translation-only retarget maps
+ *   exactly onto `MoveLPosition` (see `buildMoveLPositionEdit`). Orientation is
+ *   intentionally NOT editable — documented tradeoff.
  */
 export function buildSegmentEdit(segment: SegmentInfo, draft: number[]): ProgramEditWire {
   const index = segment.segmentIndex
@@ -104,28 +106,59 @@ export function buildSegmentEdit(segment: SegmentInfo, draft: number[]): Program
       },
     }
   }
-  if ('MoveLPosition' in segment.source) {
-    const s = segment.source.MoveLPosition
-    return {
-      ReplaceSegment: {
-        index,
-        replacement: [
-          {
-            MoveLPosition: {
-              origin: s.origin,
-              frame: s.frame,
-              target_position: [draft[0], draft[1], draft[2]],
-              max_velocity: s.max_velocity,
-            },
-          },
-        ],
-      },
-    }
+  if ('MoveL' in segment.source) {
+    return buildMoveLPositionEdit(segment, [draft[0], draft[1], draft[2]])
   }
-  throw new Error(`MoveL editing is not supported (segment ${index})`)
+  const s = segment.source.MoveLPosition
+  return {
+    ReplaceSegment: {
+      index,
+      replacement: [
+        {
+          MoveLPosition: {
+            origin: s.origin,
+            frame: s.frame,
+            target_position: [draft[0], draft[1], draft[2]],
+            max_velocity: s.max_velocity,
+          },
+        },
+      ],
+    },
+  }
 }
 
-/** Whether the segment kind supports the step-3 inline edit trigger. */
-export function isSegmentEditable(source: MotionSegmentSourceDto): boolean {
-  return !('MoveL' in source)
+/**
+ * Position-only fallback for a MoveL edit (hotfix): a full pose edit has no
+ * clean `ProgramEdit` variant, but a translation-only retarget maps exactly
+ * onto `MoveLPosition`. Derives the position-only segment from the source
+ * MoveL, preserving origin / frame / max_velocity and swapping the target
+ * pose translation for `newPosition`. The backend resolves `MoveLPosition`
+ * via `IKGoal::Position` — the fallback that converges on SCARA-like robots
+ * where a full-pose `IKGoal::Pose` would exhaust MaxIterations.
+ */
+export function buildMoveLPositionEdit(
+  segment: SegmentInfo,
+  newPosition: [number, number, number],
+): ProgramEditWire {
+  if (!('MoveL' in segment.source)) {
+    throw new Error(
+      `buildMoveLPositionEdit expects a MoveL segment (got segment ${segment.segmentIndex})`,
+    )
+  }
+  const s = segment.source.MoveL
+  return {
+    ReplaceSegment: {
+      index: segment.segmentIndex,
+      replacement: [
+        {
+          MoveLPosition: {
+            origin: s.origin,
+            frame: s.frame,
+            target_position: newPosition,
+            max_velocity: s.max_velocity,
+          },
+        },
+      ],
+    },
+  }
 }
