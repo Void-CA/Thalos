@@ -192,6 +192,12 @@ pub struct SegmentInfoDto {
     pub waypoint_end: usize,
     pub time_start: f64,
     pub time_end: f64,
+    /// The original source command (intent) — canonical `MotionSegment` serde.
+    ///
+    /// The editable program representation: the frontend renders it as the
+    /// editable segment and keeps the compiled trajectory (waypoint ranges)
+    /// alongside it for execution feedback.
+    pub source: thalos_core::motion::segment::MotionSegment,
 }
 
 /// Trajectory visualisation — the data contract for the frontend's 3D renderer.

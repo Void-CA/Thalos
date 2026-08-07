@@ -52,8 +52,35 @@ const previewResponse: RuntimeStateResponse = {
     trajectory_progress: null,
     visualization: null,
     segments: [
-      { segment_index: 0, motion_type: 'PTP', waypoint_start: 0, waypoint_end: 1, time_start: 0, time_end: 2.5 },
-      { segment_index: 1, motion_type: 'PTP', waypoint_start: 1, waypoint_end: 2, time_start: 2.5, time_end: 5 },
+      {
+        segment_index: 0,
+        motion_type: 'PTP',
+        waypoint_start: 0,
+        waypoint_end: 1,
+        time_start: 0,
+        time_end: 2.5,
+        source: { MoveJ: { origin: 'op-0', target: [0.5, 1.0], max_velocity: null, max_acceleration: null } },
+      },
+      {
+        segment_index: 1,
+        motion_type: 'PTP',
+        waypoint_start: 1,
+        waypoint_end: 2,
+        time_start: 2.5,
+        time_end: 5,
+        source: {
+          MoveL: {
+            origin: 'op-1',
+            frame: 'World',
+            target_pose: {
+              reference: 'World',
+              target: { Id: 1 },
+              transform: { translation: { x: 0.3, y: 0, z: 0 }, rotation: { q: { w: 1, x: 0, y: 0, z: 0 } } },
+            },
+            max_velocity: null,
+          },
+        },
+      },
     ],
     created_at: '2026-01-01T00:00:00Z',
     started_at: null,

@@ -145,6 +145,54 @@ export interface SegmentInfoDto {
   waypoint_end: number
   time_start: number
   time_end: number
+  /** Canonical program representation of this segment (`MotionSegment` serde).
+   *  Always present on the wire — the compiled trajectory (waypoint ranges)
+   *  coexists with this editable intent. */
+  source: MotionSegmentSourceDto
+}
+
+/** Wire shape of `thalos_core::motion::segment::MotionSegment` — the canonical
+ *  editable program, as an externally-tagged serde enum (UPPERCASE variants).
+ *  Deliberately NOT `MotionSegmentDto` (request wire, internally-tagged
+ *  lowercase `type`): this is the response-side representation of the program. */
+export type MotionSegmentSourceDto =
+  | {
+      MoveJ: {
+        origin: string
+        target: number[]
+        max_velocity: number | null
+        max_acceleration: number | null
+      }
+    }
+  | {
+      MoveL: {
+        origin: string
+        frame: FrameIdDto
+        target_pose: SourcePoseDto
+        max_velocity: number | null
+      }
+    }
+  | {
+      MoveLPosition: {
+        origin: string
+        frame: FrameIdDto
+        target_position: [number, number, number]
+        max_velocity: number | null
+      }
+    }
+
+/** Wire shape of `thalos_core::spatial::frame::FrameId`. */
+export type FrameIdDto = 'World' | { Id: number }
+
+/** Wire shape of `thalos_core::spatial::pose::Pose` — `reference`/`target`
+ *  frame ids plus the rigid `transform` (translation + unit quaternion). */
+export interface SourcePoseDto {
+  reference: FrameIdDto
+  target: FrameIdDto
+  transform: {
+    translation: { x: number; y: number; z: number }
+    rotation: { q: { w: number; x: number; y: number; z: number } }
+  }
 }
 
 export interface TrajectoryVisualizationDto {
