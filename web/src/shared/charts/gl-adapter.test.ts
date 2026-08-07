@@ -94,4 +94,20 @@ describe('buildTrajectoryOption — ECharts GL line3D option', () => {
 
     expect(option.series).toEqual([])
   })
+
+  it('keeps axisLine visible on every 3D axis (echarts-gl crashes when hidden)', () => {
+    // Regression: Grid3DAxis.update only populates `axisLineCoords` when
+    // axisLine.show is true, and Grid3DView._updateAxisLabelAlign dereferences
+    // it on camera change. Hiding the axis line crashed with
+    // "can't access property 0 of null" in the browser.
+    const option = buildTrajectoryOption(waypoints, [criticalRegion], null) as {
+      xAxis3D: { axisLine?: { show?: boolean } }
+      yAxis3D: { axisLine?: { show?: boolean } }
+      zAxis3D: { axisLine?: { show?: boolean } }
+    }
+
+    expect(option.xAxis3D.axisLine?.show).toBe(true)
+    expect(option.yAxis3D.axisLine?.show).toBe(true)
+    expect(option.zAxis3D.axisLine?.show).toBe(true)
+  })
 })

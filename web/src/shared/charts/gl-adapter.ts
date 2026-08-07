@@ -62,7 +62,12 @@ export function buildTrajectoryOption(
     max,
     axisLabel: { color: MUTED, fontSize: 11 },
     splitLine: { show: true, lineStyle: { color: GRID_SPLIT } },
-    axisLine: { show: false },
+    // axisLine MUST stay visible: echarts-gl only populates `axisLineCoords`
+    // (Grid3DAxis.update) when axisLine.show is true, and `_updateAxisLabelAlign`
+    // dereferences it on every camera change — hiding it crashes with
+    // "can't access property 0 of null". Visible axis lines are also the
+    // MATLAB-style reference frame we want for the 3D plot.
+    axisLine: { show: true, lineStyle: { color: MUTED } },
     axisTick: { show: false },
   })
 
