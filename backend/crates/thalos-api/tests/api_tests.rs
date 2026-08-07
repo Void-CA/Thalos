@@ -2073,6 +2073,196 @@ async fn apply_command_unavailable_recommendation_returns_409_without_mutation()
 }
 
 // =========================================================================
+// Program edit (CDD step 3 — free-form POST /plan/program/edit)
+// =========================================================================
+
+/// Body of a free-form MoveWaypoint edit on the shared preview fixture: the
+/// fixture's segment 0 is a MoveJ (see preview_setup), so a joint-space
+/// retarget recompiles and writes back.
+fn move_waypoint_edit() -> Value {
+    json!({
+        "edit": {
+            "MoveWaypoint": {
+                "segment_index": 0,
+                "new_target": [0.55, -0.3, -0.1, 0.0],
+                "old_target": [0.5, -0.3, -0.1, 0.0]
+            }
+        }
+    })
+}
+
+#[tokio::test]
+async fn edit_program_applies_free_form_edit_and_writes_back() {
+    // CDD step 3: POST /plan/program/edit accepts a RAW ProgramEdit — no
+    // recommendation_id — and runs the SAME apply cycle as apply_command:
+    // edit.apply(program) → recompile → re-analyze → apply_compiled_plan →
+    // ApplyResponse. Uses the scene-writeback-enabled app, like the apply
+    // tests (the default flag-off app would reject the write with
+    // feature_disabled, D5).
+    let app = writeback_app().await;
+    preview_setup(&app).await;
+
+    // Snapshot the active plan BEFORE the edit (GET /scene is read-only).
+    let (_, before) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before = before.expect("scene response must be valid JSON");
+    let before_plan_id = before["active_plan"]["plan_id"]
+        .as_str()
+        .expect("setup must leave an active plan with an id")
+        .to_string();
+
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/program/edit",
+        Some(move_waypoint_edit()),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "a free-form program edit must succeed"
+    );
+    let body = body.expect("edit response must be valid JSON");
+    assert!(
+        body["health_before"].is_number() && body["health_after"].is_number(),
+        "edit must report before/after health"
+    );
+    assert!(
+        body["plan_id"].is_string(),
+        "edit response must carry the new active plan id"
+    );
+    assert!(
+        body["improvement"].is_number(),
+        "edit must report the health improvement"
+    );
+    assert!(
+        body["history_length"].is_number(),
+        "edit must store the inverse for undo (O(1), D6)"
+    );
+    assert_eq!(
+        body["recommendation_id"], 0,
+        "the free-form path has NO advisor recommendation id (decision: 0)"
+    );
+
+    // Write-back is observable via GET /scene: the active plan CHANGED.
+    let (_, after) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after = after.expect("scene response must be valid JSON");
+    let after_plan_id = after["active_plan"]["plan_id"]
+        .as_str()
+        .expect("active plan must still exist after edit")
+        .to_string();
+    assert_ne!(
+        after_plan_id, before_plan_id,
+        "the edit must write the new plan back to SceneRuntime"
+    );
+}
+
+#[tokio::test]
+async fn edit_program_invalid_edit_returns_422_without_mutation() {
+    // Same contract as apply_command: an edit that cannot be applied (here a
+    // MoveWaypoint on the fixture's MoveL segment — WrongSegmentKind) fails
+    // with Validation `edit_apply_failed` and changes NO state.
+    let app = writeback_app().await;
+    preview_setup(&app).await;
+
+    let (_, before) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before = before.expect("scene response must be valid JSON");
+
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/program/edit",
+        Some(json!({
+            "edit": {
+                "MoveWaypoint": {
+                    "segment_index": 1,
+                    "new_target": [0.5, -0.3, -0.1, 0.0],
+                    "old_target": null
+                }
+            }
+        })),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "a MoveWaypoint on a MoveL segment must be rejected"
+    );
+    let body = body.expect("error response must be valid JSON");
+    assert_eq!(
+        body["code"], "edit_apply_failed",
+        "rejection must carry the edit_apply_failed code"
+    );
+
+    let (_, after) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after = after.expect("scene response must be valid JSON");
+    assert_eq!(
+        after["active_plan"], before["active_plan"],
+        "a failed edit must NOT mutate the active plan"
+    );
+}
+
+#[tokio::test]
+async fn edit_program_without_active_plan_returns_412_no_active_plan() {
+    // Same contract as apply_command: no active plan → InvalidState
+    // (PRECONDITION_FAILED) with the `no_active_plan` code.
+    let app = writeback_app().await;
+
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/plan/program/edit",
+        Some(move_waypoint_edit()),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::PRECONDITION_FAILED,
+        "no active plan must 412"
+    );
+    let body = body.expect("error response must be valid JSON");
+    assert_eq!(body["code"], "no_active_plan");
+}
+
+#[tokio::test]
+async fn edit_program_flag_off_returns_feature_disabled_without_mutation() {
+    // Design D5 at the API layer for the free-form path too: with
+    // scene-writeback OFF (the default app), the write is rejected with
+    // `feature_disabled` and mutates NOTHING — rollback-safe. (The analysis
+    // and the response shape still work when the flag is on.)
+    let app = test_app().await;
+    preview_setup(&app).await;
+
+    let (_, before) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let before = before.expect("scene response must be valid JSON");
+
+    let (status, body) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/plan/program/edit",
+        Some(move_waypoint_edit()),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "flag-off edit must fail with Conflict (feature_disabled)"
+    );
+    let body = body.expect("error response must be valid JSON");
+    assert_eq!(
+        body["code"], "feature_disabled",
+        "flag-off edit must carry the feature_disabled code"
+    );
+
+    let (_, after) = get_json(app, http::Method::GET, "/api/v1/scene", None).await;
+    let after = after.expect("scene response must be valid JSON");
+    assert_eq!(
+        after["active_plan"], before["active_plan"],
+        "flag-off edit must NOT mutate the active plan"
+    );
+}
+
+// =========================================================================
 // Plan command undo (PR5 — O(1) via stored inverse, design D6)
 // =========================================================================
 

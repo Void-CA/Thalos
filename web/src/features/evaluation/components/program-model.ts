@@ -1,5 +1,6 @@
 import { severityOf } from '@/shared/charts/trajectory3d'
 import type { ProblemRegionWire } from '@/shared/contracts/analysis-report'
+import type { ProgramEditWire } from '@/shared/contracts/program-edit'
 import type { FrameIdDto, MotionSegmentSourceDto } from '@/features/viewport/api/scene-api.types'
 import type { SegmentInfo } from '@/features/viewport/types'
 
@@ -76,4 +77,55 @@ export function clickRegionId(
   if (overlapping.length === 0) return null
   if (overlapping.some((region) => region.id === selectedId)) return null
   return worstRegion(overlapping)?.id ?? null
+}
+
+// ── Segment edit (CDD step 3 — free-form ProgramEdit trigger) ─────────────
+
+/**
+ * Build the semantic `ProgramEdit` for a segment retarget (CDD step 3). One
+ * operation per segment kind, using the variant that EXACTLY describes the
+ * edit (design D1):
+ * - MoveJ → `MoveWaypoint` (retarget the joint-space waypoint).
+ * - MoveLPosition → `ReplaceSegment` (swap the segment payload — `MoveWaypoint`
+ *   rejects MoveL/MoveLPosition with `WrongSegmentKind`, and no other variant
+ *   retargets a Cartesian position cleanly).
+ * - MoveL → unsupported (a full pose edit needs orientation + translation;
+ *   no single clean variant — the ProgramView disables the button).
+ */
+export function buildSegmentEdit(segment: SegmentInfo, draft: number[]): ProgramEditWire {
+  const index = segment.segmentIndex
+  if ('MoveJ' in segment.source) {
+    const target = segment.source.MoveJ.target
+    return {
+      MoveWaypoint: {
+        segment_index: index,
+        new_target: draft,
+        old_target: target,
+      },
+    }
+  }
+  if ('MoveLPosition' in segment.source) {
+    const s = segment.source.MoveLPosition
+    return {
+      ReplaceSegment: {
+        index,
+        replacement: [
+          {
+            MoveLPosition: {
+              origin: s.origin,
+              frame: s.frame,
+              target_position: [draft[0], draft[1], draft[2]],
+              max_velocity: s.max_velocity,
+            },
+          },
+        ],
+      },
+    }
+  }
+  throw new Error(`MoveL editing is not supported (segment ${index})`)
+}
+
+/** Whether the segment kind supports the step-3 inline edit trigger. */
+export function isSegmentEditable(source: MotionSegmentSourceDto): boolean {
+  return !('MoveL' in source)
 }

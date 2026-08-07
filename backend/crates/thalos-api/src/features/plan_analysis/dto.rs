@@ -109,6 +109,22 @@ pub struct ApplyRequest {
     pub recommendation_id: u32,
 }
 
+/// Request para editar el programa activo con un `ProgramEdit` LIBRE (CDD
+/// step 3).
+///
+/// `POST /plan/program/edit` — la contraparte de `ApplyRequest` que NO pasa
+/// por un `recommendation_id` del advisor: el cliente construye el comando
+/// semántico directamente (D1) y el backend lo aplica con el MISMO ciclo que
+/// `apply_command` (`edit.apply(program)` → recompile → re-analyze →
+/// write-back). `ProgramEdit` sigue siendo la API semántica — no hay un
+/// formato HTTP paralelo (spec program-edit).
+#[derive(Debug, Deserialize)]
+pub struct EditProgramRequest {
+    /// Comando semántico de plan (serde externally-tagged, D1). El frontend lo
+    /// construye desde la edición de un segmento del `ProgramView`.
+    pub edit: ProgramEdit,
+}
+
 /// Respuesta de aplicar una recomendación (PR4).
 ///
 /// Confirma el write-back: el nuevo `plan_id` activo, la salud antes/después y

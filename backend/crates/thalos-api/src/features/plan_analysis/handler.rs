@@ -33,15 +33,19 @@ use thalos_planning::{
         planner::SegmentPlanningContext,
         program::{PlannedSegment, PlanningProgram},
     },
+    program_edit::ProgramEdit,
     recommendation::{RecommendationId, RecommendationStatus},
 };
-use thalos_runtime::{CommandMetrics, PlanAnalysisService};
+use thalos_runtime::{
+    CommandMetrics, PlanAnalysisResult, PlanAnalysisService, RuntimeSnapshot,
+};
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
 use crate::features::plan_analysis::dto::{
-    ApplyRequest, ApplyResponse, MetricsComparisonDto, OperatorAppliedDto, OptimizeResponse,
-    PlanAnalysisRequest, PlanAnalysisResponse, PreviewRequest, PreviewResponse, UndoResponse,
+    ApplyRequest, ApplyResponse, EditProgramRequest, MetricsComparisonDto, OperatorAppliedDto,
+    OptimizeResponse, PlanAnalysisRequest, PlanAnalysisResponse, PreviewRequest, PreviewResponse,
+    UndoResponse,
 };
 
 /// POST /api/v1/plan/analyze
@@ -290,21 +294,7 @@ pub async fn apply_command(
         })?;
     let artifact = ArtifactRef::MotionPlan(MotionPlanId(active_plan.plan_id.clone()));
 
-    let program = {
-        let segments = active_plan.segments.as_deref().ok_or_else(|| {
-            ApiError::InvalidState {
-                message: "Active plan carries no program segments".to_string(),
-                code: "no_program_segments".to_string(),
-            }
-        })?;
-        if segments.is_empty() {
-            return Err(ApiError::InvalidState {
-                message: "Active plan has no program segments".to_string(),
-                code: "no_program_segments".to_string(),
-            });
-        }
-        PlanningProgram::new(segments.iter().map(|s| s.source.clone()).collect())
-    };
+    let program = active_program(&snapshot)?;
 
     // 2. Análisis "before" + resolución de la recomendación.
     let before = PlanAnalysisService::analyze_plan(
@@ -346,20 +336,136 @@ pub async fn apply_command(
         });
     }
 
-    // 4. Aplicar la edición sobre el programa y recompilar desde el mismo
-    //    estado inicial que el plan activo (mismo start que preview).
-    let edited_program = recommendation
-        .edit
-        .apply(&program)
+    // 4. WRITE-BACK (D4/D5/D6) — el ciclo compartido con `edit_program`.
+    apply_program_edit(
+        &state,
+        &snapshot,
+        &program,
+        artifact,
+        &before,
+        &recommendation.edit,
+        recommendation.id.0,
+        recommendation.status,
+    )
+    .await
+}
+
+/// POST /api/v1/plan/program/edit
+///
+/// Edición LIBRE del programa activo (CDD step 3): acepta un [`ProgramEdit`]
+/// arbitrario — NO un `recommendation_id` del advisor — y lo ejecuta con el
+/// MISMO ciclo que `apply_command` (reconstruct program → `edit.apply` →
+/// recompile → re-analyze → write-back). `ProgramEdit` es la API semántica:
+/// `old Program → ProgramEdit → new Program` (encaja con preview/apply/undo y
+/// la consistencia backend↔frontend).
+///
+/// `recommendation_id` del response: 0 — este camino NO deriva de una
+/// recomendación del advisor; el id no tiene significado aquí (documentado en
+/// el DTO). `status`: `None` — un edit libre no pasa por la evaluación de
+/// disponibilidad D8 (el cliente eligió la edición explícitamente).
+pub async fn edit_program(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<EditProgramRequest>,
+) -> ApiResult<ApplyResponse> {
+    let snapshot = state.services.scene.snapshot().await?;
+
+    // 1. Plan activo — fuente del programa semántico (I1/I2), igual que apply.
+    let active_plan = snapshot
+        .active_plan
+        .as_ref()
+        .ok_or_else(|| ApiError::InvalidState {
+            message: "No active plan to edit".to_string(),
+            code: "no_active_plan".to_string(),
+        })?;
+    let artifact = ArtifactRef::MotionPlan(MotionPlanId(active_plan.plan_id.clone()));
+
+    let program = active_program(&snapshot)?;
+
+    // 2. Análisis "before" (la salud del plan actual como baseline).
+    let before = PlanAnalysisService::analyze_plan(
+        &snapshot.chain,
+        &active_plan.trajectory,
+        snapshot.active_tcp.as_ref(),
+        None,
+        artifact.clone(),
+    )?;
+
+    // 3. WRITE-BACK (D4/D5/D6) — el mismo ciclo que apply_command.
+    apply_program_edit(
+        &state,
+        &snapshot,
+        &program,
+        artifact,
+        &before,
+        &req.edit,
+        0,   // sin recommendation_id: camino de edición libre, no advisor (D1)
+        None, // sin evaluación D8: la edición fue elegida explícitamente
+    )
+    .await
+}
+
+/// Reconstruye el [`PlanningProgram`] desde los segmentos compilados del plan
+/// activo (`PlannedSegment.source` preserva el comando semántico, invariante
+/// I2). Compartido por `apply_command`/`edit_program` (y preview/undo).
+fn active_program(snapshot: &RuntimeSnapshot) -> Result<PlanningProgram, ApiError> {
+    let active_plan = snapshot
+        .active_plan
+        .as_ref()
+        .ok_or_else(|| ApiError::InvalidState {
+            message: "No active plan to apply".to_string(),
+            code: "no_active_plan".to_string(),
+        })?;
+    let segments = active_plan.segments.as_deref().ok_or_else(|| {
+        ApiError::InvalidState {
+            message: "Active plan carries no program segments".to_string(),
+            code: "no_program_segments".to_string(),
+        }
+    })?;
+    if segments.is_empty() {
+        return Err(ApiError::InvalidState {
+            message: "Active plan has no program segments".to_string(),
+            code: "no_program_segments".to_string(),
+        });
+    }
+    Ok(PlanningProgram::new(segments.iter().map(|s| s.source.clone()).collect()))
+}
+
+/// Ciclo compartido de write-back (CDD step 3): `edit.apply(program)` →
+/// recompilar desde el mismo estado inicial que el plan activo → re-analizar
+/// → `apply_compiled_plan` (snapshot + restore atómico + feature flag
+/// `scene-writeback`, OFF por defecto) → `ApplyResponse`.
+///
+/// Consumido por `apply_command` (recomendación del advisor) y `edit_program`
+/// (edit libre): ambos resuelven el programa, analizan "before" y delegan el
+/// resto aquí. El inverse se almacena en memoria (D6) para el undo O(1) de
+/// PR5.
+async fn apply_program_edit(
+    state: &AppState,
+    snapshot: &RuntimeSnapshot,
+    program: &PlanningProgram,
+    artifact: ArtifactRef,
+    before: &PlanAnalysisResult,
+    edit: &ProgramEdit,
+    recommendation_id: u32,
+    status: Option<RecommendationStatus>,
+) -> ApiResult<ApplyResponse> {
+    // 1. Aplicar la edición (no-mutante) sobre el programa reconstruido.
+    let edited_program = edit
+        .apply(program)
         .map_err(|e| ApiError::Validation {
             message: e.to_string(),
             code: "edit_apply_failed".to_string(),
         })?;
 
-    let start_joints = active_plan
-        .trajectory
-        .waypoints()
-        .first()
+    // 2. Recompilar desde el mismo estado inicial que el plan activo (mismo
+    //    start que preview/apply).
+    let fk = ForwardKinematics::new(snapshot.chain.clone());
+    let solver =
+        DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
+    let start_joints = snapshot
+        .active_plan
+        .as_ref()
+        .and_then(|p| p.trajectory.waypoints().first())
         .map(|w| w.joints().to_vec())
         .unwrap_or_else(|| snapshot.joints.clone());
     let current_state = RobotState::new(start_joints);
@@ -376,7 +482,7 @@ pub async fn apply_command(
             code: "recompile_failed".to_string(),
         })?;
 
-    // 5. Análisis "after" sobre la trayectoria recompilada (la misma que el
+    // 3. Análisis "after" sobre la trayectoria recompilada (la misma que el
     //    write-back va a activar — no depende del snapshot del runtime).
     let after = PlanAnalysisService::analyze_plan(
         &snapshot.chain,
@@ -386,7 +492,7 @@ pub async fn apply_command(
         artifact,
     )?;
 
-    // 6. WRITE-BACK (D4/D5): replace_active_plan con snapshot+restore y flag
+    // 4. WRITE-BACK (D4/D5): replace_active_plan con snapshot+restore y flag
     //    `scene-writeback`; el inverse y las métricas se almacenan en memoria
     //    (D6) para el undo O(1) de PR5.
     let health_before = before.report.summary.quality_index;
@@ -396,16 +502,16 @@ pub async fn apply_command(
         .scene
         .apply_compiled_plan(
             compiled.clone(),
-            recommendation.edit.clone(),
-            recommendation.edit.inverse(),
+            edit.clone(),
+            edit.inverse(),
             CommandMetrics::new(health_before, health_after),
             edited_program.segments.clone(),
         )
         .await?;
 
     Ok(Json(ApplyResponse {
-        recommendation_id: recommendation.id.0,
-        status: recommendation.status,
+        recommendation_id,
+        status,
         plan_id: applied_snapshot
             .active_plan
             .as_ref()

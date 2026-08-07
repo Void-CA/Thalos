@@ -1,6 +1,7 @@
 import { apiClient } from '@/shared/api-client'
 import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 import type { RepairOptionsWire } from '@/shared/contracts/repair-options'
+import type { ProgramEditWire } from '@/shared/contracts/program-edit'
 import type { OptimizeResponse, PreviewResponse, ApplyResponse, UndoResponse } from './plan-analysis.types'
 
 /**
@@ -55,4 +56,13 @@ export const planAnalysisApi = {
    */
   undo: (): Promise<UndoResponse> =>
     apiClient.post<UndoResponse>('/plan/commands/undo', {}).then(r => r.data),
+
+  /**
+   * POST /plan/program/edit (CDD step 3) — free-form program edit: applies a
+   * RAW `ProgramEdit` (semantic command language, design D1) with the same
+   * backend cycle as apply (edit.apply → recompile → re-analyze → write-back).
+   * No recommendation_id — the edit is built by the UI from a segment change.
+   */
+  editProgram: (edit: ProgramEditWire): Promise<ApplyResponse> =>
+    apiClient.post<ApplyResponse>('/plan/program/edit', { edit }).then(r => r.data),
 }
