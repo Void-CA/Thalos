@@ -567,7 +567,7 @@ thalos-api/src/
 | `POST` | `/api/v1/scene/solve-ik-pose` | IK resolver pose (sin mutar) |
 | `POST` | `/api/v1/scene/execute-ik` | IK resolver + aplicar joints |
 | `POST` | `/api/v1/scene/motion/plan` | Compilar plan (preview) |
-| `POST` | `/api/v1/scene/motion/start` | Iniciar ejecución |
+| `POST` | `/api/v1/scene/motion/start` | Iniciar ejecución. Body opcional `{"mode":"once"}` o `{"mode":{"repeat":{"count":N}}}` con N en 1..=1000; ausente = `once` |
 | `POST` | `/api/v1/scene/motion/pause` | Pausar ejecución |
 | `POST` | `/api/v1/scene/motion/resume` | Reanudar ejecución |
 | `POST` | `/api/v1/scene/motion/cancel` | Cancelar ejecución |
