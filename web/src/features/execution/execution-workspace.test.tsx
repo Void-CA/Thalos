@@ -353,7 +353,7 @@ describe('Conectar — connect+retry when start fails with not_connected (R3-001
     await waitFor(() => expect(useExecutionStore.getState().status).toBe('failed'))
     expect(useExecutionStore.getState().error?.code).toBe('not_connected')
     // describeError renders the not_connected CTA + the Conectar button.
-    expect(screen.getByText(/backend/i)).toBeInTheDocument()
+    expect(screen.getByText(/controller is not connected/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Conectar' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reconectar' })).not.toBeInTheDocument()
   })
