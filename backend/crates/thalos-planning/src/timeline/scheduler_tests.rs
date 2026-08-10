@@ -343,30 +343,3 @@ fn events_are_sorted_by_absolute_time() {    // Even if the logical events arriv
         "events must be ordered by at_time (Delay fires at t=0, cursor→0.5s; MoveJ adds 1s → SetOutput at 1.5s)"
     );
 }
-
-#[test]
-fn temporal_query_finds_segment_containing_event_time() {
-    // Spec scenario (runtime-event-timeline.md: Temporal query finds correct
-    // segment): an event at at_time = 2.5s is associated with the segment
-    // whose time_range = [2.0s, 3.0s] — derived by query, never a stored
-    // reference (invariant I5).
-    let compiled = compiled_with_segments(vec![(0.0, 2.0), (2.0, 3.0)]);
-    let scheduler = TimelineScheduler::new();
-
-    let seg = scheduler.segment_at(&compiled, Duration::from_secs_f64(2.5));
-    assert!(seg.is_some(), "event at 2.5s must resolve to a segment");
-    assert_eq!(
-        seg.unwrap().time_range,
-        2.0..3.0,
-        "query must return the segment [2.0s, 3.0s]"
-    );
-
-    // Boundary: an instant in the first segment resolves there.
-    let seg = scheduler.segment_at(&compiled, Duration::from_secs_f64(1.0));
-    assert!(seg.is_some());
-    assert_eq!(seg.unwrap().time_range, 0.0..2.0);
-
-    // No segment covers this instant → None.
-    let seg = scheduler.segment_at(&compiled, Duration::from_secs_f64(10.0));
-    assert!(seg.is_none(), "out-of-range instant has no segment");
-}

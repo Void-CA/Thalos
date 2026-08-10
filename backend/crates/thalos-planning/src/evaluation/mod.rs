@@ -1,13 +1,11 @@
-//! Modelo de evaluación de planes — métricas, función de costo y scoring.
+//! Modelo de evaluación de planes — métricas.
 //!
-//! Separa el **qué medir** (`PlanMetrics`) del **cómo ponderarlo** (`CostFunction`).
-//! El evaluador (`PlanEvaluator`) convierte análisis existentes en puntajes comparables.
+//! Separa el **qué medir** (`PlanMetrics`) del **cómo ponderarlo**.
+//! El evaluador (`PlanEvaluator`) convierte análisis existentes en métricas.
 
-pub mod cost;
 pub mod evaluator;
 pub mod metrics;
 
-pub use cost::{CostFunction, PlanScore};
 pub use evaluator::PlanEvaluator;
 pub use metrics::{
     CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics, MetricKind, PlanMetrics,

@@ -98,19 +98,4 @@ impl TimelineScheduler {
 
         RuntimeProgram::new(temporal)
     }
-
-    /// Temporal query (spec: Event-Segment Linkage by Temporal Query, I5).
-    ///
-    /// Returns the `PlannedSegment` whose `time_range` contains `at_time`, or
-    /// `None` if no segment covers that instant. The association is derived on
-    /// demand from the shared absolute timeline — no stored references between
-    /// `RuntimeEvent` and `CompiledPlan` segments exist.
-    pub fn segment_at<'a>(
-        &self,
-        compiled: &'a CompiledPlan,
-        at_time: Duration,
-    ) -> Option<&'a crate::motion::program::PlannedSegment> {
-        let t = at_time.as_secs_f64();
-        compiled.segments.iter().find(|s| s.time_range.contains(&t))
-    }
 }

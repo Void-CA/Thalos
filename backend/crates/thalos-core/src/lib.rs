@@ -9,6 +9,5 @@ pub mod motion;
 pub mod operation;
 pub mod prelude;
 pub mod robot;
-pub mod scene;
 pub mod spatial;
 pub mod trajectory;

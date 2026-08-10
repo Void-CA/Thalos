@@ -1,9 +1,25 @@
 use serde::{Deserialize, Serialize};
 
 use crate::id::TaskDocumentId;
-use crate::project::Metadata as DocumentMetadata;
 use crate::scene::SceneContent;
 use thalos_semantic::program::SemanticProgram;
+
+// ---------------------------------------------------------------------------
+// Metadata — document identity and versioning
+// ---------------------------------------------------------------------------
+
+/// Document identity and versioning — describes the document itself.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Metadata {
+    /// Human-readable project name.
+    pub name: String,
+    /// Monotonically increasing document version.
+    pub version: u32,
+    /// ISO 8601 creation timestamp.
+    pub created_at: String,
+    /// ISO 8601 last-modified timestamp.
+    pub modified_at: String,
+}
 
 // ---------------------------------------------------------------------------
 // TaskDocument — the top-level document for task-level programming
@@ -21,7 +37,7 @@ pub struct TaskDocument {
     /// Unique document identifier.
     pub id: TaskDocumentId,
     /// Document metadata (name, version, timestamps).
-    pub metadata: DocumentMetadata,
+    pub metadata: Metadata,
     /// The logical scene model (objects, locations, tools, home pose).
     pub scene: SceneContent,
     /// The semantic program referencing scene resources by ID.

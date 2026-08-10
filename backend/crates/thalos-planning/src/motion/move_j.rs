@@ -1,8 +1,9 @@
+use thalos_core::trajectory::Trajectory;
+
 use crate::{
     goal::{JointGoal, ValidatedGoal},
     interpolate::joint,
     motion::planner::{PlanningContext, PlanningResult, SegmentPlanner},
-    trajectory::Trajectory,
 };
 
 #[derive(Debug, Clone)]

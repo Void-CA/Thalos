@@ -1,10 +1,9 @@
 //! Execution Validation Boundary — plan→hardware manifest and trace types.
 //!
-//! This module owns the types shared with the ESP32 hardware backend and the
-//! trace-assembly helpers. The plan-based adapter (`prepare`/`execute`) and
-//! manifest builder (`from_plan`) were removed with the parallel plan type
-//! (invariant I4 — the type no longer exists); the canonical trajectory
-//! output is `CompiledPlan` (IR-3).
+//! This module owns the types shared with the ESP32 hardware backend. The
+//! plan-based adapter (`prepare`/`execute`) and manifest builder (`from_plan`)
+//! were removed with the parallel plan type (invariant I4 — the type no
+//! longer exists); the canonical trajectory output is `CompiledPlan` (IR-3).
 //!
 //! # Ownership
 //!
@@ -17,16 +16,13 @@
 //! |--------|----------|-------|
 //! | `manifest` | `ExecutionManifest`, `ManifestMetadata`, `ManifestSegment`, `ManifestInstruction`, `TimedWaypoint` | PR 1 |
 //! | `sample` | `ExecutionSample` | PR 1 |
-//! | `trace_assembler` | `assemble_trace()` free function | PR 1 |
 //! | `manifest_builder` | `ExecutionManifestBuilder` — pure `ExecutionPlan → ExecutionManifest` builder + firmware-parity validator | PR 2; consumed by the deprecated `Esp32Backend::build_manifest` shim since PR 3 |
 
 pub mod manifest;
 pub mod manifest_builder;
 pub mod sample;
-pub mod trace_assembler;
 
 pub use manifest::{
     ExecutionManifest, ManifestInstruction, ManifestMetadata, ManifestSegment, TimedWaypoint,
 };
 pub use sample::ExecutionSample;
-pub use trace_assembler::assemble_trace;

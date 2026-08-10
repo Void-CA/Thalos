@@ -8,7 +8,7 @@
 //! Este pipeline es un respaldo para candidatos sin evaluación propia.
 
 use crate::evaluation::metrics::{ManipulabilityMetrics, PlanMetrics};
-use crate::repair::domain::types::{RepairCandidate, RepairError, RepairEvaluation, RepairResult};
+use crate::repair::domain::types::{RepairCandidate, RepairError, RepairEvaluation};
 
 /// Pipeline de evaluación de candidatos de reparación.
 pub struct EvaluationPipeline;

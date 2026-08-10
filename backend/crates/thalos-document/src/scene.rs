@@ -324,8 +324,7 @@ mod tests {
     #[test]
     fn task_document_serde_round_trip() {
         use crate::id::TaskDocumentId;
-        use crate::project::Metadata as DocumentMetadata;
-        use crate::task_document::TaskDocument;
+        use crate::task_document::{Metadata as DocumentMetadata, TaskDocument};
 
         let doc = TaskDocument {
             id: TaskDocumentId("test-1".into()),

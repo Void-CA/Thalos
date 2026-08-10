@@ -6,12 +6,13 @@ use thalos_core::{
     spatial::pose::Pose,
 };
 
+use thalos_core::trajectory::{Trajectory, TrajectoryPoint};
+
 use crate::{
     error::PlanningError,
     goal::{ResolvedPoseGoal, ResolvedPositionGoal, ValidatedGoal},
     interpolate::cartesian,
     motion::planner::{PlanningContext, PlanningResult, SegmentPlanner},
-    trajectory::{Trajectory, TrajectoryPoint},
 };
 use thalos_math::Transform3D;
 

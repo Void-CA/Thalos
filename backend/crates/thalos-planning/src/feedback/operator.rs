@@ -1,37 +1,25 @@
-//! Intention operator contract over the unified observation model.
+//! Proposal type over the unified observation model.
 //!
-//! Defines the [`ObservationIntentionOperator`] trait that all operators
-//! implement and the [`ActionProposal`] type operators produce.
+//! Defines the [`ActionProposal`] type that the advisor produces for
+//! remediating observations. The `ObservationIntentionOperator` trait
+//! contract was removed in the phase-7 deletion: remediation is decided
+//! directly by the advisor over observations, and materialized by the
+//! `ProposalMaterializer`s in [`crate::feedback::materializer`].
 //!
-//! ## Trait Contract
+//! ## Trait Contract (removed)
 //!
-//! - `name()` returns a human-readable static string for logging/metrics.
-//! - `applies_to()` is a pure predicate over the phenomenon.
-//! - `apply()` produces zero or more [`ActionProposal`]s — never mutations of
-//!   the observation, never plan modifications.
-//!
-//! Operators are pure proposers: they decide WHAT remediation an observation
-//! warrants. The HOW (proposal → concrete [`MotionSegment`]s) is the
-//! [`ProposalMaterializer`](crate::feedback::materializer::ProposalMaterializer)'s
-//! job, orchestrated by
-//! [`FeedbackOrchestrator`](crate::feedback::orchestrator::FeedbackOrchestrator)
-//! (PR 4d).
-//!
-//! ## Legacy removal (PR 4d, task 4.6)
-//!
-//! The old `IntentionOperator` trait over the legacy execution findings (which
-//! returned transformed segments directly) was removed in PR 4d: operators no
-//! longer touch [`MotionSegment`]s or legacy findings. Its segment logic was
-//! generalized onto the proposal vocabulary in `feedback/materializer.rs`.
+//! The removed operator trait required `name()`, `applies_to()` and `apply()`
+//! producing zero or more [`ActionProposal`]s — never mutations of the
+//! observation, never plan modifications.
 
 use std::collections::BTreeMap;
 
 use thalos_core::analysis::action::{Action, ActionId, ActionImpact, ActionKind, ActionPriority};
 use thalos_core::analysis::attribute_value::AttributeValue;
-use thalos_core::analysis::observation::{Observation, ObservationId};
+use thalos_core::analysis::observation::ObservationId;
 
 // ============================================================================
-// Observation-based operators (PR 4b — new model)
+// ActionProposal (PR 4b — new model)
 // ============================================================================
 
 /// Proposal for a remediation action over the observation model (spec I5).
@@ -76,46 +64,6 @@ impl ActionProposal {
         }
     }
 }
-
-/// Intention operator over the unified observation model (PR 4b).
-///
-/// The new-model operator trait. It consumes ONLY [`Observation`] — it has zero
-/// knowledge of the legacy finding/recommendation vocabularies (C1) — and
-/// produces [`ActionProposal`]s (C3).
-///
-/// # Contract
-///
-/// - `name()` returns a `&'static str` for logging/metrics.
-/// - `applies_to()` is a pure predicate over the phenomenon — implementations
-///   key their rules on [`ObservationKind`], never on attribute values (C2).
-/// - `apply()` returns zero or more [`ActionProposal`]s. It NEVER mutates the
-///   observation (C4) and never modifies the plan — the proposal is an
-///   intention, not a command (C3).
-///
-/// Implementations must be [`Send`] + [`Sync`] so a registry can hold them
-/// behind `&dyn ObservationIntentionOperator`.
-///
-/// [ObservationKind]: thalos_core::analysis::observation::ObservationKind
-pub trait ObservationIntentionOperator: Send + Sync {
-    /// Human-readable operator name for logging and metrics.
-    fn name(&self) -> &'static str;
-
-    /// Whether this operator addresses the given observation's phenomenon.
-    fn applies_to(&self, observation: &Observation) -> bool;
-
-    /// Produce remediation proposals for the given observation.
-    ///
-    /// Returns an empty vec when no proposal applies (mirroring the legacy
-    /// "no alternative exists" semantics). The observation is left untouched.
-    fn apply(&self, observation: &Observation) -> Vec<ActionProposal>;
-}
-
-// ============================================================================
-// Tests
-// ============================================================================
-//
-// RED / GREEN / TRIANGULATE evidence for every task is recorded in the TDD
-// Cycle Evidence table returned at the end.
 
 #[cfg(test)]
 mod tests {
@@ -167,57 +115,6 @@ mod tests {
             severity_distribution: BTreeMap::new(),
             grade: Grade::Good,
         }
-    }
-
-    /// Test operator over the NEW observation model.
-    struct ObservationTestOperator;
-
-    impl ObservationIntentionOperator for ObservationTestOperator {
-        fn name(&self) -> &'static str {
-            "observation_test_operator"
-        }
-
-        fn applies_to(&self, observation: &Observation) -> bool {
-            matches!(observation.kind, ObservationKind::TrackingError)
-        }
-
-        fn apply(&self, observation: &Observation) -> Vec<ActionProposal> {
-            vec![ActionProposal {
-                kind: ActionKind::SwitchMoveStrategy,
-                target_observation: observation.id,
-                priority: ActionPriority::Medium,
-                impact: ActionImpact::Medium,
-                parameters: BTreeMap::new(),
-            }]
-        }
-    }
-
-    #[test]
-    fn observation_operator_contract_is_observation_only() {
-        // C1: the trait consumes `&Observation` exclusively — no legacy
-        // finding / recommendation type appears anywhere in the contract
-        // (enforced at compile time by the signatures above).
-        let op = ObservationTestOperator;
-        let obs = execution_observation(1, ObservationKind::TrackingError, vec![]);
-
-        assert_eq!(op.name(), "observation_test_operator");
-        assert!(op.applies_to(&obs));
-    }
-
-    #[test]
-    fn operator_apply_returns_proposal_targeting_observation() {
-        // C3 + I5: apply() returns a proposal referencing the observation by
-        // id — never a mutation (C4), never a plan modification.
-        let op = ObservationTestOperator;
-        let obs = execution_observation(7, ObservationKind::TrackingError, vec![]);
-
-        let proposals = op.apply(&obs);
-        assert_eq!(proposals.len(), 1);
-        assert_eq!(proposals[0].kind, ActionKind::SwitchMoveStrategy);
-        assert_eq!(proposals[0].target_observation, obs.id);
-        // The observation remains the same fact — the operator only borrows it.
-        assert_eq!(obs.id, ObservationId(7));
-        assert_eq!(obs.kind, ObservationKind::TrackingError);
     }
 
     #[test]

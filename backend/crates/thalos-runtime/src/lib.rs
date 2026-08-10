@@ -15,10 +15,9 @@ pub mod state;
 pub mod telemetry;
 
 pub use backends::controller::{BackendCapabilities, RobotController};
-pub use backends::execution::ExecutionBackend;
 pub use commands::dispatch::Command;
 pub use error::{ControllerError, RuntimeError};
-pub use execution_analysis::{ExecutionAnalyzer, ExecutionThresholds};
+pub use execution_analysis::ExecutionAnalyzer;
 pub use execution_boundary::{
     ExecutionManifest, ManifestInstruction, ManifestMetadata, ManifestSegment, TimedWaypoint,
 };

@@ -116,10 +116,10 @@ pub fn run_scenario(scenario: &dyn BenchmarkScenario) -> PipelineReport {
     };
     // Pasa único: análisis técnico + observaciones canónicas (PR 7a).
     let artifact = ArtifactRef::MotionPlan(MotionPlanId("pbm".to_string()));
-    let (analysis_before, observations_before) = analyzer
+    let (_analysis_before, observations_before) = analyzer
         .analyze_with_observations(artifact, &traj)
         .expect("before-analysis failed");
-    let metrics_before = PlanEvaluator::compute_metrics(&analysis_before.waypoints);
+    let metrics_before = PlanEvaluator::compute_metrics_from_joints(&traj);
 
     // ── 3. Detect problem regions ─────────────────────────
     // Dueño único de la agrupación: RegionGrouper sobre observaciones.
@@ -189,7 +189,7 @@ pub fn run_scenario(scenario: &dyn BenchmarkScenario) -> PipelineReport {
     let analysis_after = analyzer
         .analyze_plan(&result.trajectory)
         .expect("after-analysis failed");
-    let metrics_after = PlanEvaluator::compute_metrics(&analysis_after.waypoints);
+    let metrics_after = PlanEvaluator::compute_metrics_from_joints(&result.trajectory);
 
     // ── 8. Build pipeline report ──────────────────────────
     let report = PipelineReport::from_optimization_report(&result.report, regions_detected);

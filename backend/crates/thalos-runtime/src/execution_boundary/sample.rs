@@ -1,7 +1,6 @@
 //! Execution sample type — a single point in a collected execution trace.
 //!
-//! These samples are collected by the hardware backend during execution and
-//! later assembled into a `MotionTrace` by `trace_assembler::assemble_trace()`.
+//! These samples are collected by the hardware backend during execution.
 
 /// A single execution sample collected from hardware during a trajectory run.
 ///

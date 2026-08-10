@@ -1595,7 +1595,6 @@ dependencies = [
  "serde_json",
  "thalos_core",
  "thalos_semantic",
- "thiserror",
 ]
 
 [[package]]
@@ -1612,7 +1611,6 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "proptest",
- "rand 0.8.6",
  "serde",
  "serde_json",
  "thalos-collision",

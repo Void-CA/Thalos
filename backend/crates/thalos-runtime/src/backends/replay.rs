@@ -26,7 +26,6 @@ use crate::backends::playback::cursor::PlaybackCursor;
 use crate::backends::playback::interpolator::{Interpolator, LinearInterpolator};
 use crate::error::ControllerError;
 use crate::motion_trace::MotionTrace;
-use crate::robot_command::RobotCommand;
 use crate::state::robot_state::RobotState;
 
 /// Backend que reproduce un MotionTrace previamente grabado.

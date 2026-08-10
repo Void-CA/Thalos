@@ -48,50 +48,22 @@ use thalos_core::analysis::{
 };
 
 /// Umbrales por defecto para detección de problemas de ejecución.
-///
-/// Se pueden ajustar pasando un `ExecutionThresholds` personalizado.
-pub struct ExecutionThresholds {
-    /// RMSE global por encima del cual se considera error de tracking severo.
-    pub global_rmse_warning: f64,
-    /// Error máximo absoluto por encima del cual se genera un TrackingSpike.
-    pub max_error_spike: f64,
-    /// Error máximo por articulación que dispara un JointDeviation.
-    pub joint_max_error_warning: f64,
-    /// Desviación de velocidad máxima por articulación (rad/s).
-    pub velocity_deviation_warning: f64,
-}
-
-impl Default for ExecutionThresholds {
-    fn default() -> Self {
-        Self {
-            global_rmse_warning: 0.05,       // 0.05 rad ≈ 2.86°
-            max_error_spike: 0.10,           // 0.10 rad ≈ 5.73°
-            joint_max_error_warning: 0.10,   // 0.10 rad por articulación
-            velocity_deviation_warning: 1.0, // 1 rad/s
-        }
-    }
-}
+const GLOBAL_RMSE_WARNING: f64 = 0.05; // 0.05 rad ≈ 2.86°
+const MAX_ERROR_SPIKE: f64 = 0.10; // 0.10 rad ≈ 5.73°
+const JOINT_MAX_ERROR_WARNING: f64 = 0.10; // 0.10 rad por articulación
+const VELOCITY_DEVIATION_WARNING: f64 = 1.0; // 1 rad/s
 
 /// Analiza una comparación plan-vs-ejecución y produce hallazgos objetivos.
 ///
 /// Sigue el mismo principio que `PlanAdvisor`:
 /// - Nunca recalcula datos que ya están en el comparison
 /// - Solo interpreta y clasifica
-pub struct ExecutionAnalyzer {
-    thresholds: ExecutionThresholds,
-}
+pub struct ExecutionAnalyzer;
 
 impl ExecutionAnalyzer {
     /// Crear con umbrales por defecto.
     pub fn new() -> Self {
-        Self {
-            thresholds: ExecutionThresholds::default(),
-        }
-    }
-
-    /// Crear con umbrales personalizados.
-    pub fn with_thresholds(thresholds: ExecutionThresholds) -> Self {
-        Self { thresholds }
+        Self
     }
 
     /// Analizar una comparación y producir observaciones canónicas.
@@ -157,7 +129,7 @@ impl ExecutionAnalyzer {
         }
 
         // 1. Error de tracking global (RMSE) — agregado de sesión completa.
-        if metrics.global_rmse > self.thresholds.global_rmse_warning {
+        if metrics.global_rmse > GLOBAL_RMSE_WARNING {
             let mut attributes = BTreeMap::new();
             attributes.insert(
                 "value".to_string(),
@@ -165,7 +137,7 @@ impl ExecutionAnalyzer {
             );
             attributes.insert(
                 "threshold".to_string(),
-                AttributeValue::Number(self.thresholds.global_rmse_warning),
+                AttributeValue::Number(GLOBAL_RMSE_WARNING),
             );
             attributes.insert(
                 "samples".to_string(),
@@ -185,7 +157,7 @@ impl ExecutionAnalyzer {
         }
 
         // 2. Pico de error máximo — fenómeno distinto (C2), anclado al instante.
-        if metrics.global_max_error > self.thresholds.max_error_spike {
+        if metrics.global_max_error > MAX_ERROR_SPIKE {
             if let Some((joint, peak)) = global_peak {
                 let mut attributes = BTreeMap::new();
                 attributes.insert(
@@ -194,7 +166,7 @@ impl ExecutionAnalyzer {
                 );
                 attributes.insert(
                     "threshold".to_string(),
-                    AttributeValue::Number(self.thresholds.max_error_spike),
+                    AttributeValue::Number(MAX_ERROR_SPIKE),
                 );
                 attributes.insert("joint".to_string(), AttributeValue::Integer(joint as i64));
                 attributes.insert(
@@ -216,7 +188,7 @@ impl ExecutionAnalyzer {
 
         // 3. Desviaciones por articulación — una observación por articulación.
         for (j, peak) in joint_peaks.iter().enumerate() {
-            if metrics.per_joint.max_error[j] > self.thresholds.joint_max_error_warning {
+            if metrics.per_joint.max_error[j] > JOINT_MAX_ERROR_WARNING {
                 let mut attributes = BTreeMap::new();
                 attributes.insert("joint".to_string(), AttributeValue::Integer(j as i64));
                 attributes.insert(
@@ -225,7 +197,7 @@ impl ExecutionAnalyzer {
                 );
                 attributes.insert(
                     "threshold".to_string(),
-                    AttributeValue::Number(self.thresholds.joint_max_error_warning),
+                    AttributeValue::Number(JOINT_MAX_ERROR_WARNING),
                 );
                 attributes.insert(
                     "sample".to_string(),
@@ -246,7 +218,7 @@ impl ExecutionAnalyzer {
 
         // 4. Desviaciones de velocidad — una observación por articulación.
         for (j, peak) in velocity_peaks.iter().enumerate() {
-            if metrics.max_velocity_deviation[j] > self.thresholds.velocity_deviation_warning {
+            if metrics.max_velocity_deviation[j] > VELOCITY_DEVIATION_WARNING {
                 let mut attributes = BTreeMap::new();
                 attributes.insert("joint".to_string(), AttributeValue::Integer(j as i64));
                 attributes.insert(
@@ -255,7 +227,7 @@ impl ExecutionAnalyzer {
                 );
                 attributes.insert(
                     "threshold".to_string(),
-                    AttributeValue::Number(self.thresholds.velocity_deviation_warning),
+                    AttributeValue::Number(VELOCITY_DEVIATION_WARNING),
                 );
                 attributes.insert(
                     "sample".to_string(),
@@ -561,42 +533,6 @@ mod tests {
     }
 
     #[test]
-    fn custom_thresholds_affect_sensitivity() {
-        let (plan, exec) = make_deviated_trace();
-        let comparison = compare(&plan, &exec, "p1", "e1", "test");
-
-        // Very permissive thresholds
-        let permissive = ExecutionThresholds {
-            global_rmse_warning: 1.0,
-            max_error_spike: 2.0,
-            joint_max_error_warning: 2.0,
-            velocity_deviation_warning: 10.0,
-        };
-        let analyzer = ExecutionAnalyzer::with_thresholds(permissive);
-        let observations = analyzer.analyze(session_artifact(), &comparison);
-
-        assert!(
-            observations.is_empty(),
-            "Permissive thresholds should produce no observations"
-        );
-
-        // Very strict thresholds
-        let strict = ExecutionThresholds {
-            global_rmse_warning: 0.001,
-            max_error_spike: 0.001,
-            joint_max_error_warning: 0.001,
-            velocity_deviation_warning: 0.001,
-        };
-        let analyzer = ExecutionAnalyzer::with_thresholds(strict);
-        let observations = analyzer.analyze(session_artifact(), &comparison);
-
-        assert!(
-            !observations.is_empty(),
-            "Strict thresholds should produce observations"
-        );
-    }
-
-    #[test]
     fn observations_use_correct_kinds() {
         let (plan, exec) = make_deviated_trace();
         let comparison = compare(&plan, &exec, "p1", "e1", "test");
@@ -814,37 +750,6 @@ mod tests {
         }
     }
 
-    // ── Thresholds still control emission sensitivity ───────────────────────
-    #[test]
-    fn thresholds_control_observation_emission() {
-        let (plan, exec) = make_deviated_trace();
-        let comparison = compare(&plan, &exec, "p1", "e1", "test");
-        let artifact = ArtifactRef::ExecutionSession(ExecutionSessionId("e1".to_string()));
-
-        let permissive = ExecutionThresholds {
-            global_rmse_warning: 1.0,
-            max_error_spike: 2.0,
-            joint_max_error_warning: 2.0,
-            velocity_deviation_warning: 10.0,
-        };
-        let observations =
-            ExecutionAnalyzer::with_thresholds(permissive).analyze(artifact.clone(), &comparison);
-        assert!(
-            observations.is_empty(),
-            "permissive thresholds must emit no observations"
-        );
-
-        let strict = ExecutionThresholds {
-            global_rmse_warning: 0.001,
-            max_error_spike: 0.001,
-            joint_max_error_warning: 0.001,
-            velocity_deviation_warning: 0.001,
-        };
-        let observations =
-            ExecutionAnalyzer::with_thresholds(strict).analyze(artifact, &comparison);
-        assert!(!observations.is_empty());
-    }
-
     // ── C4 (mandatory): root-cause chain — execution deviation → causes →
     //    plan singularity → Action ───────────────────────────────────────────
     #[test]
@@ -971,141 +876,5 @@ mod tests {
                 .any(|a| a.target_observation == singular_id),
             "the chain ends in a remediation Action targeting the plan observation"
         );
-    }
-
-    // ── PR 4c regression (user Option A): ExecutionAnalyzer → Observation →
-    //    SwitchMoveStrategy (ObservationIntentionOperator) → ActionProposal → Action
-    //
-    // Proves the new-model feedback flow end-to-end WITHOUT the legacy
-    // orchestrator (which operated on the legacy execution findings before
-    // PR 4d). Green-first by design: every dependency landed in PR 4a
-    // (canonical analyzer) and PR 4b (observation operator + ActionProposal).
-    #[test]
-    fn feedback_regression_execution_observation_to_action() {
-        use thalos_core::analysis::action::{ActionId, ActionKind};
-        use thalos_planning::feedback::operator::ObservationIntentionOperator;
-        use thalos_planning::feedback::operators::observation_switch_strategy::SwitchMoveStrategy;
-
-        let (plan, exec) = make_deviated_trace();
-        let comparison = compare(&plan, &exec, "p1", "e1", "test");
-        let artifact = ArtifactRef::ExecutionSession(ExecutionSessionId("e1".to_string()));
-
-        // 1. Canonical analyzer (PR 4a): deviated trace → Vec<Observation>.
-        let observations = ExecutionAnalyzer::new().analyze(artifact, &comparison);
-        let tracking = observations
-            .iter()
-            .find(|o| o.kind == ObservationKind::TrackingError)
-            .expect("deviated execution must emit a TrackingError observation");
-
-        // 2. New-model operator (PR 4b): kind-keyed applicability (C2) — the
-        //    tracking phenomena react, unrelated phenomena do not.
-        let op = SwitchMoveStrategy::new();
-        assert!(op.applies_to(tracking));
-        let spike = observations
-            .iter()
-            .find(|o| o.kind == ObservationKind::TrackingSpike)
-            .expect("deviated execution must emit a TrackingSpike observation");
-        assert!(op.applies_to(spike));
-        let joint_dev = observations
-            .iter()
-            .find(|o| o.kind == ObservationKind::JointDeviation)
-            .expect("deviated execution must emit a JointDeviation observation");
-        assert!(
-            !op.applies_to(joint_dev),
-            "JointDeviation must not trigger a strategy switch"
-        );
-
-        // 3. Proposal (I5): references the observation by id, carries no ActionId.
-        let proposals = op.apply(tracking);
-        assert_eq!(proposals.len(), 1);
-        assert_eq!(proposals[0].kind, ActionKind::SwitchMoveStrategy);
-        assert_eq!(proposals[0].target_observation, tracking.id);
-
-        // 4. Materialized Action: caller-owned id, same target observation.
-        let action = proposals[0].materialize(ActionId(1));
-        assert_eq!(action.id, ActionId(1));
-        assert_eq!(action.kind, ActionKind::SwitchMoveStrategy);
-        assert_eq!(action.target_observation, tracking.id);
-    }
-
-    // ── PR 4d integration (C5, task 4.6): Execution Trace → ExecutionAnalyzer
-    //    → Observations → IntentionOperator → ActionProposals →
-    //    ProposalMaterializer → Replacement MotionSegments
-    //
-    // Verifies ONLY that the full new-model pipeline produces VALID replacement
-    // segments — it does not re-prove the individual rules (analyzer, operator
-    // and materializer each carry their own unit coverage). The proposal is
-    // materialized against a concrete MoveL target segment, the plan-level
-    // anchor the feedback loop operates on.
-    #[test]
-    fn feedback_integration_observation_to_replacement_segments() {
-        use thalos_core::ids::OperationId;
-        use thalos_core::kinematics::inverse::{IKGoal, IKResult, IKSolver, IkError};
-        use thalos_core::motion::segment::MotionSegment;
-        use thalos_core::prelude::{FrameId, Pose, Transform3D};
-        use thalos_planning::feedback::materializer::{
-            ProposalMaterializer, SwitchMoveMaterializer,
-        };
-        use thalos_planning::feedback::operator::ObservationIntentionOperator;
-        use thalos_planning::feedback::operators::observation_switch_strategy::SwitchMoveStrategy;
-
-        /// Deterministic mock solver (2-DOF robot): returns q0 converged.
-        struct IdentityIKSolver;
-
-        impl IKSolver for IdentityIKSolver {
-            fn solve(&self, q0: &[f64], _goal: IKGoal) -> Result<IKResult, IkError> {
-                Ok(IKResult::converged(q0.to_vec(), 1, 0.0, None))
-            }
-        }
-
-        // 1. Analyze (PR 4a): deviated execution trace → observations.
-        let (plan, exec) = make_deviated_trace();
-        let comparison = compare(&plan, &exec, "p1", "e1", "test");
-        let artifact = ArtifactRef::ExecutionSession(ExecutionSessionId("e1".to_string()));
-        let observations = ExecutionAnalyzer::new().analyze(artifact, &comparison);
-        let tracking = observations
-            .iter()
-            .find(|o| o.kind == ObservationKind::TrackingError)
-            .expect("deviated execution must emit a TrackingError observation");
-
-        // 2. Propose (PR 4b): operator → ActionProposal over the observation.
-        let operator = SwitchMoveStrategy::new();
-        let proposals = operator.apply(tracking);
-        assert_eq!(proposals.len(), 1);
-        assert_eq!(proposals[0].target_observation, tracking.id);
-
-        // 3. Materialize (PR 4d): proposal + target MoveL → replacement
-        //    segments. The target segment is the feedback loop's plan anchor.
-        let q0 = vec![0.1, 0.2];
-        let solver = IdentityIKSolver;
-        let materializer = SwitchMoveMaterializer::new(&solver, &q0);
-        let target = MotionSegment::MoveL {
-            origin: OperationId("move_1".into()),
-            frame: FrameId::World,
-            target_pose: Pose::new(FrameId::World, FrameId::World, Transform3D::identity()),
-            max_velocity: Some(50.0),
-        };
-        let replacements = materializer
-            .materialize(&proposals[0], &target)
-            .expect("switch strategy proposal must materialize");
-
-        // 4. Verify the pipeline produced VALID replacement segments: one
-        //    MoveJ anchored to the IK solution, preserving the plan's velocity
-        //    limits and leaving acceleration to the planner.
-        assert_eq!(replacements.len(), 1, "exactly one replacement segment");
-        match &replacements[0] {
-            MotionSegment::MoveJ {
-                origin,
-                target,
-                max_velocity,
-                max_acceleration,
-            } => {
-                assert_eq!(origin, &OperationId("move_1".into()));
-                assert_eq!(target, &q0, "MoveJ must target the IK solution");
-                assert_eq!(*max_velocity, Some(50.0), "velocity limits preserved");
-                assert_eq!(*max_acceleration, None, "acceleration is the planner's job");
-            }
-            other => panic!("expected MoveJ replacement, got {other:?}"),
-        }
     }
 }

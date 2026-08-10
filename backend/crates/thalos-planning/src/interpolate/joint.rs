@@ -1,14 +1,5 @@
 use thalos_core::trajectory::TrajectoryPoint;
 
-pub fn lerp(start: &[f64], end: &[f64], t: f64) -> Vec<f64> {
-    let t = t.clamp(0.0, 1.0);
-    start
-        .iter()
-        .zip(end.iter())
-        .map(|(a, b)| a + (b - a) * t)
-        .collect()
-}
-
 pub fn trapezoidal_profile(
     start: &[f64],
     end: &[f64],
@@ -110,23 +101,6 @@ fn normalised_position(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn lerp_at_midpoint() {
-        let start = vec![0.0, 0.0];
-        let end = vec![2.0, 4.0];
-        let mid = lerp(&start, &end, 0.5);
-        assert!((mid[0] - 1.0).abs() < 1e-12);
-        assert!((mid[1] - 2.0).abs() < 1e-12);
-    }
-
-    #[test]
-    fn lerp_clamps_parameter() {
-        let start = vec![0.0];
-        let end = vec![10.0];
-        assert!((lerp(&start, &end, -0.5)[0] - 0.0).abs() < 1e-12);
-        assert!((lerp(&start, &end, 1.5)[0] - 10.0).abs() < 1e-12);
-    }
 
     #[test]
     fn trapezoidal_identical_start_end() {

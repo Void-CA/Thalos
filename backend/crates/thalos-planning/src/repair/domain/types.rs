@@ -4,7 +4,6 @@ use thalos_core::trajectory::Trajectory;
 
 use crate::analysis::domain::{ProblemRegion, RegionId};
 use crate::evaluation::metrics::PlanMetrics;
-use crate::motion::program::CompiledPlan;
 
 /// Intención de una estrategia de reparación.
 ///
@@ -114,23 +113,6 @@ pub struct RepairEvaluation {
     pub score_delta: f64,
     /// Mejora porcentual (0.0..1.0).
     pub improvement: f64,
-}
-
-/// Resultado de aplicar una reparación al plan.
-#[derive(Debug, Clone)]
-pub enum RepairResult {
-    /// Reparación aplicada exitosamente.
-    Accepted {
-        /// Plan modificado.
-        plan: CompiledPlan,
-        /// Evaluación de la reparación.
-        evaluation: RepairEvaluation,
-    },
-    /// Reparación rechazada.
-    Rejected {
-        /// Razón del rechazo.
-        reason: RepairError,
-    },
 }
 
 /// Razón por la que una estrategia fue recomendada o priorizada.
@@ -272,32 +254,6 @@ mod tests {
         };
         let candidate = RepairCandidate::new(StrategyKind::LiftTcp, delta).with_evaluation(eval);
         assert!(candidate.evaluation.is_some());
-    }
-
-    #[test]
-    fn test_result_discrimination() {
-        let dm = default_metrics();
-        let accept = &RepairResult::Accepted {
-            plan: CompiledPlan::new(Trajectory::new(vec![]), vec![]),
-            evaluation: RepairEvaluation {
-                metrics_before: dm.clone(),
-                metrics_after: dm.clone(),
-                score_delta: 0.1,
-                improvement: 0.1,
-            },
-        };
-        let reject = &RepairResult::Rejected {
-            reason: RepairError::IkFailure("no solution".into()),
-        };
-
-        match accept {
-            RepairResult::Accepted { .. } => {}
-            _ => panic!("Expected Accepted"),
-        }
-        match reject {
-            RepairResult::Rejected { .. } => {}
-            _ => panic!("Expected Rejected"),
-        }
     }
 
     #[test]

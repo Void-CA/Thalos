@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use thalos_core::{
     evaluation::{CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics, PlanMetrics},
-    kinematics::inverse::{IKGoal, IKResult, IKSolver, IKStatus},
+    kinematics::inverse::IKSolver,
     operation::ConstraintQuery,
     robot::serial_chain::SerialChain,
     trajectory::Trajectory,
@@ -62,30 +62,11 @@ pub struct TrajectoryOptimizer {
 
 impl TrajectoryOptimizer {
     /// Create a new optimizer with the given native operators.
-    ///
-    /// Use [`with_legacy_strategies`](Self::with_legacy_strategies) to
-    /// additionally wrap legacy `RepairStrategy` implementations for
-    /// backward compatibility.
     pub fn new(operators: Vec<Box<dyn TrajectoryOperator>>) -> Self {
         Self {
             pipeline: OptimizationPipeline::new(PipelineConfig::default()),
             operators,
             legacy_strategies: Vec::new(),
-        }
-    }
-
-    /// Create an optimizer with both native operators and legacy strategies.
-    ///
-    /// Legacy strategies are wrapped in [`RepairStrategyAdapter`] at
-    /// [`optimize`](Self::optimize) time using the provided IK solver.
-    pub fn with_legacy_strategies(
-        operators: Vec<Box<dyn TrajectoryOperator>>,
-        strategies: Vec<Box<dyn RepairStrategy>>,
-    ) -> Self {
-        Self {
-            pipeline: OptimizationPipeline::new(PipelineConfig::default()),
-            operators,
-            legacy_strategies: strategies,
         }
     }
 
@@ -212,19 +193,12 @@ mod tests {
 
     use thalos_core::{
         analysis::region::{RegionId, RegionKind, RegionSeverity},
-        kinematics::inverse::{IKGoal, IKResult, IKStatus, IkError},
         models::{RobotModel, RobotRegistry},
         trajectory::TrajectoryPoint,
     };
     use thalos_optimization::domain::{JointLimits, OperatorFamily, PipelineConfig};
 
-    use crate::{
-        analysis::domain::ProblemRegion,
-        repair::domain::{
-            traits::RepairStrategy,
-            types::{PlanDelta, RepairCandidate, StrategyKind},
-        },
-    };
+    use crate::analysis::domain::ProblemRegion;
 
     // ── Mock operator ─────────────────────────────────────────
 
@@ -265,53 +239,6 @@ mod tests {
             _constraints: Option<&dyn ConstraintQuery>,
         ) -> Result<Trajectory, OptimizationError> {
             Ok(trajectory.clone())
-        }
-    }
-
-    // ── Mock strategy ─────────────────────────────────────────
-
-    struct AcceptingStrategy;
-
-    impl RepairStrategy for AcceptingStrategy {
-        fn kind(&self) -> StrategyKind {
-            StrategyKind::SplitSegment
-        }
-
-        fn applies_to(&self, _region: &ProblemRegion) -> bool {
-            true
-        }
-
-        fn generate(
-            &self,
-            _context: &crate::repair::context::RepairContext,
-            _plan: &crate::motion::program::CompiledPlan,
-            _region: &ProblemRegion,
-        ) -> Vec<RepairCandidate> {
-            let delta = PlanDelta::new(
-                RegionId(0),
-                0..3,
-                Trajectory::new(vec![
-                    TrajectoryPoint::new(vec![0.5, 0.5], 0.0),
-                    TrajectoryPoint::new(vec![0.5, 0.5], 1.0),
-                    TrajectoryPoint::new(vec![0.5, 0.5], 2.0),
-                ]),
-            )
-            .unwrap();
-            vec![RepairCandidate::new(StrategyKind::SplitSegment, delta)]
-        }
-    }
-
-    struct DummySolver;
-
-    impl IKSolver for DummySolver {
-        fn solve(&self, _q0: &[f64], _goal: IKGoal) -> Result<IKResult, IkError> {
-            Ok(IKResult {
-                q: vec![],
-                status: IKStatus::MaxIterations,
-                iterations: 0,
-                final_error: 999.0,
-                error_history: None,
-            })
         }
     }
 
@@ -412,82 +339,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn legacy_strategies_are_wrapped_and_run_through_pipeline() {
-        let strategy = AcceptingStrategy;
-        let solver = Arc::new(DummySolver);
-
-        let optimizer =
-            TrajectoryOptimizer::with_legacy_strategies(vec![], vec![Box::new(strategy)]);
-
-        let chain = test_chain();
-        let traj = test_trajectory();
-        let regions = vec![test_region(0)];
-
-        let report = optimizer
-            .optimize(&chain, &traj, &regions, Some(solver))
-            .expect("optimize with legacy strategies should succeed");
-
-        // The adapter should run and produce a step
-        assert!(
-            !report.steps.is_empty(),
-            "expected steps from legacy adapter"
-        );
-    }
-
-    #[test]
-    fn legacy_strategies_skipped_when_no_ik_solver() {
-        let strategy = AcceptingStrategy;
-        let optimizer =
-            TrajectoryOptimizer::with_legacy_strategies(vec![], vec![Box::new(strategy)]);
-
-        let chain = test_chain();
-        let traj = test_trajectory();
-        let regions = vec![test_region(0)];
-
-        // Without an IK solver, legacy strategies are skipped.
-        // With no operators, the report should be empty.
-        let report = optimizer
-            .optimize(&chain, &traj, &regions, None)
-            .expect("optimize should succeed");
-
-        assert!(
-            report.steps.is_empty(),
-            "expected no steps when legacy strategies are skipped"
-        );
-    }
-
-    #[test]
-    fn native_and_legacy_operators_combine() {
-        let native = MockOperator {
-            id: "native_op",
-            app: 0.9,
-            improv: 0.8,
-            cost: 1.0,
-        };
-        let strategy = AcceptingStrategy;
-        let solver = Arc::new(DummySolver);
-
-        let optimizer = TrajectoryOptimizer::with_legacy_strategies(
-            vec![Box::new(native)],
-            vec![Box::new(strategy)],
-        );
-
-        let chain = test_chain();
-        let traj = test_trajectory();
-        let regions = vec![test_region(0)];
-
-        let report = optimizer
-            .optimize(&chain, &traj, &regions, Some(solver))
-            .expect("optimize should succeed");
-
-        // The native operator has higher score, so it should be selected
-        assert!(!report.steps.is_empty(), "expected steps");
-        assert_eq!(
-            report.steps[0].operator_id, "native_op",
-            "native operator should be ranked higher"
-        );
-    }
 
     #[test]
     fn optimize_multiple_regions_processes_all() {
