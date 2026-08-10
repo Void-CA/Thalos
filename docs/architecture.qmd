@@ -108,7 +108,7 @@ Violar una regla arquitectónica introduce deuda técnica estructural.
 | `thalos-runtime` no depende de HTTP | El runtime orquesta core + visual pero no sabe que existe `axum` ni `thalos-api`. |
 | `thalos-api` no contiene lógica de dominio | Los handlers delegan en `SceneService::execute()`. No hay cálculo cinemático ni manipulación de estructuras del core en los handlers. |
 | Sin dependencias circulares | `thalos-math` → `thalos-core` → `thalos-visual` → `thalos-runtime` → `thalos-api`. Nunca al revés. |
-| DTOs separados del dominio | Los tipos serializables de la API (`VisualSceneDto`, `RuntimeStateResponse`) son independientes de los tipos del core. `VisualScene` es una excepción controlada (es `Serialize` por diseño). El adapter `dto-to-model.ts` en el frontend traduce snake_case DTOs a camelCase internos. |
+| DTOs separados del dominio | Los tipos serializables de la API (`VisualSceneDto`, `RuntimeStateResponse`) son independientes de los tipos del core. `VisualScene` es una excepción controlada (es `Serialize` por diseño). El adapter `features/viewport/adapter.ts` en el frontend traduce snake_case DTOs a camelCase internos. |
 
 > Violar estas reglas rompe el desacoplamiento y eventualmente convierte a
 > Thalos en un monolito.
@@ -150,7 +150,7 @@ Todo lo que es mecánica de sistema, no lógica de dominio.
 - `thalos-visual` — serialización, validación de escenas, diff, primitivas
 - `thalos-runtime` — orquestación, estado mutable, backends de robots
 - `thalos-api` — HTTP, routing, DTOs de entrada/salida
-- Frontend Angular — renderizado 3D, UI, estado del cliente con signals
+- Frontend React — renderizado 3D (R3F), UI, estado del cliente con zustand
 
 La infraestructura **consume** los dominios matemático y robótico, pero nunca
 al revés.
@@ -263,6 +263,6 @@ de concepto a implementación:
 | `thalos-visual` | Scene builder, validator, diff, primitives, FrameStyle | Cómo se proyecta el dominio a visual |
 | `thalos-runtime` | SceneService, Command, RobotBackend | Cómo se orquesta el estado mutable |
 | `thalos-api` | Services, handlers, routes, DTOs | Cómo se expone a otros sistemas |
-| Frontend Angular | Scene store (signals), three renderer | Cómo se ve del lado del cliente |
+| Frontend React | Scene store (zustand), SceneCanvas (R3F) | Cómo se ve del lado del cliente |
 
 Los archivos cambian. Los conceptos sobreviven.

@@ -20,8 +20,11 @@ thalos-collision → Collision detection (SAT, naive)
 thalos-planning  → Motion planners, trajectories, evaluation, alternative generation
 thalos-visual    → 3D scenes, validation, snapshots
 thalos-runtime   → Execution, sessions, playback, simulation, recording
+thalos-semantic     → Task programming model (SemanticProgram, validation, lowering)
+thalos-optimization → Trajectory optimization (operators, scoring, pipeline)
+thalos-document     → Task document (TaskDocument) serialization
 thalos-api       → HTTP, DTOs, handlers
-frontend         → Angular SPA with 3D viewer
+web              → React SPA with 3D viewer
 ```
 
 ## M5 — Expert Planning Assistant

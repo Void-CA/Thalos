@@ -247,7 +247,7 @@ separación de responsabilidades:
            └────────┬───────────────┘
                     ▼
 ┌────────────────────────────────────┐
-│       Frontend (Angular)           │
+│       Frontend (React)             │
 │  WorkspacePanel (form + metrics)   │
 │  WorkspaceRenderer (Three.js)      │
 └────────────────────────────────────┘
@@ -364,41 +364,42 @@ pub struct SamplePointCloud {
 }
 ```
 
-### Frontend (Angular) {#sec-workspace-frontend}
+### Frontend (React) {#sec-workspace-frontend}
 
-Dos componentes standalone en la feature `workspace`:
+La feature de análisis de workspace vive en `features/viewport/`:
 
-#### WorkspacePanel
+#### AnalysisWorkspace
 
-Panel lateral con:
+`AnalysisWorkspace` (ruta `/analysis`) expone la sección inline de sampleo:
 
-- **Formulario**: selector de robot, número de muestras, semilla, tolerancia,
-  toggle de incluir muestras en respuesta
-- **Métricas**: muestra `bounding_volume`, `max_reach`, `min_reach`, `centroid`
-- **Consulta de alcanzabilidad**: inputs X/Y/Z + tolerance, botón "Check", y
-  resultado (Reachable / OutOfWorkspace con distancia)
+- **Formulario**: samples, seed, tolerance (estado local, sin auto-run)
+- **Trigger explícito**: botón "Run Analysis" corre workspace, singularidad y
+  manipulabilidad contra los endpoints `/active` del backend
+- **Métricas**: `bounding_volume`, `max_reach`, `min_reach`, sample count,
+  singularidad (condition number) y manipulabilidad (Yoshikawa / isotropía)
+- **Controles de punto cloud**: color por modo (workspace / singularity /
+  manipulability) y toggle de visibilidad
 
-Estado reactivo via `WorkspaceStore` (Angular Signals):
+Estado reactivo via `useWorkspaceStore` (zustand):
 
 ```typescript
 interface WorkspaceState {
+  workspaceSamples: CloudPoint[] | null;
+  singularitySamples: CloudPoint[] | null;
+  manipulabilitySamples: CloudPoint[] | null;
+  showPointCloud: boolean;
+  colorMode: PointCloudColorMode;
   loading: boolean;
   error: string | null;
-  metrics: WorkspaceMetrics | null;
-  bounds: BoundingBox | null;
-  reachability: ReachabilityResult | null;
 }
 ```
 
-#### WorkspaceRenderer
+#### PointCloud
 
-Canvas Three.js que renderiza:
-
-- AABB wireframe (12 aristas) del `BoundsWireframe`
-- (Futuro) nube de puntos 3D del `SamplePointCloud`
-
-Usa `effect()` para reaccionar a cambios en el store, renderizando sobre un
-canvas standalone sin depender del `ThreeRendererService` del scene viewer.
+Componente R3F dentro de `SceneCanvas` que renderiza la nube de puntos 3D
+con `THREE.BufferGeometry`, coloreada según el modo (`CloudPoint.state` para
+singularidad, `yoshikawa` para manipulabilidad). El `WorkspacePanel` mantiene
+solo los controles de color/visibilidad sobre el viewport persistente.
 
 ## Mapa de errores
 

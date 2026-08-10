@@ -14,7 +14,7 @@ Plataforma modular para modelado, análisis y visualización de sistemas robóti
 | Visual | `thalos-visual` (scene graph desacoplado, validación, diff) |
 | Runtime | `thalos-runtime` (orquestación, commands, backends, TCP, IK) |
 | API | `axum` 0.8 |
-| Frontend | Angular 21 + Three.js 0.184 |
+| Frontend | React 19 + TypeScript + Vite, Three.js (@react-three/fiber) |
 
 ## Crates
 
@@ -26,6 +26,9 @@ thalos-collision → Detección de colisiones, SAT, clasificación
 thalos-planning  → Planificadores de movimiento, trayectorias, interpolación
 thalos-visual    → Representación visual, validación, primitivas 3D, diff
 thalos-runtime   → Orquestación, estado mutable, commands, IK, TCP, ejecución
+thalos-semantic  → Modelo de programación de tareas (SemanticProgram, validación, lowering)
+thalos-optimization → Optimización de trayectorias (operators, scoring, pipeline)
+thalos-document  → Documento de tarea (TaskDocument): escena, operaciones, serializable
 thalos-api       → HTTP, DTOs, routing, workspace analysis
 ```
 
@@ -39,9 +42,9 @@ cargo test
 cargo run -p thalos_api
 
 # Frontend (en otra terminal)
-cd frontend
+cd web
 pnpm install
-pnpm start
+pnpm dev
 ```
 
 ## Documentación

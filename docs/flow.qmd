@@ -23,7 +23,7 @@ digraph e2e {
     edge [fontsize=8, fontname="sans-serif"];
 
     subgraph cluster_frontend {
-        label="Frontend (Angular)";
+        label="Frontend (React)";
         style=dashed;
         penwidth=1;
         fontsize=10;
@@ -85,7 +85,7 @@ digraph load {
     edge [fontsize=8, fontname="sans-serif"];
 
     subgraph cluster_frontend {
-        label="Frontend (Angular)";
+        label="Frontend (React)";
         style=dashed;
         penwidth=1;
         fontsize=10;

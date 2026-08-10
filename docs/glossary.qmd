@@ -143,11 +143,13 @@ muestreo y las consultas de alcanzabilidad.
 (AABB como 12 aristas) y `SamplePointCloud` (nube de puntos 3D) con overlay
 opcional del robot.
 
-**WorkspacePanel** — Componente Angular con formulario de configuración,
-visualización de métricas y consulta de alcanzabilidad.
+**WorkspacePanel** — Componente React con los controles del punto cloud: modo
+de color (workspace / singularity / manipulability) y toggle de visibilidad,
+sobre el viewport 3D.
 
-**WorkspaceRenderer** — Componente Angular/Three.js que renderiza el wireframe
-del AABB y la nube de puntos.
+**WorkspaceRenderer** — Renderizado de la nube de puntos. El equivalente real
+es `PointCloud` (componente R3F dentro de `SceneCanvas`), que dibuja las
+muestras con `THREE.BufferGeometry` coloreada según el modo.
 
 ## Términos del runtime
 
@@ -173,23 +175,27 @@ integrar hardware, archivos de configuración o redes.
 
 ## Términos del frontend
 
-**SceneStore** — Servicio Angular con estado reactivo. Usa dos pipelines RxJS
-paralelos (joints + load robot) mergados con `merge()` + `scan()`, expuestos
-como `Signal<SceneState>` vía `toSignal()`.
+**useSceneStore** — Store **zustand** con el estado del viewport 3D. Recibe el
+`RuntimeStateResponse` del backend y lo aplica vía `applyScene()`,
+`applyFkUpdate()` o `applyRuntimeDelta()`; los componentes consumen el estado
+con selectors (no hay RxJS ni signals).
 
-**RobotStore** — Store con signals puras para el catálogo de robots. Expone
-`robots`, `selectedId`, `loading` y `error` como `WritableSignal`.
+**useRobotStore** — Store zustand para el catálogo de robots. Expone `robots`,
+`selectedId`, `loading` y `error`. `select(id)` registra el robot pedido;
+`useSceneRobotSync` en `AppShell` lo convierte en un load al backend.
 
-**ThreeRendererService** — Servicio Angular que renderiza `SceneData` en
-Three.js. Maneja frames con `FrameStyle`, links cilíndricos, primitivas
-geométricas y brújula 3D.
+**SceneCanvas** — Componente React (@react-three/fiber) que monta el `<Canvas>`
+Z-up y renderiza `RobotModel`, `IkGizmo`, `TcpOverlay`, `PointCloud` y
+`Trajectory` sobre `SceneData`.
 
-**RobotCatalog** — Componente orquestador que lista robots del catálogo y al
-seleccionar uno dispara `RobotStore.select()` + `SceneStore.loadRobot()`.
+**RobotCatalog** — Componente que lista robots del catálogo (`robot-api`) y al
+seleccionar uno dispara `useRobotStore.select()`; el robot activo confirmado
+vive en el runtime del backend (`runtime.robot.id`).
 
-**dto-to-model** — Adapter que traduce DTOs del API (snake_case) a tipos
-internos del frontend (camelCase). Incluye conversión de geometrías
-(`PrimitiveGeometryDto` → `ScenePrimitive`).
+**adapter** (`features/viewport/adapter.ts`) — Traduce DTOs del API
+(snake_case) a tipos internos del frontend (camelCase): `toSceneData()`,
+`toRuntimeInfo()`, `toIkResult()`, `toActivePlan()`, `toToolFrame()` y
+`toExecutionInfo()`.
 
 ## Términos visuales
 

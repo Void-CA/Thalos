@@ -29,7 +29,7 @@ autónoma de validación.
 | Lenguaje | Rust (edition 2024) |
 | Álgebra lineal | `nalgebra` + tipos propios |
 | Backend HTTP | `axum` 0.8, `tokio` |
-| Frontend | Angular 21 + Three.js 0.184 |
+| Frontend | React 19 + TypeScript + Vite, Three.js (@react-three/fiber) |
 | Visualización | Scene graph desacoplado (`thalos-visual`) |
 | Persistencia de documentación | Quarto |
 | Testing visual | `insta` (snapshot testing) |
@@ -193,17 +193,21 @@ Esta arquitectura permite compilar y testear el núcleo matemático-robótico
 - Mapa de errores sistemático: cada error de dominio tiene código HTTP y
   código de error específico. Sin errores genéricos.
 
-### 11. Frontend Angular 21
+### 11. Frontend React 19
 
-- **3 modos de operación**: Analysis, Planning, Execution.
-- **Arquitectura UX profesional**: viewport central (Three.js), panel izquierdo
-  (catálogo + robot activo), panel derecho (herramientas schema-driven por
-  modo), panel inferior (observabilidad), barra de estado.
-- **SceneStore**: dos pipelines RxJS paralelos mergeados con `merge()` + `scan()`
-  expuestos como `Signal<SceneState>` vía `toSignal()`.
-- **ThreeRendererService**: frames con `FrameStyle`, links cilíndricos,
-  primitivas geométricas, brújula 3D.
-- **Adapter dto-to-model**: traducción snake_case (Rust) → camelCase (Angular).
+- **Workflow guiado por registro**: los workspaces (Robot, Escena, Programación,
+  Evaluación, Ejecución, Sesiones, Configuración, Analysis) derivan de
+  `WORKSPACE_REGISTRY` — rutas, guards y stepper comparten una única fuente de
+  verdad declarativa.
+- **Arquitectura UX**: `AppShell` con top bar, stepper, panel del workspace y
+  viewport 3D persistente (no se desmonta al navegar entre workspaces) más
+  barra de estado.
+- **useSceneStore** (zustand): estado del viewport actualizado desde el
+  `RuntimeStateResponse` del backend vía `applyScene()` y `applyFkUpdate()`.
+- **SceneCanvas** (@react-three/fiber): `<Canvas>` Z-up con `OrbitControls`;
+  renderiza `RobotModel`, `IkGizmo`, `TcpOverlay`, `PointCloud` y `Trajectory`.
+- **Adapter** (`features/viewport/adapter.ts`): traducción snake_case (Rust) →
+  camelCase (React) con `toSceneData()`, `toRuntimeInfo()`, etc.
 
 ### 12. Sistema de Coordenadas Canónico (Z-up)
 
@@ -229,7 +233,7 @@ Esta arquitectura permite compilar y testear el núcleo matemático-robótico
 | `thalos-runtime::scene`, `commands` | **En desarrollo** |
 | Frontend: Scene, Robots, Execution | **En desarrollo** |
 | Planning Assistant (M5) | **Completado** — evaluation, alternativas |
-| Frontend: ThreeRenderer | **Estable** |
+| Frontend: SceneCanvas (R3F) | **Estable** |
 
 Estados: Estable (API congelada) / En desarrollo (funcional, puede cambiar) /
 Experimental (implementación inicial).

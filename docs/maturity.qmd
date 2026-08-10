@@ -43,12 +43,12 @@ colaboradores y adoptantes tempranos.
 | `thalos-api::motion` | $\circ$ Experimental | Endpoints MoveJ/MoveL directos |
 | `thalos-api::workspace` | $\blacktriangle$ Desarrollo | Sample, reachability, singularity, manipulability (~9 endpoints) |
 | `thalos-api::dto` | $\blacktriangle$ Desarrollo | `RuntimeStateResponse`, `VisualSceneDto`, mirrors completos |
-| Frontend: Scene feature | $\blacktriangle$ Desarrollo | Signals + RxJS, stable pero en evolución |
+| Frontend: Scene feature | $\blacktriangle$ Desarrollo | Zustand stores + R3F, stable pero en evolución |
 | Frontend: Robots feature | $\blacktriangle$ Desarrollo | Catálogo + selección |
 | Frontend: Planning feature | $\circ$ Experimental | PlanningPanel con segmentos |
 | Frontend: Execution feature | $\blacktriangle$ Desarrollo | ExecutionPanel, estado, timeline |
-| Frontend: Workspace feature | $\circ$ Experimental | WorkspacePanel, WorkspaceRenderer |
-| Frontend: ThreeRenderer | $\blacksquare$ Estable | Primitives, FrameStyle, compass |
+| Frontend: Workspace feature | $\circ$ Experimental | AnalysisWorkspace, PointCloud (R3F) |
+| Frontend: SceneCanvas (R3F) | $\blacksquare$ Estable | RobotModel, primitives, FrameStyle |
 | Frontend: RobotCatalog | $\blacktriangle$ Desarrollo | UI de selección de robots |
 
 **Estados**: 
@@ -106,4 +106,4 @@ colaboradores y adoptantes tempranos.
 - Comparación `GeometricJacobian` vs `NumericalJacobian` (deberían coincidir
   dentro de tolerancia)
 - Snapshots por modelo robótico (Manipulator3DOF, CylindricalRPP, etc.)
-- Tests de frontend con Angular Testing Library
+- Tests de frontend con React Testing Library (vitest)
