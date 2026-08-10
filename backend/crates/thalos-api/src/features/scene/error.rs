@@ -50,6 +50,12 @@ impl From<RuntimeError> for ApiError {
                 message: "no applied command to undo".to_string(),
                 code: code.into(),
             },
+            // S8: a Repeat start without a compiled/active plan has nothing to
+            // re-execute — 400 before any controller traffic.
+            RuntimeError::NoActivePlan => ApiError::BadRequest {
+                message: "no active plan to execute".to_string(),
+                code: "no_active_plan".into(),
+            },
             // R4-001: the active plan no longer matches the command's
             // pre-state (re-scheduled by a non-commanded path) — applying the
             // stale inverse would corrupt the plan. State conflict, 409.

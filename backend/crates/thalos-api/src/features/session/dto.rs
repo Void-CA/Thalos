@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use thalos_runtime::plan::ExecutionMode;
 use thalos_runtime::session::SessionData;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -13,6 +14,19 @@ pub struct SessionResponse {
     pub duration: f64,
     pub joint_count: usize,
     pub robot_name: String,
+    /// Execution mode — `"once"` or `{"repeat":{"count":N}}` (SM1).
+    #[serde(default)]
+    pub mode: ExecutionMode,
+    /// Current iteration, 1-based (SM2).
+    #[serde(default = "default_iteration")]
+    pub iteration: u32,
+    /// Total iterations; `None` for `Once` (SM3).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_iterations: Option<u32>,
+}
+
+fn default_iteration() -> u32 {
+    1
 }
 
 impl From<SessionData> for SessionResponse {
@@ -28,6 +42,9 @@ impl From<SessionData> for SessionResponse {
             duration: s.duration,
             joint_count: s.joint_count,
             robot_name: s.robot_name,
+            mode: s.mode,
+            iteration: s.iteration,
+            total_iterations: s.total_iterations,
         }
     }
 }

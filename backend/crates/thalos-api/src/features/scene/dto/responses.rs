@@ -4,6 +4,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use thalos_core::robot::joint::JointId;
+use thalos_runtime::plan::ExecutionMode;
 
 use crate::features::robots::dto::RobotMetadataDto;
 
@@ -290,6 +291,22 @@ pub struct ExecutionDto {
     /// Aditivo y opcional: los clientes antiguos ignoran el campo.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+    /// Execution mode — `"once"` or `{"repeat":{"count":N}}` (R1/R8).
+    /// `#[serde(default)]`: old clients / absent field read as `Once`.
+    #[serde(default)]
+    pub mode: ExecutionMode,
+    /// Current iteration, 1-based (R3/R8). Defaults to 1.
+    #[serde(default = "default_iteration")]
+    pub iteration: u32,
+    /// Total iterations; `None` for `Once` (R4) — omitted from the wire so
+    /// old clients see no badge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_iterations: Option<u32>,
+}
+
+/// Serde default for `ExecutionDto::iteration` (R8): a session starts at 1.
+fn default_iteration() -> u32 {
+    1
 }
 
 /// Status de la sesión — tipado hasta el borde de la API.
@@ -311,4 +328,49 @@ pub enum ExecutionStatusDto {
     Failed,
     #[serde(rename = "Idle")]
     Idle,
+}
+
+#[cfg(test)]
+mod execution_dto_tests {
+    use super::*;
+    use serde_json::json;
+
+    /// R8: a Repeat execution carries mode/iteration/total_iterations on the
+    /// wire — the UI badge needs all three.
+    #[test]
+    fn execution_dto_serializes_repeat_state() {
+        let dto = ExecutionDto {
+            status: ExecutionStatusDto::Running,
+            progress: 0.5,
+            elapsed_secs: 1.0,
+            source: Some("Hardware".into()),
+            mode: ExecutionMode::Repeat { count: 3 },
+            iteration: 2,
+            total_iterations: Some(3),
+        };
+        let value = serde_json::to_value(&dto).expect("serialize");
+        assert_eq!(value["mode"], json!({ "repeat": { "count": 3 } }));
+        assert_eq!(value["iteration"], 2);
+        assert_eq!(value["total_iterations"], 3);
+        assert_eq!(value["source"], "Hardware");
+    }
+
+    /// EW-S4: Once omits `total_iterations` from the wire — old clients see
+    /// no iteration badge at all.
+    #[test]
+    fn once_execution_dto_omits_total_iterations() {
+        let dto = ExecutionDto {
+            status: ExecutionStatusDto::Ready,
+            progress: 0.0,
+            elapsed_secs: 0.0,
+            source: Some("Simulation".into()),
+            mode: ExecutionMode::Once,
+            iteration: 1,
+            total_iterations: None,
+        };
+        let value = serde_json::to_value(&dto).expect("serialize");
+        assert_eq!(value["mode"], json!("once"));
+        assert_eq!(value["iteration"], 1);
+        assert!(value.get("total_iterations").is_none());
+    }
 }

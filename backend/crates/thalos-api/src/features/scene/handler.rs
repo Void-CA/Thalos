@@ -29,7 +29,7 @@ use crate::app::prelude::*;
 use crate::app::state::AppState;
 use crate::features::scene::dto::mappers::delta::to_delta_response;
 use crate::features::scene::dto::mappers::runtime::build_plan_dto;
-use crate::features::scene::dto::requests::{SeekRequest, TickRequest};
+use crate::features::scene::dto::requests::{SeekRequest, StartExecutionRequest, TickRequest};
 use crate::features::scene::dto::*;
 
 /// Build a VisualScene from a RuntimeSnapshot.
@@ -242,8 +242,18 @@ pub async fn preview_plan(
 /// Start execution of the scheduled motion plan.
 pub async fn start_execution(
     State(state): State<Arc<AppState>>,
+    payload: Option<Json<StartExecutionRequest>>,
 ) -> ApiResult<RuntimeStateResponse> {
-    let snapshot = state.services.scene.start_execution().await?;
+    let request = payload.map(|Json(req)| req).unwrap_or_default();
+    request.validate().map_err(|message| ApiError::BadRequest {
+        message,
+        code: "invalid_execution_mode".into(),
+    })?;
+    let snapshot = state
+        .services
+        .scene
+        .start_execution_with_mode(request.mode)
+        .await?;
     Ok(Json(to_api_response(&snapshot)))
 }
 

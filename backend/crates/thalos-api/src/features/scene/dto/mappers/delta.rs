@@ -1,6 +1,7 @@
 use thalos_core::kinematics::forward::result::FKResult;
 use thalos_core::robot::serial_chain::SerialChain;
 use thalos_core::spatial::frame::FrameId;
+use thalos_runtime::plan::ExecutionMode;
 use thalos_runtime::TickDelta;
 
 use super::super::{ExecutionDto, ExecutionStatusDto, RuntimeDelta, TransformUpdate};
@@ -27,6 +28,9 @@ pub fn to_delta_response(delta: &TickDelta) -> RuntimeDelta {
                 progress: exe.progress(delta.plan_duration),
                 elapsed_secs: exe.current_time,
                 source: Some(exe.source.to_string()),
+                mode: exe.mode,
+                iteration: exe.iteration,
+                total_iterations: exe.total_iterations,
             }
         })
         .unwrap_or(ExecutionDto {
@@ -34,6 +38,9 @@ pub fn to_delta_response(delta: &TickDelta) -> RuntimeDelta {
             progress: 0.0,
             elapsed_secs: 0.0,
             source: None,
+            mode: ExecutionMode::Once,
+            iteration: 1,
+            total_iterations: None,
         });
 
     RuntimeDelta {

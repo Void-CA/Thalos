@@ -2,6 +2,7 @@ use thalos_core::{
     kinematics::{forward::result::FKResult, inverse::result::IKResult},
     robot::tool_frame::ToolFrame,
 };
+use thalos_runtime::plan::ExecutionMode;
 
 use crate::features::robots::dto::{JointMetadataDto, RobotMetadataDto};
 
@@ -259,6 +260,9 @@ impl RuntimeStateResponse {
                     progress: exe.current_time,
                     elapsed_secs: exe.current_time,
                     source: Some(exe.source.to_string()),
+                    mode: exe.mode,
+                    iteration: exe.iteration,
+                    total_iterations: exe.total_iterations,
                 }
             }),
             generated_at: snapshot.generated_at,

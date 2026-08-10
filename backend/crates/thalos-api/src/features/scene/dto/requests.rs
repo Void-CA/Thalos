@@ -10,10 +10,40 @@ use thalos_core::{
 };
 use thalos_math::{Quaternion, Transform3D, UnitQuaternion, Vector3};
 use thalos_planning::motion::program::PlanningProgram;
+use thalos_runtime::plan::ExecutionMode;
 use thalos_runtime::Command;
 use thalos_runtime::commands::kinematics::KinematicsCommand;
 
 use super::responses::VisualSceneDto;
+
+/// Maximum repeat count accepted on the wire (R9) — bounds the
+/// orchestration loop and the trace/timing load of a repeat session.
+pub const MAX_REPEAT_COUNT: u32 = 1000;
+
+/// Optional body for `POST /scene/motion/start` (R7).
+///
+/// An absent body (legacy clients) deserializes to `Once` via `#[serde(default)]`,
+/// preserving current behavior exactly.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct StartExecutionRequest {
+    #[serde(default)]
+    pub mode: ExecutionMode,
+}
+
+impl StartExecutionRequest {
+    /// Validate the requested mode (R9/S9): `Repeat { count }` must satisfy
+    /// `1..=1000`. `Once` is always valid.
+    pub fn validate(&self) -> Result<(), String> {
+        if let ExecutionMode::Repeat { count } = self.mode {
+            if !(1..=MAX_REPEAT_COUNT).contains(&count) {
+                return Err(format!(
+                    "repeat count must be in 1..={MAX_REPEAT_COUNT}, got {count}"
+                ));
+            }
+        }
+        Ok(())
+    }
+}
 
 // ── Existing request DTOs ──
 
@@ -604,5 +634,53 @@ mod tests {
             }
             other => panic!("expected Operation::Transit, got {other:?}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod execution_mode_tests {
+    use super::*;
+    use serde_json::json;
+
+    /// R7: an absent body / absent `mode` field deserializes to `Once` —
+    /// legacy clients keep current behavior with no body at all.
+    #[test]
+    fn absent_mode_defaults_to_once() {
+        let req: StartExecutionRequest =
+            serde_json::from_value(json!({})).expect("empty body must deserialize");
+        assert_eq!(req.mode, ExecutionMode::Once);
+        assert!(req.validate().is_ok());
+    }
+
+    /// R7/S6: explicit `once` and `{"repeat":{"count":N}}` modes.
+    #[test]
+    fn mode_variants_deserialize() {
+        let once: StartExecutionRequest =
+            serde_json::from_value(json!({ "mode": "once" })).expect("once must deserialize");
+        assert_eq!(once.mode, ExecutionMode::Once);
+
+        let repeat: StartExecutionRequest =
+            serde_json::from_value(json!({ "mode": { "repeat": { "count": 5 } } }))
+                .expect("repeat must deserialize");
+        assert_eq!(repeat.mode, ExecutionMode::Repeat { count: 5 });
+    }
+
+    /// R9/S9: repeat count is bounded to 1..=1000 — 0 and 1001 are rejected.
+    #[test]
+    fn repeat_count_out_of_bounds_rejected() {
+        let zero: StartExecutionRequest =
+            serde_json::from_value(json!({ "mode": { "repeat": { "count": 0 } } }))
+                .expect("count 0 must deserialize (validation is separate)");
+        assert!(zero.validate().is_err(), "count 0 must be rejected");
+
+        let huge: StartExecutionRequest =
+            serde_json::from_value(json!({ "mode": { "repeat": { "count": 1001 } } }))
+                .expect("count 1001 must deserialize (validation is separate)");
+        assert!(huge.validate().is_err(), "count 1001 must be rejected");
+
+        let ok: StartExecutionRequest =
+            serde_json::from_value(json!({ "mode": { "repeat": { "count": 1000 } } }))
+                .expect("count 1000 must deserialize");
+        assert!(ok.validate().is_ok(), "count 1000 is the upper bound and must pass");
     }
 }

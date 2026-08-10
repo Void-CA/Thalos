@@ -19,15 +19,17 @@ async fn get_json(
     path: &str,
     body: Option<Value>,
 ) -> (StatusCode, Option<Value>) {
-    let req = Request::builder()
-        .method(method)
-        .uri(path)
-        .header("content-type", "application/json");
+    let req = Request::builder().method(method).uri(path);
 
     let req = if let Some(b) = body {
-        req.body(Body::from(serde_json::to_string(&b).unwrap()))
+        req.header("content-type", "application/json")
+            .body(Body::from(serde_json::to_string(&b).unwrap()))
             .unwrap()
     } else {
+        // No content-type: models a client sending no body at all. This
+        // matters for `Option<Json<T>>` endpoints (e.g. /scene/motion/start):
+        // axum treats a missing JSON content-type as an ABSENT body, while a
+        // JSON content-type with an empty body is a parse rejection.
         req.body(Body::empty()).unwrap()
     };
 
