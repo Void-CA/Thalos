@@ -1691,3 +1691,41 @@ async fn repeat_boundary_tick_reports_running_for_next_iteration() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Progress-unit regression: Simulation robot_state reports a 0..1 FRACTION,
+/// but the tick delta's execution session must carry SECONDS on the wire
+/// (the DTO mapper divides by plan_duration for the progress bar). Without
+/// the normalization the bar caps at 1/plan_duration (~10% for a 10s plan).
+#[tokio::test]
+async fn simulation_tick_delta_current_time_is_seconds() {
+    let mut mock = MockController::new();
+    mock.source = ExecutionSource::Simulation;
+
+    let (svc, concrete, _sessions, dir) = repeat_service(mock).await;
+    svc.schedule_program(repeat_plan(), Default::default())
+        .await
+        .unwrap();
+    svc.start_execution_with_mode(crate::plan::ExecutionMode::Once)
+        .await
+        .unwrap();
+
+    // Half-way through a 2.0s plan: Simulation reports fraction 0.5.
+    let mut s = RobotState::default();
+    s.motion.mode = MotionMode::Moving;
+    s.execution.progress = 0.5;
+    concrete.write().await.state = Some(s);
+
+    let delta = svc.tick_execution_delta(0.1).await.unwrap();
+    let exe = delta.execution.expect("delta carries an execution session");
+    assert_eq!(
+        exe.current_time, 1.0,
+        "Simulation current_time must be SECONDS (0.5 × 2.0s plan), not a fraction"
+    );
+    assert_eq!(
+        exe.progress(2.0),
+        0.5,
+        "the progress fraction is preserved on the wire"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

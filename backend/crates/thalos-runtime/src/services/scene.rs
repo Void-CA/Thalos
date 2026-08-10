@@ -932,6 +932,20 @@ impl SceneService {
                     );
                 }
             }
+            // Normalize the execution-session time to SECONDS on the wire:
+            // Hardware robot_state already reports seconds, but Simulation and
+            // Replay report a 0..1 FRACTION. The DTO mapper divides
+            // current_time by plan_duration for the progress bar (and exposes
+            // it as elapsed_secs), so a raw fraction would cap the bar at
+            // 1/plan_duration (e.g. ~10% for a 10s program) and show wrong
+            // elapsed time.
+            if !matches!(active_source, ExecutionSource::Hardware) {
+                if let Some(ref mut exe) = delta.execution {
+                    if plan_duration > 0.0 {
+                        exe.current_time *= plan_duration;
+                    }
+                }
+            }
             return Ok(delta);
         }
 
