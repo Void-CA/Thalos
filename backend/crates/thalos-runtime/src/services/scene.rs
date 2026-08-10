@@ -22,6 +22,7 @@ use crate::backends::manager::BackendManager;
 use crate::commands::Command;
 use crate::commands::handler::ExecutableCommand;
 use crate::error::RuntimeError;
+use crate::execution_boundary::ExecutionSample as ProtocolSample;
 use crate::motion_recorder::MotionRecorder;
 use crate::motion_trace::MotionTrace;
 use crate::plan::{PlanState, SessionStatus};
@@ -29,7 +30,10 @@ use crate::services::command_history::{AppliedCommand, CommandMetrics};
 use crate::session::{ExecutionSource, SessionManager};
 use crate::snapshots::{RuntimeSnapshot, TickDelta};
 use crate::state::robot::{ActiveRobot, SceneRuntime};
-use crate::telemetry::{ExecutionObserver, ExecutionRecorder, TraceMetadata};
+use crate::telemetry::{
+    ExecutionObserver, ExecutionRecorder, ExecutionSample as TelemetrySample, ExecutionTrace,
+    TraceMetadata,
+};
 
 use std::time::Duration;
 
@@ -513,6 +517,46 @@ impl SceneService {
         Ok(Self::build_snapshot(&runtime, None))
     }
 
+    /// Assemble a telemetry [`ExecutionTrace`] from raw protocol samples
+    /// (`execution_boundary::ExecutionSample`), as required by the pinned
+    /// trace-storage decision: telemetry samples carry `timestamp` from µs,
+    /// empty velocities/accelerations, zeroed TCP, and
+    /// `progress = seconds / plan_duration`.
+    fn assemble_execution_trace(
+        samples: &[ProtocolSample],
+        plan_duration: f64,
+        session_id: u64,
+        plan_id: String,
+        robot_name: String,
+    ) -> ExecutionTrace {
+        let joint_count = samples.first().map(|s| s.joints.len()).unwrap_or(0);
+        let metadata = TraceMetadata {
+            session_id: session_id.to_string(),
+            plan_id,
+            source: ExecutionSource::Hardware,
+            robot_name,
+            joint_count,
+            duration: std::time::Duration::from_secs_f64(plan_duration),
+            sample_rate: 0.0,
+        };
+        let mut trace = ExecutionTrace::new(metadata);
+        let duration = plan_duration.max(1.0);
+        for s in samples {
+            let seconds = s.timestamp_us as f64 / 1_000_000.0;
+            trace.push_sample(TelemetrySample {
+                timestamp: std::time::Duration::from_micros(s.timestamp_us),
+                joints: s.joints.clone(),
+                velocities: vec![],
+                accelerations: vec![],
+                tcp_pose: [0.0; 7],
+                tcp_velocity: [0.0; 6],
+                tracking_error: None,
+                progress: seconds / duration,
+            });
+        }
+        trace
+    }
+
     /// Finalizar la grabación activa (si existe) y guardar el trace.
     ///
     /// Si `terminal_status` es `Some`, usa ese estado en vez de `Completed`.
@@ -571,41 +615,115 @@ impl SceneService {
                 .map(|p| p.trajectory.duration())
                 .unwrap_or(0.0);
 
-            // 3. Record the current state if recording
-            let mut recording = self.recording.write().await;
-            if let Some(ref mut rec_state) = *recording {
-                let timestamp = {
-                    let elapsed = rec_state.start_time
-                        + std::time::Duration::from_secs_f64(
-                            state.execution.progress * plan_duration.max(1.0),
-                        );
-                    elapsed
-                };
-                rec_state.recorder.record(timestamp, &state);
-                rec_state.execution_recorder.on_sample(timestamp, &state);
+            // Active source determines progress UNITS (S3.6 / RISK-1):
+            // hardware backends populate `execution.progress` in SECONDS
+            // (esp32 map_firmware_state: fraction × plan_duration); simulation
+            // keeps a 0..1 fraction.
+            let active_source = self.manager.active_source().await;
 
-                // Check if execution completed — finalize recording
-                if state.execution.progress >= 1.0
-                    || matches!(
-                        state.motion.mode,
-                        crate::state::robot_state::MotionMode::Idle
-                    )
-                {
-                    let trace = rec_state.recorder.stop();
-                    rec_state
-                        .execution_recorder
-                        .on_execution_finished(timestamp);
-                    let exec_trace = rec_state.execution_recorder.trace();
-                    self.sessions.complete(rec_state.session_id, trace).await;
-                    if let Some(et) = exec_trace {
-                        self.sessions
-                            .save_execution_trace(rec_state.session_id, et)
-                            .await;
+            // Hoisted completion detection — evaluated on EVERY tick, outside
+            // the recording gate, so the hardware execution trace is drained
+            // and saved even when recording is not active (S3.6).
+            //
+            // RISK-1 / REL-01: for Hardware the gate compares SECONDS against
+            // the active plan's duration (`>= plan_duration.max(1.0)`) — the
+            // old fraction threshold (`>= 1.0`) finalized mid-run on any plan
+            // > 1s and dropped the trace at true completion. Simulation keeps
+            // the historical fraction/Idle gate.
+            //
+            // REL-03 / RES-06: EStop is a TERMINAL condition — it must
+            // finalize the session (as Failed), never leave it Running.
+            let estop = matches!(
+                state.motion.mode,
+                crate::state::robot_state::MotionMode::EStop
+            );
+            let completed = estop
+                || match active_source {
+                    ExecutionSource::Hardware => {
+                        state.execution.progress >= plan_duration.max(1.0)
                     }
-                    *recording = None;
+                    _ => {
+                        state.execution.progress >= 1.0
+                            || matches!(
+                                state.motion.mode,
+                                crate::state::robot_state::MotionMode::Idle
+                            )
+                    }
+                };
+
+            // Backend-conditional recording timestamp (S3.6).
+            let progress_in_seconds = match active_source {
+                ExecutionSource::Hardware => state.execution.progress,
+                _ => state.execution.progress * plan_duration.max(1.0),
+            };
+
+            let mut completed_session_id: Option<u64> = None;
+            {
+                // 3. Record the current state if recording
+                let mut recording = self.recording.write().await;
+                if let Some(ref mut rec_state) = *recording {
+                    completed_session_id = Some(rec_state.session_id);
+                    let timestamp = {
+                        let elapsed = rec_state.start_time
+                            + std::time::Duration::from_secs_f64(progress_in_seconds);
+                        elapsed
+                    };
+                    rec_state.recorder.record(timestamp, &state);
+                    rec_state.execution_recorder.on_sample(timestamp, &state);
+
+                    // Check if execution completed — finalize recording.
+                    // REL-03 / RES-06: EStop finalizes as FAILED, not
+                    // Completed — a stopped-by-error run must not report done.
+                    if completed {
+                        let trace = rec_state.recorder.stop();
+                        rec_state
+                            .execution_recorder
+                            .on_execution_finished(timestamp);
+                        let exec_trace = rec_state.execution_recorder.trace();
+                        let status = if estop {
+                            SessionStatus::Failed
+                        } else {
+                            SessionStatus::Completed
+                        };
+                        self.sessions
+                            .complete_with_status(rec_state.session_id, trace, status)
+                            .await;
+                        if let Some(et) = exec_trace {
+                            self.sessions
+                                .save_execution_trace(rec_state.session_id, et)
+                                .await;
+                        }
+                        *recording = None;
+                    }
                 }
             }
-            drop(recording);
+
+            // 3b. Unconditional drain (S3.6): on a completed tick, take the
+            //     hardware execution trace (if any) and persist it as a
+            //     telemetry `ExecutionTrace` — runs even when recording was
+            //     already finalized on an earlier tick.
+            if completed {
+                if let Some(samples) = ctrl.read().await.take_execution_trace().await {
+                    if !samples.is_empty() {
+                        if let Some(session_id) = completed_session_id {
+                            let robot_name = runtime.robot_name.clone();
+                            let plan_id = runtime
+                                .active_plan
+                                .as_ref()
+                                .map(|p| p.plan_id.clone())
+                                .unwrap_or_default();
+                            let trace = Self::assemble_execution_trace(
+                                &samples,
+                                plan_duration,
+                                session_id,
+                                plan_id,
+                                robot_name,
+                            );
+                            self.sessions.save_execution_trace(session_id, trace).await;
+                        }
+                    }
+                }
+            }
 
             let fk_result =
                 Self::compute_fk(&runtime.active_robot.chain, &runtime.active_robot.joints);
@@ -619,7 +737,6 @@ impl SceneService {
             );
             // R4-001: tick deltas carry the ACTIVE controller's source so the
             // running badge keeps reflecting the real backend (Hardware/Esp32).
-            let active_source = self.manager.active_source().await;
             if let Some(ref exe) = delta.execution {
                 delta.execution = Some(exe.clone().with_source(active_source));
             }

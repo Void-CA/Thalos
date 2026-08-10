@@ -174,13 +174,23 @@ Stops any current execution and returns the firmware to Idle state.
 
 ```
 HOST → ESP: STATUS
-ESP → HOST: STATUS RUNNING
-         or: STATUS COMPLETED
+ESP → HOST: STATUS IDLE
+         or: STATUS RECEIVING
+         or: STATUS READY
+         or: STATUS RUNNING <progress> <j0> <j1> ... <jN>
+         or: STATUS COMPLETED <count>
          or: STATUS ERROR <reason>
 ```
 
 Returns the current state of execution. Used for polling-based
 completion detection.
+
+The `RUNNING` payload carries the progress fraction (0.0–1.0) followed
+by the commanded joint positions (N = `dof_count` values). The host maps
+`RUNNING` internally to its "Executing" state.
+
+The `COMPLETED` payload carries the number of recorded execution samples
+(`count`) the host can collect via `SAMPLES <count>`.
 
 ### SAMPLES — Collect execution trace
 
@@ -193,6 +203,10 @@ ESP → HOST: OK
 ```
 
 Requests the firmware to upload `count` recorded execution samples.
+Each `SAMPLE` line is **timestamp-first**: the absolute timestamp in
+microseconds from execution start, followed by the joint positions
+(`SAMPLE <ts_us> <j0..jN>` — the same collect-direction format as above).
+`count` must be ≥ 1; `SAMPLES 0` is rejected with `ERROR MALFORMED`.
 
 ## State Machine
 

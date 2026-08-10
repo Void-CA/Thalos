@@ -41,6 +41,10 @@ public:
     /// Progress as fraction 0.0–1.0.
     float progress() const;
 
+    /// Current commanded joint positions (the waypoint currently being
+    /// stepped). Empty when not RUNNING or past the last sample (S2.1).
+    std::vector<float> current_joints() const;
+
     enum State : uint8_t { IDLE, RUNNING, DONE };
 
     State current_state() const;

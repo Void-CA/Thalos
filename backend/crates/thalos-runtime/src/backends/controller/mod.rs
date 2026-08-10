@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use thalos_core::execution::runtime::RuntimeProgram;
 
 use crate::error::ControllerError;
+use crate::execution_boundary::ExecutionSample;
 use crate::session::execution_source::ExecutionSource;
 use crate::state::robot_state::RobotState;
 
@@ -131,6 +132,15 @@ pub trait RobotController: Send + Sync {
     /// Live state of the robot, as an `Arc` for cheap sharing.
     async fn robot_state(&self) -> Arc<RobotState>;
 
+    /// Take the execution trace (hardware-collected samples) if available.
+    ///
+    /// Default: `None` — simulation/playback backends have no hardware
+    /// samples. `Esp32Backend` overrides this to return the SAMPLES collected
+    /// on completion, exactly once (clear-on-take).
+    async fn take_execution_trace(&self) -> Option<Vec<ExecutionSample>> {
+        None
+    }
+
     /// Static capabilities descriptor.
     fn capabilities(&self) -> BackendCapabilities;
 
@@ -192,6 +202,15 @@ pub mod tests {
         /// Optional `advance` failure to inject (R4-001): when set, `advance`
         /// returns this error instead of succeeding.
         pub advance_error: Option<ControllerError>,
+        /// Optional execution trace to return from `take_execution_trace`
+        /// (S3.6) — lets scene tests exercise the hardware-trace drain
+        /// without a real device.
+        pub execution_trace: Option<Vec<ExecutionSample>>,
+        /// Optional `robot_state` override (review correction) — when set,
+        /// `robot_state` returns this state instead of the default, letting
+        /// scene tests simulate Moving/EStop/Completed states without a
+        /// real device.
+        pub state: Option<RobotState>,
     }
 
     impl MockController {
@@ -206,6 +225,8 @@ pub mod tests {
                 source: ExecutionSource::Simulation,
                 execute_error: None,
                 advance_error: None,
+                execution_trace: None,
+                state: None,
             }
         }
     }
@@ -275,7 +296,11 @@ pub mod tests {
         }
 
         async fn robot_state(&self) -> Arc<RobotState> {
-            Arc::new(RobotState::default())
+            Arc::new(self.state.clone().unwrap_or_default())
+        }
+
+        async fn take_execution_trace(&self) -> Option<Vec<ExecutionSample>> {
+            self.execution_trace.clone()
         }
 
         fn capabilities(&self) -> BackendCapabilities {

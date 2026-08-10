@@ -44,7 +44,10 @@ pub enum ProtocolError {
 }
 
 /// Firmware-side execution state as tracked by the host protocol codec.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// The wire token stays `RUNNING` (firmware never emits `EXECUTING`); the
+/// host maps `STATUS RUNNING <progress> <j0..jN>` to `Executing` internally.
+#[derive(Debug, Clone, PartialEq)]
 pub enum FirmwareState {
     /// No manifest loaded, idle.
     Idle,
@@ -52,8 +55,14 @@ pub enum FirmwareState {
     Receiving,
     /// Manifest uploaded and validated, ready to execute.
     Ready,
-    /// Execution in progress.
-    Executing,
+    /// Execution in progress — carries the progress fraction (0..1) and the
+    /// commanded joint positions reported by `STATUS RUNNING`.
+    Executing { progress: f64, joints: Vec<f64> },
+    /// Execution finished — carries how many recorded samples the host can
+    /// collect via `SAMPLES <count>`.
+    Completed { sample_count: u32 },
+    /// Firmware error state with a human-readable reason.
+    Error(String),
 }
 
 /// Internal parsed representation of an ESP32 response line.
@@ -63,9 +72,26 @@ enum ParsedResponse {
     Ready,
     HandshakeOk(u32),
     Error(String),
-    StatusRunning,
-    StatusCompleted,
+    StatusIdle,
+    StatusReceiving,
+    StatusReady,
+    /// `STATUS RUNNING <progress> <j0..jN>` — wire token RUNNING.
+    StatusRunning { progress: f64, joints: Vec<f64> },
+    /// `STATUS COMPLETED <count>`.
+    StatusCompleted { sample_count: u32 },
     Sample(ExecutionSample),
+}
+
+/// Maximum number of SAMPLE response lines the host will read after
+/// `SAMPLES <count>` (RISK-3): bounds allocation + read loop when the
+/// firmware reports a bogus count.
+const MAX_SAMPLES: usize = 100_000;
+
+/// Cap a firmware-supplied sample count before allocating the sample
+/// buffer (RISK-3) — a malicious/buggy count must not drive an unbounded
+/// `Vec::with_capacity` + read loop.
+fn cap_sample_count(count: usize) -> usize {
+    count.min(MAX_SAMPLES)
 }
 
 /// ESP32 protocol codec.
@@ -154,27 +180,78 @@ impl Esp32Protocol {
                     return Err(ProtocolError::MalformedResponse(line.to_string()));
                 }
                 match parts[1] {
-                    "RUNNING" => Ok(ParsedResponse::StatusRunning),
-                    "COMPLETED" => Ok(ParsedResponse::StatusCompleted),
-                    _ => Ok(ParsedResponse::Error(parts[1..].join(" "))),
+                    "IDLE" => Ok(ParsedResponse::StatusIdle),
+                    "RECEIVING" => Ok(ParsedResponse::StatusReceiving),
+                    "READY" => Ok(ParsedResponse::StatusReady),
+                    "RUNNING" => {
+                        // STATUS RUNNING [<progress> <j0> <j1> ... <jN>]
+                        // RES-01: legacy HELLO-v1 firmware emits a BARE
+                        // RUNNING — progress defaults to 0.0, joints to
+                        // empty; strict validation applies only to fields
+                        // actually present.
+                        let progress: f64 = match parts.get(2) {
+                            Some(raw) => raw.parse().map_err(|_| {
+                                ProtocolError::MalformedResponse(line.to_string())
+                            })?,
+                            None => 0.0,
+                        };
+                        // RISK-2: nan/inf/1e999 parse successfully as f64 and
+                        // would panic `Duration::from_secs_f64` after the
+                        // ×plan_duration mapping — reject non-finite values.
+                        if !progress.is_finite() {
+                            return Err(ProtocolError::MalformedResponse(line.to_string()));
+                        }
+                        let joints = parts
+                            .get(3..)
+                            .unwrap_or(&[])
+                            .iter()
+                            .map(|s| {
+                                s.parse::<f64>()
+                                    .map_err(|_| ProtocolError::MalformedResponse(line.to_string()))
+                            })
+                            .collect::<Result<Vec<f64>, _>>()?;
+                        Ok(ParsedResponse::StatusRunning { progress, joints })
+                    }
+                    "COMPLETED" => {
+                        // STATUS COMPLETED [<count>] — RES-01: the count is
+                        // optional for legacy firmware; defaults to 0.
+                        let sample_count: u32 = match parts.get(2) {
+                            Some(raw) => raw.parse().map_err(|_| {
+                                ProtocolError::MalformedResponse(line.to_string())
+                            })?,
+                            None => 0,
+                        };
+                        Ok(ParsedResponse::StatusCompleted { sample_count })
+                    }
+                    "ERROR" => {
+                        // STATUS ERROR <reason> — the ONLY token that maps to
+                        // a firmware error (REL-03): unknown tokens must be
+                        // MalformedResponse, never an implicit EStop.
+                        let reason = if parts.len() > 2 {
+                            parts[2..].join(" ")
+                        } else {
+                            "unknown".into()
+                        };
+                        Ok(ParsedResponse::Error(reason))
+                    }
+                    other => Err(ProtocolError::MalformedResponse(line.to_string())),
                 }
             }
             "SAMPLE" => {
-                // SAMPLE <j0> <j1> ... <ts_us>
+                // SAMPLE <ts_us> <j0> <j1> ... <jN>  (collect direction, ts-first)
                 if parts.len() < 3 {
                     return Err(ProtocolError::MalformedResponse(line.to_string()));
                 }
-                let n_joint_values = parts.len() - 2; // skip "SAMPLE" and timestamp
-                let mut joints = Vec::with_capacity(n_joint_values);
-                for s in &parts[1..parts.len() - 1] {
-                    let val: f64 = s
-                        .parse()
-                        .map_err(|_| ProtocolError::MalformedResponse(line.to_string()))?;
-                    joints.push(val);
-                }
-                let timestamp: u64 = parts[parts.len() - 1]
+                let timestamp: u64 = parts[1]
                     .parse()
                     .map_err(|_| ProtocolError::MalformedResponse(line.to_string()))?;
+                let joints = parts[2..]
+                    .iter()
+                    .map(|s| {
+                        s.parse::<f64>()
+                            .map_err(|_| ProtocolError::MalformedResponse(line.to_string()))
+                    })
+                    .collect::<Result<Vec<f64>, _>>()?;
                 Ok(ParsedResponse::Sample(ExecutionSample {
                     timestamp_us: timestamp,
                     joints,
@@ -314,7 +391,10 @@ impl Esp32Protocol {
             .map_err(|e| ProtocolError::MalformedResponse(format!("invalid UTF-8: {e}")))?;
         match Self::parse_response(&line)? {
             ParsedResponse::Ok => {
-                self.firmware_state = FirmwareState::Executing;
+                self.firmware_state = FirmwareState::Executing {
+                    progress: 0.0,
+                    joints: Vec::new(),
+                };
                 Ok(())
             }
             ParsedResponse::Error(reason) => Err(ProtocolError::EspError(reason)),
@@ -324,20 +404,32 @@ impl Esp32Protocol {
 
     /// Query the current execution status.
     ///
-    /// Sends `STATUS` and parses the response. Returns `"RUNNING"`,
-    /// `"COMPLETED"`, or an error.
-    pub async fn query_status(&mut self) -> Result<String, ProtocolError> {
+    /// Sends `STATUS` and parses the response into a [`FirmwareState`]. The
+    /// wire token `RUNNING` is mapped internally to `Executing { progress, joints }`.
+    pub async fn query_status(&mut self) -> Result<FirmwareState, ProtocolError> {
         self.transport.send(&Self::format_line(&["STATUS"])).await?;
         let response = self.transport.receive().await?;
         let line = String::from_utf8(response)
             .map_err(|e| ProtocolError::MalformedResponse(format!("invalid UTF-8: {e}")))?;
         match Self::parse_response(&line)? {
-            ParsedResponse::StatusRunning => Ok("RUNNING".into()),
-            ParsedResponse::StatusCompleted => {
-                self.firmware_state = FirmwareState::Idle;
-                Ok("COMPLETED".into())
+            ParsedResponse::StatusIdle => Ok(FirmwareState::Idle),
+            ParsedResponse::StatusReceiving => Ok(FirmwareState::Receiving),
+            ParsedResponse::StatusReady => Ok(FirmwareState::Ready),
+            ParsedResponse::StatusRunning { progress, joints } => {
+                self.firmware_state = FirmwareState::Executing {
+                    progress,
+                    joints: joints.clone(),
+                };
+                Ok(FirmwareState::Executing { progress, joints })
             }
-            ParsedResponse::Error(reason) => Err(ProtocolError::EspError(reason)),
+            ParsedResponse::StatusCompleted { sample_count } => {
+                self.firmware_state = FirmwareState::Idle;
+                Ok(FirmwareState::Completed { sample_count })
+            }
+            // `STATUS ERROR <reason>` — a real firmware error state, NOT a
+            // transport/protocol failure. Return it so the backend maps it to
+            // EStop/Failed (design: ERROR → EStop).
+            ParsedResponse::Error(reason) => Ok(FirmwareState::Error(reason)),
             other => Err(ProtocolError::UnexpectedResponse(format!("{other:?}"))),
         }
     }
@@ -350,6 +442,9 @@ impl Esp32Protocol {
         &mut self,
         count: usize,
     ) -> Result<Vec<ExecutionSample>, ProtocolError> {
+        // RISK-3: cap the firmware-supplied count BEFORE allocation so a
+        // bogus value cannot drive an unbounded with_capacity + read loop.
+        let count = cap_sample_count(count);
         self.transport
             .send(&Self::format_line(&["SAMPLES", &count.to_string()]))
             .await?;
@@ -383,7 +478,7 @@ impl Esp32Protocol {
 
     /// The current firmware state as tracked by the host.
     pub fn firmware_state(&self) -> FirmwareState {
-        self.firmware_state
+        self.firmware_state.clone()
     }
 
     /// The firmware protocol version, if the handshake completed.
@@ -639,7 +734,9 @@ mod tests {
 
     #[test]
     fn parse_sample_line_with_two_joints() {
-        let line = "SAMPLE 0.0 0.5 1000\n";
+        // S1.1: collect-direction SAMPLE is timestamp-FIRST (firmware emits
+        // `SAMPLE <ts_us> <j0..jN>`, protocol doc line 113).
+        let line = "SAMPLE 1000 0.0 0.5\n";
         let parsed = Esp32Protocol::parse_response(line).unwrap();
 
         match parsed {
@@ -655,7 +752,7 @@ mod tests {
 
     #[test]
     fn parse_sample_line_with_six_joints() {
-        let line = "SAMPLE 0.1 0.2 0.3 0.4 0.5 0.6 5000000\n";
+        let line = "SAMPLE 5000000 0.1 0.2 0.3 0.4 0.5 0.6\n";
         let parsed = Esp32Protocol::parse_response(line).unwrap();
 
         match parsed {
@@ -669,9 +766,26 @@ mod tests {
         }
     }
 
+    /// S1.1 — the exact spec scenario: firmware emits
+    /// `SAMPLE 1000000 0.5 0.3 0.1 -0.1 0.0 0.0` and the host must parse
+    /// timestamp-first (currently the parser reads ts-LAST → RED).
+    #[test]
+    fn parse_sample_ts_first_spec_scenario() {
+        let line = "SAMPLE 1000000 0.5 0.3 0.1 -0.1 0.0 0.0\n";
+        let parsed = Esp32Protocol::parse_response(line).unwrap();
+
+        match parsed {
+            ParsedResponse::Sample(sample) => {
+                assert_eq!(sample.timestamp_us, 1_000_000);
+                assert_eq!(sample.joints, vec![0.5, 0.3, 0.1, -0.1, 0.0, 0.0]);
+            }
+            other => panic!("Expected Sample, got {other:?}"),
+        }
+    }
+
     #[test]
     fn parse_sample_line_zero_timestamp() {
-        let line = "SAMPLE 1.0 2.0 0\n";
+        let line = "SAMPLE 0 1.0 2.0\n";
         let parsed = Esp32Protocol::parse_response(line).unwrap();
 
         match parsed {
@@ -852,14 +966,128 @@ mod tests {
 
     #[test]
     fn parse_status_running() {
-        let parsed = Esp32Protocol::parse_response("STATUS RUNNING\n").unwrap();
-        assert_eq!(parsed, ParsedResponse::StatusRunning);
+        // S1.2: EXECUTING payload — `STATUS RUNNING <progress> <j0..jN>`.
+        // Wire token stays RUNNING; the host maps it to Executing internally.
+        let parsed = Esp32Protocol::parse_response("STATUS RUNNING 0.45 0.5 0.3 0.1 -0.1 0.0 0.0\n")
+            .unwrap();
+        match parsed {
+            ParsedResponse::StatusRunning { progress, joints } => {
+                assert!((progress - 0.45).abs() < 1e-9);
+                assert_eq!(joints, vec![0.5, 0.3, 0.1, -0.1, 0.0, 0.0]);
+            }
+            other => panic!("Expected StatusRunning, got {other:?}"),
+        }
     }
 
     #[test]
     fn parse_status_completed() {
+        // S1.2/S3.1: `STATUS COMPLETED <count>` — how many samples to request.
+        let parsed = Esp32Protocol::parse_response("STATUS COMPLETED 5\n").unwrap();
+        match parsed {
+            ParsedResponse::StatusCompleted { sample_count } => assert_eq!(sample_count, 5),
+            other => panic!("Expected StatusCompleted, got {other:?}"),
+        }
+    }
+
+    // ── S1.3 RED: STATUS full-state parse (IDLE/RECEIVING/READY + ERROR) ──
+
+    #[test]
+    fn parse_status_idle() {
+        let parsed = Esp32Protocol::parse_response("STATUS IDLE\n").unwrap();
+        assert_eq!(parsed, ParsedResponse::StatusIdle);
+    }
+
+    #[test]
+    fn parse_status_receiving() {
+        let parsed = Esp32Protocol::parse_response("STATUS RECEIVING\n").unwrap();
+        assert_eq!(parsed, ParsedResponse::StatusReceiving);
+    }
+
+    #[test]
+    fn parse_status_ready() {
+        let parsed = Esp32Protocol::parse_response("STATUS READY\n").unwrap();
+        assert_eq!(parsed, ParsedResponse::StatusReady);
+    }
+
+    #[test]
+    fn parse_status_error_with_reason() {
+        let parsed = Esp32Protocol::parse_response("STATUS ERROR MOTOR_FAULT\n").unwrap();
+        match parsed {
+            ParsedResponse::Error(reason) => assert_eq!(reason, "MOTOR_FAULT"),
+            other => panic!("Expected Error, got {other:?}"),
+        }
+    }
+
+    // ── Review correction (RES-01 / RISK-2 / REL-03) ────────────────────
+
+    /// RES-01: legacy HELLO-v1 firmware emits a BARE `STATUS RUNNING` (no
+    /// progress / joints payload). The parser must accept it — progress
+    /// defaults to 0.0, joints to empty — instead of failing every poll.
+    #[test]
+    fn parse_status_running_bare_token_is_lenient() {
+        let parsed = Esp32Protocol::parse_response("STATUS RUNNING\n").unwrap();
+        match parsed {
+            ParsedResponse::StatusRunning { progress, joints } => {
+                assert_eq!(progress, 0.0);
+                assert!(joints.is_empty());
+            }
+            other => panic!("Expected StatusRunning, got {other:?}"),
+        }
+    }
+
+    /// RES-01: same leniency for a bare `STATUS COMPLETED` — sample_count
+    /// defaults to 0.
+    #[test]
+    fn parse_status_completed_bare_token_is_lenient() {
         let parsed = Esp32Protocol::parse_response("STATUS COMPLETED\n").unwrap();
-        assert_eq!(parsed, ParsedResponse::StatusCompleted);
+        match parsed {
+            ParsedResponse::StatusCompleted { sample_count } => assert_eq!(sample_count, 0),
+            other => panic!("Expected StatusCompleted, got {other:?}"),
+        }
+    }
+
+    /// RISK-2: a non-finite progress (nan / inf / 1e999) would multiply by
+    /// plan_duration in `map_firmware_state` and then panic the tick in
+    /// `Duration::from_secs_f64`. It must be rejected at parse time.
+    #[test]
+    fn parse_status_running_rejects_non_finite_progress() {
+        for line in [
+            "STATUS RUNNING nan 0 0\n",
+            "STATUS RUNNING inf 0 0\n",
+            "STATUS RUNNING 1e999 0 0\n",
+        ] {
+            let result = Esp32Protocol::parse_response(line);
+            assert!(
+                matches!(result, Err(ProtocolError::MalformedResponse(_))),
+                "{line:?} must be MalformedResponse, got {result:?}"
+            );
+        }
+    }
+
+    /// REL-03 / RES-06: an UNKNOWN STATUS token must be MalformedResponse —
+    /// only the literal `ERROR` token is a firmware error (→ EStop). Any
+    /// other token silently mapping to Error would EStop a healthy run.
+    #[test]
+    fn parse_status_unknown_token_is_malformed_not_error() {
+        let result = Esp32Protocol::parse_response("STATUS FOO\n");
+        assert!(
+            matches!(result, Err(ProtocolError::MalformedResponse(_))),
+            "STATUS FOO must be MalformedResponse, got {result:?}"
+        );
+    }
+
+    /// RISK-3: the firmware-supplied `count` drives `Vec::with_capacity` +
+    /// the read loop in `collect_samples` — a bogus huge count must be
+    /// capped at MAX_SAMPLES before any allocation.
+    #[test]
+    fn collect_samples_caps_firmware_supplied_count() {
+        let bogus = u32::MAX as usize;
+        assert_eq!(
+            cap_sample_count(bogus),
+            MAX_SAMPLES,
+            "bogus count must be capped to MAX_SAMPLES"
+        );
+        assert_eq!(cap_sample_count(5), 5, "small counts pass through");
     }
 
     #[test]

@@ -198,7 +198,7 @@ async fn plan_compile_then_esp32_execute() {
     );
 
     // ── 4. Verify wire commands ────────────────────────────────────────
-    let sent = backend.test_sent_commands();
+    let sent = backend.test_sent_commands().await;
     assert!(!sent.is_empty(), "commands should have been sent");
 
     let as_text: Vec<String> = sent
