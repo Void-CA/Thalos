@@ -70,9 +70,11 @@ export const sceneApi = {
   previewPlan: (request: MotionPlanRequest) =>
     apiClient.post<RuntimeStateResponse>('/scene/motion/plan', request).then(r => r.data),
 
-  /** Execution control. Optional mode: absent → once (axios omits the body). */
+  /** Execution control. Optional mode: absent → once (no body sent). The
+   *  backend `StartExecutionRequest` expects `{ mode: ... }`, so the mode is
+   *  wrapped — sending the bare mode object would deserialize as Once. */
   startExecution: (mode?: ExecutionModeDto) =>
-    apiClient.post<RuntimeStateResponse>('/scene/motion/start', mode).then(r => r.data),
+    apiClient.post<RuntimeStateResponse>('/scene/motion/start', mode === undefined ? undefined : { mode }).then(r => r.data),
 
   pauseExecution: () =>
     apiClient.post<RuntimeStateResponse>('/scene/motion/pause').then(r => r.data),

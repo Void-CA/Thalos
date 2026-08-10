@@ -50,3 +50,26 @@ describe('sceneApi.selectToolFrame — POST /scene/tcp (tcp-resolved-pose R2)', 
     expect(mocks.post).toHaveBeenCalledWith('/scene/tcp', { frame_id: null, offset: null })
   })
 })
+
+describe('sceneApi.startExecution — mode body shape (execution-mode-repeat R7)', () => {
+  beforeEach(() => {
+    mocks.post.mockResolvedValue({ data: runtimeResponse })
+  })
+
+  it('sends NO body when mode is absent (legacy → Once)', async () => {
+    await sceneApi.startExecution()
+    expect(mocks.post).toHaveBeenCalledWith('/scene/motion/start', undefined)
+  })
+
+  it('wraps once in { mode: ... }', async () => {
+    await sceneApi.startExecution('once')
+    expect(mocks.post).toHaveBeenCalledWith('/scene/motion/start', { mode: 'once' })
+  })
+
+  it('wraps repeat in { mode: { repeat: { count } } } — the backend shape', async () => {
+    await sceneApi.startExecution({ repeat: { count: 5 } })
+    expect(mocks.post).toHaveBeenCalledWith('/scene/motion/start', {
+      mode: { repeat: { count: 5 } },
+    })
+  })
+})
