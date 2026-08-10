@@ -1649,3 +1649,45 @@ async fn reset_execution_clears_repeat_state_and_next_start_begins_at_iteration_
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// R8 regression: the tick that finishes iteration k must report Running
+/// (iteration k+1) — a stale Completed status on that tick would make the
+/// frontend treat the session as finished and stop its tick loop after the
+/// first iteration.
+#[tokio::test]
+async fn repeat_boundary_tick_reports_running_for_next_iteration() {
+    let mut mock = MockController::new();
+    mock.source = ExecutionSource::Hardware;
+
+    let (svc, concrete, _sessions, dir) = repeat_service(mock).await;
+    svc.schedule_program(repeat_plan(), Default::default())
+        .await
+        .unwrap();
+    svc.start_execution_with_mode(crate::plan::ExecutionMode::Repeat { count: 3 })
+        .await
+        .unwrap();
+
+    // Iteration 1 mid-run → Running.
+    concrete.write().await.state = Some(repeat_running_state());
+    let delta = svc.tick_execution_delta(0.1).await.unwrap();
+    let exe = delta.execution.expect("delta carries an execution session");
+    assert_eq!(exe.status, crate::plan::SessionStatus::Running);
+    assert_eq!(exe.iteration, 1);
+    assert_eq!(exe.total_iterations, Some(3));
+
+    // Iteration 1 completes → the BOUNDARY tick must report Running(2/3),
+    // never Completed — the frontend keeps polling (R8).
+    concrete.write().await.state = Some(repeat_done_state());
+    let delta = svc.tick_execution_delta(0.1).await.unwrap();
+    let exe = delta.execution.expect("delta carries an execution session");
+    assert_eq!(
+        exe.status,
+        crate::plan::SessionStatus::Running,
+        "boundary tick must NOT report Completed — the frontend would stop"
+    );
+    assert_eq!(exe.iteration, 2, "boundary tick reports the NEXT iteration");
+    assert_eq!(exe.total_iterations, Some(3));
+    assert_eq!(exe.progress(2.0), 0.0, "fresh iteration starts at progress 0");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

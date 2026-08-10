@@ -731,6 +731,11 @@ impl SceneService {
             // Set ONLY when THIS tick finalized the final iteration as
             // Completed — gates the hardware execution-trace drain (S2, R6).
             let mut terminal_completion = false;
+            // Set when THIS tick completed an INTERMEDIATE iteration and
+            // re-executed the plan for k+1 — the delta built from the
+            // pre-gate state must report Running(k+1), not the stale
+            // Completed(k) that would stop the frontend tick loop (R8).
+            let mut intermediate_restart = false;
             {
                 // 3. Record the current state if recording
                 let mut recording = self.recording.write().await;
@@ -828,6 +833,8 @@ impl SceneService {
                                 *recording = None;
                                 return Err(RuntimeError::ControllerFailed { source: e });
                             }
+                            // The controller is running iteration k+1 now.
+                            intermediate_restart = true;
                         } else {
                             // Final iteration → Completed.
                             terminal_completion = true;
@@ -898,7 +905,7 @@ impl SceneService {
             // R4-001: tick deltas carry the ACTIVE controller's source so the
             // running badge keeps reflecting the real backend (Hardware/Esp32).
             if let Some(ref exe) = delta.execution {
-                delta.execution = Some(exe.clone().with_source(active_source));
+                delta.execution = Some(exe.clone().with_source(active_source.clone()));
             }
             // Repeat state: the derived ExecutionSession knows nothing about
             // mode/iteration — attach the recording's live (or just-finalized)
@@ -906,6 +913,23 @@ impl SceneService {
             if let Some((mode, iteration)) = repeat_meta {
                 if let Some(ref exe) = delta.execution {
                     delta.execution = Some(exe.clone().with_repeat_state(mode, iteration));
+                }
+            }
+            // Boundary-tick correction (R8): the delta was built from the
+            // pre-gate `state`, which on an intermediate completion still says
+            // Completed(k). The controller has ALREADY been restarted for
+            // k+1 — report Running with a fresh progress so the frontend
+            // keeps polling instead of treating the session as finished.
+            if intermediate_restart {
+                if let Some((mode, iteration)) = repeat_meta {
+                    delta.execution = Some(
+                        crate::plan::ExecutionSession::derived_with_source(
+                            SessionStatus::Running,
+                            0.0,
+                            active_source.clone(),
+                        )
+                        .with_repeat_state(mode, iteration),
+                    );
                 }
             }
             return Ok(delta);
