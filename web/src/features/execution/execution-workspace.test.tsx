@@ -83,6 +83,10 @@ beforeEach(() => {
     progress: 0,
     elapsedSecs: 0,
     error: null,
+    source: 'Simulation',
+    mode: 'once',
+    iteration: 1,
+    totalIterations: undefined,
   })
   act(() => {
     useSceneStore.setState({ execution: null } as never)
@@ -446,5 +450,48 @@ describe('Iteration badge (EW3-EW6)', () => {
     setStatus('running', { iteration: 1, totalIterations: undefined, activePlan: plan })
     renderWorkspace()
     expect(screen.queryByText(/Iteration/)).not.toBeInTheDocument()
+  })
+})
+
+describe('Execution origin pill (P0 visibility)', () => {
+  it('shows Simulation by default', () => {
+    setStatus('ready', { activePlan: plan, source: 'Simulation' })
+    renderWorkspace()
+    expect(screen.getByTestId('execution-source-pill')).toHaveTextContent('Simulation')
+  })
+
+  it('shows ESP32 · Connected when running on hardware with a live connection', () => {
+    act(() => {
+      useBackendStore.setState({ activeId: 'esp32' })
+      useBackendStore.setState({ backends: [SIM_BACKEND, { ...ESP_BACKEND, status: 'active', connected: true }] })
+    })
+    setStatus('running', { activePlan: plan, source: 'Hardware' })
+    renderWorkspace()
+    expect(screen.getByTestId('execution-source-pill')).toHaveTextContent('ESP32 · Connected')
+  })
+
+  it('shows ESP32 · Disconnected when the hardware backend is not connected', () => {
+    act(() => {
+      useBackendStore.setState({ activeId: 'esp32' })
+    })
+    setStatus('running', { activePlan: plan, source: 'Hardware' })
+    renderWorkspace()
+    expect(screen.getByTestId('execution-source-pill')).toHaveTextContent('ESP32 · Disconnected')
+  })
+})
+
+describe('Progress label (P1 clarity)', () => {
+  it('labels the bar "Current progress" during a Repeat session', () => {
+    setStatus('running', { activePlan: plan, progress: 0.62, iteration: 4, totalIterations: 10 })
+    renderWorkspace()
+    expect(screen.getByText(/Current progress 62%/)).toBeInTheDocument()
+    expect(screen.getByText('4 / 10')).toBeInTheDocument()
+  })
+
+  it('labels the bar "Progress" for a Once session', () => {
+    setStatus('running', { activePlan: plan, progress: 0.62, totalIterations: undefined })
+    renderWorkspace()
+    expect(screen.getByText(/Progress 62%/)).toBeInTheDocument()
+    expect(screen.queryByText(/Current progress/)).not.toBeInTheDocument()
   })
 })

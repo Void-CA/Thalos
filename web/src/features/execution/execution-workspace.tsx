@@ -30,12 +30,17 @@ export function ExecutionWorkspace() {
   const activePlan = useExecutionStore((s) => s.activePlan)
   const iteration = useExecutionStore((s) => s.iteration)
   const totalIterations = useExecutionStore((s) => s.totalIterations)
+  const source = useExecutionStore((s) => s.source)
 
   const start = useExecutionStore((s) => s.start)
   const pause = useExecutionStore((s) => s.pause)
   const resume = useExecutionStore((s) => s.resume)
   const cancel = useExecutionStore((s) => s.cancel)
   const reset = useExecutionStore((s) => s.reset)
+
+  // Hardware connection state for the source pill — "ESP32 · Connected".
+  const activeBackend = useBackendStore((s) => s.backends.find((b) => b.id === s.activeId))
+  const hardwareConnected = activeBackend?.id === 'esp32' && activeBackend.connected === true
 
   // Mode selection (EW1/EW2): Once by default; Repeat(N) with 1..=1000.
   const [modeKind, setModeKind] = useState<'once' | 'repeat'>('once')
@@ -86,6 +91,23 @@ export function ExecutionWorkspace() {
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
         <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider flex-1">Execution</h2>
         <BackendSelector />
+        {/* Execution origin pill (P0 visibility): the running session always
+            says WHERE it executes — "Simulation" or "ESP32 · Connected".
+            Sourced from the tick delta (backend truth), seeded at start. */}
+        <span
+          data-testid="execution-source-pill"
+          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+            source === 'Hardware'
+              ? hardwareConnected
+                ? 'bg-blue-600/20 text-blue-400'
+                : 'bg-muted text-muted-foreground'
+              : 'bg-muted text-muted-foreground'
+          }`}
+        >
+          {source === 'Hardware'
+            ? `ESP32 · ${hardwareConnected ? 'Connected' : 'Disconnected'}`
+            : 'Simulation'}
+        </span>
         <span
           className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide
             ${status === 'running' ? 'bg-green-600/20 text-green-500'
@@ -252,7 +274,12 @@ export function ExecutionWorkspace() {
             />
           </div>
           <div className="mt-1 flex justify-between text-[10px] text-muted-foreground font-mono">
-            <span>{(progress * 100).toFixed(0)}%</span>
+            <span>
+              {/* P1 clarity: in Repeat the bar is per-iteration, so label it
+                  "Current progress" instead of a bare percentage. */}
+              {totalIterations !== undefined && totalIterations > 1 ? 'Current progress' : 'Progress'}{' '}
+              {(progress * 100).toFixed(0)}%
+            </span>
             <span>{elapsedSecs.toFixed(1)}s elapsed</span>
           </div>
         </section>

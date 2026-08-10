@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { executionClient } from './execution-client'
 import { useSceneStore } from '@/features/viewport/store'
+import { useBackendStore } from './backend-store'
 import { isApiError } from '@/shared/errors'
 import type { ExecutionModeDto } from '@/features/viewport/api/scene-api.types'
 import type { ObjectTransform, ExecutionInfo } from '@/features/viewport/types'
@@ -61,6 +62,10 @@ export interface ExecutionState {
   iteration: number
   /** Total iterations; undefined for Once → no badge (EW6). */
   totalIterations?: number
+  /** Execution origin — "Simulation" | "Hardware" | "Replay #N". Rendered in
+   *  the workspace header so a running session never looks ambiguous about
+   *  where it is executing. Sourced from the tick delta (backend truth). */
+  source: string
 }
 
 interface ExecutionActions {
@@ -100,6 +105,7 @@ const INITIAL: ExecutionState = {
   mode: 'once',
   iteration: 1,
   totalIterations: undefined,
+  source: 'Simulation',
 }
 
 /** Normalize any thrown error to `{message, code}` (error-ux spec): the
@@ -170,6 +176,7 @@ function startLoop() {
         mode: delta.execution.mode ?? 'once',
         iteration: delta.execution.iteration ?? 1,
         totalIterations: delta.execution.total_iterations,
+        source: delta.execution.source ?? 'Simulation',
       })
 
       if (isTerminal) {
@@ -222,7 +229,17 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>((set)
       // Seed the iteration badge from the requested mode; the first tick then
       // confirms it from the backend. Once / absent → no badge (EW6).
       const total = mode !== undefined && mode !== 'once' ? mode.repeat.count : undefined
-      set({ status: 'running', mode: mode ?? 'once', iteration: 1, totalIterations: total })
+      // Seed the execution origin from the active backend so the header is
+      // correct before the first tick arrives.
+      const active = useBackendStore.getState()
+      const source = active.activeId === 'esp32' ? 'Hardware' : 'Simulation'
+      set({
+        status: 'running',
+        mode: mode ?? 'once',
+        iteration: 1,
+        totalIterations: total,
+        source,
+      })
       startLoop()
     } catch (err) {
       set({ status: 'failed', error: toExecutionError(err) })
