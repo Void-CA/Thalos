@@ -306,10 +306,64 @@ impl BackendManager {
 mod tests {
     use super::*;
     use crate::backends::controller::tests::MockController;
-    use crate::backends::transport::FakeTransport;
+    use crate::backends::transport::{FakeTransport, TransportError};
     use crate::error::ControllerError;
+    use async_trait::async_trait;
     use std::time::Duration;
     use tokio_serial::SerialPort;
+
+    /// Test seam: a transport whose `connect` always fails with an IO error —
+    /// used to prove that an OPEN failure maps to `ControllerError::PortInUse`
+    /// deterministically (no reliance on real /dev paths).
+    struct FailingTransport;
+
+    #[async_trait]
+    impl Transport for FailingTransport {
+        async fn connect(&mut self) -> Result<(), TransportError> {
+            Err(TransportError::Io(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "simulated open failure",
+            )))
+        }
+        async fn disconnect(&mut self) -> Result<(), TransportError> {
+            Ok(())
+        }
+        async fn send(&mut self, _data: &[u8]) -> Result<(), TransportError> {
+            Ok(())
+        }
+        async fn receive(&mut self) -> Result<Vec<u8>, TransportError> {
+            Err(TransportError::Timeout)
+        }
+    }
+
+    /// Wait on the PTY master until the host's HELLO line arrives, then answer
+    /// the handshake. Ignores leftover bytes (e.g. the STOP written on the
+    /// previous disconnect) and retries on EIO while the slave is not yet open.
+    async fn answer_handshake(master: &mut tokio_serial::SerialStream) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut buf = [0u8; 512];
+        let mut pending: Vec<u8> = Vec::new();
+        loop {
+            match master.read(&mut buf).await {
+                Ok(n) => {
+                    pending.extend_from_slice(&buf[..n]);
+                    if let Some(pos) = pending.iter().position(|&b| b == b'\n') {
+                        let line: Vec<u8> = pending.drain(..=pos).collect();
+                        if line.windows(5).any(|w| w == b"HELLO") {
+                            master.write_all(b"HELLO 1 OK\r\n").await.unwrap();
+                            master.flush().await.unwrap();
+                            return;
+                        }
+                    }
+                }
+                Err(_) => {
+                    // EIO while the slave device is closed (disconnect) or not
+                    // yet opened — retry shortly until the next connect opens it.
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
+            }
+        }
+    }
 
     async fn make_controller() -> Arc<RwLock<dyn RobotController + Send + Sync>> {
         let ctrl = MockController::new();
@@ -540,6 +594,118 @@ mod tests {
             manager.get_controller().await.is_some(),
             "connecting the active backend must point the runtime at it"
         );
+    }
+
+    /// Port-level failure: a transport whose OPEN fails with an IO error must
+    /// map to `ControllerError::PortInUse` — the deterministic, injectable
+    /// version of the real-device test (`connect_with_port_to_invalid_device_*`).
+    #[tokio::test]
+    async fn connect_with_transport_open_failure_maps_to_port_in_use() {
+        let manager = BackendManager::new();
+        manager.register_esp32("/dev/ttyUSB0").await;
+
+        let err = manager
+            .connect_with_transport("esp32", "/dev/ttyUSB0", Box::new(FailingTransport))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, ControllerError::PortInUse(_)),
+            "open failure must map to port_in_use, got {err:?}"
+        );
+
+        // Failed open must not leave a controller or point the runtime at it.
+        let entry = manager
+            .list_backends()
+            .await
+            .into_iter()
+            .find(|e| e.id == "esp32")
+            .unwrap();
+        assert!(entry.controller.is_none());
+        assert!(manager.get_controller().await.is_none());
+    }
+
+    /// Reconnect on the SAME device path: connect → disconnect → connect again
+    /// over a REAL virtual serial device must succeed both times, with no
+    /// wedged port, no stale controller, and a clean active state. Each connect
+    /// answers the HELLO handshake through the PTY master.
+    #[tokio::test]
+    async fn reconnect_same_port_after_disconnect_works() {
+        let manager = BackendManager::new();
+        manager.register_esp32("/dev/thalos-reconnect-ptty").await;
+        manager.activate("esp32").await.unwrap();
+        assert!(manager.get_controller().await.is_none());
+
+        let (mut master, slave) = tokio_serial::SerialStream::pair().unwrap();
+        let path = slave.name().expect("PTY slave must expose its device path");
+        // Close the test's copy of the slave — the backend opens the device
+        // path itself on each connect (true open/close cycle).
+        drop(slave);
+
+        let mut connect = async |manager: &BackendManager, path: &str| {
+            let t = SerialTransport::new(path, 115200)
+                .with_read_timeout(Duration::from_millis(300));
+            let c = tokio::time::timeout(
+                Duration::from_secs(3),
+                manager.connect_with_transport("esp32", path, Box::new(t)),
+            );
+            let a = tokio::time::timeout(Duration::from_secs(3), answer_handshake(&mut master));
+            let (cr, ar) = tokio::join!(c, a);
+            assert!(
+                ar.is_ok(),
+                "PTY master must answer the handshake within the test bound"
+            );
+            cr.expect("connect must complete within the test bound").unwrap();
+        };
+
+        // First connect → controller stored and runtime pointed at it.
+        connect(&manager, &path).await;
+        assert!(manager.get_controller().await.is_some());
+        assert_eq!(manager.active_id().await.as_deref(), Some("esp32"));
+        {
+            let entry = manager
+                .list_backends()
+                .await
+                .into_iter()
+                .find(|e| e.id == "esp32")
+                .unwrap();
+            assert!(entry.controller.is_some());
+        } // entry dropped BEFORE disconnect: it clones the controller Arc,
+          // and keeping it alive would leak the serial fd (device stays busy).
+
+        // Disconnect → controller removed, runtime and active_id clean.
+        manager.disconnect_backend("esp32").await.unwrap();
+        assert!(manager.get_controller().await.is_none());
+        assert_eq!(manager.active_id().await, None, "disconnect clears active_id");
+        {
+            let entry = manager
+                .list_backends()
+                .await
+                .into_iter()
+                .find(|e| e.id == "esp32")
+                .unwrap();
+            assert!(entry.controller.is_none(), "no stale controller after disconnect");
+        } // entry dropped before the reconnect, for the same Arc reason.
+
+        // Second connect on the SAME path → succeeds (device was released, no
+        // port_in_use wedge), fresh controller stored.
+        connect(&manager, &path).await;
+        {
+            let entry = manager
+                .list_backends()
+                .await
+                .into_iter()
+                .find(|e| e.id == "esp32")
+                .unwrap();
+            assert!(entry.controller.is_some(), "reconnect must store a fresh controller");
+            assert_eq!(entry.port.as_deref(), Some(path.as_str()));
+        } // entry dropped before activate (same Arc-leak reason as above).
+
+        // disconnect_backend cleared active_id (R3-001) — re-activating the
+        // backend must point the runtime at the fresh controller, proving the
+        // reconnect left no contaminated connected/cache state behind.
+        manager.activate("esp32").await.unwrap();
+        assert!(manager.get_controller().await.is_some());
+        assert_eq!(manager.active_id().await.as_deref(), Some("esp32"));
     }
 
     #[tokio::test]

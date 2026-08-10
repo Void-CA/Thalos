@@ -850,6 +850,28 @@ mod tests {
         assert!(protocol.is_connected());
     }
 
+    /// A firmware line containing invalid UTF-8 bytes must surface as
+    /// `ProtocolError::MalformedResponse` — never a panic or a mis-parse.
+    #[tokio::test]
+    async fn handshake_with_invalid_utf8_returns_malformed_response() {
+        let mut transport = FakeTransport::new();
+        // 0xFF is not a valid UTF-8 byte; the rest is a well-formed HELLO reply.
+        transport.inject_response(vec![
+            b'H', 0xFF, b'E', b'L', b'L', b'O', b' ', b'1', b' ', b'O', b'K', b'\n',
+        ]);
+        transport.connect().await.unwrap();
+
+        let mut protocol = Esp32Protocol::new(Box::new(transport), 1);
+        let result = protocol.handshake().await;
+
+        match result.unwrap_err() {
+            ProtocolError::MalformedResponse(msg) => {
+                assert!(msg.contains("UTF-8"), "error must mention UTF-8, got: {msg}");
+            }
+            other => panic!("Expected MalformedResponse, got {other}"),
+        }
+    }
+
     // ── Task 2.11: RED — unexpected response triggers protocol error ──
 
     #[tokio::test]
