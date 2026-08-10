@@ -66,6 +66,10 @@ export interface ExecutionState {
    *  the workspace header so a running session never looks ambiguous about
    *  where it is executing. Sourced from the tick delta (backend truth). */
   source: string
+  /** Monotonic timestamp (performance.now()) of the LAST successful tick
+   *  delta — drives the "Feedback X ms ago" connection-health indicator.
+   *  null until the first tick arrives (or after a fresh start). */
+  lastFeedbackAt: number | null
 }
 
 interface ExecutionActions {
@@ -106,6 +110,7 @@ const INITIAL: ExecutionState = {
   iteration: 1,
   totalIterations: undefined,
   source: 'Simulation',
+  lastFeedbackAt: null,
 }
 
 /** Normalize any thrown error to `{message, code}` (error-ux spec): the
@@ -177,6 +182,7 @@ function startLoop() {
         iteration: delta.execution.iteration ?? 1,
         totalIterations: delta.execution.total_iterations,
         source: delta.execution.source ?? 'Simulation',
+        lastFeedbackAt: performance.now(),
       })
 
       if (isTerminal) {
@@ -239,6 +245,7 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>((set)
         iteration: 1,
         totalIterations: total,
         source,
+        lastFeedbackAt: null,
       })
       startLoop()
     } catch (err) {

@@ -495,3 +495,38 @@ describe('Progress label (P1 clarity)', () => {
     expect(screen.queryByText(/Current progress/)).not.toBeInTheDocument()
   })
 })
+
+describe('Feedback age (connection health)', () => {
+  beforeEach(() => {
+    act(() => {
+      useBackendStore.setState({ activeId: 'esp32', backends: [SIM_BACKEND, { ...ESP_BACKEND, status: 'active', connected: true }] })
+    })
+  })
+
+  it('shows "Feedback X ms ago" while running with recent feedback', () => {
+    setStatus('running', {
+      activePlan: plan,
+      source: 'Hardware',
+      lastFeedbackAt: performance.now(),
+    })
+    renderWorkspace()
+    expect(screen.getByTestId('execution-source-pill')).toHaveTextContent(/Feedback \d+ ms ago/)
+  })
+
+  it('shows "No recent feedback" when the connection is silent for >2s', () => {
+    setStatus('running', {
+      activePlan: plan,
+      source: 'Hardware',
+      lastFeedbackAt: performance.now() - 5000,
+    })
+    renderWorkspace()
+    expect(screen.getByTestId('execution-source-pill')).toHaveTextContent('No recent feedback')
+  })
+
+  it('shows no age outside a running session (Connected only)', () => {
+    setStatus('ready', { activePlan: plan, source: 'Hardware', lastFeedbackAt: null })
+    renderWorkspace()
+    expect(screen.getByTestId('execution-source-pill')).toHaveTextContent('ESP32 · Connected')
+    expect(screen.getByTestId('execution-source-pill')).not.toHaveTextContent(/Feedback|recent/)
+  })
+})

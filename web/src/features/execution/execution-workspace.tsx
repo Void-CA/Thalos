@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Activity, Clock, Play, Square, RefreshCw, Pause, Gauge, ListOrdered, Repeat, Repeat1, Cpu } from 'lucide-react'
 import { useExecutionStore } from './execution-store'
 import { useBackendStore } from './backend-store'
@@ -31,6 +31,7 @@ export function ExecutionWorkspace() {
   const iteration = useExecutionStore((s) => s.iteration)
   const totalIterations = useExecutionStore((s) => s.totalIterations)
   const source = useExecutionStore((s) => s.source)
+  const lastFeedbackAt = useExecutionStore((s) => s.lastFeedbackAt)
 
   const start = useExecutionStore((s) => s.start)
   const pause = useExecutionStore((s) => s.pause)
@@ -41,6 +42,29 @@ export function ExecutionWorkspace() {
   // Hardware connection state for the source pill — "ESP32 · Connected".
   const activeBackend = useBackendStore((s) => s.backends.find((b) => b.id === s.activeId))
   const hardwareConnected = activeBackend?.id === 'esp32' && activeBackend.connected === true
+
+  // Feedback-age ticker: re-render ~4x/s while running so the "Feedback X ms
+  // ago" line stays live. A connection being open says nothing about whether
+  // communication is actually alive — the age distinguishes healthy from
+  // stalled without any backend change (lastFeedbackAt comes from the tick).
+  const [, setNow] = useState(0)
+  useEffect(() => {
+    if (status !== 'running') return
+    const id = setInterval(() => setNow((n) => n + 1), 250)
+    return () => clearInterval(id)
+  }, [status])
+  const feedbackAgeMs =
+    source === 'Hardware' && hardwareConnected && status === 'running' && lastFeedbackAt !== null
+      ? Math.max(0, Math.round(performance.now() - lastFeedbackAt))
+      : null
+  const feedbackHealth: 'healthy' | 'delayed' | 'stale' | null =
+    feedbackAgeMs === null
+      ? null
+      : feedbackAgeMs > 2000
+        ? 'stale'
+        : feedbackAgeMs > 500
+          ? 'delayed'
+          : 'healthy'
 
   // Mode selection (EW1/EW2): Once by default; Repeat(N) with 1..=1000.
   const [modeKind, setModeKind] = useState<'once' | 'repeat'>('once')
@@ -119,15 +143,31 @@ export function ExecutionWorkspace() {
               data-testid="execution-source-pill"
               className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
                 source === 'Hardware'
-                  ? hardwareConnected
-                    ? 'bg-blue-600/20 text-blue-400'
-                    : 'bg-red-600/20 text-red-400'
+                  ? !hardwareConnected
+                    ? 'bg-red-600/20 text-red-400'
+                    : feedbackHealth === 'stale'
+                      ? 'bg-red-600/20 text-red-400'
+                      : feedbackHealth === 'delayed'
+                        ? 'bg-amber-600/20 text-amber-500'
+                        : 'bg-blue-600/20 text-blue-400'
                   : 'bg-muted text-muted-foreground'
               }`}
             >
-              {source === 'Hardware'
-                ? `ESP32 · ${hardwareConnected ? 'Connected' : 'Disconnected'}`
-                : 'Simulation'}
+              {source === 'Hardware' ? (
+                <>
+                  ESP32 · {hardwareConnected ? 'Connected' : 'Disconnected'}
+                  {feedbackHealth && (
+                    <>
+                      {' · '}
+                      {feedbackHealth === 'stale'
+                        ? 'No recent feedback'
+                        : `Feedback ${feedbackAgeMs} ms ago`}
+                    </>
+                  )}
+                </>
+              ) : (
+                'Simulation'
+              )}
             </span>
           </div>
           <BackendSelector />

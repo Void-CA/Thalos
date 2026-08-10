@@ -117,6 +117,16 @@ Sent by the firmware during sample collection (after `SAMPLES <count>`).
 The first field after `SAMPLE` is the **absolute timestamp** in
 microseconds from execution start, followed by joint positions.
 
+> **Semantics of execution samples (important):** execution samples represent
+> the state **reported by the execution backend**, not an independent physical
+> measurement. For the current ESP32 implementation, joint samples are the
+> **commanded waypoint values** recorded by the executor at their target
+> timestamps (`executor.cpp` replays the uploaded manifest; there are no
+> encoders or position sensors). Thalos therefore cannot claim to know the
+> physical joint position of the robot — only the execution state it
+> commanded. UI and documentation must phrase this as *reported* / *commanded*
+> joint state, never as measured position.
+
 ### END_UPLOAD — Finish manifest upload
 
 ```
