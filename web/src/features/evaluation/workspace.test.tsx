@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
 import { act } from 'react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -324,50 +324,155 @@ describe('EvaluationWorkspace — structured program view (Program)', () => {
   })
 })
 
-describe('EvaluationWorkspace — 3-portion grid (charts | charts | region detail)', () => {
-  it('renders the two jacobian charts, the problem regions list and the region detail placeholder', async () => {
-    act(() => {
-      useAnalysisStore.setState({ report: cleanReport })
-      useSceneStore.setState({ activePlan })
-    })
-    renderWorkspace()
-
-    // The lazy ECharts chunk resolves asynchronously — the two chart cards
-    // mount once the module loads (explicit timeout under parallel load).
-    const charts = await screen.findAllByTestId('chart', {}, { timeout: 5000 })
-    expect(charts).toHaveLength(2)
-    // Porción 3: problem regions list + the "select a region" placeholder.
-    expect(screen.getByText('Problem Regions')).toBeInTheDocument()
-    expect(screen.getByText(/select a region/i)).toBeInTheDocument()
-  })
-
-  it('keeps the region list, trajectory and recommendations visible while inspecting a region', async () => {
+describe('EvaluationWorkspace — master-detail layout (context | action)', () => {
+  it('renders both panels: the master (context) and the detail (action)', () => {
     act(() => {
       useAnalysisStore.setState({ report: recommendationReport })
       useSceneStore.setState({ activePlan })
     })
     renderWorkspace()
-    // Selecting a region opens the RegionInspector in porción 3 WITHOUT
-    // hiding the grouped regions list or the trajectory (charts stay put).
-    fireEvent.click(screen.getByRole('button', { name: /Singularity near waypoint 10/i }))
-    expect(screen.getByRole('heading', { name: 'Region Details' })).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: /Singularity near waypoint 10/i }),
-    ).toBeInTheDocument()
-    expect(
-      await screen.findByRole('img', { name: /Trajectory with problem regions/i }, { timeout: 5000 }),
-    ).toBeInTheDocument()
-    // The inspector co-renders with the recommendations in the same layout.
-    expect(screen.getByTestId('recommendation-row')).toBeInTheDocument()
+    expect(screen.getByTestId('evaluation-master')).toBeInTheDocument()
+    expect(screen.getByTestId('evaluation-detail')).toBeInTheDocument()
   })
 
-  it('renders a placeholder when no region is selected (porción 3 stays put)', () => {
+  it('keeps the trajectory view and both jacobian charts in the master panel', async () => {
     act(() => {
-      useAnalysisStore.setState({ report: cleanReport })
+      useAnalysisStore.setState({ report: recommendationReport })
       useSceneStore.setState({ activePlan })
     })
     renderWorkspace()
-    expect(screen.getByText(/Select a region to inspect its details/i)).toBeInTheDocument()
+    const master = screen.getByTestId('evaluation-master')
+    // The lazy ECharts chunk resolves asynchronously — explicit timeout.
+    expect(
+      await within(master).findByRole('img', { name: /Trajectory with problem regions/i }, { timeout: 5000 }),
+    ).toBeInTheDocument()
+    const charts = await within(master).findAllByTestId('chart', {}, { timeout: 5000 })
+    expect(charts).toHaveLength(2)
+  })
+
+  it('shows the ProblemRegions chooser, ProgramView and Recommendations in the detail when no region is selected', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: recommendationReport })
+      useSceneStore.setState({ activePlan })
+    })
+    renderWorkspace()
+    const detail = screen.getByTestId('evaluation-detail')
+    expect(within(detail).getByText('Problem Regions')).toBeInTheDocument()
+    expect(
+      within(detail).getByRole('button', { name: /Singularity near waypoint 10/i }),
+    ).toBeInTheDocument()
+    expect(within(detail).getByTestId('program-view')).toBeInTheDocument()
+    expect(within(detail).getByTestId('recommendation-row')).toBeInTheDocument()
+    expect(
+      within(detail).queryByRole('heading', { name: 'Region Details' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('swaps the chooser for the RegionInspector in the detail when a region is selected, keeping ProgramView', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: recommendationReport })
+      useSceneStore.setState({ activePlan })
+    })
+    renderWorkspace()
+    fireEvent.click(screen.getByRole('button', { name: /Singularity near waypoint 10/i }))
+    const detail = screen.getByTestId('evaluation-detail')
+    expect(within(detail).getByRole('heading', { name: 'Region Details' })).toBeInTheDocument()
+    expect(within(detail).queryByText('Problem Regions')).not.toBeInTheDocument()
+    expect(within(detail).getByTestId('program-view')).toBeInTheDocument()
+  })
+
+  it('filters recommendations to the selected region, keeping plan-general ones', () => {
+    const twoRegionReport: AnalysisReportWire = {
+      ...cleanReport,
+      problem_regions: [
+        {
+          id: 7,
+          kind: 'singularity',
+          severity: 'critical',
+          waypoint_start: 10,
+          waypoint_end: 20,
+          waypoint_count: 11,
+        },
+        {
+          id: 8,
+          kind: 'joint_limit',
+          severity: 'warning',
+          waypoint_start: 30,
+          waypoint_end: 40,
+          waypoint_count: 11,
+        },
+      ],
+      observations: [
+        {
+          id: 3,
+          kind: 'Singularity',
+          severity: 'Error',
+          artifact: { kind: 'MotionPlan', id: 'plan-1' },
+          location: { Waypoint: 15 },
+          attributes: {},
+          causes: [],
+          related: [],
+        },
+        {
+          id: 4,
+          kind: 'ConstraintViolation',
+          severity: 'Warning',
+          artifact: { kind: 'MotionPlan', id: 'plan-1' },
+          location: { Waypoint: 35 },
+          attributes: {},
+          causes: [],
+          related: [],
+        },
+      ],
+      recommendations: [
+        {
+          id: 1,
+          action: {
+            id: 1,
+            kind: 'MoveWaypoint',
+            target_observation: 3,
+            priority: 'high',
+            impact: 'reposition',
+            parameters: {},
+          },
+          edit: { MoveWaypoint: { waypoint: 15 } },
+          status: 'available',
+        },
+        {
+          id: 2,
+          action: {
+            id: 2,
+            kind: 'RotateTool',
+            target_observation: 4,
+            priority: 'medium',
+            impact: 'medium',
+            parameters: {},
+          },
+          edit: { ReplaceSegment: { index: 0 } },
+          status: 'available',
+        },
+      ],
+    }
+    act(() => {
+      useAnalysisStore.setState({ report: twoRegionReport })
+      useSceneStore.setState({ activePlan })
+    })
+    renderWorkspace()
+    // No selection → all recommendations.
+    expect(screen.getAllByTestId('recommendation-row')).toHaveLength(2)
+    // Selecting region 7 (wp 10–20) keeps only the recommendation whose
+    // target observation anchors at wp 15.
+    act(() => {
+      useAnalysisStore.getState().selectRegion(7)
+    })
+    expect(screen.getAllByTestId('recommendation-row')).toHaveLength(1)
+    expect(screen.getByText('Move Waypoint')).toBeInTheDocument()
+    // Selecting region 8 (wp 30–40) keeps only the wp 35 recommendation.
+    act(() => {
+      useAnalysisStore.getState().selectRegion(8)
+    })
+    expect(screen.getAllByTestId('recommendation-row')).toHaveLength(1)
+    expect(screen.getByText('Rotate Tool')).toBeInTheDocument()
   })
 })
 

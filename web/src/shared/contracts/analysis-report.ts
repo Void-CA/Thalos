@@ -253,3 +253,26 @@ export function dedupeRecommendations(
   }
   return unique
 }
+
+/**
+ * Problem region a recommendation is tied to, or `null` when the chain cannot
+ * be resolved: `recommendation.action.target_observation` → the referenced
+ * observation → its `Location::Waypoint` → the region whose interval covers
+ * that waypoint. Recommendations that cannot resolve (missing observation,
+ * non-waypoint location, waypoint outside every region) are plan-general and
+ * are never filtered out by a region selection in the evaluation layout.
+ */
+export function recommendationRegionId(
+  recommendation: RecommendationWire,
+  report: AnalysisReportWire,
+): number | null {
+  const observation = report.observations.find(
+    (o) => o.id === recommendation.action.target_observation,
+  )
+  const waypoint = observation ? waypointOf(observation) : null
+  if (waypoint === null) return null
+  const region = (report.problem_regions ?? []).find(
+    (r) => r.waypoint_start <= waypoint && waypoint <= r.waypoint_end,
+  )
+  return region ? region.id : null
+}

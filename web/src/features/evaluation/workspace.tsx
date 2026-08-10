@@ -7,7 +7,11 @@ import { RegionInspector } from '@/features/analysis/components/region-inspector
 import { RecommendationRow } from '@/features/planning/components/RecommendationRow'
 import { useSemanticEditor } from '@/features/semantic/store'
 import { useSceneStore } from '@/features/viewport/store'
-import { dedupeRecommendations, recommendationKey } from '@/shared/contracts/analysis-report'
+import {
+  dedupeRecommendations,
+  recommendationKey,
+  recommendationRegionId,
+} from '@/shared/contracts/analysis-report'
 import { YoshikawaChart } from './components/yoshikawa-chart'
 import { DeterminantChart } from './components/determinant-chart'
 import { ProgramView } from './components/program-view'
@@ -75,6 +79,19 @@ export function EvaluationWorkspace() {
   const hasProblemRegions = (report.problem_regions ?? []).length > 0
   const recommendations = dedupeRecommendations(report.recommendations ?? [])
 
+  // Master-detail (CDD redesign): the detail pane is contextual on the
+  // selected region. Recommendations tied to THAT region come first;
+  // plan-general ones (no resolvable region chain — see
+  // `recommendationRegionId`) are always actionable and stay visible;
+  // recommendations of OTHER regions are hidden — they belong to that
+  // region's own drill-down.
+  const visibleRecommendations = selectedRegion
+    ? recommendations.filter((recommendation) => {
+        const regionId = recommendationRegionId(recommendation, report)
+        return regionId === selectedRegion.id || regionId === null
+      })
+    : recommendations
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Evaluation header: the decision this view exists for ── */}
@@ -86,71 +103,79 @@ export function EvaluationWorkspace() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-4 min-h-0">
-        {/* Verdict + decision context: plan summary and trajectory. */}
+      {/* Single scroll container: both columns share one scrollbar (the 3D
+          trajectory and the action pane stay aligned; the header is fixed). */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-3">
+        {/* Verdict spans the whole decision — full-width above the split. */}
         <StatusBanner />
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 items-start">
-          <PlanSummary />
-          <div className="lg:col-span-2 min-w-0">
+
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3 items-start">
+          {/* ── MASTER (context, ~2/3): WHERE the problem is — trajectory +
+              temporal analysis, all cross-highlighting the selected region. */}
+          <div
+            className="lg:col-span-2 flex flex-col gap-4 min-w-0"
+            data-testid="evaluation-master"
+          >
+            <PlanSummary />
             <Suspense fallback={<div className="h-64 w-full" aria-label="Trajectory with problem regions" />}>
               <TrajectoryView />
             </Suspense>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 min-w-0">
+              <YoshikawaChart />
+              <DeterminantChart />
+            </div>
           </div>
-        </div>
 
-        {/* 3-portion grid at lg (stacked below): the two jacobian charts are
-            the visual focus, the third portion is the problem regions list +
-            the selected region's detail. */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 items-start">
-          <YoshikawaChart />
-          <DeterminantChart />
-          <section className="flex flex-col gap-2 min-w-0">
-            <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
-              Problem Regions
-            </h2>
-            {hasProblemRegions ? (
-              <ProblemRegions />
-            ) : (
-              <p className="text-xs text-muted-foreground text-center py-4 rounded-lg border border-border bg-card/50">
-                No se detectaron problemas — el plan está listo.
-              </p>
-            )}
+          {/* ── DETAIL (action, ~1/3): WHAT to do with the problem. Swaps the
+              region chooser for the RegionInspector once a region is active;
+              ProgramView (the editable segment) and Recommendations always live
+              here. In mobile the detail collapses below the master. */}
+          <aside
+            className="lg:col-span-1 flex flex-col gap-4 min-w-0"
+            data-testid="evaluation-detail"
+          >
             {selectedRegion ? (
-              <RegionInspector />
+              <>
+                <RegionInspector />
+                <ProgramView />
+              </>
             ) : (
-              <div className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border bg-card/30 px-3 py-6 text-center">
-                <span className="text-xs text-muted-foreground">
-                  Select a region to inspect its details
-                </span>
-                <span className="text-[10px] text-muted-foreground/70">
-                  Click a region in the list or on the trajectory.
-                </span>
-              </div>
+              <>
+                <section className="flex flex-col gap-2 min-w-0">
+                  <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                    Problem Regions
+                  </h2>
+                  {hasProblemRegions ? (
+                    <ProblemRegions />
+                  ) : (
+                    <p className="text-xs text-muted-foreground text-center py-4 rounded-lg border border-border bg-card/50">
+                      No se detectaron problemas — el plan está listo.
+                    </p>
+                  )}
+                </section>
+                <ProgramView />
+              </>
             )}
-          </section>
+
+            {/* Recommendations — the base of the post-MVP resolution strategy
+                (Preview/Apply/Undo). */}
+            {visibleRecommendations.length > 0 && (
+              <section className="flex flex-col gap-2">
+                <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                  Recommendations
+                </h2>
+                <ul className="flex flex-col gap-1.5">
+                  {visibleRecommendations.map((recommendation) => (
+                    <RecommendationRow
+                      key={recommendationKey(recommendation)}
+                      recommendation={recommendation}
+                    />
+                  ))}
+                </ul>
+              </section>
+            )}
+          </aside>
         </div>
-
-        {/* Program — the structured, non-editable state of the plan's motion
-            program, connected to the problem regions above (step 2 CDD:
-            "which segment is the one I must edit"). */}
-        <ProgramView />
-
-        {/* Recommendations — the base of the post-MVP resolution strategy. */}
-        {recommendations.length > 0 && (
-          <section className="flex flex-col gap-2">
-            <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
-              Recommendations
-            </h2>
-            <ul className="flex flex-col gap-1.5">
-              {recommendations.map((recommendation) => (
-                <RecommendationRow
-                  key={recommendationKey(recommendation)}
-                  recommendation={recommendation}
-                />
-              ))}
-            </ul>
-          </section>
-        )}
       </div>
     </div>
   )
