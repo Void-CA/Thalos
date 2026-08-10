@@ -274,3 +274,58 @@ async fn execute_without_manifest_is_rejected_not_ready() {
     drop(protocol);
     server.stop();
 }
+
+// ── execution-mode-repeat (R10, NF2): 3 sequential uploads, single trace ────
+
+/// R10/NF2: re-upload per iteration requires ZERO firmware changes — a
+/// Repeat { count: 3 } host loop issues three full manifest uploads against
+/// the SAME connected device, and the host collects exactly ONE execution
+/// trace (the last run's 10 samples, clear-on-take).
+#[tokio::test]
+async fn repeat_three_uploads_thrice_and_collects_single_trace() {
+    let (mut server, addr) = start_sim(Scenario::Happy);
+    let mut backend = connect_backend(&addr).await;
+
+    for _i in 0..3 {
+        backend
+            .execute(six_dof_waypoints(), PLAN_DURATION)
+            .await
+            .expect("each iteration uploads and starts execution");
+        // Sleep past the 75ms STATUS-poll TTL BEFORE the first poll: the
+        // previous iteration left a terminal state (Idle, progress=plan) in
+        // the cache — an immediate poll would short-circuit on that stale
+        // "completed" and skip waiting for THIS iteration to actually run.
+        tokio::time::sleep(POLL_INTERVAL).await;
+        // Drive STATUS polls until the firmware COMPLETED → Idle with full
+        // progress (same predicate as the happy-cycle test).
+        poll_until(&backend, |s| {
+            s.motion.mode == MotionMode::Idle && s.execution.progress >= PLAN_DURATION
+        })
+        .await;
+    }
+
+    // R10: 3 iterations = 3 full upload+execute cycles on the SAME device.
+    // The loop above already proves the wire contract: each `execute()` does a
+    // complete MANIFEST→…→END_UPLOAD→READY→EXECUTE upload, and any broken
+    // re-upload path would have failed an iteration with NOT_READY instead of
+    // completing. (The `test_sent_commands()` wire-count helper is
+    // FakeTransport-only — calling it on a TcpTransport-backed backend is UB.)
+
+    // Single trace: the LAST run's 10 samples, consumed exactly once.
+    let trace = backend
+        .take_execution_trace()
+        .await
+        .expect("execution trace must be available after the final iteration");
+    assert_eq!(trace.len(), DEFAULT_SAMPLE_COUNT, "single trace with 10 samples");
+    assert!(
+        backend.take_execution_trace().await.is_none(),
+        "trace is clear-on-take: a second call must return None"
+    );
+
+    assert!(
+        backend.is_connected(),
+        "the device stays connected across repeated uploads"
+    );
+    backend.disconnect().await.expect("disconnect must succeed");
+    server.stop();
+}
