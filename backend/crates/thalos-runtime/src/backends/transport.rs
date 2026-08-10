@@ -181,6 +181,12 @@ pub struct SerialTransport {
     /// enough to beat the frontend 10s timeout and return `no_firmware` fast,
     /// long enough for a real device to answer the HELLO handshake.
     read_timeout: std::time::Duration,
+    /// In-progress response line carried across `receive()` calls so a
+    /// timed-out partial line is never lost (mirrors the TCP `partial_line`,
+    /// REL-04). `read_until` appends DIRECTLY to this Vec (cancellation-safe),
+    /// unlike `read_line`, which mem::takes the String into a future-owned
+    /// buffer that is dropped on timeout.
+    partial_line: Option<Vec<u8>>,
 }
 
 impl SerialTransport {
@@ -194,6 +200,7 @@ impl SerialTransport {
             baud,
             stream: None,
             read_timeout: std::time::Duration::from_secs(2),
+            partial_line: Some(Vec::new()),
         }
     }
 
@@ -216,6 +223,7 @@ impl SerialTransport {
             baud: 0,
             stream: Some(tokio::sync::Mutex::new(stream)),
             read_timeout,
+            partial_line: Some(Vec::new()),
         }
     }
 }
@@ -231,11 +239,14 @@ impl Transport for SerialTransport {
         let port = tokio_serial::SerialStream::open(&builder)
             .map_err(|e| TransportError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
         self.stream = Some(tokio::sync::Mutex::new(port));
+        // A fresh device connection must not inherit a stale partial line.
+        self.partial_line = Some(Vec::new());
         Ok(())
     }
 
     async fn disconnect(&mut self) -> Result<(), TransportError> {
         self.stream = None;
+        self.partial_line = None;
         Ok(())
     }
 
@@ -253,19 +264,36 @@ impl Transport for SerialTransport {
         let stream = self.stream.as_ref().ok_or(TransportError::Disconnected)?;
         let mut guard = stream.lock().await;
         let mut reader = tokio::io::BufReader::new(&mut *guard);
-        let mut line = String::new();
+        // REL-04 (serial): `read_until` accumulates into the persistent
+        // `partial_line`, so a partial line buffered when the timeout fires
+        // SURVIVES and is resumed by the next call (unlike `read_line`, whose
+        // future-owned String buffer is dropped on timeout, losing the prefix).
+        let line = self
+            .partial_line
+            .as_mut()
+            .ok_or(TransportError::Disconnected)?;
         // R4-002: bound the read — a silent device must surface `Timeout`
         // (→ `no_firmware`) instead of blocking the request forever.
-        match tokio::time::timeout(self.read_timeout, reader.read_line(&mut line)).await {
+        match tokio::time::timeout(self.read_timeout, reader.read_until(b'\n', line)).await {
             Err(_) => return Err(TransportError::Timeout),
             Ok(Err(e)) => return Err(TransportError::Io(e)),
             Ok(Ok(0)) => return Err(TransportError::Disconnected),
             Ok(Ok(_)) => {}
         }
-        // Strip trailing \r\n or \n (ESP firmware envía \r\n)
-        let trimmed = line.trim_end_matches('\n').trim_end_matches('\r');
-        let mut bytes = trimmed.to_string().into_bytes();
-        bytes.push(b'\n'); // restore single \n for protocol parser
+        if line.is_empty() {
+            return Err(TransportError::Disconnected);
+        }
+        // Take the completed line; the next call starts a fresh one.
+        let mut bytes = std::mem::take(line);
+        // Strip trailing \r\n or \n (ESP firmware envía \r\n), then restore a
+        // single \n for the protocol parser.
+        if bytes.last() == Some(&b'\n') {
+            bytes.pop();
+        }
+        if bytes.last() == Some(&b'\r') {
+            bytes.pop();
+        }
+        bytes.push(b'\n');
         Ok(bytes)
     }
 }
@@ -443,5 +471,106 @@ mod tests {
             start.elapsed() < Duration::from_secs(5),
             "receive must not block forever"
         );
+    }
+
+    /// Fragmented writes: a line split across several `write` calls with a gap
+    /// between them must still be delivered COMPLETE by a single `receive()`.
+    /// The read path (kernel buffering + `read_until`) coalesces the fragments
+    /// instead of returning a truncated line.
+    #[tokio::test]
+    async fn serial_receive_coalesces_fragmented_writes() {
+        use tokio::io::AsyncWriteExt;
+        let (master, mut slave) = tokio_serial::SerialStream::pair().unwrap();
+        let mut transport = SerialTransport::from_stream(master, Duration::from_secs(2));
+
+        // "PART1" arrives first; a byte-count read would return early here.
+        slave.write_all(b"PART1").await.unwrap();
+        slave.flush().await.unwrap();
+        // Gap between fragments, then the rest of the line.
+        tokio::time::sleep(Duration::from_millis(80)).await;
+        slave.write_all(b"PART2\n").await.unwrap();
+        slave.flush().await.unwrap();
+
+        let resp = transport.receive().await.unwrap();
+        assert_eq!(String::from_utf8(resp).unwrap(), "PART1PART2\n");
+    }
+
+    /// RED: a partial line buffered when the receive timeout fires must NOT be
+    /// lost — the in-progress line must survive across `receive()` calls so a
+    /// slow/partial write never desyncs the protocol permanently. Mirrors the
+    /// REL-04 guarantee the TCP transport already has.
+    #[tokio::test]
+    async fn serial_partial_line_survives_receive_timeout() {
+        use tokio::io::AsyncWriteExt;
+        let (master, mut slave) = tokio_serial::SerialStream::pair().unwrap();
+        let mut transport = SerialTransport::from_stream(master, Duration::from_millis(150));
+
+        // Half a line, then silence: the first receive() times out mid-line.
+        slave.write_all(b"STATUS RUN").await.unwrap();
+        slave.flush().await.unwrap();
+        let err = transport.receive().await.unwrap_err();
+        assert!(matches!(err, TransportError::Timeout), "got {err:?}");
+
+        // The rest arrives later — the buffered prefix must be kept.
+        slave.write_all(b"NING 0.5\n").await.unwrap();
+        slave.flush().await.unwrap();
+        let resp = transport.receive().await.unwrap();
+        assert_eq!(String::from_utf8(resp).unwrap(), "STATUS RUNNING 0.5\n");
+    }
+
+    /// EOF/disconnect: when the peer end of the virtual serial pair is dropped,
+    /// `receive()` must surface a TERMINAL error instead of blocking until the
+    /// read timeout. Note: Linux PTYs report EIO when the slave side closes,
+    /// so the drop maps to `Io` here; macOS reports EOF → `Disconnected`. A
+    /// disconnect must NEVER masquerade as a `Timeout`.
+    #[tokio::test]
+    async fn serial_receive_reports_disconnect_when_peer_dropped() {
+        let (master, slave) = tokio_serial::SerialStream::pair().unwrap();
+        let mut transport = SerialTransport::from_stream(master, Duration::from_millis(150));
+
+        // Drop the peer end of the PTY pair.
+        drop(slave);
+
+        let start = std::time::Instant::now();
+        let err = transport.receive().await.unwrap_err();
+        assert!(
+            !matches!(err, TransportError::Timeout),
+            "peer drop must NOT surface as a timeout, got {err:?}"
+        );
+        assert!(
+            matches!(
+                err,
+                TransportError::Disconnected | TransportError::Io(_)
+            ),
+            "peer drop must surface as Disconnected or Io, got {err:?}"
+        );
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "receive must not hang after the peer is dropped"
+        );
+    }
+
+    /// Sizing: a line longer than 1KB must be read intact — `read_until` grows
+    /// its buffer dynamically, so a long line (e.g. a verbose error) must not
+    /// be truncated at a fixed chunk. This is a HOST-side bound; the firmware
+    /// 256-byte buffer is a separate device limit.
+    #[tokio::test]
+    async fn serial_receive_handles_long_line() {
+        use tokio::io::AsyncWriteExt;
+        let (master, mut slave) = tokio_serial::SerialStream::pair().unwrap();
+        let mut transport = SerialTransport::from_stream(master, Duration::from_secs(2));
+
+        let mut long_line = vec![b'A'; 4096];
+        long_line.push(b'\n');
+        slave.write_all(&long_line).await.unwrap();
+        slave.flush().await.unwrap();
+
+        let resp = transport.receive().await.unwrap();
+        assert_eq!(resp.len(), 4097);
+        assert!(
+            resp.iter().take(4096).all(|&b| b == b'A'),
+            "long line must be read intact"
+        );
+        assert_eq!(resp[4096], b'\n');
     }
 }
