@@ -7,7 +7,6 @@ pub mod execution_boundary;
 pub mod motion_recorder;
 pub mod motion_trace;
 pub mod plan;
-pub mod robot_command;
 pub mod services;
 pub mod session;
 pub mod snapshots;
@@ -23,7 +22,6 @@ pub use execution_boundary::{
 };
 pub use motion_trace::{MotionSample, MotionTrace};
 pub use plan::{ActiveMotionPlan, ExecutionSession, MotionType, PlanState, SessionStatus};
-pub use robot_command::RobotCommand;
 pub use services::command_history::{AppliedCommand, CommandHistory, CommandMetrics, DEFAULT_HISTORY_CAP};
 pub use services::manipulability::ManipulabilityService;
 pub use services::plan_analysis::{PlanAnalysisResult, PlanAnalysisService};

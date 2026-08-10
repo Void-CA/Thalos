@@ -1,6 +1,6 @@
 //! Transport abstraction — comunicación con hardware real.
 //!
-//! Separa el protocolo de aplicación (RobotCommand → wire format) del
+//! Separa el protocolo de aplicación (comando → wire format) del
 //! medio físico (serial, TCP, MQTT, etc.).
 //!
 //! # Ejemplo

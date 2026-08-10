@@ -11,8 +11,8 @@
 //!                  └── Interpolator (muestras → RobotState)
 //! ```
 //!
-//! El frontend controla el replay mediante `RobotCommand::Stop/Pause/Resume`
-//! y el ciclo de tick avanza el cursor mediante `advance(dt)`.
+//! El frontend controla el replay (stop/pause/resume) y el ciclo de tick
+//! avanza el cursor mediante `advance(dt)`.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
