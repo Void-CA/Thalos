@@ -211,6 +211,9 @@ pub mod tests {
         /// scene tests simulate Moving/EStop/Completed states without a
         /// real device.
         pub state: Option<RobotState>,
+        /// Number of `execute` calls (repeat orchestration): each iteration
+        /// completion re-executes the plan, so the gate loop increments this.
+        pub execute_count: AtomicUsize,
     }
 
     impl MockController {
@@ -227,6 +230,7 @@ pub mod tests {
                 advance_error: None,
                 execution_trace: None,
                 state: None,
+                execute_count: AtomicUsize::new(0),
             }
         }
     }
@@ -264,6 +268,7 @@ pub mod tests {
                 return Err(err.clone());
             }
             self.executed.store(true, Ordering::SeqCst);
+            self.execute_count.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
 

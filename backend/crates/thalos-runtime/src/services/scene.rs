@@ -25,7 +25,7 @@ use crate::error::RuntimeError;
 use crate::execution_boundary::ExecutionSample as ProtocolSample;
 use crate::motion_recorder::MotionRecorder;
 use crate::motion_trace::MotionTrace;
-use crate::plan::{PlanState, SessionStatus};
+use crate::plan::{ExecutionMode, PlanState, SessionStatus};
 use crate::services::command_history::{AppliedCommand, CommandMetrics};
 use crate::session::{ExecutionSource, SessionManager};
 use crate::snapshots::{RuntimeSnapshot, TickDelta};
@@ -43,6 +43,14 @@ struct RecordingState {
     recorder: MotionRecorder,
     execution_recorder: ExecutionRecorder,
     start_time: Duration,
+    /// Execution mode of the running session (R1) — drives the repeat
+    /// orchestration in the completion gate.
+    mode: ExecutionMode,
+    /// Current iteration, 1-based (R3). Incremented at each intermediate
+    /// iteration completion; the terminal iteration is finalized as-is.
+    iteration: u32,
+    /// Total iterations from the mode (`None` for Once, R4).
+    total_iterations: Option<u32>,
 }
 
 /// Derive an ExecutionSession from a RobotState.
@@ -132,9 +140,12 @@ impl SceneService {
     /// Build a snapshot that includes execution state from the controller.
     ///
     /// Reads the controller's RobotState and derives ExecutionSession + joints.
+    /// `repeat_meta` (mode + current iteration) is attached to the derived
+    /// session when known — the controller state carries no repeat intent.
     async fn build_snapshot_with_execution(
         runtime: &tokio::sync::RwLock<SceneRuntime>,
         controller: &Arc<RwLock<dyn RobotController + Send + Sync>>,
+        repeat_meta: Option<(ExecutionMode, u32)>,
     ) -> RuntimeSnapshot {
         let ctrl = controller.read().await;
         let state = ctrl.robot_state().await;
@@ -145,7 +156,13 @@ impl SceneService {
         // R4-001: the derived session carries the ACTIVE controller's source so
         // the badge reports Hardware/Esp32 when the ESP32 backend is connected.
         let source = ctrl.execution_source();
-        let execution = session_from_state(&state).map(|exe| exe.with_source(source));
+        let execution = session_from_state(&state).map(|exe| {
+            let exe = exe.with_source(source);
+            match repeat_meta {
+                Some((mode, iteration)) => exe.with_repeat_state(mode, iteration),
+                None => exe,
+            }
+        });
 
         // Sync the active_plan state with the execution
         if let Some(ref mut plan) = rt.active_plan {
@@ -361,6 +378,26 @@ impl SceneService {
     }
 
     pub async fn start_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        self.start_execution_with_mode(ExecutionMode::Once).await
+    }
+
+    /// Start execution with an explicit mode (R1/R7).
+    ///
+    /// S8: `Repeat` requires a loaded plan — without one the request is
+    /// refused with [`RuntimeError::NoActivePlan`] (4xx) BEFORE any controller
+    /// or session work. `Once` preserves the legacy behavior: starting
+    /// without a loaded plan still succeeds (existing tests depend on it).
+    pub async fn start_execution_with_mode(
+        &self,
+        mode: ExecutionMode,
+    ) -> Result<RuntimeSnapshot, RuntimeError> {
+        if matches!(mode, ExecutionMode::Repeat { .. }) {
+            let runtime = self.runtime.read().await;
+            if runtime.scheduled_plan.is_none() && runtime.active_plan.is_none() {
+                return Err(RuntimeError::NoActivePlan);
+            }
+        }
+
         // R3-001: with NO active controller (e.g. the hardware backend is
         // active but was never connected, or the device was disconnected while
         // active) start must fail EXPLICITLY with `not_connected` — a silent
@@ -408,6 +445,7 @@ impl SceneService {
                     duration,
                     joint_count,
                     robot_name_for_session,
+                    mode,
                 )
                 .await;
 
@@ -435,10 +473,22 @@ impl SceneService {
                 recorder,
                 execution_recorder: exec_recorder,
                 start_time: std::time::Duration::ZERO,
+                mode,
+                iteration: 1,
+                total_iterations: mode.total_iterations(),
             });
         }
 
-        Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await)
+        let repeat_meta = self.repeat_state().await;
+        Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl, repeat_meta).await)
+    }
+
+    /// Current repeat state from the active recording — `(mode, iteration)`.
+    ///
+    /// `None` when no recording is active (Once sessions or post-finalize).
+    async fn repeat_state(&self) -> Option<(ExecutionMode, u32)> {
+        let recording = self.recording.read().await;
+        recording.as_ref().map(|r| (r.mode, r.iteration))
     }
 
     /// Seek the active controller to a position (fraction 0.0–1.0).
@@ -452,7 +502,8 @@ impl SceneService {
                 .await
                 .map_err(|e| RuntimeError::ControllerFailed { source: e })?;
             drop(ctrl_guard);
-            return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
+            let repeat_meta = self.repeat_state().await;
+            return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl, repeat_meta).await);
         }
         let runtime = self.runtime.read().await;
         Ok(Self::build_snapshot(&runtime, None))
@@ -464,7 +515,8 @@ impl SceneService {
                 let mut c = ctrl.write().await;
                 c.pause().await?;
             } // write lock dropped
-            return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
+            let repeat_meta = self.repeat_state().await;
+            return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl, repeat_meta).await);
         }
         let runtime = self.runtime.read().await;
         Ok(Self::build_snapshot(&runtime, None))
@@ -476,7 +528,8 @@ impl SceneService {
                 let mut c = ctrl.write().await;
                 c.resume().await?;
             } // write lock dropped
-            return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
+            let repeat_meta = self.repeat_state().await;
+            return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl, repeat_meta).await);
         }
         let runtime = self.runtime.read().await;
         Ok(Self::build_snapshot(&runtime, None))
@@ -484,6 +537,10 @@ impl SceneService {
 
     pub async fn cancel_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
         if let Some(ctrl) = self.manager.get_controller().await {
+            // Capture the repeat state BEFORE finalizing — the recording is
+            // consumed by finalize_recording and the DTO must still show the
+            // iteration at cancel time (R12).
+            let repeat_meta = self.repeat_state().await;
             {
                 let mut c = ctrl.write().await;
                 c.stop().await?;
@@ -491,7 +548,7 @@ impl SceneService {
             // Finalize recording as Cancelled if active
             self.finalize_recording(Some(crate::plan::SessionStatus::Cancelled))
                 .await;
-            return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl).await);
+            return Ok(Self::build_snapshot_with_execution(&self.runtime, &ctrl, repeat_meta).await);
         }
         let runtime = self.runtime.read().await;
         Ok(Self::build_snapshot(&runtime, None))

@@ -7,6 +7,7 @@ use tokio::sync::RwLock;
 
 use crate::motion_trace::MotionTrace;
 use crate::plan::session_status::SessionStatus;
+use crate::plan::ExecutionMode;
 use crate::telemetry::ExecutionTrace;
 
 use super::execution_source::ExecutionSource;
@@ -56,6 +57,9 @@ impl SessionManager {
     }
 
     /// Registrar una nueva sesión (empieza en estado Running).
+    ///
+    /// SM4: accepts the `ExecutionMode` and initializes `iteration = 1` and
+    /// `total_iterations = mode.total_iterations()`.
     pub async fn register(
         &self,
         source: ExecutionSource,
@@ -63,6 +67,7 @@ impl SessionManager {
         duration: f64,
         joint_count: usize,
         robot_name: String,
+        mode: ExecutionMode,
     ) -> SessionData {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let session = SessionData {
@@ -76,11 +81,30 @@ impl SessionManager {
             duration,
             joint_count,
             robot_name,
+            mode,
+            iteration: 1,
+            total_iterations: mode.total_iterations(),
         };
 
         self.sessions.write().await.push(session.clone());
         let _ = self.save_to_disk(&session).await;
         session
+    }
+
+    /// Actualizar el contador de iteración de una sesión (R5, R3).
+    ///
+    /// The scene service persists the current iteration on every iteration
+    /// transition (intermediate completions AND the terminal one) so the
+    /// session list / DTOs always carry the live value.
+    pub async fn set_iteration(&self, id: u64, iteration: u32) -> Option<SessionData> {
+        let mut sessions = self.sessions.write().await;
+        if let Some(session) = sessions.iter_mut().find(|s| s.id == id) {
+            session.iteration = iteration;
+            let s = session.clone();
+            let _ = self.save_to_disk(&s).await;
+            return Some(s);
+        }
+        None
     }
 
     /// Marcar sesión como completada y guardar el trace.
@@ -187,7 +211,7 @@ impl SessionManager {
         let duration = trace.duration().as_secs_f64();
         let joint_count = trace.samples().first().map(|s| s.joints.len()).unwrap_or(0);
         let session = self
-            .register(source, "imported".into(), duration, joint_count, robot_name)
+            .register(source, "imported".into(), duration, joint_count, robot_name, ExecutionMode::Once)
             .await;
         self.complete(session.id, trace).await;
         session
@@ -310,6 +334,7 @@ mod tests {
                 2.0,
                 6,
                 "test_robot".into(),
+                ExecutionMode::Once,
             )
             .await;
         assert_eq!(session.id, 1);
@@ -330,6 +355,7 @@ mod tests {
                 1.0,
                 2,
                 "robot".into(),
+                ExecutionMode::Once,
             )
             .await;
         let trace = sample_trace();
@@ -347,10 +373,10 @@ mod tests {
     async fn list_returns_most_recent_first() {
         let manager = SessionManager::with_path(tmp_path());
         manager
-            .register(ExecutionSource::Simulation, "p1".into(), 1.0, 2, "r".into())
+            .register(ExecutionSource::Simulation, "p1".into(), 1.0, 2, "r".into(), ExecutionMode::Once)
             .await;
         manager
-            .register(ExecutionSource::Simulation, "p2".into(), 1.0, 2, "r".into())
+            .register(ExecutionSource::Simulation, "p2".into(), 1.0, 2, "r".into(), ExecutionMode::Once)
             .await;
 
         let list = manager.list().await;

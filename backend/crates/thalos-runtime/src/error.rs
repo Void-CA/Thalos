@@ -129,6 +129,12 @@ pub enum RuntimeError {
     /// `JointCountMismatch{0,0}` (422) that the frontend could not act on.
     #[error("{source}")]
     ControllerFailed { source: ControllerError },
+
+    /// `Repeat` execution was requested with no plan loaded (S8). The API
+    /// maps this to 400 `no_active_plan` — `Once` keeps the legacy behavior
+    /// of starting (and immediately idling) without a plan.
+    #[error("no active plan to execute")]
+    NoActivePlan,
 }
 
 #[cfg(test)]
@@ -215,6 +221,7 @@ impl RuntimeError {
             RuntimeError::StaleUndo => "stale_undo",
             RuntimeError::UndoVersionMismatch { .. } => "undo_version_mismatch",
             RuntimeError::ControllerFailed { source } => source.error_code(),
+            RuntimeError::NoActivePlan => "no_active_plan",
         }
     }
 }
