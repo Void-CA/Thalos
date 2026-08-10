@@ -214,6 +214,10 @@ pub mod tests {
         /// Number of `execute` calls (repeat orchestration): each iteration
         /// completion re-executes the plan, so the gate loop increments this.
         pub execute_count: AtomicUsize,
+        /// Number of `take_execution_trace` calls — the repeat gate must drain
+        /// the hardware samples EXACTLY once (final iteration, NF3) and never
+        /// on intermediate iterations or failures (S2).
+        pub take_trace_calls: AtomicUsize,
     }
 
     impl MockController {
@@ -231,6 +235,7 @@ pub mod tests {
                 execution_trace: None,
                 state: None,
                 execute_count: AtomicUsize::new(0),
+                take_trace_calls: AtomicUsize::new(0),
             }
         }
     }
@@ -305,6 +310,7 @@ pub mod tests {
         }
 
         async fn take_execution_trace(&self) -> Option<Vec<ExecutionSample>> {
+            self.take_trace_calls.fetch_add(1, Ordering::SeqCst);
             self.execution_trace.clone()
         }
 

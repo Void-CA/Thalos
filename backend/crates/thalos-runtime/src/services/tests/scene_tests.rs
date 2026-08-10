@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::backends::controller::tests::MockController;
-use crate::session::ExecutionSource;
+use crate::session::{ExecutionSource, SessionManager};
 use crate::state::robot_state::{MotionMode, RobotState};
 use crate::{
     Command, RobotController, RuntimeSnapshot, SceneService,
@@ -1389,6 +1389,262 @@ async fn estop_state_finalizes_session_as_failed() {
         session.status,
         crate::plan::SessionStatus::Failed,
         "EStop must finalize the session as Failed"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// Execution Mode Repeat — orchestration gate (S1-S3, S10 / R3-R6, R11-R12)
+// ═════════════════════════════════════════════════════════════════════
+
+/// A completing hardware state: seconds-progress >= the 2.0s plan duration.
+fn repeat_done_state() -> RobotState {
+    let mut s = RobotState::default();
+    s.motion.mode = MotionMode::Moving;
+    s.execution.progress = 2.0;
+    s
+}
+
+/// A mid-run hardware state: seconds-progress below the plan duration.
+fn repeat_running_state() -> RobotState {
+    let mut s = RobotState::default();
+    s.motion.mode = MotionMode::Moving;
+    s.execution.progress = 0.5;
+    s
+}
+
+/// A 2.0s Scara plan — the standard fixture for the repeat tests.
+fn repeat_plan() -> thalos_planning::motion::program::CompiledPlan {
+    CompiledPlan::new(
+        thalos_core::trajectory::Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0, 0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![0.5, -0.3, 0.1, 0.0], 2.0),
+        ]),
+        vec![],
+    )
+}
+
+/// Build a SceneService with a Hardware-source MockController whose state the
+/// test drives tick-by-tick, plus a temp-dir SessionManager.
+async fn repeat_service(
+    mock: MockController,
+) -> (
+    SceneService,
+    Arc<RwLock<MockController>>,
+    Arc<SessionManager>,
+    std::path::PathBuf,
+) {
+    let concrete = Arc::new(RwLock::new(mock));
+    let controller = concrete.clone() as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let manager = Arc::new(BackendManager::new());
+    manager.set_active(controller).await.unwrap();
+
+    let dir = std::env::temp_dir().join(format!(
+        "thalos-scene-repeat-{}-{}",
+        std::process::id(),
+        rand_suffix()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    let sessions = Arc::new(SessionManager::with_path(dir.clone()));
+    let svc = SceneService::with_session_manager(
+        Box::new(InternalBackend),
+        manager.clone(),
+        RobotModel::Scara,
+        sessions.clone(),
+    );
+    (svc, concrete, sessions, dir)
+}
+
+fn rand_suffix() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0)
+}
+
+/// S1 (R4, R6, NF3): `Repeat { count: 5 }` completes 5 iterations — the gate
+/// re-executes the plan after each intermediate completion and finalizes ONLY
+/// at iteration == total, writing exactly one MotionTrace and draining the
+/// hardware execution trace exactly once (final iteration).
+#[tokio::test]
+async fn repeat_five_completes_five_iterations_with_single_trace() {
+    use crate::execution_boundary::ExecutionSample;
+    use std::sync::atomic::Ordering;
+
+    let mut mock = MockController::new();
+    mock.source = ExecutionSource::Hardware;
+    mock.execution_trace = Some(vec![ExecutionSample {
+        timestamp_us: 1_000_000,
+        joints: vec![0.1, 0.2],
+    }]);
+
+    let (svc, concrete, sessions, dir) = repeat_service(mock).await;
+    svc.schedule_program(repeat_plan(), Default::default())
+        .await
+        .unwrap();
+    svc.start_execution_with_mode(crate::plan::ExecutionMode::Repeat { count: 5 })
+        .await
+        .unwrap();
+
+    for iteration in 1..=5 {
+        // Completion tick: iteration `iteration` finishes → the gate runs.
+        concrete.write().await.state = Some(repeat_done_state());
+        svc.tick_execution_delta(0.1).await.unwrap();
+        if iteration < 5 {
+            // The gate re-executes the plan for the next iteration; the
+            // controller reports a fresh run until the next completion.
+            concrete.write().await.state = Some(repeat_running_state());
+            svc.tick_execution_delta(0.1).await.unwrap();
+        }
+    }
+
+    let session = sessions
+        .get(1)
+        .await
+        .expect("session registered at start");
+    assert_eq!(
+        session.status,
+        crate::plan::SessionStatus::Completed,
+        "S1: session must be Completed after 5 iterations"
+    );
+    assert_eq!(session.iteration, 5, "R4: iteration == total_iterations");
+    assert_eq!(session.total_iterations, Some(5));
+    assert_eq!(
+        concrete.read().await.execute_count.load(Ordering::SeqCst),
+        5,
+        "S1: 1 initial execute + 4 re-executes = 5"
+    );
+
+    // R6/NF3: exactly ONE motion trace for the session…
+    let trace = sessions
+        .get_trace(1)
+        .await
+        .expect("single MotionTrace must be stored");
+    assert!(!trace.samples().is_empty(), "recorder accumulated samples");
+
+    // …and the hardware execution trace was drained exactly once (final tick).
+    assert_eq!(
+        concrete.read().await.take_trace_calls.load(Ordering::SeqCst),
+        1,
+        "NF3: hardware execution trace drained exactly once (final iteration)"
+    );
+    let et = sessions
+        .get_execution_trace(1)
+        .await
+        .expect("execution trace persisted at the final iteration");
+    assert_eq!(et.samples.len(), 1);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// S2 (R5, R12): `Repeat { count: 3 }` with EStop during iteration 3 →
+/// `Failed(iteration=3)`, iterations 4+ never start, and NO execution trace
+/// is written (failure emits no trace).
+#[tokio::test]
+async fn repeat_three_estop_at_third_iteration_fails_with_iteration_and_no_trace() {
+    use crate::execution_boundary::ExecutionSample;
+    use std::sync::atomic::Ordering;
+
+    let mut mock = MockController::new();
+    mock.source = ExecutionSource::Hardware;
+    // Samples exist on the device — they must NEVER be drained on a failure.
+    mock.execution_trace = Some(vec![ExecutionSample {
+        timestamp_us: 0,
+        joints: vec![0.1, 0.2],
+    }]);
+
+    let (svc, concrete, sessions, dir) = repeat_service(mock).await;
+    svc.schedule_program(repeat_plan(), Default::default())
+        .await
+        .unwrap();
+    svc.start_execution_with_mode(crate::plan::ExecutionMode::Repeat { count: 3 })
+        .await
+        .unwrap();
+
+    // Iterations 1-2 complete normally (re-executing in between).
+    for _ in 0..2 {
+        concrete.write().await.state = Some(repeat_done_state());
+        svc.tick_execution_delta(0.1).await.unwrap();
+        concrete.write().await.state = Some(repeat_running_state());
+        svc.tick_execution_delta(0.1).await.unwrap();
+    }
+    // Iteration 3: the backend reports EStop → terminal failure.
+    let mut estop = RobotState::default();
+    estop.motion.mode = MotionMode::EStop;
+    concrete.write().await.state = Some(estop);
+    svc.tick_execution_delta(0.1).await.unwrap();
+
+    let session = sessions.get(1).await.expect("session registered");
+    assert_eq!(
+        session.status,
+        crate::plan::SessionStatus::Failed,
+        "S2: EStop at iteration 3 must finalize as Failed"
+    );
+    assert_eq!(session.iteration, 3, "R5: iteration must be the FAILING one");
+    assert_eq!(session.total_iterations, Some(3));
+    assert_eq!(
+        concrete.read().await.execute_count.load(Ordering::SeqCst),
+        3,
+        "S2: iterations 4+ must never start (no re-execute after EStop)"
+    );
+    // S2/R6: the hardware execution trace is NEVER drained on a failure —
+    // `take_execution_trace` (clear-on-take) must not have been called.
+    assert_eq!(
+        concrete.read().await.take_trace_calls.load(Ordering::SeqCst),
+        0,
+        "S2: no execution trace drain on failure"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// S10 (R11): after a completed Repeat session, `reset_execution()` clears the
+/// iteration/mode transient state — the next start registers a NEW session
+/// beginning at iteration 1.
+#[tokio::test]
+async fn reset_execution_clears_repeat_state_and_next_start_begins_at_iteration_one() {
+    use std::sync::atomic::Ordering;
+
+    let (svc, concrete, sessions, dir) = repeat_service(MockController::new()).await;
+    svc.schedule_program(repeat_plan(), Default::default())
+        .await
+        .unwrap();
+    svc.start_execution_with_mode(crate::plan::ExecutionMode::Repeat { count: 2 })
+        .await
+        .unwrap();
+
+    // Run two iterations to a Completed session.
+    concrete.write().await.state = Some(repeat_done_state());
+    svc.tick_execution_delta(0.1).await.unwrap();
+    concrete.write().await.state = Some(repeat_running_state());
+    svc.tick_execution_delta(0.1).await.unwrap();
+    concrete.write().await.state = Some(repeat_done_state());
+    svc.tick_execution_delta(0.1).await.unwrap();
+    let first = sessions.get(1).await.expect("first session");
+    assert_eq!(first.status, crate::plan::SessionStatus::Completed);
+    assert_eq!(first.iteration, 2, "setup: repeat-2 completed at iteration 2");
+    assert_eq!(
+        concrete.read().await.execute_count.load(Ordering::SeqCst),
+        2,
+        "setup: 2 execute calls for 2 iterations"
+    );
+
+    // R11: reset clears the repeat transient state.
+    svc.reset_execution().await.unwrap();
+
+    // The next start is a FRESH session beginning at iteration 1.
+    svc.start_execution_with_mode(crate::plan::ExecutionMode::Repeat { count: 2 })
+        .await
+        .unwrap();
+    let second = sessions.get(2).await.expect("second session");
+    assert_eq!(second.iteration, 1, "R11: next start begins at iteration 1");
+    assert_eq!(second.total_iterations, Some(2));
+    assert_eq!(
+        concrete.read().await.execute_count.load(Ordering::SeqCst),
+        3,
+        "R11: iteration 1 of the new session executes once"
     );
 
     let _ = std::fs::remove_dir_all(&dir);

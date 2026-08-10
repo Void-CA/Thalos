@@ -672,6 +672,13 @@ impl SceneService {
                 .map(|p| p.trajectory.duration())
                 .unwrap_or(0.0);
 
+            // Re-execution payload for intermediate repeat iterations — the
+            // same (waypoints, duration) the session started with. Captured
+            // HERE while the runtime write guard is held: the tokio RwLock is
+            // NOT reentrant, so reading the runtime again inside the recording
+            // block below would deadlock this task.
+            let re_execute_payload = Self::trajectory_to_waypoints(&runtime);
+
             // Active source determines progress UNITS (S3.6 / RISK-1):
             // hardware backends populate `execution.progress` in SECONDS
             // (esp32 map_firmware_state: fraction × plan_duration); simulation
@@ -715,11 +722,21 @@ impl SceneService {
             };
 
             let mut completed_session_id: Option<u64> = None;
+            // Repeat state to attach to the tick delta. Captured from the
+            // recording at the START of the block; the intermediate branch
+            // refreshes it AFTER incrementing so the delta for the tick that
+            // finished iteration k reports the NEXT iteration (k+1). When the
+            // recording is finalized this tick, this holds the FINAL value.
+            let mut repeat_meta: Option<(ExecutionMode, u32)> = None;
+            // Set ONLY when THIS tick finalized the final iteration as
+            // Completed — gates the hardware execution-trace drain (S2, R6).
+            let mut terminal_completion = false;
             {
                 // 3. Record the current state if recording
                 let mut recording = self.recording.write().await;
                 if let Some(ref mut rec_state) = *recording {
                     completed_session_id = Some(rec_state.session_id);
+                    repeat_meta = Some((rec_state.mode, rec_state.iteration));
                     let timestamp = {
                         let elapsed = rec_state.start_time
                             + std::time::Duration::from_secs_f64(progress_in_seconds);
@@ -731,35 +748,121 @@ impl SceneService {
                     // Check if execution completed — finalize recording.
                     // REL-03 / RES-06: EStop finalizes as FAILED, not
                     // Completed — a stopped-by-error run must not report done.
+                    //
+                    // Repeat orchestration (R3/R4/R6, S1/S2):
+                    // - EStop (any iteration) → Failed(iteration=k), never
+                    //   re-executes (R5/R12), no execution trace (S2).
+                    // - intermediate completion (iteration < total) →
+                    //   keep BOTH recorders open (single accumulated trace,
+                    //   NF3), increment the iteration, re-execute the plan.
+                    //   A failed re-execute finalizes Failed(iteration) and
+                    //   propagates the error (R5).
+                    // - final completion (iteration == total) → Completed,
+                    //   close recorders, persist the single trace, and drain
+                    //   the hardware execution trace exactly once (R6/NF3).
                     if completed {
-                        let trace = rec_state.recorder.stop();
-                        rec_state
-                            .execution_recorder
-                            .on_execution_finished(timestamp);
-                        let exec_trace = rec_state.execution_recorder.trace();
-                        let status = if estop {
-                            SessionStatus::Failed
-                        } else {
-                            SessionStatus::Completed
-                        };
-                        self.sessions
-                            .complete_with_status(rec_state.session_id, trace, status)
-                            .await;
-                        if let Some(et) = exec_trace {
+                        let iteration = rec_state.iteration;
+                        let is_final = rec_state
+                            .total_iterations
+                            .map_or(true, |total| iteration >= total);
+
+                        if estop {
+                            let trace = rec_state.recorder.stop();
+                            rec_state
+                                .execution_recorder
+                                .on_execution_finished(timestamp);
+                            let exec_trace = rec_state.execution_recorder.trace();
                             self.sessions
-                                .save_execution_trace(rec_state.session_id, et)
+                                .complete_with_status(
+                                    rec_state.session_id,
+                                    trace,
+                                    SessionStatus::Failed,
+                                )
                                 .await;
+                            self.sessions
+                                .set_iteration(rec_state.session_id, iteration)
+                                .await;
+                            if let Some(et) = exec_trace {
+                                self.sessions
+                                    .save_execution_trace(rec_state.session_id, et)
+                                    .await;
+                            }
+                            *recording = None;
+                        } else if !is_final {
+                            // Intermediate iteration: keep the recorders open,
+                            // advance the base timestamp so samples stay
+                            // monotonic, increment, then re-execute.
+                            rec_state.iteration += 1;
+                            repeat_meta = Some((rec_state.mode, rec_state.iteration));
+                            rec_state.start_time +=
+                                std::time::Duration::from_secs_f64(progress_in_seconds);
+                            self.sessions
+                                .set_iteration(rec_state.session_id, rec_state.iteration)
+                                .await;
+
+                            let (waypoints, duration) = re_execute_payload;
+                            let re_execute = match self.manager.get_controller().await {
+                                Some(ctrl) => {
+                                    ctrl.write().await.execute(waypoints, duration).await
+                                }
+                                None => Err(crate::error::ControllerError::NotConnected),
+                            };
+                            if let Err(e) = re_execute {
+                                // Re-execution failed → the session fails at
+                                // the CURRENT iteration; the error propagates
+                                // so the frontend sees the real code (R5).
+                                let trace = rec_state.recorder.stop();
+                                rec_state
+                                    .execution_recorder
+                                    .on_execution_finished(timestamp);
+                                self.sessions
+                                    .complete_with_status(
+                                        rec_state.session_id,
+                                        trace,
+                                        SessionStatus::Failed,
+                                    )
+                                    .await;
+                                self.sessions
+                                    .set_iteration(rec_state.session_id, iteration)
+                                    .await;
+                                *recording = None;
+                                return Err(RuntimeError::ControllerFailed { source: e });
+                            }
+                        } else {
+                            // Final iteration → Completed.
+                            terminal_completion = true;
+                            let trace = rec_state.recorder.stop();
+                            rec_state
+                                .execution_recorder
+                                .on_execution_finished(timestamp);
+                            let exec_trace = rec_state.execution_recorder.trace();
+                            self.sessions
+                                .complete_with_status(
+                                    rec_state.session_id,
+                                    trace,
+                                    SessionStatus::Completed,
+                                )
+                                .await;
+                            self.sessions
+                                .set_iteration(rec_state.session_id, iteration)
+                                .await;
+                            if let Some(et) = exec_trace {
+                                self.sessions
+                                    .save_execution_trace(rec_state.session_id, et)
+                                    .await;
+                            }
+                            *recording = None;
                         }
-                        *recording = None;
                     }
                 }
             }
 
-            // 3b. Unconditional drain (S3.6): on a completed tick, take the
-            //     hardware execution trace (if any) and persist it as a
-            //     telemetry `ExecutionTrace` — runs even when recording was
-            //     already finalized on an earlier tick.
-            if completed {
+            // 3b. Drain the hardware execution trace (S3.6) — ONLY when THIS
+            //     tick finalized the terminal Completed iteration (R6/NF3).
+            //     Never on intermediate iterations (clear-on-take would
+            //     consume the hardware samples before the final one) and
+            //     never on EStop (S2: a failure emits no trace).
+            if terminal_completion {
                 if let Some(samples) = ctrl.read().await.take_execution_trace().await {
                     if !samples.is_empty() {
                         if let Some(session_id) = completed_session_id {
@@ -796,6 +899,14 @@ impl SceneService {
             // running badge keeps reflecting the real backend (Hardware/Esp32).
             if let Some(ref exe) = delta.execution {
                 delta.execution = Some(exe.clone().with_source(active_source));
+            }
+            // Repeat state: the derived ExecutionSession knows nothing about
+            // mode/iteration — attach the recording's live (or just-finalized)
+            // values so the wire DTOs expose them (R8, EW3-EW6).
+            if let Some((mode, iteration)) = repeat_meta {
+                if let Some(ref exe) = delta.execution {
+                    delta.execution = Some(exe.clone().with_repeat_state(mode, iteration));
+                }
             }
             return Ok(delta);
         }
