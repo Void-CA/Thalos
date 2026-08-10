@@ -146,7 +146,7 @@ impl Interpolator for LinearInterpolator {
         let progress = samples[lo].progress + (samples[hi].progress - samples[lo].progress) * frac;
 
         // Target joints interpolados (opcional)
-        let target_joints = match (&samples[lo].target_joints, &samples[hi].target_joints) {
+        let _target_joints = match (&samples[lo].target_joints, &samples[hi].target_joints) {
             (Some(a), Some(b)) => {
                 let n = a.len().min(b.len());
                 Some(
@@ -198,7 +198,7 @@ impl Interpolator for LinearInterpolator {
 }
 
 /// Convertir un MotionSample a RobotState.
-fn sample_to_state(sample: &MotionSample, t: Duration) -> Arc<RobotState> {
+fn sample_to_state(sample: &MotionSample, _t: Duration) -> Arc<RobotState> {
     let is_last = sample.progress >= 1.0;
     Arc::new(RobotState {
         joints: JointState {

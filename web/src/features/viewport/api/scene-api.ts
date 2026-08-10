@@ -62,10 +62,6 @@ export const sceneApi = {
       ...(frame_id !== undefined ? { frame_id } : {}),
     }).then(r => r.data),
 
-  /** Execute solved IK. Campo: `joint_angles` según ExecuteIKRequest. */
-  executeIk: (joints: number[]) =>
-    apiClient.post<RuntimeStateResponse>('/scene/execute-ik', { joint_angles: joints }).then(r => r.data),
-
   /** Preview a motion program (compile + visualize, no execution). */
   previewPlan: (request: MotionPlanRequest) =>
     apiClient.post<RuntimeStateResponse>('/scene/motion/plan', request).then(r => r.data),

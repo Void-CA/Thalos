@@ -9,8 +9,6 @@ pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/workspace/sample", post(handler::sample))
         .route("/workspace/sample/active", post(handler::sample_active))
-        .route("/workspace/bounds/active", post(handler::bounds_active))
-        .route("/workspace/analyze/active", post(handler::analyze_active))
         .route("/workspace/reachability", post(handler::reachability))
         .route("/workspace/singularity", post(handler::singularity))
         .route(

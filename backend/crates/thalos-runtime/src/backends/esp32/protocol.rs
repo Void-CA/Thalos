@@ -234,7 +234,7 @@ impl Esp32Protocol {
                         };
                         Ok(ParsedResponse::Error(reason))
                     }
-                    other => Err(ProtocolError::MalformedResponse(line.to_string())),
+                    _other => Err(ProtocolError::MalformedResponse(line.to_string())),
                 }
             }
             "SAMPLE" => {

@@ -8,7 +8,7 @@ use crate::state::robot_state::{MotionMode, RobotState};
 use crate::{
     Command, RobotController, RuntimeSnapshot, SceneService,
     backends::{
-        InternalBackend, controller::simulation::SimulationController, manager::BackendManager,
+        controller::simulation::SimulationController, manager::BackendManager,
     },
     commands::kinematics::KinematicsCommand,
     commands::motion::MotionCommands,
@@ -40,7 +40,7 @@ async fn make_service(model: RobotModel) -> (SceneService, Arc<BackendManager>) 
         as Arc<RwLock<dyn RobotController + Send + Sync>>;
     let manager = Arc::new(BackendManager::new());
     manager.set_active(controller).await.unwrap();
-    let svc = SceneService::new(Box::new(InternalBackend), manager.clone(), model);
+    let svc = SceneService::new(manager.clone(), model);
     (svc, manager)
 }
 
@@ -939,7 +939,6 @@ async fn scheduled_runtime_events_dispatch_via_tick() {
     let manager = Arc::new(BackendManager::new());
     manager.set_active(controller).await.unwrap();
     let svc = SceneService::new(
-        Box::new(InternalBackend),
         manager.clone(),
         RobotModel::Scara,
     );
@@ -996,7 +995,6 @@ async fn scheduled_delay_freezes_execution_through_tick() {
     let manager = Arc::new(BackendManager::new());
     manager.set_active(controller).await.unwrap();
     let svc = SceneService::new(
-        Box::new(InternalBackend),
         manager.clone(),
         RobotModel::Scara,
     );
@@ -1065,7 +1063,6 @@ async fn start_execution_reports_active_controller_source() {
     let manager = Arc::new(BackendManager::new());
     manager.set_active(controller).await.unwrap();
     let svc = SceneService::new(
-        Box::new(InternalBackend),
         manager.clone(),
         RobotModel::Scara,
     );
@@ -1088,7 +1085,6 @@ async fn start_execution_propagates_connection_lost_from_controller() {
     let manager = Arc::new(BackendManager::new());
     manager.set_active(controller).await.unwrap();
     let svc = SceneService::new(
-        Box::new(InternalBackend),
         manager.clone(),
         RobotModel::Scara,
     );
@@ -1121,7 +1117,6 @@ async fn tick_propagates_connection_lost_from_advance() {
     let manager = Arc::new(BackendManager::new());
     manager.set_active(controller).await.unwrap();
     let svc = SceneService::new(
-        Box::new(InternalBackend),
         manager.clone(),
         RobotModel::Scara,
     );
@@ -1148,7 +1143,6 @@ async fn tick_ignores_unsupported_capability_from_advance() {
     let manager = Arc::new(BackendManager::new());
     manager.set_active(controller).await.unwrap();
     let svc = SceneService::new(
-        Box::new(InternalBackend),
         manager.clone(),
         RobotModel::Scara,
     );
@@ -1177,7 +1171,6 @@ async fn start_execution_without_controller_returns_not_connected() {
     );
 
     let svc = SceneService::new(
-        Box::new(InternalBackend),
         manager.clone(),
         RobotModel::Scara,
     );
@@ -1233,7 +1226,6 @@ async fn hardware_execution_trace_is_persisted_on_completion() {
     let _ = std::fs::remove_dir_all(&dir);
     let sessions = Arc::new(SessionManager::with_path(dir.clone()));
     let svc = SceneService::with_session_manager(
-        Box::new(InternalBackend),
         manager.clone(),
         RobotModel::Scara,
         sessions.clone(),
@@ -1293,7 +1285,6 @@ async fn hardware_running_seconds_progress_below_plan_duration_does_not_finalize
     let _ = std::fs::remove_dir_all(&dir);
     let sessions = Arc::new(SessionManager::with_path(dir.clone()));
     let svc = SceneService::with_session_manager(
-        Box::new(InternalBackend),
         manager.clone(),
         RobotModel::Scara,
         sessions.clone(),
@@ -1367,7 +1358,6 @@ async fn estop_state_finalizes_session_as_failed() {
     let _ = std::fs::remove_dir_all(&dir);
     let sessions = Arc::new(SessionManager::with_path(dir.clone()));
     let svc = SceneService::with_session_manager(
-        Box::new(InternalBackend),
         manager.clone(),
         RobotModel::Scara,
         sessions.clone(),
@@ -1448,7 +1438,6 @@ async fn repeat_service(
     let _ = std::fs::remove_dir_all(&dir);
     let sessions = Arc::new(SessionManager::with_path(dir.clone()));
     let svc = SceneService::with_session_manager(
-        Box::new(InternalBackend),
         manager.clone(),
         RobotModel::Scara,
         sessions.clone(),

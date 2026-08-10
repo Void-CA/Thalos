@@ -6,8 +6,7 @@ use thalos_core::models::RobotModel;
 use thalos_runtime::{
     RobotController, SceneService, SessionManager,
     backends::{
-        BackendEntry, InternalBackend, controller::simulation::SimulationController,
-        manager::BackendManager,
+        BackendEntry, controller::simulation::SimulationController, manager::BackendManager,
     },
 };
 
@@ -141,8 +140,6 @@ pub async fn new_state_with_scene_writeback_and_history_cap(
     scene_writeback: bool,
     history_cap: usize,
 ) -> SharedState {
-    let backend = Box::new(InternalBackend);
-
     // Runtime controller DOF and scene robot model are named independently so
     // the I1 guard below actually protects against drift between the two.
     let controller_dof = RobotModel::Planar2R.metadata().dof;
@@ -173,7 +170,7 @@ pub async fn new_state_with_scene_writeback_and_history_cap(
 
     let sessions = Arc::new(SessionManager::new());
     let scene =
-        SceneService::with_session_manager(backend, manager.clone(), scene_model, sessions.clone());
+        SceneService::with_session_manager(manager.clone(), scene_model, sessions.clone());
     if scene_writeback {
         scene.set_scene_writeback(true).await;
     }

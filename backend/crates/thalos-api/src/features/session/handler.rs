@@ -9,7 +9,7 @@ use serde_json::Value;
 
 use thalos_core::{analysis::observation::ArtifactRef, ids::ExecutionSessionId};
 use thalos_runtime::{
-    ExecutionAnalyzer, ExecutionSource, MotionTrace, TraceAnalyzer,
+    ExecutionAnalyzer, TraceAnalyzer,
     backends::{
         controller::RobotController,
         playback::interpolator::{Interpolator, LinearInterpolator, NearestSampleInterpolator},
@@ -104,52 +104,6 @@ pub async fn get_session_statistics(
     Ok(Json(stats))
 }
 
-/// Comparar plan (MotionTrace) con ejecución (ExecutionTrace) de una sesión.
-pub async fn compare_plan_execution(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<u64>,
-) -> Result<Json<comparison::PlanExecutionComparison>, ApiError> {
-    // Obtener MotionTrace (plan) — usando el trace original de la sesión
-    let motion_trace =
-        state
-            .services
-            .sessions
-            .get_trace(id)
-            .await
-            .ok_or_else(|| ApiError::NotFound {
-                message: format!("MotionTrace for session {} not found", id),
-            })?;
-
-    // Obtener ExecutionTrace (ejecución)
-    let exec_trace = state
-        .services
-        .sessions
-        .get_execution_trace(id)
-        .await
-        .ok_or_else(|| ApiError::NotFound {
-            message: format!("ExecutionTrace for session {} not found", id),
-        })?;
-
-    let session = state
-        .services
-        .sessions
-        .get(id)
-        .await
-        .ok_or_else(|| ApiError::NotFound {
-            message: format!("Session {} not found", id),
-        })?;
-
-    let result = comparison::compare(
-        &motion_trace,
-        &exec_trace,
-        &session.plan_id,
-        &id.to_string(),
-        &session.robot_name,
-    );
-
-    Ok(Json(result))
-}
-
 /// Resumen de una sesión con estadísticas calculadas del trace.
 #[derive(Debug, Serialize)]
 pub struct SessionSummary {
@@ -222,7 +176,7 @@ pub async fn get_session_summary(
                 let total: f64 = samples
                     .windows(2)
                     .map(|w| {
-                        let dt =
+                        let _dt =
                             (w[1].timestamp.as_secs_f64() - w[0].timestamp.as_secs_f64()).max(1e-6);
                         (w[1].joints[j] - w[0].joints[j]).abs()
                     })
@@ -322,32 +276,6 @@ pub async fn start_replay(
 
     Ok(Json(to_api_response(&snapshot)))
 }
-
-/// Importar un trace desde JSON.
-pub async fn import_trace(
-    State(state): State<Arc<AppState>>,
-    Json(payload): Json<ImportRequest>,
-) -> ApiResult<SessionResponse> {
-    let trace: MotionTrace =
-        serde_json::from_str(&payload.trace_json).map_err(|e| ApiError::Validation {
-            message: format!("Invalid trace JSON: {}", e),
-            code: "invalid_trace".into(),
-        })?;
-
-    let session = state
-        .services
-        .sessions
-        .import(
-            ExecutionSource::Replay { session_id: 0 },
-            trace,
-            payload.robot_name,
-        )
-        .await;
-
-    Ok(Json(session.into()))
-}
-
-// ── GET /sessions/{id}/comparison ──
 
 /// Respuesta combinada: métricas de comparación + observaciones de ejecución.
 ///

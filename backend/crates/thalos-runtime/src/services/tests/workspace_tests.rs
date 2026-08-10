@@ -7,7 +7,7 @@ use thalos_core::models::RobotModel;
 use thalos_math::Vector3;
 
 use crate::backends::{
-    InternalBackend, controller::simulation::SimulationController, manager::BackendManager,
+    controller::simulation::SimulationController, manager::BackendManager,
 };
 use crate::error::RuntimeError;
 use crate::services::workspace::WorkspaceService;
@@ -127,7 +127,7 @@ async fn sample_does_not_mutate_scene_service_state() {
     ))) as Arc<RwLock<dyn RobotController + Send + Sync>>;
     let manager = Arc::new(BackendManager::new());
     manager.set_active(controller).await.unwrap();
-    let scene = SceneService::new(Box::new(InternalBackend), manager, RobotModel::Scara);
+    let scene = SceneService::new(manager, RobotModel::Scara);
     let snap_before = scene.snapshot().await.unwrap();
 
     let _ws = WorkspaceService::sample(

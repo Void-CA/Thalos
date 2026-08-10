@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::time::Duration;
 
 use crate::state::robot_state::RobotState;
@@ -11,16 +10,16 @@ use crate::telemetry::trace::ExecutionTrace;
 /// pueden incluir WebSocket streaming, logging, exportación CSV, etc.
 pub trait ExecutionObserver: Send + Sync {
     /// Notifica que una ejecución comenzó.
-    fn on_execution_started(&mut self, timestamp: Duration) {}
+    fn on_execution_started(&mut self, _timestamp: Duration) {}
 
     /// Notifica una muestra del estado del robot.
-    fn on_sample(&mut self, timestamp: Duration, state: &RobotState) {}
+    fn on_sample(&mut self, _timestamp: Duration, _state: &RobotState) {}
 
     /// Notifica un evento de ciclo de vida.
-    fn on_event(&mut self, event: ExecutionEvent) {}
+    fn on_event(&mut self, _event: ExecutionEvent) {}
 
     /// Notifica que la ejecución finalizó.
-    fn on_execution_finished(&mut self, timestamp: Duration) {}
+    fn on_execution_finished(&mut self, _timestamp: Duration) {}
 
     /// Obtener el trace acumulado (si corresponde).
     fn trace(&self) -> Option<ExecutionTrace> {

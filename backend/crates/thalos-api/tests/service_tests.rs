@@ -2,13 +2,12 @@ use std::f64::consts::PI;
 use std::sync::Arc;
 
 use thalos_core::models::RobotModel;
-use thalos_runtime::backends::{BackendManager, InternalBackend};
+use thalos_runtime::backends::BackendManager;
 use thalos_runtime::{Command, SceneService};
 
 fn new_service() -> SceneService {
-    let backend = Box::new(InternalBackend);
     let manager = Arc::new(BackendManager::new());
-    SceneService::new(backend, manager, RobotModel::Planar2R)
+    SceneService::new(manager, RobotModel::Planar2R)
 }
 
 #[tokio::test]

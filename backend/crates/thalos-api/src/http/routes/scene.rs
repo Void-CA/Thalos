@@ -30,14 +30,11 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/scene/motion/resume", post(handler::resume_execution))
         .route("/scene/motion/cancel", post(handler::cancel_execution))
         .route("/scene/motion/reset", post(handler::reset_execution))
-        // Execution seek (replay/simulation position control)
-        .route("/scene/motion/seek", post(handler::seek_execution))
         // Execution tick (polling-based advance)
         .route("/scene/motion/tick", post(handler::tick_execution))
         // IK solve (no mutation) + execute
         .route("/scene/solve-ik-position", post(handler::solve_ik_position))
         .route("/scene/solve-ik-pose", post(handler::solve_ik_pose))
-        .route("/scene/execute-ik", post(handler::execute_ik))
         // FK → scene (same as set_joints but exposed as a separate endpoint)
         .route("/scene/from-fk", post(handler::set_joints))
         // TCP selection

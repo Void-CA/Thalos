@@ -5,7 +5,7 @@
 //! Solo interpola la trayectoria existente insertando nuevos puntos.
 
 use crate::{
-    analysis::domain::{ProblemRegion, RegionKind},
+    analysis::domain::ProblemRegion,
     evaluation::evaluator::PlanEvaluator,
     motion::program::CompiledPlan,
     repair::{
@@ -133,7 +133,7 @@ impl RepairStrategy for SplitSegment {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analysis::domain::{RegionId, RegionSeverity};
+    use crate::analysis::domain::{RegionId, RegionKind, RegionSeverity};
 
     #[test]
     fn test_interpolate_pair_produces_correct_count() {

@@ -29,8 +29,4 @@ pub fn routes() -> Router<Arc<AppState>> {
             "/plan/analyze/alternatives",
             post(alternatives::analyze_alternatives),
         )
-        .route(
-            "/plan/regenerate-from-execution/{session_id}",
-            post(alternatives::regenerate_from_execution),
-        )
 }

@@ -296,17 +296,12 @@ pub struct ExecutionDto {
     #[serde(default)]
     pub mode: ExecutionMode,
     /// Current iteration, 1-based (R3/R8). Defaults to 1.
-    #[serde(default = "default_iteration")]
+    #[serde(default)]
     pub iteration: u32,
     /// Total iterations; `None` for `Once` (R4) — omitted from the wire so
     /// old clients see no badge.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total_iterations: Option<u32>,
-}
-
-/// Serde default for `ExecutionDto::iteration` (R8): a session starts at 1.
-fn default_iteration() -> u32 {
-    1
 }
 
 /// Status de la sesión — tipado hasta el borde de la API.

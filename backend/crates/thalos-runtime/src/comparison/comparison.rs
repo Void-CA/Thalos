@@ -2,7 +2,7 @@
 
 use serde::Serialize;
 
-use super::alignment::{AlignedPair, Alignment, align};
+use super::alignment::{Alignment, align};
 use super::metrics::{ComparisonMetrics, compute_metrics};
 use crate::motion_trace::MotionTrace;
 use crate::telemetry::ExecutionTrace;

@@ -203,12 +203,3 @@ pub async fn analyze_alternatives(
         total_candidates: total,
     }))
 }
-
-/// POST /api/v1/plan/regenerate-from-execution/{session_id} (deprecated)
-pub async fn regenerate_from_execution(
-    State(state): State<Arc<AppState>>,
-    _sid: axum::extract::Path<u64>,
-) -> ApiResult<AlternativesResponse> {
-    // Versión legacy: ignora session_id, delega a analyze_alternatives
-    analyze_alternatives(State(state)).await
-}

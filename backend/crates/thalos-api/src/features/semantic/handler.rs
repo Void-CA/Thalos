@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
-use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use axum::{Json, extract::State, http::StatusCode};
 
-use serde::Serialize;
 use thalos_core::analysis::location::Location;
 use thalos_core::analysis::observation::{Observation, Severity};
 use thalos_core::{
@@ -10,13 +9,11 @@ use thalos_core::{
     motion::MotionProfile,
     robot::state::RobotState,
     spatial::frame::FrameRegistry,
-    trajectory::TrajectoryPoint,
 };
 use thalos_planning::{
     motion::{
         compiler::{DefaultPlannerDispatcher, PlanCompiler},
         planner::SegmentPlanningContext,
-        program::CompiledPlan,
     },
     resolver::{MotionResolver, ResolutionError},
     timeline::TimelineScheduler,
@@ -25,7 +22,6 @@ use thalos_semantic::{
     lowering::{SemanticLowering, context::LoweringContext},
     validation::validate,
 };
-use tracing_subscriber::field::debug;
 
 use crate::app::state::AppState;
 use crate::features::semantic::{

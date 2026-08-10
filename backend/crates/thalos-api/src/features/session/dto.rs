@@ -61,16 +61,3 @@ pub struct ReplayRequest {
 fn default_interpolation() -> String {
     "linear".to_string()
 }
-
-#[derive(Debug, Deserialize)]
-pub struct ImportRequest {
-    /// Raw JSON content of the trace file.
-    pub trace_json: String,
-    /// Optional robot name.
-    #[serde(default = "default_robot_name")]
-    pub robot_name: String,
-}
-
-fn default_robot_name() -> String {
-    "imported".to_string()
-}

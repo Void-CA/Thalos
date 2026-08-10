@@ -24,7 +24,7 @@ use thalos_core::{
 use crate::{
     Command, RobotController, SceneService,
     backends::{
-        InternalBackend, controller::simulation::SimulationController, manager::BackendManager,
+        controller::simulation::SimulationController, manager::BackendManager,
     },
     services::workspace::WorkspaceService,
 };
@@ -114,7 +114,7 @@ async fn make_scara_service() -> SceneService {
     )) as Arc<RwLock<dyn RobotController + Send + Sync>>;
     let manager = Arc::new(BackendManager::new());
     manager.set_active(controller).await.unwrap();
-    SceneService::new(Box::new(InternalBackend), manager, RobotModel::Scara)
+    SceneService::new(manager, RobotModel::Scara)
 }
 
 /// Test 1: FK.tcp_pose returns the correct composed transformation.

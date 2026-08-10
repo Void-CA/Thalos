@@ -2,7 +2,6 @@ use thalos_core::{
     kinematics::{forward::result::FKResult, inverse::result::IKResult},
     robot::tool_frame::ToolFrame,
 };
-use thalos_runtime::plan::ExecutionMode;
 
 use crate::features::robots::dto::{JointMetadataDto, RobotMetadataDto};
 

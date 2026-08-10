@@ -4,7 +4,6 @@ pub mod scara;
 pub mod scene;
 pub mod trajectory;
 pub mod validator;
-pub mod workspace;
 
 pub use builder::{SceneBuilder, align_y_to, cylinder_between};
 pub use mapper::map_visuals;
@@ -15,4 +14,3 @@ pub use trajectory::{
     WaypointType,
 };
 pub use validator::{SceneError, SceneValidator};
-pub use workspace::WorkspaceVisual;

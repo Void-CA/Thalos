@@ -12,7 +12,6 @@ pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         // Repair options (M8.2)
         .route("/plan/repair/options", post(handler::repair_options))
-        .route("/plan/repair/apply", post(handler::repair_apply))
         // Repair sessions (M8.4)
         .route("/repair/sessions", post(session_handler::create_session))
         .route(

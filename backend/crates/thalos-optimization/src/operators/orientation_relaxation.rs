@@ -38,7 +38,7 @@ use thalos_core::{
     robot::serial_chain::SerialChain,
     trajectory::{Trajectory, TrajectoryPoint},
 };
-use thalos_math::{DynamicVector, Transform3D, orientation_error};
+use thalos_math::{DynamicVector, orientation_error};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 

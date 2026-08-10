@@ -15,7 +15,6 @@ use thalos_core::{
 use thalos_planning::motion::program::{CompiledPlan, PlanningProgram};
 use thalos_planning::program_edit::ProgramEdit;
 
-use crate::backends::RobotBackend;
 use crate::backends::controller::RobotController;
 use crate::backends::controller::simulation::SimulationController;
 use crate::backends::manager::BackendManager;
@@ -24,7 +23,6 @@ use crate::commands::handler::ExecutableCommand;
 use crate::error::RuntimeError;
 use crate::execution_boundary::ExecutionSample as ProtocolSample;
 use crate::motion_recorder::MotionRecorder;
-use crate::motion_trace::MotionTrace;
 use crate::plan::{ExecutionMode, PlanState, SessionStatus};
 use crate::services::command_history::{AppliedCommand, CommandMetrics};
 use crate::session::{ExecutionSource, SessionManager};
@@ -76,23 +74,17 @@ fn session_from_state(
 
 pub struct SceneService {
     runtime: RwLock<SceneRuntime>,
-    backend: Box<dyn RobotBackend + Send + Sync>,
     manager: Arc<BackendManager>,
     sessions: Arc<SessionManager>,
     recording: RwLock<Option<RecordingState>>,
 }
 
 impl SceneService {
-    pub fn new(
-        backend: Box<dyn RobotBackend + Send + Sync>,
-        manager: Arc<BackendManager>,
-        model: RobotModel,
-    ) -> Self {
-        Self::with_session_manager(backend, manager, model, Arc::new(SessionManager::new()))
+    pub fn new(manager: Arc<BackendManager>, model: RobotModel) -> Self {
+        Self::with_session_manager(manager, model, Arc::new(SessionManager::new()))
     }
 
     pub fn with_session_manager(
-        backend: Box<dyn RobotBackend + Send + Sync>,
         manager: Arc<BackendManager>,
         model: RobotModel,
         sessions: Arc<SessionManager>,
@@ -105,7 +97,6 @@ impl SceneService {
 
         Self {
             runtime: RwLock::new(runtime),
-            backend,
             manager,
             sessions,
             recording: RwLock::new(None),
@@ -994,7 +985,6 @@ mod tests {
         // intact, so undo from a reset state stays valid.
         let manager = Arc::new(BackendManager::new());
         let service = SceneService::with_session_manager(
-            Box::new(crate::backends::InternalBackend),
             manager,
             RobotModel::Planar2R,
             Arc::new(SessionManager::new()),

@@ -29,7 +29,7 @@ use crate::app::prelude::*;
 use crate::app::state::AppState;
 use crate::features::scene::dto::mappers::delta::to_delta_response;
 use crate::features::scene::dto::mappers::runtime::build_plan_dto;
-use crate::features::scene::dto::requests::{SeekRequest, StartExecutionRequest, TickRequest};
+use crate::features::scene::dto::requests::{StartExecutionRequest, TickRequest};
 use crate::features::scene::dto::*;
 
 /// Build a VisualScene from a RuntimeSnapshot.
@@ -289,22 +289,6 @@ pub async fn reset_execution(
     Ok(Json(to_api_response(&snapshot)))
 }
 
-/// Seek execution to a position (fraction 0.0–1.0).
-///
-/// Only meaningful for replay/simulation backends.
-/// Hardware backends return an error.
-pub async fn seek_execution(
-    State(state): State<Arc<AppState>>,
-    Json(payload): Json<SeekRequest>,
-) -> ApiResult<RuntimeStateResponse> {
-    let snapshot = state
-        .services
-        .scene
-        .seek_execution(payload.position)
-        .await?;
-    Ok(Json(to_api_response(&snapshot)))
-}
-
 // ─── Execution tick ───────────────────────────────────────────────────────
 
 /// Advance execution by `dt` seconds.
@@ -354,19 +338,6 @@ pub async fn solve_ik_pose(
         joints,
         ik_result: ik.into(),
     }))
-}
-
-/// Apply solved joint angles to the runtime (move the robot).
-pub async fn execute_ik(
-    State(state): State<Arc<AppState>>,
-    Json(payload): Json<ExecuteIKRequest>,
-) -> ApiResult<RuntimeStateResponse> {
-    let snapshot = state
-        .services
-        .scene
-        .execute(Command::SetJoints(payload.joint_angles))
-        .await?;
-    Ok(Json(to_api_response(&snapshot)))
 }
 
 fn scene_error_to_response(err: &SceneError) -> (StatusCode, Json<Value>) {

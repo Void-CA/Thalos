@@ -1,5 +1,4 @@
 use serde::Serialize;
-use std::time::Duration;
 
 use crate::telemetry::trace::ExecutionTrace;
 

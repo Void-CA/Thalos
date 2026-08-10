@@ -22,11 +22,3 @@ export function useRobots() {
 
   return query
 }
-
-export function useRobot(id: string) {
-  return useQuery({
-    queryKey: ['robots', id],
-    queryFn: () => robotApi.get(id),
-    enabled: !!id,
-  })
-}

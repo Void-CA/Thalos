@@ -2,7 +2,6 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
 use crate::motion_trace::MotionTrace;

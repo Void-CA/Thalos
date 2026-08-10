@@ -109,17 +109,3 @@ pub async fn repair_options(
 
     Ok(Json(RepairOptionsResponse { repairs }))
 }
-
-/// POST /api/v1/plan/repair/apply — redirigido a sesiones
-pub async fn repair_apply(
-    State(_state): State<Arc<AppState>>,
-    Json(req): Json<RepairApplyRequest>,
-) -> ApiResult<RepairApplyResponse> {
-    Ok(Json(RepairApplyResponse {
-        plan_id: req.plan_id.unwrap_or_default(),
-        status: "deprecated".to_string(),
-        modified_range: None,
-        metrics_delta: None,
-        reason: Some("Use POST /repair/sessions/{id}/apply".to_string()),
-    }))
-}

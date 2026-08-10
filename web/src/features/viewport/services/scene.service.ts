@@ -135,11 +135,6 @@ export class SceneService {
     }
   }
 
-  async executeIk(joints: number[]): Promise<SceneSnapshot> {
-    const res = await this.api.executeIk(joints)
-    return toSnapshot(res)
-  }
-
   async startExecution(): Promise<SceneSnapshot> {
     const res = await this.api.startExecution()
     return toSnapshot(res)

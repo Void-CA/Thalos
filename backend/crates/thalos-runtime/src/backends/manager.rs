@@ -165,7 +165,7 @@ impl BackendManager {
         // this returns FAST on a silent device, and the explicit `drop` closes
         // the serial device — a retry does NOT hit port_in_use.
         let mut backend = Esp32Backend::new(transport);
-        if let Err(e) = backend.connect().await {
+        if let Err(_e) = backend.connect().await {
             drop(backend);
             return Err(ControllerError::NoFirmware);
         }

@@ -17,7 +17,6 @@ use std::sync::Arc;
 use thalos_core::{
     evaluation::{CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics, PlanMetrics},
     kinematics::inverse::IKSolver,
-    operation::ConstraintQuery,
     robot::serial_chain::SerialChain,
     trajectory::Trajectory,
 };
@@ -194,6 +193,7 @@ mod tests {
     use thalos_core::{
         analysis::region::{RegionId, RegionKind, RegionSeverity},
         models::{RobotModel, RobotRegistry},
+        operation::ConstraintQuery,
         trajectory::TrajectoryPoint,
     };
     use thalos_optimization::domain::{JointLimits, OperatorFamily, PipelineConfig};

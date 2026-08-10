@@ -122,13 +122,8 @@ pub struct PoseTargetDto {
 pub enum RotationDto {
     /// Unit quaternion `[w, x, y, z]`.
     Quaternion { w: f64, x: f64, y: f64, z: f64 },
-    /// ZYX Euler angles (roll, pitch, yaw) in radians.
-    Ypr { roll: f64, pitch: f64, yaw: f64 },
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ExecuteIKRequest {
-    pub joint_angles: Vec<f64>,
+/// ZYX Euler angles (roll, pitch, yaw) in radians.
+Ypr { roll: f64, pitch: f64, yaw: f64 },
 }
 
 // ── Motion program request ──
@@ -346,13 +341,6 @@ pub struct LoadUrdfRobotRequest {
 #[derive(Debug, Deserialize)]
 pub struct TickRequest {
     pub dt: f64,
-}
-
-/// Request to seek execution to a position.
-#[derive(Debug, Deserialize)]
-pub struct SeekRequest {
-    /// Position as fraction 0.0–1.0.
-    pub position: f64,
 }
 
 // ── TCP selection request ──

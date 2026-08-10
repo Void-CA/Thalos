@@ -7,7 +7,7 @@ use thalos_core::{
     },
     kinematics::inverse::{IKGoal, IKSolver, IKStatus},
     motion::segment::MotionSegment,
-    motion::target::{MotionPose, MotionTarget},
+    motion::target::MotionTarget,
     spatial::{
         frame::{FrameId, FrameRegistry},
         pose::Pose,

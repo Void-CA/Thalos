@@ -21,10 +21,9 @@ use thalos_core::analysis::singularity::SingularityConfig;
 use crate::app::prelude::*;
 use crate::app::state::AppState;
 use crate::features::workspace::dto::{
-    ActiveAnalysisRequest, ActiveAnalysisResponse, ActiveSampleRequest, ActiveSingularityRequest,
-    BoundingBoxDto, ManipulabilityRequest, ManipulabilityResponse, ManipulabilitySampleDto,
-    ReachabilityDto, ReachabilityRequest, SampleRequest, SingularityRequest, SingularityResponse,
-    SingularitySampleDto, WorkspaceDto, WorkspaceSampleDto,
+    ActiveSampleRequest, ActiveSingularityRequest, ManipulabilityRequest, ManipulabilityResponse,
+    ManipulabilitySampleDto, ReachabilityDto, ReachabilityRequest, SampleRequest,
+    SingularityRequest, SingularityResponse, SingularitySampleDto, WorkspaceDto, WorkspaceSampleDto,
 };
 
 /// POST /api/v1/workspace/sample
@@ -185,103 +184,6 @@ pub async fn sample_active(
         metrics: ws.metrics().clone().into(),
         bounds: ws.bounds().clone().into(),
         samples,
-    }))
-}
-
-/// POST /api/v1/workspace/bounds/active
-///
-/// Lightweight endpoint: returns only the bounding box of the workspace
-/// for the currently loaded robot.
-pub async fn bounds_active(
-    State(state): State<Arc<AppState>>,
-    Json(req): Json<ActiveSampleRequest>,
-) -> ApiResult<BoundingBoxDto> {
-    let snapshot = state.services.scene.snapshot().await?;
-
-    let config = WorkspaceConfig {
-        samples: req.samples,
-        seed: req.seed,
-        tolerance: req.tolerance,
-    };
-
-    let ws = RuntimeWorkspaceService::sample_from_chain_with_tcp(
-        &snapshot.chain,
-        config,
-        snapshot.active_tcp.as_ref(),
-    )?;
-
-    Ok(Json(ws.bounds().clone().into()))
-}
-
-/// POST /api/v1/workspace/analyze/active
-///
-/// Full analysis (workspace + singularity + manipulability) on the
-/// currently loaded robot, all from a single set of samples.
-pub async fn analyze_active(
-    State(state): State<Arc<AppState>>,
-    Json(req): Json<ActiveAnalysisRequest>,
-) -> ApiResult<ActiveAnalysisResponse> {
-    let snapshot = state.services.scene.snapshot().await?;
-
-    let config = WorkspaceConfig {
-        samples: req.samples,
-        seed: req.seed,
-        tolerance: req.tolerance,
-    };
-
-    let singularity_config = SingularityConfig {
-        near_singular_condition_threshold: req.near_singular_condition_threshold,
-    };
-
-    // All three analyses share the same chain and config — sample once.
-    let ws = RuntimeWorkspaceService::sample_from_chain_with_tcp(
-        &snapshot.chain,
-        config,
-        snapshot.active_tcp.as_ref(),
-    )?;
-    let singularity = RuntimeSingularityService::analyze_from_chain_with_tcp(
-        &snapshot.chain,
-        config,
-        singularity_config,
-        snapshot.active_tcp.as_ref(),
-    )?;
-    let manipulability = RuntimeManipulabilityService::analyze_from_chain_with_tcp(
-        &snapshot.chain,
-        config,
-        snapshot.active_tcp.as_ref(),
-    )?;
-
-    let singularity_samples = if req.include_samples {
-        Some(
-            singularity
-                .samples
-                .iter()
-                .map(SingularitySampleDto::from)
-                .collect(),
-        )
-    } else {
-        None
-    };
-
-    let manipulability_samples = if req.include_samples {
-        Some(
-            manipulability
-                .samples
-                .iter()
-                .map(ManipulabilitySampleDto::from)
-                .collect(),
-        )
-    } else {
-        None
-    };
-
-    Ok(Json(ActiveAnalysisResponse {
-        workspace: ws.metrics().clone().into(),
-        bounds: ws.bounds().clone().into(),
-        singularity: singularity.metrics.into(),
-        manipulability: manipulability.metrics.into(),
-        singularity_samples,
-        manipulability_samples,
     }))
 }
 

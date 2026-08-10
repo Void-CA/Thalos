@@ -37,7 +37,7 @@ use thalos_planning::{
 use thalos_runtime::{
     RobotController, SceneService,
     backends::controller::simulation::SimulationController,
-    backends::{BackendManager, InternalBackend},
+    backends::BackendManager,
     plan::SessionStatus,
 };
 use thalos_semantic::{
@@ -100,7 +100,6 @@ async fn make_service() -> (SceneService, Arc<RwLock<SimulationController>>) {
     let manager = Arc::new(BackendManager::new());
     manager.set_active(controller).await.unwrap();
     let svc = SceneService::new(
-        Box::new(InternalBackend),
         manager.clone(),
         RobotModel::Planar2R,
     );
