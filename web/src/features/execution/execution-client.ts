@@ -1,5 +1,5 @@
 import { sceneApi } from '@/features/viewport/api/scene-api'
-import type { RuntimeDelta } from '@/features/viewport/api/scene-api.types'
+import type { ExecutionModeDto, RuntimeDelta } from '@/features/viewport/api/scene-api.types'
 
 /**
  * ExecutionClient — transporte puro.
@@ -11,8 +11,8 @@ import type { RuntimeDelta } from '@/features/viewport/api/scene-api.types'
  * solo cambia este archivo — el resto del sistema no se entera.
  */
 export const executionClient = {
-  /** Start execution of the scheduled plan. */
-  start: () => sceneApi.startExecution(),
+  /** Start execution of the scheduled plan. Optional mode (absent → once). */
+  start: (mode?: ExecutionModeDto) => sceneApi.startExecution(mode),
 
   /** Pause a running execution. */
   pause: () => sceneApi.pauseExecution(),

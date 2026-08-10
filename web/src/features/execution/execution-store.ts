@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { executionClient } from './execution-client'
 import { useSceneStore } from '@/features/viewport/store'
 import { isApiError } from '@/shared/errors'
+import type { ExecutionModeDto } from '@/features/viewport/api/scene-api.types'
 import type { ObjectTransform, ExecutionInfo } from '@/features/viewport/types'
 
 // ── Status ────────────────────────────────────────────────────────────────
@@ -54,11 +55,18 @@ export interface ExecutionState {
   error: ExecutionError | null
   /** Summary of the loaded plan; null until a plan is handed off. */
   activePlan: ActivePlanInfo | null
+  /** Execution mode of the running session (EW1). Defaults to once. */
+  mode: ExecutionModeDto
+  /** Current iteration, 1-based (EW3). Sourced from the tick delta. */
+  iteration: number
+  /** Total iterations; undefined for Once → no badge (EW6). */
+  totalIterations?: number
 }
 
 interface ExecutionActions {
-  /** Iniciar (o reanudar) la ejecución del plan cargado. */
-  start: () => Promise<void>
+  /** Iniciar (o reanudar) la ejecución del plan cargado. Optional mode —
+   *  absent defaults to `once` (current behavior). */
+  start: (mode?: ExecutionModeDto) => Promise<void>
 
   /** Pausar una ejecución activa. */
   pause: () => Promise<void>
@@ -89,6 +97,9 @@ const INITIAL: ExecutionState = {
   elapsedSecs: 0,
   error: null,
   activePlan: null,
+  mode: 'once',
+  iteration: 1,
+  totalIterations: undefined,
 }
 
 /** Normalize any thrown error to `{message, code}` (error-ux spec): the
@@ -153,6 +164,12 @@ function startLoop() {
         progress: delta.execution.progress,
         elapsedSecs: delta.execution.elapsed_secs,
         status,
+        // Backend is the source of truth for repeat state (EW3): the tick
+        // delta reports the CURRENT iteration and total. Absent fields
+        // (legacy backend / Once) keep the defaults.
+        mode: delta.execution.mode ?? 'once',
+        iteration: delta.execution.iteration ?? 1,
+        totalIterations: delta.execution.total_iterations,
       })
 
       if (isTerminal) {
@@ -199,10 +216,13 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>((set)
 
   receivePlan: (plan) => set({ activePlan: plan, status: 'ready' }),
 
-  start: async () => {
+  start: async (mode?: ExecutionModeDto) => {
     try {
-      await executionClient.start()
-      set({ status: 'running' })
+      await executionClient.start(mode)
+      // Seed the iteration badge from the requested mode; the first tick then
+      // confirms it from the backend. Once / absent → no badge (EW6).
+      const total = mode !== undefined && mode !== 'once' ? mode.repeat.count : undefined
+      set({ status: 'running', mode: mode ?? 'once', iteration: 1, totalIterations: total })
       startLoop()
     } catch (err) {
       set({ status: 'failed', error: toExecutionError(err) })

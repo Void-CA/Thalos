@@ -6,6 +6,7 @@ import type {
   RuntimeDelta,
   MotionPlanRequest,
   SelectToolFrameRequest,
+  ExecutionModeDto,
 } from './scene-api.types'
 
 export const sceneApi = {
@@ -69,9 +70,9 @@ export const sceneApi = {
   previewPlan: (request: MotionPlanRequest) =>
     apiClient.post<RuntimeStateResponse>('/scene/motion/plan', request).then(r => r.data),
 
-  /** Execution control. */
-  startExecution: () =>
-    apiClient.post<RuntimeStateResponse>('/scene/motion/start').then(r => r.data),
+  /** Execution control. Optional mode: absent → once (axios omits the body). */
+  startExecution: (mode?: ExecutionModeDto) =>
+    apiClient.post<RuntimeStateResponse>('/scene/motion/start', mode).then(r => r.data),
 
   pauseExecution: () =>
     apiClient.post<RuntimeStateResponse>('/scene/motion/pause').then(r => r.data),

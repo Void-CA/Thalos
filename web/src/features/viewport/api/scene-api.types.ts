@@ -225,6 +225,9 @@ export interface RuntimeDelta {
   execution: ExecutionDto
 }
 
+/** Execution mode on the wire: `"once"` or `{"repeat":{"count":N}}` (absent → once). */
+export type ExecutionModeDto = 'once' | { repeat: { count: number } }
+
 /** Execution info carried by each TICK delta (`RuntimeDelta` from
  *  `POST /scene/motion/tick`). Here `progress` IS a fraction 0..1 of the plan
  *  duration (`exe.progress(plan_duration)`, clamped); `elapsed_secs` is
@@ -234,6 +237,12 @@ export interface ExecutionDto {
   progress: number
   elapsed_secs: number
   source?: string
+  /** Execution mode; absent → once (legacy clients / Once sessions). */
+  mode?: ExecutionModeDto
+  /** Current iteration, 1-based; absent → 1. */
+  iteration?: number
+  /** Total iterations; absent for Once — no iteration badge. */
+  total_iterations?: number
 }
 
 export type ExecutionStatusDto = 'Created' | 'Active' | 'Paused' | 'Completed' | 'Cancelled' | 'Failed' | 'Idle'

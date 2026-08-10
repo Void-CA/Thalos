@@ -1,8 +1,10 @@
-import { Activity, Clock, Play, Square, RefreshCw, Pause, Gauge, ListOrdered } from 'lucide-react'
+import { useState } from 'react'
+import { Activity, Clock, Play, Square, RefreshCw, Pause, Gauge, ListOrdered, Repeat, Repeat1 } from 'lucide-react'
 import { useExecutionStore } from './execution-store'
 import { useBackendStore } from './backend-store'
 import { BackendSelector } from './components/backend-selector'
 import { ErrorBox } from '@/components/ui/error-box'
+import type { ExecutionModeDto } from '@/features/viewport/api/scene-api.types'
 
 /**
  * ExecutionWorkspace — the single owner of execution lifecycle and runtime
@@ -26,12 +28,23 @@ export function ExecutionWorkspace() {
   const elapsedSecs = useExecutionStore((s) => s.elapsedSecs)
   const error = useExecutionStore((s) => s.error)
   const activePlan = useExecutionStore((s) => s.activePlan)
+  const iteration = useExecutionStore((s) => s.iteration)
+  const totalIterations = useExecutionStore((s) => s.totalIterations)
 
   const start = useExecutionStore((s) => s.start)
   const pause = useExecutionStore((s) => s.pause)
   const resume = useExecutionStore((s) => s.resume)
   const cancel = useExecutionStore((s) => s.cancel)
   const reset = useExecutionStore((s) => s.reset)
+
+  // Mode selection (EW1/EW2): Once by default; Repeat(N) with 1..=1000.
+  const [modeKind, setModeKind] = useState<'once' | 'repeat'>('once')
+  const [repeatCount, setRepeatCount] = useState(5)
+
+  const selectedMode: ExecutionModeDto =
+    modeKind === 'once' ? 'once' : { repeat: { count: repeatCount } }
+
+  const handleStart = () => void start(selectedMode)
 
   // Spec control table — each action enabled exactly for these statuses.
   const canStart = status === 'ready'
@@ -110,8 +123,53 @@ export function ExecutionWorkspace() {
           <h3 className="flex items-center gap-1.5 text-[11px] font-semibold text-foreground uppercase tracking-wider mb-1.5">
             <Play className="size-3 text-muted-foreground" /> Execution Controls
           </h3>
+
+          {/* Mode selector (EW1/EW2): only meaningful before a run starts. */}
+          {canStart && (
+            <div className="mb-2 flex items-center gap-2 rounded-lg border border-border/50 bg-card/30 p-2 text-xs">
+              <span className="text-muted-foreground">Mode</span>
+              <button
+                onClick={() => setModeKind('once')}
+                className={`inline-flex items-center gap-1 px-2 py-1 rounded-md cursor-pointer ${
+                  modeKind === 'once'
+                    ? 'bg-green-600/20 text-green-500'
+                    : 'text-muted-foreground hover:bg-accent'
+                }`}
+              >
+                <Repeat1 className="size-3" /> Once
+              </button>
+              <button
+                onClick={() => setModeKind('repeat')}
+                className={`inline-flex items-center gap-1 px-2 py-1 rounded-md cursor-pointer ${
+                  modeKind === 'repeat'
+                    ? 'bg-green-600/20 text-green-500'
+                    : 'text-muted-foreground hover:bg-accent'
+                }`}
+              >
+                <Repeat className="size-3" /> Repeat
+              </button>
+              {modeKind === 'repeat' && (
+                <>
+                  <input
+                    type="number"
+                    min={1}
+                    max={1000}
+                    value={repeatCount}
+                    onChange={(e) => {
+                      const v = Math.max(1, Math.min(1000, Number(e.target.value) || 1))
+                      setRepeatCount(v)
+                    }}
+                    className="w-16 rounded border border-border/60 bg-background px-1.5 py-0.5 text-right font-mono text-xs"
+                    aria-label="Repeat count"
+                  />
+                  <span className="text-muted-foreground">times</span>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-1.5">
-            <button onClick={() => void start()} disabled={!canStart}
+            <button onClick={handleStart} disabled={!canStart}
               className={`${controlBtn} bg-green-600/20 text-green-500 hover:bg-green-600/30`}>
               <Play className="size-3" /> Start
             </button>
@@ -174,6 +232,19 @@ export function ExecutionWorkspace() {
           <h3 className="flex items-center gap-1.5 text-[11px] font-semibold text-foreground uppercase tracking-wider mb-1.5">
             <Clock className="size-3 text-muted-foreground" /> Progress / Elapsed
           </h3>
+          {/* Iteration badge (EW3-EW6): only for Repeat sessions — the backend
+              omits total_iterations for Once, so the badge stays hidden. */}
+          {totalIterations !== undefined && totalIterations > 1 && (
+            <div className="mb-2 flex items-center justify-between rounded-lg border border-border/50 bg-card/30 px-2.5 py-1.5 text-xs">
+              <span className="text-muted-foreground">Iteration</span>
+              <span className="font-mono font-semibold text-foreground">
+                {status === 'failed'
+                  ? `Failed at ${iteration} / ${totalIterations}`
+                  : `${iteration} / ${totalIterations}`}
+                {status === 'completed' && ' — Completed'}
+              </span>
+            </div>
+          )}
           <div className="h-1.5 rounded-full bg-border overflow-hidden">
             <div
               className="h-full rounded-full bg-green-600/70 transition-[width] duration-300"

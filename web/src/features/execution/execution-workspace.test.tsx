@@ -389,3 +389,62 @@ describe('Conectar — connect+retry when start fails with not_connected (R3-001
     await waitFor(() => expect(useExecutionStore.getState().status).toBe('completed'))
   })
 })
+
+describe('Execution mode selector (EW1/EW2)', () => {
+  it('renders Once/Repeat and a bounded count input, hidden after a run starts', () => {
+    setStatus('ready', { activePlan: plan })
+    renderWorkspace()
+    expect(screen.getByRole('button', { name: /Once/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Repeat/ })).toBeInTheDocument()
+    // Count input appears only in Repeat mode.
+    expect(screen.queryByLabelText('Repeat count')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Repeat/ }))
+    expect(screen.getByLabelText('Repeat count')).toBeInTheDocument()
+  })
+
+  it('Start passes the selected mode to the client (repeat with count)', async () => {
+    execClientMocks.start.mockResolvedValue(undefined)
+    setStatus('ready', { activePlan: plan })
+    renderWorkspace()
+    fireEvent.click(screen.getByRole('button', { name: /Repeat/ }))
+    const input = screen.getByLabelText('Repeat count') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '3' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(execClientMocks.start).toHaveBeenCalledWith({ repeat: { count: 3 } }))
+  })
+
+  it('Start defaults to once when the mode stays Onces', async () => {
+    execClientMocks.start.mockResolvedValue(undefined)
+    setStatus('ready', { activePlan: plan })
+    renderWorkspace()
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(execClientMocks.start).toHaveBeenCalledWith('once'))
+  })
+})
+
+describe('Iteration badge (EW3-EW6)', () => {
+  it('shows "Iteration i/N" while a Repeat session runs', () => {
+    setStatus('running', { iteration: 2, totalIterations: 5, activePlan: plan })
+    renderWorkspace()
+    expect(screen.getByText(/Iteration/)).toBeInTheDocument()
+    expect(screen.getByText('2 / 5')).toBeInTheDocument()
+  })
+
+  it('shows "Failed at i/N" when an iteration fails', () => {
+    setStatus('failed', { iteration: 3, totalIterations: 5, activePlan: plan })
+    renderWorkspace()
+    expect(screen.getByText('Failed at 3 / 5')).toBeInTheDocument()
+  })
+
+  it('marks a completed repeat session as done', () => {
+    setStatus('completed', { iteration: 5, totalIterations: 5, activePlan: plan })
+    renderWorkspace()
+    expect(screen.getByText('5 / 5 — Completed')).toBeInTheDocument()
+  })
+
+  it('hides the badge when total_iterations is absent (Once, EW6)', () => {
+    setStatus('running', { iteration: 1, totalIterations: undefined, activePlan: plan })
+    renderWorkspace()
+    expect(screen.queryByText(/Iteration/)).not.toBeInTheDocument()
+  })
+})
