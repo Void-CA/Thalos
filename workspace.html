@@ -808,7 +808,7 @@ FrameRegistry { map&lt;FrameId, Frame&gt; }
 <tr class="even">
 <td><code>POST</code></td>
 <td><code>/api/v1/scene/motion/start</code></td>
-<td>Iniciar ejecución</td>
+<td>Iniciar ejecución. Body opcional <code>{"mode":"once"}</code> o <code>{"mode":{"repeat":{"count":N}}}</code> con N en 1..=1000; ausente = <code>once</code></td>
 </tr>
 <tr class="odd">
 <td><code>POST</code></td>
