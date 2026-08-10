@@ -2,6 +2,8 @@
 #include "executor.h"
 #include "validator.h"
 
+#include <cstdlib>
+
 // ── Constructor ──────────────────────────────────────────────────────────
 
 Protocol::Protocol(Executor& executor, Validator& validator)
@@ -170,7 +172,17 @@ void Protocol::handle_sample(const String& line) {
 
     TimedWaypoint wp;
     for (size_t i = 1; i < tokens.size() - 1; ++i) {
-        wp.joints.push_back(tokens[i].toFloat());
+        const char* tok = tokens[i].c_str();
+        char* end = nullptr;
+        // Arduino String::toFloat() is SILENT: garbage like "abc" parses to
+        // 0.0, silently corrupting the manifest. Reject non-numeric joint
+        // tokens instead of accepting 0.0.
+        float value = strtof(tok, &end);
+        if (end == tok || *end != '\0') {
+            set_error(F("MALFORMED_SAMPLE"));
+            return;
+        }
+        wp.joints.push_back(value);
     }
     wp.dt_us = static_cast<uint32_t>(tokens[tokens.size() - 1].toInt());
 
