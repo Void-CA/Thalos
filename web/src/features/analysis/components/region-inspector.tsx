@@ -1,5 +1,8 @@
 import { useAnalysisStore, useSelectedRegion } from '../store'
-import { manipulabilitySeriesOf } from '@/shared/contracts/analysis-report'
+import {
+  manipulabilitySeriesOf,
+  regionShareOfPlan,
+} from '@/shared/contracts/analysis-report'
 import type { ManipulabilityPointWire } from '@/shared/contracts/analysis-report'
 import { X } from 'lucide-react'
 
@@ -102,6 +105,7 @@ export function RegionInspector() {
     region.waypoint_start,
     region.waypoint_end,
   )
+  const share = regionShareOfPlan(region, series, report?.metrics ?? {})
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3">
@@ -182,6 +186,12 @@ export function RegionInspector() {
         <div>
           <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Location</h4>
           <span className="text-xs font-mono text-primary bg-primary-weak px-2 py-0.5 rounded">{wpRange}</span>
+          {share.percentOfPlan !== null && (
+            <p className="text-[10px] text-muted-foreground mt-1">
+              {share.percentOfPlan.toFixed(1)}% del plan
+              {share.durationSecs !== null ? ` · ${formatDuration(share.durationSecs)}` : ''}
+            </p>
+          )}
         </div>
         {region.explanation?.confidence != null && (
           <span className="text-[10px] text-muted-foreground">
@@ -208,4 +218,12 @@ function fmt(val: number): string {
   if (abs >= 0.001) return val.toFixed(4)
   if (abs >= 1e-6) return val.toFixed(6)
   return val.toExponential(2)
+}
+
+/** Compact duration label: seconds, or minutes + seconds past 60s. */
+function formatDuration(secs: number): string {
+  if (secs < 60) return `${secs.toFixed(1)}s`
+  const m = Math.floor(secs / 60)
+  const s = Math.round(secs % 60)
+  return `${m}m ${s}s`
 }

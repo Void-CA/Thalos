@@ -15,7 +15,7 @@ const report: AnalysisReportWire = {
   artifact: { kind: 'MotionPlan', id: 'plan-1' },
   observations: [],
   actions: [],
-  metrics: {},
+  metrics: { waypoint_count: 30, has_collisions: 0 },
   summary: {
     quality_index: 0.5,
     score: 50,
@@ -49,10 +49,10 @@ const report: AnalysisReportWire = {
   ],
   // In-range points 10/11/12 → avg 0.2, min 0.1; out-of-range 30 → excluded.
   manipulability_series: [
-    { waypoint: 10, yoshikawa: 0.1, det_jtj: 0.01 },
-    { waypoint: 11, yoshikawa: 0.2, det_jtj: 0.04 },
-    { waypoint: 12, yoshikawa: 0.3, det_jtj: 0.09 },
-    { waypoint: 30, yoshikawa: 0.9 },
+    { waypoint: 10, yoshikawa: 0.1, det_jtj: 0.01, timestamp: 5 },
+    { waypoint: 11, yoshikawa: 0.2, det_jtj: 0.04, timestamp: 6 },
+    { waypoint: 12, yoshikawa: 0.3, det_jtj: 0.09, timestamp: 7 },
+    { waypoint: 30, yoshikawa: 0.9, timestamp: 20 },
   ],
 }
 
@@ -147,6 +147,23 @@ describe('RegionInspector (PR6 6.5 — zero per-strategy buttons)', () => {
     })
     renderInspector()
     expect(screen.getByText(/no manipulability data/i)).toBeInTheDocument()
+  })
+
+  it('shows the region share of the plan with its span duration (R5)', () => {
+    seedSelectedRegion()
+    renderInspector()
+
+    // 3 of 30 waypoints → 10.0%; series timestamps 5→7 → 2.0s.
+    expect(screen.getByText('10.0% del plan · 2.0s')).toBeInTheDocument()
+  })
+
+  it('hides the share when the plan metrics carry no waypoint_count (R5 fallback)', () => {
+    useAnalysisStore.setState({
+      report: { ...report, metrics: {} },
+      selectedRegionId: 7,
+    })
+    renderInspector()
+    expect(screen.queryByText(/del plan/)).not.toBeInTheDocument()
   })
 })
 

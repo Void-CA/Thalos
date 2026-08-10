@@ -7,6 +7,7 @@ import {
   mountGLChart,
   resizeGLChart,
 } from '@/shared/charts/gl-adapter'
+import { minClearanceWaypoint } from '@/shared/contracts/analysis-report'
 import {
   buildTrajectoryRuns,
   regionAtWaypoint,
@@ -46,12 +47,19 @@ export function TrajectoryView() {
     [waypoints],
   )
   const regions = useMemo(() => report?.problem_regions ?? [], [report])
+  const markerWaypoint = useMemo(
+    () => (report ? minClearanceWaypoint(report.metrics) : null),
+    [report],
+  )
 
   useEffect(() => {
     const el = containerRef.current
     if (el === null) return
 
-    const chart = mountGLChart(el, buildTrajectoryOption(points, regions, selectedRegionId))
+    const chart = mountGLChart(
+      el,
+      buildTrajectoryOption(points, regions, selectedRegionId, markerWaypoint),
+    )
     chartRef.current = chart
 
     const handleClick = (params: { seriesIndex?: number; dataIndex?: number }) => {
@@ -74,7 +82,7 @@ export function TrajectoryView() {
       disposeGLChart(el)
       chartRef.current = null
     }
-  }, [points, regions, selectedRegionId, selectRegion])
+  }, [points, regions, selectedRegionId, markerWaypoint, selectRegion])
 
   if (points.length === 0) {
     return (

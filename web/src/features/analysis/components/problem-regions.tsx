@@ -1,5 +1,9 @@
 import { useState, useMemo } from 'react'
 import { useAnalysisStore } from '../store'
+import {
+  manipulabilitySeriesOf,
+  regionShareOfPlan,
+} from '@/shared/contracts/analysis-report'
 import type { ProblemRegionWire as ProblemRegion } from '@/shared/contracts/analysis-report'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 
@@ -126,6 +130,10 @@ function RegionCard({ region, selected, onSelect }: { region: ProblemRegion; sel
     ? `wp${region.waypoint_start}–wp${region.waypoint_end}`
     : `wp${region.waypoint_start}`
   const findingCount = (region.metrics?.error_count ?? 0) + (region.metrics?.warning_count ?? 0)
+  const report = useAnalysisStore(s => s.report)
+  const share = report
+    ? regionShareOfPlan(region, manipulabilitySeriesOf(report), report.metrics)
+    : { percentOfPlan: null as number | null, durationSecs: null }
 
   const tier = region.severity === 'critical' || region.severity === 'error' ? 'critical'
     : region.severity === 'warning' ? 'warning' : 'info'
@@ -149,6 +157,9 @@ function RegionCard({ region, selected, onSelect }: { region: ProblemRegion; sel
         <span className="capitalize">{categoryLabel(region.kind)}</span>
         <span className="font-mono">{wpRange}</span>
         {findingCount > 0 && <span>{findingCount} finding{findingCount !== 1 ? 's' : ''}</span>}
+        {share.percentOfPlan !== null && (
+          <span className="font-mono tabular-nums">{share.percentOfPlan.toFixed(1)}% del plan</span>
+        )}
       </div>
     </button>
   )

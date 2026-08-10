@@ -162,6 +162,38 @@ describe('TrajectoryView — ECharts GL line3D trajectory', () => {
     expect(option.series.some((s) => s.lineStyle?.color === '#ffffff')).toBe(true)
   })
 
+  it('marks the minimum-clearance waypoint with a scatter3D series when metrics carry it', () => {
+    act(() => {
+      useAnalysisStore.setState({
+        report: {
+          ...regionReport,
+          metrics: { min_collision_distance: 0.03, min_collision_waypoint: 2, has_collisions: 0 },
+        },
+      })
+      useSceneStore.setState({ activePlan: makePlan(5) })
+    })
+    renderView()
+
+    const option = gl.mountGLChart.mock.calls[0][1] as {
+      series: Array<{ type: string; data?: unknown[] }>
+    }
+    const marker = option.series.find((s) => s.type === 'scatter3D')
+    expect(marker).toBeTruthy()
+    // makePlan waypoint 2 sits at [2, 0, 0].
+    expect(marker?.data).toEqual([[2, 0, 0]])
+  })
+
+  it('emits no marker when the report metrics carry no clearance waypoint', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: regionReport })
+      useSceneStore.setState({ activePlan: makePlan(5) })
+    })
+    renderView()
+
+    const option = gl.mountGLChart.mock.calls[0][1] as { series: Array<{ type: string }> }
+    expect(option.series.some((s) => s.type === 'scatter3D')).toBe(false)
+  })
+
   it('shows an empty state when the plan carries no cartesian waypoints', () => {
     act(() => {
       useAnalysisStore.setState({ report: regionReport })

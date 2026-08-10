@@ -279,6 +279,91 @@ describe('EvaluationWorkspace — decision focus: trajectory + grouped regions, 
   })
 })
 
+describe('EvaluationWorkspace — plan summary metric chips (R4/R1)', () => {
+  it('renders the wire aggregate metrics as chips when present', () => {
+    act(() => {
+      useAnalysisStore.setState({
+        report: {
+          ...cleanReport,
+          metrics: {
+            waypoint_count: 10,
+            trajectory_duration: 12.5,
+            avg_manipulability: 0.456,
+            min_manipulability: 0.123,
+            near_singular_count: 3,
+            singular_count: 1,
+            has_collisions: 0,
+          },
+        },
+      })
+    })
+    renderWorkspace()
+    expect(screen.getByText('0.456')).toBeInTheDocument() // avg manipulability
+    expect(screen.getByText('0.123')).toBeInTheDocument() // min manipulability
+    expect(screen.getByText(/3 cerca · 1 exactas/)).toBeInTheDocument()
+    expect(screen.getByText('12.5s')).toBeInTheDocument() // analysis duration
+  })
+
+  it('shows the minimum-clearance chip with its waypoint when the metrics carry it (R1)', () => {
+    act(() => {
+      useAnalysisStore.setState({
+        report: {
+          ...cleanReport,
+          metrics: {
+            waypoint_count: 10,
+            min_collision_distance: 0.03,
+            min_collision_waypoint: 4,
+            has_collisions: 0,
+          },
+        },
+      })
+    })
+    renderWorkspace()
+    expect(screen.getByText(/0.03 m @ wp4/)).toBeInTheDocument()
+  })
+
+  it('shows a green "Sin colisiones" chip when the plan has no collisions and no clearance value', () => {
+    act(() => {
+      useAnalysisStore.setState({
+        report: { ...cleanReport, metrics: { waypoint_count: 10, has_collisions: 0 } },
+      })
+    })
+    renderWorkspace()
+    expect(screen.getByText('Sin colisiones')).toBeInTheDocument()
+  })
+
+  it('renders no chips when the report carries no metrics', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: cleanReport })
+    })
+    renderWorkspace()
+    expect(screen.queryByTestId('metric-chips')).not.toBeInTheDocument()
+  })
+})
+
+describe('EvaluationWorkspace — problem region share of the plan (R5)', () => {
+  it('labels each problem region with its % of the plan in the list', () => {
+    act(() => {
+      useAnalysisStore.setState({
+        report: { ...regionReport, metrics: { waypoint_count: 22, has_collisions: 0 } },
+      })
+      useSceneStore.setState({ activePlan })
+    })
+    renderWorkspace()
+    // region waypoint_count 11 of 22 → 50.0%.
+    expect(screen.getByText('50.0% del plan')).toBeInTheDocument()
+  })
+
+  it('omits the share when the plan metrics carry no waypoint_count', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: regionReport })
+      useSceneStore.setState({ activePlan })
+    })
+    renderWorkspace()
+    expect(screen.queryByText(/del plan/)).not.toBeInTheDocument()
+  })
+})
+
 describe('EvaluationWorkspace — recommendations with uniform Preview/Apply/Undo', () => {
   it('renders one RecommendationRow per recommendation when present', () => {
     act(() => {

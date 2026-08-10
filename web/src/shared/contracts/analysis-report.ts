@@ -185,6 +185,73 @@ export function manipulabilitySeriesOf(
   return report.manipulability_series ?? []
 }
 
+// ─── R1/R4/R5 metrics accessors (evaluation hotfix) ────────────────────────
+//
+// The wire projects `AnalysisMetrics.to_btree_map()` as a flat
+// `Record<string, number>` — these typed accessors make the optional keys the
+// UI consumes explicit and resilient to absence (old payloads omit them).
+
+/** `min_collision_distance` (metres; negative = collision), or null when the
+ *  analysis carried no collision checker. */
+export function minClearanceDistance(
+  metrics: Record<string, number>,
+): number | null {
+  const value = metrics['min_collision_distance']
+  return typeof value === 'number' ? value : null
+}
+
+/** Global waypoint index of the minimum-clearance point, or null when absent.
+ *  The wire carries it as a `usize` projected to f64 — rounded on read. */
+export function minClearanceWaypoint(
+  metrics: Record<string, number>,
+): number | null {
+  const value = metrics['min_collision_waypoint']
+  return typeof value === 'number' ? Math.round(value) : null
+}
+
+/** Whether the plan carries detected collisions (`has_collisions` is always
+ *  projected by the backend as 1.0/0.0; absent → false). */
+export function hasCollisions(metrics: Record<string, number>): boolean {
+  return metrics['has_collisions'] === 1
+}
+
+/** R5: how much of the plan a problem region spans. The percent derives from
+ *  `region.waypoint_count / metrics.waypoint_count` (the wire never ships a
+ *  ready-made share); the duration derives from the manipulability series'
+ *  `timestamp` (seconds) over the region's waypoint span — both degrade to
+ *  null when the wire lacks the data. */
+export interface RegionShare {
+  percentOfPlan: number | null
+  durationSecs: number | null
+}
+
+export function regionShareOfPlan(
+  region: ProblemRegionWire,
+  series: ManipulabilityPointWire[],
+  metrics: Record<string, number>,
+): RegionShare {
+  const total = metrics['waypoint_count']
+  const percentOfPlan =
+    typeof total === 'number' && total > 0 && region.waypoint_count > 0
+      ? (region.waypoint_count / total) * 100
+      : null
+  const inRange = series.filter(
+    (p) =>
+      p.waypoint >= region.waypoint_start &&
+      p.waypoint <= region.waypoint_end &&
+      p.timestamp !== undefined,
+  )
+  const first = inRange[0]
+  const last = inRange[inRange.length - 1]
+  const durationSecs =
+    inRange.length >= 2 &&
+    first?.timestamp !== undefined &&
+    last?.timestamp !== undefined
+      ? last.timestamp - first.timestamp
+      : null
+  return { percentOfPlan, durationSecs }
+}
+
 /** Per-waypoint analysis view derived from observations anchored to a
  *  `Location::Waypoint` (I4: derived pure function — the store persists only
  *  the canonical report). Sparse coverage falls back to fewer entries; the

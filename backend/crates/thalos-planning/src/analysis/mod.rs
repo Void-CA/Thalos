@@ -191,6 +191,9 @@ impl AnalysisMetrics {
         if let Some(d) = self.min_collision_distance {
             map.insert("min_collision_distance".to_string(), d);
         }
+        if let Some(wp) = self.min_collision_waypoint {
+            map.insert("min_collision_waypoint".to_string(), wp as f64);
+        }
         map
     }
 }
@@ -934,10 +937,11 @@ mod tests {
         assert_eq!(map["near_singular_count"], 3.0);
         assert_eq!(map["singular_count"], 1.0);
         assert!((map["min_collision_distance"] - 0.035).abs() < 1e-12);
+        assert_eq!(map["min_collision_waypoint"], 2.0);
         assert_eq!(map["has_collisions"], 1.0);
         assert_eq!(
             map.len(),
-            8,
+            9,
             "all non-optional aggregates + present optionals"
         );
     }
@@ -964,6 +968,7 @@ mod tests {
             "avg_manipulability",
             "min_manipulability",
             "min_collision_distance",
+            "min_collision_waypoint",
         ] {
             assert!(
                 !map.contains_key(absent),

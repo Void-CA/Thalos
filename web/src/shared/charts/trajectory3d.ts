@@ -27,6 +27,7 @@ export const TRAJECTORY_COLOR_NEUTRAL = '#94a3b8'
 export const TRAJECTORY_COLOR_CRITICAL = '#ef4444'
 export const TRAJECTORY_COLOR_WARNING = '#f59e0b'
 export const TRAJECTORY_COLOR_INFO = '#60a5fa'
+export const TRAJECTORY_COLOR_MARKER = '#22c55e'
 
 const SEVERITY_RANK: Record<SegmentSeverity, number> = {
   critical: 3,

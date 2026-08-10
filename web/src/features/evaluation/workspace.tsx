@@ -9,6 +9,9 @@ import { useSemanticEditor } from '@/features/semantic/store'
 import { useSceneStore } from '@/features/viewport/store'
 import {
   dedupeRecommendations,
+  hasCollisions,
+  minClearanceDistance,
+  minClearanceWaypoint,
   recommendationKey,
   recommendationRegionId,
 } from '@/shared/contracts/analysis-report'
@@ -226,6 +229,7 @@ function PlanSummary() {
         <SummaryItem label="Instrucciones" value={instructionCount !== undefined ? String(instructionCount) : '—'} />
         <SummaryItem label="DOF" value={dof !== null ? String(dof) : '—'} />
       </dl>
+      <MetricChips metrics={report?.metrics} />
       {initialJoints && (
         <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
           <span>Joints iniciales</span>
@@ -241,6 +245,80 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between gap-2">
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="font-mono font-semibold text-foreground tabular-nums">{value}</dd>
+    </div>
+  )
+}
+
+interface MetricChip {
+  label: string
+  value: string
+  tone: 'good' | 'bad' | 'neutral'
+}
+
+function MetricChips({ metrics }: { metrics: Record<string, number> | undefined }) {
+  if (metrics === undefined || Object.keys(metrics).length === 0) return null
+
+  const chips: MetricChip[] = []
+
+  const avg = metrics['avg_manipulability']
+  if (avg !== undefined) {
+    chips.push({ label: 'Yoshikawa avg', value: avg.toFixed(3), tone: 'neutral' })
+  }
+  const min = metrics['min_manipulability']
+  if (min !== undefined) {
+    chips.push({ label: 'Yoshikawa min', value: min.toFixed(3), tone: 'neutral' })
+  }
+  const near = metrics['near_singular_count']
+  const exact = metrics['singular_count']
+  if ((near ?? 0) > 0 || (exact ?? 0) > 0) {
+    chips.push({
+      label: 'Singularidades',
+      value: `${near ?? 0} cerca · ${exact ?? 0} exactas`,
+      tone: 'neutral',
+    })
+  }
+  const duration = metrics['trajectory_duration']
+  if (duration !== undefined) {
+    chips.push({ label: 'Duración análisis', value: formatDuration(duration), tone: 'neutral' })
+  }
+
+  const minClearance = minClearanceDistance(metrics)
+  if (minClearance !== null) {
+    const waypoint = minClearanceWaypoint(metrics)
+    chips.push({
+      label: 'Distancia mínima a obstáculo',
+      value: waypoint !== null
+        ? `${minClearance.toFixed(2)} m @ wp${waypoint}`
+        : `${minClearance.toFixed(2)} m`,
+      tone: minClearance < 0 ? 'bad' : 'neutral',
+    })
+  } else if (hasCollisions(metrics)) {
+    chips.push({ label: 'Colisiones', value: 'Sí', tone: 'bad' })
+  } else if (metrics['has_collisions'] === 0) {
+    chips.push({ label: 'Colisiones', value: 'Sin colisiones', tone: 'good' })
+  }
+
+  if (chips.length === 0) return null
+
+  const toneClass: Record<MetricChip['tone'], string> = {
+    good: 'text-chart-3',
+    bad: 'text-destructive',
+    neutral: 'text-foreground',
+  }
+
+  return (
+    <div data-testid="metric-chips" className="flex flex-wrap gap-1.5">
+      {chips.map((chip) => (
+        <span
+          key={chip.label}
+          className="inline-flex items-center gap-1.5 bg-secondary/20 rounded-md px-2 py-1 text-[10px]"
+        >
+          <span className="text-muted-foreground">{chip.label}</span>
+          <span className={`font-mono font-semibold tabular-nums ${toneClass[chip.tone]}`}>
+            {chip.value}
+          </span>
+        </span>
+      ))}
     </div>
   )
 }

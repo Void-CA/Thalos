@@ -95,6 +95,26 @@ describe('buildTrajectoryOption — ECharts GL line3D option', () => {
     expect(option.series).toEqual([])
   })
 
+  it('marks the minimum-clearance waypoint with a scatter3D series when provided', () => {
+    const option = buildTrajectoryOption(waypoints, [criticalRegion], null, 3) as {
+      series: Array<{ type: string; data?: Array<[number, number, number]> }>
+    }
+    const marker = option.series.find((s) => s.type === 'scatter3D')
+    expect(marker).toBeTruthy()
+    expect(marker?.data).toEqual([[3, 0, 0]])
+  })
+
+  it('emits no scatter3D marker when the waypoint is absent or out of range', () => {
+    const absent = buildTrajectoryOption(waypoints, [criticalRegion], null, null) as {
+      series: Array<{ type: string }>
+    }
+    const outOfRange = buildTrajectoryOption(waypoints, [criticalRegion], null, 999) as {
+      series: Array<{ type: string }>
+    }
+    expect(absent.series.every((s) => s.type === 'line3D')).toBe(true)
+    expect(outOfRange.series.every((s) => s.type === 'line3D')).toBe(true)
+  })
+
   it('keeps axisLine visible on every 3D axis (echarts-gl crashes when hidden)', () => {
     // Regression: Grid3DAxis.update only populates `axisLineCoords` when
     // axisLine.show is true, and Grid3DView._updateAxisLabelAlign dereferences

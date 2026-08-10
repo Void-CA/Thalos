@@ -15,7 +15,7 @@
  */
 
 import * as echarts from 'echarts/core'
-import { Line3DChart } from 'echarts-gl/charts'
+import { Line3DChart, Scatter3DChart } from 'echarts-gl/charts'
 import { Grid3DComponent } from 'echarts-gl/components'
 import { TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -27,11 +27,12 @@ import {
   grid3DFrame,
   regionAtWaypoint,
   severityLabel,
+  TRAJECTORY_COLOR_MARKER,
   type Vec3,
 } from './trajectory3d'
 import { resolveChartColor, withAlpha } from './theme'
 
-echarts.use([Line3DChart, Grid3DComponent, TooltipComponent, CanvasRenderer])
+echarts.use([Line3DChart, Scatter3DChart, Grid3DComponent, TooltipComponent, CanvasRenderer])
 
 const MUTED = resolveChartColor('severity.nodata')
 const GRID_SPLIT = withAlpha(resolveChartColor('severity.nodata'), 0.25)
@@ -51,9 +52,16 @@ export function buildTrajectoryOption(
   waypoints: Vec3[],
   regions: ProblemRegionWire[],
   selectedRegionId: number | null,
+  minClearanceWaypoint?: number | null,
 ): EChartsOption {
   const runs = buildTrajectoryRuns(waypoints, regions)
   const frame = grid3DFrame(waypoints)
+
+  const markerInRange =
+    minClearanceWaypoint != null &&
+    minClearanceWaypoint >= 0 &&
+    minClearanceWaypoint < waypoints.length
+  const markerPoint = markerInRange ? waypoints[minClearanceWaypoint as number] : null
 
   const axis3D = (name: string, min: number, max: number) => ({
     type: 'value',
@@ -77,7 +85,11 @@ export function buildTrajectoryOption(
       trigger: 'item',
       formatter: (params: TooltipParams): string => {
         const run = runs[params.seriesIndex]
-        if (run === undefined) return ''
+        if (run === undefined) {
+          return markerInRange
+            ? `Minimum clearance waypoint ${minClearanceWaypoint}`
+            : ''
+        }
         const [x, y, z] = params.data
         const globalIndex = run.waypointStart + params.dataIndex
         const region = regionAtWaypoint(regions, globalIndex)
@@ -110,6 +122,18 @@ export function buildTrajectoryOption(
         },
       }
     }),
+  }
+
+  if (markerPoint !== null) {
+    const markerSeries = option.series as unknown[]
+    markerSeries.push({
+      type: 'scatter3D',
+      name: 'Minimum clearance',
+      data: [[markerPoint.x, markerPoint.y, markerPoint.z]],
+      symbol: 'diamond',
+      symbolSize: 9,
+      itemStyle: { color: TRAJECTORY_COLOR_MARKER },
+    })
   }
   return option as unknown as EChartsOption
 }
