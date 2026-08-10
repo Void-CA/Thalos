@@ -28,6 +28,10 @@ export const TRAJECTORY_COLOR_CRITICAL = '#ef4444'
 export const TRAJECTORY_COLOR_WARNING = '#f59e0b'
 export const TRAJECTORY_COLOR_INFO = '#60a5fa'
 export const TRAJECTORY_COLOR_MARKER = '#22c55e'
+/** Start marker — green circle, the "departure" of the trajectory. */
+export const TRAJECTORY_COLOR_START = '#22c55e'
+/** End marker — red circle, the "arrival" of the trajectory. */
+export const TRAJECTORY_COLOR_END = '#ef4444'
 
 const SEVERITY_RANK: Record<SegmentSeverity, number> = {
   critical: 3,

@@ -280,7 +280,7 @@ describe('EvaluationWorkspace — decision focus: trajectory + grouped regions, 
 })
 
 describe('EvaluationWorkspace — plan summary metric chips (R4/R1)', () => {
-  it('renders the wire aggregate metrics as chips when present', () => {
+  it('renders the wire aggregate metrics as mini-cards when present', () => {
     act(() => {
       useAnalysisStore.setState({
         report: {
@@ -298,10 +298,32 @@ describe('EvaluationWorkspace — plan summary metric chips (R4/R1)', () => {
       })
     })
     renderWorkspace()
-    expect(screen.getByText('0.456')).toBeInTheDocument() // avg manipulability
-    expect(screen.getByText('0.123')).toBeInTheDocument() // min manipulability
-    expect(screen.getByText(/3 cerca · 1 exactas/)).toBeInTheDocument()
-    expect(screen.getByText('12.5s')).toBeInTheDocument() // analysis duration
+    const container = screen.getByTestId('metric-chips')
+    expect(container).toBeInTheDocument()
+    expect(within(container).getAllByTestId('metric-chip').length).toBeGreaterThanOrEqual(3)
+    expect(within(container).getByText('0.456')).toBeInTheDocument() // avg manipulability
+    expect(within(container).getByText(/3 cerca · 1 exactas/)).toBeInTheDocument()
+    expect(within(container).getByText('12.5s')).toBeInTheDocument() // analysis duration
+  })
+
+  it('omits the "Yoshikawa min" card (min_manipulability is ~0 through any singularity)', () => {
+    act(() => {
+      useAnalysisStore.setState({
+        report: {
+          ...cleanReport,
+          metrics: {
+            waypoint_count: 10,
+            avg_manipulability: 0.456,
+            min_manipulability: 0.123,
+            has_collisions: 0,
+          },
+        },
+      })
+    })
+    renderWorkspace()
+    expect(screen.queryByText('Yoshikawa min')).not.toBeInTheDocument()
+    expect(screen.queryByText('0.123')).not.toBeInTheDocument()
+    expect(screen.getByText('0.456')).toBeInTheDocument() // avg survives
   })
 
   it('shows the minimum-clearance chip with its waypoint when the metrics carry it (R1)', () => {

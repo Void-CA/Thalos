@@ -264,10 +264,6 @@ function MetricChips({ metrics }: { metrics: Record<string, number> | undefined 
   if (avg !== undefined) {
     chips.push({ label: 'Yoshikawa avg', value: avg.toFixed(3), tone: 'neutral' })
   }
-  const min = metrics['min_manipulability']
-  if (min !== undefined) {
-    chips.push({ label: 'Yoshikawa min', value: min.toFixed(3), tone: 'neutral' })
-  }
   const near = metrics['near_singular_count']
   const exact = metrics['singular_count']
   if ((near ?? 0) > 0 || (exact ?? 0) > 0) {
@@ -307,17 +303,20 @@ function MetricChips({ metrics }: { metrics: Record<string, number> | undefined 
   }
 
   return (
-    <div data-testid="metric-chips" className="flex flex-wrap gap-1.5">
+    <div data-testid="metric-chips" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
       {chips.map((chip) => (
-        <span
+        <div
           key={chip.label}
-          className="inline-flex items-center gap-1.5 bg-secondary/20 rounded-md px-2 py-1 text-[10px]"
+          data-testid="metric-chip"
+          className="flex flex-col gap-1 rounded-md border border-border bg-secondary/10 px-2.5 py-2"
         >
-          <span className="text-muted-foreground">{chip.label}</span>
-          <span className={`font-mono font-semibold tabular-nums ${toneClass[chip.tone]}`}>
+          <span className="text-[9px] uppercase tracking-wider text-muted-foreground">
+            {chip.label}
+          </span>
+          <span className={`text-sm font-mono font-semibold tabular-nums ${toneClass[chip.tone]}`}>
             {chip.value}
           </span>
-        </span>
+        </div>
       ))}
     </div>
   )

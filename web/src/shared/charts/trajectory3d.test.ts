@@ -7,7 +7,9 @@ import {
   severityAtWaypoint,
   severityColor,
   TRAJECTORY_COLOR_CRITICAL,
+  TRAJECTORY_COLOR_END,
   TRAJECTORY_COLOR_NEUTRAL,
+  TRAJECTORY_COLOR_START,
   TRAJECTORY_COLOR_WARNING,
   type Vec3,
 } from './trajectory3d'
@@ -143,6 +145,13 @@ describe('severity lookup helpers', () => {
     expect(severityColor('clean')).toBe(TRAJECTORY_COLOR_NEUTRAL)
     expect(severityColor('critical')).toBe(TRAJECTORY_COLOR_CRITICAL)
     expect(severityColor('warning')).toBe(TRAJECTORY_COLOR_WARNING)
+  })
+})
+
+describe('trajectory endpoint marker palette', () => {
+  it('exposes the start (green) / end (red) marker colors', () => {
+    expect(TRAJECTORY_COLOR_START).toBe('#22c55e')
+    expect(TRAJECTORY_COLOR_END).toBe('#ef4444')
   })
 })
 

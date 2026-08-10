@@ -175,23 +175,32 @@ describe('TrajectoryView — ECharts GL line3D trajectory', () => {
     renderView()
 
     const option = gl.mountGLChart.mock.calls[0][1] as {
-      series: Array<{ type: string; data?: unknown[] }>
+      series: Array<{ type: string; name?: string; data?: unknown[] }>
     }
-    const marker = option.series.find((s) => s.type === 'scatter3D')
+    const marker = option.series.find(
+      (s) => s.type === 'scatter3D' && s.name === 'Minimum clearance',
+    )
     expect(marker).toBeTruthy()
     // makePlan waypoint 2 sits at [2, 0, 0].
     expect(marker?.data).toEqual([[2, 0, 0]])
   })
 
-  it('emits no marker when the report metrics carry no clearance waypoint', () => {
+  it('emits no clearance marker when the report metrics carry no clearance waypoint, but still marks endpoints', () => {
     act(() => {
       useAnalysisStore.setState({ report: regionReport })
       useSceneStore.setState({ activePlan: makePlan(5) })
     })
     renderView()
 
-    const option = gl.mountGLChart.mock.calls[0][1] as { series: Array<{ type: string }> }
-    expect(option.series.some((s) => s.type === 'scatter3D')).toBe(false)
+    const option = gl.mountGLChart.mock.calls[0][1] as {
+      series: Array<{ type: string; name?: string }>
+    }
+    expect(
+      option.series.some((s) => s.type === 'scatter3D' && s.name === 'Minimum clearance'),
+    ).toBe(false)
+    // The Start/End endpoint markers are independent of the clearance metric.
+    expect(option.series.some((s) => s.name === 'Start')).toBe(true)
+    expect(option.series.some((s) => s.name === 'End')).toBe(true)
   })
 
   it('shows an empty state when the plan carries no cartesian waypoints', () => {

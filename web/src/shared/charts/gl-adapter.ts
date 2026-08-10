@@ -27,7 +27,9 @@ import {
   grid3DFrame,
   regionAtWaypoint,
   severityLabel,
+  TRAJECTORY_COLOR_END,
   TRAJECTORY_COLOR_MARKER,
+  TRAJECTORY_COLOR_START,
   type Vec3,
 } from './trajectory3d'
 import { resolveChartColor, withAlpha } from './theme'
@@ -42,6 +44,7 @@ type TooltipParams = {
   seriesIndex: number
   dataIndex: number
   data: number[]
+  seriesName?: string
 }
 
 /**
@@ -86,9 +89,17 @@ export function buildTrajectoryOption(
       formatter: (params: TooltipParams): string => {
         const run = runs[params.seriesIndex]
         if (run === undefined) {
-          return markerInRange
-            ? `Minimum clearance waypoint ${minClearanceWaypoint}`
-            : ''
+          const [x, y, z] = params.data
+          switch (params.seriesName) {
+            case 'Start':
+              return `Start (waypoint 0)<br/>X ${x.toFixed(3)} · Y ${y.toFixed(3)} · Z ${z.toFixed(3)}`
+            case 'End':
+              return `Goal (waypoint ${waypoints.length - 1})<br/>X ${x.toFixed(3)} · Y ${y.toFixed(3)} · Z ${z.toFixed(3)}`
+            default:
+              return markerInRange
+                ? `Minimum clearance waypoint ${minClearanceWaypoint}`
+                : ''
+          }
         }
         const [x, y, z] = params.data
         const globalIndex = run.waypointStart + params.dataIndex
@@ -124,6 +135,29 @@ export function buildTrajectoryOption(
     }),
   }
 
+  if (waypoints.length >= 2) {
+    const start = waypoints[0]
+    const end = waypoints[waypoints.length - 1]
+    const endpointSeries = option.series as unknown[]
+    endpointSeries.push(
+      {
+        type: 'scatter3D',
+        name: 'Start',
+        data: [[start.x, start.y, start.z]],
+        symbol: 'circle',
+        symbolSize: 9,
+        itemStyle: { color: TRAJECTORY_COLOR_START },
+      },
+      {
+        type: 'scatter3D',
+        name: 'End',
+        data: [[end.x, end.y, end.z]],
+        symbol: 'circle',
+        symbolSize: 9,
+        itemStyle: { color: TRAJECTORY_COLOR_END },
+      },
+    )
+  }
   if (markerPoint !== null) {
     const markerSeries = option.series as unknown[]
     markerSeries.push({
