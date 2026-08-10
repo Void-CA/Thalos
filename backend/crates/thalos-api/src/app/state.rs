@@ -10,7 +10,6 @@ use thalos_runtime::{
     },
 };
 
-use crate::features::repair::session_handler::SessionServiceState;
 use crate::features::robots::service::RobotService;
 
 pub struct Services {
@@ -22,7 +21,6 @@ pub struct Services {
 
 pub struct AppState {
     pub services: Arc<Services>,
-    pub session_service: SessionServiceState,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -184,7 +182,6 @@ pub async fn new_state_with_scene_writeback_and_history_cap(
             manager,
             sessions,
         }),
-        session_service: SessionServiceState::new(),
     })
 }
 

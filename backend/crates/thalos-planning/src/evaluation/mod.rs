@@ -10,6 +10,3 @@ pub use evaluator::PlanEvaluator;
 pub use metrics::{
     CollisionMetrics, JointSafetyMetrics, ManipulabilityMetrics, MetricKind, PlanMetrics,
 };
-
-// M8.2 reemplazó AlternativeGenerator por RepairPlanner.
-// M8.1 reemplazó ProblemRegions legacy por SemanticRegion analysis.

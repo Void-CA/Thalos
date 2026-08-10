@@ -2,8 +2,6 @@ pub mod controller;
 pub mod esp32;
 mod internal;
 pub mod manager;
-pub mod playback;
-pub mod replay;
 pub mod transport;
 
 pub use internal::InternalBackend;

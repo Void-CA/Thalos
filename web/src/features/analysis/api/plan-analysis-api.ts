@@ -1,8 +1,7 @@
 import { apiClient } from '@/shared/api-client'
 import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
-import type { RepairOptionsWire } from '@/shared/contracts/repair-options'
 import type { ProgramEditWire } from '@/shared/contracts/program-edit'
-import type { OptimizeResponse, PreviewResponse, ApplyResponse, UndoResponse } from './plan-analysis.types'
+import type { PreviewResponse, ApplyResponse, UndoResponse } from './plan-analysis.types'
 
 /**
  * domain-areas S4: `/plan/analyze` returns the canonical AnalysisReport
@@ -15,17 +14,6 @@ export const planAnalysisApi = {
     apiClient
       .post<AnalysisReportWire>('/plan/analyze', { plan_id: planId ?? null })
       .then(r => r.data),
-
-  /**
-   * Canonical repair-options endpoint (spec alternatives-panel-react, S4).
-   * The deprecated `/plan/analyze/alternatives` route was removed from the
-   * client (criteria C1/C2) — the panel consumes ONLY `/plan/repair/options`.
-   */
-  repairOptions: (): Promise<RepairOptionsWire> =>
-    apiClient.post<RepairOptionsWire>('/plan/repair/options', {}).then(r => r.data),
-
-  optimize: () =>
-    apiClient.post<OptimizeResponse>('/plan/optimize', {}).then(r => r.data),
 
   /**
    * POST /plan/commands/preview (PR3) — READ-ONLY simulation of a

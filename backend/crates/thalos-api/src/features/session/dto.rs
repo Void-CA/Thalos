@@ -48,16 +48,3 @@ impl From<SessionData> for SessionResponse {
         }
     }
 }
-
-#[derive(Debug, Deserialize)]
-pub struct ReplayRequest {
-    /// Session ID to replay.
-    pub session_id: u64,
-    /// Optional interpolation method.
-    #[serde(default = "default_interpolation")]
-    pub interpolation: String,
-}
-
-fn default_interpolation() -> String {
-    "linear".to_string()
-}

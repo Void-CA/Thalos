@@ -10,8 +10,6 @@ pub enum ExecutionSource {
     Simulation,
     /// Ejecución en robot físico.
     Hardware,
-    /// Reproducción de una ejecución previa (trace).
-    Replay { session_id: u64 },
 }
 
 impl std::fmt::Display for ExecutionSource {
@@ -19,7 +17,6 @@ impl std::fmt::Display for ExecutionSource {
         match self {
             ExecutionSource::Simulation => write!(f, "Simulation"),
             ExecutionSource::Hardware => write!(f, "Hardware"),
-            ExecutionSource::Replay { session_id } => write!(f, "Replay #{}", session_id),
         }
     }
 }

@@ -385,9 +385,7 @@ mod tests {
     }
 
     #[test]
-    fn replay_source_display() {
-        let src = ExecutionSource::Replay { session_id: 42 };
-        assert_eq!(src.to_string(), "Replay #42");
+    fn source_display() {
         assert_eq!(ExecutionSource::Simulation.to_string(), "Simulation");
         assert_eq!(ExecutionSource::Hardware.to_string(), "Hardware");
     }

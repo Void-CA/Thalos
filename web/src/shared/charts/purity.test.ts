@@ -16,7 +16,6 @@ const PURE_MODULES = [
   new URL('./builders/metrics-dashboard.ts', import.meta.url),
   new URL('./builders/comparison.ts', import.meta.url),
   new URL('./builders/timeline.ts', import.meta.url),
-  new URL('./builders/repair-options.ts', import.meta.url),
   new URL('./builders/trace.ts', import.meta.url),
 ]
 

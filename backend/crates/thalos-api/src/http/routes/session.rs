@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::{
     Router,
-    routing::{get, post},
+    routing::get,
 };
 
 use crate::app::state::AppState;
@@ -15,7 +15,6 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/sessions/{id}/trace", get(handler::get_trace))
         .route("/sessions/{id}/summary", get(handler::get_session_summary))
         .route("/sessions/{id}/export", get(handler::export_trace_csv))
-        .route("/sessions/{id}/replay", post(handler::start_replay))
         .route(
             "/sessions/{id}/execution-trace",
             get(handler::get_execution_trace),

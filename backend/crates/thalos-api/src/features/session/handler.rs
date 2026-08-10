@@ -8,22 +8,12 @@ use serde::Serialize;
 use serde_json::Value;
 
 use thalos_core::{analysis::observation::ArtifactRef, ids::ExecutionSessionId};
-use thalos_runtime::{
-    ExecutionAnalyzer, TraceAnalyzer,
-    backends::{
-        controller::RobotController,
-        playback::interpolator::{Interpolator, LinearInterpolator, NearestSampleInterpolator},
-        replay::ReplayBackend,
-    },
-    comparison,
-};
+use thalos_runtime::{ExecutionAnalyzer, TraceAnalyzer, comparison};
 
 use crate::app::error::ApiError;
 use crate::app::prelude::*;
 use crate::app::state::AppState;
 use crate::features::plan_analysis::dto::ObservationDto;
-use crate::features::scene::dto::responses::RuntimeStateResponse;
-use crate::features::scene::handler::to_api_response;
 use crate::features::session::dto::*;
 
 /// Listar todas las sesiones.
@@ -230,51 +220,6 @@ pub async fn export_trace_csv(
             message: format!("Trace for session {} not found", id),
         })?;
     Ok((axum::http::StatusCode::OK, trace.to_csv()))
-}
-
-/// Iniciar replay de una sesión.
-pub async fn start_replay(
-    State(state): State<Arc<AppState>>,
-    Json(payload): Json<ReplayRequest>,
-) -> ApiResult<RuntimeStateResponse> {
-    let trace = state
-        .services
-        .sessions
-        .get_trace(payload.session_id)
-        .await
-        .ok_or_else(|| ApiError::NotFound {
-            message: format!("Trace for session {} not found", payload.session_id),
-        })?;
-
-    let interpolator: Box<dyn Interpolator + Send + Sync> = match payload.interpolation.as_str() {
-        "nearest" => Box::new(NearestSampleInterpolator::new()),
-        _ => Box::new(LinearInterpolator::new()),
-    };
-
-    let replay = Arc::new(tokio::sync::RwLock::new(ReplayBackend::with_interpolator(
-        trace,
-        interpolator,
-    ))) as Arc<tokio::sync::RwLock<dyn RobotController + Send + Sync>>;
-
-    state
-        .services
-        .manager
-        .replace_controller(replay)
-        .await
-        .map_err(|e| ApiError::Internal {
-            message: e.to_string(),
-        })?;
-
-    let snapshot = state
-        .services
-        .scene
-        .snapshot()
-        .await
-        .map_err(|e| ApiError::Internal {
-            message: e.to_string(),
-        })?;
-
-    Ok(Json(to_api_response(&snapshot)))
 }
 
 /// Respuesta combinada: métricas de comparación + observaciones de ejecución.

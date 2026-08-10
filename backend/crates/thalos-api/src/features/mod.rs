@@ -1,6 +1,5 @@
 pub mod motion;
 pub mod plan_analysis;
-pub mod repair;
 pub mod backend;
 pub mod robots;
 pub mod scene;

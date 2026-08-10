@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::{Router, routing::post};
 
 use crate::app::state::AppState;
-use crate::features::plan_analysis::{alternatives, handler};
+use crate::features::plan_analysis::handler;
 
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -24,9 +24,5 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route(
             "/plan/program/edit",
             post(handler::edit_program),
-        )
-        .route(
-            "/plan/analyze/alternatives",
-            post(alternatives::analyze_alternatives),
         )
 }

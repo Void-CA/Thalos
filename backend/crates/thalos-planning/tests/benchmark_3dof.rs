@@ -3,29 +3,20 @@
 //! Crea trayectorias con problemas conocidos y ejecuta cada operador,
 //! reportando métricas antes/después y mejora porcentual.
 
-use std::sync::Arc;
-
 use thalos_core::{
-    kinematics::{
-        forward::ForwardKinematics,
-        inverse::{IKSolver, JacobianTransposeSolver},
-    },
     models::manipulator_3dof::Manipulator3DOFSpec,
     robot::serial_chain::SerialChain,
     trajectory::{Trajectory, TrajectoryPoint},
 };
-use thalos_math::Vector3;
 use thalos_optimization::{
     TrajectoryOperator,
     domain::context::{JointLimits, OptimizationContext, PipelineConfig},
     operators::JointCenteringOperator,
+    pipeline::OptimizationPipeline,
 };
 use thalos_planning::{
-    adapters::RepairStrategyAdapter,
     evaluation::evaluator::PlanEvaluator,
     evaluation::metrics::PlanMetrics,
-    optimizer::TrajectoryOptimizer,
-    repair::strategies::{LiftTcpStrategy, RotateToolStrategy, SplitSegment},
 };
 
 fn build_chain() -> SerialChain {
@@ -209,41 +200,6 @@ fn benchmark_adaptive_sampling_baseline() {
         max_joint_delta(&traj)
     );
 
-    // SplitSegment baseline (uniforme, factor 2x)
-    let chain = build_chain();
-    let tcp = chain.end_effector().clone();
-    let fk = ForwardKinematics::new(chain.clone());
-    let solver =
-        Arc::new(JacobianTransposeSolver::new(fk, tcp, 5000, 1e-4, 0.1)) as Arc<dyn IKSolver>;
-    let split = SplitSegment::new(2);
-    let adapter = RepairStrategyAdapter::new(&split, solver.clone());
-    let ctx = make_ctx(&chain);
-    let region = thalos_core::analysis::region::ProblemRegion::new(
-        thalos_core::analysis::region::RegionId(0),
-        thalos_core::analysis::region::RegionKind::Tracking,
-        thalos_core::analysis::region::RegionSeverity::Warning,
-        15..25,
-    );
-    let result = adapter.apply(&chain, &traj, &region, &ctx, None);
-    match result {
-        Ok(new_traj) => {
-            let m2 = compute_metrics(&new_traj);
-            println!("\n  SplitSegment(×2) — baseline uniforme:");
-            println!(
-                "    Waypoints:   {} (era {})",
-                new_traj.waypoints().len(),
-                traj.waypoints().len()
-            );
-            println!(
-                "    Smoothness:  {:.4} ({:+.1}%)",
-                m2.smoothness,
-                (m2.smoothness - m.smoothness) / m.smoothness.max(1e-12) * 100.0
-            );
-            println!("    Max delta:   {:.4}", max_joint_delta(&new_traj));
-        }
-        Err(e) => println!("\n  SplitSegment: {:?}", e),
-    }
-
     println!("\n═══════════════════════════════════════════════════");
     println!("  FIN BASELINE — implementar AdaptiveSampling y re-ejecutar");
     println!("═══════════════════════════════════════════════════\n");
@@ -252,10 +208,6 @@ fn benchmark_adaptive_sampling_baseline() {
 #[test]
 fn benchmark_all_operators_on_3dof() {
     let chain = build_chain();
-    let tcp = chain.end_effector().clone();
-    let fk = ForwardKinematics::new(chain.clone());
-    let solver =
-        Arc::new(JacobianTransposeSolver::new(fk, tcp, 5000, 1e-4, 0.1)) as Arc<dyn IKSolver>;
 
     println!("\n═══════════════════════════════════════════════════");
     println!("  BENCHMARK: Operadores en manipulador 3DOF");
@@ -285,36 +237,6 @@ fn benchmark_all_operators_on_3dof() {
         &m1,
         &ctx,
     );
-    run_operator(
-        "LiftTCP(1cm)",
-        &RepairStrategyAdapter::new(
-            &LiftTcpStrategy::new(Vector3::new(0.0, 0.0, 0.01)),
-            solver.clone(),
-        ),
-        &chain,
-        &traj1,
-        reg1,
-        &m1,
-        &ctx,
-    );
-    run_operator(
-        "RotateTool(0.05)",
-        &RepairStrategyAdapter::new(&RotateToolStrategy::new(0.05), solver.clone()),
-        &chain,
-        &traj1,
-        reg1,
-        &m1,
-        &ctx,
-    );
-    run_operator(
-        "SplitSegment(x2)",
-        &RepairStrategyAdapter::new(&SplitSegment::new(2), solver.clone()),
-        &chain,
-        &traj1,
-        reg1,
-        &m1,
-        &ctx,
-    );
 
     // Trayectoria 2: Singularidad
     println!("\n─── TRAYECTORIA 2: Cerca de singularidad ───");
@@ -335,36 +257,6 @@ fn benchmark_all_operators_on_3dof() {
         &m2,
         &ctx,
     );
-    run_operator(
-        "LiftTCP(1cm)",
-        &RepairStrategyAdapter::new(
-            &LiftTcpStrategy::new(Vector3::new(0.0, 0.0, 0.01)),
-            solver.clone(),
-        ),
-        &chain,
-        &traj2,
-        reg2,
-        &m2,
-        &ctx,
-    );
-    run_operator(
-        "RotateTool(0.05)",
-        &RepairStrategyAdapter::new(&RotateToolStrategy::new(0.05), solver.clone()),
-        &chain,
-        &traj2,
-        reg2,
-        &m2,
-        &ctx,
-    );
-    run_operator(
-        "SplitSegment(x2)",
-        &RepairStrategyAdapter::new(&SplitSegment::new(2), solver.clone()),
-        &chain,
-        &traj2,
-        reg2,
-        &m2,
-        &ctx,
-    );
 
     // ═══ VALIDACIÓN: Pipeline + blending ═══
     println!("\n─── VALIDACIÓN: Pipeline (con blending) vs traj completa ───");
@@ -376,20 +268,19 @@ fn benchmark_all_operators_on_3dof() {
          before: &PlanMetrics,
          regions: Vec<thalos_core::analysis::region::ProblemRegion>| {
             let jc = JointCenteringOperator::new(0.3);
-            let opt = TrajectoryOptimizer::new(vec![Box::new(jc) as Box<dyn TrajectoryOperator>]);
-            match opt.optimize(&chain, traj, &regions, None) {
+            let ops: Vec<&dyn TrajectoryOperator> = vec![&jc];
+            let pipeline = OptimizationPipeline::new(PipelineConfig::default());
+            match pipeline.optimize_regions(&ops, &chain, traj, &regions, before, &ctx, None) {
                 Ok(r) => {
-                    if let Some(ft) = &r.final_trajectory {
-                        let m = compute_metrics(ft);
-                        println!(
-                            "  Pipeline {}: smooth={:.4} ({}), joint_margin={:.4} ({})",
-                            label,
-                            m.smoothness,
-                            pct(before.smoothness, m.smoothness),
-                            m.joint_safety.min_margin,
-                            pct(before.joint_safety.min_margin, m.joint_safety.min_margin),
-                        );
-                    }
+                    let m = compute_metrics(&r.trajectory);
+                    println!(
+                        "  Pipeline {}: smooth={:.4} ({}), joint_margin={:.4} ({})",
+                        label,
+                        m.smoothness,
+                        pct(before.smoothness, m.smoothness),
+                        m.joint_safety.min_margin,
+                        pct(before.joint_safety.min_margin, m.joint_safety.min_margin),
+                    );
                 }
                 Err(e) => println!("  Pipeline {}: {:?}", label, e),
             }
