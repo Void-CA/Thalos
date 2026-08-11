@@ -255,7 +255,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#thalos-runtime" id="toc-thalos-runtime" class="nav-link" data-scroll-target="#thalos-runtime"><span class="header-section-number">5.5.2</span> thalos-runtime</a></li>
   <li><a href="#thalos-api" id="toc-thalos-api" class="nav-link" data-scroll-target="#thalos-api"><span class="header-section-number">5.5.3</span> thalos-api</a></li>
   <li><a href="#thalos-visual" id="toc-thalos-visual" class="nav-link" data-scroll-target="#thalos-visual"><span class="header-section-number">5.5.4</span> thalos-visual</a></li>
-  <li><a href="#sec-workspace-frontend" id="toc-sec-workspace-frontend" class="nav-link" data-scroll-target="#sec-workspace-frontend"><span class="header-section-number">5.5.5</span> Frontend (Angular)</a></li>
+  <li><a href="#sec-workspace-frontend" id="toc-sec-workspace-frontend" class="nav-link" data-scroll-target="#sec-workspace-frontend"><span class="header-section-number">5.5.5</span> Frontend (React)</a></li>
   </ul></li>
   <li><a href="#mapa-de-errores" id="toc-mapa-de-errores" class="nav-link" data-scroll-target="#mapa-de-errores"><span class="header-section-number">5.6</span> Mapa de errores</a></li>
   <li><a href="#tests" id="toc-tests" class="nav-link" data-scroll-target="#tests"><span class="header-section-number">5.7</span> Tests</a>
@@ -602,7 +602,7 @@ Figure&nbsp;5.1: Diagrama conceptual del pipeline de análisis de workspace
            └────────┬───────────────┘
                     ▼
 ┌────────────────────────────────────┐
-│       Frontend (Angular)           │
+│       Frontend (React)             │
 │  WorkspacePanel (form + metrics)   │
 │  WorkspaceRenderer (Three.js)      │
 └────────────────────────────────────┘</code></pre>
@@ -694,33 +694,31 @@ Figure&nbsp;5.1: Diagrama conceptual del pipeline de análisis de workspace
 <span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="sec-workspace-frontend" class="level3" data-number="5.5.5">
-<h3 data-number="5.5.5" class="anchored" data-anchor-id="sec-workspace-frontend"><span class="header-section-number">5.5.5</span> Frontend (Angular)</h3>
-<p>Dos componentes standalone en la feature <code>workspace</code>:</p>
-<section id="workspacepanel" class="level4" data-number="5.5.5.1">
-<h4 data-number="5.5.5.1" class="anchored" data-anchor-id="workspacepanel"><span class="header-section-number">5.5.5.1</span> WorkspacePanel</h4>
-<p>Panel lateral con:</p>
+<h3 data-number="5.5.5" class="anchored" data-anchor-id="sec-workspace-frontend"><span class="header-section-number">5.5.5</span> Frontend (React)</h3>
+<p>La feature de análisis de workspace vive en <code>features/viewport/</code>:</p>
+<section id="analysisworkspace" class="level4" data-number="5.5.5.1">
+<h4 data-number="5.5.5.1" class="anchored" data-anchor-id="analysisworkspace"><span class="header-section-number">5.5.5.1</span> AnalysisWorkspace</h4>
+<p><code>AnalysisWorkspace</code> (ruta <code>/analysis</code>) expone la sección inline de sampleo:</p>
 <ul>
-<li><strong>Formulario</strong>: selector de robot, número de muestras, semilla, tolerancia, toggle de incluir muestras en respuesta</li>
-<li><strong>Métricas</strong>: muestra <code>bounding_volume</code>, <code>max_reach</code>, <code>min_reach</code>, <code>centroid</code></li>
-<li><strong>Consulta de alcanzabilidad</strong>: inputs X/Y/Z + tolerance, botón “Check”, y resultado (Reachable / OutOfWorkspace con distancia)</li>
+<li><strong>Formulario</strong>: samples, seed, tolerance (estado local, sin auto-run)</li>
+<li><strong>Trigger explícito</strong>: botón “Run Analysis” corre workspace, singularidad y manipulabilidad contra los endpoints <code>/active</code> del backend</li>
+<li><strong>Métricas</strong>: <code>bounding_volume</code>, <code>max_reach</code>, <code>min_reach</code>, sample count, singularidad (condition number) y manipulabilidad (Yoshikawa / isotropía)</li>
+<li><strong>Controles de punto cloud</strong>: color por modo (workspace / singularity / manipulability) y toggle de visibilidad</li>
 </ul>
-<p>Estado reactivo via <code>WorkspaceStore</code> (Angular Signals):</p>
+<p>Estado reactivo via <code>useWorkspaceStore</code> (zustand):</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode typescript code-with-copy"><code class="sourceCode typescript"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">interface</span> WorkspaceState {</span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  loading<span class="op">:</span> <span class="dt">boolean</span><span class="op">;</span></span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  error<span class="op">:</span> <span class="dt">string</span> <span class="op">|</span> <span class="dt">null</span><span class="op">;</span></span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  metrics<span class="op">:</span> WorkspaceMetrics <span class="op">|</span> <span class="dt">null</span><span class="op">;</span></span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  bounds<span class="op">:</span> BoundingBox <span class="op">|</span> <span class="dt">null</span><span class="op">;</span></span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>  reachability<span class="op">:</span> ReachabilityResult <span class="op">|</span> <span class="dt">null</span><span class="op">;</span></span>
-<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  workspaceSamples<span class="op">:</span> CloudPoint[] <span class="op">|</span> <span class="dt">null</span><span class="op">;</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  singularitySamples<span class="op">:</span> CloudPoint[] <span class="op">|</span> <span class="dt">null</span><span class="op">;</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  manipulabilitySamples<span class="op">:</span> CloudPoint[] <span class="op">|</span> <span class="dt">null</span><span class="op">;</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  showPointCloud<span class="op">:</span> <span class="dt">boolean</span><span class="op">;</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>  colorMode<span class="op">:</span> PointCloudColorMode<span class="op">;</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>  loading<span class="op">:</span> <span class="dt">boolean</span><span class="op">;</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>  error<span class="op">:</span> <span class="dt">string</span> <span class="op">|</span> <span class="dt">null</span><span class="op">;</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="workspacerenderer" class="level4" data-number="5.5.5.2">
-<h4 data-number="5.5.5.2" class="anchored" data-anchor-id="workspacerenderer"><span class="header-section-number">5.5.5.2</span> WorkspaceRenderer</h4>
-<p>Canvas Three.js que renderiza:</p>
-<ul>
-<li>AABB wireframe (12 aristas) del <code>BoundsWireframe</code></li>
-<li>(Futuro) nube de puntos 3D del <code>SamplePointCloud</code></li>
-</ul>
-<p>Usa <code>effect()</code> para reaccionar a cambios en el store, renderizando sobre un canvas standalone sin depender del <code>ThreeRendererService</code> del scene viewer.</p>
+<section id="pointcloud" class="level4" data-number="5.5.5.2">
+<h4 data-number="5.5.5.2" class="anchored" data-anchor-id="pointcloud"><span class="header-section-number">5.5.5.2</span> PointCloud</h4>
+<p>Componente R3F dentro de <code>SceneCanvas</code> que renderiza la nube de puntos 3D con <code>THREE.BufferGeometry</code>, coloreada según el modo (<code>CloudPoint.state</code> para singularidad, <code>yoshikawa</code> para manipulabilidad). El <code>WorkspacePanel</code> mantiene solo los controles de color/visibilidad sobre el viewport persistente.</p>
 </section>
 </section>
 </section>

@@ -452,7 +452,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </tr>
 <tr class="even">
 <td>DTOs separados del dominio</td>
-<td>Los tipos serializables de la API (<code>VisualSceneDto</code>, <code>RuntimeStateResponse</code>) son independientes de los tipos del core. <code>VisualScene</code> es una excepción controlada (es <code>Serialize</code> por diseño). El adapter <code>dto-to-model.ts</code> en el frontend traduce snake_case DTOs a camelCase internos.</td>
+<td>Los tipos serializables de la API (<code>VisualSceneDto</code>, <code>RuntimeStateResponse</code>) son independientes de los tipos del core. <code>VisualScene</code> es una excepción controlada (es <code>Serialize</code> por diseño). El adapter <code>features/viewport/adapter.ts</code> en el frontend traduce snake_case DTOs a camelCase internos.</td>
 </tr>
 </tbody>
 </table>
@@ -493,7 +493,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><code>thalos-visual</code> — serialización, validación de escenas, diff, primitivas</li>
 <li><code>thalos-runtime</code> — orquestación, estado mutable, backends de robots</li>
 <li><code>thalos-api</code> — HTTP, routing, DTOs de entrada/salida</li>
-<li>Frontend Angular — renderizado 3D, UI, estado del cliente con signals</li>
+<li>Frontend React — renderizado 3D (R3F), UI, estado del cliente con zustand</li>
 </ul>
 <p>La infraestructura <strong>consume</strong> los dominios matemático y robótico, pero nunca al revés.</p>
 </section>
@@ -745,8 +745,8 @@ Figure&nbsp;3.1: Mapa de dependencias del workspace
 <td>Cómo se expone a otros sistemas</td>
 </tr>
 <tr class="odd">
-<td>Frontend Angular</td>
-<td>Scene store (signals), three renderer</td>
+<td>Frontend React</td>
+<td>Scene store (zustand), SceneCanvas (R3F)</td>
 <td>Cómo se ve del lado del cliente</td>
 </tr>
 </tbody>

@@ -458,7 +458,7 @@ window.Quarto = {
 <tr class="even">
 <td>Frontend: Scene feature</td>
 <td><span class="math inline">\(\blacktriangle\)</span> Desarrollo</td>
-<td>Signals + RxJS, stable pero en evolución</td>
+<td>Zustand stores + R3F, stable pero en evolución</td>
 </tr>
 <tr class="odd">
 <td>Frontend: Robots feature</td>
@@ -478,12 +478,12 @@ window.Quarto = {
 <tr class="even">
 <td>Frontend: Workspace feature</td>
 <td><span class="math inline">\(\circ\)</span> Experimental</td>
-<td>WorkspacePanel, WorkspaceRenderer</td>
+<td>AnalysisWorkspace, PointCloud (R3F)</td>
 </tr>
 <tr class="odd">
-<td>Frontend: ThreeRenderer</td>
+<td>Frontend: SceneCanvas (R3F)</td>
 <td><span class="math inline">\(\blacksquare\)</span> Estable</td>
-<td>Primitives, FrameStyle, compass</td>
+<td>RobotModel, primitives, FrameStyle</td>
 </tr>
 <tr class="even">
 <td>Frontend: RobotCatalog</td>
@@ -560,7 +560,7 @@ window.Quarto = {
 <li>Tests para <code>SerialChainBuilder</code> (éxito y error)</li>
 <li>Comparación <code>GeometricJacobian</code> vs <code>NumericalJacobian</code> (deberían coincidir dentro de tolerancia)</li>
 <li>Snapshots por modelo robótico (Manipulator3DOF, CylindricalRPP, etc.)</li>
-<li>Tests de frontend con Angular Testing Library</li>
+<li>Tests de frontend con React Testing Library (vitest)</li>
 </ul>
 
 

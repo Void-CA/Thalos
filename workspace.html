@@ -270,10 +270,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#mapa-de-errores" id="toc-mapa-de-errores" class="nav-link" data-scroll-target="#mapa-de-errores"><span class="header-section-number">4.9.5</span> Mapa de errores</a></li>
   </ul></li>
   <li><a href="#esquema-general-del-workspace" id="toc-esquema-general-del-workspace" class="nav-link" data-scroll-target="#esquema-general-del-workspace"><span class="header-section-number">4.10</span> Esquema general del workspace</a></li>
-  <li><a href="#frontend-angular-21" id="toc-frontend-angular-21" class="nav-link" data-scroll-target="#frontend-angular-21"><span class="header-section-number">4.11</span> Frontend (Angular 21)</a>
+  <li><a href="#frontend-react-19" id="toc-frontend-react-19" class="nav-link" data-scroll-target="#frontend-react-19"><span class="header-section-number">4.11</span> Frontend (React 19)</a>
   <ul class="collapse">
-  <li><a href="#arquitectura-del-store-scenestore" id="toc-arquitectura-del-store-scenestore" class="nav-link" data-scroll-target="#arquitectura-del-store-scenestore"><span class="header-section-number">4.11.1</span> Arquitectura del store (SceneStore)</a></li>
-  <li><a href="#threerendererservice" id="toc-threerendererservice" class="nav-link" data-scroll-target="#threerendererservice"><span class="header-section-number">4.11.2</span> ThreeRendererService</a></li>
+  <li><a href="#arquitectura-del-store-usescenestore" id="toc-arquitectura-del-store-usescenestore" class="nav-link" data-scroll-target="#arquitectura-del-store-usescenestore"><span class="header-section-number">4.11.1</span> Arquitectura del store (useSceneStore)</a></li>
+  <li><a href="#scenecanvas-renderizado-3d-con-r3f" id="toc-scenecanvas-renderizado-3d-con-r3f" class="nav-link" data-scroll-target="#scenecanvas-renderizado-3d-con-r3f"><span class="header-section-number">4.11.2</span> SceneCanvas (renderizado 3D con R3F)</a></li>
   </ul></li>
   </ul>
 </nav>
@@ -300,7 +300,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>El workspace de Thalos está organizado en <strong>ocho crates</strong> dentro de un workspace Cargo.</p>
+<p>El workspace de Thalos está organizado en <strong>once crates</strong> dentro de un workspace Cargo.</p>
 <pre><code>backend/
 ├── Cargo.toml                    # workspace root
 ├── crates/
@@ -309,6 +309,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 │   ├── thalos-models/            # Estructura canónica de robot (URDF mirror)
 │   ├── thalos-collision/         # Detección de colisiones
 │   ├── thalos-planning/          # Planificación de movimiento
+│   ├── thalos-semantic/          # Modelo de programación de tareas
+│   ├── thalos-optimization/      # Optimización de trayectorias
+│   ├── thalos-document/          # Documento de tarea (TaskDocument)
 │   ├── thalos-visual/            # Representación visual
 │   ├── thalos-runtime/           # Orquestación runtime
 │   └── thalos-api/               # Exposición externa (HTTP)</code></pre>
@@ -1064,6 +1067,19 @@ FrameRegistry { map&lt;FrameId, Frame&gt; }
 │   ├── trajectory        # Trajectory, Waypoint
 │   └── interpolate       # Joint/Cartesian interpolation
 │
+├── thalos-semantic       # Modelo de programación de tareas
+│   ├── program           # SemanticProgram, SemanticOp
+│   ├── validation        # Validación L1 (secuencia) y L2 (recursos)
+│   └── lowering          # SemanticLowering → ExecutionProgram
+│
+├── thalos-optimization   # Optimización de trayectorias
+│   ├── domain            # Operator trait, scoring, assessment
+│   └── pipeline          # Pipeline iterativo de optimización
+│
+├── thalos-document       # Documento de tarea (TaskDocument)
+│   ├── task_document     # TaskDocument serializable
+│   └── scene             # SceneContent (objetos, locations, tools)
+│
 ├── thalos-visual         # Visualización desacoplada
 │   ├── scene             # VisualScene, SceneDiff, FrameStyle, VisualPrimitive
 │   ├── builder           # SceneBuilder, ScaraVisualBuilder
@@ -1083,75 +1099,61 @@ FrameRegistry { map&lt;FrameId, Frame&gt; }
     ├── features          # scene, robots, motion, workspace
     └── http/routes       # Rutas REST (axum Router) + CORS</code></pre>
 </section>
-<section id="frontend-angular-21" class="level2" data-number="4.11">
-<h2 data-number="4.11" class="anchored" data-anchor-id="frontend-angular-21"><span class="header-section-number">4.11</span> Frontend (Angular 21)</h2>
-<p>El frontend está organizado por <strong>features</strong>, cada uno con sus propios stores, servicios, tipos y componentes. Usa <strong>Angular Signals</strong> como mecanismo principal de reactividad, con RxJS subyacente para comunicación HTTP y pipelines asíncronos.</p>
-<pre><code>frontend/src/app/
-├── app.config.ts              # Providers y configuración de Angular
-├── app.component.ts           # Layout shell (5 zonas)
-│
-├── features/
-│   ├── scene/                 # Feature de escena 3D
-│   │   ├── scene.types.ts     # Tipos internos (SceneData, SceneFrame, etc.)
-│   │   ├── scene-api.types.ts # Mirror de DTOs del backend (snake_case)
-│   │   ├── adapters/
-│   │   │   └── dto-to-model.ts    # VisualSceneDto → SceneData
-│   │   ├── store/
-│   │   │   └── scene.store.ts     # Estado reactivo → Signal&lt;SceneState&gt;
-│   │   ├── services/
-│   │   │   ├── scene-api.service.ts       # HTTP client
-│   │   │   └── three-renderer.service.ts  # Renderizado Three.js
-│   │   └── components/
-│   │       ├── scene-viewer/        # Canvas Three.js + effect()
-│   │       └── joint-control/       # Sliders adaptativos por DOF
+<section id="frontend-react-19" class="level2" data-number="4.11">
+<h2 data-number="4.11" class="anchored" data-anchor-id="frontend-react-19"><span class="header-section-number">4.11</span> Frontend (React 19)</h2>
+<p>El frontend está organizado por <strong>features</strong>, cada uno con sus propios stores (zustand), servicios, tipos y componentes. Usa <strong>React 19 + TypeScript + Vite</strong> con <strong>Tailwind CSS</strong>, <strong>zustand</strong> para el estado global, <strong><span class="citation" data-cites="react-three/fiber">(<a href="#ref-react-three/fiber" role="doc-biblioref"><strong>react-three/fiber?</strong></a>)</span></strong> para el renderizado 3D (sobre Three.js), <strong>echarts 6 + echarts-gl</strong> para gráficos y <strong>react-router 7</strong> para el enrutado.</p>
+<pre><code>web/
+├── package.json              # scripts: dev (vite), build (tsc -b &amp;&amp; vite build),
+│                             #   lint (oxlint), test (vitest)
+├── src/
+│   ├── main.tsx              # Entry point: createRoot + &lt;App/&gt;
+│   ├── App.tsx               # Providers: React Query, Services, Tooltip, Router
+│   ├── router.tsx            # react-router 7, derivado de WORKSPACE_REGISTRY
+│   ├── index.css             # Tailwind CSS
 │   │
-│   ├── robots/                 # Feature de catálogo de robots
-│   │   ├── robot-api.types.ts  # DTOs (RobotMetadataDto)
-│   │   ├── store/
-│   │   │   └── robot.store.ts  # Estado reactivo → signals
-│   │   └── components/
-│   │       ├── robot-catalog/      # Lista + selección
-│   │       └── robot-card/         # Card individual
+│   ├── components/ui/        # shadcn/@base-ui (button, dialog, tabs, tooltip, accordion)
 │   │
-│   ├── planning/               # Feature de planificación de movimiento
-│   │   ├── planning.types.ts
-│   │   ├── store/
-│   │   │   └── planning.store.ts
-│   │   └── components/
-│   │       └── planning-panel/     # Segmentos, compile, preview
+│   ├── features/             # Áreas funcionales por feature
+│   │   ├── robots/           # Catálogo de robots (robot-api, use-robots, robot-catalog, robot-card)
+│   │   ├── scene/            # Escena: objetos, locations, tools, home pose (store zustand)
+│   │   ├── planning/         # Planificación (planning-panel, store, recommendations)
+│   │   ├── programming/      # Programación unificada (/task: Tasks + Motion)
+│   │   ├── semantic/         # Editor semántico (script parser/serializer, pipeline-status, diagnostics)
+│   │   ├── evaluation/       # Evaluación pre-ejecución (/evaluation, charts yoshikawa/determinant)
+│   │   ├── execution/        # Ejecución (backend-selector, execution-store, execution-client)
+│   │   ├── sessions/         # Sesiones (browser, detail, timeline/trace/comparison/export, CSV)
+│   │   ├── knowledge/        # Knowledge (/knowledge)
+│   │   ├── configuration/    # Configuración (/configuration)
+│   │   ├── analysis/         # Análisis de plan (plan-analysis-api, region-inspector, problem-regions)
+│   │   └── viewport/         # Viewport 3D: scene-canvas (R3F), robot-model, ik-gizmo,
+│   │                         #   tcp-overlay, point-cloud, trajectory, scene service
 │   │
-│   ├── execution/              # Feature de ejecución de trayectorias
-│   │   ├── execution.types.ts
-│   │   ├── store/
-│   │   │   └── execution.store.ts
-│   │   └── components/
-│   │       └── execution-panel/    # Start/Pause/Stop, progreso, LIVE
-│   │
-│   └── workspace/              # Feature de workspace analysis
-│       ├── workspace.types.ts
-│       ├── store/
-│       │   └── workspace.store.ts
-│       └── components/
-│           ├── workspace-panel/    # Form + metrics + reachability
-│           └── workspace-renderer/ # AABB wireframe + point cloud</code></pre>
-<section id="arquitectura-del-store-scenestore" class="level3" data-number="4.11.1">
-<h3 data-number="4.11.1" class="anchored" data-anchor-id="arquitectura-del-store-scenestore"><span class="header-section-number">4.11.1</span> Arquitectura del store (SceneStore)</h3>
-<p>Dos pipelines RxJS paralelos se merged con <code>merge()</code> + <code>scan()</code> para producir un <code>Observable&lt;SceneState&gt;</code> que se convierte en <code>Signal&lt;SceneState&gt;</code> vía <code>toSignal()</code>:</p>
-<pre><code>qSubject (BehaviorSubject) ─→ auditTime(16) ─→ switchMap → API setJoints ──┐
-                                                                           ├→ merge → scan → toSignal → Signal&lt;SceneState&gt;
-loadRobotSubject (Subject) ─────────────────→ switchMap → API loadRobot ───┘</code></pre>
-<p>Los componentes consumen <code>SceneStore.state</code> como signal. <strong>No hay subscriptions manuales</strong> — usan <code>effect()</code> o <code>computed()</code>.</p>
+│   └── shared/
+│       ├── api-client.ts     # Cliente axios base /api/v1 + wrapping de errores
+│       ├── charts/           # Adapter echarts 6 + echarts-gl (EChart, builders, trajectory3d)
+│       ├── contracts/        # Tipos DTO (RuntimeStateResponse, ExecutionProgram, MotionPlan)
+│       ├── layout/           # AppShell, top-bar, status-bar
+│       └── workflow/         # WORKSPACE_REGISTRY, guards, guarded-route, stepper</code></pre>
+<section id="arquitectura-del-store-usescenestore" class="level3" data-number="4.11.1">
+<h3 data-number="4.11.1" class="anchored" data-anchor-id="arquitectura-del-store-usescenestore"><span class="header-section-number">4.11.1</span> Arquitectura del store (useSceneStore)</h3>
+<p>El estado del viewport se maneja con un store <strong>zustand</strong> (<code>useSceneStore</code>): los datos llegan del backend como <code>RuntimeStateResponse</code> (DTO snake_case), se adaptan a <code>SceneData</code> interno (camelCase) con <code>toSceneData()</code> y se escriben mediante acciones como <code>applyScene()</code>, <code>applyFkUpdate()</code> o <code>applyRuntimeDelta()</code>. Los componentes consumen el estado con selectors — no hay <code>BehaviorSubject</code> ni pipelines RxJS:</p>
+<pre><code>POST /scene/joints ──→ RuntimeStateResponse ──→ adapter.toSceneData()
+                                                        ↓
+                                                useSceneStore.applyScene()
+                                                        ↓
+                                componentes: selectors (s =&gt; s.data) → re-render</code></pre>
+<p>Las rutas y guards se derivan de <code>WORKSPACE_REGISTRY</code> (una única fuente de verdad declarativa por área), y <code>AppShell</code> mantiene el viewport 3D montado fuera del <code>&lt;Outlet/&gt;</code> para que no se desmonte al navegar entre workspaces.</p>
 </section>
-<section id="threerendererservice" class="level3" data-number="4.11.2">
-<h3 data-number="4.11.2" class="anchored" data-anchor-id="threerendererservice"><span class="header-section-number">4.11.2</span> ThreeRendererService</h3>
-<p>Renderiza <code>SceneData</code> en Three.js. Soporta:</p>
+<section id="scenecanvas-renderizado-3d-con-r3f" class="level3" data-number="4.11.2">
+<h3 data-number="4.11.2" class="anchored" data-anchor-id="scenecanvas-renderizado-3d-con-r3f"><span class="header-section-number">4.11.2</span> SceneCanvas (renderizado 3D con R3F)</h3>
+<p><code>SceneCanvas</code> monta un <code>&lt;Canvas&gt;</code> de <strong><span class="citation" data-cites="react-three/fiber">(<a href="#ref-react-three/fiber" role="doc-biblioref"><strong>react-three/fiber?</strong></a>)</span></strong> con convención <strong>Z-up</strong> (cámara con <code>up = (0, 0, 1)</code>), <code>OrbitControls</code>, grid y luces. Renderiza:</p>
 <ul>
-<li><strong>Frames</strong> con <code>FrameStyle</code> (esferas de origen, ejes con flechas cónicas)</li>
-<li><strong>Links</strong> como cilindros entre dos puntos</li>
-<li><strong>Primitivas</strong> geométricas (cilindros, esferas, cajas con color por ID)</li>
-<li><strong>Brújula 3D</strong> en esquina (contra-rotada a la cámara para orientación global)</li>
+<li><strong>RobotModel</strong> — frames, links y primitivas a partir de <code>SceneData</code></li>
+<li><strong>IkGizmo</strong> / <strong>TcpOverlay</strong> — overlays de IK y TCP activo</li>
+<li><strong>PointCloud</strong> — nube de puntos del workspace</li>
+<li><strong>Trajectory</strong> — trayectorias con color por segmento / calidad / manipulabilidad</li>
 </ul>
-<p>Rotación: Rust serializa quaternions como <code>[w, x, y, z]</code> → Three.js espera <code>(x, y, z, w)</code>. El adapter y el renderer aplican esta conversión.</p>
+<p>Rotación: Rust serializa quaternions como <code>[w, x, y, z]</code> → Three.js espera <code>(x, y, z, w)</code>. <code>rustQuatToThree()</code> (robot-model) aplica esta conversión.</p>
 
 
 </section>
