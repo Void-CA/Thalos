@@ -2,6 +2,8 @@ import { Html } from '@react-three/drei'
 import { useDomainSceneStore } from '@/features/scene/store'
 import type { SceneObject, SceneLocation } from '@/features/scene/store'
 import type { PoseDef } from '@/shared/contracts'
+import { useSceneStore } from '../store'
+import { scaleFromRefDim } from './scale'
 
 /**
  * SceneEntities — renders the domain scene (objects/locations) in the 3D
@@ -22,9 +24,12 @@ import type { PoseDef } from '@/shared/contracts'
 /** Mesh palette — no shared token exists for scene entities yet. */
 const OBJECT_COLOR = 0x22c55e
 const LOCATION_COLOR = 0xf59e0b
+/** Entity size at referenceDimension = 1.0 — scaled by `scaleFromRefDim`. */
 export const ENTITY_SIZE = 0.08
+/** Location radius at referenceDimension = 1.0 — scaled by `scaleFromRefDim`. */
 const LOCATION_RADIUS = 0.05
-/** Vertical offset (world units) of the name label above the entity (Z-up). */
+/** Vertical offset (world units) of the name label above the entity (Z-up),
+ *  at referenceDimension = 1.0 — scaled by `scaleFromRefDim`. */
 export const LABEL_OFFSET = 0.1
 
 /** Store quaternion `[w,x,y,z]` → THREE `[x,y,z,w]` (mirrors robot-model.tsx
@@ -65,9 +70,9 @@ export function locationQuaternion(poseOrientation: PoseDef['orientation']): [nu
 /** Z-up: a location at z=0 sits half its height above the floor plane instead
  *  of intersecting it; any other entity keeps its exact pose. Pure — trivially
  *  re-evaluated on every store re-render (live pose edits included). */
-function nudgeToFloor(position: PoseDef['position'], kind: 'object' | 'location'): PoseDef['position'] {
+function nudgeToFloor(position: PoseDef['position'], kind: 'object' | 'location', entitySize: number): PoseDef['position'] {
   if (kind === 'location' && position[2] === 0) {
-    return [position[0], position[1], ENTITY_SIZE / 2]
+    return [position[0], position[1], entitySize / 2]
   }
   return position
 }
@@ -77,11 +82,18 @@ interface SceneEntityMeshProps {
   name: string
   pose: PoseDef
   kind: 'object' | 'location'
+  /** Scene reference dimension — overlay sizes scale with it (no-op at 1.0). */
+  refDim: number
 }
 
-function SceneEntityMesh({ id, name, pose, kind }: SceneEntityMeshProps) {
+function SceneEntityMesh({ id, name, pose, kind, refDim }: SceneEntityMeshProps) {
   const color = kind === 'object' ? OBJECT_COLOR : LOCATION_COLOR
-  const position = nudgeToFloor(pose.position, kind)
+  // Overlay sizes derive from referenceDimension via the shared helper — the
+  // fallback lives in scaleFromRefDim, components never inline `refDim ?? 1`.
+  const entitySize = scaleFromRefDim(refDim, ENTITY_SIZE)
+  const locationRadius = scaleFromRefDim(refDim, LOCATION_RADIUS)
+  const labelOffset = scaleFromRefDim(refDim, LABEL_OFFSET)
+  const position = nudgeToFloor(pose.position, kind, entitySize)
   // R3-002: locations carry the flat-lay rotation composed INTO the quaternion
   // (q_π2_x ⊗ q_pose) — a separate `rotation` prop would overwrite the pose.
   const quaternion = kind === 'location' ? locationQuaternion(pose.orientation) : worldQuaternion(pose.orientation)
@@ -94,13 +106,13 @@ function SceneEntityMesh({ id, name, pose, kind }: SceneEntityMeshProps) {
         frustumCulled={false}
       >
         {kind === 'object' ? (
-          <boxGeometry args={[ENTITY_SIZE, ENTITY_SIZE, ENTITY_SIZE]} />
+          <boxGeometry args={[entitySize, entitySize, entitySize]} />
         ) : (
-          <cylinderGeometry args={[LOCATION_RADIUS, LOCATION_RADIUS, ENTITY_SIZE, 16, 1]} />
+          <cylinderGeometry args={[locationRadius, locationRadius, entitySize, 16, 1]} />
         )}
         <meshStandardMaterial color={color} roughness={0.6} metalness={0.2} />
       </mesh>
-      <Html position={[0, 0, LABEL_OFFSET]} center className="pointer-events-none">
+      <Html position={[0, 0, labelOffset]} center className="pointer-events-none">
         <div className="select-none whitespace-nowrap rounded bg-black/60 px-1.5 py-0.5 font-mono text-[10px] text-white">
           {name}
         </div>
@@ -114,16 +126,19 @@ export function SceneEntities() {
   // (spec R1.3). Selecting each array re-renders only when that array changes.
   const objects = useDomainSceneStore(s => s.objects)
   const locations = useDomainSceneStore(s => s.locations)
+  // Overlay sizes scale with the scene reference dimension (viewport store) —
+  // absent scene data degrades to 1.0 via scaleFromRefDim (no-op).
+  const refDim = useSceneStore(s => s.data?.referenceDimension) ?? 1.0
 
   if (objects.length === 0 && locations.length === 0) return null
 
   return (
     <group>
       {objects.map((obj: SceneObject) => (
-        <SceneEntityMesh key={obj.id} id={obj.id} name={obj.name} pose={obj.pose} kind="object" />
+        <SceneEntityMesh key={obj.id} id={obj.id} name={obj.name} pose={obj.pose} kind="object" refDim={refDim} />
       ))}
       {locations.map((loc: SceneLocation) => (
-        <SceneEntityMesh key={loc.id} id={loc.id} name={loc.name} pose={loc.pose} kind="location" />
+        <SceneEntityMesh key={loc.id} id={loc.id} name={loc.name} pose={loc.pose} kind="location" refDim={refDim} />
       ))}
     </group>
   )
