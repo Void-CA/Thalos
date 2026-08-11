@@ -144,6 +144,40 @@ const recommendationReport: AnalysisReportWire = {
   ],
 }
 
+const assessedReport: AnalysisReportWire = {
+  ...recommendationReport,
+  assessment: {
+    risk: 'high',
+    quality: 0.31,
+    triggered_rules: [
+      { id: 'R07_low_manipulability', category: 'manipulability', priority: 3 },
+      { id: 'R11_danger_zone', category: 'manipulability', priority: 10 },
+    ],
+    evidence: { manipulability: 0.2, singularity_proximity: 0.4 },
+    recommendations: [
+      {
+        action_kind: 'Manipulability',
+        region_id: 3,
+        rationale: 'Improve manipulability near the flagged region.',
+      },
+    ],
+    trace: [
+      {
+        rule_id: 'R07_low_manipulability',
+        priority: 3,
+        bindings: { 'Manipulability IS low': '0.667' },
+        derived_output: { danger_zone: true },
+      },
+      {
+        rule_id: 'R11_danger_zone',
+        priority: 10,
+        bindings: { danger_zone: 'true' },
+        derived_output: {},
+      },
+    ],
+  },
+}
+
 function renderWorkspace(initialPath = '/evaluation') {
   const router = createMemoryRouter([{ path: '*', element: <EvaluationWorkspace /> }], {
     initialEntries: [initialPath],
@@ -383,6 +417,48 @@ describe('EvaluationWorkspace — problem region share of the plan (R5)', () => 
     })
     renderWorkspace()
     expect(screen.queryByText(/del plan/)).not.toBeInTheDocument()
+  })
+})
+
+describe('EvaluationWorkspace — intelligent assessment section (workspace-analysis)', () => {
+  it('renders the section when the report carries an assessment, between the verdict and the grid', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: assessedReport })
+      useSceneStore.setState({ activePlan })
+    })
+    renderWorkspace()
+    const section = screen.getByTestId('intelligent-assessment')
+    expect(section).toBeInTheDocument()
+    // Placement: inside the single scroll container, before the master grid.
+    expect(section.compareDocumentPosition(screen.getByTestId('evaluation-master')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // Summary visible: risk + quality + triggered rules.
+    expect(within(section).getByText('high')).toBeInTheDocument()
+    expect(within(section).getByText('0.31')).toBeInTheDocument()
+    expect(within(section).getByText('R07_low_manipulability')).toBeInTheDocument()
+  })
+
+  it('hides the section entirely when the report carries no assessment', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: recommendationReport })
+      useSceneStore.setState({ activePlan })
+    })
+    renderWorkspace()
+    expect(screen.queryByTestId('intelligent-assessment')).not.toBeInTheDocument()
+    expect(screen.queryByText('Intelligent Assessment')).not.toBeInTheDocument()
+    expect(screen.queryByText('Risk Level')).not.toBeInTheDocument()
+    // No empty placeholder/error either — the rest of the workspace is intact.
+    expect(screen.getByTestId('evaluation-master')).toBeInTheDocument()
+  })
+
+  it('keeps the trace collapsed by default inside the workspace', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: assessedReport })
+      useSceneStore.setState({ activePlan })
+    })
+    renderWorkspace()
+    const toggle = within(screen.getByTestId('intelligent-assessment')).getByTestId('assessment-trace-toggle')
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByTestId('assessment-trace')).not.toBeInTheDocument()
   })
 })
 

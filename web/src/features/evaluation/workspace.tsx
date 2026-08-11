@@ -18,6 +18,7 @@ import {
 import { YoshikawaChart } from './components/yoshikawa-chart'
 import { DeterminantChart } from './components/determinant-chart'
 import { ProgramView } from './components/program-view'
+import { IntelligentAssessment } from './components/intelligent-assessment'
 import { ShieldCheck } from 'lucide-react'
 
 // TrajectoryView mounts ECharts GL — lazy like the 2D EChart wrapper (C2:
@@ -111,6 +112,11 @@ export function EvaluationWorkspace() {
       <div className="flex-1 min-h-0 overflow-y-auto p-3">
         {/* Verdict spans the whole decision — full-width above the split. */}
         <StatusBanner />
+
+        {/* Intelligent Assessment — full-width between the verdict and the
+            master-detail grid; hidden when `assessment` is absent (additive
+            wire field, I3). */}
+        {report.assessment && <IntelligentAssessment assessment={report.assessment} />}
 
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3 items-start">
           {/* ── MASTER (context, ~2/3): WHERE the problem is — trajectory +

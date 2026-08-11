@@ -47,4 +47,20 @@ describe('ExecuteSemanticResponse', () => {
     expect(res.duration_secs).toBeGreaterThan(0)
     expect(Number.isFinite(res.duration_secs)).toBe(true)
   })
+
+  it('decodes with the additive warnings array when present', () => {
+    const withWarnings = JSON.parse(WIRE) as ExecuteSemanticResponse & { warnings: string[] }
+    withWarnings.warnings = ['[Warning] ZeroDurationWait (op: wait-1)']
+    const decoded = JSON.stringify(withWarnings)
+    const res: ExecuteSemanticResponse = JSON.parse(decoded)
+    expect(res.warnings).toEqual(['[Warning] ZeroDurationWait (op: wait-1)'])
+    // Pre-existing fields keep their shape alongside the additive field.
+    expect(res.status).toBe('ok')
+    expect(res.segment_count).toBe(3)
+  })
+
+  it('tolerates the absence of warnings (old backend, additive I3)', () => {
+    const res = decode(WIRE)
+    expect(res.warnings).toBeUndefined()
+  })
 })

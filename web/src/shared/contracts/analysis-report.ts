@@ -116,6 +116,57 @@ export interface RecommendationWire {
   status?: 'available' | 'unavailable'
 }
 
+/** One fired rule summarized on the wire (intelligent assessment). */
+export interface TriggeredRuleWire {
+  /** Rule id, e.g. "R07_low_manipulability". */
+  id: string
+  /** Reasoning category ("collision" | "singularity" | "manipulability" |
+   *  "trajectory"). */
+  category: string
+  /** Agenda priority. */
+  priority: number
+}
+
+/** A reference to an existing PlanAdvisor action the diagnosis associates with. */
+export interface AssessmentRecommendationWire {
+  /** The associated action kind (e.g. "Manipulability"). */
+  action_kind: string
+  /** Problem region the recommendation addresses, when resolvable. */
+  region_id?: number
+  /** Human-readable rationale (English). */
+  rationale: string
+}
+
+/** One inference trace entry — a fired rule in exact firing order. */
+export interface AssessmentTraceEntryWire {
+  /** Fired rule id. */
+  rule_id: string
+  /** Agenda priority. */
+  priority: number
+  /** Antecedent → matched value. */
+  bindings: Record<string, string>
+  /** Derived facts produced by this firing. */
+  derived_output: Record<string, boolean>
+}
+
+/** The intelligent assessment verdict (thalos-intelligence), projected by the
+ *  backend DTO (spec analysis-report-contract "Assessment DTO Structure").
+ *  Mirrors the domain `Assessment` field-for-field. */
+export interface AssessmentWire {
+  /** Categorical verdict, lowercase on the wire. */
+  risk: 'low' | 'medium' | 'high' | 'critical'
+  /** Quality score in [0, 1] (normalized complement of the crisp risk). */
+  quality: number
+  /** Rules that fired during inference. */
+  triggered_rules: TriggeredRuleWire[]
+  /** Key-value evidence (derived inputs + rule evidence). */
+  evidence: Record<string, number>
+  /** References to existing PlanAdvisor actions by kind. */
+  recommendations: AssessmentRecommendationWire[]
+  /** Inference trace in firing order. */
+  trace: AssessmentTraceEntryWire[]
+}
+
 /** The canonical /plan/analyze wire payload — projection of the domain
  *  `AnalysisReport` (spec motion-plan-endpoint). */
 export interface AnalysisReportWire {
@@ -139,6 +190,10 @@ export interface AnalysisReportWire {
    *  old payloads omit the field; the advisor only produces recommendations
    *  when the analysis flow carries program + solver context. */
   recommendations?: RecommendationWire[]
+  /** Intelligent assessment verdict (additive, I3). OPTIONAL on the wire:
+   *  old payloads omit the field; the Evaluation workspace hides the
+   *  "Intelligent Assessment" section when it is absent. */
+  assessment?: AssessmentWire
 }
 
 // ─── Derived pure helpers (I3: interpretation derives from kind/severity) ───

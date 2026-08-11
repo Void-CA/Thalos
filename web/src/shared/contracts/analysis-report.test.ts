@@ -8,7 +8,7 @@ import {
   severityCounts,
   waypointAnalysisFromReport,
 } from './analysis-report'
-import type { AnalysisReportWire } from './analysis-report'
+import type { AnalysisReportWire, AssessmentWire } from './analysis-report'
 
 /** Minimal canonical report WITHOUT the new `manipulability_series` field —
  *  the "old client" payload shape (spec I3: additive backward compatibility). */
@@ -110,5 +110,72 @@ describe('regionShareOfPlan (R5 — region as % of the plan)', () => {
     const share = regionShareOfPlan(region, [{ waypoint: 10, yoshikawa: 0.1 }], { waypoint_count: 30 })
     expect(share.percentOfPlan).toBe(10)
     expect(share.durationSecs).toBeNull()
+  })
+})
+
+describe('assessment (additive delta, spec analysis-report-contract)', () => {
+  /** A wire Assessment as the backend DTO projects it (risk/category lowercase,
+   *  bindings/derived_output as records). */
+  const assessment: AssessmentWire = {
+    risk: 'high',
+    quality: 0.3,
+    triggered_rules: [
+      { id: 'R07_low_manipulability', category: 'manipulability', priority: 3 },
+      { id: 'R11_danger_zone', category: 'manipulability', priority: 10 },
+    ],
+    evidence: { manipulability: 0.2, singularity_proximity: 0.4 },
+    recommendations: [
+      {
+        action_kind: 'Manipulability',
+        region_id: 3,
+        rationale: 'Improve manipulability near the flagged region.',
+      },
+    ],
+    trace: [
+      {
+        rule_id: 'R07_low_manipulability',
+        priority: 3,
+        bindings: { 'Manipulability IS low': '0.67' },
+        derived_output: { danger_zone: true },
+      },
+      {
+        rule_id: 'R11_danger_zone',
+        priority: 10,
+        bindings: { danger_zone: 'true' },
+        derived_output: {},
+      },
+    ],
+  }
+
+  it('mirrors the backend DTO field-for-field (risk/quality/triggered_rules/evidence/recommendations/trace)', () => {
+    const report: AnalysisReportWire = { ...baseReport(), assessment }
+    expect(report.assessment).toEqual(assessment)
+    expect(report.assessment?.risk).toBe('high')
+    expect(report.assessment?.quality).toBe(0.3)
+    expect(report.assessment?.triggered_rules).toHaveLength(2)
+    expect(report.assessment?.triggered_rules?.[0]).toEqual({
+      id: 'R07_low_manipulability',
+      category: 'manipulability',
+      priority: 3,
+    })
+    expect(report.assessment?.evidence).toEqual({
+      manipulability: 0.2,
+      singularity_proximity: 0.4,
+    })
+    expect(report.assessment?.recommendations?.[0]?.region_id).toBe(3)
+    expect(report.assessment?.trace?.[0]?.bindings).toEqual({ 'Manipulability IS low': '0.67' })
+    expect(report.assessment?.trace?.[0]?.derived_output).toEqual({ danger_zone: true })
+  })
+
+  it('is optional on AnalysisReportWire — old payloads omit it (I3)', () => {
+    const oldReport: AnalysisReportWire = baseReport()
+    expect(oldReport.assessment).toBeUndefined()
+    expect(JSON.stringify(oldReport)).not.toContain('assessment')
+  })
+
+  it('preserves trace firing order on the wire', () => {
+    const report: AnalysisReportWire = { ...baseReport(), assessment }
+    const ids = report.assessment?.trace.map((entry) => entry.rule_id) ?? []
+    expect(ids).toEqual(['R07_low_manipulability', 'R11_danger_zone'])
   })
 })

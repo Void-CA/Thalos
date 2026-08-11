@@ -107,6 +107,10 @@ export interface ExecuteSemanticResponse {
   duration_secs: number
   waypoints: unknown[]
   event_count: number
+  /** Advisory warnings (semantic expert + validator), ADDITIVE (I3): the
+   *  semantic handler emits the array; old backends omit it, so consumers
+   *  must tolerate its absence. */
+  warnings?: string[]
 }
 
 /** Processing metadata attached to `CompileResponse`. */
