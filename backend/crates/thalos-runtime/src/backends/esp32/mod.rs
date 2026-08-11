@@ -325,10 +325,20 @@ impl RobotController for Esp32Backend {
         #[allow(deprecated)]
         let manifest = Self::build_manifest(&waypoints, duration);
 
-        // Upload → READY
-        protocol
-            .upload_manifest(&manifest)
-            .await
+        // Upload → READY. One NOT_IDLE recovery: a stale firmware state
+        // (READY/EXECUTING/ERROR left over from a previous session) rejects
+        // MANIFEST — STOP resets the firmware to IDLE, then retry once.
+        // Observed on real hardware after a failed connect left the device
+        // in a non-IDLE state.
+        let mut upload = protocol.upload_manifest(&manifest).await;
+        if let Err(ProtocolError::EspError(reason)) = &upload {
+            if reason.trim() == "NOT_IDLE" {
+                tracing::warn!(reason = %reason, "manifest rejected NOT_IDLE — STOP-resetting the firmware and retrying");
+                protocol.stop().await.ok(); // consumes its response; firmware → IDLE
+                upload = protocol.upload_manifest(&manifest).await;
+            }
+        }
+        upload
             .map_err(|e| {
                 let mapped = Self::map_protocol_error("upload failed", e);
                 tracing::error!(error = %mapped, waypoints = waypoints.len(), "ESP32 manifest upload failed");
@@ -1031,4 +1041,68 @@ mod tests {
             other => panic!("Expected InvalidManifest, got {other:?}"),
         }
     }
+
+    /// Robustness regression (real hardware): a stale serial buffer (boot
+    /// bytes / leftover from a previous session) can make the first HELLO
+    /// read return garbage. The handshake retries once and succeeds.
+    #[tokio::test]
+    async fn handshake_survives_stale_buffer_line() {
+        let transport = FakeTransport::new();
+        let mut backend = Esp32Backend::new(Box::new(transport));
+        // First read → stale garbage (observed: "0.000000 0.000000");
+        // retry read → the real handshake response.
+        backend
+            .protocol
+            .lock()
+            .await
+            .as_ref()
+            .unwrap()
+            .test_inject_response(b"0.000000 0.000000\n".to_vec());
+        backend
+            .protocol
+            .lock()
+            .await
+            .as_ref()
+            .unwrap()
+            .test_inject_response(b"HELLO 1 OK\n".to_vec());
+
+        backend
+            .connect()
+            .await
+            .expect("handshake retry must recover from a stale buffer line");
+        assert!(backend.is_connected());
+    }
+
+    /// Robustness regression (real hardware): a stale firmware state
+    /// (READY/EXECUTING/ERROR from a previous session) rejects MANIFEST with
+    /// NOT_IDLE. The backend STOP-resets the device (→ IDLE) and retries the
+    /// upload once — no manual device reset needed.
+    #[tokio::test]
+    async fn upload_recovers_from_not_idle_with_stop_and_retry() {
+        let transport = FakeTransport::new();
+        let mut backend = make_connected_backend(transport).await;
+        {
+            let protocol = backend.protocol.lock().await;
+            let p = protocol.as_ref().unwrap();
+            // First upload: MANIFEST rejected because the firmware is not IDLE.
+            p.test_inject_response(b"ERROR NOT_IDLE\n".to_vec());
+            // Recovery STOP response (consumed by protocol.stop()).
+            p.test_inject_response(b"OK\n".to_vec());
+            // Retry upload: MANIFEST, SEGMENT, SAMPLE 0, SAMPLE 1, END_UPLOAD.
+            p.test_inject_response(b"OK\n".to_vec());
+            p.test_inject_response(b"OK\n".to_vec());
+            p.test_inject_response(b"OK\n".to_vec());
+            p.test_inject_response(b"OK\n".to_vec());
+            p.test_inject_response(b"READY\n".to_vec());
+            // EXECUTE.
+            p.test_inject_response(b"OK\n".to_vec());
+        }
+
+        backend
+            .execute(vec![vec![0.0, 0.0], vec![1.0, 1.0]], 1.0)
+            .await
+            .expect("upload must recover from NOT_IDLE with a STOP + retry");
+        assert!(backend.is_connected());
+    }
 }
+

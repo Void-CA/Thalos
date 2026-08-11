@@ -311,27 +311,41 @@ impl Esp32Protocol {
     /// Sends `HELLO <expected_version>` and expects `HELLO <ver> OK`.
     /// Returns an error if the version does not match.
     pub async fn handshake(&mut self) -> Result<(), ProtocolError> {
-        let cmd = Self::format_line(&["HELLO", &self.expected_version.to_string()]);
-        self.transport.send(&cmd).await?;
+        // Retry-once: a stale serial buffer (boot ROM bytes / leftovers from a
+        // previous session) can make the first read return garbage instead of
+        // the handshake response. Consuming that line and re-sending HELLO
+        // yields the real response — observed on real hardware (first connect
+        // read `0.000000 0.000000`, the retry succeeded).
+        let mut last_error: Option<ProtocolError> = None;
+        for _attempt in 0..2 {
+            let cmd = Self::format_line(&["HELLO", &self.expected_version.to_string()]);
+            self.transport.send(&cmd).await?;
+            let response = self.transport.receive().await?;
+            let line = String::from_utf8(response)
+                .map_err(|e| ProtocolError::MalformedResponse(format!("invalid UTF-8: {e}")))?;
 
-        let response = self.transport.receive().await?;
-        let line = String::from_utf8(response)
-            .map_err(|e| ProtocolError::MalformedResponse(format!("invalid UTF-8: {e}")))?;
-
-        match Self::parse_response(&line)? {
-            ParsedResponse::HandshakeOk(version) => {
-                if version != self.expected_version {
-                    return Err(ProtocolError::VersionMismatch {
-                        expected: self.expected_version,
-                        actual: version,
-                    });
+            match Self::parse_response(&line) {
+                Ok(ParsedResponse::HandshakeOk(version)) => {
+                    if version != self.expected_version {
+                        return Err(ProtocolError::VersionMismatch {
+                            expected: self.expected_version,
+                            actual: version,
+                        });
+                    }
+                    self.firmware_version = version;
+                    self.firmware_state = FirmwareState::Idle;
+                    return Ok(());
                 }
-                self.firmware_version = version;
-                self.firmware_state = FirmwareState::Idle;
-                Ok(())
+                Ok(other) => {
+                    last_error =
+                        Some(ProtocolError::UnexpectedResponse(format!("{other:?}")));
+                }
+                Err(e) => last_error = Some(e),
             }
-            other => Err(ProtocolError::UnexpectedResponse(format!("{other:?}"))),
         }
+        Err(last_error.unwrap_or_else(|| {
+            ProtocolError::UnexpectedResponse("no handshake response".into())
+        }))
     }
 
     /// Upload a manifest to the ESP32.
@@ -351,12 +365,18 @@ impl Esp32Protocol {
 
         for cmd in upload_lines {
             self.transport.send(cmd).await?;
-            // Expect OK after MANIFEST, SEGMENT, SAMPLE
+            // Expect OK after MANIFEST, SEGMENT, SAMPLE — a firmware
+            // `ERROR <reason>` (e.g. NOT_IDLE on MANIFEST from a stale state)
+            // must surface as an EspError so the caller can recover, not as a
+            // generic UnexpectedResponse.
             let response = self.transport.receive().await?;
             let line = String::from_utf8(response)
                 .map_err(|e| ProtocolError::MalformedResponse(format!("invalid UTF-8: {e}")))?;
             match Self::parse_response(&line)? {
                 ParsedResponse::Ok => {}
+                ParsedResponse::Error(reason) => {
+                    return Err(ProtocolError::EspError(reason));
+                }
                 other => {
                     return Err(ProtocolError::UnexpectedResponse(format!("{other:?}")));
                 }
@@ -472,6 +492,10 @@ impl Esp32Protocol {
     /// Send a STOP command to the ESP32.
     pub async fn stop(&mut self) -> Result<(), ProtocolError> {
         self.transport.send(&Self::format_line(&["STOP"])).await?;
+        // Consume the response (OK or NOT_ACTIVE) so the stream stays aligned —
+        // a caller that immediately sends MANIFEST after a recovery STOP must
+        // not read the STOP response as the MANIFEST reply.
+        let _ = self.transport.receive().await;
         self.firmware_state = FirmwareState::Idle;
         Ok(())
     }
