@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useSceneStore } from './store'
 import { SceneCanvas } from './renderer/scene-canvas'
 import { useLoadScene } from './synchronization/use-scene-loader'
+import { ViewportTcpHud } from './components/viewport-tcp-hud'
 import { ErrorBox } from '@/components/ui/error-box'
 import { Loader2, Move } from 'lucide-react'
 
@@ -86,6 +87,12 @@ export function Viewport() {
   return (
     <div className="relative w-full h-full">
       <SceneCanvas />
+
+      {/* Bottom-left floating chips (diff-overlay pattern): TCP position HUD
+          + grid scale legend. Positioned by the column, chips are plain. */}
+      <div className="absolute bottom-3 left-3 flex flex-col items-start gap-1.5">
+        <ViewportTcpHud />
+      </div>
 
       {/* Numerical diff overlay when viewing optimized trajectory */}
       {viewMode === 'optimized' && diff && (
