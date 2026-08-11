@@ -3,6 +3,7 @@ import { useSceneStore } from './store'
 import { SceneCanvas } from './renderer/scene-canvas'
 import { useLoadScene } from './synchronization/use-scene-loader'
 import { ViewportTcpHud } from './components/viewport-tcp-hud'
+import { ViewportGridLegend } from './components/viewport-grid-legend'
 import { ErrorBox } from '@/components/ui/error-box'
 import { Loader2, Move } from 'lucide-react'
 
@@ -92,6 +93,7 @@ export function Viewport() {
           + grid scale legend. Positioned by the column, chips are plain. */}
       <div className="absolute bottom-3 left-3 flex flex-col items-start gap-1.5">
         <ViewportTcpHud />
+        <ViewportGridLegend />
       </div>
 
       {/* Numerical diff overlay when viewing optimized trajectory */}
