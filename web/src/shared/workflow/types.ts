@@ -59,6 +59,10 @@ export interface WorkflowState {
   planReady: boolean // a plan exists for execution: compiled ∨ scene.activePlanPresent
   analyzed: boolean // analysis report exists: useAnalysisStore.summary !== null
   executable: boolean // runtime can start: planReady && execStatus ∈ {ready, running, paused}
+  /** Execution workspace stays open after a run: executable OR a terminal
+   *  status (completed/failed) — otherwise the guard kicks the user out of
+   *  /execution the moment a run finishes. */
+  executionViewable: boolean
   running: boolean // runtime active: execStatus ∈ {running, paused}
   completed: boolean // execution session exists: execStatus === 'completed'
 }

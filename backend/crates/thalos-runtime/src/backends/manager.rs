@@ -134,8 +134,10 @@ impl BackendManager {
     /// On success the connected controller is stored in the backend entry and
     /// becomes the runtime controller when that backend is active.
     pub async fn connect_with_port(&self, id: &str, port: &str) -> Result<(), ControllerError> {
+        tracing::info!(backend = %id, %port, "connect_with_port — opening serial transport");
         let transport = SerialTransport::new(port, 115200);
-        self.connect_with_transport(id, port, Box::new(transport)).await
+        self.connect_with_transport(id, port, Box::new(transport))
+            .await
     }
 
     /// Connect with an injected transport — the shared implementation behind
@@ -155,23 +157,24 @@ impl BackendManager {
             }
         }
         // Port-level failure (missing/occupied device) → port_in_use.
-        transport
-            .connect()
-            .await
-            .map_err(|e| ControllerError::PortInUse(e.to_string()))?;
+        transport.connect().await.map_err(|e| {
+            tracing::error!(backend = %id, %port, error = %e, "connect — serial open failed");
+            ControllerError::PortInUse(e.to_string())
+        })?;
 
         // Port opened but no firmware answers the HELLO handshake → no_firmware.
         // R4-002: the handshake read is bounded by the transport timeout, so
         // this returns FAST on a silent device, and the explicit `drop` closes
         // the serial device — a retry does NOT hit port_in_use.
         let mut backend = Esp32Backend::new(transport);
-        if let Err(_e) = backend.connect().await {
+        if let Err(e) = backend.connect().await {
+            tracing::error!(backend = %id, %port, error = %e, "connect — handshake failed (no firmware)");
             drop(backend);
             return Err(ControllerError::NoFirmware);
         }
+        tracing::info!(backend = %id, %port, "connect — handshake OK, controller stored");
 
-        let ctrl = Arc::new(RwLock::new(backend))
-            as Arc<RwLock<dyn RobotController + Send + Sync>>;
+        let ctrl = Arc::new(RwLock::new(backend)) as Arc<RwLock<dyn RobotController + Send + Sync>>;
         {
             let mut entries = self.registered.write().await;
             if let Some(entry) = entries.iter_mut().find(|e| e.id == id) {
@@ -466,7 +469,9 @@ mod tests {
     #[tokio::test]
     async fn connect_with_port_to_invalid_device_returns_port_in_use() {
         let manager = BackendManager::new();
-        manager.register_esp32("/dev/thalos-tests-nonexistent-7f3c").await;
+        manager
+            .register_esp32("/dev/thalos-tests-nonexistent-7f3c")
+            .await;
         let err = manager
             .connect_with_port("esp32", "/dev/thalos-tests-nonexistent-7f3c")
             .await
@@ -572,7 +577,10 @@ mod tests {
             .into_iter()
             .find(|e| e.id == "esp32")
             .unwrap();
-        assert!(entry.controller.is_some(), "controller stored after connect");
+        assert!(
+            entry.controller.is_some(),
+            "controller stored after connect"
+        );
         assert_eq!(entry.port.as_deref(), Some("/dev/ttyUSB0"));
     }
 
@@ -642,8 +650,8 @@ mod tests {
         drop(slave);
 
         let mut connect = async |manager: &BackendManager, path: &str| {
-            let t = SerialTransport::new(path, 115200)
-                .with_read_timeout(Duration::from_millis(300));
+            let t =
+                SerialTransport::new(path, 115200).with_read_timeout(Duration::from_millis(300));
             let c = tokio::time::timeout(
                 Duration::from_secs(3),
                 manager.connect_with_transport("esp32", path, Box::new(t)),
@@ -654,7 +662,8 @@ mod tests {
                 ar.is_ok(),
                 "PTY master must answer the handshake within the test bound"
             );
-            cr.expect("connect must complete within the test bound").unwrap();
+            cr.expect("connect must complete within the test bound")
+                .unwrap();
         };
 
         // First connect → controller stored and runtime pointed at it.
@@ -670,12 +679,16 @@ mod tests {
                 .unwrap();
             assert!(entry.controller.is_some());
         } // entry dropped BEFORE disconnect: it clones the controller Arc,
-          // and keeping it alive would leak the serial fd (device stays busy).
+        // and keeping it alive would leak the serial fd (device stays busy).
 
         // Disconnect → controller removed, runtime and active_id clean.
         manager.disconnect_backend("esp32").await.unwrap();
         assert!(manager.get_controller().await.is_none());
-        assert_eq!(manager.active_id().await, None, "disconnect clears active_id");
+        assert_eq!(
+            manager.active_id().await,
+            None,
+            "disconnect clears active_id"
+        );
         {
             let entry = manager
                 .list_backends()
@@ -683,7 +696,10 @@ mod tests {
                 .into_iter()
                 .find(|e| e.id == "esp32")
                 .unwrap();
-            assert!(entry.controller.is_none(), "no stale controller after disconnect");
+            assert!(
+                entry.controller.is_none(),
+                "no stale controller after disconnect"
+            );
         } // entry dropped before the reconnect, for the same Arc reason.
 
         // Second connect on the SAME path → succeeds (device was released, no
@@ -696,7 +712,10 @@ mod tests {
                 .into_iter()
                 .find(|e| e.id == "esp32")
                 .unwrap();
-            assert!(entry.controller.is_some(), "reconnect must store a fresh controller");
+            assert!(
+                entry.controller.is_some(),
+                "reconnect must store a fresh controller"
+            );
             assert_eq!(entry.port.as_deref(), Some(path.as_str()));
         } // entry dropped before activate (same Arc-leak reason as above).
 

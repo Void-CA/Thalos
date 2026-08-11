@@ -31,6 +31,7 @@ const allGood: WorkflowState = {
   analyzed: true,
   planReady: true,
   executable: true,
+  executionViewable: true,
   running: false,
   completed: false,
 }

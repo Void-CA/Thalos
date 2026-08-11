@@ -48,6 +48,7 @@ export const useBackendStore = create<BackendState>((set, get) => ({
       const active = backends.find((b) => b.status === 'active') ?? null
       set({ backends, activeId: active?.id ?? null, loading: false })
     } catch (err) {
+      console.error('[backend] fetchBackends failed', err)
       set({ loading: false, error: toBackendError(err) })
     }
   },
@@ -59,6 +60,7 @@ export const useBackendStore = create<BackendState>((set, get) => ({
       set({ activeId: id })
       await get().fetchBackends()
     } catch (err) {
+      console.error('[backend] activate failed', id, err)
       set({ error: toBackendError(err) })
       throw err
     }
@@ -70,6 +72,7 @@ export const useBackendStore = create<BackendState>((set, get) => ({
       await backendApi.connect(id, port)
       await get().fetchBackends()
     } catch (err) {
+      console.error('[backend] connect failed', id, port, err)
       set({ error: toBackendError(err) })
       throw err
     }
@@ -81,6 +84,7 @@ export const useBackendStore = create<BackendState>((set, get) => ({
       await backendApi.disconnect(id)
       await get().fetchBackends()
     } catch (err) {
+      console.error('[backend] disconnect failed', id, err)
       set({ error: toBackendError(err) })
       throw err
     }

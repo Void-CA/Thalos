@@ -186,10 +186,16 @@ function startLoop() {
       })
 
       if (isTerminal) {
+        console.debug('[execution] terminal tick', {
+          status,
+          iteration: delta.execution.iteration,
+          totalIterations: delta.execution.total_iterations,
+        })
         stopLoop()
         return
       }
     } catch (err) {
+      console.error('[execution] tick failed', err)
       stopLoop()
       useExecutionStore.setState({ status: 'failed', error: toExecutionError(err) })
       return
@@ -231,6 +237,7 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>((set)
 
   start: async (mode?: ExecutionModeDto) => {
     try {
+      console.debug('[execution] start', { mode })
       await executionClient.start(mode)
       // Seed the iteration badge from the requested mode; the first tick then
       // confirms it from the backend. Once / absent → no badge (EW6).
@@ -249,6 +256,7 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>((set)
       })
       startLoop()
     } catch (err) {
+      console.error('[execution] start failed', err)
       set({ status: 'failed', error: toExecutionError(err) })
     }
   },
@@ -259,6 +267,7 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>((set)
       stopLoop()
       set({ status: 'paused' })
     } catch (err) {
+      console.error('[execution] pause failed', err)
       set({ status: 'failed', error: toExecutionError(err) })
     }
   },
@@ -269,6 +278,7 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>((set)
       set({ status: 'running' })
       startLoop()
     } catch (err) {
+      console.error('[execution] resume failed', err)
       set({ status: 'failed', error: toExecutionError(err) })
     }
   },
@@ -279,6 +289,7 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>((set)
       stopLoop()
       set({ status: 'cancelled' })
     } catch (err) {
+      console.error('[execution] cancel failed', err)
       set({ status: 'failed', error: toExecutionError(err) })
     }
   },
@@ -289,6 +300,7 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>((set)
       stopLoop()
       set({ ...INITIAL })
     } catch (err) {
+      console.error('[execution] reset failed', err)
       set({ status: 'failed', error: toExecutionError(err) })
     }
   },

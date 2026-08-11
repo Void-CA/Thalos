@@ -84,6 +84,13 @@ export function deriveWorkflowState(snapshot: WorkflowSnapshot): WorkflowState {
     planReady,
     analyzed: snapshot.analysis.report !== null,
     executable: planReady && EXECUTABLE_STATUSES.includes(status),
+    // Terminal statuses stay in the Execution workspace: a finished run
+    // (Completed/Failed) must remain viewable instead of tripping the guard
+    // and redirecting away from /execution the moment it ends.
+    executionViewable:
+      (planReady && EXECUTABLE_STATUSES.includes(status)) ||
+      status === 'completed' ||
+      status === 'failed',
     running: RUNNING_STATUSES.includes(status),
     completed: status === 'completed',
   }
@@ -111,6 +118,7 @@ const FLAG_PHRASES: Record<WorkflowFlag, string> = {
   planReady: 'a plan',
   analyzed: 'an analyzed plan',
   executable: 'an executable plan',
+  executionViewable: 'a runnable or finished execution',
   running: 'a running execution',
   completed: 'a completed execution',
 }

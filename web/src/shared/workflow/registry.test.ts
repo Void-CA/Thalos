@@ -61,6 +61,7 @@ describe('WORKSPACE_REGISTRY (slice 3 — requires/produces/capability)', () => 
       'planReady',
       'analyzed',
       'executable',
+      'executionViewable',
       'running',
       'completed',
     ])
@@ -93,7 +94,7 @@ describe('WORKSPACE_REGISTRY (slice 3 — requires/produces/capability)', () => 
     // Program preview — satisfy the guard. `analyzed` is deliberately NOT a
     // requirement: evaluation is a RECOMMENDED pre-flight checkpoint, not a
     // hard gate — the fast path (compile → execute) keeps working.
-    expect(byWorkspace.execution.requires).toEqual(['sceneValid', 'planReady', 'executable'])
+    expect(byWorkspace.execution.requires).toEqual(['sceneValid', 'planReady', 'executionViewable'])
     // Guard relaxed (area-sessions S5): the browser browses failed/running
     // sessions too — no `completed` gate on /sessions.
     expect(byWorkspace.sessions.requires).toEqual([])
@@ -252,7 +253,7 @@ describe('WORKSPACE_REGISTRY (slice S3.5 — typed domain graph, user criterion 
       ['evaluation', ['sceneValid', 'planReady'], 'analyzed'],
       // PR2: planReady replaces the raw `compiled` prerequisite — the Motion
       // Program preview path (activePlanPresent) also unlocks /execution.
-      ['execution', ['sceneValid', 'planReady', 'executable'], 'completed'],
+      ['execution', ['sceneValid', 'planReady', 'executionViewable'], 'completed'],
       ['sessions', [], null],
     ]
     for (const [workspace, requires, produces] of expected) {

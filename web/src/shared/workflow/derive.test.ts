@@ -69,6 +69,7 @@ const ALL_TRUE: WorkflowState = {
   planReady: true,
   analyzed: true,
   executable: true,
+  executionViewable: true,
   running: false,
   completed: false,
 }
@@ -488,15 +489,26 @@ describe('deriveStepperStages — per-stage state from flags + active route', ()
     expect(byWs.sessions.reason).toBeNull()
   })
 
-  it('blocks Execution when executable is unmet, with a derived reason', () => {
+  it('blocks Execution when not viewable (no runnable or finished execution)', () => {
     const stages = deriveStepperStages(
-      { ...ALL_TRUE, executable: false },
+      { ...ALL_TRUE, executionViewable: false },
       '/task',
       WORKSPACE_REGISTRY,
     )
     const execution = stages.find((s) => s.entry.workspace === 'execution')!
     expect(execution.state).toBe('blocked')
-    expect(execution.reason).toBe('Requires an executable plan')
+    expect(execution.reason).toBe('Requires a runnable or finished execution')
+  })
+
+  it('keeps Execution open when a run just finished (no kick-out on Completed)', () => {
+    const stages = deriveStepperStages(
+      { ...ALL_TRUE, executable: false, executionViewable: true },
+      '/task',
+      WORKSPACE_REGISTRY,
+    )
+    const execution = stages.find((s) => s.entry.workspace === 'execution')!
+    expect(execution.state).not.toBe('blocked')
+    expect(execution.reason).toBeNull()
   })
 
   it('derives the reason from the first missing flag (sceneValid → execution)', () => {

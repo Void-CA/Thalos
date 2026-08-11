@@ -13,11 +13,11 @@ use async_trait::async_trait;
 use crate::backends::controller::{BackendCapabilities, RobotController};
 use crate::backends::transport::{Transport, TransportError};
 use crate::error::ControllerError;
+use crate::execution_boundary::ExecutionSample;
 use crate::execution_boundary::manifest::{
     ExecutionManifest, ManifestInstruction, ManifestMetadata, ManifestSegment, TimedWaypoint,
 };
 use crate::execution_boundary::manifest_builder::ExecutionManifestBuilder;
-use crate::execution_boundary::ExecutionSample;
 use crate::session::execution_source::ExecutionSource;
 use crate::state::robot_state::{MotionMode, RobotState};
 use thalos_core::execution::plan::{
@@ -273,20 +273,24 @@ impl RobotController for Esp32Backend {
 
         let protocol = self.protocol_mut()?;
 
-        protocol
-            .handshake()
-            .await
-            .map_err(|e| Self::map_protocol_error("handshake failed", e))?;
+        protocol.handshake().await.map_err(|e| {
+            let mapped = Self::map_protocol_error("handshake failed", e);
+            tracing::error!(error = %mapped, "ESP32 handshake failed");
+            mapped
+        })?;
 
-        self.connected.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.connected
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         // RES-02: a fresh connection resets the poll-failure streak.
         self.consecutive_poll_failures
             .store(0, std::sync::atomic::Ordering::SeqCst);
+        tracing::info!("ESP32 connected (handshake OK)");
         Ok(())
     }
 
     async fn disconnect(&mut self) -> Result<(), ControllerError> {
-        self.connected.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.connected
+            .store(false, std::sync::atomic::Ordering::SeqCst);
         self.plan_duration = 0.0;
         // Stale poll cache / collected samples must not leak across connects.
         *self.cached_state.lock().await = None;
@@ -325,13 +329,24 @@ impl RobotController for Esp32Backend {
         protocol
             .upload_manifest(&manifest)
             .await
-            .map_err(|e| Self::map_protocol_error("upload failed", e))?;
+            .map_err(|e| {
+                let mapped = Self::map_protocol_error("upload failed", e);
+                tracing::error!(error = %mapped, waypoints = waypoints.len(), "ESP32 manifest upload failed");
+                mapped
+            })?;
+        tracing::info!(
+            waypoints = waypoints.len(),
+            duration_s = duration,
+            "ESP32 manifest uploaded (READY)"
+        );
 
         // Execute → OK
-        protocol
-            .start_execution()
-            .await
-            .map_err(|e| Self::map_protocol_error("execute failed", e))?;
+        protocol.start_execution().await.map_err(|e| {
+            let mapped = Self::map_protocol_error("execute failed", e);
+            tracing::error!(error = %mapped, "ESP32 start_execution failed");
+            mapped
+        })?;
+        tracing::info!("ESP32 execution started (EXECUTE OK)");
 
         // Return immediately per RobotController contract
         Ok(())
@@ -418,12 +433,16 @@ impl RobotController for Esp32Backend {
             // RES-02: after 3 CONSECUTIVE failures clear `connected` so the
             // next tick/snapshot surfaces a connection problem instead of a
             // frozen stale Running state; this call still serves the cache.
-            Err(_) => {
-                self.consecutive_poll_failures
-                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                if self.consecutive_poll_failures.load(std::sync::atomic::Ordering::SeqCst) >= 3 {
+            Err(e) => {
+                let failures = self
+                    .consecutive_poll_failures
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+                    + 1;
+                tracing::debug!(error = %e, failures, "ESP32 STATUS poll failed");
+                if failures >= 3 {
                     self.connected
                         .store(false, std::sync::atomic::Ordering::SeqCst);
+                    tracing::warn!("ESP32 marked disconnected after 3 consecutive poll failures");
                 }
                 let cached = self.cached_state.lock().await;
                 match cached.as_ref() {
@@ -469,7 +488,10 @@ impl Esp32Backend {
     /// Production code MUST NOT depend on this method.
     pub async fn test_sent_commands(&self) -> Vec<Vec<u8>> {
         let guard = self.protocol.lock().await;
-        guard.as_ref().map(|p| p.test_sent_commands()).unwrap_or_default()
+        guard
+            .as_ref()
+            .map(|p| p.test_sent_commands())
+            .unwrap_or_default()
     }
 
     /// Expose the protocol for integration test response injection.
@@ -509,7 +531,9 @@ mod tests {
         let mut backend = Esp32Backend::new(Box::new(transport));
         // Inject the HELLO response BEFORE connect
         backend
-            .protocol.lock().await
+            .protocol
+            .lock()
+            .await
             .as_ref()
             .unwrap()
             .test_inject_response(b"HELLO 1 OK\n".to_vec());
@@ -628,32 +652,44 @@ mod tests {
 
         // Inject responses for the full upload→execute flow
         backend
-            .protocol.lock().await
+            .protocol
+            .lock()
+            .await
             .as_ref()
             .unwrap()
             .test_inject_response(b"OK\n".to_vec()); // MANIFEST
         backend
-            .protocol.lock().await
+            .protocol
+            .lock()
+            .await
             .as_ref()
             .unwrap()
             .test_inject_response(b"OK\n".to_vec()); // SEGMENT
         backend
-            .protocol.lock().await
+            .protocol
+            .lock()
+            .await
             .as_ref()
             .unwrap()
             .test_inject_response(b"OK\n".to_vec()); // SAMPLE 0
         backend
-            .protocol.lock().await
+            .protocol
+            .lock()
+            .await
             .as_ref()
             .unwrap()
             .test_inject_response(b"OK\n".to_vec()); // SAMPLE 1
         backend
-            .protocol.lock().await
+            .protocol
+            .lock()
+            .await
             .as_ref()
             .unwrap()
             .test_inject_response(b"READY\n".to_vec()); // END_UPLOAD
         backend
-            .protocol.lock().await
+            .protocol
+            .lock()
+            .await
             .as_ref()
             .unwrap()
             .test_inject_response(b"OK\n".to_vec()); // EXECUTE
@@ -667,7 +703,13 @@ mod tests {
         assert!(backend.is_connected());
 
         // Verify commands were sent
-        let sent = backend.protocol.lock().await.as_ref().unwrap().test_sent_commands();
+        let sent = backend
+            .protocol
+            .lock()
+            .await
+            .as_ref()
+            .unwrap()
+            .test_sent_commands();
         assert!(!sent.is_empty(), "commands should have been sent");
 
         // HELLO was first (from connect)
@@ -687,7 +729,9 @@ mod tests {
         let transport = FakeTransport::new();
         let mut backend = Esp32Backend::new(Box::new(transport));
         backend
-            .protocol.lock().await
+            .protocol
+            .lock()
+            .await
             .as_ref()
             .unwrap()
             .test_inject_response(b"HELLO 1 OK\n".to_vec());
@@ -714,7 +758,9 @@ mod tests {
         // Inject HELLO response BUT NOT any manifest responses
         let mut backend = Esp32Backend::new(Box::new(transport));
         backend
-            .protocol.lock().await
+            .protocol
+            .lock()
+            .await
             .as_ref()
             .unwrap()
             .test_inject_response(b"HELLO 1 OK\n".to_vec());
@@ -732,7 +778,13 @@ mod tests {
 
         // Verify NO upload commands were sent over the transport
         // Only the 1 HELLO from connect should exist
-        let sent = backend.protocol.lock().await.as_ref().unwrap().test_sent_commands();
+        let sent = backend
+            .protocol
+            .lock()
+            .await
+            .as_ref()
+            .unwrap()
+            .test_sent_commands();
         assert_eq!(sent.len(), 1, "only HELLO should have been sent");
         assert_eq!(String::from_utf8(sent[0].clone()).unwrap(), "HELLO 1\n");
     }
@@ -742,7 +794,9 @@ mod tests {
         let transport = FakeTransport::new();
         let mut backend = Esp32Backend::new(Box::new(transport));
         backend
-            .protocol.lock().await
+            .protocol
+            .lock()
+            .await
             .as_ref()
             .unwrap()
             .test_inject_response(b"HELLO 1 OK\n".to_vec());
@@ -759,7 +813,9 @@ mod tests {
         // Only HELLO was sent (from connect)
         assert_eq!(
             backend
-                .protocol.lock().await
+                .protocol
+                .lock()
+                .await
                 .as_ref()
                 .unwrap()
                 .test_sent_commands()
@@ -773,7 +829,9 @@ mod tests {
         let transport = FakeTransport::new();
         let mut backend = Esp32Backend::new(Box::new(transport));
         backend
-            .protocol.lock().await
+            .protocol
+            .lock()
+            .await
             .as_ref()
             .unwrap()
             .test_inject_response(b"HELLO 1 OK\n".to_vec());
@@ -792,7 +850,9 @@ mod tests {
         // Only HELLO was sent
         assert_eq!(
             backend
-                .protocol.lock().await
+                .protocol
+                .lock()
+                .await
                 .as_ref()
                 .unwrap()
                 .test_sent_commands()
@@ -808,7 +868,9 @@ mod tests {
         let transport = FakeTransport::new();
         let mut backend = Esp32Backend::new(Box::new(transport));
         backend
-            .protocol.lock().await
+            .protocol
+            .lock()
+            .await
             .as_ref()
             .unwrap()
             .test_inject_response(b"HELLO 1 OK\n".to_vec());

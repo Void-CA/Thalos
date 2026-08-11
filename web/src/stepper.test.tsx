@@ -221,7 +221,7 @@ describe('Stepper — six registry-derived stages (global-stepper spec S3)', () 
   it('derives a blocked reason from the missing flag (not a fixed string)', () => {
     seedFlags({ robotLoaded: true, compiled: true }) // executable=false
     renderStepper('/task')
-    expect(screen.getByText('Requires an executable plan')).toBeInTheDocument()
+    expect(screen.getByText('Requires a runnable or finished execution')).toBeInTheDocument()
     // Sessions is no longer blocked (guard relaxed) — no completed reason exists.
     expect(screen.queryByText(/Requires a completed execution/)).not.toBeInTheDocument()
   })
@@ -240,7 +240,7 @@ describe('Stepper — click = navigation, availability is separate (C3, threat "
     const router = renderStepper('/task')
     const execution = screen.getByRole('button', { name: 'Ejecución' })
     expect(execution).toBeDisabled()
-    expect(screen.getByText('Requires an executable plan')).toBeInTheDocument()
+    expect(screen.getByText('Requires a runnable or finished execution')).toBeInTheDocument()
     fireEvent.click(execution)
     expect(router.state.location.pathname).toBe('/task')
   })

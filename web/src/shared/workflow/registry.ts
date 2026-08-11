@@ -89,7 +89,7 @@ export const WORKSPACE_REGISTRY: Area[] = [
   // the producer of its origin (compiled) so "no plan at all" still redirects
   // to /task, the workspace that compiles a plan. `analyzed` is NOT required:
   // evaluation is a recommended checkpoint, not a hard gate.
-  { path: '/execution', workspace: 'execution', label: 'Ejecución', requires: ['sceneValid', 'planReady', 'executable'], produces: 'completed', capability: 'execute', hidden: false, consumes: 'MotionPlan', producesArtifact: 'Runtime', stage: 5, stepperIndex: 5 },
+  { path: '/execution', workspace: 'execution', label: 'Ejecución', requires: ['sceneValid', 'planReady', 'executionViewable'], produces: 'completed', capability: 'execute', hidden: false, consumes: 'MotionPlan', producesArtifact: 'Runtime', stage: 5, stepperIndex: 5 },
   // S5.1 AUDIT verdict (area-sessions spec): the `completed` requirement was
   // REMOVED from /sessions — the browser must show failed/running sessions
   // (status filters), so the guard no longer gates the area. `completed` stays
