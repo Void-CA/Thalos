@@ -12,5 +12,6 @@ members = [
     "crates/thalos-planning",
     "crates/thalos-optimization",
     "crates/thalos-document",
-    "crates/thalos-semantic"
+    "crates/thalos-semantic",
+    "crates/thalos-intelligence"
     ]

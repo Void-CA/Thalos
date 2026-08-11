@@ -101,6 +101,29 @@ pub enum ObservationKind {
     /// A single joint's velocity deviated beyond threshold during execution
     /// (PR 4 vocabulary; mirrors the legacy velocity-deviation detection).
     VelocityDeviation,
+    /// An object was picked and never released by any later `Place`
+    /// (semantic expert, B-lite: incomplete operation).
+    PickWithoutPlace,
+    /// A `Home` executed while the gripper still holds a picked object
+    /// (semantic expert, B-lite: load carried into the home pose).
+    HomeBeforePlace,
+    /// A `Pick` of a second object occurred before the first was placed
+    /// (semantic expert, B-lite: double-grasp risk).
+    PickWhileHolding,
+    /// Two consecutive `MoveTo` operations target the same destination
+    /// (semantic expert, B-lite: redundancy).
+    RedundantMoveTo,
+    /// A `Place` is immediately followed by a `Pick` of the same object
+    /// (semantic expert, B-lite: possible re-grasp loop).
+    RePickAfterPlace,
+    /// A `Wait` has a zero duration (semantic expert, B-lite: no-op).
+    ZeroDurationWait,
+    /// A non-empty program does not end with a `Home` operation
+    /// (semantic expert, B-lite: never returns to the home pose).
+    MissingFinalHome,
+    /// `MoveTo` destinations oscillate A → B → A without an intervening
+    /// `Pick`/`Place` (semantic expert, B-lite: inefficiency).
+    ZigzagMoveTo,
 }
 
 /// Severity of an observation. Machine-readable; renderers map it to
