@@ -420,42 +420,56 @@ describe('EvaluationWorkspace — problem region share of the plan (R5)', () => 
   })
 })
 
-describe('EvaluationWorkspace — intelligent assessment section (workspace-analysis)', () => {
-  it('renders the section when the report carries an assessment, between the verdict and the grid', () => {
+describe('EvaluationWorkspace — intelligence tab (evaluation-intelligence-tab)', () => {
+  it('shows Evaluation (default) and Intelligence triggers when the report carries an assessment', () => {
     act(() => {
       useAnalysisStore.setState({ report: assessedReport })
       useSceneStore.setState({ activePlan })
     })
     renderWorkspace()
+    expect(screen.getByRole('tab', { name: 'Evaluation' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Intelligence' })).toBeInTheDocument()
+    // Default active tab is Evaluation: the evaluation content is mounted and
+    // the intelligence view is NOT (Base UI Tabs mounts only the active panel).
+    expect(screen.getByTestId('evaluation-master')).toBeInTheDocument()
+    expect(screen.queryByTestId('intelligent-assessment')).not.toBeInTheDocument()
+  })
+
+  it('reveals the composed intelligence view when the Intelligence tab is activated', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: assessedReport })
+      useSceneStore.setState({ activePlan })
+    })
+    renderWorkspace()
+    fireEvent.click(screen.getByRole('tab', { name: 'Intelligence' }))
     const section = screen.getByTestId('intelligent-assessment')
     expect(section).toBeInTheDocument()
-    // Placement: inside the single scroll container, before the master grid.
-    expect(section.compareDocumentPosition(screen.getByTestId('evaluation-master')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     // Summary visible: risk + quality + triggered rules.
     expect(within(section).getByText('high')).toBeInTheDocument()
     expect(within(section).getByText('0.31')).toBeInTheDocument()
     expect(within(section).getByText('R07_low_manipulability')).toBeInTheDocument()
   })
 
-  it('hides the section entirely when the report carries no assessment', () => {
+  it('hides the Intelligence trigger and section when the report carries no assessment', () => {
     act(() => {
       useAnalysisStore.setState({ report: recommendationReport })
       useSceneStore.setState({ activePlan })
     })
     renderWorkspace()
+    expect(screen.queryByRole('tab', { name: 'Intelligence' })).not.toBeInTheDocument()
     expect(screen.queryByTestId('intelligent-assessment')).not.toBeInTheDocument()
-    expect(screen.queryByText('Intelligent Assessment')).not.toBeInTheDocument()
     expect(screen.queryByText('Risk Level')).not.toBeInTheDocument()
     // No empty placeholder/error either — the rest of the workspace is intact.
     expect(screen.getByTestId('evaluation-master')).toBeInTheDocument()
   })
 
-  it('keeps the trace collapsed by default inside the workspace', () => {
+  it('keeps the trace collapsed by default inside the intelligence tab', () => {
     act(() => {
       useAnalysisStore.setState({ report: assessedReport })
       useSceneStore.setState({ activePlan })
     })
     renderWorkspace()
+    fireEvent.click(screen.getByRole('tab', { name: 'Intelligence' }))
     const toggle = within(screen.getByTestId('intelligent-assessment')).getByTestId('assessment-trace-toggle')
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByTestId('assessment-trace')).not.toBeInTheDocument()

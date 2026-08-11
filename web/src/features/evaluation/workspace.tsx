@@ -18,7 +18,8 @@ import {
 import { YoshikawaChart } from './components/yoshikawa-chart'
 import { DeterminantChart } from './components/determinant-chart'
 import { ProgramView } from './components/program-view'
-import { IntelligentAssessment } from './components/intelligent-assessment'
+import { IntelligenceView } from './components/intelligence/IntelligenceView'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { ShieldCheck } from 'lucide-react'
 
 // TrajectoryView mounts ECharts GL — lazy like the 2D EChart wrapper (C2:
@@ -107,85 +108,98 @@ export function EvaluationWorkspace() {
         </div>
       </div>
 
-      {/* Single scroll container: both columns share one scrollbar (the 3D
-          trajectory and the action pane stay aligned; the header is fixed). */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-3">
-        {/* Verdict spans the whole decision — full-width above the split. */}
-        <StatusBanner />
+      {/* Two tabs: "Evaluation" (default — the decision this view exists for)
+          and "Intelligence" (the AI/fuzzy verdict — ONLY when the report
+          carries an assessment, spec evaluation-intelligence-tab). */}
+      <Tabs defaultValue="evaluation" className="flex flex-col h-full overflow-hidden min-h-0">
+        <TabsList className="mx-3 mt-3 shrink-0">
+          <TabsTrigger value="evaluation">Evaluation</TabsTrigger>
+          {report.assessment && <TabsTrigger value="intelligence">Intelligence</TabsTrigger>}
+        </TabsList>
 
-        {/* Intelligent Assessment — full-width between the verdict and the
-            master-detail grid; hidden when `assessment` is absent (additive
-            wire field, I3). */}
-        {report.assessment && <IntelligentAssessment assessment={report.assessment} />}
+        {/* Evaluation tab — the pre-refactor content, unchanged: verdict banner
+            + the master-detail decision grid. */}
+        <TabsContent value="evaluation" className="flex-1 min-h-0 overflow-y-auto p-3">
+          {/* Verdict spans the whole decision — full-width above the split. */}
+          <StatusBanner />
 
-        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3 items-start">
-          {/* ── MASTER (context, ~2/3): WHERE the problem is — trajectory +
-              temporal analysis, all cross-highlighting the selected region. */}
-          <div
-            className="lg:col-span-2 flex flex-col gap-4 min-w-0"
-            data-testid="evaluation-master"
-          >
-            <PlanSummary />
-            <Suspense fallback={<div className="h-64 w-full" aria-label="Trajectory with problem regions" />}>
-              <TrajectoryView />
-            </Suspense>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 min-w-0">
-              <YoshikawaChart />
-              <DeterminantChart />
+          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3 items-start">
+            {/* ── MASTER (context, ~2/3): WHERE the problem is — trajectory +
+                temporal analysis, all cross-highlighting the selected region. */}
+            <div
+              className="lg:col-span-2 flex flex-col gap-4 min-w-0"
+              data-testid="evaluation-master"
+            >
+              <PlanSummary />
+              <Suspense fallback={<div className="h-64 w-full" aria-label="Trajectory with problem regions" />}>
+                <TrajectoryView />
+              </Suspense>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 min-w-0">
+                <YoshikawaChart />
+                <DeterminantChart />
+              </div>
             </div>
-          </div>
 
-          {/* ── DETAIL (action, ~1/3): WHAT to do with the problem. Swaps the
-              region chooser for the RegionInspector once a region is active;
-              ProgramView (the editable segment) and Recommendations always live
-              here. In mobile the detail collapses below the master. */}
-          <aside
-            className="lg:col-span-1 flex flex-col gap-4 min-w-0"
-            data-testid="evaluation-detail"
-          >
-            {selectedRegion ? (
-              <>
-                <RegionInspector />
-                <ProgramView />
-              </>
-            ) : (
-              <>
-                <section className="flex flex-col gap-2 min-w-0">
+            {/* ── DETAIL (action, ~1/3): WHAT to do with the problem. Swaps the
+                region chooser for the RegionInspector once a region is active;
+                ProgramView (the editable segment) and Recommendations always live
+                here. In mobile the detail collapses below the master. */}
+            <aside
+              className="lg:col-span-1 flex flex-col gap-4 min-w-0"
+              data-testid="evaluation-detail"
+            >
+              {selectedRegion ? (
+                <>
+                  <RegionInspector />
+                  <ProgramView />
+                </>
+              ) : (
+                <>
+                  <section className="flex flex-col gap-2 min-w-0">
+                    <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                      Problem Regions
+                    </h2>
+                    {hasProblemRegions ? (
+                      <ProblemRegions />
+                    ) : (
+                      <p className="text-xs text-muted-foreground text-center py-4 rounded-lg border border-border bg-card/50">
+                        No se detectaron problemas — el plan está listo.
+                      </p>
+                    )}
+                  </section>
+                  <ProgramView />
+                </>
+              )}
+
+              {/* Recommendations — the base of the post-MVP resolution strategy
+                  (Preview/Apply/Undo). */}
+              {visibleRecommendations.length > 0 && (
+                <section className="flex flex-col gap-2">
                   <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
-                    Problem Regions
+                    Recommendations
                   </h2>
-                  {hasProblemRegions ? (
-                    <ProblemRegions />
-                  ) : (
-                    <p className="text-xs text-muted-foreground text-center py-4 rounded-lg border border-border bg-card/50">
-                      No se detectaron problemas — el plan está listo.
-                    </p>
-                  )}
+                  <ul className="flex flex-col gap-1.5">
+                    {visibleRecommendations.map((recommendation) => (
+                      <RecommendationRow
+                        key={recommendationKey(recommendation)}
+                        recommendation={recommendation}
+                      />
+                    ))}
+                  </ul>
                 </section>
-                <ProgramView />
-              </>
-            )}
+              )}
+            </aside>
+          </div>
+        </TabsContent>
 
-            {/* Recommendations — the base of the post-MVP resolution strategy
-                (Preview/Apply/Undo). */}
-            {visibleRecommendations.length > 0 && (
-              <section className="flex flex-col gap-2">
-                <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
-                  Recommendations
-                </h2>
-                <ul className="flex flex-col gap-1.5">
-                  {visibleRecommendations.map((recommendation) => (
-                    <RecommendationRow
-                      key={recommendationKey(recommendation)}
-                      recommendation={recommendation}
-                    />
-                  ))}
-                </ul>
-              </section>
-            )}
-          </aside>
-        </div>
-      </div>
+        {/* Intelligence tab — the COMPOSED AI verdict view; hidden entirely
+            when the report carries no assessment. */}
+        {report.assessment && (
+          <TabsContent value="intelligence" className="flex-1 min-h-0 overflow-y-auto p-3">
+            <IntelligenceView assessment={report.assessment} />
+          </TabsContent>
+        )}
+      </Tabs>
     </div>
   )
 }
