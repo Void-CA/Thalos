@@ -205,6 +205,13 @@ pub struct PlanAnalysisResponse {
     /// clientes antiguos (JSON sin el campo) deserializan a `[]`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub recommendations: Vec<RecommendationDto>,
+    /// Verdicto de inteligencia (thalos-intelligence) — proyección del
+    /// `Assessment` del runtime. ADITIVO: `#[serde(default)]` + omitido cuando
+    /// ausente (mismo patrón que `recommendations`); los clientes antiguos
+    /// deserializan a `None` sin error (spec analysis-report-contract "Old
+    /// Backend Omits Assessment").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assessment: Option<AssessmentDto>,
 }
 
 impl PlanAnalysisResponse {
@@ -225,6 +232,7 @@ impl PlanAnalysisResponse {
         analysis: &PlanAnalysis,
         segments: &[PlannedSegment],
         recommendations: &[Recommendation],
+        assessment: Option<&thalos_intelligence::Assessment>,
     ) -> Self {
         let regions = RegionGrouper::default().group(&report.observations);
         let manipulability_series = analysis
@@ -267,6 +275,7 @@ impl PlanAnalysisResponse {
                 .iter()
                 .map(RecommendationDto::from)
                 .collect(),
+            assessment: assessment.map(AssessmentDto::from),
         }
     }
 }
@@ -426,6 +435,107 @@ impl From<&Recommendation> for RecommendationDto {
             action: ActionDto::from(&r.action),
             edit: r.edit.clone(),
             status: r.status,
+        }
+    }
+}
+
+// ─── Intelligent assessment (additive, spec analysis-report-contract) ─────
+//
+// The `assessment` wire field is a projection of the runtime `Assessment`
+// (thalos-intelligence). Additive: `#[serde(default)]` on
+// `PlanAnalysisResponse.assessment` keeps old clients deserializing to `None`.
+
+/// Verdicto de inteligencia proyectado al wire (spec analysis-report-contract
+/// "Assessment DTO Structure"): risk + quality + triggered_rules + evidence +
+/// recommendations + trace.
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct AssessmentDto {
+    /// Categorical verdict ("low" | "medium" | "high" | "critical").
+    pub risk: String,
+    /// Quality score in [0, 1] (normalized complement of the crisp risk).
+    pub quality: f64,
+    /// Rules that fired during inference.
+    pub triggered_rules: Vec<TriggeredRuleDto>,
+    /// Key-value evidence (derived inputs + rule evidence).
+    pub evidence: BTreeMap<String, f64>,
+    /// References to existing PlanAdvisor actions by kind.
+    pub recommendations: Vec<AssessmentRecommendationDto>,
+    /// Inference trace in firing order.
+    pub trace: Vec<TraceEntryDto>,
+}
+
+/// A fired rule summary on the wire.
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct TriggeredRuleDto {
+    /// Rule id, e.g. `"R07_low_manipulability"`.
+    pub id: String,
+    /// Reasoning category ("collision" | "singularity" | "manipulability" |
+    /// "trajectory").
+    pub category: String,
+    /// Agenda priority.
+    pub priority: u8,
+}
+
+/// A recommendation reference — an existing PlanAdvisor `ActionKind` the
+/// diagnosis associates with (region-aware when resolvable).
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct AssessmentRecommendationDto {
+    /// The associated action kind (e.g. "Manipulability").
+    pub action_kind: String,
+    /// Problem region the recommendation addresses, when resolvable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub region_id: Option<usize>,
+    /// Human-readable rationale (English).
+    pub rationale: String,
+}
+
+/// One trace entry — a fired rule in exact execution order.
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct TraceEntryDto {
+    /// Fired rule id.
+    pub rule_id: String,
+    /// Agenda priority.
+    pub priority: u8,
+    /// Antecedent → matched value.
+    pub bindings: BTreeMap<String, String>,
+    /// Derived facts produced by this firing.
+    pub derived_output: BTreeMap<String, bool>,
+}
+
+impl From<&thalos_intelligence::Assessment> for AssessmentDto {
+    fn from(assessment: &thalos_intelligence::Assessment) -> Self {
+        Self {
+            risk: format!("{:?}", assessment.risk).to_lowercase(),
+            quality: assessment.quality,
+            triggered_rules: assessment
+                .triggered_rules
+                .iter()
+                .map(|rule| TriggeredRuleDto {
+                    id: rule.id.clone(),
+                    category: format!("{:?}", rule.category).to_lowercase(),
+                    priority: rule.priority,
+                })
+                .collect(),
+            evidence: assessment.evidence.clone(),
+            recommendations: assessment
+                .recommendations
+                .iter()
+                .map(|recommendation| AssessmentRecommendationDto {
+                    action_kind: format!("{:?}", recommendation.action_kind),
+                    region_id: recommendation.region_id,
+                    rationale: recommendation.rationale.clone(),
+                })
+                .collect(),
+            trace: assessment
+                .trace
+                .iter()
+                .map(|entry| TraceEntryDto {
+                    rule_id: entry.rule_id.clone(),
+                    priority: entry.priority,
+                    bindings: entry.bindings.clone(),
+                    derived_output: entry.derived_output.clone(),
+                })
+                .collect(),
         }
     }
 }
@@ -800,7 +910,7 @@ mod tests {
         let report = sample_report();
         let segments: Vec<PlannedSegment> = Vec::new();
         let response =
-            PlanAnalysisResponse::from_report(&report, &sample_analysis(0), &segments, &[]);
+            PlanAnalysisResponse::from_report(&report, &sample_analysis(0), &segments, &[], None);
         let value = serde_json::to_value(response).expect("serialize");
         let obj = value.as_object().expect("object");
         for field in ["observations", "actions", "metrics", "summary"] {
@@ -1019,6 +1129,7 @@ mod tests {
             &analysis,
             &segments,
             &[],
+            None,
         ))
         .expect("serialize");
         let series = value["manipulability_series"]
@@ -1058,7 +1169,7 @@ mod tests {
         let report = sample_report();
         let analysis = sample_analysis(20);
         let segments: Vec<PlannedSegment> = Vec::new();
-        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[]);
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[], None);
 
         let json = serde_json::to_string(&response).expect("serialize");
         let back: PlanAnalysisResponse = serde_json::from_str(&json).expect("deserialize");
@@ -1082,7 +1193,7 @@ mod tests {
         let report = sample_report();
         let analysis = sample_analysis(0);
         let segments: Vec<PlannedSegment> = Vec::new();
-        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[]);
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[], None);
 
         let value = serde_json::to_value(response).expect("serialize");
         assert!(
@@ -1107,7 +1218,7 @@ mod tests {
         let report = sample_report();
         let analysis = sample_analysis(2);
         let segments: Vec<PlannedSegment> = Vec::new();
-        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[]);
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[], None);
 
         let mut value = serde_json::to_value(response).expect("serialize");
         value
@@ -1132,7 +1243,7 @@ mod tests {
         let report = sample_report();
         let analysis = sample_analysis(2);
         let segments: Vec<PlannedSegment> = Vec::new();
-        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[]);
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[], None);
 
         let mut value = serde_json::to_value(response).expect("serialize");
         value["manipulability_series"][0]
@@ -1160,7 +1271,7 @@ mod tests {
         let report = sample_report();
         let analysis = sample_analysis(2);
         let segments: Vec<PlannedSegment> = Vec::new();
-        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[]);
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[], None);
 
         let mut value = serde_json::to_value(response).expect("serialize");
         value["manipulability_series"][0]
@@ -1231,7 +1342,7 @@ mod tests {
         let report = sample_report();
         let analysis = sample_analysis(2);
         let segments: Vec<PlannedSegment> = Vec::new();
-        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[]);
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[], None);
 
         let mut value = serde_json::to_value(response).expect("serialize");
         value
@@ -1255,7 +1366,8 @@ mod tests {
         let analysis = sample_analysis(2);
         let segments: Vec<PlannedSegment> = Vec::new();
         let rec = sample_recommendation();
-        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[rec]);
+        let response =
+            PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[rec], None);
 
         let value = serde_json::to_value(&response).expect("serialize");
         let arr = value["recommendations"].as_array().expect("array");
@@ -1286,7 +1398,7 @@ mod tests {
         let report = sample_report();
         let analysis = sample_analysis(0);
         let segments: Vec<PlannedSegment> = Vec::new();
-        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[]);
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[], None);
 
         let value = serde_json::to_value(response).expect("serialize");
         assert!(
@@ -1328,5 +1440,103 @@ mod tests {
             dtos[1].semantic.is_none(),
             "region with no overlapping provenance must have no semantic context"
         );
+    }
+
+    // ─── IA: additive `assessment` wire field (spec analysis-report-contract) ──
+
+    fn sample_assessment() -> thalos_intelligence::Assessment {
+        use thalos_intelligence::{Assessment, Risk, TraceEntry, TriggeredRule};
+        Assessment {
+            risk: Risk::High,
+            quality: 0.3,
+            triggered_rules: vec![TriggeredRule {
+                id: "R07_low_manipulability".into(),
+                category: thalos_intelligence::RuleCategory::Manipulability,
+                priority: 3,
+            }],
+            evidence: BTreeMap::from([("manipulability".to_string(), 0.2)]),
+            recommendations: vec![thalos_intelligence::RecommendationRef {
+                action_kind: ActionKind::Manipulability,
+                region_id: Some(3),
+                rationale: "Improve manipulability near the flagged region.".to_string(),
+            }],
+            trace: vec![TraceEntry {
+                rule_id: "R07_low_manipulability".into(),
+                priority: 3,
+                bindings: BTreeMap::from([("Manipulability IS low".to_string(), "0.67".into())]),
+                derived_output: BTreeMap::from([("danger_zone".to_string(), true)]),
+            }],
+        }
+    }
+
+    #[test]
+    fn assessment_dto_round_trips_preserving_trace_order() {
+        // Spec analysis-report-contract "DTO Round-Trip Serialization": all
+        // fields round-trip without loss and trace entries keep firing order.
+        let dto = AssessmentDto::from(&sample_assessment());
+        let json = serde_json::to_string(&dto).expect("serialize");
+        let back: AssessmentDto = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back, dto);
+        let ids: Vec<&str> = back.trace.iter().map(|t| t.rule_id.as_str()).collect();
+        assert_eq!(ids, vec!["R07_low_manipulability"]);
+        assert_eq!(back.risk, "high");
+        assert_eq!(back.triggered_rules[0].category, "manipulability");
+        assert_eq!(back.recommendations[0].action_kind, "Manipulability");
+        assert_eq!(back.recommendations[0].region_id, Some(3));
+    }
+
+    #[test]
+    fn old_json_without_assessment_deserializes_to_none() {
+        // Spec analysis-report-contract "Client Backward Compatibility": a
+        // payload without `assessment` deserializes to None, never an error.
+        let report = sample_report();
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response =
+            PlanAnalysisResponse::from_report(&report, &sample_analysis(2), &segments, &[], None);
+        let json = serde_json::to_string(&response).expect("serialize");
+        let value: serde_json::Value = serde_json::from_str(&json).expect("parse");
+        assert!(
+            value.get("assessment").is_none(),
+            "absent assessment must be omitted from the wire"
+        );
+
+        let back: PlanAnalysisResponse = serde_json::from_str(&json).expect("deserialize");
+        assert!(
+            back.assessment.is_none(),
+            "absent assessment must deserialize to None"
+        );
+    }
+
+    #[test]
+    fn new_json_includes_assessment_field() {
+        // Spec analysis-report-contract "New Backend Includes Assessment":
+        // when the runtime produces an assessment, the wire carries it with all
+        // six sections.
+        let report = sample_report();
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response = PlanAnalysisResponse::from_report(
+            &report,
+            &sample_analysis(2),
+            &segments,
+            &[],
+            Some(&sample_assessment()),
+        );
+        let value = serde_json::to_value(response).expect("serialize");
+        let assessment = value
+            .get("assessment")
+            .expect("assessment must be present on the wire");
+        for field in [
+            "risk",
+            "quality",
+            "triggered_rules",
+            "evidence",
+            "recommendations",
+            "trace",
+        ] {
+            assert!(
+                assessment.get(field).is_some(),
+                "assessment must carry `{field}`"
+            );
+        }
     }
 }

@@ -1644,6 +1644,7 @@ dependencies = [
  "sha2",
  "thalos-collision",
  "thalos-document",
+ "thalos-intelligence",
  "thalos-optimization",
  "thalos-planning",
  "thalos_core",
@@ -1702,6 +1703,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thalos-collision",
+ "thalos-intelligence",
  "thalos-planning",
  "thalos_core",
  "thalos_math",
@@ -1710,6 +1712,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-serial",
+ "tracing",
 ]
 
 [[package]]

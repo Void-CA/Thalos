@@ -10,6 +10,7 @@ thalos_models = { path = "../thalos-models" }
 thalos-planning = { path = "../thalos-planning" }
 thalos_visual = { path = "../thalos-visual" }
 thalos_runtime = { path = "../thalos-runtime" }
+thalos-intelligence = { path = "../thalos-intelligence" }
 thalos-collision = { path = "../thalos-collision" }
 thalos-optimization = { path = "../thalos-optimization" }
 thalos_semantic = { path = "../thalos-semantic" }

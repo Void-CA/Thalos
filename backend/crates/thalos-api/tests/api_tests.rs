@@ -774,7 +774,10 @@ async fn workspace_sample_active_targets_the_loaded_catalog_robot() {
     let arr = samples.as_array().unwrap();
     assert_eq!(arr.len(), 500, "must sample the active chain");
     for sample in arr {
-        assert!(sample.get("position").is_some(), "sample must have position");
+        assert!(
+            sample.get("position").is_some(),
+            "sample must have position"
+        );
     }
 }
 
@@ -1324,7 +1327,11 @@ async fn preview_plan_movel_position_only_succeeds_on_scara() {
     let segments = plan["segments"]
         .as_array()
         .expect("segments must be an array");
-    assert_eq!(segments.len(), 1, "one movel segment must produce one plan segment");
+    assert_eq!(
+        segments.len(),
+        1,
+        "one movel segment must produce one plan segment"
+    );
 }
 
 #[tokio::test]
@@ -1367,7 +1374,11 @@ async fn preview_plan_movel_with_rotation_still_succeeds_on_scara() {
     let segments = body["active_plan"]["segments"]
         .as_array()
         .expect("segments must be an array");
-    assert_eq!(segments.len(), 1, "one movel segment must produce one plan segment");
+    assert_eq!(
+        segments.len(),
+        1,
+        "one movel segment must produce one plan segment"
+    );
 }
 
 #[tokio::test]
@@ -1783,9 +1794,9 @@ async fn analyze_command_populates_recommendations_with_edits() {
         "analyze must return recommendations when observations can generate them"
     );
     assert!(
-        recommendations.iter().any(|r| {
-            r["status"] == "available" && r["edit"]["ReplaceSegment"].is_object()
-        }),
+        recommendations
+            .iter()
+            .any(|r| { r["status"] == "available" && r["edit"]["ReplaceSegment"].is_object() }),
         "at least one available recommendation must carry a typed ReplaceSegment edit"
     );
 }
@@ -2287,7 +2298,10 @@ fn active_trajectory_signature(scene: &serde_json::Value) -> (usize, Vec<Vec<f64
     assert!(!joints.is_empty(), "trajectory must not be empty");
     (
         joints.len(),
-        vec![joints.first().unwrap().clone(), joints.last().unwrap().clone()],
+        vec![
+            joints.first().unwrap().clone(),
+            joints.last().unwrap().clone(),
+        ],
     )
 }
 
@@ -2407,7 +2421,11 @@ async fn undo_command_one_to_many_insert_waypoint_restores_original() {
         Some(json!({"recommendation_id": 2})),
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "apply of the InsertWaypoint must succeed");
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "apply of the InsertWaypoint must succeed"
+    );
     let body = body.expect("apply response must be valid JSON");
     assert_eq!(
         body["status"], "available",
@@ -2488,7 +2506,8 @@ async fn undo_command_stale_inverse_rejected_after_reschedule() {
     assert_eq!(status, StatusCode::OK, "re-schedule must succeed");
 
     // The re-scheduled (unrelated) plan must survive — undo must NOT corrupt it.
-    let (_, rescheduled_scene) = get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
+    let (_, rescheduled_scene) =
+        get_json(app.clone(), http::Method::GET, "/api/v1/scene", None).await;
     let rescheduled_scene = rescheduled_scene.expect("scene response must be valid JSON");
     let rescheduled = active_trajectory_signature(&rescheduled_scene);
 
@@ -3753,13 +3772,8 @@ async fn start_execution_with_active_but_disconnected_hardware_returns_409_not_c
     );
 
     let app = app_router().with_state(state);
-    let (status, body) = get_json(
-        app,
-        http::Method::POST,
-        "/api/v1/scene/motion/start",
-        None,
-    )
-    .await;
+    let (status, body) =
+        get_json(app, http::Method::POST, "/api/v1/scene/motion/start", None).await;
     assert_eq!(
         status,
         StatusCode::CONFLICT,
@@ -3814,16 +3828,119 @@ async fn start_execution_with_lost_connection_returns_409_connection_lost() {
         .expect("schedule_program must succeed");
 
     let app = app_router().with_state(state);
+    let (status, body) =
+        get_json(app, http::Method::POST, "/api/v1/scene/motion/start", None).await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "connection_lost must be a conflict"
+    );
+    assert_eq!(
+        body.expect("body")["code"],
+        "connection_lost",
+        "the real code must reach the frontend, not a collapsed joint_count_mismatch"
+    );
+}
+
+// ── /semantic/compile + /semantic/execute with the Semantic Expert ─────────
+// B-lite (semantic-expert): the expert chains advisory observations
+// (Info/Warning only) into the warnings channel. It NEVER emits Error, so the
+// 422 compile gate and the execution path stay untouched.
+
+/// A minimal TaskDocument whose scene resolves `bolt-1` at `tray-1`.
+fn pick_task_document(program: Value) -> Value {
+    json!({
+        "id": "doc-1",
+        "metadata": {
+            "name": "expert-fixture",
+            "version": 1,
+            "created_at": "2026-01-01T00:00:00Z",
+            "modified_at": "2026-01-01T00:00:00Z",
+        },
+        "scene": {
+            "objects": [
+                { "id": "bolt-1", "name": "Bolt", "category": null,
+                  "pose": { "position": [0.5, 0.0, 0.0], "orientation": [0.0, 0.0, 0.0, 1.0] } }
+            ],
+            "locations": [
+                { "id": "tray-1", "name": "Tray", "description": null,
+                  "pose": { "position": [0.8, -0.3, 0.0], "orientation": [0.0, 0.0, 0.0, 1.0] } }
+            ],
+            "tools": [],
+            "home_pose": { "position": [0.0, 0.0, 0.5], "orientation": [0.0, 0.0, 0.0, 1.0] },
+        },
+        "program": { "operations": program },
+    })
+}
+
+#[tokio::test]
+async fn compile_surfaces_expert_warnings_without_gating_422() {
+    // Spec semantic-expert "Compile Surfaces Expert Warnings": a program with
+    // Pick(bolt-1) and no later Place yields an expert warning in
+    // `validation.warnings` while the response stays `status: ok` (no 422).
+    let app = test_app().await;
+    let task = pick_task_document(json!([
+        { "type": "pick", "origin": "op-1", "object": "bolt-1", "tool": null }
+    ]));
     let (status, body) = get_json(
         app,
         http::Method::POST,
-        "/api/v1/scene/motion/start",
-        None,
+        "/api/v1/semantic/compile",
+        Some(json!({ "task": task })),
     )
     .await;
-    assert_eq!(status, StatusCode::CONFLICT, "connection_lost must be a conflict");
-    assert_eq!(
-        body.expect("body")["code"], "connection_lost",
-        "the real code must reach the frontend, not a collapsed joint_count_mismatch"
+
+    assert_eq!(status, StatusCode::OK, "expert warnings must not gate 422");
+    let body = body.expect("response must be valid JSON");
+    assert_eq!(body["status"], "ok");
+    let warnings = body["validation"]["warnings"]
+        .as_array()
+        .expect("validation.warnings must be an array");
+    assert!(
+        warnings
+            .iter()
+            .any(|w| { w.as_str().is_some_and(|s| s.contains("PickWithoutPlace")) }),
+        "warnings must surface the expert PickWithoutPlace finding, got {warnings:?}"
     );
+}
+
+#[tokio::test]
+async fn execute_surfaces_additive_warnings_for_zero_duration_wait() {
+    // Spec semantic-expert "Run Surfaces Expert Warnings": a zero-duration
+    // Wait produces an additive `warnings` array while the remaining fields
+    // (segment_count, duration_secs, waypoints, event_count) are unchanged.
+    let app = test_app().await;
+    let task = pick_task_document(json!([
+        { "type": "wait", "origin": "wait-1", "duration": { "secs": 0, "nanos": 0 } }
+    ]));
+    let (status, body) = get_json(
+        app,
+        http::Method::POST,
+        "/api/v1/semantic/execute",
+        Some(json!({ "task": task })),
+    )
+    .await;
+
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "expert warnings must not break execute"
+    );
+    let body = body.expect("response must be valid JSON");
+    assert_eq!(body["status"], "ok");
+    let warnings = body["warnings"]
+        .as_array()
+        .expect("response must carry the additive warnings array");
+    assert!(
+        warnings
+            .iter()
+            .any(|w| { w.as_str().is_some_and(|s| s.contains("ZeroDurationWait")) }),
+        "warnings must surface the expert ZeroDurationWait finding, got {warnings:?}"
+    );
+    for field in ["segment_count", "duration_secs", "waypoints", "event_count"] {
+        assert!(
+            body.get(field).is_some(),
+            "execute response must keep the `{field}` field unchanged"
+        );
+    }
 }

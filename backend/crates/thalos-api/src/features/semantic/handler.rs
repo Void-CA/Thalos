@@ -10,6 +10,7 @@ use thalos_core::{
     robot::state::RobotState,
     spatial::frame::FrameRegistry,
 };
+use thalos_intelligence::semantic::SemanticExpert;
 use thalos_planning::{
     motion::{
         compiler::{DefaultPlannerDispatcher, PlanCompiler},
@@ -61,9 +62,14 @@ pub async fn compile_semantic(
             ),
         ));
     }
+    // B-lite (semantic-expert): the expert is advisory (Info/Warning only),
+    // chained into the warnings channel — the 422 Error gate stays
+    // authoritative and untouched.
+    let expert = SemanticExpert::analyze(&task.program);
     let warnings: Vec<String> = observations
         .iter()
-        .filter(|o| o.severity == Severity::Warning)
+        .chain(expert.iter())
+        .filter(|o| o.severity != Severity::Error)
         .map(validation_message)
         .collect();
     let provider = task.scene.knowledge();
@@ -133,7 +139,15 @@ pub async fn run_semantic(
     let initial_joints = snapshot.joints.clone();
 
     // ── Síncrono: validación, lowering, resolución, compilación, timeline ──
-    let (duration_secs, segment_count, waypoints_json, event_count, compiled, runtime_program) = {
+    let (
+        duration_secs,
+        segment_count,
+        waypoints_json,
+        event_count,
+        warnings,
+        compiled,
+        runtime_program,
+    ) = {
         let task = payload.task;
         let observations = validate(&task.program);
         if observations.iter().any(|o| o.severity == Severity::Error) {
@@ -149,6 +163,16 @@ pub async fn run_semantic(
                 ),
             ));
         }
+        // B-lite (semantic-expert): advisory observations (Info/Warning only)
+        // ride into the additive `warnings` array — never an Error, so the
+        // 422 gate and the execution path are untouched.
+        let expert = SemanticExpert::analyze(&task.program);
+        let warnings: Vec<String> = observations
+            .iter()
+            .chain(expert.iter())
+            .filter(|o| o.severity != Severity::Error)
+            .map(validation_message)
+            .collect();
         let provider = task.scene.knowledge();
         let ctx = LoweringContext {
             provider: &provider,
@@ -205,6 +229,7 @@ pub async fn run_semantic(
             compiled.segments.len(),
             wps_json,
             runtime_program.events.len(),
+            warnings,
             compiled,
             runtime_program,
         )
@@ -230,6 +255,7 @@ pub async fn run_semantic(
         "duration_secs": duration_secs,
         "waypoints": waypoints_json,
         "event_count": event_count,
+        "warnings": warnings,
     })))
 }
 

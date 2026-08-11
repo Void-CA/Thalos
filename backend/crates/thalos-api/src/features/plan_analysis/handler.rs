@@ -12,10 +12,8 @@ use std::sync::Arc;
 use axum::{Json, extract::State};
 
 use thalos_core::{
-    analysis::observation::ArtifactRef, ids::MotionPlanId,
-    kinematics::forward::ForwardKinematics,
-    kinematics::inverse::DampedLeastSquaresSolver,
-    robot::state::RobotState,
+    analysis::observation::ArtifactRef, ids::MotionPlanId, kinematics::forward::ForwardKinematics,
+    kinematics::inverse::DampedLeastSquaresSolver, robot::state::RobotState,
 };
 use thalos_optimization::{
     PlanMetrics,
@@ -36,9 +34,7 @@ use thalos_planning::{
     program_edit::ProgramEdit,
     recommendation::{RecommendationId, RecommendationStatus},
 };
-use thalos_runtime::{
-    CommandMetrics, PlanAnalysisResult, PlanAnalysisService, RuntimeSnapshot,
-};
+use thalos_runtime::{CommandMetrics, PlanAnalysisResult, PlanAnalysisService, RuntimeSnapshot};
 
 use crate::app::prelude::*;
 use crate::app::state::AppState;
@@ -84,8 +80,7 @@ pub async fn analyze_plan(
     // (mismas observaciones + mismo programa → mismas recomendaciones). Un plan
     // sin programa (single-shot legacy) no produce recomendaciones — contexto
     // inexistente, documentado (campo aditivo en el wire).
-    let program =
-        PlanningProgram::new(segments.iter().map(|s| s.source.clone()).collect());
+    let program = PlanningProgram::new(segments.iter().map(|s| s.source.clone()).collect());
     let fk = ForwardKinematics::new(snapshot.chain.clone());
     let solver =
         DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
@@ -102,12 +97,14 @@ pub async fn analyze_plan(
     )?;
 
     // El wire es una proyección del reporte canónico (I6): el handler no
-    // construye modelos intermedios entre dominio y contrato.
+    // construye modelos intermedios entre dominio y contrato. El `assessment`
+    // del runtime (aditivo) se proyecta tal cual.
     Ok(Json(PlanAnalysisResponse::from_report(
         &result.report,
         &result.analysis,
         segments,
         &result.recommendations,
+        Some(&result.assessment),
     )))
 }
 
@@ -142,12 +139,13 @@ pub async fn preview_command(
     //    (`PlannedSegment.source` preserva el comando semántico, invariante
     //    I2). Es un CLON — la edición nunca toca el plan del runtime.
     let program = {
-        let segments = active_plan.segments.as_deref().ok_or_else(|| {
-            ApiError::InvalidState {
+        let segments = active_plan
+            .segments
+            .as_deref()
+            .ok_or_else(|| ApiError::InvalidState {
                 message: "Active plan carries no program segments".to_string(),
                 code: "no_program_segments".to_string(),
-            }
-        })?;
+            })?;
         if segments.is_empty() {
             return Err(ApiError::InvalidState {
                 message: "Active plan has no program segments".to_string(),
@@ -169,7 +167,8 @@ pub async fn preview_command(
     )?;
 
     let fk = ForwardKinematics::new(snapshot.chain.clone());
-    let solver = DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
+    let solver =
+        DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
     let recommendations = PlanAdvisor.recommend(
         &before.report.observations,
         &program,
@@ -392,13 +391,8 @@ pub async fn edit_program(
 
     // 3. WRITE-BACK (D4/D5/D6) — el mismo ciclo que apply_command.
     apply_program_edit(
-        &state,
-        &snapshot,
-        &program,
-        artifact,
-        &before,
-        &req.edit,
-        0,   // sin recommendation_id: camino de edición libre, no advisor (D1)
+        &state, &snapshot, &program, artifact, &before, &req.edit,
+        0,    // sin recommendation_id: camino de edición libre, no advisor (D1)
         None, // sin evaluación D8: la edición fue elegida explícitamente
     )
     .await
@@ -415,19 +409,22 @@ fn active_program(snapshot: &RuntimeSnapshot) -> Result<PlanningProgram, ApiErro
             message: "No active plan to apply".to_string(),
             code: "no_active_plan".to_string(),
         })?;
-    let segments = active_plan.segments.as_deref().ok_or_else(|| {
-        ApiError::InvalidState {
+    let segments = active_plan
+        .segments
+        .as_deref()
+        .ok_or_else(|| ApiError::InvalidState {
             message: "Active plan carries no program segments".to_string(),
             code: "no_program_segments".to_string(),
-        }
-    })?;
+        })?;
     if segments.is_empty() {
         return Err(ApiError::InvalidState {
             message: "Active plan has no program segments".to_string(),
             code: "no_program_segments".to_string(),
         });
     }
-    Ok(PlanningProgram::new(segments.iter().map(|s| s.source.clone()).collect()))
+    Ok(PlanningProgram::new(
+        segments.iter().map(|s| s.source.clone()).collect(),
+    ))
 }
 
 /// Ciclo compartido de write-back (CDD step 3): `edit.apply(program)` →
@@ -450,12 +447,10 @@ async fn apply_program_edit(
     status: Option<RecommendationStatus>,
 ) -> ApiResult<ApplyResponse> {
     // 1. Aplicar la edición (no-mutante) sobre el programa reconstruido.
-    let edited_program = edit
-        .apply(program)
-        .map_err(|e| ApiError::Validation {
-            message: e.to_string(),
-            code: "edit_apply_failed".to_string(),
-        })?;
+    let edited_program = edit.apply(program).map_err(|e| ApiError::Validation {
+        message: e.to_string(),
+        code: "edit_apply_failed".to_string(),
+    })?;
 
     // 2. Recompilar desde el mismo estado inicial que el plan activo (mismo
     //    start que preview/apply).
@@ -545,12 +540,13 @@ pub async fn undo_command(State(state): State<Arc<AppState>>) -> ApiResult<UndoR
         })?;
 
     let program = {
-        let segments = active_plan.segments.as_deref().ok_or_else(|| {
-            ApiError::InvalidState {
+        let segments = active_plan
+            .segments
+            .as_deref()
+            .ok_or_else(|| ApiError::InvalidState {
                 message: "Active plan carries no program segments".to_string(),
                 code: "no_program_segments".to_string(),
-            }
-        })?;
+            })?;
         if segments.is_empty() {
             return Err(ApiError::InvalidState {
                 message: "Active plan has no program segments".to_string(),

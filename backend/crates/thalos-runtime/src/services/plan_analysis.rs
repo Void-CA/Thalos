@@ -49,6 +49,10 @@ pub struct PlanAnalysisResult {
     /// `analyze_plan_with_recommendations`); en el análisis puro queda vacía
     /// (clientes antiguos no afectados).
     pub recommendations: Vec<Recommendation>,
+    /// Verdicto de inteligencia (thalos-intelligence): riesgo + calidad +
+    /// traza, computado como paso final PURO sobre el reporte agregado
+    /// (`Assessor::assess(&report)`). ADITIVO en el wire (`#[serde(default)]`).
+    pub assessment: thalos_intelligence::Assessment,
 }
 
 /// Servicio de análisis de planes.
@@ -116,6 +120,12 @@ impl PlanAnalysisService {
         // ADITIVO: solo llena un campo que llegaba vacío (`{}`).
         report.metrics = analysis.metrics.to_btree_map();
 
+        // (IA) Paso final PURO: el `Assessor` interpreta `report.metrics` en
+        // riesgo/calidad. Se ejecuta DESPUÉS de poblar las métricas y SOLO lee
+        // el reporte — nunca lo muta, ni toca planner/runtime (spec
+        // intelligent-assessment "Read-Only Architectural Constraint").
+        let assessment = thalos_intelligence::Assessor::assess(&report);
+
         Ok(PlanAnalysisResult {
             analysis,
             report,
@@ -124,6 +134,7 @@ impl PlanAnalysisService {
             // `analyze_plan_with_recommendations`. El wire lo expone con
             // serde default, así que los clientes antiguos no cambian (I3).
             recommendations: Vec::new(),
+            assessment,
         })
     }
 
@@ -235,6 +246,35 @@ mod tests {
         assert!(
             result.report.metrics.contains_key("has_collisions"),
             "has_collisions is a stable aggregate key"
+        );
+    }
+
+    #[test]
+    fn analyze_plan_populates_assessment() {
+        // Spec intelligent-assessment: the runtime composes `Assessor::assess`
+        // as a final pure step — `PlanAnalysisResult.assessment` is populated
+        // with a coherent risk/quality verdict and an ordered trace.
+        let result = analyze(Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![0.5, 1.57], 0.5),
+        ]));
+
+        // The verdict is always well-formed for a real analyzed plan.
+        assert!(
+            (0.0..=1.0).contains(&result.assessment.quality),
+            "assessment quality must be within [0, 1], got {}",
+            result.assessment.quality
+        );
+        // The report metrics that drive the assessment were populated first,
+        // so the evidence reflects the analyzed plan.
+        assert_eq!(
+            result.assessment.evidence["manipulability"],
+            result.report.metrics["avg_manipulability"]
+        );
+        // The trace exposes the exact firing order (non-empty for a real plan).
+        assert!(
+            !result.assessment.trace.is_empty(),
+            "assessment trace must list fired rules"
         );
     }
 }
