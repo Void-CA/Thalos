@@ -546,6 +546,14 @@ impl SceneService {
     }
 
     pub async fn reset_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
+        // Stop the active controller FIRST — a hardware run may still be in
+        // progress on the device. Resetting must abort it, otherwise the next
+        // Start finds the firmware mid-EXECUTING and has to go through the
+        // NOT_IDLE STOP+retry recovery every time (mirrors cancel_execution).
+        if let Some(ctrl) = self.manager.get_controller().await {
+            let mut c = ctrl.write().await;
+            c.stop().await?;
+        }
         // Finalize any active recording as Cancelled first
         self.finalize_recording(Some(crate::plan::SessionStatus::Cancelled))
             .await;
