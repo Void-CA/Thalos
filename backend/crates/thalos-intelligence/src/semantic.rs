@@ -250,14 +250,15 @@ impl SemanticExpert {
         }
 
         // S07: a non-empty program must end with Home.
-        if !matches!(program.operations.last(), Some(SemanticOperation::Home(_))) {
-            let last = program.operations.last().expect("non-empty program");
-            observations.push(observation(
-                ObservationKind::MissingFinalHome,
-                Severity::Warning,
-                op_origin(last),
-                BTreeMap::new(),
-            ));
+        if let Some(last) = program.operations.last() {
+            if !matches!(last, SemanticOperation::Home(_)) {
+                observations.push(observation(
+                    ObservationKind::MissingFinalHome,
+                    Severity::Warning,
+                    op_origin(last),
+                    BTreeMap::new(),
+                ));
+            }
         }
 
         observations
