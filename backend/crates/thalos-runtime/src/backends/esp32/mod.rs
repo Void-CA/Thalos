@@ -315,7 +315,15 @@ impl RobotController for Esp32Backend {
         }
 
         // Task 2.10: Validate manifest before any wire traffic
-        Self::validate_manifest(&waypoints, duration)?;
+        Self::validate_manifest(&waypoints, duration).map_err(|e| {
+            tracing::error!(
+                error = %e,
+                waypoints = waypoints.len(),
+                duration_s = duration,
+                "ESP32 execute rejected BEFORE wire traffic (invalid manifest)"
+            );
+            e
+        })?;
         // Store the plan duration so STATUS polls can map fraction → seconds.
         self.plan_duration = duration;
 

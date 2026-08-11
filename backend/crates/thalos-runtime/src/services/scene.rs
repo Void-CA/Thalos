@@ -410,6 +410,20 @@ impl SceneService {
             // Execute on controller FIRST (before creating session).
             // If execution fails, no orphaned session is created.
             let has_wps = !waypoints.is_empty() && duration > 0.0;
+            tracing::info!(
+                mode = ?mode,
+                waypoints = waypoints.len(),
+                duration_s = duration,
+                %has_wps,
+                "start_execution — prepared"
+            );
+            if !has_wps {
+                tracing::warn!(
+                    waypoints = waypoints.len(),
+                    duration_s = duration,
+                    "start_execution — NO wire traffic: empty trajectory or zero duration"
+                );
+            }
             if has_wps {
                 let wps_exec = waypoints.clone();
                 let mut c = ctrl.write().await;
