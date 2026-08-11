@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { useSceneStore } from '../store'
 import { useAnalysisStore } from '@/features/analysis/store'
 import { waypointAnalysisFromReport } from '@/shared/contracts/analysis-report'
+import { scaleFromRefDim } from './scale'
 import type { VisualWaypointDto } from '../api/scene-api.types'
 import {
   SEGMENT_PALETTE,
@@ -34,6 +35,9 @@ export function Trajectory() {
   const transformSnapshot = useSceneStore(s => s.transformSnapshot)
   const execution = useSceneStore(s => s.execution)
   const analysisReport = useAnalysisStore(s => s.report)
+  // Marker radii scale with the scene reference dimension — absent scene data
+  // degrades to 1.0 via scaleFromRefDim (no-op, current sizes preserved).
+  const refDim = useSceneStore(s => s.data?.referenceDimension) ?? 1.0
   const segments = activePlan?.segments
   const vis = activePlan?.visualization
 
@@ -102,13 +106,14 @@ export function Trajectory() {
 
   const optimizedMarkers = useMemo(() => {
     if (!optimizedPositions) return null
+    const markerRadius = scaleFromRefDim(refDim, 0.015)
     return optimizedPositions.map((p, i) => (
       <mesh key={`opt-${i}`} position={[p[0], p[1], p[2]]}>
-        <sphereGeometry args={[0.015, 8, 8]} />
+        <sphereGeometry args={[markerRadius, 8, 8]} />
         <meshBasicMaterial color={0x22c55e} transparent opacity={0.7} />
       </mesh>
     ))
-  }, [optimizedPositions])
+  }, [optimizedPositions, refDim])
 
   // Preview trajectory (from /plan/commands/preview — PR3)
   const previewLine = useMemo(() => {
@@ -125,13 +130,14 @@ export function Trajectory() {
 
   const previewMarkers = useMemo(() => {
     if (!previewPositions) return null
+    const markerRadius = scaleFromRefDim(refDim, 0.015)
     return previewPositions.map((p, i) => (
       <mesh key={`prev-${i}`} position={[p[0], p[1], p[2]]}>
-        <sphereGeometry args={[0.015, 8, 8]} />
+        <sphereGeometry args={[markerRadius, 8, 8]} />
         <meshBasicMaterial color={0xf59e0b} transparent opacity={0.75} />
       </mesh>
     ))
-  }, [previewPositions])
+  }, [previewPositions, refDim])
 
   // ── Mutually exclusive render ──
   if (trajectoryViewMode === 'preview' && previewPositions) {
@@ -170,7 +176,7 @@ export function Trajectory() {
       <WaypointMarkers
         waypoints={vis.waypoints} colorMode={colorMode}
         segments={segments ?? undefined} perWaypointColor={perWaypointColor}
-        activeIndex={activeWaypointIndex}
+        activeIndex={activeWaypointIndex} refDim={refDim}
       />
     </group>
   )
@@ -211,13 +217,15 @@ function TrajectoryLines({
 }
 
 function WaypointMarkers({
-  waypoints, colorMode, segments, perWaypointColor, activeIndex,
+  waypoints, colorMode, segments, perWaypointColor, activeIndex, refDim,
 }: {
   waypoints: VisualWaypointDto[]
   colorMode: string
   segments?: { segmentIndex: number; waypointStart: number; waypointEnd: number }[]
   perWaypointColor: number[] | null
   activeIndex: number
+  /** Scene reference dimension — waypoint sphere radii scale with it. */
+  refDim: number
 }) {
   return (
     <group>
@@ -231,9 +239,12 @@ function WaypointMarkers({
           color = WAYPOINT_TYPE[wp.waypoint_type] ?? SEVERITY.nodata
         }
         const isActive = i === activeIndex
+        // Trajectory LINES are NOT resized (they join the same world points) —
+        // only the marker spheres scale with referenceDimension.
+        const markerRadius = scaleFromRefDim(refDim, isActive ? 0.02 : 0.012)
         return (
           <mesh key={i} position={wp.position}>
-            <sphereGeometry args={[isActive ? 0.02 : 0.012, isActive ? 16 : 12, 12]} />
+            <sphereGeometry args={[markerRadius, isActive ? 16 : 12, 12]} />
             <meshBasicMaterial color={isActive ? WAYPOINT_ACTIVE : color} />
           </mesh>
         )
