@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useSceneStore } from '../store'
 import { TCP_COLOR } from '@/shared/tokens'
+import { scaleFromRefDim } from './scale'
 import type { SceneData, ToolFrame, TransformSnapshot } from '../types'
 
 /**
@@ -45,6 +46,67 @@ export function resolveTcpPosition(
   return [fx, fy, fz]
 }
 
+/**
+ * World-space apex direction of the TCP pyramid for a tool orientation in
+ * store `[w,x,y,z]` order: the tool frame's LOCAL +Z (never global +Z).
+ * Pure — pins the orientation contract (identity → +Z world; the rotation
+ * that carries +Z to +Y world → +Y world).
+ */
+export function tcpApexDirection(orientationWxyz: [number, number, number, number]): [number, number, number] {
+  const [w, x, y, z] = orientationWxyz
+  const q = new THREE.Quaternion(x, y, z, w)
+  const v = new THREE.Vector3(0, 0, 1).applyQuaternion(q)
+  return [v.x, v.y, v.z]
+}
+
+/** Height of the pyramid as a ratio of referenceDimension — bounded well under
+ *  the 0.15 ceiling so the marker never dominates the robot geometry. */
+const TCP_PYRAMID_HEIGHT_RATIO = 0.12
+/** Base edge as a ratio of the height (~0.6) — the dominant visual dimension
+ *  stays the bounded height. */
+const TCP_BASE_EDGE_RATIO = 0.6
+
+/** Pyramid size contract: height = scaleFromRefDim(refDim, ratio) bounded to
+ *  ≤ 0.15 × refDim, base edge ≈ 0.6 × height. Pure — tested directly. */
+export function tcpPyramidDimensions(refDim: number | undefined | null): { height: number; baseEdge: number } {
+  const height = scaleFromRefDim(refDim, TCP_PYRAMID_HEIGHT_RATIO)
+  return { height, baseEdge: height * TCP_BASE_EDGE_RATIO }
+}
+
+/** Store quaternion `[w,x,y,z]` → THREE `[x,y,z,w]` (same as robot-model
+ *  rustQuatToThree — R3F applies the `quaternion` prop in THREE order). */
+function rustQuatToThree([w, x, y, z]: [number, number, number, number]): [number, number, number, number] {
+  return [x, y, z, w]
+}
+
+/**
+ * World orientation of the tool frame, from the same transform source that
+ * drives position: the backend resolved pose wins; otherwise the execution
+ * tick / FK frame / static scene frame rotation for the base frame id.
+ * `null` when no orientation source exists.
+ */
+function resolveTcpOrientation(
+  activeTcp: ToolFrame,
+  transformSnapshot: TransformSnapshot,
+  data: SceneData | null,
+): [number, number, number, number] | null {
+  if (activeTcp.resolvedPose) return rustQuatToThree(activeTcp.resolvedPose.orientation)
+
+  const frameId = String(activeTcp.baseFrameId)
+  if (transformSnapshot.kind === 'execution') {
+    const tx = transformSnapshot.transforms.find(t => t.id === frameId)
+    if (tx) return rustQuatToThree(tx.rotation)
+  } else if (transformSnapshot.kind === 'fk') {
+    const frame = transformSnapshot.frames.get(frameId)
+    if (frame) return rustQuatToThree(frame.quat)
+  }
+  if (data) {
+    const staticFrame = data.frames.find(f => f.id === frameId)
+    if (staticFrame) return rustQuatToThree(staticFrame.rotation)
+  }
+  return null
+}
+
 export function TcpOverlay() {
   const activeTcp = useSceneStore(s => s.activeTcp)
   const transformSnapshot = useSceneStore(s => s.transformSnapshot)
@@ -55,31 +117,33 @@ export function TcpOverlay() {
     [activeTcp, transformSnapshot, data],
   )
 
+  const orientation = useMemo(
+    () => (activeTcp ? resolveTcpOrientation(activeTcp, transformSnapshot, data) : null),
+    [activeTcp, transformSnapshot, data],
+  )
+
+  const refDim = data?.referenceDimension ?? 1.0
+
   if (!position) return null
 
-  const lineLen = 0.08
+  // Pyramid marker (tcp-resolved-pose MODIFIED): a 4-segment cone whose apex
+  // points +Y in local cone space, flipped -π/2 about X so it points the tool
+  // frame's LOCAL +Z. The tool orientation quaternion sits on the marker group
+  // and composes with the local flip — the apex follows the tool, never
+  // global +Z. The wireframe material keeps the base subtle.
+  const { height, baseEdge } = tcpPyramidDimensions(refDim)
+  const radius = baseEdge / Math.SQRT2 // circumradius of the square base
 
   return (
-    <group position={new THREE.Vector3(...position)} data-testid="tcp-overlay-marker">
-      <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.06, 0.075, 32]} />
-        <meshBasicMaterial color={TCP_COLOR} side={2} transparent opacity={0.6} />
+    <group
+      position={new THREE.Vector3(...position)}
+      quaternion={orientation ?? [0, 0, 0, 1]}
+      data-testid="tcp-overlay-marker"
+    >
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <coneGeometry args={[radius, height, 4]} />
+        <meshBasicMaterial color={TCP_COLOR} wireframe transparent opacity={0.25} />
       </mesh>
-      <mesh>
-        <sphereGeometry args={[0.02, 12, 12]} />
-        <meshBasicMaterial color={TCP_COLOR} transparent opacity={0.9} />
-      </mesh>
-      <LinePoints points={[[-lineLen, 0, 0], [lineLen, 0, 0]]} />
-      <LinePoints points={[[0, -lineLen, 0], [0, lineLen, 0]]} />
-      <LinePoints points={[[0, 0, -lineLen], [0, 0, lineLen]]} />
     </group>
   )
-}
-
-function LinePoints({ points }: { points: [[number, number, number], [number, number, number]] }) {
-  const line = useMemo(() => {
-    const geom = new THREE.BufferGeometry().setFromPoints(points.map(p => new THREE.Vector3(...p)))
-    return new THREE.Line(geom, new THREE.LineBasicMaterial({ color: TCP_COLOR, transparent: true, opacity: 0.4 }))
-  }, [points])
-  return <primitive object={line} />
 }
