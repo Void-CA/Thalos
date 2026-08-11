@@ -51,6 +51,10 @@ pub struct Esp32Backend {
     cached_state: tokio::sync::Mutex<Option<(std::time::Instant, Arc<RobotState>)>>,
     /// Samples collected on COMPLETED, consumed once by `take_execution_trace`.
     collected_samples: tokio::sync::Mutex<Option<Vec<ExecutionSample>>>,
+    /// Last firmware status transition logged (0=idle/unknown, 1=RUNNING,
+    /// 2=COMPLETED, 3=ERROR) — dedup so STATUS polls only log on change,
+    /// giving an explicit `RUNNING → COMPLETED` trace in the logs (PR-0).
+    last_status_logged: std::sync::atomic::AtomicU8,
 }
 
 impl Esp32Backend {
@@ -67,6 +71,7 @@ impl Esp32Backend {
             plan_duration: 0.0,
             cached_state: tokio::sync::Mutex::new(None),
             collected_samples: tokio::sync::Mutex::new(None),
+            last_status_logged: std::sync::atomic::AtomicU8::new(0),
         }
     }
 
@@ -295,6 +300,7 @@ impl RobotController for Esp32Backend {
         // Stale poll cache / collected samples must not leak across connects.
         *self.cached_state.lock().await = None;
         *self.collected_samples.lock().await = None;
+        self.last_status_logged.store(0, std::sync::atomic::Ordering::SeqCst);
         if let Some(protocol) = self.protocol.get_mut().as_mut() {
             let _ = protocol.stop().await;
         }
@@ -418,6 +424,26 @@ impl RobotController for Esp32Backend {
                 // A successful poll breaks the failure streak (RES-02).
                 self.consecutive_poll_failures
                     .store(0, std::sync::atomic::Ordering::SeqCst);
+                // Log firmware status TRANSITIONS (dedup) — the PR-0 evidence
+                // of the RUNNING → COMPLETED cycle in the integration logs.
+                let tag: u8 = match &fs {
+                    FirmwareState::Executing { .. } => 1,
+                    FirmwareState::Completed { .. } => 2,
+                    FirmwareState::Error(_) => 3,
+                    _ => 0,
+                };
+                if tag != 0 {
+                    let prev = self
+                        .last_status_logged
+                        .swap(tag, std::sync::atomic::Ordering::SeqCst);
+                    if prev != tag {
+                        match tag {
+                            1 => tracing::info!("firmware status: RUNNING"),
+                            2 => tracing::info!("firmware status: COMPLETED"),
+                            _ => tracing::info!("firmware status: ERROR"),
+                        }
+                    }
+                }
                 // On COMPLETED, collect the recorded samples (S3.5). Guard on
                 // `sample_count > 0`: the firmware rejects `SAMPLES 0` as
                 // MALFORMED (protocol.cpp), so the host must never send it.
