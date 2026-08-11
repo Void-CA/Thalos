@@ -46,19 +46,6 @@ export function resolveTcpPosition(
   return [fx, fy, fz]
 }
 
-/**
- * World-space apex direction of the TCP pyramid for a tool orientation in
- * store `[w,x,y,z]` order: the tool frame's LOCAL +Z (never global +Z).
- * Pure — pins the orientation contract (identity → +Z world; the rotation
- * that carries +Z to +Y world → +Y world).
- */
-export function tcpApexDirection(orientationWxyz: [number, number, number, number]): [number, number, number] {
-  const [w, x, y, z] = orientationWxyz
-  const q = new THREE.Quaternion(x, y, z, w)
-  const v = new THREE.Vector3(0, 0, 1).applyQuaternion(q)
-  return [v.x, v.y, v.z]
-}
-
 /** Height of the pyramid as a ratio of referenceDimension — bounded well under
  *  the 0.15 ceiling so the marker never dominates the robot geometry. */
 const TCP_PYRAMID_HEIGHT_RATIO = 0.12
@@ -127,10 +114,12 @@ export function TcpOverlay() {
   if (!position) return null
 
   // Pyramid marker (tcp-resolved-pose MODIFIED): a 4-segment cone whose apex
-  // points +Y in local cone space, flipped -π/2 about X so it points the tool
-  // frame's LOCAL +Z. The tool orientation quaternion sits on the marker group
-  // and composes with the local flip — the apex follows the tool, never
-  // global +Z. The wireframe material keeps the base subtle.
+  // points +Y in local cone space, flipped +π/2 about X so it points the tool
+  // frame's LOCAL +Z (rotation about X by +π/2 carries +Y → +Z; the previous
+  // -π/2 flip mapped +Y → -Z and pointed the apex down at identity). The tool
+  // orientation quaternion sits on the marker group and composes with the
+  // local flip — the apex follows the tool, never global +Z. The wireframe
+  // material keeps the base subtle.
   const { height, baseEdge } = tcpPyramidDimensions(refDim)
   const radius = baseEdge / Math.SQRT2 // circumradius of the square base
 
@@ -140,7 +129,7 @@ export function TcpOverlay() {
       quaternion={orientation ?? [0, 0, 0, 1]}
       data-testid="tcp-overlay-marker"
     >
-      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
         <coneGeometry args={[radius, height, 4]} />
         <meshBasicMaterial color={TCP_COLOR} wireframe transparent opacity={0.25} />
       </mesh>

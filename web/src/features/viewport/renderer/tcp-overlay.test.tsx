@@ -2,8 +2,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { act } from 'react'
+import * as THREE from 'three'
 import '@testing-library/jest-dom/vitest'
-import { TcpOverlay, resolveTcpPosition, tcpPyramidDimensions, tcpApexDirection } from './tcp-overlay'
+import { TcpOverlay, resolveTcpPosition, tcpPyramidDimensions } from './tcp-overlay'
 import { useSceneStore } from '../store'
 import type { SceneData, ToolFrame, TransformSnapshot } from '../types'
 
@@ -91,7 +92,7 @@ describe('TcpOverlay — consumes resolved pose for the marker (R5)', () => {
 
 describe('TcpOverlay — oriented pyramid marker (tcp-resolved-pose MODIFIED, pyramid)', () => {
   // The marker is a pyramid: a 4-radial-segment cone whose apex points +Y in
-  // LOCAL cone space, rotated -π/2 about X so it points +Z of the tool frame.
+  // LOCAL cone space, rotated +π/2 about X so it points +Z of the tool frame.
   // The tool orientation quaternion (store [w,x,y,z] → THREE [x,y,z,w]) lives
   // on the marker group, composing with the local flip.
 
@@ -126,35 +127,53 @@ describe('TcpOverlay — oriented pyramid marker (tcp-resolved-pose MODIFIED, py
     expect(resolveTcpPosition(tcpNoPose, idle, null)).toBeNull()
   })
 
-  it('orientates the cone so its local apex points LOCAL +Z of the tool frame', () => {
+  it('points the apex along LOCAL +Z of the tool frame (behavioral world direction)', () => {
     act(() => {
       useSceneStore.setState({ data: sceneData, transformSnapshot: idle, activeTcp: tcpWithPose })
     })
     render(<TcpOverlay />)
+    // Behavioral check — compute the apex WORLD direction from the transforms
+    // that actually render (mesh rotation + group quaternion), not from an
+    // internal attribute: coneGeometry apex is local +Y; the mesh carries the
+    // +Y→+Z flip (+π/2 about X); the marker group carries the tool quaternion.
     const mesh = document.querySelector('mesh')!
-    // The cone mesh carries the local +Y→+Z flip (-π/2 about X); the marker
-    // group carries the tool orientation quaternion (THREE order, identity
-    // [w,x,y,z]=[1,0,0,0] → [x,y,z,w]=[0,0,0,1]).
     const rotation = (mesh.getAttribute('rotation') ?? '').split(',').map(Number)
-    expect(rotation[0]).toBeCloseTo(-Math.PI / 2, 6)
-    expect(rotation[1]).toBeCloseTo(0, 6)
-    expect(rotation[2]).toBeCloseTo(0, 6)
-    expect(screen.getByTestId('tcp-overlay-marker').getAttribute('quaternion')).toBe('0,0,0,1')
+    const group = screen.getByTestId('tcp-overlay-marker')
+    const quat = (group.getAttribute('quaternion') ?? '').split(',').map(Number)
+    // tcpWithPose orientation is identity [w,x,y,z]=[1,0,0,0] → THREE [0,0,0,1].
+    const apexLocalY = new THREE.Vector3(0, 1, 0) // cone apex in cone space
+    const qFlip = new THREE.Quaternion().setFromEuler(new THREE.Euler(rotation[0], rotation[1], rotation[2]))
+    const apexAfterFlip = apexLocalY.clone().applyQuaternion(qFlip)
+    // Identity tool quaternion: apex direction stays the flipped one (+Z world).
+    const apexWorld = apexAfterFlip.clone().applyQuaternion(new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3]))
+    expect(apexWorld.x).toBeCloseTo(0, 6)
+    expect(apexWorld.y).toBeCloseTo(0, 6)
+    expect(apexWorld.z).toBeCloseTo(1, 6)
   })
 
-  it('points the apex along LOCAL +Z: identity orientation → +Z world, 90° X rotation → +Y world', () => {
-    // Pure direction contract (tcpApexDirection): the apex is LOCAL +Z of the
-    // tool frame, never global +Z.
-    const [x, y, z] = tcpApexDirection([1, 0, 0, 0])
-    expect(x).toBeCloseTo(0, 10)
-    expect(y).toBeCloseTo(0, 10)
-    expect(z).toBeCloseTo(1, 10)
-    // 90° rotation about X (the rotation that carries LOCAL +Z to +Y world)
-    // — store [w,x,y,z] = [cos(-45°), sin(-45°), 0, 0].
-    const [x2, y2, z2] = tcpApexDirection([Math.SQRT1_2, -Math.SQRT1_2, 0, 0])
-    expect(x2).toBeCloseTo(0, 10)
-    expect(y2).toBeCloseTo(1, 10)
-    expect(z2).toBeCloseTo(0, 10)
+  it('follows a rotated tool frame: -90° about X carries LOCAL +Z to +Y world', () => {
+    // A tool rotated -90° about X (store [w,x,y,z]=[cos45°, -sin45°, 0, 0])
+    // carries its LOCAL +Z to +Y world — the apex must follow, never global +Z.
+    const rotatedTcp: ToolFrame = {
+      baseFrameId: 2,
+      offset: [0, 0, 0.1],
+      resolvedPose: { position: [1, 2, 3], orientation: [Math.SQRT1_2, -Math.SQRT1_2, 0, 0] },
+    }
+    act(() => {
+      useSceneStore.setState({ data: sceneData, transformSnapshot: idle, activeTcp: rotatedTcp })
+    })
+    render(<TcpOverlay />)
+    const mesh = document.querySelector('mesh')!
+    const rotation = (mesh.getAttribute('rotation') ?? '').split(',').map(Number)
+    const quat = (screen.getByTestId('tcp-overlay-marker').getAttribute('quaternion') ?? '').split(',').map(Number)
+    const apexLocalY = new THREE.Vector3(0, 1, 0)
+    const apexAfterFlip = apexLocalY.clone().applyQuaternion(
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(rotation[0], rotation[1], rotation[2])),
+    )
+    const apexWorld = apexAfterFlip.applyQuaternion(new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3]))
+    expect(apexWorld.x).toBeCloseTo(0, 6)
+    expect(apexWorld.y).toBeCloseTo(1, 6)
+    expect(apexWorld.z).toBeCloseTo(0, 6)
   })
 
   it('uses a subtle base: wireframe material or opacity ≤ 0.3', () => {
