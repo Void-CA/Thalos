@@ -531,6 +531,20 @@ describe('EvaluationWorkspace — structured program view (Program)', () => {
 })
 
 describe('EvaluationWorkspace — master-detail layout (context | action)', () => {
+  it('renders the decision grid directly — the StatusBanner is gone', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: cleanReport })
+      useSceneStore.setState({ activePlan })
+    })
+    renderWorkspace()
+    // The full-width verdict banner (score / 100 + grade pill + risk pill +
+    // severity counts) no longer renders above the grid.
+    expect(screen.queryByText('/ 100')).not.toBeInTheDocument()
+    // The tab starts directly with the decision grid.
+    expect(screen.getByTestId('evaluation-master')).toBeInTheDocument()
+    expect(screen.getByTestId('evaluation-detail')).toBeInTheDocument()
+  })
+
   it('renders both panels: the master (context) and the detail (action)', () => {
     act(() => {
       useAnalysisStore.setState({ report: recommendationReport })

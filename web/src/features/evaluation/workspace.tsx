@@ -1,7 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { useNavigate } from 'react-router'
 import { useAnalysisStore, useSelectedRegion } from '@/features/analysis/store'
-import { StatusBanner } from '@/features/analysis/components/status-banner'
 import { ProblemRegions } from '@/features/analysis/components/problem-regions'
 import { RegionInspector } from '@/features/analysis/components/region-inspector'
 import { RecommendationRow } from '@/features/planning/components/RecommendationRow'
@@ -43,8 +42,8 @@ const TrajectoryView = lazy(() =>
  * un-actionable dump of up-to-200 observations.
  *
  * Layout + gating decisions (hotfix evaluation-layout):
- *  - StatusBanner full-width verdict FIRST, then the decision context:
- *    Plan summary (what is about to execute) + the trajectory view.
+ *  - Master-detail decision grid first: Plan summary (what is about to
+ *    execute) + the trajectory view.
  *  - 3-portion grid at lg (collapses to stacked below): portion 1 = Yoshikawa
  *    manipulability chart, portion 2 = Jacobian determinant chart (both with
  *    their threshold reference lines), portion 3 = problem regions list + the
@@ -134,12 +133,8 @@ export function EvaluationWorkspace() {
           {report.assessment && <TabsTrigger value="intelligence">Intelligence</TabsTrigger>}
         </TabsList>
 
-        {/* Evaluation tab — the pre-refactor content, unchanged: verdict banner
-            + the master-detail decision grid. */}
+        {/* Evaluation tab — starts directly with the master-detail decision grid. */}
         <TabsContent value="evaluation" className="flex-1 min-h-0 overflow-y-auto p-3">
-          {/* Verdict spans the whole decision — full-width above the split. */}
-          <StatusBanner />
-
           <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3 items-start">
             {/* ── MASTER (context, ~2/3): WHERE the problem is — trajectory +
                 temporal analysis, all cross-highlighting the selected region. */}
@@ -270,7 +265,7 @@ function ContinueToExecution({ reason }: { reason: string | null }) {
  * programming flow already populates: semantic editor (Tasks source +
  * instruction count), viewport scene store (waypoints + duration + robot DOF +
  * initial joints) and the analysis report (analyzed waypoints fallback, plan
- * id). The canonical score/grade lives in StatusBanner, full-width above.
+ * id).
  */
 function PlanSummary() {
   const report = useAnalysisStore((s) => s.report)
