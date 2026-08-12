@@ -1937,9 +1937,14 @@ async fn apply_command_writes_back_and_stores_inverse_without_preview() {
         app.clone(),
         http::Method::POST,
         "/api/v1/plan/commands/apply",
-        // Recommendation 3 is AVAILABLE in this scenario (ids 1-2 are
-        // LiftTcp/manipulability edits whose IK fails → unavailable, D8).
-        Some(json!({"recommendation_id": 3})),
+        // Recommendation 2 (Waypoint/InsertWaypoint) is AVAILABLE in this
+        // scenario: it splits the MoveL at a reachable waypoint and
+        // recompiles. (M2 honesty: recommendation 1 — LiftTcp z-elevation —
+        // exceeds the Scara prismatic reach and is now Unavailable{ik_failed};
+        // recommendation 3 — RotateTool — is Unavailable because the rotated
+        // pose does not realize; both used to lie as `available` under the
+        // old D8 gate.)
+        Some(json!({"recommendation_id": 2})),
     )
     .await;
     assert_eq!(
@@ -2025,8 +2030,9 @@ async fn apply_command_flag_off_returns_feature_disabled_without_mutation() {
         http::Method::POST,
         "/api/v1/plan/commands/apply",
         // Must pass the D8 gate (available recommendation) to reach the flag
-        // check — recommendation 3 is available in this scenario.
-        Some(json!({"recommendation_id": 3})),
+        // check — recommendation 2 (InsertWaypoint) is available in this
+        // scenario under the honest M2 gate.
+        Some(json!({"recommendation_id": 2})),
     )
     .await;
     assert_eq!(
@@ -2318,12 +2324,13 @@ async fn undo_command_restores_previous_plan_via_inverse() {
     let before_scene = before_scene.expect("scene response must be valid JSON");
     let original = active_trajectory_signature(&before_scene);
 
-    // Apply recommendation 3 (available in this scenario) → plan changes.
+    // Apply recommendation 2 (the honest Available one in this scenario:
+    // InsertWaypoint splits the MoveL at a reachable waypoint) → plan changes.
     let (status, body) = get_json(
         app.clone(),
         http::Method::POST,
         "/api/v1/plan/commands/apply",
-        Some(json!({"recommendation_id": 3})),
+        Some(json!({"recommendation_id": 2})),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "apply must succeed");
@@ -2470,12 +2477,13 @@ async fn undo_command_stale_inverse_rejected_after_reschedule() {
     let app = writeback_app().await;
     preview_setup(&app).await;
 
-    // 1. Apply an available recommendation → history_length 1.
+    // 1. Apply an available recommendation (2 = InsertWaypoint under the
+    //    honest M2 gate) → history_length 1.
     let (status, body) = get_json(
         app.clone(),
         http::Method::POST,
         "/api/v1/plan/commands/apply",
-        Some(json!({"recommendation_id": 3})),
+        Some(json!({"recommendation_id": 2})),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "apply must succeed");
@@ -2484,7 +2492,11 @@ async fn undo_command_stale_inverse_rejected_after_reschedule() {
 
     // 2. Re-schedule the plan by a NON-commanded path (motion plan preview).
     //    This replaces active_plan while the command history still holds the
-    //    stale entry from the apply.
+    //    stale entry from the apply. The re-scheduled program has THREE
+    //    segments: enough for the stored inverse (rec 2 is a 1→2
+    //    InsertWaypoint split, whose inverse collapses two segments) to apply
+    //    cleanly — so the request reaches the R4-001 stale guard, which then
+    //    rejects it because the active program differs from the applied one.
     let (status, _) = get_json(
         app.clone(),
         http::Method::POST,
@@ -2492,6 +2504,13 @@ async fn undo_command_stale_inverse_rejected_after_reschedule() {
         Some(json!({
             "segments": [
                 {"type": "movej", "target": [0.5, -0.3, -0.1, 0.0]},
+                {
+                    "type": "movel",
+                    "target": {
+                        "translation": [1.1, 0.5, 0.2],
+                        "rotation": {"kind": "Quaternion", "value": {"w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0}}
+                    }
+                },
                 {
                     "type": "movel",
                     "target": {

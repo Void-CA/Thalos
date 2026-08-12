@@ -22,12 +22,17 @@ use thalos_core::{
     analysis::report::AnalysisReport,
     analysis::scoring::DefaultScoringPolicy,
     collision::CollisionMatrix,
+    prelude::RobotState,
     robot::{serial_chain::SerialChain, tool_frame::ToolFrame},
 };
 use thalos_planning::{
     advisor::PlanAdvisor,
     analysis::{PlanAnalysis, TrajectoryAnalyzer},
-    motion::program::PlanningProgram,
+    motion::{
+        compiler::{DefaultPlannerDispatcher, PlanCompiler},
+        planner::SegmentPlanningContext,
+        program::PlanningProgram,
+    },
     recommendation::Recommendation,
 };
 
@@ -150,6 +155,12 @@ impl PlanAnalysisService {
     /// `recommendations` vacío (el advisor no puede resolver segmentos
     /// objetivo) — nunca un vacío silencioso: los flujos sin contexto de plan
     /// no proyectan el campo (aditivo en el wire).
+    ///
+    /// M2 (design ADR-3): el servicio compila el programa (desde
+    /// `current_joints`) y le pasa el [`CompiledPlan`] al advisor vía
+    /// `recommend_with_segment_context` — la verificación fin-a-fin de
+    /// disponibilidad corre contra los `waypoint_range` REALES del plan
+    /// compilado (fix ADR-5: nunca índice-de-waypoint-como-segmento).
     pub fn analyze_plan_with_recommendations(
         chain: &SerialChain,
         trajectory: &thalos_core::trajectory::Trajectory,
@@ -161,11 +172,26 @@ impl PlanAnalysisService {
         current_joints: &[f64],
     ) -> Result<PlanAnalysisResult, RuntimeError> {
         let mut result = Self::analyze_plan(chain, trajectory, tcp, constraints, artifact)?;
-        result.recommendations = PlanAdvisor.recommend(
+
+        // Compilar el programa para obtener el contexto de segmentos
+        // (waypoint_range + joints de inicio de segmento) — el mismo compile
+        // determinista que `recommend` (4-arg) haría internamente.
+        let state = RobotState::new(current_joints.to_vec());
+        let ctx = SegmentPlanningContext {
+            robot: chain,
+            current_state: &state,
+            ik_solver,
+            tcp: None,
+        };
+        let compiled = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()))
+            .compile(program, &ctx)
+            .map_err(|e| RuntimeError::Planning(e.into()))?;
+
+        result.recommendations = PlanAdvisor.recommend_with_segment_context(
             &result.report.observations,
             program,
             ik_solver,
-            current_joints,
+            &compiled,
         );
         Ok(result)
     }

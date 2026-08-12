@@ -146,6 +146,22 @@ describe('useRecommendation — initial state', () => {
     )
     expect(result.current.state.unavailable).toBe(true)
   })
+
+  it('exposes a human-readable reason for an unavailable edit (ADR-2)', () => {
+    const { result } = renderHook(() =>
+      useRecommendation(
+        { ...recommendation, status: 'unavailable', reason: 'ik_failed' },
+        report,
+      ),
+    )
+    expect(result.current.state.unavailable).toBe(true)
+    expect(result.current.derived.reason).toBe('IK could not converge')
+  })
+
+  it('exposes no reason for an available recommendation (additive wire)', () => {
+    const { result } = renderHook(() => useRecommendation(recommendation, report))
+    expect(result.current.derived.reason).toBeNull()
+  })
 })
 
 describe('useRecommendation — preview (PR3, read-only)', () => {

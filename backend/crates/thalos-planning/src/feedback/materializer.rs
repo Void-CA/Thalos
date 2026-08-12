@@ -233,27 +233,38 @@ impl ProposalMaterializer for LiftTcpMaterializer<'_> {
 /// `MoveL` target pose around its approach (Z) axis (`rotation` parameter,
 /// radians).
 ///
-/// Translation is untouched by a pure tool rotation. No IK is required — the
-/// rotation is a geometric remediation on the existing reachable pose.
-pub struct RotateToolMaterializer;
+/// Translation is untouched by a pure tool rotation. The rotated pose is
+/// verified through IK from the SEGMENT-START joints (design ADR-3, T8 M2) —
+/// a rotation a planar robot cannot realize surfaces
+/// [`MaterializationError::IkFailure`] so the advisor marks the recommendation
+/// unavailable instead of lying (spec recommendation-availability-contract
+/// "RotateTool on planar robot"). No position-only fallback: the rotation IS
+/// the remediation, so a rotation without a full-pose solution is unrealizable.
+pub struct RotateToolMaterializer<'a> {
+    /// IK solver used to verify the rotated pose stays reachable.
+    ik_solver: &'a dyn IKSolver,
+    /// Segment-start joints (end of the previous segment) — the deterministic
+    /// context IK is solved from. NEVER the runtime snapshot.
+    current_joints: &'a [f64],
+}
 
-impl RotateToolMaterializer {
+impl<'a> RotateToolMaterializer<'a> {
     /// Default tool rotation (radians) when the proposal carries none.
     pub const DEFAULT_ROTATION: f64 = std::f64::consts::FRAC_PI_2;
 
     /// Creates a new `RotateToolMaterializer`.
-    pub fn new() -> Self {
-        Self
+    ///
+    /// * `ik_solver` — solver used to verify the rotated pose.
+    /// * `current_joints` — the segment-start joints (q0) for the IK check.
+    pub fn new(ik_solver: &'a dyn IKSolver, current_joints: &'a [f64]) -> Self {
+        Self {
+            ik_solver,
+            current_joints,
+        }
     }
 }
 
-impl Default for RotateToolMaterializer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ProposalMaterializer for RotateToolMaterializer {
+impl ProposalMaterializer for RotateToolMaterializer<'_> {
     fn name(&self) -> &'static str {
         "rotate_tool_materializer"
     }
@@ -288,6 +299,18 @@ impl ProposalMaterializer for RotateToolMaterializer {
                 target_pose.transform().rotation * spin,
             ),
         );
+
+        // T8 (M2): verify the rotated pose from the SEGMENT-START joints —
+        // the same joints the compiler will solve the segment from. A
+        // rotation with no full-pose solution is unrealizable (no position
+        // fallback: the rotation is the remediation).
+        let result = self
+            .ik_solver
+            .solve(self.current_joints, IKGoal::Pose(oriented.clone()))
+            .map_err(|_| MaterializationError::IkFailure)?;
+        if !result.status.is_converged() {
+            return Err(MaterializationError::IkFailure);
+        }
 
         Ok(vec![MotionSegment::MoveL {
             origin: origin.clone(),
@@ -621,7 +644,9 @@ mod tests {
         // Spec "RotateTool materialization": rotated tool orientation. The
         // rotation parameter (radians, around the tool's approach axis) is
         // composed onto the target pose orientation.
-        let materializer = RotateToolMaterializer::new();
+        let q0 = vec![0.0; 6];
+        let solver = NoopIKSolver;
+        let materializer = RotateToolMaterializer::new(&solver, &q0);
 
         let segments = materializer
             .materialize(
@@ -653,8 +678,31 @@ mod tests {
     }
 
     #[test]
+    fn rotate_tool_verifies_rotated_pose_from_segment_start_joints() {
+        // T8 (M2): RotateToolMaterializer takes the segment-start joints (NOT
+        // the runtime snapshot) and verifies the rotated pose stays reachable
+        // from them. The SCARA-like solver (pose fails, position converges)
+        // makes the rotation unrealizable → IkFailure, so the advisor marks
+        // the recommendation unavailable instead of lying (spec
+        // recommendation-availability-contract "RotateTool on planar robot").
+        let q0 = vec![0.0; 6];
+        let solver = PoseFailsPositionConvergesIKSolver;
+        let materializer = RotateToolMaterializer::new(&solver, &q0);
+
+        match materializer.materialize(
+            &proposal(ActionKind::Singularity, &[("rotation", 0.5)]),
+            &move_l_at(thalos_math::Vector3::new(1.0, 2.0, 3.0)),
+        ) {
+            Err(MaterializationError::IkFailure) => {}
+            other => panic!("expected IkFailure for an unrealizable rotation, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn rotate_tool_rejects_wrong_proposal_kind() {
-        let materializer = RotateToolMaterializer::new();
+        let q0 = vec![0.0; 6];
+        let solver = NoopIKSolver;
+        let materializer = RotateToolMaterializer::new(&solver, &q0);
 
         match materializer.materialize(
             &proposal(ActionKind::Manipulability, &[("rotation", 0.5)]),

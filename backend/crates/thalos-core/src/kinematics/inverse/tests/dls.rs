@@ -190,3 +190,17 @@ fn error_history() {
         "Último historial debe coincidir con final_error"
     );
 }
+
+/// T6 (M2): the DLS solver exposes the robot chain it operates on, so the
+/// advisor can recompile/re-analyze edited programs with the SAME kinematic
+/// model (end-to-end availability verification, design ADR-2/ADR-3).
+#[test]
+fn exposes_the_robot_chain_it_was_built_with() {
+    let (fk, ee) = build_2dof_planar_arm();
+    let solver = DampedLeastSquaresSolver::new(fk, ee, 500, 1e-6, 0.1);
+
+    let robot = solver
+        .robot()
+        .expect("a solver wrapping a ForwardKinematics must expose its robot");
+    assert_eq!(robot.dof_count(), 2, "the 2-DOF planar test arm");
+}

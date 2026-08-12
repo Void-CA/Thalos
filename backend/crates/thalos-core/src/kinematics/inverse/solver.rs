@@ -1,4 +1,5 @@
 use crate::spatial::pose::Pose;
+use crate::robot::serial_chain::SerialChain;
 use thalos_math::DynamicVector;
 use thalos_math::{UnitQuaternion, Vector3, orientation_error};
 
@@ -49,4 +50,15 @@ pub fn compute_pose_error(current: &Pose, target: &Pose) -> DynamicVector {
 
 pub trait IKSolver: Send + Sync {
     fn solve(&self, q0: &[f64], goal: IKGoal) -> Result<IKResult, IkError>;
+
+    /// Optional access to the robot chain the solver operates on.
+    ///
+    /// Solvers built over a [`ForwardKinematics`] (e.g.
+    /// `DampedLeastSquaresSolver`) expose their chain so callers — like the
+    /// availability verifier in the planner — can recompile and re-analyze
+    /// edited programs with the SAME kinematic model. The default is `None`
+    /// (mock solvers without a robot); additive and non-breaking.
+    fn robot(&self) -> Option<&SerialChain> {
+        None
+    }
 }

@@ -169,11 +169,30 @@ pub async fn preview_command(
     let fk = ForwardKinematics::new(snapshot.chain.clone());
     let solver =
         DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
-    let recommendations = PlanAdvisor.recommend(
+
+    // M2 (design ADR-3): compile the program to obtain the segment context
+    // (waypoint_range + segment-start joints) and let the advisor verify
+    // availability against THAT compiled plan — the SAME deterministic
+    // context the analyze service uses (same joints + solver → same
+    // recommendation ids, so analyze → preview/apply resolve consistently).
+    let original_state = RobotState::new(snapshot.joints.clone());
+    let original_ctx = SegmentPlanningContext {
+        robot: &snapshot.chain,
+        current_state: &original_state,
+        ik_solver: &solver,
+        tcp: None,
+    };
+    let compiled_original = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()))
+        .compile(&program, &original_ctx)
+        .map_err(|e| ApiError::Validation {
+            message: e.to_string(),
+            code: "compile_failed".to_string(),
+        })?;
+    let recommendations = PlanAdvisor.recommend_with_segment_context(
         &before.report.observations,
         &program,
         &solver,
-        &snapshot.joints,
+        &compiled_original,
     );
 
     let recommendation = recommendations
@@ -307,11 +326,27 @@ pub async fn apply_command(
     let fk = ForwardKinematics::new(snapshot.chain.clone());
     let solver =
         DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
-    let recommendations = PlanAdvisor.recommend(
+
+    // M2 (design ADR-3): same compiled-plan context as the analyze service
+    // (deterministic recommendation ids across analyze → preview → apply).
+    let original_state = RobotState::new(snapshot.joints.clone());
+    let original_ctx = SegmentPlanningContext {
+        robot: &snapshot.chain,
+        current_state: &original_state,
+        ik_solver: &solver,
+        tcp: None,
+    };
+    let compiled_original = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()))
+        .compile(&program, &original_ctx)
+        .map_err(|e| ApiError::Validation {
+            message: e.to_string(),
+            code: "compile_failed".to_string(),
+        })?;
+    let recommendations = PlanAdvisor.recommend_with_segment_context(
         &before.report.observations,
         &program,
         &solver,
-        &snapshot.joints,
+        &compiled_original,
     );
 
     let recommendation = recommendations

@@ -7,6 +7,7 @@ use crate::kinematics::inverse::{
 };
 use crate::kinematics::jacobian::{GeometricJacobian, JacobianSolver};
 use crate::robot::joint::{JointKind, JointLimits};
+use crate::robot::serial_chain::SerialChain;
 use crate::spatial::frame::FrameId;
 use thalos_math::algebra::{DynamicMatrix, DynamicVector, vector_to_dynamic};
 
@@ -48,6 +49,10 @@ impl DampedLeastSquaresSolver {
 }
 
 impl IKSolver for DampedLeastSquaresSolver {
+    fn robot(&self) -> Option<&SerialChain> {
+        Some(self.fk.robot())
+    }
+
     fn solve(&self, q0: &[f64], goal: IKGoal) -> Result<IKResult, IkError> {
         let mut q = DynamicVector::from_column_slice(q0);
         let mut error_history = if self.track_history {

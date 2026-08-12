@@ -96,17 +96,36 @@ impl SegmentPlanner for MoveLPlanner {
                     transform.clone(),
                 );
 
-                let ik_result = ctx.ik_solver.solve(&q_current, IKGoal::Pose(waypoint_pose))?;
+                let ik_result = ctx.ik_solver.solve(&q_current, IKGoal::Pose(waypoint_pose.clone()))?;
 
                 match ik_result.status {
                     IKStatus::Converged => {
                         q_current = ik_result.q;
                     }
                     IKStatus::MaxIterations => {
-                        return Err(PlanningError::IkFailed {
-                            target_pose: target_pose.clone(),
-                            reason: crate::error::IkFailureReason::NoSolution,
-                        });
+                        // Semantic fallback (design ADR-4, spec
+                        // semantic-ik-fallback "Position fallback when
+                        // operation allows"): a MoveL intermediate whose FULL
+                        // pose is unreachable retries translation-only IK —
+                        // gated by the operation type (MoveL allows it;
+                        // MoveLPosition drives Position from the start). If
+                        // the position is ALSO unreachable, the failure is
+                        // preserved as IkFailed (orientation-mandatory path).
+                        let position = waypoint_pose.translation();
+                        let position_result = ctx
+                            .ik_solver
+                            .solve(&q_current, IKGoal::Position(position))?;
+                        match position_result.status {
+                            IKStatus::Converged => {
+                                q_current = position_result.q;
+                            }
+                            IKStatus::MaxIterations => {
+                                return Err(PlanningError::IkFailed {
+                                    target_pose: target_pose.clone(),
+                                    reason: crate::error::IkFailureReason::NoSolution,
+                                });
+                            }
+                        }
                     }
                 }
             }
@@ -308,5 +327,108 @@ mod tests {
             error < 0.02,
             "EE position error {error:.4} (expected {target:?}, got {ee:?})"
         );
+    }
+
+    // ── T9 (M2): semantic intermediate fallback (design ADR-4) ──────────────
+    //
+    // Spec semantic-ik-fallback "Position fallback when operation allows": a
+    // MoveL intermediate whose full pose exhausts `MaxIterations` falls back
+    // to translation-only IK for THAT intermediate when the position itself
+    // converges. The final pose is resolved before planning (dispatcher), so
+    // this fallback covers the path between start and goal only.
+
+    /// Mock solver with the SCARA profile: full-pose IK exhausts
+    /// `MaxIterations`, translation-only IK converges.
+    struct PoseFailsPositionConvergesIKSolver;
+
+    impl IKSolver for PoseFailsPositionConvergesIKSolver {
+        fn solve(&self, q0: &[f64], goal: IKGoal) -> Result<IKResult, IkError> {
+            match goal {
+                IKGoal::Pose(_) => Ok(IKResult::max_iterations(q0.to_vec(), 100, 1.5, None)),
+                IKGoal::Position(_) => Ok(IKResult::converged(q0.to_vec(), 1, 0.0, None)),
+            }
+        }
+    }
+
+    #[test]
+    fn plan_falls_back_to_position_ik_for_unreachable_intermediates() {
+        // RED (BUG 2): on current code every intermediate is solved with
+        // `IKGoal::Pose` and the FIRST MaxIterations kills the plan. With the
+        // fallback the same intermediates converge through `IKGoal::Position`.
+        let robot = RobotRegistry::create_default(RobotModel::Planar2R);
+        let state = RobotState::zero(2);
+        let ik = PoseFailsPositionConvergesIKSolver;
+        let ctx = PlanningContext {
+            robot: &robot,
+            current_state: &state,
+            ik_solver: &ik,
+            tcp: None,
+        };
+
+        let planner = MoveLPlanner::default();
+        let fk = ForwardKinematics::new(robot.clone());
+        let result = fk.evaluate(&[0.5, 0.3]);
+        let target_pose = result.ee_pose().cloned().unwrap();
+
+        let goal = ValidatedGoal {
+            goal: ResolvedPoseGoal {
+                pose: target_pose,
+                state: RobotState::new(vec![0.5, 0.3]),
+            },
+            metadata: GoalMetadata::default(),
+            assessment: PlanningAssessment::accepted(),
+        };
+
+        let traj = planner
+            .plan(&ctx, &goal)
+            .expect("intermediate pose failure must fall back to position IK");
+        assert!(!traj.is_empty(), "trajectory should have waypoints");
+
+        // The last waypoint is the RESOLVED final state (never re-solved by
+        // the planner); the intermediates rode the position fallback.
+        let last = traj.waypoints().last().unwrap().joints().to_vec();
+        assert_eq!(last, vec![0.5, 0.3], "final waypoint must be the goal state");
+    }
+
+    #[test]
+    fn plan_still_fails_when_position_fallback_also_fails() {
+        // Spec semantic-ik-fallback "Orientation mandatory + unreachable":
+        // when BOTH pose and position IK exhaust MaxIterations, the failure
+        // is preserved as `PlanningError::IkFailed` — never silently degraded.
+        struct FailingIKSolver;
+        impl IKSolver for FailingIKSolver {
+            fn solve(&self, q0: &[f64], _goal: IKGoal) -> Result<IKResult, IkError> {
+                Ok(IKResult::max_iterations(q0.to_vec(), 100, 1.5, None))
+            }
+        }
+
+        let robot = RobotRegistry::create_default(RobotModel::Planar2R);
+        let state = RobotState::zero(2);
+        let ik = FailingIKSolver;
+        let ctx = PlanningContext {
+            robot: &robot,
+            current_state: &state,
+            ik_solver: &ik,
+            tcp: None,
+        };
+
+        let planner = MoveLPlanner::default();
+        let fk = ForwardKinematics::new(robot.clone());
+        let result = fk.evaluate(&[0.5, 0.3]);
+        let target_pose = result.ee_pose().cloned().unwrap();
+
+        let goal = ValidatedGoal {
+            goal: ResolvedPoseGoal {
+                pose: target_pose,
+                state: RobotState::new(vec![0.5, 0.3]),
+            },
+            metadata: GoalMetadata::default(),
+            assessment: PlanningAssessment::accepted(),
+        };
+
+        match planner.plan(&ctx, &goal) {
+            Err(PlanningError::IkFailed { .. }) => {}
+            other => panic!("expected IkFailed when pose AND position fail, got {other:?}"),
+        }
     }
 }

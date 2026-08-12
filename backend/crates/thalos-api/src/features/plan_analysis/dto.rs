@@ -41,7 +41,7 @@ use thalos_core::{
 use thalos_planning::analysis::PlanAnalysis;
 use thalos_planning::motion::program::PlannedSegment;
 use thalos_planning::program_edit::ProgramEdit;
-use thalos_planning::recommendation::{Recommendation, RecommendationStatus};
+use thalos_planning::recommendation::{Recommendation, RecommendationStatus, UnavailabilityReason};
 
 /// Request para analizar un plan activo.
 #[derive(Debug, Deserialize)]
@@ -414,7 +414,9 @@ impl From<&Action> for ActionDto {
 ///
 /// `status` es opcional en el wire — `"available"` | `"unavailable"` (D8) —
 /// omitido cuando no fue evaluado, para compatibilidad con clientes que no lo
-/// conocen.
+/// conocen. `reason` (ADR-2, T10 M2) es ADITIVO: solo viaja cuando la
+/// recomendación es `unavailable` y el motivo está poblado; los clientes
+/// antiguos sin el campo deserializan a `None`.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RecommendationDto {
     /// Id de la recomendación dentro del reporte.
@@ -426,6 +428,10 @@ pub struct RecommendationDto {
     /// Disponibilidad del edit: `"available"` | `"unavailable"` (D8).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<RecommendationStatus>,
+    /// Motivo estructurado de la no-disponibilidad (design ADR-2). ADITIVO:
+    /// omitido cuando `None` — los clientes antiguos deserializan sin cambio.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<UnavailabilityReason>,
 }
 
 impl From<&Recommendation> for RecommendationDto {
@@ -435,6 +441,7 @@ impl From<&Recommendation> for RecommendationDto {
             action: ActionDto::from(&r.action),
             edit: r.edit.clone(),
             status: r.status,
+            reason: r.reason,
         }
     }
 }
@@ -1331,6 +1338,7 @@ mod tests {
                 }]),
             },
             status: Some(RecommendationStatus::Available),
+            reason: None,
         }
     }
 
@@ -1389,6 +1397,57 @@ mod tests {
             back.recommendations[0].edit,
             ProgramEdit::ReplaceSegment { .. }
         ));
+    }
+
+    // ── T10 (M2): additive `reason` projection (design ADR-2) ──────────────
+
+    #[test]
+    fn recommendation_dto_round_trips_reason_on_the_wire() {
+        // Spec recommendation-availability-contract "Availability Reason
+        // Exposure": an unavailable recommendation carries its structured
+        // reason through the DTO, losslessly.
+        use thalos_planning::recommendation::UnavailabilityReason;
+
+        let mut rec = sample_recommendation();
+        rec.status = Some(RecommendationStatus::Unavailable);
+        rec.reason = Some(UnavailabilityReason::IkFailed);
+
+        let dto = RecommendationDto::from(&rec);
+        let value = serde_json::to_value(&dto).expect("serialize");
+        assert_eq!(
+            value["reason"], "ik_failed",
+            "the reason must project snake_case on the wire"
+        );
+
+        let back: RecommendationDto =
+            serde_json::from_value(value).expect("dto must round-trip");
+        assert_eq!(back.reason, Some(UnavailabilityReason::IkFailed));
+        assert_eq!(back.status, Some(RecommendationStatus::Unavailable));
+    }
+
+    #[test]
+    fn recommendation_dto_without_reason_skips_it_and_deserializes() {
+        // Additive contract (I3): an available/undetermined recommendation has
+        // no reason — it is skipped on the wire, and old JSON without the
+        // field deserializes to None.
+        use thalos_planning::recommendation::UnavailabilityReason;
+
+        let dto = RecommendationDto::from(&sample_recommendation());
+        let value = serde_json::to_value(&dto).expect("serialize");
+        assert!(
+            value.get("reason").is_none(),
+            "None reason must be skipped on the wire"
+        );
+
+        let mut legacy = value.clone();
+        legacy
+            .as_object_mut()
+            .expect("object")
+            .remove("reason");
+        let back: RecommendationDto =
+            serde_json::from_value(legacy).expect("old JSON without reason must deserialize");
+        assert_eq!(back.reason, None);
+        assert_eq!(back.id, 7, "pre-existing fields keep their values");
     }
 
     #[test]

@@ -42,6 +42,25 @@ export function recommendationKindLabel(kind: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+/** Structured wire reason → human-readable label (design ADR-2). Returns
+ *  null for available/undetermined recommendations or when the wire carries
+ *  no reason (additive contract — old payloads omit the field). Display-only:
+ *  presentations render it; they never branch logic on the string. */
+export function unavailabilityReasonLabel(
+  reason?: RecommendationWire['reason'],
+): string | null {
+  if (!reason) return null
+  const labels: Record<NonNullable<RecommendationWire['reason']>, string> = {
+    ik_failed: 'IK could not converge',
+    compile_failed: 'The edited program does not compile',
+    planning_failed: 'Planning did not converge on a clean region',
+    unreachable_configuration: 'The target configuration is unreachable',
+    not_applicable: 'This remediation does not apply here',
+    unsupported: 'This segment type is not supported',
+  }
+  return labels[reason]
+}
+
 /** Health fraction (0..1) → whole-percent display ("62%"). One implementation
  *  so row and card can never render the same server value differently. */
 function healthPercent(value: number): string {
@@ -135,6 +154,10 @@ export interface RecommendationDerived {
   span: string | null
   strategy: string[] | null
   edit: { variant: string; params: string } | null
+  /** Human-readable unavailability reason (design ADR-2); null when the
+   *  recommendation is available or the wire carries no reason. M4 renders
+   *  it on the card; the model already exposes it for both presentations. */
+  reason: string | null
   applied: AppliedRecommendationSummary | null
   preview: PreviewRecommendationSummary | null
 }
@@ -244,6 +267,7 @@ export function useRecommendation(
         Object.keys(recommendation.edit).length > 0
           ? { variant: editVariant(recommendation.edit), params: editParamsSummary(recommendation.edit) }
           : null,
+      reason: unavailabilityReasonLabel(recommendation.reason),
       applied: applied
         ? {
             planId: applied.plan_id,

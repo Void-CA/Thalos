@@ -100,10 +100,11 @@ export interface ManipulabilityPointWire {
 }
 
 /** A remediation recommendation (spec recommendation-model "Wire Contract").
- *  Projection of `Recommendation { id, action, edit, status }` — the typed
- *  `edit` is a semantic plan command (design D1) that the Preview/Apply/Undo
- *  pipeline executes. The frontend treats `edit` as opaque in PR3 (Preview
- *  only) — Apply/Undo (PR4/PR5) consume it verbatim from the wire. */
+ *  Projection of `Recommendation { id, action, edit, status, reason }` — the
+ *  typed `edit` is a semantic plan command (design D1) that the
+ *  Preview/Apply/Undo pipeline executes. The frontend treats `edit` as opaque
+ *  in PR3 (Preview only) — Apply/Undo (PR4/PR5) consume it verbatim from the
+ *  wire. */
 export interface RecommendationWire {
   /** Recommendation id within the analysis report (1-based advisor counter). */
   id: number
@@ -114,6 +115,16 @@ export interface RecommendationWire {
   /** Availability (design D8): "available" | "unavailable"; omitted when
    *  not evaluated. Unavailable edits must not be applied (PR4 gates on it). */
   status?: 'available' | 'unavailable'
+  /** Structured reason when `status` is "unavailable" (design ADR-2, additive
+   *  — absent for available/undetermined recommendations, so old payloads
+   *  deserialize unchanged). */
+  reason?:
+    | 'ik_failed'
+    | 'compile_failed'
+    | 'planning_failed'
+    | 'unreachable_configuration'
+    | 'not_applicable'
+    | 'unsupported'
 }
 
 /** One fired rule summarized on the wire (intelligent assessment). */

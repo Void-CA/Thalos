@@ -12,7 +12,7 @@ use thalos_core::{
 
 use crate::error::{CompileError, PlanningError};
 use crate::goal::{
-    GoalResolver, GoalResolverConfig, JointGoal, ResolvedPoseGoal, ResolvedPositionGoal,
+    GoalResolver, GoalResolverConfig, JointGoal, ResolvedPositionGoal,
     ValidatedGoal,
 };
 use crate::motion::move_j::{MoveJConfig, MoveJPlanner};
@@ -91,16 +91,35 @@ impl MotionPlannerDispatcher for DefaultPlannerDispatcher {
                 ..
             } => {
                 let resolver = GoalResolver::new(self.goal_resolver_config.clone());
-                let goal: ValidatedGoal<ResolvedPoseGoal> =
-                    resolver.resolve_pose(ctx, target_pose)?;
-
                 let planner = MoveLPlanner::new(MoveLConfig {
                     max_velocity: max_velocity.unwrap_or(0.25),
                     max_acceleration: 0.125,
                     time_step: 0.01,
                     cartesian_step: 0.01,
                 });
-                planner.plan(ctx, &goal)
+
+                // Semantic fallback (design ADR-4, spec semantic-ik-fallback
+                // "MoveL pose unreachable but translation reachable"): a
+                // MoveL whose FINAL pose has no full-pose IK solution compiles
+                // through the translation-only path — gated by the operation
+                // type (MoveL allows it; MoveLPosition declares Position from
+                // the start). When the position ALSO fails, the resolver's
+                // IkFailed propagates unchanged (orientation-mandatory path).
+                match resolver.resolve_pose(ctx, target_pose) {
+                    Ok(goal) => planner.plan(ctx, &goal),
+                    Err(
+                        source @ (PlanningError::IkFailed { .. }
+                        | PlanningError::IkFailedPosition { .. }
+                        | PlanningError::Ik(_)),
+                    ) => {
+                        let _ = source;
+                        let position = target_pose.translation();
+                        let goal: ValidatedGoal<ResolvedPositionGoal> =
+                            resolver.resolve_position(ctx, position)?;
+                        planner.plan_position(ctx, &goal)
+                    }
+                    Err(other) => Err(other),
+                }
             }
 
             MotionSegment::MoveLPosition {
@@ -337,6 +356,35 @@ impl PlanCompiler {
             provenance,
         })
     }
+}
+
+/// Deterministic initial joints of `segment_index` (design ADR-3, spec
+/// semantic-ik-fallback "Segment-start context for materialization").
+///
+/// - Segment 0 starts from the caller's `current_joints` (the plan's start
+///   configuration).
+/// - Segment N > 0 starts from the END joints of segment N−1 (its last
+///   waypoint) — exactly the joints the compiler will hand the segment when
+///   the program is (re)compiled. NEVER the runtime snapshot.
+///
+/// Materializers and the availability verifier solve IK from these joints so
+/// verification matches compilation. Defensive fallback to `current_joints`
+/// when the previous segment has an empty trajectory (cannot happen for a
+/// successfully compiled plan).
+pub fn segment_start_joints(
+    compiled: &CompiledPlan,
+    segment_index: usize,
+    current_joints: &[f64],
+) -> Vec<f64> {
+    if segment_index == 0 {
+        return current_joints.to_vec();
+    }
+    compiled
+        .segments
+        .get(segment_index - 1)
+        .and_then(|prev| prev.trajectory.waypoints().last())
+        .map(|wp| wp.joints().to_vec())
+        .unwrap_or_else(|| current_joints.to_vec())
 }
 
 /// Per-node semantic metadata carried from expansion into `PlannedSegment`.
@@ -1084,5 +1132,135 @@ mod tests {
         assert_eq!(plan.segments.len(), 2);
         assert_eq!(plan.segments[0].origin, OperationId("pick-1".to_string()));
         assert_eq!(plan.segments[1].origin, OperationId("place-2".to_string()));
+    }
+
+    // ── T8 (M2): deterministic segment-start joints (design ADR-3) ─────────
+    //
+    // Spec semantic-ik-fallback "Same target from two contexts" + "Segment-
+    // start context for materialization": the joints a materializer/verifier
+    // solves IK from for segment N are the END joints of segment N-1 — never
+    // the runtime snapshot — and segment 0 starts from the caller's current
+    // joints. Deterministic per start: same program, same start → same joints.
+
+    #[test]
+    fn segment_start_joints_are_deterministic_per_segment() {
+        let h = TestHarness::new();
+        let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
+        let program = PlanningProgram::new(vec![
+            MotionSegment::MoveJ {
+                origin: OperationId("test".into()),
+                target: vec![0.5, 0.3],
+                max_velocity: None,
+                max_acceleration: None,
+            },
+            MotionSegment::MoveJ {
+                origin: OperationId("test".into()),
+                target: vec![1.0, 0.7],
+                max_velocity: None,
+                max_acceleration: None,
+            },
+        ]);
+        let plan = compiler.compile(&program, &h.ctx()).expect("compile failed");
+
+        let current = vec![0.1, 0.2];
+
+        let seg0_start = segment_start_joints(&plan, 0, &current);
+        assert_eq!(
+            seg0_start, current,
+            "segment 0 must start from the caller's current joints"
+        );
+
+        let seg1_start = segment_start_joints(&plan, 1, &current);
+        let seg0_end = plan.segments[0]
+            .trajectory
+            .waypoints()
+            .last()
+            .expect("segment 0 trajectory")
+            .joints()
+            .to_vec();
+        assert_eq!(
+            seg1_start, seg0_end,
+            "segment 1 must start from the END joints of segment 0"
+        );
+        assert_ne!(
+            seg1_start, current,
+            "segment-start joints must never be the snapshot when a previous segment exists"
+        );
+    }
+
+    // ── T9 (M2): dispatcher-level semantic fallback (design ADR-4) ──────────
+    //
+    // Spec semantic-ik-fallback "MoveL pose unreachable but translation
+    // reachable": the FINAL pose of a user-authored MoveL is resolved by the
+    // dispatcher BEFORE planning (GoalResolver::resolve_pose). When that full
+    // pose has no IK solution but the translation converges, the segment
+    // compiles through the position-only path (`plan_position`) — the same
+    // semantic a MoveLPosition declares from the start.
+
+    #[test]
+    fn movel_with_unreachable_final_pose_falls_back_to_position_planning() {
+        /// Mock solver with the SCARA profile: full-pose IK exhausts
+        /// `MaxIterations`, translation-only IK converges.
+        struct PoseFailsPositionConvergesIKSolver;
+
+        impl IKSolver for PoseFailsPositionConvergesIKSolver {
+            fn solve(
+                &self,
+                q0: &[f64],
+                goal: thalos_core::kinematics::inverse::IKGoal,
+            ) -> Result<IKResult, IkError> {
+                match goal {
+                    thalos_core::kinematics::inverse::IKGoal::Pose(_) => {
+                        Ok(IKResult::max_iterations(q0.to_vec(), 100, 1.5, None))
+                    }
+                    thalos_core::kinematics::inverse::IKGoal::Position(_) => {
+                        Ok(IKResult::converged(q0.to_vec(), 1, 0.0, None))
+                    }
+                }
+            }
+        }
+
+        let robot = RobotRegistry::create_default(RobotModel::Planar2R);
+        let state = RobotState::zero(2);
+        let ik = PoseFailsPositionConvergesIKSolver;
+        let ctx = SegmentPlanningContext {
+            robot: &robot,
+            current_state: &state,
+            ik_solver: &ik,
+            tcp: None,
+        };
+        let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
+        let program = PlanningProgram::new(vec![
+            MotionSegment::MoveJ {
+                origin: OperationId("op-j".to_string()),
+                target: vec![0.5, 0.5],
+                max_velocity: None,
+                max_acceleration: None,
+            },
+            MotionSegment::MoveL {
+                origin: OperationId("op-l".to_string()),
+                frame: FrameId::World,
+                target_pose: Pose::new(
+                    FrameId::World,
+                    FrameId::Id(1),
+                    Transform3D::from_translation(thalos_math::Vector3::new(1.5, 0.5, 0.0)),
+                ),
+                max_velocity: None,
+            },
+        ]);
+
+        // RED (BUG 2): on current code the dispatcher resolves the final pose
+        // with IKGoal::Pose → MaxIterations → "segment 2 failed: Inverse
+        // kinematics failed for target pose". The semantic fallback must make
+        // the reachable-translation MoveL compile.
+        let plan = compiler.compile(&program, &ctx).expect(
+            "a MoveL whose final pose is unreachable but translation is reachable must compile via the position fallback",
+        );
+        assert_eq!(plan.segments.len(), 2);
+        assert!(!plan.merged_trajectory.is_empty());
+
+        // The last waypoint is the position-resolved state (mock returns q0).
+        let last = plan.merged_trajectory.waypoints().last().unwrap().joints().to_vec();
+        assert_eq!(last, vec![0.5, 0.5]);
     }
 }
