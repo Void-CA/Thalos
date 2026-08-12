@@ -1,12 +1,11 @@
 import { useAnalysisStore } from '@/features/analysis/store'
 import type { AssessmentWire, ProblemRegionWire } from '@/shared/contracts/analysis-report'
 import { dedupeRecommendations, recommendationKey } from '@/shared/contracts/analysis-report'
-import { NarrativeSummaryCard } from './NarrativeSummaryCard'
+import { buildNarrativeSummary } from '@/shared/analysis/narrative-summary'
+import { VerdictHero } from './VerdictHero'
+import { FactorRows } from './FactorRows'
 import { RecommendationCard } from './RecommendationCard'
-import { VerdictGauge } from './VerdictGauge'
-import { TriggeredRules } from './TriggeredRules'
-import { MembershipBars } from './MembershipBars'
-import { InferenceTrace } from './InferenceTrace'
+import { TechnicalDetails } from './TechnicalDetails'
 
 /** References — the assessment's own recommendation list (kept from the
  *  pre-tab IntelligentAssessment section, asserted by its tests). Deliberately
@@ -39,22 +38,22 @@ function AssessmentRecommendations({ assessment }: { assessment: AssessmentWire 
 }
 
 /**
- * IntelligenceView — the COMPOSED content of the Intelligence tab (spec
- * evaluation-intelligence-tab hierarchy), one focused sub-component per
- * concern, in reading order:
+ * IntelligenceView — the COMPOSED content of the Intelligence tab (structural
+ * UX redesign: decision first, technical detail collapsed away). Reading
+ * order, one focused sub-component per concern:
  *
- *   0. Hero       — NarrativeSummaryCard: large verdict headline + grounded
- *      summary + primary factor chips, risk-tinted (intelligible-repair-loop).
- *   1. Verdict    — VerdictGauge: large canonical Score (0–100) + grade + Risk
- *      gauge
- *   2. Evidence   — TriggeredRules: count + rule chips (id + priority), then
- *      MembershipBars: one horizontal bar per evidence variable
- *   3. Repair     — RecommendationCard list (report recommendations, deduped
- *      like the Evaluation tab) with uniform Preview/Apply/Undo controls
- *   4. References — AssessmentRecommendations: the assessment's own list,
- *      de-emphasized (kept from the pre-tab section)
- *   5. Detail     — InferenceTrace: collapsible inference trace, collapsed by
- *      default (table)
+ *   0. Verdict     — VerdictHero: ONE risk-tinted band (canonical score +
+ *      grade pill + risk badge + a single human summary line). The only
+ *      verdict number on the tab.
+ *   1. Why         — FactorRows: structured top factors (icon | label |
+ *      value | severity bar | reading), selected from the narrative's primary
+ *      factors so the hero one-liner and the rows always agree.
+ *   2. Action      — RecommendationCard list (report recommendations, deduped
+ *      like the Evaluation tab) with uniform Preview/Apply/Undo controls.
+ *   3. Detail      — TechnicalDetails: ONE collapsible (closed by default)
+ *      owning TriggeredRules + MembershipBars + InferenceTrace.
+ *   4. References  — AssessmentRecommendations: the assessment's own list,
+ *      de-emphasized (kept from the pre-tab section).
  *
  * EvaluationWorkspace mounts this view with the assessment + the report's
  * problem regions and accumulates NO fuzzy/AI rendering logic of its own. The
@@ -70,6 +69,7 @@ export function IntelligenceView({
 }) {
   const report = useAnalysisStore((s) => s.report)
   const recommendations = report?.recommendations ?? []
+  const narrative = buildNarrativeSummary(assessment, regions)
 
   return (
     <section
@@ -79,15 +79,11 @@ export function IntelligenceView({
       <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground">
         Intelligent Assessment
       </h2>
-      <NarrativeSummaryCard assessment={assessment} regions={regions} />
-      <VerdictGauge assessment={assessment} report={report} />
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-secondary/10 p-3.5">
-        <TriggeredRules rules={assessment.triggered_rules} />
-        <MembershipBars evidence={assessment.evidence} />
-      </div>
+      <VerdictHero assessment={assessment} report={report} summary={narrative.summary} />
+      <FactorRows evidence={assessment.evidence} primaryFactors={narrative.primary_factors} />
       {report && recommendations.length > 0 && (
         <div className="flex flex-col gap-2.5">
-          <h3 className="text-sm font-semibold text-foreground">Repair Recommendations</h3>
+          <h3 className="text-sm font-semibold text-foreground">Action · Repair recommendations</h3>
           <ul data-testid="intelligence-recommendations" className="flex flex-col gap-2.5">
             {dedupeRecommendations(recommendations).map((recommendation) => (
               <RecommendationCard
@@ -99,8 +95,12 @@ export function IntelligenceView({
           </ul>
         </div>
       )}
+      <TechnicalDetails
+        rules={assessment.triggered_rules}
+        evidence={assessment.evidence}
+        trace={assessment.trace}
+      />
       <AssessmentRecommendations assessment={assessment} />
-      <InferenceTrace trace={assessment.trace} />
     </section>
   )
 }
