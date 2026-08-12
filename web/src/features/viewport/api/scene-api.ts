@@ -30,11 +30,11 @@ export const sceneApi = {
   loadRobotFromUrdf: (source: string) =>
     apiClient.post<RuntimeStateResponse>('/scene/robot/from-urdf', { urdf_source: source }).then(r => r.data),
 
-  /** Set joint angles (FK). Campo: `joint_angles` según SetJointsRequest. */
+  /** Set joint angles (FK). Field: `joint_angles` per SetJointsRequest. */
   setJoints: (joints: number[]) =>
     apiClient.post<RuntimeStateResponse>('/scene/joints', { joint_angles: joints }).then(r => r.data),
 
-  /** Move to position (IK). Omitir frame_id si es undefined para evitar null en la request. */
+  /** Move to position (IK). Omit frame_id if undefined to avoid null in the request. */
   moveToPosition: (target: [number, number, number], frame_id?: number) =>
     apiClient.post<RuntimeStateResponse>('/scene/move-to-position', {
       target,

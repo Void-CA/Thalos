@@ -12,7 +12,7 @@ installCanvasMock()
 /**
  * Viewport retry (resilience-matrix-frontend spec, requirement "Retry Buttons
  * in Viewport"): when the scene load fails (backend offline / timeout), the
- * viewport shows the error message AND a "Reintentar" button, the loading
+ * viewport shows the error message AND a "Retry" button, the loading
  * spinner is stopped, and clicking the button re-attempts the scene load.
  */
 const loadSceneMocks = vi.hoisted(() => ({ mutate: vi.fn() }))
@@ -33,23 +33,23 @@ describe('Viewport — retry button on load error (resilience-matrix spec)', () 
   })
   afterEach(() => cleanup())
 
-  it('shows the error message and a Reintentar button when the scene load failed', () => {
+  it('shows the error message and a Retry button when the scene load failed', () => {
     act(() => {
       useSceneStore.setState({ error: 'Backend is offline', loading: false, data: null } as never)
     })
     render(<Viewport />)
     expect(screen.getByText('Backend is offline')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
     // Coherent state: the loading spinner is NOT shown (setError clears loading).
     expect(screen.queryByText('Loading scene...')).not.toBeInTheDocument()
   })
 
-  it('clicking Reintentar clears the error and re-attempts the scene load', async () => {
+  it('clicking Retry clears the error and re-attempts the scene load', async () => {
     act(() => {
       useSceneStore.setState({ error: 'Backend is offline', loading: false, data: null } as never)
     })
     render(<Viewport />)
-    fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
 
     await waitFor(() => expect(loadSceneMocks.mutate).toHaveBeenCalledTimes(1))
     // The error is cleared so a retry that succeeds can paint the scene.
@@ -57,8 +57,8 @@ describe('Viewport — retry button on load error (resilience-matrix spec)', () 
   })
 
   it('shows the catalog CTA when the scene load fails with a not_found code (matrix Esc 5)', () => {
-    // Robot inexistente: el backend responde 404 not_found; el ErrorBox debe
-    // ofrecer "Volver al catálogo" (describeError code→CTA), no un Reintentar genérico.
+    // Nonexistent robot: the backend answers 404 not_found; the ErrorBox must
+    // offer "Back to catalog" (describeError code→CTA), not a generic Retry.
     act(() => {
       useSceneStore.setState({
         error: 'Robot not found',
@@ -68,11 +68,11 @@ describe('Viewport — retry button on load error (resilience-matrix spec)', () 
       } as never)
     })
     render(<Viewport />)
-    // describeError renderiza el CTA del código not_found + el mensaje del backend.
+    // describeError renders the not_found code CTA + the backend message.
     expect(screen.getByText('Robot not found — return to the catalog — Robot not found')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Volver al catálogo' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Back to catalog' })).toBeInTheDocument()
     // Coherent state: no spinner, retry not mislabeled.
-    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
     expect(screen.queryByText('Loading scene...')).not.toBeInTheDocument()
   })
 

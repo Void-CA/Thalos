@@ -16,15 +16,15 @@ import {
 } from '@/shared/tokens'
 
 /**
- * Trajectory — renderiza la trayectoria del plan activo.
+ * Trajectory — renders the active plan's trajectory.
  *
- * Muestra exclusivamente una de las tres según `trajectoryViewMode`:
- * - `original`  → trayectoria original coloreada por modo
- * - `optimized` → solo la trayectoria optimizada (verde sólido)
- * - `preview`   → solo la trayectoria simulada de una recomendación (ámbar,
- *                 PR3 — reutiliza el mecanismo de overlay de `optimized`)
+ * Shows exactly one of the three according to `trajectoryViewMode`:
+ * - `original`  → original trajectory colored by mode
+ * - `optimized` → only the optimized trajectory (solid green)
+ * - `preview`   → only a recommendation's simulated trajectory (amber,
+ *                 PR3 — reuses the `optimized` overlay mechanism)
  *
- * Nunca más de una al mismo tiempo — toggle mutuamente excluyente.
+ * Never more than one at a time — mutually exclusive toggle.
  */
 export function Trajectory() {
   const activePlan = useSceneStore(s => s.activePlan)

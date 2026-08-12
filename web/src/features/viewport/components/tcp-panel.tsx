@@ -3,15 +3,15 @@ import { useSceneStore } from '../store'
 import { useSceneService } from '../services/service-context'
 
 /**
- * TCP Panel — selección del Tool Center Point activo.
+ * TCP Panel — Tool Center Point selection.
  *
  * Matching Angular (TcpInfoPanel):
- *   - Selector de frame base (desde scene.frames) + inputs de offset
- *   - Muestra la resolved_pose del backend (FK) cuando el TCP está activo
- *   - Mensaje "No TCP selected — using flange" cuando no hay TCP
+ *   - Base-frame selector (from scene.frames) + offset inputs
+ *   - Shows the backend resolved_pose (FK) when the TCP is active
+ *   - "No TCP selected — using flange" message when there is no TCP
  *
- * El POST /scene/tcp ocurre al cambiar el selector (R2): el offset actual de
- * los inputs viaja con la selección; la opción vacía limpia el TCP.
+ * POST /scene/tcp happens on selector change (R2): the current input offset
+ * travels with the selection; the empty option clears the TCP.
  */
 export function TcpPanel() {
   const service = useSceneService()

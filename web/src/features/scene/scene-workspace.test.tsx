@@ -8,7 +8,7 @@ import { useDomainSceneStore, type SceneObject } from './store'
 import type { PoseDef } from '@/shared/contracts'
 
 /**
- * Escena area (area-scene spec, S2):
+ * Scene area (area-scene spec, S2):
  * - Scene panel is FULL-HEIGHT: SceneWorkspace renders the SceneEditor at
  *   full panel height with NO collapsible <details> wrapper ("Scene Panel
  *   Full-Height").
@@ -37,7 +37,7 @@ beforeEach(() => {
 })
 afterEach(() => cleanup())
 
-describe('Escena area — full-height SceneWorkspace (area-scene spec)', () => {
+describe('Scene area — full-height SceneWorkspace (area-scene spec)', () => {
   it('renders the Scene editor with objects/locations/tools/home at full height', () => {
     renderWorkspace()
     // SceneEditor sections are all present (behavioral output, not CSS classes).

@@ -3,9 +3,9 @@ import { useSceneStore } from '../store'
 import { useSceneService } from '../services/service-context'
 
 /**
- * Hook para enviar cambios de ángulos articulares (FK) al backend.
+ * Hook to send joint angle changes (FK) to the backend.
  *
- * Dependencia: SceneService (inyectado via ServicesProvider).
+ * Dependency: SceneService (injected via ServicesProvider).
  */
 export function useFkStream() {
   const service = useSceneService()

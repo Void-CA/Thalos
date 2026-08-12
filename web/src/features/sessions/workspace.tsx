@@ -1,7 +1,7 @@
 import { SessionBrowser } from './components/SessionBrowser'
 
 /**
- * SessionsWorkspace — Sesiones area entry point (S5, area-sessions spec).
+ * SessionsWorkspace — Sessions area entry point (S5, area-sessions spec).
  *
  * Renders the full session browser (list + status filters + search +
  * detail preview). Pure projection over React Query (ADR

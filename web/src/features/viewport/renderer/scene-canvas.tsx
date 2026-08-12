@@ -15,8 +15,8 @@ interface SceneCanvasProps {
 }
 
 /**
- * Z-up Camera Controller — configura cámara con up=(0,0,1)
- * para convención robótica (plano XY horizontal).
+ * Z-up Camera Controller — configures the camera with up=(0,0,1)
+ * for the robotics convention (XY horizontal plane).
  */
 function CameraSetup() {
   const { camera } = useThree()
@@ -32,7 +32,7 @@ function CameraSetup() {
   return null
 }
 
-/** GridHelper rotado π/2 en X para Z-up. */
+/** GridHelper rotated π/2 on X for Z-up. */
 function SceneGrid() {
   const refDim = useSceneStore(s => s.data?.referenceDimension) ?? 1.0
   const size = Math.max(refDim * 4, 0.5)
@@ -54,7 +54,7 @@ function SceneLights() {
   )
 }
 
-/** Contenedor R3F con Z-up, controles, robot y overlays. */
+/** R3F container with Z-up, controls, robot and overlays. */
 export function SceneCanvas({ showStats = false }: SceneCanvasProps) {
   const sceneData = useSceneStore(s => s.data)
 

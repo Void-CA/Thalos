@@ -4,7 +4,7 @@ import type { CloudPoint } from './workspace-analysis-store'
 export interface WorkspaceResult {
   metrics: Record<string, number>
   bounds: { min: [number, number, number]; max: [number, number, number] } | null
-  /** Puntos de muestra para la nube (null si include_samples=false). */
+  /** Sample points for the cloud (null if include_samples=false). */
   samples: CloudPoint[] | null
 }
 
@@ -25,15 +25,15 @@ export interface SampleParams {
 }
 
 /**
- * Umbral de condición para clasificar una muestra como casi-singular: número de
- * condición de la matriz Jacobiana (razón entre el valor singular más fuerte y
- * el más débil, adimensional). Refleja el default del backend
- * `SingularityConfig::default()` en thalos-core/analysis/singularity/config.rs;
- * el frontend lo reenvía tal cual en /workspace/singularity.
+ * Condition threshold for classifying a sample as near-singular: condition
+ * number of the Jacobian matrix (ratio between the strongest and weakest
+ * singular value, dimensionless). Mirrors the backend default
+ * `SingularityConfig::default()` in thalos-core/analysis/singularity/config.rs;
+ * the frontend forwards it as-is in /workspace/singularity.
  */
 export const NEAR_SINGULAR_CONDITION_THRESHOLD = 100.0
 
-/** Extrae puntos de muestra de una respuesta con position.*/
+/** Extracts sample points from a response carrying position.*/
 function extractPoints(arr: unknown[] | undefined | null, stateKey?: string): CloudPoint[] | null {
   if (!arr || !Array.isArray(arr) || arr.length === 0) return null
   return arr.map((s: any) => ({
@@ -44,7 +44,7 @@ function extractPoints(arr: unknown[] | undefined | null, stateKey?: string): Cl
 }
 
 /**
- * WorkspaceService — análisis de workspace sampling, singularidad, manipulabilidad.
+ * WorkspaceService — workspace sampling, singularity, manipulability analysis.
  */
 export class WorkspaceService {
   readonly client: typeof apiClient

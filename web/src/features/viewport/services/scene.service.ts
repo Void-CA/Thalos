@@ -11,8 +11,8 @@ import type { SceneData, RuntimeInfo, IkResult, ActivePlan, ToolFrame, Execution
 import type { RuntimeStateResponse, PoseTargetDto } from '../api/scene-api.types'
 
 /**
- * SceneSnapshot — estado completo de la escena post-operación,
- * ya transformado de DTOs a tipos de dominio.
+ * SceneSnapshot — full scene state after an operation,
+ * already transformed from DTOs to domain types.
  */
 export interface SceneSnapshot {
   scene: SceneData
@@ -24,7 +24,7 @@ export interface SceneSnapshot {
 }
 
 /**
- * FkUpdateSnapshot — versión liviana para FK (no altera plan ni execution).
+ * FkUpdateSnapshot — lightweight version for FK (does not alter plan or execution).
  */
 export interface FkUpdateSnapshot {
   scene: SceneData
@@ -34,7 +34,7 @@ export interface FkUpdateSnapshot {
 }
 
 /**
- * SolvedIk — resultado del solver IK.
+ * SolvedIk — IK solver result.
  */
 export interface SolvedIk {
   joints: number[]
@@ -64,10 +64,10 @@ function toFkSnapshot(res: RuntimeStateResponse): FkUpdateSnapshot {
 }
 
 /**
- * SceneService — capa de negocio para operaciones de escena robótica.
+ * SceneService — business layer for robotic scene operations.
  *
- * Encapsula: API calls + transformación DTO → dominio.
- * Testeable: inyectando un mock del objeto api.
+ * Encapsulates: API calls + DTO → domain transformation.
+ * Testable: by injecting a mock of the api object.
  */
 export class SceneService {
   readonly api: typeof sceneApi
@@ -151,5 +151,5 @@ export class SceneService {
   }
 }
 
-/** Singleton para uso fuera de React (testing). */
+/** Singleton for use outside React (testing). */
 export const sceneService = new SceneService(sceneApi)

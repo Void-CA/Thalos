@@ -35,11 +35,11 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('SessionsWorkspace — renders the session browser (S5.5)', () => {
-  it('mounts the browser shell (Sesiones heading) and delegates to GET /sessions', async () => {
+  it('mounts the browser shell (Sessions heading) and delegates to GET /sessions', async () => {
     apiMocks.list.mockResolvedValue([])
     renderWorkspace()
 
-    expect(screen.getByRole('heading', { name: 'Sesiones' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Sessions' })).toBeInTheDocument()
     expect(await screen.findByText('No sessions yet')).toBeInTheDocument()
     expect(apiMocks.list).toHaveBeenCalledTimes(1)
   })

@@ -24,7 +24,7 @@ export interface SceneState {
   error: string | null
   /** Machine-readable error code from the backend (resilience-matrix spec).
    *  Kept separate so ErrorBox can render the correct CTA (e.g. not_found →
-   *  "Volver al catálogo") without breaking string-only callers. */
+   *  "Back to catalog") without breaking string-only callers. */
   errorCode: string | null
   trajectoryColorMode: TrajectoryColorMode
 }

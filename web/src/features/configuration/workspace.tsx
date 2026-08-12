@@ -1,7 +1,7 @@
 /**
  * ConfigurationWorkspace — non-stage shell (S5, area-configuration spec).
  *
- * Configuración is ORTHOGONAL to the pipeline: it has no consume/produce
+ * Configuration is ORTHOGONAL to the pipeline: it has no consume/produce
  * artifacts, no stage and no stepper position (`stage: null` in the registry)
  * — it never appears in the stepper and never blocks navigation. This change
  * ships ONLY the structural shell: each future settings group (Solver IK,
@@ -20,7 +20,7 @@ export function ConfigurationWorkspace() {
     <div className="flex flex-col h-full overflow-hidden">
       <div className="px-4 py-3 border-b border-border">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-foreground">
-          Configuración
+          Configuration
         </h2>
       </div>
 

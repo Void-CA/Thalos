@@ -1,18 +1,18 @@
 import { create } from 'zustand'
 
-/** Punto con posición y metadatos opcionales según el origen. */
+/** Point with position and optional metadata depending on the source. */
 export interface CloudPoint {
   position: [number, number, number]
-  /** Solo disponible en samples de singularity. */
+  /** Only available in singularity samples. */
   state?: string
-  /** Solo disponible en samples de manipulability. */
+  /** Only available in manipulability samples. */
   yoshikawa?: number
 }
 
 export type PointCloudColorMode = 'none' | 'workspace' | 'singularity' | 'manipulability'
 
 interface WorkspaceState {
-  /** Samples por tipo de análisis — cada uno tiene los campos que le corresponden. */
+  /** Samples per analysis type — each one has the fields that correspond to it. */
   workspaceSamples: CloudPoint[] | null
   singularitySamples: CloudPoint[] | null
   manipulabilitySamples: CloudPoint[] | null

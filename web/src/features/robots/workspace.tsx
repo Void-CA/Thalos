@@ -29,9 +29,9 @@ export function RobotShell() {
             <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">
               Tools
             </h2>
-            {/* Todos los paneles cerrados por defecto (product-quality item 6):
-                Base UI ya es single-open (`multiple` false); sin defaultValue
-                el accordion arranca all-closed. */}
+            {/* All panels closed by default (product-quality item 6):
+                Base UI is already single-open (`multiple` false); without a
+                defaultValue the accordion starts all-closed. */}
             <Accordion className="w-full">
               {tools.map((tool) => (
                 <AccordionItem key={tool.id} value={tool.id} className="border-b border-border last:border-b-0">

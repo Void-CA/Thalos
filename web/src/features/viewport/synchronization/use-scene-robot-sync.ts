@@ -4,29 +4,27 @@ import { useSceneStore } from '../store'
 import { useLoadRobot, useLoadScene } from './use-scene-loader'
 
 /**
- * Límite de re-arm automático del latch de GET /scene (fix review): si el boot
- * falla durablemente (retry: 1 del mutation agotado), `initialSceneRequested`
- * quedaba en true para siempre y un backend recuperado jamás volvía a
- * inicializar la escena. El re-arm concede reintentos acotados para que la
- * recuperación automática sea posible SIN que un backend caído produzca un
- * bucle infinito de re-fires.
+ * Auto re-arm limit of the GET /scene latch (fix review): if boot fails
+ * durably (retry: 1 of the mutation exhausted), `initialSceneRequested`
+ * stayed true forever and a recovered backend never re-initialized the
+ * scene. The re-arm grants bounded retries so automatic recovery is
+ * possible WITHOUT a down backend producing an infinite re-fire loop.
  */
 const MAX_SCENE_LOAD_REARMS = 2
 
 /**
- * Decisión pura del efecto de request del sync hook (spec R2.1): ¿debe
- * dispararse un loadRobot para `selectedId` en este momento?
+ * Pure request-effect decision of the sync hook (spec R2.1): should a
+ * loadRobot for `selectedId` fire right now?
  *
- * La selección del catálogo es una REQUEST; la identidad confirmada vive en el
- * scene runtime (`confirmedId`), así que un robot ya confirmado nunca se
- * re-solicita. `lastRequestedId` es el latch de dedupe: el request en vuelo
- * para la selección actual. `autoRetrySpent` es el budget de reintento
- * automático (a lo sumo uno por selección tras un error): el error-settle
- * consume el budget y limpia el latch para conceder ese reintento, por eso un
- * latch limpio con budget gastado es EXACTAMENTE el estado de reintento
- * pendiente y el request se permite; un latch puesto con budget gastado es el
- * reintento agotado y se bloquea hasta que el usuario cambie de selección
- * (lo que resetea budget y latch juntos).
+ * Catalog selection is a REQUEST; the confirmed identity lives in the scene
+ * runtime (`confirmedId`), so an already-confirmed robot is never re-fetched.
+ * `lastRequestedId` is the dedupe latch: the in-flight request for the current
+ * selection. `autoRetrySpent` is the automatic-retry budget (at most one per
+ * selection after an error): the error-settle consumes the budget and clears
+ * the latch to grant that retry — so a clean latch with a spent budget is
+ * EXACTLY the pending-retry state and the request is allowed; a set latch with
+ * a spent budget is the exhausted retry and it is blocked until the user
+ * changes the selection (which resets budget and latch together).
  */
 export function shouldRequestRobot(
   selectedId: string | null,
@@ -36,28 +34,27 @@ export function shouldRequestRobot(
 ): boolean {
   if (!selectedId) return false
   if (selectedId === confirmedId) return false
-  // Latch de dedupe: el request de esta selección ya fue emitido (en vuelo o
-  // agotado tras error). Solo el error-settle (reintento concedido) o un cambio
-  // de selección limpian el latch.
+  // Dedupe latch: the request for this selection was already emitted (in-flight
+  // or exhausted after an error). Only the error-settle (granted retry) or a
+  // selection change clears the latch.
   if (selectedId === lastRequestedId) return false
-  // Latch limpio → selección fresca o reintento concedido: ambos legítimos.
-  // `autoRetrySpent` se lee para mantener explícito el contrato completo: un
-  // budget gastado jamás debe coincidir con un latch limpio salvo justo tras el
-  // error-settle que concedió el reintento (la defensa `lastRequestedId === null`
-  // es la que permite ese caso único).
+  // Clean latch → fresh selection or granted retry: both legitimate.
+  // `autoRetrySpent` is read to keep the full contract explicit: a spent
+  // budget must never coincide with a clean latch except right after the
+  // error-settle that granted the retry (the `lastRequestedId === null`
+  // defense is what allows that single case).
   return !autoRetrySpent || lastRequestedId === null
 }
 
 /**
- * Sincroniza la selección de robot del catálogo con la escena 3D.
+ * Syncs the catalog robot selection with the 3D scene.
  *
- * La identidad CONFIRMADA del robot vive en el scene runtime, escrita
- * exclusivamente por `applyScene` (spec R2.1 — single writer). La selección
- * del catálogo es solo una REQUEST: cuando el usuario elige un robot que el
- * scene ya confirma, no se dispara ningún load.
+ * The CONFIRMED robot identity lives in the scene runtime, written exclusively
+ * by `applyScene` (spec R2.1 — single writer). The catalog selection is only a
+ * REQUEST: when the user picks a robot the scene already confirms, no load fires.
  *
- * Cuando el usuario selecciona un robot en el catálogo, automáticamente
- * lo carga en el viewport vía la API (si el scene aún no lo confirma).
+ * When the user selects a robot in the catalog, it is automatically loaded in
+ * the viewport via the API (if the scene does not confirm it yet).
  */
 export function useSceneRobotSync() {
   const selectedId = useRobotStore(s => s.selectedId)
@@ -66,31 +63,31 @@ export function useSceneRobotSync() {
   const confirmedId = useSceneStore(s => s.runtime?.robot.id ?? null)
   const lastRequestedId = useRef<string | null>(null)
   const initialSceneRequested = useRef(false)
-  // Re-arms de GET /scene consumidos: el re-arm concede a lo sumo
-  // MAX_SCENE_LOAD_REARMS reintentos automáticos del latch inicial.
+  // GET /scene re-arms consumed: the re-arm grants at most
+  // MAX_SCENE_LOAD_REARMS automatic retries of the initial latch.
   const sceneLoadRearms = useRef(0)
-  // Budget de reintento automático: permite a lo sumo UN re-request tras un
-  // fallo por selección. Sin este flag, resetear lastRequestedId en cada flip
-  // de isError re-disparaba el efecto de request (el objeto useMutation es
-  // fresco por render) → bucle infinito de POST /scene/robot (CRITICAL R3-001).
+  // Automatic retry budget: allows at most ONE re-request after a failure per
+  // selection. Without this flag, resetting lastRequestedId on every isError
+  // flip re-fired the request effect (the useMutation object is fresh per
+  // render) → infinite POST /scene/robot loop (CRITICAL R3-001).
   const autoRetrySpent = useRef(false)
 
-  // Invalida el dedupe latch cuando cambia la identidad confirmada (fix review):
-  // el flujo "select scara → importar URDF → re-seleccionar scara" quedaba
-  // silenciosamente ignorado porque selectedId('scara') === lastRequestedId, aun
-  // cuando confirmedId ya no era scara. Corre ANTES que el efecto de request
-  // para que una re-selección distinta se re-solicite en el mismo commit. El
-  // guard no depende de confirmedId truthy: también invalida cuando la identidad
-  // confirmada pasa a null/falsy (escena reseteada).
+  // Invalidates the dedupe latch when the confirmed identity changes (fix review):
+  // the flow "select scara → import URDF → re-select scara" was silently ignored
+  // because selectedId('scara') === lastRequestedId, even when confirmedId was no
+  // longer scara. Runs BEFORE the request effect so a distinct re-selection is
+  // re-requested in the same commit. The guard does not depend on confirmedId
+  // being truthy: it also invalidates when the confirmed identity goes null/falsy
+  // (scene reset).
   useEffect(() => {
     if (confirmedId !== lastRequestedId.current) {
       lastRequestedId.current = null
     }
   }, [confirmedId])
 
-  // Cuando el usuario cambia de selección, el budget de reintento se reinicia
-  // y el latch se limpia: una selección distinta (o una deselección) habilita
-  // de nuevo el reintento automático del robot fallido.
+  // When the user changes the selection, the retry budget resets and the latch
+  // clears: a distinct selection (or a deselection) re-enables the automatic
+  // retry of the failed robot.
   useEffect(() => {
     if (selectedId !== lastRequestedId.current) {
       autoRetrySpent.current = false
@@ -98,12 +95,13 @@ export function useSceneRobotSync() {
     }
   }, [selectedId])
 
-  // Error settle: permite UN reintento automático por selección (fix CRITICAL
-  // R3-001). Un loadRobot(X) fallido nunca cambia confirmedId, así que el reset
-  // por identidad confirmada jamás desbloquea X (selectedId === lastRequestedId === X).
-  // Un request fallido no debe envenenar la re-selección — pero tampoco debe
-  // bombardear el backend: el budget se consume aquí y, tras el segundo fallo,
-  // el latch permanece, cortando el bucle hasta que el usuario cambie de selección.
+  // Error settle: allows ONE automatic retry per selection (fix CRITICAL
+  // R3-001). A failed loadRobot(X) never changes confirmedId, so the confirmed-
+  // identity reset never unlocks X (selectedId === lastRequestedId === X).
+  // A failed request must not poison the re-selection — but it must not
+  // bombard the backend either: the budget is consumed here and, after the
+  // second failure, the latch stays, cutting the loop until the user changes
+  // the selection.
   useEffect(() => {
     if (loadRobot.isError && !autoRetrySpent.current) {
       autoRetrySpent.current = true
@@ -112,21 +110,21 @@ export function useSceneRobotSync() {
   }, [loadRobot.isError])
 
   useEffect(() => {
-    // Dedupe (decisión pura `shouldRequestRobot`): se saltean los robots ya
-    // confirmados por el scene (respuesta de applyScene) o ya solicitados — un
-    // import URDF que cambia la identidad de la escena no debe disparar un
-    // reload espurio de la última selección del catálogo.
+    // Dedupe (pure decision `shouldRequestRobot`): skips robots already
+    // confirmed by the scene (applyScene response) or already requested — a
+    // URDF import that changes the scene identity must not fire a spurious
+    // reload of the last catalog selection.
     if (shouldRequestRobot(selectedId, confirmedId, lastRequestedId.current, autoRetrySpent.current) && selectedId) {
       lastRequestedId.current = selectedId
       loadRobot.mutate(selectedId)
     }
   }, [selectedId, confirmedId, loadRobot])
 
-  // Re-arm del latch de GET /scene (fix review): si el boot falló durablemente
-  // (retry: 1 agotado) sin identidad confirmada ni request en vuelo, el latch
-  // inicial se re-dispara para que un backend recuperado pueda re-inicializar
-  // la escena. Acotado por `sceneLoadRearms` para no crear un bucle de re-fires
-  // mientras el backend siga caído; la escena inicializada repone el budget.
+  // Re-arm of the GET /scene latch (fix review): if boot failed durably
+  // (retry: 1 exhausted) with no confirmed identity and no in-flight request,
+  // the initial latch re-fires so a recovered backend can re-initialize the
+  // scene. Bounded by `sceneLoadRearms` to avoid a re-fire loop while the
+  // backend stays down; the initialized scene replenishes the budget.
   useEffect(() => {
     if (confirmedId) {
       sceneLoadRearms.current = 0
@@ -139,14 +137,14 @@ export function useSceneRobotSync() {
     initialSceneRequested.current = false
   }, [loadScene.isError, loadScene.isPending, loadRobot.isPending, confirmedId])
 
-  // Spec R7/R6 — default derivado del backend. GET /scene es la ÚNICA vía de
-  // carga: se dispara siempre que no haya identidad confirmada ni un request
-  // de identidad en vuelo. El RobotSelector (y su hint persistido
-  // ROBOT_SELECTION_KEY) fue eliminado — el catálogo es la única fuente de
-  // selección (spec frontend-task-workspace). Sin este load, arrancar en '/'
-  // dejaba la escena sin cargar (viewport vacío y redirect a '/'), y un fallo
-  // de GET /robots también bloqueaba la escena. El load extra de GET /scene es
-  // seguro: use-scene-loader descarta respuestas stale vía tokens de orden.
+  // Spec R7/R6 — backend-derived default. GET /scene is the ONLY load path:
+  // it fires whenever there is no confirmed identity or in-flight identity
+  // request. The RobotSelector (and its persisted ROBOT_SELECTION_KEY hint)
+  // was removed — the catalog is the only selection source (spec
+  // frontend-task-workspace). Without this load, starting at '/' left the
+  // scene unloaded (empty viewport and redirect to '/'), and a GET /robots
+  // failure also blocked the scene. The extra GET /scene load is safe:
+  // use-scene-loader discards stale responses via ordering tokens.
   useEffect(() => {
     if (confirmedId) return
     if (loadScene.isPending || loadRobot.isPending) return

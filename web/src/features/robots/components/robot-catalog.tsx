@@ -6,7 +6,7 @@ import { RobotCard } from './robot-card'
 import { ErrorBox } from '@/components/ui/error-box'
 import { Loader2, ChevronRight, ChevronDown, Upload } from 'lucide-react'
 
-/** IDs de robots a excluir del catálogo. */
+/** Robot IDs to exclude from the catalog. */
 const EXCLUDED_IDS = new Set([
   'single_revolute',
   'manipulator_6dof',
