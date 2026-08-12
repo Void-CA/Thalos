@@ -13,6 +13,7 @@
 //! todo el wire format habla observaciones; la remediación son [`Action`]s.
 
 use std::collections::{BTreeMap, HashSet};
+use std::ops::Range;
 
 use thalos_core::analysis::action::{Action, ActionId, ActionImpact, ActionKind, ActionPriority};
 use thalos_core::analysis::location::Location;
@@ -24,6 +25,7 @@ use thalos_core::kinematics::inverse::IKSolver;
 use thalos_core::motion::segment::MotionSegment;
 use thalos_core::prelude::RobotState;
 use thalos_core::robot::serial_chain::SerialChain;
+use thalos_core::robot::tool_frame::ToolFrame;
 
 use crate::analysis::TrajectoryAnalyzer;
 use crate::error::PlanningError;
@@ -149,7 +151,7 @@ impl PlanAdvisor {
     ) -> Vec<Recommendation> {
         let Some(robot) = ik_solver.robot() else {
             // Sin modelo cinemático (mocks): no hay compilación posible.
-            return self.recommend_core(observations, program, ik_solver, current_joints, None, None);
+            return self.recommend_core(observations, program, ik_solver, current_joints, None, None, None);
         };
         let state = RobotState::new(current_joints.to_vec());
         let ctx = SegmentPlanningContext {
@@ -167,6 +169,7 @@ impl PlanAdvisor {
             current_joints,
             compiled.as_ref(),
             Some(robot),
+            None,
         )
     }
 
@@ -174,12 +177,21 @@ impl PlanAdvisor {
     /// el caller YA compiló el programa, así que la resolución de segmento y
     /// la verificación fin-a-fin corren contra ESE [`CompiledPlan`] (los
     /// `waypoint_range` reales, nunca índice-de-waypoint-como-segmento).
+    ///
+    /// R3-3 (P0): `tcp` es el Tool Center Point ACTIVO del snapshot
+    /// (`snapshot.active_tcp`) — el MISMO que preview/apply usan al recompilar
+    /// y re-analizar. La verificación de disponibilidad debe evaluar contra el
+    /// MISMO frame que el apply real: el Jacobiano (y por lo tanto las
+    /// observaciones de singularidad) depende del frame del efector. Con el
+    /// TCP activo, `None` aquí evaluaría la disponibilidad contra el flange y
+    /// mentiría sobre el resultado del apply.
     pub fn recommend_with_segment_context(
         &self,
         observations: &[Observation],
         program: &PlanningProgram,
         ik_solver: &dyn IKSolver,
         compiled: &CompiledPlan,
+        tcp: Option<&ToolFrame>,
     ) -> Vec<Recommendation> {
         let current_joints = compiled
             .merged_trajectory
@@ -194,6 +206,7 @@ impl PlanAdvisor {
             &current_joints,
             Some(compiled),
             ik_solver.robot(),
+            tcp,
         )
     }
 
@@ -211,6 +224,7 @@ impl PlanAdvisor {
         current_joints: &[f64],
         compiled: Option<&CompiledPlan>,
         robot: Option<&SerialChain>,
+        tcp: Option<&ToolFrame>,
     ) -> Vec<Recommendation> {
         let regions = RegionGrouper::default().group(observations);
         let mut recommendations = Vec::new();
@@ -279,27 +293,48 @@ impl PlanAdvisor {
                         };
                         match (robot, compiled) {
                             (Some(chain), Some(_plan)) => {
-                                let target_waypoint = match observation.location {
-                                    Location::Waypoint(wp) => Some(wp),
-                                    _ => None,
-                                };
                                 let context = AvailabilityContext {
                                     robot: chain,
                                     program,
                                     ik_solver,
                                     current_joints,
                                     kind,
-                                    regions: &regions,
+                                    tcp,
                                 };
-                                match Self::verify_available(&context, &edit, target_waypoint) {
-                                    Ok(()) => (edit, RecommendationStatus::Available, None),
-                                    Err(reason) => {
-                                        (edit, RecommendationStatus::Unavailable, Some(reason))
-                                    }
+                                match Self::verify_available(&context, &edit) {
+                                    Ok(()) => (
+                                        edit,
+                                        Some(RecommendationStatus::Available),
+                                        None,
+                                    ),
+                                    Err(reason) => (
+                                        edit,
+                                        Some(RecommendationStatus::Unavailable),
+                                        Some(reason),
+                                    ),
                                 }
                             }
-                            // Sin contexto cinemático: solo materialización.
-                            _ => (edit, RecommendationStatus::Available, None),
+                            // R3-2 (P0): no-context arms made HONEST. The old
+                            // `_` arm claimed `Available` for ANY missing
+                            // context — the D8 gate lied.
+                            //
+                            // (Some, None): el programa BASE no compiló (ruta
+                            // 4-arg con robot real). El edit no puede
+                            // verificarse y el base está roto — el veredicto
+                            // honesto es `Unavailable { CompileFailed }`.
+                            (Some(_), None) => (
+                                edit,
+                                Some(RecommendationStatus::Unavailable),
+                                Some(UnavailabilityReason::CompileFailed),
+                            ),
+                            // (None, _): sin modelo cinemático (solver mock).
+                            // El edit materializó, pero la verificación
+                            // fin-a-fin requiere un robot real — veredicto
+                            // honesto: `None` (no evaluado, omitido en el
+                            // wire), NUNCA un `Available` inventado. La
+                            // producción siempre tiene robot
+                            // (`DampedLeastSquaresSolver::robot()` = Some).
+                            (None, _) => (edit, None, None),
                         }
                     }
                     Err(error) => {
@@ -312,7 +347,7 @@ impl PlanAdvisor {
                                 replacement: vec![target.clone()],
                                 original: Some(vec![target.clone()]),
                             },
-                            RecommendationStatus::Unavailable,
+                            Some(RecommendationStatus::Unavailable),
                             Some(reason),
                         )
                     }
@@ -328,7 +363,7 @@ impl PlanAdvisor {
                         parameters: BTreeMap::new(),
                     },
                     edit,
-                    status: Some(status),
+                    status,
                     reason,
                 });
             }
@@ -510,16 +545,18 @@ impl PlanAdvisor {
     ///    del plan — el mismo contexto determinista que preview/apply usan);
     /// 3. la trayectoria compilada re-analiza;
     /// 4. para remediaciones de Singularity, la REGIÓN OBJETIVO re-analizada
-    ///    (todos los waypoints agrupados por `RegionGrouper`) queda libre de
-    ///    observaciones de singularidad (garantía de región completa).
+    ///    queda LIBRE de observaciones de singularidad — garantía de región
+    ///    completa (R3-1 P0 fix), no una mera disminución de conteo.
     ///
     /// Cualquier fallo mapea al [`UnavailabilityReason`] específico. El
     /// re-análisis corre sin collision checker: las observaciones de
-    /// singularidad son del Jacobiano y no dependen de colisiones.
+    /// singularidad son del Jacobiano y no dependen de colisiones. El
+    /// re-análisis usa el MISMO [`ToolFrame`] activo que preview/apply
+    /// (R3-3): la condición del Jacobiano depende del frame del efector, y la
+    /// disponibilidad debe evaluarse contra el frame del apply real.
     fn verify_available(
         context: &AvailabilityContext<'_>,
         edit: &ProgramEdit,
-        target_waypoint: Option<usize>,
     ) -> Result<(), UnavailabilityReason> {
         let AvailabilityContext {
             robot,
@@ -527,7 +564,7 @@ impl PlanAdvisor {
             ik_solver,
             current_joints,
             kind,
-            regions,
+            tcp,
         } = *context;
 
         // 1. Aplicar el edit (no-mutante).
@@ -535,13 +572,14 @@ impl PlanAdvisor {
             .apply(program)
             .map_err(|_| UnavailabilityReason::NotApplicable)?;
 
-        // 2. Compilar el programa editado desde el inicio del plan.
+        // 2. Compilar el programa editado desde el inicio del plan, con el
+        //    MISMO TCP activo que preview/apply usan al recompilar.
         let state = RobotState::new(current_joints.to_vec());
         let ctx = SegmentPlanningContext {
             robot,
             current_state: &state,
             ik_solver,
-            tcp: None,
+            tcp,
         };
         let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
         let compiled = compiler.compile(&edited, &ctx).map_err(|error| match error.source {
@@ -551,53 +589,63 @@ impl PlanAdvisor {
             _ => UnavailabilityReason::CompileFailed,
         })?;
 
-        // 3. Re-analizar la trayectoria compilada.
+        // 3. Re-analizar la trayectoria compilada (mismo TCP activo).
         let artifact = ArtifactRef::MotionPlan(MotionPlanId("availability-verification".to_string()));
-        let (_analysis, reanalyzed) = TrajectoryAnalyzer::new(robot, None)
+        let (_analysis, reanalyzed) = TrajectoryAnalyzer::new(robot, tcp)
             .analyze_with_observations(artifact, &compiled.merged_trajectory)
             .map_err(|_| UnavailabilityReason::PlanningFailed)?;
 
-        // 4. Verificación CAUSAL para Singularity (design ADR-2 REVISION 4,
-        //    T13 M3): la región objetivo re-analizada debe tener ESTRICTAMENTE
-        //    MENOS observaciones de singularidad que la región original.
+        // 4. Garantía de REGIÓN COMPLETA para Singularity (R3-1 P0 fix, design
+        //    ADR-2 REVISION 4, spec causal-remediation "Whole-Region
+        //    Availability Guarantee").
         //
-        //    El rango original de `RegionGrouper` vive en el espacio de índices
-        //    de la trayectoria ORIGINAL; el edit cambia la interpolación
-        //    (el reparameterizer altera el conteo de waypoints), así que los
-        //    índices re-analizados DIVERGEN. La verificación usa el rango
-        //    RECOMPILADO del segmento objetivo (del plan recompilado — el
-        //    mismo índice de segmento, nuevo rango de waypoints) y compara el
-        //    conteo, nunca los índices.
+        //    El contrato: `Available` significa que la región objetivo
+        //    re-analizada está LIBRE de observaciones de singularidad — TODOS
+        //    los waypoints de la región proyectada, no una instancia, y NUNCA
+        //    una mera disminución de conteo (24→23 NO es `Available`).
         //
-        //    El waypoint de arranque FIJO del plan puede permanecer singular
-        //    (p.ej. Planar3R parte de [0,0,0] — ningún edit de segmento puede
-        //    moverlo): la garantía es que la remediación es CAUSAL (el
-        //    fenómeno disminuyó), que es lo que el contrato de usabilidad
-        //    asserta (24 → <24; 17 → <4 con el set completo).
-        if kind == ActionKind::Singularity
-            && let Some(waypoint) = target_waypoint
-            && let Some(region) = regions
-                .iter()
-                .find(|r| r.kind == RegionKind::Singularity && r.waypoint_range.contains(&waypoint))
-        {
-            let original_errors = region.metrics.as_ref().map_or(0, |m| m.error_count);
+        //    Proyección de índices: el rango de `RegionGrouper` vive en el
+        //    espacio de índices de la trayectoria ORIGINAL; el edit cambia la
+        //    interpolación (el reparameterizer altera el conteo de waypoints),
+        //    así que los índices re-analizados DIVERGEN. La proyección
+        //    determinista es el rango RECOMPILADO del segmento objetivo
+        //    (`recompiled.segments[target_index].waypoint_range`): el edit
+        //    reemplaza exactamente ESE segmento, así que su rango recompilado
+        //    ES la imagen de la región original sobre la trayectoria
+        //    recompilada (la correspondencia de segmento es exacta aunque los
+        //    índices de waypoint no lo sean). Cualquier observación de
+        //    singularidad dentro de ese rango es el fenómeno de la región que
+        //    persiste (o uno nuevo que el edit introdujo EN EL MISMO segmento)
+        //    — el gate es conservador pero nunca miente.
+        //
+        //    EXCLUSIÓN irreducible (fixed start): el waypoint 0 de la
+        //    trayectoria merged es la configuración inicial FIJA del plan
+        //    (invariante del compilador: merged waypoint 0 == current_joints —
+        //    `compile_two_movej_first_waypoint_matches_start_state`). Cuando
+        //    el segmento objetivo es el PRIMERO del plan (target_index == 0,
+        //    el único caso donde el rango proyectado contiene el waypoint 0),
+        //    una singularidad en el waypoint 0 se EXCLUYE: la remediación
+        //    edita segmentos de trayectoria, nunca el estado inicial, así que
+        //    una configuración inicial singular es irreducible (Planar3R parte
+        //    de [0,0,0] → el resultado M3 24→1 mantiene la singularidad del
+        //    waypoint 0 y el gate lo acepta; Scara 17→0 no tiene waypoint 0
+        //    singular y pasa igual).
+        if kind == ActionKind::Singularity {
             let target_index = match edit {
                 ProgramEdit::ReplaceSegment { index, .. } => *index,
                 _ => return Err(UnavailabilityReason::NotApplicable),
             };
-            let recompiled_range = compiled
+            let projected_range = compiled
                 .segments
                 .get(target_index)
-                .map(|segment| segment.waypoint_range.clone());
-            let reanalyzed_errors = reanalyzed
-                .iter()
-                .filter(|o| {
-                    o.kind == ObservationKind::Singularity
-                        && matches!(o.location, Location::Waypoint(wp)
-                            if recompiled_range.as_ref().is_some_and(|range| range.contains(&wp)))
-                })
-                .count();
-            if reanalyzed_errors >= original_errors.max(1) {
+                .map(|segment| segment.waypoint_range.clone())
+                .ok_or(UnavailabilityReason::PlanningFailed)?;
+            let exclude_fixed_start = target_index == 0;
+            if !projected_region_has_zero_relevant_observations(
+                &reanalyzed,
+                &projected_range,
+                exclude_fixed_start,
+            ) {
                 return Err(UnavailabilityReason::PlanningFailed);
             }
         }
@@ -637,7 +685,65 @@ struct AvailabilityContext<'a> {
     ik_solver: &'a dyn IKSolver,
     current_joints: &'a [f64],
     kind: ActionKind,
-    regions: &'a [ProblemRegion],
+    /// Tool Center Point ACTIVO (R3-3 P0): el MISMO frame que preview/apply
+    /// usan al recompilar y re-analizar. La disponibilidad se evalúa contra
+    /// ese frame, nunca contra el flange.
+    tcp: Option<&'a ToolFrame>,
+}
+
+/// Cantidad de observaciones de Singularity dentro de la región proyectada de
+/// la trayectoria recompilada, excluyendo el waypoint de arranque fijo
+/// irreducible (R3-1 P0 fix, spec causal-remediation "Whole-Region
+/// Availability Guarantee").
+///
+/// - `reanalyzed`: observaciones de re-analizar la trayectoria editada.
+/// - `projected_range`: rango de waypoints RECOMPILADO del segmento objetivo —
+///   la proyección determinista de la `ProblemRegion` original sobre la
+///   trayectoria recompilada (el edit reemplaza exactamente ese segmento; los
+///   índices divergen pero la correspondencia de segmento es exacta).
+/// - `exclude_fixed_start`: true cuando el segmento objetivo es el primero del
+///   plan — su rango contiene el waypoint 0 de la trayectoria merged, que es
+///   la configuración inicial FIJA (invariante del compilador). Ningún edit de
+///   segmento puede moverla, así que una singularidad ahí es irreducible y se
+///   excluye de la garantía.
+///
+/// El gate exige ZERO observaciones relevantes: una mera disminución de conteo
+/// (24→23) NO es `Available`.
+fn region_singularity_observations(
+    reanalyzed: &[Observation],
+    projected_range: &Range<usize>,
+    exclude_fixed_start: bool,
+) -> usize {
+    reanalyzed
+        .iter()
+        .filter(|o| {
+            if o.kind != ObservationKind::Singularity {
+                return false;
+            }
+            let Location::Waypoint(wp) = o.location else {
+                return false;
+            };
+            if !projected_range.contains(&wp) {
+                return false;
+            }
+            if exclude_fixed_start && wp == 0 {
+                return false;
+            }
+            true
+        })
+        .count()
+}
+
+/// El predicado de disponibilidad de la garantía de región completa: la región
+/// proyectada re-analizada queda LIBRE de observaciones de singularidad
+/// (excluyendo el fixed start irreducible). Falso para 24→23; verdadero para
+/// 24→1 (Planar3R) y 17→0 (Scara).
+fn projected_region_has_zero_relevant_observations(
+    reanalyzed: &[Observation],
+    projected_range: &Range<usize>,
+    exclude_fixed_start: bool,
+) -> bool {
+    region_singularity_observations(reanalyzed, projected_range, exclude_fixed_start) == 0
 }
 
 #[cfg(test)]
@@ -795,13 +901,17 @@ mod tests {
                 "IK failure must be surfaced explicitly, never dropped"
             );
         }
-        // The other remediation (Waypoint) materializes fine.
+        // R3-2 (P0): the other remediation (Waypoint) materializes fine, but
+        // the mock solver exposes NO kinematic model (`robot()` = None), so
+        // the honest verdict is "not evaluated" (`status: None`, omitted on
+        // the wire) — never a claimed `Available`. The end-to-end D8
+        // verification requires a real robot (production always has one).
         assert!(
-            recommendations
-                .iter()
-                .any(|r| r.action.kind == ActionKind::Waypoint
-                    && r.status == Some(crate::recommendation::RecommendationStatus::Available)),
-            "materializable recommendations stay available"
+            recommendations.iter().any(|r| {
+                r.action.kind == ActionKind::Waypoint && r.status.is_none()
+            }),
+            "without a kinematic model the materialization-only status must be None (not evaluated), \
+             never a claimed Available"
         );
     }
 
@@ -1198,5 +1308,330 @@ mod tests {
             matches!(strategy, Some(SingularityStrategy::Detour { .. })),
             "interior region must route to the joint-space Detour, got {strategy:?}"
         );
+    }
+
+    // ── R3-1 (P0): whole-region availability guarantee ─────────────────────
+    //
+    // The 4R review found a CRITICAL spec/implementation drift: the gate used
+    // `reanalyzed_errors < original_errors` (a strict count DECREASE), so a
+    // 24→23 reduction was marked `Available` even though the region remained
+    // mostly singular. The contract (spec causal-remediation "Whole-Region
+    // Availability Guarantee") requires the re-analyzed target region to be
+    // FREE of Singularity observations — the ONLY exclusion is the irreducible
+    // fixed-start waypoint (the plan's initial configuration, which no segment
+    // edit can move). These tests pin the strengthened gate: 24→23 MUST fail,
+    // 24→1 MUST pass, and the fixed-start exclusion must never mask interior
+    // singularities.
+
+    #[test]
+    fn region_with_remaining_singularities_fails_the_whole_region_gate() {
+        // The 24→23 regression distilled: a projected region that STILL
+        // contains Singularity observations is NOT cleared — availability
+        // requires zero, not "fewer than before".
+        let observations = vec![singular_obs(1, 2), singular_obs(2, 3), singular_obs(3, 7)];
+        let range = 0..10;
+        assert_eq!(
+            region_singularity_observations(&observations, &range, false),
+            3,
+            "every Singularity observation inside the projected range must count"
+        );
+        assert!(
+            !projected_region_has_zero_relevant_observations(&observations, &range, false),
+            "3 remaining singularities must fail the availability gate"
+        );
+    }
+
+    #[test]
+    fn region_with_only_the_irreducible_fixed_start_singularity_passes_the_gate() {
+        // The Planar3R M3 result (24→1): the only remaining Singularity is the
+        // fixed initial configuration (merged-trajectory waypoint 0), which no
+        // segment edit can change. When the target segment is the plan's first
+        // segment, that waypoint is EXCLUDED from the whole-region guarantee.
+        let observations = vec![singular_obs(1, 0)];
+        let range = 0..25;
+        assert_eq!(
+            region_singularity_observations(&observations, &range, true),
+            0,
+            "the fixed-start waypoint must be excluded when the target segment is the first segment"
+        );
+        assert!(
+            projected_region_has_zero_relevant_observations(&observations, &range, true),
+            "24→1 must stay Available under the strengthened gate"
+        );
+    }
+
+    #[test]
+    fn fixed_start_exclusion_does_not_mask_remaining_interior_singularities() {
+        // The 24→23 case EXPLICIT: 24 singularities at waypoints 0..=23;
+        // excluding waypoint 0 still leaves 23 inside the projected range —
+        // the gate MUST reject the recommendation (the region remains mostly
+        // singular and the score stays 0.0).
+        let observations: Vec<Observation> = (0..24)
+            .map(|wp| singular_obs(wp as u32 + 1, wp))
+            .collect();
+        let range = 0..25;
+        assert_eq!(
+            region_singularity_observations(&observations, &range, true),
+            23,
+            "only the fixed-start waypoint may be excluded — 23 interior singularities remain"
+        );
+        assert!(
+            !projected_region_has_zero_relevant_observations(&observations, &range, true),
+            "24→23 must NEVER be Available (the UI would enable Apply on a non-repair)"
+        );
+    }
+
+    #[test]
+    fn singularities_outside_the_projected_range_do_not_fail_the_gate() {
+        // Triangulation: the guarantee is scoped to the projected region —
+        // Singularity observations elsewhere in the trajectory are other
+        // regions' responsibility (their own recommendations).
+        let observations = vec![singular_obs(1, 15), singular_obs(2, 16)];
+        let range = 0..10;
+        assert_eq!(
+            region_singularity_observations(&observations, &range, false),
+            0,
+            "observations outside the projected range must not count"
+        );
+        assert!(
+            projected_region_has_zero_relevant_observations(&observations, &range, false)
+        );
+    }
+
+    #[test]
+    fn singularity_available_requires_whole_region_clear_except_fixed_start() {
+        // End-to-end on the M3 Planar3R scenario: the fixed-start departure
+        // saturates the score (≥ 4 Errors); the Available remediation
+        // (departure reparameterization) must leave the recompiled target
+        // segment free of Singularity observations EXCEPT the irreducible
+        // fixed start (waypoint 0). This guards the strengthened gate against
+        // flipping the 24→1 result to Unavailable.
+        use thalos_core::analysis::observation::Severity;
+        use crate::analysis::TrajectoryAnalyzer;
+
+        let robot = RobotRegistry::create_default(RobotModel::Planar3R);
+        let program = crate::motion::program::PlanningProgram::new(vec![
+            MotionSegment::MoveJ {
+                origin: thalos_core::ids::OperationId("op-j".to_string()),
+                target: vec![0.5, -0.3, 0.1],
+                max_velocity: None,
+                max_acceleration: None,
+            },
+            move_l_segment(0),
+        ]);
+        let start = vec![0.0, 0.0, 0.0];
+        let solver = real_solver(&robot);
+        let state = RobotState::new(start.clone());
+        let ctx = SegmentPlanningContext {
+            robot: &robot,
+            current_state: &state,
+            ik_solver: &solver,
+            tcp: None,
+        };
+        let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
+        let compiled = compiler.compile(&program, &ctx).expect("original must compile");
+
+        let artifact = ArtifactRef::MotionPlan(MotionPlanId("m3-whole-region".to_string()));
+        let (_analysis, observations) = TrajectoryAnalyzer::new(&robot, None)
+            .analyze_with_observations(artifact, &compiled.merged_trajectory)
+            .expect("analysis must succeed");
+        let errors_before = observations
+            .iter()
+            .filter(|o| o.kind == ObservationKind::Singularity)
+            .count();
+        assert!(
+            errors_before >= 4,
+            "precondition: the fixed-start departure must saturate the score (got {errors_before} Errors)"
+        );
+
+        let recommendations = PlanAdvisor.recommend_with_segment_context(
+            &observations,
+            &program,
+            &solver,
+            &compiled,
+            None,
+        );
+        let singularity = recommendations
+            .iter()
+            .find(|r| {
+                r.action.kind == ActionKind::Singularity
+                    && r.status == Some(RecommendationStatus::Available)
+            })
+            .expect(
+                "the departure remediation must stay Available under the strengthened gate (24→1)",
+            );
+
+        let index = match singularity.edit {
+            ProgramEdit::ReplaceSegment { index, .. } => index,
+            _ => panic!("a singularity edit must be ReplaceSegment"),
+        };
+        let edited = singularity
+            .edit
+            .apply(&program)
+            .expect("the available edit must apply");
+        let recompiled = compiler
+            .compile(&edited, &ctx)
+            .expect("the edited program must recompile");
+        let (_r2, reanalyzed) = TrajectoryAnalyzer::new(&robot, None)
+            .analyze_with_observations(
+                ArtifactRef::MotionPlan(MotionPlanId("m3-whole-region-2".to_string())),
+                &recompiled.merged_trajectory,
+            )
+            .expect("reanalysis must succeed");
+
+        let range = recompiled.segments[index].waypoint_range.clone();
+        let raw: Vec<usize> = reanalyzed
+            .iter()
+            .filter_map(|o| {
+                if o.kind == ObservationKind::Singularity {
+                    if let Location::Waypoint(wp) = o.location {
+                        if range.contains(&wp) {
+                            return Some(wp);
+                        }
+                    }
+                }
+                None
+            })
+            .collect();
+        assert!(
+            raw.len() <= 1,
+            "the recompiled departure must leave AT MOST the fixed-start waypoint singular, got {raw:?}"
+        );
+        if let Some(wp) = raw.first() {
+            assert_eq!(
+                *wp, 0,
+                "the only remaining singularity must be the irreducible fixed start (waypoint 0), got {raw:?}"
+            );
+        }
+        assert_eq!(
+            region_singularity_observations(&reanalyzed, &range, index == 0),
+            0,
+            "the whole region must be free of Singularity observations once the fixed start is excluded"
+        );
+    }
+
+    // ── R3-2 (P0): honest no-context arm ────────────────────────────────────
+    //
+    // The old `_ => (edit, Available, None)` arm claimed Available whenever
+    // the kinematic verification context was missing. Two distinct cases:
+    // - `(Some(robot), None)`: the 4-arg recommend could not compile the BASE
+    //   program — the edit cannot be verified and the base is broken. Honest
+    //   verdict: `Unavailable { CompileFailed }`.
+    // - `(None, _)`: no kinematic model (mock solver) — materialization-only.
+    //   Honest verdict: `None` (not evaluated), never a claimed Available.
+
+    #[test]
+    fn base_compile_failure_marks_recommendation_unavailable_compile_failed() {
+        // R3-2: when the base program does not compile (real robot), the
+        // no-context arm must NOT claim Available — the D8 gate would let the
+        // user "fix" a program that cannot even compile.
+        let robot = RobotRegistry::create_default(RobotModel::Planar2R);
+        // MoveJ target far beyond the ±π joint limits → InvalidGoal → compile
+        // failure (NOT an IK failure — maps to CompileFailed).
+        let program = crate::motion::program::PlanningProgram::new(vec![MotionSegment::MoveJ {
+            origin: thalos_core::ids::OperationId("op-j".to_string()),
+            target: vec![10.0, 10.0],
+            max_velocity: None,
+            max_acceleration: None,
+        }]);
+        let start = vec![0.0, 0.0];
+
+        // Precondition: the base program genuinely does not compile.
+        let solver = real_solver(&robot);
+        let state = RobotState::new(start.clone());
+        let ctx = SegmentPlanningContext {
+            robot: &robot,
+            current_state: &state,
+            ik_solver: &solver,
+            tcp: None,
+        };
+        let compile_result =
+            PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default())).compile(&program, &ctx);
+        assert!(
+            compile_result.is_err(),
+            "precondition: the base program must fail to compile"
+        );
+
+        let observations = vec![singular_obs(1, 0)];
+        let recommendations =
+            PlanAdvisor.recommend(&observations, &program, &solver, &start);
+        let singularity = recommendations
+            .iter()
+            .find(|r| r.action.kind == ActionKind::Singularity)
+            .expect("the singularity remediation must still be present");
+        assert_eq!(
+            singularity.status,
+            Some(RecommendationStatus::Unavailable),
+            "an unverifiable edit on a broken base program must be Unavailable"
+        );
+        assert_eq!(
+            singularity.reason,
+            Some(UnavailabilityReason::CompileFailed),
+            "the honest reason for an uncompilable base is compile_failed"
+        );
+    }
+
+    // ── R3-3 (P0): TCP threading into availability verification ────────────
+    //
+    // preview/apply recompile with `snapshot.active_tcp` while verify_available
+    // used `tcp: None` — with an active TCP the availability verdict was
+    // computed against a DIFFERENT frame than the actual apply. The fix
+    // threads the TCP into the verification context. An identity TCP at the
+    // flange is semantically identical to no TCP, so the recommendations must
+    // be identical — a deterministic behavioral proof the TCP flows through.
+
+    #[test]
+    fn tcp_identity_at_flange_is_equivalent_to_no_tcp() {
+        use thalos_core::robot::tool_frame::ToolFrame;
+
+        let robot = RobotRegistry::create_default(RobotModel::Planar3R);
+        let program = crate::motion::program::PlanningProgram::new(vec![
+            MotionSegment::MoveJ {
+                origin: thalos_core::ids::OperationId("op-j".to_string()),
+                target: vec![0.5, -0.3, 0.1],
+                max_velocity: None,
+                max_acceleration: None,
+            },
+            move_l_segment(0),
+        ]);
+        let start = vec![0.0, 0.0, 0.0];
+        let solver = real_solver(&robot);
+        let state = RobotState::new(start.clone());
+        let ctx = SegmentPlanningContext {
+            robot: &robot,
+            current_state: &state,
+            ik_solver: &solver,
+            tcp: None,
+        };
+        let compiled = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()))
+            .compile(&program, &ctx)
+            .expect("compile");
+        let artifact = ArtifactRef::MotionPlan(MotionPlanId("m3-tcp".to_string()));
+        let (_analysis, observations) = TrajectoryAnalyzer::new(&robot, None)
+            .analyze_with_observations(artifact, &compiled.merged_trajectory)
+            .expect("analysis");
+
+        let identity_tcp = ToolFrame::identity(*robot.end_effector());
+        let without =
+            PlanAdvisor.recommend_with_segment_context(&observations, &program, &solver, &compiled, None);
+        let with = PlanAdvisor.recommend_with_segment_context(
+            &observations,
+            &program,
+            &solver,
+            &compiled,
+            Some(&identity_tcp),
+        );
+
+        assert_eq!(
+            without.len(),
+            with.len(),
+            "the TCP must not change the recommendation set when it is identity-at-flange"
+        );
+        for (a, b) in without.iter().zip(with.iter()) {
+            assert_eq!(a.id, b.id, "recommendation ids must be deterministic under the TCP");
+            assert_eq!(a.status, b.status, "statuses must be identical for an identity TCP");
+            assert_eq!(a.reason, b.reason, "reasons must be identical for an identity TCP");
+            assert_eq!(a.edit, b.edit, "edits must be identical for an identity TCP");
+        }
     }
 }

@@ -175,13 +175,14 @@ impl PlanAnalysisService {
 
         // Compilar el programa para obtener el contexto de segmentos
         // (waypoint_range + joints de inicio de segmento) — el mismo compile
-        // determinista que `recommend` (4-arg) haría internamente.
+        // determinista que `recommend` (4-arg) haría internamente, con el
+        // MISMO TCP activo que preview/apply (R3-3 P0).
         let state = RobotState::new(current_joints.to_vec());
         let ctx = SegmentPlanningContext {
             robot: chain,
             current_state: &state,
             ik_solver,
-            tcp: None,
+            tcp,
         };
         let compiled = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()))
             .compile(program, &ctx)
@@ -192,6 +193,7 @@ impl PlanAnalysisService {
             program,
             ik_solver,
             &compiled,
+            tcp,
         );
         Ok(result)
     }

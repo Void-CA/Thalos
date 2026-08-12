@@ -67,8 +67,9 @@ use thalos_planning::{
     motion::{
         compiler::{DefaultPlannerDispatcher, PlanCompiler},
         planner::SegmentPlanningContext,
-        program::PlanningProgram,
+        program::{CompiledPlan, PlanningProgram},
     },
+    program_edit::ProgramEdit,
     recommendation::{Recommendation, RecommendationStatus},
 };
 
@@ -125,6 +126,27 @@ fn compile(
         .compile(program, &ctx)
         .map(|p| p.merged_trajectory)
         .map_err(|e| e.to_string())
+}
+
+/// Compile a program with the REAL IK solver and return the full
+/// [`CompiledPlan`] — the whole-region projection needs the per-segment
+/// `waypoint_range` of the recompiled trajectory (which the trajectory-only
+/// `compile` helper hides).
+fn compile_plan(
+    chain: &SerialChain,
+    start: &[f64],
+    program: &PlanningProgram,
+) -> Result<CompiledPlan, String> {
+    let solver = real_solver(chain);
+    let state = RobotState::new(start.to_vec());
+    let ctx = SegmentPlanningContext {
+        robot: chain,
+        current_state: &state,
+        ik_solver: &solver,
+        tcp: None,
+    };
+    let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
+    compiler.compile(program, &ctx).map_err(|e| e.to_string())
 }
 
 fn count_observations(
@@ -261,22 +283,51 @@ proptest! {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// PROPERTY 2 — remediation ⇒ Singularity observation count decreases (M3)
+// PROPERTY 2 — remediation ⇒ the re-analyzed target region is FREE of
+// Singularity observations (R3-1 P0 fix, M3)
 // ────────────────────────────────────────────────────────────────────────────
 //
-// Spec quality-scoring-contract "Monotonic Improvement" + the M3 causal
-// remediation contract: an `Available` Singularity recommendation SHALL be
-// causal — after applying the edit, recompiling and re-analyzing, the
-// Singularity observation count MUST strictly decrease (unless already 0).
+// Spec causal-remediation "Whole-Region Availability Guarantee": `Available`
+// for a Singularity recommendation SHALL mean the re-analyzed target region
+// (all waypoints in `ProblemRegion.waypoint_range`, projected onto the
+// recompiled trajectory via the owning segment) is free of Singularity
+// observations — NOT merely fewer than before. A partial reduction that leaves
+// the region singular (24→23) MUST never be `Available`.
+//
+// The ONLY exclusion is the irreducible fixed-start waypoint (merged
+// trajectory waypoint 0 of the plan's first segment): the remediation edits
+// trajectory segments only, never the fixed initial configuration, so a
+// singular starting state cannot be repaired by any segment edit (the M3
+// scenarios keep 24→1 and 17→0 passing under this criterion).
+//
+// The property re-runs the whole-region check INDEPENDENTLY of the advisor
+// (mirroring production's projection: the recompiled owning segment's
+// waypoint_range), so any future weakening of the gate fails here in CI.
 // `Unavailable{Unsupported}` recommendations (e.g. interior MoveL, documented
-// M3 gap) carry no repair obligation and are not generated as `Available`, so
-// the property never sees them.
+// M3 gap) carry no repair obligation and are not generated as `Available`.
+
+/// Singularity observations inside the projected range, excluding the
+/// irreducible fixed-start waypoint (mirror of the production gate).
+fn singular_in_range(
+    observations: &[Observation],
+    range: &std::ops::Range<usize>,
+    exclude_fixed_start: bool,
+) -> usize {
+    observations
+        .iter()
+        .filter(|o| {
+            o.kind == ObservationKind::Singularity
+                && matches!(o.location, Location::Waypoint(wp) if range.contains(&wp))
+                && !(exclude_fixed_start && matches!(o.location, Location::Waypoint(0)))
+        })
+        .count()
+}
 
 proptest! {
     #![proptest_config(proptest::test_runner::Config { failure_persistence: None, ..proptest::test_runner::Config::with_cases(12) })]
 
     #[test]
-    fn available_singularity_remediation_strictly_decreases_observation_count(
+    fn available_singularity_remediation_clears_the_whole_target_region(
         (chain, start, program) in pipeline_case_strategy(),
     ) {
         let trajectory = match compile(&chain, &start, &program) {
@@ -303,28 +354,37 @@ proptest! {
             "precondition: the generated program must yield an Available Singularity recommendation"
         );
 
-        let errors_before = singular_errors(&report.observations);
-        if errors_before == 0 {
-            // "unless already 0" — the decrease obligation is vacuous.
-            return Ok(());
-        }
-
         for rec in &singular_available {
+            let ProgramEdit::ReplaceSegment { index, .. } = rec.edit else {
+                panic!("a singularity edit must be ReplaceSegment");
+            };
             let edited = rec
                 .edit
                 .apply(&program)
                 .expect("an available edit must apply to the program clone");
-            let edited_trajectory = compile(&chain, &start, &edited)
+            let edited_plan = compile_plan(&chain, &start, &edited)
                 .expect("availability contract guarantees the edited program compiles");
-            let healed = analyze(&chain, &edited_trajectory);
-            let errors_after = singular_errors(&healed.observations);
-            prop_assert!(
-                errors_after < errors_before,
-                "REMEDIATION CONTRACT VIOLATED: recommendation {} (kind {:?}) is Available but \
-                 the Singularity observation count does not strictly decrease: {errors_before} -> {errors_after} \
-                 (program: {:?})",
+            // The projected region: the recompiled owning segment's waypoint
+            // range — the deterministic projection of the original
+            // ProblemRegion onto the recompiled trajectory (the edit replaces
+            // exactly that segment; waypoint indices diverge, the segment
+            // correspondence is exact).
+            let projected_range = edited_plan.segments[index].waypoint_range.clone();
+            let healed = analyze(&chain, &edited_plan.merged_trajectory);
+            // The irreducible fixed-start waypoint (merged waypoint 0 of the
+            // plan's first segment) is excluded from the guarantee.
+            let relevant = singular_in_range(&healed.observations, &projected_range, index == 0);
+            prop_assert_eq!(
+                relevant, 0,
+                "REMEDIATION CONTRACT VIOLATED: recommendation {} (kind {:?}) is Available but the \
+                 re-analyzed target region still contains {} Singularity observation(s) \
+                 inside the projected range {:?} (fixed-start excluded: {}) — the whole region must \
+                 be free, not merely reduced (24→23 must never be Available) — program: {:?}",
                 rec.id.0,
                 rec.action.kind,
+                relevant,
+                projected_range,
+                index == 0,
                 program.segments.iter().map(|s| format!("{s:?}")).collect::<Vec<_>>(),
             );
         }

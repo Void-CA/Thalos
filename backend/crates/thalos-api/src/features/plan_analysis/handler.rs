@@ -180,7 +180,10 @@ pub async fn preview_command(
         robot: &snapshot.chain,
         current_state: &original_state,
         ik_solver: &solver,
-        tcp: None,
+        // R3-3 (P0): el contexto de segmentos debe usar el MISMO TCP activo
+        // que el apply real — si no, las recomendaciones se resuelven contra
+        // el flange y su disponibilidad miente sobre el resultado del apply.
+        tcp: snapshot.active_tcp.as_ref(),
     };
     let compiled_original = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()))
         .compile(&program, &original_ctx)
@@ -193,6 +196,7 @@ pub async fn preview_command(
         &program,
         &solver,
         &compiled_original,
+        snapshot.active_tcp.as_ref(),
     );
 
     let recommendation = recommendations
@@ -334,7 +338,10 @@ pub async fn apply_command(
         robot: &snapshot.chain,
         current_state: &original_state,
         ik_solver: &solver,
-        tcp: None,
+        // R3-3 (P0): el contexto de segmentos debe usar el MISMO TCP activo
+        // que el apply real — si no, las recomendaciones se resuelven contra
+        // el flange y su disponibilidad miente sobre el resultado del apply.
+        tcp: snapshot.active_tcp.as_ref(),
     };
     let compiled_original = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()))
         .compile(&program, &original_ctx)
@@ -347,6 +354,7 @@ pub async fn apply_command(
         &program,
         &solver,
         &compiled_original,
+        snapshot.active_tcp.as_ref(),
     );
 
     let recommendation = recommendations
