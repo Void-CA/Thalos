@@ -5,7 +5,7 @@ import { CheckCircle2, XCircle } from 'lucide-react'
  * Shared metric display components for workspace analysis results.
  *
  * Extracted from the old analysis-dialog.tsx modal (PR-C): the inline
- * AnalysisWorkspace section reuses the same visual language (progress bars,
+ * WorkspaceAnalysis section reuses the same visual language (progress bars,
  * value cards, grade badges) without the modal wrapper.
  */
 

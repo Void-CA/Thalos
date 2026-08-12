@@ -107,7 +107,10 @@ export const WORKSPACE_REGISTRY: Area[] = [
   // workspace in slice 6, kept there after the unify-programming hotfix).
   // P0-A (workspace-spatial-layout): layout 'full' — the analysis tool is an
   // analytical/data view; it doesn't need the 3D scene beside it.
-  { path: '/analysis', workspace: 'analysis', label: 'Analysis', requires: ['robotLoaded'], produces: null, capability: null, hidden: false, consumes: null, producesArtifact: null, stage: null, kind: 'tool', layout: 'full' },
+  // P0-B (workspace-spatial-layout): label is now "Workspace Analysis" — the
+  // first-class characterization tool "What can this robot do?", explicitly
+  // separate from Evaluation ("How good/safe is this trajectory?").
+  { path: '/analysis', workspace: 'analysis', label: 'Workspace Analysis', requires: ['robotLoaded'], produces: null, capability: null, hidden: false, consumes: null, producesArtifact: null, stage: null, kind: 'tool', layout: 'full' },
 ]
 
 /**

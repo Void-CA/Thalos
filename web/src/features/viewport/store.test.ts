@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useSceneStore } from './store'
-import { useWorkspaceStore, type CloudPoint } from './store/workspace-store'
+import { useWorkspaceStore, type CloudPoint } from '@/features/workspace-analysis/workspace-analysis-store'
 import type { RuntimeInfo, SceneData } from './types'
 
 const scene = {} as SceneData

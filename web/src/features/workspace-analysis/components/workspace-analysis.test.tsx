@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import '@testing-library/jest-dom/vitest'
-import { AnalysisWorkspace } from './analysis-workspace'
+import { WorkspaceAnalysis } from './workspace-analysis'
+import { WORKSPACE_PRESETS } from './presets'
 import { useRobotStore } from '@/features/robots/store'
-import { useSceneStore } from '../store'
-import { useWorkspaceStore } from '../store/workspace-store'
+import { useSceneStore } from '@/features/viewport/store'
+import { useWorkspaceStore } from '../workspace-analysis-store'
 
 const mocks = vi.hoisted(() => ({
   sample: vi.fn(),
@@ -14,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   analyzeManipulability: vi.fn(),
 }))
 
-vi.mock('../services/service-context', () => ({
+vi.mock('@/features/viewport/services/service-context', () => ({
   useWorkspaceService: () => ({
     sample: mocks.sample,
     analyzeSingularity: mocks.analyzeSingularity,
@@ -24,9 +26,11 @@ vi.mock('../services/service-context', () => ({
 
 function renderWorkspace() {
   return render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { mutations: { retry: false } } })}>
-      <AnalysisWorkspace />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { mutations: { retry: false } } })}>
+        <WorkspaceAnalysis />
+      </QueryClientProvider>
+    </MemoryRouter>,
   )
 }
 
@@ -40,7 +44,7 @@ beforeEach(() => {
 
 afterEach(() => cleanup())
 
-describe('AnalysisWorkspace — explicit trigger, no auto-run (spec: Explicit Run Trigger)', () => {
+describe('WorkspaceAnalysis — explicit trigger, no auto-run (spec: Explicit Run Trigger)', () => {
   it('mounts with a loaded robot and makes ZERO sampling calls (no auto-run on mount)', () => {
     useRobotStore.getState().setRobots([{ id: 'scara', display_name: 'SCARA', dof: 4, joints: [] }])
     useRobotStore.getState().select('scara')
@@ -78,7 +82,7 @@ describe('AnalysisWorkspace — explicit trigger, no auto-run (spec: Explicit Ru
   })
 })
 
-describe('AnalysisWorkspace — explicit trigger runs 3 mutations (spec: Explicit trigger runs sampling)', () => {
+describe('WorkspaceAnalysis — explicit trigger runs 3 mutations (spec: Explicit trigger runs sampling)', () => {
   it('passes null as robot id to all three analysis services even when a catalog robot is selected', async () => {
     useRobotStore.getState().setRobots([{ id: 'scara', display_name: 'SCARA', dof: 4, joints: [] }])
     useRobotStore.getState().select('scara')
@@ -165,5 +169,58 @@ describe('AnalysisWorkspace — explicit trigger runs 3 mutations (spec: Explici
 
     // No modal overlay — inline section (spec: Non-Blocking Inline Section).
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+})
+
+describe('WorkspaceAnalysis — sampling presets (proposal P0-B)', () => {
+  it('declares the Quick 1k / Balanced 10k / Precise 50k presets with the right sample counts', () => {
+    expect(WORKSPACE_PRESETS.map(p => [p.label, p.samples])).toEqual([
+      ['Quick 1k', 1000],
+      ['Balanced 10k', 10000],
+      ['Precise 50k', 50000],
+    ])
+  })
+
+  it('selecting a preset drives the samples count sent to the services', async () => {
+    useRobotStore.getState().setRobots([{ id: 'scara', display_name: 'SCARA', dof: 4, joints: [] }])
+    useRobotStore.getState().select('scara')
+
+    renderWorkspace()
+    fireEvent.click(screen.getByRole('button', { name: 'Precise 50k' }))
+    fireEvent.click(screen.getByRole('button', { name: /run analysis/i }))
+
+    await waitFor(() => {
+      expect(mocks.sample).toHaveBeenCalledWith(null, { samples: 50000, seed: 0, tolerance: 0.001 })
+    })
+  })
+
+  it('advanced config overrides the preset once opened and edited', async () => {
+    useRobotStore.getState().setRobots([{ id: 'scara', display_name: 'SCARA', dof: 4, joints: [] }])
+    useRobotStore.getState().select('scara')
+
+    renderWorkspace()
+    fireEvent.click(screen.getByRole('button', { name: 'Precise 50k' }))
+
+    // Open the disclosure, edit Samples → the custom value wins over the preset.
+    fireEvent.click(screen.getByText('Advanced Config'))
+    fireEvent.change(screen.getByLabelText('Samples'), { target: { value: '25000' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /run analysis/i }))
+    await waitFor(() => {
+      expect(mocks.sample).toHaveBeenCalledWith(null, { samples: 25000, seed: 0, tolerance: 0.001 })
+    })
+  })
+
+  it('opens the disclosure with the Balanced default without re-selecting', async () => {
+    useRobotStore.getState().setRobots([{ id: 'scara', display_name: 'SCARA', dof: 4, joints: [] }])
+    useRobotStore.getState().select('scara')
+
+    renderWorkspace()
+    // Balanced is the default — no preset click needed.
+    fireEvent.click(screen.getByRole('button', { name: /run analysis/i }))
+
+    await waitFor(() => {
+      expect(mocks.sample).toHaveBeenCalledWith(null, { samples: 10000, seed: 0, tolerance: 0.001 })
+    })
   })
 })

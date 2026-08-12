@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { useWorkspaceStore } from './store/workspace-store'
+import { useWorkspaceStore } from '@/features/workspace-analysis/workspace-analysis-store'
 import type { SceneData, RuntimeInfo, IkResult, IkTarget, ActivePlan, ToolFrame, ExecutionInfo, ObjectTransform, TransformSnapshot, FkFrameMap, SceneFrame } from './types'
 
 export type TrajectoryColorMode = 'segment' | 'trajectory-quality' | 'manipulability' | 'singularity'

@@ -1,11 +1,13 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import { useRobotStore } from '@/features/robots/store'
-import { useSceneStore } from '../store'
-import { useWorkspaceStore, type PointCloudColorMode } from '../store/workspace-store'
-import { useWorkspaceService } from '../services/service-context'
+import { useSceneStore } from '@/features/viewport/store'
+import { useWorkspaceStore, type PointCloudColorMode } from '../workspace-analysis-store'
+import { useWorkspaceService } from '@/features/viewport/services/service-context'
 import { FlaskConical, Loader2 } from 'lucide-react'
 import { ErrorBox } from '@/components/ui/error-box'
+import { WORKSPACE_PRESETS, DEFAULT_PRESET_KEY } from './presets'
 import {
   MetricRow,
   MetricValue,
@@ -15,19 +17,20 @@ import {
 } from './analysis-metrics'
 
 /**
- * AnalysisWorkspace — inline workspace-sampling section (PR-C).
+ * WorkspaceAnalysis — "What can this robot do?"
  *
- * Replaces the old blocking modal (analysis-dialog.tsx) with a non-blocking
- * inline section. Sampling is triggered EXPLICITLY via "Run Analysis" — it
- * never auto-runs on mount, because 10k samples is slow (spec: Explicit Run
- * Trigger). All three services target the scene chain via /active endpoints
- * (null robot id, spec R3).
+ * A first-class characterization tool (features/workspace-analysis), distinct
+ * from Evaluation ("How good/safe is this trajectory?"). Sampling is triggered
+ * EXPLICITLY via "Run Analysis" — it never auto-runs on mount, because 10k
+ * samples is slow (spec: Explicit Run Trigger). All three services target the
+ * scene chain via /active endpoints (null robot id, spec R3).
  *
- * Distinct from plan-analysis (/planning, useAnalysisStore): this tool uses
- * useWorkspaceStore and WorkspaceService only (spec: Distinct from Plan
- * Analysis).
+ * The 3D point cloud (features/viewport/renderer/point-cloud.tsx) is the
+ * visualization: it stays driven by this feature's store (colorMode /
+ * showPointCloud / workspaceSamples), so choosing a color mode immediately
+ * re-colors the cloud wherever the viewport renders.
  */
-export function AnalysisWorkspace() {
+export function WorkspaceAnalysis() {
   const service = useWorkspaceService()
   const selectedId = useRobotStore(s => s.selectedId)
   const runtime = useSceneStore(s => s.runtime)
@@ -45,6 +48,8 @@ export function AnalysisWorkspace() {
   const [samples, setSamplesCount] = useState(10_000)
   const [seed, setSeed] = useState(0)
   const [tolerance, setTolerance] = useState(0.001)
+  // Active preset key; null once the advanced fields are edited (override wins).
+  const [presetKey, setPresetKey] = useState<string | null>(DEFAULT_PRESET_KEY)
 
   const params = { samples, seed, tolerance }
 
@@ -97,18 +102,59 @@ export function AnalysisWorkspace() {
   ]
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* ── Config ── */}
+    <div className="flex flex-col gap-3 p-3">
+      {/* ── Purpose (conceptual split: characterization tool, not decision stage) ── */}
+      <header>
+        <h2 className="text-sm font-semibold text-foreground">Workspace Analysis</h2>
+        <p className="text-xs text-muted-foreground">What can this robot do?</p>
+        <p className="text-xs text-muted-foreground mt-1.5">
+          How good or safe a trajectory is gets evaluated in{' '}
+          <Link to="/evaluation" className="text-primary underline underline-offset-2 hover:text-primary-strong">
+            Evaluation
+          </Link>
+          .
+        </p>
+      </header>
+
+      {/* ── Presets (Quick / Balanced / Precise — no raw config by default) ── */}
       <div>
         <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
-          Config
+          Sampling Preset
         </span>
         <div className="grid grid-cols-3 gap-1.5">
-          <NumberInput label="Samples" value={samples} onChange={setSamplesCount} min={100} max={100000} step={100} />
-          <NumberInput label="Seed" value={seed} onChange={setSeed} />
-          <NumberInput label="Tolerance" value={tolerance} onChange={setTolerance} min={0.001} step={0.001} />
+          {WORKSPACE_PRESETS.map(preset => (
+            <button
+              key={preset.key}
+              onClick={() => {
+                setPresetKey(preset.key)
+                setSamplesCount(preset.samples)
+              }}
+              className={`px-2 py-1.5 text-xs font-medium rounded-md border transition-all cursor-pointer
+                ${presetKey === preset.key
+                  ? 'bg-primary-weak border-primary-mid text-primary'
+                  : 'bg-transparent border-border text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                }`}
+            >
+              {preset.label}
+            </button>
+          ))}
         </div>
       </div>
+
+      {/* ── Advanced config behind a disclosure (editing overrides the preset) ── */}
+      <details
+        className="text-xs text-muted-foreground"
+        onToggle={e => { if (e.currentTarget.open) setPresetKey(null) }}
+      >
+        <summary className="cursor-pointer select-none text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground">
+          Advanced Config
+        </summary>
+        <div className="grid grid-cols-3 gap-1.5 mt-1.5">
+          <NumberInput label="Samples" value={samples} onChange={v => { setSamplesCount(v); setPresetKey(null) }} min={100} max={100000} step={100} />
+          <NumberInput label="Seed" value={seed} onChange={v => { setSeed(v); setPresetKey(null) }} />
+          <NumberInput label="Tolerance" value={tolerance} onChange={v => { setTolerance(v); setPresetKey(null) }} min={0.001} step={0.001} />
+        </div>
+      </details>
 
       {/* ── Explicit trigger (no auto-run on mount) ── */}
       <button
@@ -245,7 +291,7 @@ export function AnalysisWorkspace() {
         <p className="text-sm text-muted-foreground text-center py-4">No data yet — run the analysis</p>
       )}
 
-      {/* ── Point-cloud visualization controls (spec: preserved) ── */}
+      {/* ── Point-cloud visualization controls (3D linkage: re-colors the cloud) ── */}
       {hasAnySamples && (
         <div className="border-t border-border pt-2">
           <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
@@ -299,6 +345,7 @@ function NumberInput({
       <span className="text-[10px] font-medium text-muted-foreground">{label}</span>
       <input
         type="number"
+        aria-label={label}
         min={min}
         max={max}
         step={step ?? 1}

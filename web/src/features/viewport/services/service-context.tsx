@@ -2,7 +2,7 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import { sceneApi } from '../api/scene-api'
 import { apiClient } from '@/shared/api-client'
 import { SceneService } from './scene.service'
-import { WorkspaceService } from './workspace.service'
+import { WorkspaceService } from '@/features/workspace-analysis/workspace-analysis-client'
 
 // ── Context ──
 

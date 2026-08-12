@@ -60,7 +60,7 @@ describe('TopBar — pipeline stages, divider, then tool links (auxiliary-tools-
       'Ejecución',
       'Sesiones',
       'Configuración',
-      'Analysis',
+      'Workspace Analysis',
     ])
 
     // Visual separator between the stage group and the tool group (spec:
@@ -68,7 +68,7 @@ describe('TopBar — pipeline stages, divider, then tool links (auxiliary-tools-
     const divider = screen.getByTestId('nav-divider')
     expect(divider).toHaveAttribute('aria-hidden', 'true')
     const lastStage = screen.getByRole('link', { name: 'Configuración' })
-    const analysis = screen.getByRole('link', { name: 'Analysis' })
+    const analysis = screen.getByRole('link', { name: 'Workspace Analysis' })
     expect(
       lastStage.compareDocumentPosition(divider) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
@@ -77,19 +77,19 @@ describe('TopBar — pipeline stages, divider, then tool links (auxiliary-tools-
     ).toBeTruthy()
   })
 
-  it('navigates to /analysis when the Analysis tool link is clicked (robot loaded)', async () => {
+  it('navigates to /analysis when the Workspace Analysis tool link is clicked (robot loaded)', async () => {
     seedFlags({ robotLoaded: true })
     const router = renderTopBar('/')
 
-    fireEvent.click(screen.getByRole('link', { name: 'Analysis' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Workspace Analysis' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/analysis'))
   })
 
-  it('disables the Analysis tool link when no robot is loaded (guard state, no navigation)', async () => {
+  it('disables the Workspace Analysis tool link when no robot is loaded (guard state, no navigation)', async () => {
     seedFlags({ robotLoaded: false })
     const router = renderTopBar('/')
 
-    const analysis = screen.getByRole('link', { name: 'Analysis' })
+    const analysis = screen.getByRole('link', { name: 'Workspace Analysis' })
     expect(analysis).toHaveAttribute('aria-disabled', 'true')
     fireEvent.click(analysis)
     expect(router.state.location.pathname).toBe('/')

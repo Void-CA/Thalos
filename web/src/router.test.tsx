@@ -324,13 +324,13 @@ describe('the /evaluation route renders the pre-execution EVALUACIÓN', () => {
 })
 
 describe('the /analysis route renders the AnalysisWorkspace tool (PR-D — kind nav model)', () => {
-  it('shows an Analysis link in the top-bar tools group', () => {
+  it('shows a Workspace Analysis link in the top-bar tools group', () => {
     seedPrerequisites()
     renderRouter(['/task'])
-    expect(screen.getByRole('link', { name: 'Analysis' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Workspace Analysis' })).toBeInTheDocument()
   })
 
-  it('routes /analysis to the AnalysisWorkspace when a robot is loaded (no modal)', () => {
+  it('routes /analysis to the WorkspaceAnalysis when a robot is loaded (no modal)', () => {
     seedPrerequisites()
     const { router } = renderRouter(['/analysis'])
 

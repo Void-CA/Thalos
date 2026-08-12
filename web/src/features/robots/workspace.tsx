@@ -5,8 +5,9 @@ import { RobotCatalog } from './components/robot-catalog'
 /**
  * RobotShell — landing workspace (`/`).
  *
- * Robot catalog plus the scene tools (FK / IK / Workspace / TCP) in one side
- * panel. The 3D viewport itself lives in the layout route (invariant #1) and
+ * Robot catalog plus the scene tools (FK / IK / TCP) in one side
+ * panel. Workspace Analysis moved to its own first-class tool at /analysis
+ * (P0-B). The 3D viewport itself lives in the layout route (invariant #1) and
  * is NOT part of this shell.
  */
 export function RobotShell() {

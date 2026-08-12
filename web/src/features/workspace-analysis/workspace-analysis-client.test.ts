@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { apiClient } from '@/shared/api-client'
-import { WorkspaceService, NEAR_SINGULAR_CONDITION_THRESHOLD } from './workspace.service'
+import { WorkspaceService, NEAR_SINGULAR_CONDITION_THRESHOLD } from './workspace-analysis-client'
 
 const mocks = vi.hoisted(() => ({
   post: vi.fn(),

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
-import { useWorkspaceStore, type CloudPoint } from '../store/workspace-store'
+import { useWorkspaceStore, type CloudPoint } from '@/features/workspace-analysis/workspace-analysis-store'
 import { CLOUD_WORKSPACE, CLOUD_GENERIC, SINGULAR_NORMAL, SINGULAR_NEAR, SINGULAR_SINGULAR, MANIP_HIGH, MANIP_MED, MANIP_LOW } from '@/shared/tokens'
 
 export function PointCloud() {

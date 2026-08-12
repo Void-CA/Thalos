@@ -1,5 +1,5 @@
 import { apiClient } from '@/shared/api-client'
-import type { CloudPoint } from '../store/workspace-store'
+import type { CloudPoint } from './workspace-analysis-store'
 
 export interface WorkspaceResult {
   metrics: Record<string, number>

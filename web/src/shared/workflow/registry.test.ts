@@ -195,7 +195,7 @@ describe('WORKSPACE_REGISTRY (slice S1.7 — scene entry, Robot stage marker, la
       'Sesiones',
       'Knowledge',
       'Configuración',
-      'Analysis',
+      'Workspace Analysis',
     ])
     const legacy = ['Task', 'Planning', 'Execution', 'Sessions', 'Planificación']
     expect(WORKSPACE_REGISTRY.some((e) => legacy.includes(e.label))).toBe(false)
@@ -324,7 +324,7 @@ describe('WORKSPACE_REGISTRY (PR-D — kind nav model, auxiliary-tools-navigatio
     const analysis = WORKSPACE_REGISTRY.find((e) => e.path === '/analysis')
     expect(analysis).toBeDefined()
     expect(analysis!.workspace).toBe('analysis')
-    expect(analysis!.label).toBe('Analysis')
+    expect(analysis!.label).toBe('Workspace Analysis')
     expect(analysis!.kind).toBe('tool')
     expect(analysis!.requires).toEqual(['robotLoaded'])
     expect(analysis!.stage).toBeNull()
