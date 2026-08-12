@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
 import { act } from 'react'
 import '@testing-library/jest-dom/vitest'
 import { RecommendationCard } from './RecommendationCard'
@@ -295,5 +295,64 @@ describe('RecommendationCard — apply/undo re-fetch flow (3.2/3.3, UI derives f
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
     await screen.findByTestId('recommendation-preview')
     expect(apiMocks.analyze).not.toHaveBeenCalled()
+  })
+})
+
+describe('RecommendationCard — no-op detection (UX redesign: never present a no-op as success)', () => {
+  it('preview of 0→0 with unchanged waypoints and broken continuity renders a muted "No improvement" state', async () => {
+    apiMocks.preview.mockResolvedValue({
+      recommendation_id: 1,
+      status: 'available',
+      waypoints: [],
+      metrics_before: { waypoint_count: 10 },
+      metrics_after: { waypoint_count: 10 },
+      health_before: 0,
+      health_after: 0,
+      improvement: 0,
+      continuity: false,
+    })
+    render(<RecommendationCard recommendation={recommendation} report={report} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+
+    const panel = await screen.findByTestId('recommendation-preview')
+    expect(panel).toHaveTextContent('Health')
+    expect(panel).toHaveTextContent('No improvement')
+    expect(panel).not.toHaveTextContent('improved')
+    // No green "(0%)" delta badge either.
+    expect(within(panel).queryByText('(0%)')).not.toBeInTheDocument()
+  })
+
+  it('apply of 0→0 health renders "No improvement" instead of a green "improved" badge', async () => {
+    apiMocks.apply.mockResolvedValue({
+      recommendation_id: 1,
+      status: 'available',
+      plan_id: 'plan-2',
+      health_before: 0,
+      health_after: 0,
+      improvement: 0,
+      history_length: 1,
+    })
+    render(<RecommendationCard recommendation={recommendation} report={report} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    const panel = await screen.findByTestId('recommendation-applied')
+    expect(panel).toHaveTextContent('No improvement')
+    expect(screen.queryByText('improved')).not.toBeInTheDocument()
+  })
+
+  it('a real improvement still renders the green "improved" state (no false no-op)', async () => {
+    apiMocks.preview.mockResolvedValue({
+      ...previewResponse,
+      health_before: 0,
+      health_after: 0.1,
+      improvement: 0.1,
+      continuity: false,
+    })
+    render(<RecommendationCard recommendation={recommendation} report={report} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+
+    const panel = await screen.findByTestId('recommendation-preview')
+    expect(panel).not.toHaveTextContent('No improvement')
+    expect(panel).toHaveTextContent('10%')
   })
 })

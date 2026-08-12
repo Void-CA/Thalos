@@ -30,8 +30,23 @@ export function RecommendationCard({
 }) {
   const { state, handlers, derived } = useRecommendation(recommendation, report)
 
-  const { previewing, applying, undoing, error, unavailable, canUndo } = state
+  const { previewing, applying, undoing, error, unavailable, canUndo, preview: previewRaw, applied: appliedRaw } = state
   const { kindLabel, region, span, strategy, edit, applied, preview } = derived
+
+  // No-op detection (UX redesign: never present a no-op as success). A preview
+  // or apply that changes nothing — health flat (~0 improvement), waypoints
+  // unchanged, continuity broken (preview) — renders a muted "No improvement"
+  // state instead of a green delta. Presentation-only; the backend fix is a
+  // separate change.
+  const previewNoop =
+    previewRaw !== null &&
+    Math.abs(previewRaw.improvement) < 0.005 &&
+    previewRaw.metrics_before.waypoint_count === previewRaw.metrics_after.waypoint_count &&
+    previewRaw.continuity === false
+  const appliedNoop =
+    appliedRaw !== null &&
+    appliedRaw.health_after === appliedRaw.health_before &&
+    Math.abs(appliedRaw.improvement) < 0.005
 
   return (
     <li
@@ -41,7 +56,7 @@ export function RecommendationCard({
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-semibold text-foreground">{kindLabel}</h3>
         {unavailable && (
-          <span className="rounded-md border border-warning-mid bg-warning-weak px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-chart-4">
+          <span className="rounded-md border border-warning-mid bg-warning-weak px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-chart-4">
             unavailable
           </span>
         )}
@@ -153,14 +168,23 @@ export function RecommendationCard({
             <span className="text-xs uppercase tracking-wide text-muted-foreground">Health</span>
             <span className="font-mono text-foreground">{applied.beforePct}</span>
             <span className="text-muted-foreground">→</span>
-            <span className={`font-mono font-semibold ${applied.improved ? 'text-chart-3' : 'text-destructive'}`}>
+            <span className={`font-mono font-semibold ${appliedNoop ? 'text-muted-foreground' : applied.improved ? 'text-chart-3' : 'text-destructive'}`}>
               {applied.afterPct}
             </span>
-            <span
-              className={`rounded-md px-1.5 py-0.5 text-xs font-semibold ${applied.improved ? 'bg-chart-3/15 text-chart-3' : 'bg-destructive-weak text-destructive'}`}
-            >
-              {applied.improved ? 'improved' : 'regressed'}
-            </span>
+            {appliedNoop ? (
+              <span
+                data-testid="recommendation-noop"
+                className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-semibold text-muted-foreground"
+              >
+                No improvement
+              </span>
+            ) : (
+              <span
+                className={`rounded-md px-1.5 py-0.5 text-xs font-semibold ${applied.improved ? 'bg-chart-3/15 text-chart-3' : 'bg-destructive-weak text-destructive'}`}
+              >
+                {applied.improved ? 'improved' : 'regressed'}
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -179,13 +203,22 @@ export function RecommendationCard({
             <span className="font-mono text-foreground">{preview.beforePct}</span>
             <span className="text-muted-foreground">→</span>
             <span
-              className={`font-mono font-semibold ${preview.improved ? 'text-chart-3' : 'text-destructive'}`}
+              className={`font-mono font-semibold ${previewNoop ? 'text-muted-foreground' : preview.improved ? 'text-chart-3' : 'text-destructive'}`}
             >
               {preview.afterPct}
             </span>
-            <span className={`text-xs font-semibold ${preview.improved ? 'text-chart-3' : 'text-destructive'}`}>
-              ({preview.deltaPct})
-            </span>
+            {previewNoop ? (
+              <span
+                data-testid="recommendation-noop"
+                className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-semibold text-muted-foreground"
+              >
+                No improvement
+              </span>
+            ) : (
+              <span className={`text-xs font-semibold ${preview.improved ? 'text-chart-3' : 'text-destructive'}`}>
+                ({preview.deltaPct})
+              </span>
+            )}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <span>

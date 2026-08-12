@@ -53,18 +53,25 @@ describe('IntelligentAssessment — section renders when assessment present', ()
     expect(screen.getByText('30')).toBeInTheDocument() // 0.3027 quality → score 30
     expect(screen.getByText('Poor')).toBeInTheDocument() // <50 → Poor
     expect(screen.getByText('Triggered Rules')).toBeInTheDocument()
-    expect(screen.getByText('R01_collision_danger')).toBeInTheDocument()
-    expect(screen.getByText('R07_low_manipulability')).toBeInTheDocument()
+    // UX redesign: rules are labeled humanly (raw ids only as hover anchor).
+    const ruleChips = screen.getAllByTestId('assessment-rule')
+    expect(ruleChips[0]).toHaveTextContent('Collision danger')
+    expect(ruleChips[1]).toHaveTextContent('Low manipulability')
     expect(screen.getByText('Recommendations')).toBeInTheDocument()
-    expect(screen.getByText('Collision')).toBeInTheDocument()
+    // Collision appears as the rule-group header (and the recommendation kind).
+    expect(screen.getAllByTestId('assessment-rule-group')[0]).toHaveTextContent('Collision')
   })
 
-  it('renders evidence chips with key and value', () => {
+  it('renders evidence chips with human label, value and semantic reading', () => {
     render(<IntelligentAssessment assessment={assessment} />)
     const chips = screen.getAllByTestId('assessment-evidence-chip')
     expect(chips).toHaveLength(3)
-    expect(chips[0]).toHaveTextContent('manipulability: 0.200')
-    expect(chips[1]).toHaveTextContent('singularity_proximity: 0.300')
+    expect(chips[0]).toHaveTextContent('Manipulability')
+    expect(chips[0]).toHaveTextContent('0.200')
+    expect(chips[0]).toHaveTextContent('Low') // < 0.3 manipulability → Low
+    expect(chips[1]).toHaveTextContent('Singularity proximity')
+    expect(chips[1]).toHaveTextContent('0.300')
+    expect(chips[1]).toHaveTextContent('Near') // ≥ 0.3 proximity → Near
   })
 
   it('uses English copy only (no regional variants or Spanish)', () => {
@@ -79,7 +86,7 @@ describe('IntelligentAssessment — section renders when assessment present', ()
     ]) {
       expect(screen.getByText(label)).toBeInTheDocument()
     }
-    expect(screen.getByText(/Inference Trace/)).toBeInTheDocument()
+    expect(screen.getByText(/Inference trace/i)).toBeInTheDocument()
     for (const banned of ['Riesgo', 'Calidad', 'Traza', 'Evaluación']) {
       expect(screen.queryByText(banned)).not.toBeInTheDocument()
     }
@@ -91,7 +98,8 @@ describe('IntelligentAssessment — collapsible inference trace', () => {
     render(<IntelligentAssessment assessment={assessment} />)
     const toggle = screen.getByTestId('assessment-trace-toggle')
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    expect(toggle).toHaveTextContent('Show Inference Trace')
+    expect(toggle).toHaveTextContent('Inference trace')
+    expect(toggle).toHaveTextContent('Show')
     expect(screen.queryByTestId('assessment-trace')).not.toBeInTheDocument()
     expect(screen.queryByText('R01_collision_danger', { selector: 'tr *' })).toBeNull()
   })
@@ -101,7 +109,8 @@ describe('IntelligentAssessment — collapsible inference trace', () => {
     fireEvent.click(screen.getByTestId('assessment-trace-toggle'))
     const toggle = screen.getByTestId('assessment-trace-toggle')
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    expect(toggle).toHaveTextContent('Hide Inference Trace')
+    expect(toggle).toHaveTextContent('Inference trace')
+    expect(toggle).toHaveTextContent('Hide')
 
     const rows = screen.getAllByTestId('assessment-trace-entry')
     expect(rows).toHaveLength(2)

@@ -80,7 +80,7 @@ export function IntelligenceView({
         Intelligent Assessment
       </h2>
       <NarrativeSummaryCard assessment={assessment} regions={regions} />
-      <VerdictGauge assessment={assessment} />
+      <VerdictGauge assessment={assessment} report={report} />
       <div className="flex flex-col gap-3 rounded-lg border border-border bg-secondary/10 p-3.5">
         <TriggeredRules rules={assessment.triggered_rules} />
         <MembershipBars evidence={assessment.evidence} />

@@ -449,10 +449,14 @@ describe('EvaluationWorkspace — intelligence tab (evaluation-intelligence-tab)
     fireEvent.click(screen.getByRole('tab', { name: 'Intelligence' }))
     const section = screen.getByTestId('intelligent-assessment')
     expect(section).toBeInTheDocument()
-    // Summary visible: risk + canonical score + triggered rules.
+    // Verdict visible: risk + canonical score + human-labeled rules.
     expect(within(section).getByText('high')).toBeInTheDocument()
-    expect(within(section).getByText('31')).toBeInTheDocument() // 0.31 quality → score 31
-    expect(within(section).getByText('R07_low_manipulability')).toBeInTheDocument()
+    // Score reconciliation: Intelligence shows the SAME canonical score as
+    // Evaluation (report.summary.score 95), never the assessment-derived 31.
+    expect(within(section).getByText('95')).toBeInTheDocument()
+    expect(within(section).getByText('Excellent')).toBeInTheDocument() // gradeFromScore(95)
+    // The human label appears in both the narrative factors and the rule chips.
+    expect(within(section).getAllByText('Low manipulability').length).toBeGreaterThan(0)
   })
 
   it('hides the Intelligence trigger and section when the report carries no assessment', () => {
