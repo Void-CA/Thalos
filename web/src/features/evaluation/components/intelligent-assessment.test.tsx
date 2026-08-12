@@ -63,16 +63,16 @@ describe('IntelligentAssessment — section renders when assessment present', ()
     expect(within(ruleRows[0]).getByText('Collision')).toBeInTheDocument()
   })
 
-  it('renders evidence chips with human label, value and semantic reading', () => {
+  it('renders evidence rows with human label, value and semantic reading', () => {
     render(<IntelligentAssessment assessment={assessment} />)
-    const chips = screen.getAllByTestId('assessment-evidence-chip')
-    expect(chips).toHaveLength(3)
-    expect(chips[0]).toHaveTextContent('Manipulability')
-    expect(chips[0]).toHaveTextContent('0.200')
-    expect(chips[0]).toHaveTextContent('Low') // < 0.3 manipulability → Low
-    expect(chips[1]).toHaveTextContent('Singularity proximity')
-    expect(chips[1]).toHaveTextContent('0.300')
-    expect(chips[1]).toHaveTextContent('Near') // ≥ 0.3 proximity → Near
+    const rows = screen.getAllByTestId('evidence-row')
+    expect(rows).toHaveLength(3)
+    expect(rows[0]).toHaveTextContent('Manipulability')
+    expect(rows[0]).toHaveTextContent('0.200')
+    expect(rows[0]).toHaveTextContent('Low') // < 0.3 manipulability → Low
+    expect(rows[1]).toHaveTextContent('Singularity proximity')
+    expect(rows[1]).toHaveTextContent('0.300')
+    expect(rows[1]).toHaveTextContent('Near') // ≥ 0.3 proximity → Near
   })
 
   it('uses English copy only (no regional variants or Spanish)', () => {
@@ -84,7 +84,8 @@ describe('IntelligentAssessment — section renders when assessment present', ()
       'Evidence',
       'Recommendations',
     ]) {
-      expect(screen.getByText(label)).toBeInTheDocument()
+      // "Evidence" appears twice once expanded (heading + table column header).
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0)
     }
     // v2: no uppercase "Score"/"Risk Level" labels — the hierarchy carries it.
     expect(screen.queryByText('Score')).not.toBeInTheDocument()

@@ -152,7 +152,7 @@ describe('IntelligenceView — technical details (ONE collapsible, closed by def
     expect(toggle).toHaveTextContent('4 evidence')
   })
 
-  it('expands to show the rule reasoning (human labels, category tags), evidence bars and the trace', () => {
+  it('expands to show the rule reasoning (human labels, category tags), the dense evidence table and the trace', () => {
     render(<IntelligenceView assessment={assessment} regions={[]} />)
     fireEvent.click(screen.getByTestId('technical-details-toggle'))
     expect((screen.getByTestId('technical-details') as HTMLDetailsElement).open).toBe(true)
@@ -167,9 +167,12 @@ describe('IntelligenceView — technical details (ONE collapsible, closed by def
     // The KB agenda priority must never be presented as a fuzzy weight.
     expect(screen.queryByText(/weight/i)).not.toBeInTheDocument()
 
-    const bars = screen.getAllByTestId('membership-bar')
-    expect(bars).toHaveLength(4)
-    expect(bars[0]).toHaveStyle({ width: '75%' }) // 0.75 → 75%
+    // Dense evidence table, no bars: one row per canonical variable with the
+    // raw value and the tone-colored semantic reading.
+    const evidenceRows = screen.getAllByTestId('evidence-row')
+    expect(evidenceRows).toHaveLength(4)
+    expect(evidenceRows[0]).toHaveTextContent('Manipulability')
+    expect(evidenceRows[0]).toHaveTextContent('0.750')
     const readings = screen.getAllByTestId('evidence-reading')
     expect(readings[0]).toHaveTextContent('Good')
     expect(readings[1]).toHaveTextContent('Moderate')

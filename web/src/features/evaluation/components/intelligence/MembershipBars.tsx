@@ -5,93 +5,118 @@ import {
   type EvidenceTone,
 } from '@/shared/analysis/evidence'
 
-const BAR_TONES: Record<EvidenceTone, string> = {
-  good: 'bg-chart-3',
-  warn: 'bg-chart-4',
-  danger: 'bg-destructive',
-}
-
 const READING_TONES: Record<EvidenceTone, string> = {
   good: 'text-chart-3',
   warn: 'text-chart-4',
   danger: 'text-destructive',
 }
 
+interface EvidenceRow {
+  key: string
+  label: string
+  value: number
+  unit: string | null
+  reading: string | null
+  tone: EvidenceTone | null
+}
+
 /**
- * MembershipBars — the "evidence" of the verdict, readable at a glance: one
- * bar per canonical evidence variable (Manipulability, Singularity proximity,
- * Collision clearance, Trajectory complexity) with a human label, the raw
- * value (with unit where it has one), a semantic reading derived from the
- * KB-anchored thresholds (`evidence.ts`), and a bar COLORED by that semantic —
- * not by the raw ratio alone. Derived/unknown evidence keys (the fuzzy
- * `MarkEvidence` flags) render as compact muted facts below, value only —
- * the UI never invents a reading for a key it cannot interpret. Values outside
- * 0..1 are clamped to the bar range (negative clearance clamps to 0 width).
+ * MembershipBars — the "evidence" of the verdict, readable at a glance: one row
+ * per canonical evidence variable (Manipulability, Singularity proximity,
+ * Collision clearance, Trajectory complexity) with a human label, the raw value
+ * (with unit where it has one) and a semantic reading derived from the
+ * KB-anchored thresholds (`evidence.ts`), tone-colored by that semantic — not
+ * by the raw ratio alone. An evidence audit reads as a TABLE, matching
+ * RuleReasoning's visual language inside Technical Details: a dense `w-full`
+ * `table-fixed` table (Evidence / Value / Reading), no per-row backgrounds, no
+ * bars. Derived/unknown evidence keys (the fuzzy `MarkEvidence` flags) fold in
+ * as extra rows with the value and a "—" reading — the UI never invents a
+ * reading for a key it cannot interpret.
  */
 export function MembershipBars({ evidence }: { evidence: Record<string, number> }) {
-  const variables = VARIABLE_ORDER
+  const rows: EvidenceRow[] = VARIABLE_ORDER
     .map((key) => ({ key, value: evidence[key] }))
     .filter((entry): entry is { key: string; value: number } => entry.value !== undefined)
-    .map((entry) => ({
-      key: entry.key,
-      value: entry.value,
-      reading: evidenceReading(entry.key, entry.value) as NonNullable<ReturnType<typeof evidenceReading>>,
+    .map((entry) => {
+      const reading = evidenceReading(entry.key, entry.value)!
+      return {
+        key: entry.key,
+        label: reading.label,
+        value: entry.value,
+        unit: reading.unit,
+        reading: reading.reading,
+        tone: reading.tone,
+      }
+    })
+
+  const derived: EvidenceRow[] = Object.entries(evidence)
+    .filter(([key]) => !VARIABLE_ORDER.includes(key))
+    .map(([key, value]) => ({
+      key,
+      label: humanizeKey(key),
+      value,
+      unit: null,
+      reading: null,
+      tone: null,
     }))
 
-  const derived = Object.entries(evidence).filter(([key]) => !VARIABLE_ORDER.includes(key))
+  const allRows = [...rows, ...derived]
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2" data-testid="assessment-evidence">
       <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         Evidence
       </h3>
-      <div className="flex flex-col gap-2.5" data-testid="assessment-evidence">
-        {variables.map(({ key, value, reading }) => {
-          const pct = Math.min(Math.max(value, 0), 1) * 100
-          return (
-            <div
-              key={key}
-              data-testid="assessment-evidence-chip"
-              className="flex items-center gap-3"
-            >
-              <div className="flex w-48 shrink-0 flex-col leading-tight sm:w-52">
-                <span className="text-xs font-medium text-foreground">{reading.label}</span>
-                <span className="text-[11px] font-mono tabular-nums text-muted-foreground">
-                  {value.toFixed(3)}
-                  {reading.unit ? ` ${reading.unit}` : ''}
-                </span>
-              </div>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-secondary" role="presentation">
-                <div
-                  data-testid="membership-bar"
-                  className={`h-full rounded-full ${BAR_TONES[reading.tone]}`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <span
-                data-testid="evidence-reading"
-                className={`w-16 shrink-0 text-right text-[11px] font-semibold ${READING_TONES[reading.tone]}`}
+      <div className="overflow-x-auto">
+        <table className="w-full table-fixed border-collapse">
+          <thead>
+            <tr>
+              <th
+                scope="col"
+                className="w-[50%] border-b border-border px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
               >
-                {reading.reading}
-              </span>
-            </div>
-          )
-        })}
-        {derived.length > 0 && (
-          <div
-            data-testid="evidence-derived"
-            className="flex flex-wrap gap-1.5 border-t border-border pt-2"
-          >
-            {derived.map(([key, value]) => (
-              <span
-                key={key}
-                className="rounded bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                Evidence
+              </th>
+              <th
+                scope="col"
+                className="w-[25%] border-b border-border px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
               >
-                {humanizeKey(key)} · {value.toFixed(1)}
-              </span>
+                Value
+              </th>
+              <th
+                scope="col"
+                className="w-[25%] border-b border-border px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                Reading
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {allRows.map((row, index) => (
+              <tr
+                key={row.key}
+                data-testid="evidence-row"
+                className={index < allRows.length - 1 ? 'border-b border-border' : ''}
+              >
+                <td className="px-3 py-2 align-top">
+                  <span className="text-sm font-medium text-foreground">{row.label}</span>
+                </td>
+                <td className="px-3 py-2 align-top font-mono text-sm tabular-nums text-muted-foreground">
+                  {row.value.toFixed(3)}
+                  {row.unit ? ` ${row.unit}` : ''}
+                </td>
+                <td
+                  data-testid="evidence-reading"
+                  className={`px-3 py-2 align-top text-sm font-semibold ${
+                    row.tone ? READING_TONES[row.tone] : 'text-muted-foreground'
+                  }`}
+                >
+                  {row.reading ?? '—'}
+                </td>
+              </tr>
             ))}
-          </div>
-        )}
+          </tbody>
+        </table>
       </div>
     </div>
   )

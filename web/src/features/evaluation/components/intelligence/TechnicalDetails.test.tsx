@@ -10,7 +10,7 @@ import type {
 
 /**
  * TechnicalDetails (structural UX redesign) — ONE collapsible detail section
- * owning the rule reasoning, the evidence bars and the inference trace,
+ * owning the rule reasoning, the dense evidence table and the inference trace,
  * CLOSED by default. The child testids (`rule-reasoning*`,
  * `assessment-evidence*`, `assessment-trace*`) survive unchanged.
  */
@@ -45,14 +45,14 @@ describe('TechnicalDetails — ONE collapsible detail section (closed by default
     expect(toggle).toHaveTextContent('4 evidence')
   })
 
-  it('expands on click to show rule reasoning, evidence bars and the inference trace', () => {
+  it('expands on click to show rule reasoning, the dense evidence table and the inference trace', () => {
     render(<TechnicalDetails rules={rules} evidence={evidence} trace={trace} />)
     fireEvent.click(screen.getByTestId('technical-details-toggle'))
     expect((screen.getByTestId('technical-details') as HTMLDetailsElement).open).toBe(true)
 
     expect(screen.getByTestId('assessment-rule-count')).toHaveTextContent('3 rules')
     expect(screen.getAllByTestId('rule-reasoning-row')).toHaveLength(3)
-    expect(screen.getAllByTestId('assessment-evidence-chip')).toHaveLength(4)
+    expect(screen.getAllByTestId('evidence-row')).toHaveLength(4)
     expect(screen.getAllByTestId('evidence-reading')).toHaveLength(4)
 
     const traceToggle = screen.getByTestId('assessment-trace-toggle')
@@ -124,7 +124,7 @@ describe('TechnicalDetails — ONE collapsible detail section (closed by default
     render(<TechnicalDetails rules={rules} evidence={evidence} trace={reasonedTrace} />)
     fireEvent.click(screen.getByTestId('technical-details-toggle'))
 
-    const table = screen.getByRole('table')
+    const table = within(screen.getByTestId('rule-reasoning')).getByRole('table')
     expect(table).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'Rule' })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'Why' })).toBeInTheDocument()
