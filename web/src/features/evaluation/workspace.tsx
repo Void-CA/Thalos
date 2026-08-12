@@ -141,36 +141,35 @@ export function EvaluationWorkspace() {
               </div>
             </div>
 
-            {/* ── DETAIL (action, ~1/3): WHAT to do with the problem. Swaps the
-                region chooser for the RegionInspector once a region is active;
-                ProgramView (the editable segment) and Recommendations always live
-                here. In mobile the detail collapses below the master. */}
+            {/* ── DETAIL (action, ~1/3): WHAT to do with the problem. The
+                Problem Regions chooser is ALWAYS visible — selecting a region
+                never replaces it; the RegionInspector opens in-place below the
+                list (the chosen row stays highlighted) and ProgramView (the
+                editable segment) + Recommendations always live here. In mobile
+                the detail collapses below the master. */}
             <aside
               className="lg:col-span-1 flex flex-col gap-4 min-w-0"
               data-testid="evaluation-detail"
             >
-              {selectedRegion ? (
-                <>
-                  <RegionInspector />
-                  <ProgramView />
-                </>
-              ) : (
-                <>
-                  <section className="flex flex-col gap-2 min-w-0">
-                    <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
-                      Problem Regions
-                    </h2>
-                    {hasProblemRegions ? (
-                      <ProblemRegions />
-                    ) : (
-                      <p className="text-xs text-muted-foreground text-center py-4 rounded-lg border border-border bg-card/50">
-                        No problems detected — the plan is ready.
-                      </p>
-                    )}
-                  </section>
-                  <ProgramView />
-                </>
-              )}
+              <section className="flex flex-col gap-2 min-w-0">
+                <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                  Problem Regions
+                </h2>
+                {hasProblemRegions ? (
+                  <ProblemRegions />
+                ) : (
+                  <p className="text-xs text-muted-foreground text-center py-4 rounded-lg border border-border bg-card/50">
+                    No problems detected — the plan is ready.
+                  </p>
+                )}
+              </section>
+
+              {/* RegionInspector — the selected region's drill-down detail.
+                  Below the list (never replacing it) so the selection context
+                  stays on screen; ProgramView remains the editable segment. */}
+              {selectedRegion && <RegionInspector />}
+
+              <ProgramView />
 
               {/* Recommendations — the base of the post-MVP resolution strategy
                   (Preview/Apply/Undo). */}

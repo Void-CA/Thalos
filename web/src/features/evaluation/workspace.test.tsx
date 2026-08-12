@@ -565,7 +565,7 @@ describe('EvaluationWorkspace — master-detail layout (context | action)', () =
     ).not.toBeInTheDocument()
   })
 
-  it('swaps the chooser for the RegionInspector in the detail when a region is selected, keeping ProgramView', () => {
+  it('keeps the Problem Regions list mounted and shows the RegionInspector when a region is selected', () => {
     act(() => {
       useAnalysisStore.setState({ report: recommendationReport })
       useSceneStore.setState({ activePlan })
@@ -574,8 +574,31 @@ describe('EvaluationWorkspace — master-detail layout (context | action)', () =
     fireEvent.click(screen.getByRole('button', { name: /Singularity near waypoint 10/i }))
     const detail = screen.getByTestId('evaluation-detail')
     expect(within(detail).getByRole('heading', { name: 'Region Details' })).toBeInTheDocument()
-    expect(within(detail).queryByText('Problem Regions')).not.toBeInTheDocument()
+    // The list is NEVER replaced by the selection — it stays mounted behind
+    // the inspector, with the selected row still present.
+    expect(within(detail).getByText('Problem Regions')).toBeInTheDocument()
+    expect(
+      within(detail).getByRole('button', { name: /Singularity near waypoint 10/i }),
+    ).toBeInTheDocument()
     expect(within(detail).getByTestId('program-view')).toBeInTheDocument()
+  })
+
+  it('removes the RegionInspector and keeps the list mounted when the selected region is deselected', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: recommendationReport })
+      useSceneStore.setState({ activePlan })
+    })
+    renderWorkspace()
+    const regionCard = () => screen.getByRole('button', { name: /Singularity near waypoint 10/i })
+    // Select → inspector shows next to the still-mounted list.
+    fireEvent.click(regionCard())
+    expect(screen.getByRole('heading', { name: 'Region Details' })).toBeInTheDocument()
+    // Click the same region again → deselect, back to list-only view.
+    fireEvent.click(regionCard())
+    expect(screen.queryByRole('heading', { name: 'Region Details' })).not.toBeInTheDocument()
+    expect(screen.getByText('Problem Regions')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Singularity near waypoint 10/i })).toBeInTheDocument()
+    expect(screen.getByTestId('program-view')).toBeInTheDocument()
   })
 
   it('filters recommendations to the selected region, keeping plan-general ones', () => {
