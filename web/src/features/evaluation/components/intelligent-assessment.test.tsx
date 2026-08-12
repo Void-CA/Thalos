@@ -44,12 +44,10 @@ beforeEach(() => cleanup())
 afterEach(() => cleanup())
 
 describe('IntelligentAssessment — section renders when assessment present', () => {
-  it('shows the heading, risk level, canonical score, rules and recommendations', () => {
+  it('shows the heading, risk chip, canonical score, rules and recommendations', () => {
     render(<IntelligentAssessment assessment={assessment} />)
     expect(screen.getByRole('heading', { name: 'Intelligent Assessment' })).toBeInTheDocument()
-    expect(screen.getByText('Risk Level')).toBeInTheDocument()
-    expect(screen.getByText('high')).toBeInTheDocument()
-    expect(screen.getByText('Score')).toBeInTheDocument()
+    expect(screen.getByText('high risk')).toBeInTheDocument()
     expect(screen.getByText('30')).toBeInTheDocument() // 0.3027 quality → score 30
     expect(screen.getByText('Poor')).toBeInTheDocument() // <50 → Poor
     expect(screen.getByText('Triggered Rules')).toBeInTheDocument()
@@ -78,14 +76,16 @@ describe('IntelligentAssessment — section renders when assessment present', ()
     render(<IntelligentAssessment assessment={assessment} />)
     for (const label of [
       'Intelligent Assessment',
-      'Risk Level',
-      'Score',
+      'high risk',
       'Triggered Rules',
       'Evidence',
       'Recommendations',
     ]) {
       expect(screen.getByText(label)).toBeInTheDocument()
     }
+    // v2: no uppercase "Score"/"Risk Level" labels — the hierarchy carries it.
+    expect(screen.queryByText('Score')).not.toBeInTheDocument()
+    expect(screen.queryByText('Risk Level')).not.toBeInTheDocument()
     expect(screen.getByText(/Inference trace/i)).toBeInTheDocument()
     for (const banned of ['Riesgo', 'Calidad', 'Traza', 'Evaluación']) {
       expect(screen.queryByText(banned)).not.toBeInTheDocument()
@@ -129,12 +129,12 @@ describe('IntelligentAssessment — collapsible inference trace', () => {
 })
 
 describe('IntelligentAssessment — risk badge', () => {
-  it('renders the categorical risk value on the badge', () => {
+  it('renders the categorical risk value on the chip', () => {
     const { unmount } = render(<IntelligentAssessment assessment={assessment} />)
-    expect(within(screen.getByTestId('intelligent-assessment')).getByText('high')).toBeInTheDocument()
+    expect(within(screen.getByTestId('intelligent-assessment')).getByText('high risk')).toBeInTheDocument()
     unmount()
 
     render(<IntelligentAssessment assessment={{ ...assessment, risk: 'critical' }} />)
-    expect(within(screen.getByTestId('intelligent-assessment')).getByText('critical')).toBeInTheDocument()
+    expect(within(screen.getByTestId('intelligent-assessment')).getByText('critical risk')).toBeInTheDocument()
   })
 })

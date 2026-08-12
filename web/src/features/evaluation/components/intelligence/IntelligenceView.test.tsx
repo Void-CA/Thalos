@@ -76,17 +76,16 @@ beforeEach(() => {
 })
 afterEach(() => cleanup())
 
-describe('IntelligenceView — verdict hero (structural redesign)', () => {
-  it('shows the canonical score + grade and the categorical risk in ONE hero band', () => {
+describe('IntelligenceView — verdict hero (v2: number + scale + inline grade)', () => {
+  it('shows the canonical score + inline grade and the categorical risk in ONE hero band', () => {
     render(<IntelligenceView assessment={assessment} regions={[]} />)
     const hero = screen.getByTestId('intelligence-verdict-hero')
-    expect(hero).toHaveTextContent('Score')
     expect(hero).toHaveTextContent('82') // no report → 0.82 quality → score 82
     expect(hero).toHaveTextContent('Good') // ≥70 → Good
-    expect(hero).toHaveTextContent('Risk Level')
-    expect(hero).toHaveTextContent('low')
+    expect(hero).toHaveTextContent('low risk')
     // The hero is the ONLY verdict number on the tab — no competing gauge.
-    expect(screen.getAllByText('Score')).toHaveLength(1)
+    expect(screen.queryByText('Score')).not.toBeInTheDocument()
+    expect(screen.queryByText('Risk Level')).not.toBeInTheDocument()
     expect(screen.queryByText('Narrative Summary')).not.toBeInTheDocument()
   })
 
@@ -116,8 +115,8 @@ describe('IntelligenceView — score reconciliation (P1.1 kept: hero matches Eva
     expect(hero.getByText('Good')).toBeInTheDocument()
     expect(hero.queryByText('68')).not.toBeInTheDocument()
     expect(hero.queryByText('Fair')).not.toBeInTheDocument()
-    // The assessment's risk stays as the secondary badge.
-    expect(hero.getByText('low')).toBeInTheDocument()
+    // The assessment's risk stays as the secondary chip.
+    expect(hero.getByText('low risk')).toBeInTheDocument()
     // Report score present → no fallback note.
     expect(screen.queryByTestId('verdict-source-note')).not.toBeInTheDocument()
   })

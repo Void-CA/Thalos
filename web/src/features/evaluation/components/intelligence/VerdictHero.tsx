@@ -11,15 +11,26 @@ const RISK_ACCENT: Record<AssessmentWire['risk'], string> = {
   critical: 'border-destructive-mid bg-destructive-weak',
 }
 
-/** Color-coded grade pill tones (canonical score→grade language). */
+/** Inline grade tone (canonical score→grade language): the grade word sits
+ *  baseline-aligned next to the number as ONE statement — colored text only,
+ *  no pill chrome, so the number + word read as a single verdict. */
 const GRADE_TONES: Record<VerdictGrade, string> = {
-  Excellent: 'bg-success-weak text-chart-3',
-  Good: 'bg-success-weak text-chart-3',
-  Fair: 'bg-warning-weak text-chart-4',
-  Poor: 'bg-destructive-weak text-destructive',
+  Excellent: 'text-chart-3',
+  Good: 'text-chart-3',
+  Fair: 'text-chart-4',
+  Poor: 'text-destructive',
 }
 
-/** Color-coded risk badge tones (green/yellow/orange/red). */
+/** Fill tone for the 0–100 score scale, keyed by the grade (the accent carries
+ *  the verdict; the track stays monochrome). */
+const SCALE_TONES: Record<VerdictGrade, string> = {
+  Excellent: 'bg-chart-3',
+  Good: 'bg-chart-3',
+  Fair: 'bg-chart-4',
+  Poor: 'bg-destructive',
+}
+
+/** Color-coded risk chip tones (green/yellow/orange/red). */
 const RISK_TONES: Record<AssessmentWire['risk'], string> = {
   low: 'bg-success-weak text-chart-3',
   medium: 'bg-warning-weak text-chart-4',
@@ -28,16 +39,18 @@ const RISK_TONES: Record<AssessmentWire['risk'], string> = {
 }
 
 /**
- * VerdictHero (structural UX redesign) — the decision band at the top of the
- * Intelligence tab: ONE full-width band tinted by RISK, carrying the canonical
- * score (the number dominates), grade pill, risk badge and a single human
- * summary line. This is the ONLY verdict number on the tab — the old gauge is
- * gone.
+ * VerdictHero (UX redesign v2) — the decision band at the top of the
+ * Intelligence tab: ONE full-width band tinted by RISK carrying a single
+ * dominant statement — the big score with the grade word INLINE (baseline-
+ * aligned, colored, not a pill) — anchored on a thin 0–100 score scale, with
+ * risk demoted to a small secondary chip and one human summary line. No
+ * uppercase "Score"/"Risk Level" labels: the hierarchy carries the meaning.
+ * This is the ONLY verdict number on the tab — the old gauge is gone.
  *
  * Score reconciliation (P1.1 — kept): the primary number is the canonical
  * score the Evaluation tab shows — `report.summary.score` with its
  * backend-aligned grade (`gradeFromScore`). The assessment's `risk` stays as
- * the secondary badge (it expresses a different thing — safety). Only when no
+ * the secondary chip (it expresses a different thing — safety). Only when no
  * report score is present does the hero fall back to
  * `verdictFromQuality(assessment.quality)` (same projection the backend uses),
  * flagged with a subtle note. The two vocabularies can therefore never
@@ -68,41 +81,44 @@ export function VerdictHero({
     >
       <div
         data-testid="assessment-verdict"
-        className="flex flex-wrap items-center justify-between gap-4"
+        className="flex flex-wrap items-start justify-between gap-4"
       >
-        <div className="flex items-center gap-3">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Score
+        <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+          <span className="flex items-baseline gap-2">
+            <span
+              data-testid="verdict-score"
+              className="text-5xl font-bold leading-none font-mono tabular-nums text-foreground"
+            >
+              {primary.score}
             </span>
-            <span className="flex items-baseline gap-1.5">
-              <span
-                data-testid="verdict-score"
-                className="text-5xl font-bold leading-none font-mono tabular-nums text-foreground"
-              >
-                {primary.score}
-              </span>
-              <span className="text-xs font-semibold tabular-nums text-muted-foreground">
-                / 100
-              </span>
+            <span className="text-xs font-semibold tabular-nums text-muted-foreground">
+              / 100
             </span>
+            <span
+              data-testid="verdict-grade"
+              className={`text-xl font-bold tracking-tight ${GRADE_TONES[primary.grade]}`}
+            >
+              {primary.grade}
+            </span>
+          </span>
+          <div
+            data-testid="verdict-scale"
+            className="relative h-1.5 w-full overflow-hidden rounded-full bg-border"
+            aria-hidden="true"
+          >
+            <div
+              data-testid="verdict-scale-fill"
+              className={`absolute inset-y-0 left-0 rounded-full ${SCALE_TONES[primary.grade]}`}
+              style={{ width: `${primary.score}%` }}
+            />
           </div>
-          <span
-            data-testid="verdict-grade"
-            className={`self-start rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${GRADE_TONES[primary.grade]}`}
-          >
-            {primary.grade}
-          </span>
         </div>
-        <div className="flex flex-col items-end gap-1.5">
-          <span className="text-xs uppercase tracking-wider text-muted-foreground">Risk Level</span>
-          <span
-            data-testid="verdict-risk"
-            className={`rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${RISK_TONES[assessment.risk]}`}
-          >
-            {assessment.risk}
-          </span>
-        </div>
+        <span
+          data-testid="verdict-risk"
+          className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${RISK_TONES[assessment.risk]}`}
+        >
+          {assessment.risk} risk
+        </span>
       </div>
       <p
         data-testid="verdict-summary"

@@ -6,7 +6,6 @@ import { ProblemRegions } from '@/features/analysis/components/problem-regions'
 import { RegionInspector } from '@/features/analysis/components/region-inspector'
 import { RecommendationRow } from '@/features/planning/components/RecommendationRow'
 import { useSemanticEditor } from '@/features/semantic/store'
-import { gradeFromScore } from '@/shared/analysis/verdict'
 import { useSceneStore } from '@/features/viewport/store'
 import {
   dedupeRecommendations,
@@ -271,7 +270,7 @@ function ContinueToExecution({ reason }: { reason: string | null }) {
  * programming flow already populates: semantic editor (Tasks source +
  * instruction count), viewport scene store (waypoints + duration + robot DOF +
  * initial joints) and the analysis report (analyzed waypoints fallback, plan
- * id, score/grade).
+ * id). The canonical score/grade lives in StatusBanner, full-width above.
  */
 function PlanSummary() {
   const report = useAnalysisStore((s) => s.report)
@@ -293,15 +292,10 @@ function PlanSummary() {
 
   return (
     <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-card px-3 py-2.5">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
         <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
           Plan
         </span>
-        {report && (
-          <span className="text-[10px] font-mono font-semibold text-primary bg-primary-weak px-2 py-0.5 rounded tabular-nums">
-            Score {report.summary.score} · {gradeFromScore(report.summary.score)}
-          </span>
-        )}
       </div>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-3">
         <SummaryItem label="Source" value={source} />

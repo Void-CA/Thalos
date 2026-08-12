@@ -450,7 +450,7 @@ describe('EvaluationWorkspace — intelligence tab (evaluation-intelligence-tab)
     const section = screen.getByTestId('intelligent-assessment')
     expect(section).toBeInTheDocument()
     // Verdict visible: risk + canonical score + human-labeled rules.
-    expect(within(section).getByText('high')).toBeInTheDocument()
+    expect(within(section).getByText('high risk')).toBeInTheDocument()
     // Score reconciliation: Intelligence shows the SAME canonical score as
     // Evaluation (report.summary.score 95), never the assessment-derived 31.
     expect(within(section).getByText('95')).toBeInTheDocument()
