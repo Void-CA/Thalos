@@ -7,6 +7,7 @@ import { useWorkspaceStore, type PointCloudColorMode } from '../workspace-analys
 import { useWorkspaceService } from '@/features/viewport/services/service-context'
 import { FlaskConical, Loader2 } from 'lucide-react'
 import { ErrorBox } from '@/components/ui/error-box'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { WORKSPACE_PRESETS, DEFAULT_PRESET_KEY } from './presets'
 import { histogram } from './histogram'
 import { HistogramBars, CategoricalBars } from './histogram-bars'
@@ -37,7 +38,10 @@ import {
  * The 3D point cloud (features/viewport/renderer/point-cloud.tsx) is the
  * visualization: it stays driven by this feature's store (colorMode /
  * showPointCloud / workspaceSamples), so choosing a color mode immediately
- * re-colors the cloud wherever the viewport renders.
+ * re-colors the cloud wherever the viewport renders. The inline report is
+ * TABBED (one tab per feature); the active tab drives the cloud color mode
+ * one-directionally (tab → color), and the manual color control below remains
+ * an override that never rewinds the active tab.
  */
 export function WorkspaceAnalysis() {
   const service = useWorkspaceService()
@@ -141,6 +145,27 @@ export function WorkspaceAnalysis() {
     { key: 'manipulability', label: 'Manipulability' },
   ]
 
+  // ── Tabbed report: one tab per analyzed feature, coupled to the 3D cloud ──
+  // The ACTIVE tab drives the point-cloud color mode (tab → color, one
+  // direction). The manual "Point Cloud Color" control below stays an
+  // override that never rewinds the active tab. Default tab = the first
+  // feature that produced data (workspace → singularity → manipulability).
+  type ReportTab = 'workspace' | 'singularity' | 'manipulability'
+  const [activeTab, setActiveTab] = useState<ReportTab | null>(null)
+
+  const hasResults = !!ws.data || !!sg.data || !!mp.data
+  const availableTabs: ReportTab[] = []
+  if (ws.data) availableTabs.push('workspace')
+  if (sg.data) availableTabs.push('singularity')
+  if (mp.data) availableTabs.push('manipulability')
+  const effectiveTab = activeTab ?? availableTabs[0] ?? null
+
+  const selectTab = (tab: ReportTab) => {
+    setActiveTab(tab)
+    setColorMode(tab)
+    setShowPointCloud(true)
+  }
+
   return (
     <div className="flex flex-col gap-3 p-1.5">
       {/* ── Purpose (conceptual split: characterization tool, not decision stage) ── */}
@@ -223,116 +248,146 @@ export function WorkspaceAnalysis() {
       {sg.error && <ErrorBox error={(sg.error as Error)} />}
       {mp.error && <ErrorBox error={(mp.error as Error)} />}
 
-      {/* ── Inline results ── */}
-      {ws.data && (
-        <section>
-          <SectionHeader title="Workspace" />
-          <div className="space-y-3">
-            <MetricRow
-              label="Bounding Volume"
-              value={ws.data.metrics.bounding_volume}
-              max={10}
-              unit="m³"
-            />
-            <MetricRange
-              label="Reach"
-              min={ws.data.metrics.min_reach}
-              max={ws.data.metrics.max_reach}
-              unit="m"
-            />
-            <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">
-              <span>Sample count</span>
-              <span className="font-mono tabular-nums text-foreground">{ws.data.metrics.sample_count ?? '—'}</span>
-            </div>
-            {reachHistogram && (
-              <div className="pt-1">
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                  Reach distribution
-                </span>
-                <HistogramBars data={reachHistogram} formatValue={v => v.toFixed(2)} />
-              </div>
-            )}
-          </div>
-        </section>
-      )}
+      {/* ── Tabbed inline results: one tab per analyzed feature. The active
+       * tab is coupled to the 3D point cloud — switching re-colors it. ── */}
+      {hasResults && effectiveTab && (
+        <Tabs value={effectiveTab} onValueChange={(tab) => selectTab(tab as ReportTab)}>
+          <TabsList className="w-full">
+            <TabsTrigger value="workspace">Workspace</TabsTrigger>
+            <TabsTrigger value="singularity">Singularity</TabsTrigger>
+            <TabsTrigger value="manipulability">Manipulability</TabsTrigger>
+          </TabsList>
 
-      {sg.data && (
-        <section>
-          <SectionHeader
-            title="Singularity"
-            badge={gradeBadge(sg.data.metrics.singular_count, sg.data.metrics.total_samples)}
-          />
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-2">
-              <MetricValue label="Normal" value={sg.data.metrics.normal_count} color="#44cc44" />
-              <MetricValue label="Near Singular" value={sg.data.metrics.near_singular_count} color="#eebb22" />
-              <MetricValue label="Singular" value={sg.data.metrics.singular_count} color="#ee3333" />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <MetricValue label="Avg Condition Number" value={sg.data.metrics.avg_condition_number} unit="σ" />
-              <MetricValue label="Min σₘᵢₙ" value={sg.data.metrics.min_condition_number} unit="σ" />
-            </div>
-            <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">
-              <span>Total samples</span>
-              <span className="font-mono tabular-nums text-foreground">{sg.data.metrics.total_samples ?? '—'}</span>
-            </div>
-            {stateCounts && (
-              <div className="pt-1">
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                  State distribution
-                </span>
-                <CategoricalBars
-                  categories={[
-                    { label: 'Normal', count: stateCounts.normal, color: '#44cc44' },
-                    { label: 'Near Sing.', count: stateCounts.near_singular, color: '#eebb22' },
-                    { label: 'Singular', count: stateCounts.singular, color: '#ee3333' },
-                  ]}
+          <TabsContent value="workspace">
+            {ws.data ? (
+              <section>
+                <SectionHeader title="Workspace" />
+                <div className="space-y-3">
+                  <MetricRow
+                    label="Bounding Volume"
+                    value={ws.data.metrics.bounding_volume}
+                    max={10}
+                    unit="m³"
+                  />
+                  <MetricRange
+                    label="Reach"
+                    min={ws.data.metrics.min_reach}
+                    max={ws.data.metrics.max_reach}
+                    unit="m"
+                  />
+                  <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">
+                    <span>Sample count</span>
+                    <span className="font-mono tabular-nums text-foreground">{ws.data.metrics.sample_count ?? '—'}</span>
+                  </div>
+                  {reachHistogram && (
+                    <div className="pt-1">
+                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                        Reach distribution
+                      </span>
+                      <HistogramBars data={reachHistogram} formatValue={v => v.toFixed(2)} />
+                    </div>
+                  )}
+                </div>
+              </section>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                {ws.error ? 'Workspace analysis failed' : 'No workspace data yet'}
+              </p>
+            )}
+          </TabsContent>
+
+          <TabsContent value="singularity">
+            {sg.data ? (
+              <section>
+                <SectionHeader
+                  title="Singularity"
+                  badge={gradeBadge(sg.data.metrics.singular_count, sg.data.metrics.total_samples)}
                 />
-              </div>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    <MetricValue label="Normal" value={sg.data.metrics.normal_count} color="#44cc44" />
+                    <MetricValue label="Near Singular" value={sg.data.metrics.near_singular_count} color="#eebb22" />
+                    <MetricValue label="Singular" value={sg.data.metrics.singular_count} color="#ee3333" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <MetricValue label="Avg Condition Number" value={sg.data.metrics.avg_condition_number} unit="σ" />
+                    <MetricValue label="Min σₘᵢₙ" value={sg.data.metrics.min_condition_number} unit="σ" />
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">
+                    <span>Total samples</span>
+                    <span className="font-mono tabular-nums text-foreground">{sg.data.metrics.total_samples ?? '—'}</span>
+                  </div>
+                  {stateCounts && (
+                    <div className="pt-1">
+                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                        State distribution
+                      </span>
+                      <CategoricalBars
+                        categories={[
+                          { label: 'Normal', count: stateCounts.normal, color: '#44cc44' },
+                          { label: 'Near Sing.', count: stateCounts.near_singular, color: '#eebb22' },
+                          { label: 'Singular', count: stateCounts.singular, color: '#ee3333' },
+                        ]}
+                      />
+                    </div>
+                  )}
+                </div>
+              </section>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                {sg.error ? 'Singularity analysis failed' : 'No singularity data yet'}
+              </p>
             )}
-          </div>
-        </section>
+          </TabsContent>
+
+          <TabsContent value="manipulability">
+            {mp.data ? (
+              <section>
+                <SectionHeader
+                  title="Manipulability"
+                  badge={gradeBadgeInverse(mp.data.metrics.avg_yoshikawa)}
+                />
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    <MetricValue label="Avg Yoshikawa" value={mp.data.metrics.avg_yoshikawa} pct />
+                    <MetricValue label="Min" value={mp.data.metrics.min_yoshikawa} pct />
+                    <MetricValue label="Max" value={mp.data.metrics.max_yoshikawa} pct />
+                  </div>
+                  <MetricRange
+                    label="Isotropy"
+                    min={mp.data.metrics.min_isotropy}
+                    max={mp.data.metrics.max_isotropy}
+                    pct
+                  />
+                  <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">
+                    <span>Total samples</span>
+                    <span className="font-mono tabular-nums text-foreground">{mp.data.metrics.total_samples ?? '—'}</span>
+                  </div>
+                  {yoshikawaHistogram && (
+                    <div className="pt-1">
+                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                        Yoshikawa distribution
+                      </span>
+                      <HistogramBars data={yoshikawaHistogram} formatValue={v => v.toFixed(3)} />
+                    </div>
+                  )}
+                </div>
+              </section>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                {mp.error ? 'Manipulability analysis failed' : 'No manipulability data yet'}
+              </p>
+            )}
+          </TabsContent>
+        </Tabs>
       )}
 
-      {mp.data && (
-        <section>
-          <SectionHeader
-            title="Manipulability"
-            badge={gradeBadgeInverse(mp.data.metrics.avg_yoshikawa)}
-          />
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-2">
-              <MetricValue label="Avg Yoshikawa" value={mp.data.metrics.avg_yoshikawa} pct />
-              <MetricValue label="Min" value={mp.data.metrics.min_yoshikawa} pct />
-              <MetricValue label="Max" value={mp.data.metrics.max_yoshikawa} pct />
-            </div>
-            <MetricRange
-              label="Isotropy"
-              min={mp.data.metrics.min_isotropy}
-              max={mp.data.metrics.max_isotropy}
-              pct
-            />
-            <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">
-              <span>Total samples</span>
-              <span className="font-mono tabular-nums text-foreground">{mp.data.metrics.total_samples ?? '—'}</span>
-            </div>
-            {yoshikawaHistogram && (
-              <div className="pt-1">
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                  Yoshikawa distribution
-                </span>
-                <HistogramBars data={yoshikawaHistogram} formatValue={v => v.toFixed(3)} />
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {!isRunning && !ws.data && !sg.data && !mp.data && (
+      {!isRunning && !hasResults && (
         <p className="text-sm text-muted-foreground text-center py-4">No data yet — run the analysis</p>
       )}
 
-      {/* ── Point-cloud visualization controls (3D linkage: re-colors the cloud) ── */}
+      {/* ── Point-cloud visualization controls. The active TAB drives the cloud
+       * color mode; these manual controls stay available as an override. ── */}
       {hasAnySamples && (
         <div className="border-t border-border pt-2">
           <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">

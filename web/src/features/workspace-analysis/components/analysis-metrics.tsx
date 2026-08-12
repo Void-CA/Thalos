@@ -66,7 +66,14 @@ export function MetricRange({
   unit?: string
   pct?: boolean
 }) {
-  const fmt = (v?: number) => (v == null ? '—' : v.toFixed(2))
+  // pct: values are ratios (0..1) — scale by 100 for display, keep the raw
+  // value in data. Rounding strips trailing zeros so `12% — 85%` reads clean
+  // while tiny values (0.1%) don't collapse (3 decimals floor for raw units).
+  const fmt = (v?: number) => {
+    if (v == null) return '—'
+    const scaled = pct ? v * 100 : v
+    return String(Math.round(scaled * 1000) / 1000)
+  }
   const suffix = pct ? '%' : unit
   return (
     <div className="flex items-center justify-between text-xs">
@@ -94,7 +101,7 @@ export function MetricValue({
     <div className="flex flex-col gap-0.5 bg-secondary/20 rounded-md px-2.5 py-2">
       <span className="text-[10px] text-muted-foreground truncate">{label}</span>
       <span className="text-sm font-mono font-semibold tabular-nums" style={{ color: color ?? 'var(--foreground)' }}>
-        {value?.toFixed?.(4) ?? '—'}
+        {value != null ? (pct ? String(Math.round(value * 10000) / 100) : value.toFixed(4)) : '—'}
         {pct && <span className="text-[10px] text-muted-foreground font-normal">%</span>}
         {unit && <span className="text-[10px] text-muted-foreground font-normal">{unit}</span>}
       </span>

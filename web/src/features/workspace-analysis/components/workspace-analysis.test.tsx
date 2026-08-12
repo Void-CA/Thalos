@@ -124,7 +124,7 @@ describe('WorkspaceAnalysis — explicit trigger runs 3 mutations (spec: Explici
     })
   })
 
-  it('renders inline result cards with MetricRow/SectionHeader after sampling', async () => {
+  it('renders the TABBED inline report — one metric panel per feature', async () => {
     mocks.sample.mockResolvedValue({
       metrics: { bounding_volume: 1.25, max_reach: 0.8, min_reach: 0.2, sample_count: 10000 },
       bounds: { min: [-0.5, -0.5, 0], max: [0.5, 0.5, 0.5] },
@@ -150,25 +150,107 @@ describe('WorkspaceAnalysis — explicit trigger runs 3 mutations (spec: Explici
     renderWorkspace()
     fireEvent.click(screen.getByRole('button', { name: /run analysis/i }))
 
-    // Inline result cards — section headers from SectionHeader, no modal.
+    // Default tab = first feature with data → Workspace (all three succeed).
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Workspace' })).toBeInTheDocument()
     })
-    expect(screen.getByRole('heading', { name: 'Singularity' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Manipulability' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Workspace' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Singularity' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Manipulability' })).toBeInTheDocument()
 
-    // MetricRow/MetricRange labels from the resolved metrics.
+    // Workspace tab: MetricRow/MetricRange metrics from the resolved data.
     expect(screen.getByText('Bounding Volume')).toBeInTheDocument()
     expect(screen.getByText('Reach')).toBeInTheDocument()
-    expect(screen.getByText('Avg Condition Number')).toBeInTheDocument()
-    expect(screen.getByText('Isotropy')).toBeInTheDocument()
-
-    // Formatted metric values prove real data rendered.
     expect(screen.getByText('1.2500')).toBeInTheDocument()
-    expect(screen.getByText('0.80')).toBeInTheDocument()
+    expect(screen.getByText('0.8')).toBeInTheDocument()
 
-    // No modal overlay — inline section (spec: Non-Blocking Inline Section).
+    // Singularity tab — its own metrics live on its panel.
+    fireEvent.click(screen.getByRole('tab', { name: 'Singularity' }))
+    expect(screen.getByRole('heading', { name: 'Singularity' })).toBeInTheDocument()
+    expect(screen.getByText('Avg Condition Number')).toBeInTheDocument()
+
+    // Manipulability tab — metrics + the pct fix renders 12% — 85% (values
+    // are ratios scaled ×100; the text is split across child spans, so assert
+    // on the row's full textContent).
+    fireEvent.click(screen.getByRole('tab', { name: 'Manipulability' }))
+    expect(screen.getByRole('heading', { name: 'Manipulability' })).toBeInTheDocument()
+    expect(screen.getByText('Isotropy')).toBeInTheDocument()
+    expect(screen.getByText('Isotropy').parentElement).toHaveTextContent('12—85%')
+
+    // No modal overlay — inline tabs (spec: Non-Blocking Inline Section).
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('switching tabs drives the 3D point-cloud color mode one-way (tab → color)', async () => {
+    mocks.sample.mockResolvedValue({
+      metrics: { bounding_volume: 1.25, max_reach: 0.8, min_reach: 0.2, sample_count: 10000 },
+      bounds: { min: [-0.5, -0.5, 0], max: [0.5, 0.5, 0.5] },
+      samples: [{ position: [0.1, 0.2, 0.3] }],
+    })
+    mocks.analyzeSingularity.mockResolvedValue({
+      metrics: {
+        normal_count: 9900, near_singular_count: 95, singular_count: 5, total_samples: 10000,
+        avg_condition_number: 12.5, min_condition_number: 1.02,
+      },
+      samples: [{ position: [0.1, 0.2, 0.3], state: 'normal' }],
+    })
+    mocks.analyzeManipulability.mockResolvedValue({
+      metrics: {
+        avg_yoshikawa: 0.42, min_yoshikawa: 0.1, max_yoshikawa: 0.9,
+        avg_isotropy: 0.55, min_isotropy: 0.12, max_isotropy: 0.85, total_samples: 10000,
+      },
+      samples: [{ position: [0.1, 0.2, 0.3], yoshikawa: 0.42 }],
+    })
+    useRobotStore.getState().setRobots([{ id: 'scara', display_name: 'SCARA', dof: 4, joints: [] }])
+    useRobotStore.getState().select('scara')
+
+    renderWorkspace()
+    fireEvent.click(screen.getByRole('button', { name: /run analysis/i }))
+
+    // Let the first data land (default tab = Workspace) before switching.
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Workspace' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Singularity' }))
+    expect(useWorkspaceStore.getState().colorMode).toBe('singularity')
+    expect(useWorkspaceStore.getState().showPointCloud).toBe(true)
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Manipulability' }))
+    expect(useWorkspaceStore.getState().colorMode).toBe('manipulability')
+    expect(useWorkspaceStore.getState().showPointCloud).toBe(true)
+
+    // Manual color override (below the tabs) does NOT rewind the active tab.
+    fireEvent.click(screen.getByRole('button', { name: 'Workspace' }))
+    expect(useWorkspaceStore.getState().colorMode).toBe('workspace')
+    expect(screen.getByRole('heading', { name: 'Manipulability' })).toBeInTheDocument()
+  })
+
+  it('defaults to the first feature that has data; failed features show an empty state', async () => {
+    mocks.sample.mockRejectedValue(new Error('workspace boom'))
+    mocks.analyzeSingularity.mockResolvedValue({
+      metrics: {
+        normal_count: 9900, near_singular_count: 95, singular_count: 5, total_samples: 10000,
+        avg_condition_number: 12.5, min_condition_number: 1.02,
+      },
+      samples: [{ position: [0.1, 0.2, 0.3], state: 'normal' }],
+    })
+    mocks.analyzeManipulability.mockRejectedValue(new Error('manip boom'))
+    useRobotStore.getState().setRobots([{ id: 'scara', display_name: 'SCARA', dof: 4, joints: [] }])
+    useRobotStore.getState().select('scara')
+
+    renderWorkspace()
+    fireEvent.click(screen.getByRole('button', { name: /run analysis/i }))
+
+    // Workspace failed, singularity succeeded → Singularity is the default tab.
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Singularity' })).toBeInTheDocument()
+    })
+    expect(screen.queryByRole('heading', { name: 'Workspace' })).not.toBeInTheDocument()
+
+    // The failed feature shows its empty state in its tab rather than nothing.
+    fireEvent.click(screen.getByRole('tab', { name: 'Workspace' }))
+    expect(screen.getByText('Workspace analysis failed')).toBeInTheDocument()
   })
 })
 
