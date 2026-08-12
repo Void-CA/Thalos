@@ -46,11 +46,11 @@ beforeEach(() => cleanup())
 afterEach(() => cleanup())
 
 describe('NarrativeSummaryCard — narrative display (2.1)', () => {
-  it('renders the headline and the grounded summary sentences (risk, quality, region cause + span)', () => {
+  it('renders the headline and the grounded summary sentences (risk, score, region cause + span)', () => {
     render(<NarrativeSummaryCard assessment={assessment} regions={[region]} />)
     const card = screen.getByTestId('narrative-summary')
     expect(card).toHaveTextContent('High risk plan')
-    expect(card).toHaveTextContent('0.31')
+    expect(card).toHaveTextContent('score of 31') // 0.31 quality → canonical score 31
     expect(card).toHaveTextContent('Singularity near waypoint 10')
     expect(card).toHaveTextContent('wp10')
     expect(card).toHaveTextContent('wp20')

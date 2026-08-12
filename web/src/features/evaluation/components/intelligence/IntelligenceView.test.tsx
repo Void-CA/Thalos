@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { IntelligenceView } from './IntelligenceView'
-import { qualityLabel } from './VerdictGauge'
+import { gradeFromScore } from '@/shared/analysis/verdict'
 import type { AssessmentWire } from '@/shared/contracts/analysis-report'
 
 /**
@@ -36,20 +36,21 @@ beforeEach(() => cleanup())
 afterEach(() => cleanup())
 
 describe('IntelligenceView — verdict gauge (spec scenario)', () => {
-  it('shows quality label + score and the categorical risk', () => {
+  it('shows the canonical score + grade and the categorical risk', () => {
     render(<IntelligenceView assessment={assessment} regions={[]} />)
     const verdict = within(screen.getByTestId('assessment-verdict'))
-    expect(verdict.getByText('Quality Score')).toBeInTheDocument()
-    expect(verdict.getByText('0.82')).toBeInTheDocument()
-    expect(verdict.getByText('GOOD')).toBeInTheDocument()
+    expect(verdict.getByText('Score')).toBeInTheDocument()
+    expect(verdict.getByText('82')).toBeInTheDocument() // 0.82 quality → score 82
+    expect(verdict.getByText('Good')).toBeInTheDocument() // ≥70 → Good
     expect(verdict.getByText('Risk Level')).toBeInTheDocument()
     expect(verdict.getByText('low')).toBeInTheDocument()
   })
 
-  it('maps quality bands: ≥0.7 GOOD, ≥0.4 FAIR, below POOR', () => {
-    expect(qualityLabel(0.82)).toBe('GOOD')
-    expect(qualityLabel(0.5)).toBe('FAIR')
-    expect(qualityLabel(0.2)).toBe('POOR')
+  it('maps the canonical grade bands aligned with the backend (≥90 Excellent, ≥70 Good, ≥50 Fair)', () => {
+    expect(gradeFromScore(95)).toBe('Excellent')
+    expect(gradeFromScore(82)).toBe('Good')
+    expect(gradeFromScore(60)).toBe('Fair')
+    expect(gradeFromScore(30)).toBe('Poor')
   })
 })
 

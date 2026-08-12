@@ -444,9 +444,9 @@ describe('EvaluationWorkspace — intelligence tab (evaluation-intelligence-tab)
     fireEvent.click(screen.getByRole('tab', { name: 'Intelligence' }))
     const section = screen.getByTestId('intelligent-assessment')
     expect(section).toBeInTheDocument()
-    // Summary visible: risk + quality + triggered rules.
+    // Summary visible: risk + canonical score + triggered rules.
     expect(within(section).getByText('high')).toBeInTheDocument()
-    expect(within(section).getByText('0.31')).toBeInTheDocument()
+    expect(within(section).getByText('31')).toBeInTheDocument() // 0.31 quality → score 31
     expect(within(section).getByText('R07_low_manipulability')).toBeInTheDocument()
   })
 

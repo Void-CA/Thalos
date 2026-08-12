@@ -45,7 +45,8 @@ function AssessmentRecommendations({ assessment }: { assessment: AssessmentWire 
  *
  *   0. Hero       — NarrativeSummaryCard: large verdict headline + grounded
  *      summary + primary factor chips, risk-tinted (intelligible-repair-loop).
- *   1. Verdict    — VerdictGauge: large Quality (0..1) + Risk gauge
+ *   1. Verdict    — VerdictGauge: large canonical Score (0–100) + grade + Risk
+ *      gauge
  *   2. Evidence   — TriggeredRules: count + rule chips (id + priority), then
  *      MembershipBars: one horizontal bar per evidence variable
  *   3. Repair     — RecommendationCard list (report recommendations, deduped

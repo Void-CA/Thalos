@@ -1,13 +1,32 @@
 import { useAnalysisStore } from '../store'
 import { severityCounts } from '@/shared/contracts/analysis-report'
+import { gradeFromScore, type VerdictGrade } from '@/shared/analysis/verdict'
+import type { AssessmentWire } from '@/shared/contracts/analysis-report'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 
 type BannerState = 'good' | 'attention' | 'critical'
 
+const GRADE_TONES: Record<VerdictGrade, string> = {
+  Excellent: 'bg-success-weak text-chart-3',
+  Good: 'bg-success-weak text-chart-3',
+  Fair: 'bg-warning-weak text-chart-4',
+  Poor: 'bg-destructive-weak text-destructive',
+}
+
+const RISK_TONES: Record<AssessmentWire['risk'], string> = {
+  low: 'bg-success-weak text-chart-3',
+  medium: 'bg-warning-weak text-chart-4',
+  high: 'bg-warning-weak text-chart-5',
+  critical: 'bg-destructive-weak text-destructive',
+}
+
 /**
- * StatusBanner — barra de estado horizontal con score, severity distribution.
- * Derives entirely from the canonical AnalysisReport (I3: interpretation from
- * observation severities; I7: single score = summary.score).
+ * StatusBanner — the SINGLE verdict display of the Evaluation workspace.
+ * Shows the canonical Score /100 prominently + a grade pill (backend-aligned
+ * score→grade) + a risk pill (secondary dimension, only when the report
+ * carries an assessment) + the severity counts. The old derived
+ * Good/Attention/Critical label is gone — it was a competing verdict
+ * vocabulary ("Good" as a state next to "Good" as a grade).
  */
 export function StatusBanner() {
   const report = useAnalysisStore(s => s.report)
@@ -15,9 +34,6 @@ export function StatusBanner() {
   const counts = report ? severityCounts(report) : { error: 0, warning: 0, info: 0 }
   const bannerState: BannerState = counts.error > 0 ? 'critical'
     : counts.warning > 0 ? 'attention' : 'good'
-
-  const stateLabel = bannerState === 'critical' ? 'Critical'
-    : bannerState === 'attention' ? 'Attention' : 'Good'
 
   const errorCount = counts.error
   const warnCount = counts.warning
@@ -31,15 +47,32 @@ export function StatusBanner() {
 
   const c = colors[bannerState]
   const total = errorCount + warnCount + infoCount
+  const score = report?.summary.score
+  const grade = report ? gradeFromScore(report.summary.score) : null
+  const risk = report?.assessment?.risk ?? null
 
   return (
     <div className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border ${c.bg} ${c.border}`}>
       <div className="flex items-center gap-2.5 min-w-0">
         <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${c.text} bg-current`} />
-        <span className={`text-sm font-bold uppercase tracking-wider ${c.text}`}>{stateLabel}</span>
-        <span className="text-xs text-muted-foreground font-semibold tabular-nums">
-          {report?.summary.score ?? '—'} / 100
+        <span className="text-lg font-bold font-mono tabular-nums text-foreground leading-none">
+          {score ?? '—'}
         </span>
+        <span className="text-xs text-muted-foreground font-semibold tabular-nums">/ 100</span>
+        {grade && (
+          <span
+            className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${GRADE_TONES[grade]}`}
+          >
+            {grade}
+          </span>
+        )}
+        {risk && (
+          <span
+            className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${RISK_TONES[risk]}`}
+          >
+            {risk}
+          </span>
+        )}
       </div>
       {total > 0 && (
         <div className="flex items-center gap-2.5 shrink-0">

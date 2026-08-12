@@ -44,13 +44,14 @@ beforeEach(() => cleanup())
 afterEach(() => cleanup())
 
 describe('IntelligentAssessment — section renders when assessment present', () => {
-  it('shows the heading, risk level, quality score, rules and recommendations', () => {
+  it('shows the heading, risk level, canonical score, rules and recommendations', () => {
     render(<IntelligentAssessment assessment={assessment} />)
     expect(screen.getByRole('heading', { name: 'Intelligent Assessment' })).toBeInTheDocument()
     expect(screen.getByText('Risk Level')).toBeInTheDocument()
     expect(screen.getByText('high')).toBeInTheDocument()
-    expect(screen.getByText(/Quality Score/)).toBeInTheDocument()
-    expect(screen.getByText('0.30')).toBeInTheDocument()
+    expect(screen.getByText('Score')).toBeInTheDocument()
+    expect(screen.getByText('30')).toBeInTheDocument() // 0.3027 quality → score 30
+    expect(screen.getByText('Poor')).toBeInTheDocument() // <50 → Poor
     expect(screen.getByText('Triggered Rules')).toBeInTheDocument()
     expect(screen.getByText('R01_collision_danger')).toBeInTheDocument()
     expect(screen.getByText('R07_low_manipulability')).toBeInTheDocument()
@@ -71,7 +72,7 @@ describe('IntelligentAssessment — section renders when assessment present', ()
     for (const label of [
       'Intelligent Assessment',
       'Risk Level',
-      'Quality Score',
+      'Score',
       'Triggered Rules',
       'Evidence',
       'Recommendations',

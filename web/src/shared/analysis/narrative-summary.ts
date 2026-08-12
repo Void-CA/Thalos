@@ -1,4 +1,5 @@
 import type { AssessmentWire, ProblemRegionWire } from '@/shared/contracts/analysis-report'
+import { verdictFromQuality } from './verdict'
 
 /**
  * intelligible-repair-loop — narrative summary builder (task 1.2).
@@ -95,8 +96,12 @@ export function buildNarrativeSummary(
 ): NarrativeSummary {
   const headline = RISK_HEADLINES[assessment.risk]
 
+  // Canonical verdict language: the primary number is the score (0–100 derived
+  // from the wire quality), never the raw 0..1 quality.
+  const { score, grade } = verdictFromQuality(assessment.quality)
+
   const sentences: string[] = [
-    `The plan is assessed at ${assessment.risk} risk with a quality score of ${assessment.quality.toFixed(2)}.`,
+    `The plan is assessed at ${assessment.risk} risk with a score of ${score} (${grade}).`,
   ]
 
   if (assessment.triggered_rules.length > 0) {

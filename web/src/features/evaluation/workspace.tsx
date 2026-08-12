@@ -6,6 +6,7 @@ import { ProblemRegions } from '@/features/analysis/components/problem-regions'
 import { RegionInspector } from '@/features/analysis/components/region-inspector'
 import { RecommendationRow } from '@/features/planning/components/RecommendationRow'
 import { useSemanticEditor } from '@/features/semantic/store'
+import { gradeFromScore } from '@/shared/analysis/verdict'
 import { useSceneStore } from '@/features/viewport/store'
 import {
   dedupeRecommendations,
@@ -240,7 +241,7 @@ function PlanSummary() {
         </span>
         {report && (
           <span className="text-[10px] font-mono font-semibold text-primary bg-primary-weak px-2 py-0.5 rounded tabular-nums">
-            Score {report.summary.score} · {report.summary.grade}
+            Score {report.summary.score} · {gradeFromScore(report.summary.score)}
           </span>
         )}
       </div>
