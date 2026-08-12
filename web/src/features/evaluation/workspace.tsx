@@ -184,6 +184,7 @@ export function EvaluationWorkspace() {
                       <RecommendationRow
                         key={recommendationKey(recommendation)}
                         recommendation={recommendation}
+                        report={report}
                       />
                     ))}
                   </ul>
