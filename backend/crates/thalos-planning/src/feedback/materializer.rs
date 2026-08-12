@@ -190,21 +190,42 @@ impl ProposalMaterializer for LiftTcpMaterializer<'_> {
         );
 
         // D8: the elevated pose must stay reachable — surface the failure to
-        // the advisor instead of returning an unusable segment.
-        let result = self
+        // the advisor instead of returning an unusable segment. When the FULL
+        // pose is unreachable (e.g. SCARA: yaw-only rotation can't reach a
+        // 6-DOF pose), fall back to position-only IK on the elevated position
+        // and materialize a MoveLPosition segment — the documented pattern
+        // (move_l::plan_position drives every waypoint with IKGoal::Position,
+        // never IKGoal::Pose). Only when the position itself is unreachable do
+        // we surface IkFailure so the advisor marks the recommendation
+        // unavailable (D8).
+        let pose_result = self
             .ik_solver
             .solve(self.current_joints, IKGoal::Pose(elevated.clone()))
             .map_err(|_| MaterializationError::IkFailure)?;
-        if !result.status.is_converged() {
-            return Err(MaterializationError::IkFailure);
+        if pose_result.status.is_converged() {
+            return Ok(vec![MotionSegment::MoveL {
+                origin: origin.clone(),
+                frame: *frame,
+                target_pose: elevated,
+                max_velocity: *max_velocity,
+            }]);
         }
 
-        Ok(vec![MotionSegment::MoveL {
-            origin: origin.clone(),
-            frame: *frame,
-            target_pose: elevated,
-            max_velocity: *max_velocity,
-        }])
+        let position = elevated.translation();
+        let position_result = self
+            .ik_solver
+            .solve(self.current_joints, IKGoal::Position(position))
+            .map_err(|_| MaterializationError::IkFailure)?;
+        if position_result.status.is_converged() {
+            return Ok(vec![MotionSegment::MoveLPosition {
+                origin: origin.clone(),
+                frame: *frame,
+                target_position: [position.x, position.y, position.z],
+                max_velocity: *max_velocity,
+            }]);
+        }
+
+        Err(MaterializationError::IkFailure)
     }
 }
 
@@ -401,6 +422,19 @@ mod tests {
         }
     }
 
+    /// Mock solver with the SCARA profile: full-pose IK exhausts
+    /// `MaxIterations` but position-only IK converges.
+    struct PoseFailsPositionConvergesIKSolver;
+
+    impl IKSolver for PoseFailsPositionConvergesIKSolver {
+        fn solve(&self, q0: &[f64], goal: IKGoal) -> Result<IKResult, IkError> {
+            match goal {
+                IKGoal::Pose(_) => Ok(IKResult::max_iterations(q0.to_vec(), 100, 1.5, None)),
+                IKGoal::Position(_) => Ok(IKResult::converged(q0.to_vec(), 1, 0.0, None)),
+            }
+        }
+    }
+
     // ── TRIANGULATE — error Display ────────────────────────────────────────
 
     #[test]
@@ -536,6 +570,47 @@ mod tests {
         ) {
             Err(MaterializationError::IkFailure) => {}
             other => panic!("expected IkFailure, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn lift_tcp_falls_back_to_position_only_when_full_pose_is_unreachable() {
+        // SCARA-like profile (move_l::plan_position): a full 6-DOF pose
+        // exhausts MaxIterations but the elevated position is reachable — the
+        // materializer must fall back to a MoveLPosition segment (translation-
+        // only IK) instead of surfacing IkFailure.
+        let q0 = vec![0.0; 6];
+        let solver = PoseFailsPositionConvergesIKSolver;
+        let materializer = LiftTcpMaterializer::new(&solver, &q0);
+
+        let segments = materializer
+            .materialize(
+                &proposal(ActionKind::Manipulability, &[("offset", 0.1)]),
+                &move_l_at(thalos_math::Vector3::new(1.0, 2.0, 3.0)),
+            )
+            .expect("position fallback must materialize");
+
+        assert_eq!(segments.len(), 1);
+        match &segments[0] {
+            MotionSegment::MoveLPosition {
+                frame,
+                target_position,
+                max_velocity,
+                ..
+            } => {
+                assert_eq!(*frame, FrameId::World);
+                assert!(
+                    (target_position[2] - 3.1).abs() < 1e-9,
+                    "target z must be raised by the offset"
+                );
+                assert!(
+                    (target_position[0] - 1.0).abs() < 1e-9
+                        && (target_position[1] - 2.0).abs() < 1e-9,
+                    "x/y must stay unchanged"
+                );
+                assert_eq!(*max_velocity, Some(200.0));
+            }
+            other => panic!("expected MoveLPosition, got {other:?}"),
         }
     }
 
