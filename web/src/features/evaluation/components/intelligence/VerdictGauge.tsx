@@ -26,21 +26,21 @@ export function VerdictGauge({ assessment }: { assessment: AssessmentWire }) {
   return (
     <div
       data-testid="assessment-verdict"
-      className="flex items-end justify-between gap-4 rounded-lg border border-border bg-secondary/10 px-3 py-2"
+      className="flex items-end justify-between gap-4 rounded-lg border border-border bg-secondary/10 px-4 py-3"
     >
-      <div className="flex flex-col gap-1">
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Quality Score</span>
-        <span className="text-2xl font-bold font-mono tabular-nums text-foreground leading-none">
+      <div className="flex flex-col gap-1.5">
+        <span className="text-xs uppercase tracking-wider text-muted-foreground">Quality Score</span>
+        <span className="text-3xl font-bold font-mono tabular-nums text-foreground leading-none">
           {assessment.quality.toFixed(2)}
         </span>
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">
+        <span className="text-xs font-semibold uppercase tracking-wider text-primary">
           {qualityLabel(assessment.quality)}
         </span>
       </div>
-      <div className="flex flex-col items-end gap-1">
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Risk Level</span>
+      <div className="flex flex-col items-end gap-1.5">
+        <span className="text-xs uppercase tracking-wider text-muted-foreground">Risk Level</span>
         <span
-          className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${RISK_TONES[assessment.risk]}`}
+          className={`rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${RISK_TONES[assessment.risk]}`}
         >
           {assessment.risk}
         </span>

@@ -9,20 +9,20 @@
 export function MembershipBars({ evidence }: { evidence: Record<string, number> }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground">Evidence</h3>
-      <div className="flex flex-col gap-1.5" data-testid="assessment-evidence">
+      <h3 className="text-xs uppercase tracking-wider text-muted-foreground">Evidence</h3>
+      <div className="flex flex-col gap-2" data-testid="assessment-evidence">
         {Object.entries(evidence).map(([key, value]) => {
           const pct = Math.min(Math.max(value, 0), 1) * 100
           return (
             <div
               key={key}
               data-testid="assessment-evidence-chip"
-              className="flex items-center gap-2 text-[10px] font-mono tabular-nums"
+              className="flex items-center gap-3 text-xs font-mono tabular-nums"
             >
-              <span className="w-44 shrink-0 truncate">
+              <span className="w-48 shrink-0 truncate">
                 {key}: {value.toFixed(3)}
               </span>
-              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary" role="presentation">
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-secondary" role="presentation">
                 <div
                   data-testid="membership-bar"
                   className="h-full rounded-full bg-primary"

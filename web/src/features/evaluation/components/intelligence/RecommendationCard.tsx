@@ -116,34 +116,37 @@ export function RecommendationCard({
     }
   }
 
+  const appliedImproved =
+    applied !== null && applied.health_after >= applied.health_before
+
   return (
     <li
       data-testid="recommendation-card"
-      className="flex flex-col gap-1.5 rounded-md border border-border bg-secondary/20 px-2.5 py-2"
+      className="flex flex-col gap-2.5 rounded-lg border border-border bg-secondary/20 p-3.5"
     >
-      <div className="flex items-center gap-2">
-        <span className="text-xs font-medium text-foreground">{titleCase(recommendation.action.kind)}</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-sm font-semibold text-foreground">{titleCase(recommendation.action.kind)}</h3>
         {unavailable && (
-          <span className="rounded border border-warning-mid bg-warning-weak px-1.5 py-0.5 text-[9px] font-semibold uppercase text-chart-4">
+          <span className="rounded-md border border-warning-mid bg-warning-weak px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-chart-4">
             unavailable
           </span>
         )}
-        <span className="ml-auto flex items-center gap-1">
+        <span className="ml-auto flex items-center gap-2">
           <button
             onClick={handlePreview}
             disabled={previewing}
-            className="inline-flex items-center gap-1 rounded-md border border-primary-mid bg-primary-weak px-2 py-1 text-[10px] font-medium text-primary hover:bg-primary-weak transition-colors cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-md border border-primary-mid bg-primary-weak px-3 py-1.5 text-xs font-medium text-primary transition-colors duration-150 hover:bg-primary-strong/30 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {previewing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
+            {previewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
             Preview
           </button>
           <button
             onClick={handleApply}
             disabled={applying || unavailable}
             title={unavailable ? 'Edit unavailable (D8) — cannot apply' : 'Apply to the active plan'}
-            className="inline-flex items-center gap-1 rounded-md border border-primary-mid bg-primary-weak px-2 py-1 text-[10px] font-medium text-primary hover:bg-primary-weak transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 rounded-md border border-primary-mid bg-primary-weak px-3 py-1.5 text-xs font-medium text-primary transition-colors duration-150 hover:bg-primary-strong/30 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {applying ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+            {applying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
             Apply
           </button>
           <button
@@ -154,9 +157,9 @@ export function RecommendationCard({
                 ? 'No applied command to undo'
                 : 'Undo the last applied command (O(1) via stored inverse)'
             }
-            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-muted/40 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted/40 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {undoing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+            {undoing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
             Undo
           </button>
         </span>
@@ -164,46 +167,55 @@ export function RecommendationCard({
 
       {/* Rationale — WHY this remediation exists (region cause, wire-grounded). */}
       {region?.explanation?.cause && (
-        <p data-testid="recommendation-rationale" className="text-[11px] font-medium text-foreground">
+        <p data-testid="recommendation-rationale" className="text-sm leading-relaxed text-foreground">
           {region.explanation.cause}
         </p>
       )}
 
       {/* Affected segment — where the remediation lands. */}
       {(region || span) && (
-        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground" data-testid="recommendation-segment">
-          <span>Affected segment</span>
-          {region && <span className="font-mono text-foreground">Region {region.id}</span>}
-          {span && <span className="font-mono text-foreground">{span}</span>}
+        <div
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground"
+          data-testid="recommendation-segment"
+        >
+          <span className="uppercase tracking-wide">Affected segment</span>
+          {region && (
+            <span className="rounded bg-secondary/50 px-1.5 py-0.5 font-mono text-foreground">
+              Region {region.id}
+            </span>
+          )}
+          {span && (
+            <span className="rounded bg-secondary/50 px-1.5 py-0.5 font-mono text-foreground">{span}</span>
+          )}
         </div>
       )}
 
       {/* Strategy — how the plan can be repaired. */}
       {(strategy || recommendation.action.impact) && (
-        <div className="flex flex-col gap-0.5" data-testid="recommendation-strategy">
-          <h4 className="text-[9px] uppercase tracking-wider text-muted-foreground">Strategy</h4>
+        <div className="flex flex-col gap-1" data-testid="recommendation-strategy">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Strategy</h4>
           {strategy ? (
-            <ul className="flex flex-wrap gap-1">
+            <ul className="flex flex-wrap gap-1.5">
               {strategy.map((s) => (
                 <li
                   key={s}
-                  className="rounded border border-border bg-card px-1.5 py-0.5 text-[10px] text-foreground"
+                  className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground"
                 >
                   {s}
                 </li>
               ))}
             </ul>
           ) : (
-            <span className="text-[10px] text-foreground">{recommendation.action.impact}</span>
+            <span className="text-xs text-foreground">{recommendation.action.impact}</span>
           )}
         </div>
       )}
 
       {/* Proposed edit — the semantic command, rendered structurally. */}
       {Object.keys(recommendation.edit).length > 0 && (
-        <div className="flex flex-col gap-0.5" data-testid="recommendation-edit">
-          <h4 className="text-[9px] uppercase tracking-wider text-muted-foreground">Proposed edit</h4>
-          <div className="flex items-center gap-1.5 text-[10px]">
+        <div className="flex flex-col gap-1" data-testid="recommendation-edit">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Proposed edit</h4>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
             <span className="font-mono font-semibold text-foreground">{editVariant(recommendation.edit)}</span>
             <span className="font-mono text-muted-foreground">{editParamsSummary(recommendation.edit)}</span>
           </div>
@@ -211,51 +223,64 @@ export function RecommendationCard({
       )}
 
       {applied && (
-        <div data-testid="recommendation-applied" className="space-y-1 rounded bg-muted/40 px-2 py-1.5 text-[10px]">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded bg-green-600/15 px-1.5 py-0.5 font-semibold uppercase text-green-600">
-              <Check className="h-3 w-3" />
+        <div
+          data-testid="recommendation-applied"
+          className="rounded-lg border border-success-mid/60 bg-success-weak px-3 py-2"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-chart-3/20 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-chart-3">
+              <Check className="h-3.5 w-3.5" />
               Applied
             </span>
-            <span className="text-muted-foreground">Plan</span>
-            <span className="font-mono text-foreground">{applied.plan_id}</span>
-            <span className="ml-auto text-muted-foreground">
-              Health {(applied.health_before * 100).toFixed(0)}% →{' '}
-              <span className="font-mono tabular-nums font-semibold text-foreground">
-                {(applied.health_after * 100).toFixed(0)}%
-              </span>
+            <span className="text-xs text-muted-foreground">Plan</span>
+            <span className="font-mono text-xs text-foreground">{applied.plan_id}</span>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm tabular-nums">
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">Health</span>
+            <span className="font-mono text-foreground">{(applied.health_before * 100).toFixed(0)}%</span>
+            <span className="text-muted-foreground">→</span>
+            <span className={`font-mono font-semibold ${appliedImproved ? 'text-chart-3' : 'text-destructive'}`}>
+              {(applied.health_after * 100).toFixed(0)}%
+            </span>
+            <span
+              className={`rounded-md px-1.5 py-0.5 text-xs font-semibold ${appliedImproved ? 'bg-chart-3/15 text-chart-3' : 'bg-destructive-weak text-destructive'}`}
+            >
+              {appliedImproved ? 'improved' : 'regressed'}
             </span>
           </div>
         </div>
       )}
 
       {error && (
-        <div className="text-[10px] text-destructive bg-destructive-weak rounded px-2 py-1">{error}</div>
+        <div className="rounded-md bg-destructive-weak px-3 py-1.5 text-xs text-destructive">{error}</div>
       )}
 
       {preview && (
-        <div data-testid="recommendation-preview" className="space-y-1 rounded bg-muted/40 px-2 py-1.5 text-[10px]">
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">Health</span>
-            <span className="font-mono tabular-nums">{(preview.health_before * 100).toFixed(0)}%</span>
+        <div
+          data-testid="recommendation-preview"
+          className="rounded-lg border border-border bg-secondary/30 px-3 py-2"
+        >
+          <div className="flex flex-wrap items-center gap-2 text-sm tabular-nums">
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">Health</span>
+            <span className="font-mono text-foreground">{(preview.health_before * 100).toFixed(0)}%</span>
             <span className="text-muted-foreground">→</span>
             <span
-              className={`font-mono tabular-nums font-semibold ${preview.improvement >= 0 ? 'text-green-600' : 'text-red-500'}`}
+              className={`font-mono font-semibold ${preview.improvement >= 0 ? 'text-chart-3' : 'text-destructive'}`}
             >
               {(preview.health_after * 100).toFixed(0)}%
             </span>
-            <span className={`text-[10px] ${preview.improvement >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+            <span className={`text-xs font-semibold ${preview.improvement >= 0 ? 'text-chart-3' : 'text-destructive'}`}>
               ({pct(preview.health_before, preview.health_after)})
             </span>
           </div>
-          <div className="flex items-center gap-3 text-muted-foreground">
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <span>
               Waypoints {preview.metrics_before.waypoint_count ?? '-'} →{' '}
               {preview.metrics_after.waypoint_count ?? '-'}
             </span>
             <span>
               Continuity:{' '}
-              <span className="text-foreground font-mono">{preview.continuity ? 'continuous' : 'broken'}</span>
+              <span className="font-mono text-foreground">{preview.continuity ? 'continuous' : 'broken'}</span>
             </span>
           </div>
         </div>
