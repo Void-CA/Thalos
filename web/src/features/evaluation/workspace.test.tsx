@@ -9,10 +9,12 @@ import { EvaluationWorkspace } from './workspace'
 import { useAnalysisStore } from '@/features/analysis/store'
 import { useSemanticEditor } from '@/features/semantic/store'
 import { useSceneStore } from '@/features/viewport/store'
+import { useExecutionStore } from '@/features/execution/execution-store'
 import { installCanvasMock } from '@/test/canvas-mock'
 import type { AnalysisReportWire } from '@/shared/contracts/analysis-report'
 import type { CompileResponse } from '@/features/semantic/types'
 import type { ActivePlan } from '@/features/viewport/types'
+import type { SceneData } from '@/features/viewport/types'
 
 // The trajectory view mounts ECharts GL, which needs a WebGL context jsdom
 // cannot provide. This suite only asserts the trajectory DOM surface, so the
@@ -201,6 +203,9 @@ beforeEach(() => {
     useAnalysisStore.getState().clear()
     useSemanticEditor.getState().reset()
     useSceneStore.getState().reset()
+    // Default to idle so the forward CTA starts blocked (executionViewable
+    // needs a runnable or finished status); tests opt into 'ready' to unlock it.
+    useExecutionStore.setState({ status: 'idle' })
   })
 })
 afterEach(() => cleanup())
@@ -741,5 +746,65 @@ describe('EvaluationWorkspace — recommendation dedup (frontend safety net)', (
     })
     renderWorkspace()
     expect(screen.getAllByTestId('recommendation-row')).toHaveLength(2)
+  })
+})
+
+describe('EvaluationWorkspace — forward CTA to Execution (P1.4)', () => {
+  // /execution requires ['sceneValid', 'planReady', 'executionViewable'].
+  // Reachable = valid scene (robot loaded + domain scene seeded + home pose) +
+  // active plan (planReady) + runnable status ('ready' → executionViewable).
+  function seedReachableExecution() {
+    act(() => {
+      useAnalysisStore.setState({ report: cleanReport })
+      useSceneStore.setState({ activePlan, data: {} as SceneData })
+      useExecutionStore.setState({ status: 'ready' })
+    })
+  }
+
+  it('renders an enabled Continue to Execution CTA and navigates to /execution when guards pass', () => {
+    seedReachableExecution()
+    const router = renderWorkspace()
+    const cta = screen.getByTestId('evaluation-forward-cta')
+    expect(cta).toHaveTextContent('Continue to Execution')
+    expect(cta).not.toHaveAttribute('aria-disabled')
+    fireEvent.click(cta)
+    expect(router.state.location.pathname).toBe('/execution')
+  })
+
+  it('disables the CTA with a reason title when Execution is blocked', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: cleanReport })
+      useSceneStore.setState({ activePlan, data: {} as SceneData })
+      // status 'idle' → executionViewable false → /execution blocked.
+      useExecutionStore.setState({ status: 'idle' })
+    })
+    const router = renderWorkspace()
+    const cta = screen.getByTestId('evaluation-forward-cta')
+    expect(cta).toHaveAttribute('aria-disabled', 'true')
+    // Same missing-flag phrase the TopBar tooltip uses.
+    expect(cta).toHaveAttribute('title', 'Requires a runnable or finished execution')
+    fireEvent.click(cta)
+    expect(router.state.location.pathname).toBe('/evaluation')
+  })
+
+  it('offers the forward CTA in the empty state when Execution is reachable', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: null })
+      useSceneStore.setState({ activePlan, data: {} as SceneData })
+      useExecutionStore.setState({ status: 'ready' })
+    })
+    renderWorkspace()
+    expect(screen.getByRole('button', { name: 'Back to Programming' })).toBeInTheDocument()
+    expect(screen.getByTestId('evaluation-forward-cta')).toBeInTheDocument()
+  })
+
+  it('omits the forward CTA from the empty state when Execution is blocked', () => {
+    act(() => {
+      useAnalysisStore.setState({ report: null })
+      useSceneStore.setState({ activePlan, data: {} as SceneData })
+      useExecutionStore.setState({ status: 'idle' })
+    })
+    renderWorkspace()
+    expect(screen.queryByTestId('evaluation-forward-cta')).not.toBeInTheDocument()
   })
 })

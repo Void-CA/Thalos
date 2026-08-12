@@ -21,7 +21,12 @@ import { DeterminantChart } from './components/determinant-chart'
 import { ProgramView } from './components/program-view'
 import { IntelligenceView } from './components/intelligence/IntelligenceView'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { ShieldCheck } from 'lucide-react'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import { useWorkflowState } from '@/shared/workflow/use-workflow-state'
+import { requirementReason } from '@/shared/workflow/derive'
+import { WORKSPACE_REGISTRY } from '@/shared/workflow/registry'
+import { ArrowRight, ShieldCheck } from 'lucide-react'
 
 // TrajectoryView mounts ECharts GL — lazy like the 2D EChart wrapper (C2:
 // ECharts/echarts-gl stay out of the eager initial bundle).
@@ -61,6 +66,15 @@ export function EvaluationWorkspace() {
   const report = useAnalysisStore((s) => s.report)
   const selectedRegion = useSelectedRegion()
   const navigate = useNavigate()
+  // Guard-aware forward path (P1.4): the CTA reflects whether /execution is
+  // reachable. Same registry + WorkflowState contract the GuardedRoute and
+  // TopBar enforce — the forward CTA can never contradict the guards.
+  const flags = useWorkflowState()
+  const executionEntry = WORKSPACE_REGISTRY.find((e) => e.workspace === 'execution')
+  const executionBlockReason = executionEntry
+    ? requirementReason(executionEntry, flags)
+    : 'Requires a runnable execution'
+  const executionReachable = executionBlockReason === null
 
   if (!report) {
     return (
@@ -70,14 +84,17 @@ export function EvaluationWorkspace() {
         <p className="text-xs text-muted-foreground mb-4">
           Evaluate the plan before executing — compile or generate a plan first.
         </p>
-        <button
-          onClick={() => navigate('/task')}
-          className="inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium
-                     rounded-lg border border-primary-mid bg-primary-weak text-primary
-                     hover:bg-primary-weak transition-all cursor-pointer"
-        >
-          Back to Programming
-        </button>
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={() => navigate('/task')}
+            className="inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium
+                       rounded-lg border border-primary-mid bg-primary-weak text-primary
+                       hover:bg-primary-weak transition-all cursor-pointer"
+          >
+            Back to Programming
+          </button>
+          {executionReachable && <ContinueToExecution reason={executionBlockReason} />}
+        </div>
       </div>
     )
   }
@@ -191,6 +208,15 @@ export function EvaluationWorkspace() {
               )}
             </aside>
           </div>
+
+          {/* ── Forward decision gate (P1.4): Evaluation is no dead-end. The
+              primary action lives AFTER the detail column content, in a footer
+              bar under both columns. Guard-aware: disabled (aria-disabled +
+              title, the TopBar blocked-link pattern) while /execution is not
+              reachable — the tooltip keeps the reason readable. */}
+          <div className="mt-4 flex justify-end border-t border-border/50 pt-3">
+            <ContinueToExecution reason={executionBlockReason} />
+          </div>
         </TabsContent>
 
         {/* Intelligence tab — the COMPOSED AI verdict view; hidden entirely
@@ -205,6 +231,38 @@ export function EvaluationWorkspace() {
         )}
       </Tabs>
     </div>
+  )
+}
+
+/**
+ * ContinueToExecution — the primary forward action that ENDS Evaluation (P1.4).
+ *
+ * A disabled-button look with aria-disabled + title + click-prevention, the
+ * same pattern TopBar's `WorkspaceNavLink` uses for blocked links: a native
+ * `disabled` attribute would suppress the title tooltip in most browsers, so
+ * the reason stays visible as a tooltip while the action is inert.
+ */
+function ContinueToExecution({ reason }: { reason: string | null }) {
+  const navigate = useNavigate()
+  const reachable = reason === null
+  return (
+    <button
+      type="button"
+      data-testid="evaluation-forward-cta"
+      aria-disabled={reachable ? undefined : true}
+      title={reachable ? undefined : (reason ?? undefined)}
+      onClick={() => {
+        if (reachable) navigate('/execution')
+      }}
+      className={cn(
+        buttonVariants({ variant: 'default', size: 'default' }),
+        'gap-2 cursor-pointer',
+        !reachable && 'opacity-40',
+      )}
+    >
+      Continue to Execution
+      <ArrowRight className="size-3.5" />
+    </button>
   )
 }
 
