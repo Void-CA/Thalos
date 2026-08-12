@@ -162,6 +162,35 @@ describe('useRecommendation — initial state', () => {
     const { result } = renderHook(() => useRecommendation(recommendation, report))
     expect(result.current.derived.reason).toBeNull()
   })
+
+  it('maps EVERY structured wire reason to a human-readable label (M4, ADR-2)', () => {
+    // The full reason vocabulary (spec recommendation-availability-contract):
+    // the UI must distinguish each class, never render raw wire keys.
+    const cases: Array<[NonNullable<RecommendationWire['reason']>, string]> = [
+      ['ik_failed', 'IK could not converge'],
+      ['compile_failed', 'The edited program does not compile'],
+      ['planning_failed', 'Planning did not converge on a clean region'],
+      ['unreachable_configuration', 'The target configuration is unreachable'],
+      ['not_applicable', 'This remediation does not apply here'],
+      ['unsupported', 'This segment type is not supported'],
+    ]
+    for (const [reason, expected] of cases) {
+      const { result } = renderHook(() =>
+        useRecommendation({ ...recommendation, status: 'unavailable', reason }, report),
+      )
+      expect(result.current.state.unavailable).toBe(true)
+      expect(result.current.derived.reason).toBe(expected)
+    }
+  })
+
+  it('stays null when the wire carries an unavailable status but NO reason (additive contract)', () => {
+    // Old payloads: status without reason must not fabricate a label.
+    const { result } = renderHook(() =>
+      useRecommendation({ ...recommendation, status: 'unavailable' }, report),
+    )
+    expect(result.current.state.unavailable).toBe(true)
+    expect(result.current.derived.reason).toBeNull()
+  })
 })
 
 describe('useRecommendation — preview (PR3, read-only)', () => {

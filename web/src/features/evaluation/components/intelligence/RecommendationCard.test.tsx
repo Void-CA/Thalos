@@ -187,6 +187,92 @@ describe('RecommendationCard — display (2.2)', () => {
   })
 })
 
+describe('RecommendationCard — unavailability reasons (M4, ADR-2: the card distinguishes Available / Unreachable / Unsupported)', () => {
+  it('shows the human-readable reason for an unavailable recommendation', () => {
+    render(
+      <RecommendationCard
+        recommendation={{ ...recommendation, status: 'unavailable', reason: 'ik_failed' }}
+        report={report}
+      />,
+    )
+    expect(screen.getByTestId('recommendation-reason')).toHaveTextContent('IK could not converge')
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
+  })
+
+  it('shows the informative message and NO actionable repair for unreachable_configuration', () => {
+    render(
+      <RecommendationCard
+        recommendation={{
+          ...recommendation,
+          status: 'unavailable',
+          reason: 'unreachable_configuration',
+        }}
+        report={report}
+      />,
+    )
+    expect(screen.getByTestId('recommendation-reason')).toHaveTextContent(
+      'The target configuration is unreachable',
+    )
+    // Per spec: an unreachable remediation is NOT an actionable repair —
+    // the strategy and proposed edit are suppressed, Apply is disabled.
+    expect(screen.queryByTestId('recommendation-strategy')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('recommendation-edit')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
+  })
+
+  it('shows the informative message and NO actionable repair for not_applicable', () => {
+    render(
+      <RecommendationCard
+        recommendation={{
+          ...recommendation,
+          status: 'unavailable',
+          reason: 'not_applicable',
+        }}
+        report={report}
+      />,
+    )
+    expect(screen.getByTestId('recommendation-reason')).toHaveTextContent(
+      'This remediation does not apply here',
+    )
+    expect(screen.queryByTestId('recommendation-strategy')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('recommendation-edit')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
+  })
+
+  it('keeps the strategy and proposed edit visible for transient failures (compile_failed)', () => {
+    render(
+      <RecommendationCard
+        recommendation={{
+          ...recommendation,
+          status: 'unavailable',
+          reason: 'compile_failed',
+        }}
+        report={report}
+      />,
+    )
+    expect(screen.getByTestId('recommendation-reason')).toHaveTextContent(
+      'The edited program does not compile',
+    )
+    // A transient verification failure still explains WHAT was attempted.
+    expect(screen.getByTestId('recommendation-strategy')).toBeInTheDocument()
+    expect(screen.getByTestId('recommendation-edit')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
+  })
+
+  it('distinguishes unsupported (message shown, Apply disabled)', () => {
+    render(
+      <RecommendationCard
+        recommendation={{ ...recommendation, status: 'unavailable', reason: 'unsupported' }}
+        report={report}
+      />,
+    )
+    expect(screen.getByTestId('recommendation-reason')).toHaveTextContent(
+      'This segment type is not supported',
+    )
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
+  })
+})
+
 describe('RecommendationCard — preview (3.1)', () => {
   it('shows Actual → Proposed → Improvement + continuity and never touches the scene overlay', async () => {
     render(<RecommendationCard recommendation={recommendation} report={report} />)

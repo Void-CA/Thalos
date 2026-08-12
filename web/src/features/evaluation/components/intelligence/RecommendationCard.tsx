@@ -31,7 +31,14 @@ export function RecommendationCard({
   const { state, handlers, derived } = useRecommendation(recommendation, report)
 
   const { previewing, applying, undoing, error, unavailable, canUndo, preview: previewRaw, applied: appliedRaw } = state
-  const { kindLabel, region, span, strategy, edit, applied, preview } = derived
+  const { kindLabel, region, span, strategy, edit, reason, applied, preview } = derived
+
+  // M4 (ADR-2): an unreachable / not-applicable remediation is NOT an
+  // actionable repair — the strategy ("how to repair") and the proposed edit
+  // (the repair command) are suppressed; only the informative reason shows.
+  const rawReason = recommendation.reason
+  const hidesActionableRepair =
+    rawReason === 'unreachable_configuration' || rawReason === 'not_applicable'
 
   // No-op detection (UX redesign: never present a no-op as success). A preview
   // or apply that changes nothing — health flat (~0 improvement), waypoints
@@ -101,6 +108,19 @@ export function RecommendationCard({
         </p>
       )}
 
+      {/* Unavailability reason (M4, ADR-2) — WHY this card cannot act. The
+          message distinguishes the reason classes; for
+          unreachable_configuration / not_applicable it is the ONLY content
+          beyond the header (the actionable repair is suppressed). */}
+      {unavailable && reason && (
+        <p
+          data-testid="recommendation-reason"
+          className="rounded-md border border-warning-mid/50 bg-warning-weak/40 px-2.5 py-1.5 text-xs leading-relaxed text-chart-4"
+        >
+          {reason}
+        </p>
+      )}
+
       {/* Affected segment — where the remediation lands. */}
       {(region || span) && (
         <div
@@ -120,7 +140,7 @@ export function RecommendationCard({
       )}
 
       {/* Strategy — how the plan can be repaired. */}
-      {(strategy || recommendation.action.impact) && (
+      {!hidesActionableRepair && (strategy || recommendation.action.impact) && (
         <div className="flex flex-col gap-1" data-testid="recommendation-strategy">
           <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Strategy</h4>
           {strategy ? (
@@ -141,7 +161,7 @@ export function RecommendationCard({
       )}
 
       {/* Proposed edit — the semantic command, rendered structurally. */}
-      {edit && (
+      {!hidesActionableRepair && edit && (
         <div className="flex flex-col gap-1" data-testid="recommendation-edit">
           <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Proposed edit</h4>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">

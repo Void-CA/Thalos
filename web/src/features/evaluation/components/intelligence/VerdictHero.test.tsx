@@ -116,4 +116,29 @@ describe('VerdictHero — the decision band (v2: number + scale + inline grade)'
     render(<VerdictHero assessment={assessment} report={report} summary={summary} />)
     expect(screen.getByTestId('assessment-verdict')).toBeInTheDocument()
   })
+
+  it('projects the dual-component quality_index onto the 0–100 score (M4 composite score)', () => {
+    // The primary number IS the dual-component quality_index projected × 100
+    // by the backend DTO (quality_index 0.70 → score 70) — the M1 semantics
+    // surface in the UI as the dominant statement, not the saturated legacy
+    // severity count.
+    render(
+      <VerdictHero
+        assessment={assessment}
+        report={{
+          ...report,
+          summary: {
+            ...report.summary,
+            quality_index: 0.7,
+            score: 70,
+            grade: 'Good',
+          },
+        }}
+        summary={summary}
+      />,
+    )
+    expect(screen.getByTestId('verdict-score')).toHaveTextContent('70')
+    expect(screen.getByTestId('verdict-grade')).toHaveTextContent('Good')
+    expect(screen.getByTestId('verdict-scale-fill')).toHaveStyle({ width: '70%' })
+  })
 })
