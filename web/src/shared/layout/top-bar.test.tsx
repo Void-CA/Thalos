@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { act } from 'react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import '@testing-library/jest-dom/vitest'
@@ -16,9 +16,11 @@ import type { SceneData } from '@/features/viewport/types'
  *
  * The top-bar groups registry entries by kind: pipeline stage links first
  * (kind default 'stage'), a decorative divider, then auxiliary tool links
- * (kind 'tool' — /analysis). Guard state comes from the same registry +
- * WorkflowState contract the GuardedRoute enforces: an unmet requirement
- * aria-disables the link and prevents its click.
+ * (kind 'tool'). P0-B reorg: the last tool entry (/analysis) was REMOVED —
+ * Workspace Analysis is a Robot accordion tool now, so no tool group (and no
+ * divider) renders. Guard state comes from the same registry + WorkflowState
+ * contract the GuardedRoute enforces: an unmet requirement aria-disables the
+ * link and prevents its click.
  */
 function seedFlags(opts: { robotLoaded?: boolean } = {}) {
   const { robotLoaded = true } = opts
@@ -46,8 +48,8 @@ beforeEach(() => {
 })
 afterEach(() => cleanup())
 
-describe('TopBar — pipeline stages, divider, then tool links (auxiliary-tools-navigation spec)', () => {
-  it('renders every stage link first, then the Analysis tool link after a divider', () => {
+describe('TopBar — pipeline stages only (P0-B reorg: no tool group anymore)', () => {
+  it('renders every stage link and no tool link / divider (Workspace Analysis is a Robot accordion tool)', () => {
     seedFlags({ robotLoaded: true })
     renderTopBar('/')
 
@@ -60,38 +62,22 @@ describe('TopBar — pipeline stages, divider, then tool links (auxiliary-tools-
       'Ejecución',
       'Sesiones',
       'Configuración',
-      'Workspace Analysis',
     ])
 
-    // Visual separator between the stage group and the tool group (spec:
-    // Tools grouped with divider). aria-hidden: decorative, not read aloud.
-    const divider = screen.getByTestId('nav-divider')
-    expect(divider).toHaveAttribute('aria-hidden', 'true')
-    const lastStage = screen.getByRole('link', { name: 'Configuración' })
-    const analysis = screen.getByRole('link', { name: 'Workspace Analysis' })
-    expect(
-      lastStage.compareDocumentPosition(divider) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
-    expect(
-      divider.compareDocumentPosition(analysis) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
+    // No auxiliary tool entries remain in the registry → the decorative
+    // divider (which only renders when tool links exist) is gone too.
+    expect(screen.queryByRole('link', { name: 'Workspace Analysis' })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('nav-divider')).not.toBeInTheDocument()
   })
 
-  it('navigates to /analysis when the Workspace Analysis tool link is clicked (robot loaded)', async () => {
-    seedFlags({ robotLoaded: true })
-    const router = renderTopBar('/')
-
-    fireEvent.click(screen.getByRole('link', { name: 'Workspace Analysis' }))
-    await waitFor(() => expect(router.state.location.pathname).toBe('/analysis'))
-  })
-
-  it('disables the Workspace Analysis tool link when no robot is loaded (guard state, no navigation)', async () => {
+  it('aria-disables stage links whose guards are unmet (guard state, no navigation)', async () => {
     seedFlags({ robotLoaded: false })
     const router = renderTopBar('/')
 
-    const analysis = screen.getByRole('link', { name: 'Workspace Analysis' })
-    expect(analysis).toHaveAttribute('aria-disabled', 'true')
-    fireEvent.click(analysis)
+    // Escena requires robotLoaded — unmet → aria-disabled and click prevented.
+    const scene = screen.getByRole('link', { name: 'Escena' })
+    expect(scene).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(scene)
     expect(router.state.location.pathname).toBe('/')
   })
 })

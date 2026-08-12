@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import { useRobotStore } from '@/features/robots/store'
@@ -8,6 +8,8 @@ import { useWorkspaceService } from '@/features/viewport/services/service-contex
 import { FlaskConical, Loader2 } from 'lucide-react'
 import { ErrorBox } from '@/components/ui/error-box'
 import { WORKSPACE_PRESETS, DEFAULT_PRESET_KEY } from './presets'
+import { histogram } from './histogram'
+import { HistogramBars, CategoricalBars } from './histogram-bars'
 import {
   MetricRow,
   MetricValue,
@@ -24,6 +26,12 @@ import {
  * EXPLICITLY via "Run Analysis" — it never auto-runs on mount, because 10k
  * samples is slow (spec: Explicit Run Trigger). All three services target the
  * scene chain via /active endpoints (null robot id, spec R3).
+ *
+ * P0-B reorg: this tool renders INSIDE the Robot shell accordion
+ * (TOOLS_BY_PERSPECTIVE.robot) — the accordion trigger already shows the
+ * "Workspace Analysis" label, so the duplicate h2 title is gone. The inline
+ * report now also renders a small distribution histogram per analysis type,
+ * DERIVED from the samples already in the store (no backend changes).
  *
  * The 3D point cloud (features/viewport/renderer/point-cloud.tsx) is the
  * visualization: it stays driven by this feature's store (colorMode /
@@ -43,6 +51,37 @@ export function WorkspaceAnalysis() {
   const showPointCloud = useWorkspaceStore(s => s.showPointCloud)
   const hasAnySamples = useWorkspaceStore(s =>
     s.workspaceSamples !== null || s.singularitySamples !== null || s.manipulabilitySamples !== null)
+
+  // Store samples feed the distribution histograms (derived, no new data).
+  const workspaceSamples = useWorkspaceStore(s => s.workspaceSamples)
+  const singularitySamples = useWorkspaceStore(s => s.singularitySamples)
+  const manipulabilitySamples = useWorkspaceStore(s => s.manipulabilitySamples)
+
+  const reachHistogram = useMemo(() => {
+    if (!workspaceSamples || workspaceSamples.length === 0) return null
+    const reach = workspaceSamples.map(point => Math.hypot(...point.position))
+    return histogram(reach, 10)
+  }, [workspaceSamples])
+
+  const yoshikawaHistogram = useMemo(() => {
+    if (!manipulabilitySamples || manipulabilitySamples.length === 0) return null
+    const values = manipulabilitySamples
+      .map(point => point.yoshikawa)
+      .filter((value): value is number => typeof value === 'number')
+    if (values.length === 0) return null
+    return histogram(values, 10)
+  }, [manipulabilitySamples])
+
+  const stateCounts = useMemo(() => {
+    if (!singularitySamples || singularitySamples.length === 0) return null
+    const counts = { normal: 0, near_singular: 0, singular: 0 }
+    for (const point of singularitySamples) {
+      if (point.state === 'normal') counts.normal += 1
+      else if (point.state === 'near_singular') counts.near_singular += 1
+      else if (point.state === 'singular') counts.singular += 1
+    }
+    return counts
+  }, [singularitySamples])
 
   // Local config inputs (spec: config inputs — local state, no auto-run).
   const [samples, setSamplesCount] = useState(10_000)
@@ -102,10 +141,9 @@ export function WorkspaceAnalysis() {
   ]
 
   return (
-    <div className="flex flex-col gap-3 p-3">
+    <div className="flex flex-col gap-3 p-1.5">
       {/* ── Purpose (conceptual split: characterization tool, not decision stage) ── */}
       <header>
-        <h2 className="text-sm font-semibold text-foreground">Workspace Analysis</h2>
         <p className="text-xs text-muted-foreground">What can this robot do?</p>
         <p className="text-xs text-muted-foreground mt-1.5">
           How good or safe a trajectory is gets evaluated in{' '}
@@ -211,6 +249,14 @@ export function WorkspaceAnalysis() {
               <span>Sample count</span>
               <span className="font-mono tabular-nums text-foreground">{ws.data.metrics.sample_count ?? '—'}</span>
             </div>
+            {reachHistogram && (
+              <div className="pt-1">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                  Reach distribution
+                </span>
+                <HistogramBars data={reachHistogram} formatValue={v => v.toFixed(2)} />
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -245,6 +291,20 @@ export function WorkspaceAnalysis() {
               <span>Total samples</span>
               <span className="font-mono tabular-nums text-foreground">{sg.data.metrics.total_samples ?? '—'}</span>
             </div>
+            {stateCounts && (
+              <div className="pt-1">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                  State distribution
+                </span>
+                <CategoricalBars
+                  categories={[
+                    { label: 'Normal', count: stateCounts.normal, color: '#44cc44' },
+                    { label: 'Near Sing.', count: stateCounts.near_singular, color: '#eebb22' },
+                    { label: 'Singular', count: stateCounts.singular, color: '#ee3333' },
+                  ]}
+                />
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -283,6 +343,14 @@ export function WorkspaceAnalysis() {
               <span>Total samples</span>
               <span className="font-mono tabular-nums text-foreground">{mp.data.metrics.total_samples ?? '—'}</span>
             </div>
+            {yoshikawaHistogram && (
+              <div className="pt-1">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                  Yoshikawa distribution
+                </span>
+                <HistogramBars data={yoshikawaHistogram} formatValue={v => v.toFixed(3)} />
+              </div>
+            )}
           </div>
         </section>
       )}

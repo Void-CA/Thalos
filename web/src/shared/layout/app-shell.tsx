@@ -18,10 +18,12 @@ import { useSceneRobotSync } from '@/features/viewport/synchronization/use-scene
  * HOTFIX (evaluation-workspace) + P0-A (workspace-spatial-layout): the active
  * workspace's registry `layout` field selects the shell body shape — default
  * 'panel' renders the workspace in a resizable side panel (ResizablePanel)
- * beside the persistent viewport; 'full' (used by /evaluation, /sessions and
- * /analysis) drops the viewport so the workspace IS the focus. This is a
- * DELIBERATE, documented exception to invariant #1: those areas don't need the
- * 3D scene beside them, so the viewport unmounts while they're active.
+ * beside the persistent viewport; 'full' (used by /evaluation and /sessions)
+ * drops the viewport so the workspace IS the focus. This is a DELIBERATE,
+ * documented exception to invariant #1: those areas don't need the 3D scene
+ * beside them, so the viewport unmounts while they're active. (/analysis used
+ * to be full too, but the P0-B reorg removed that route — Workspace Analysis
+ * is now a tool INSIDE the Robot 'panel' view, keeping the viewport mounted.)
  *
  * The coordinator performs no domain operations and knows nothing about the
  * workspaces: the active workspace and its layout are resolved from the
@@ -40,8 +42,8 @@ export function AppShell() {
       <Stepper />
 
       {/* Body: workspace panel (Outlet) + persistent viewport (or full-width
-          workspace for layout 'full' areas — evaluation/sessions/analysis
-          drop the viewport). */}
+          workspace for layout 'full' areas — evaluation/sessions drop the
+          viewport). */}
       <div className="flex flex-1 overflow-hidden">
         {fullWidth ? (
           <main className="flex-1 overflow-hidden">

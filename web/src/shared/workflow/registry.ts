@@ -14,12 +14,15 @@ export type { Area, ArtifactKind, Capability, WorkspaceEntry, WorkspaceName } fr
  *  Labels are domain vocabulary (navigation-router spec): Robot / Escena /
  *  Programación / Ejecución / Sesiones / Configuración. Robot carries a stage
  *  marker (stage 1) even though it has no prerequisite. The legacy
- *  plan-analysis `/analysis` was absorbed into `/planning` in slice 6; PR-D
- *  re-introduces `/analysis` as the SAMPLING tool (kind: 'tool' — reach /
- *  singularity / manipulability), distinct from plan-analysis. The sitemap is
- *  `/`, `/scene`, `/task`, `/execution`, `/sessions` (visible since S5),
- *  `/knowledge` (hidden), `/configuration` (non-stage shell, S5) and
- *  `/analysis` (auxiliary tool).
+ *  plan-analysis `/analysis` was absorbed into `/planning` in slice 6. PR-D
+ *  re-introduced `/analysis` as the SAMPLING tool (kind: 'tool' — reach /
+ *  singularity / manipulability), distinct from plan-analysis — but the P0-B
+ *  reorg REMOVED that route again: Workspace Analysis now lives INSIDE the
+ *  Robot view as a tools-accordion entry (TOOLS_BY_PERSPECTIVE.robot), so it
+ *  renders inline in the persistent viewport panel instead of as a standalone
+ *  view. The sitemap is `/`, `/scene`, `/task`, `/execution`, `/sessions`
+ *  (visible since S5), `/knowledge` (hidden) and `/configuration`
+ *  (non-stage shell, S5).
  *
  *  HOTFIX (unify-programming): `/planning` was ABSORBED into `/task`. Both
  *  areas were the same thing — commanding the robot with different syntaxes —
@@ -99,18 +102,14 @@ export const WORKSPACE_REGISTRY: Area[] = [
   { path: '/sessions', workspace: 'sessions', label: 'Sesiones', requires: [], produces: null, capability: 'replay', hidden: false, consumes: 'Runtime', producesArtifact: 'ExecutionSession', stage: 6, stepperIndex: 6, layout: 'full' },
   { path: '/knowledge', workspace: 'knowledge', label: 'Knowledge', requires: ['analyzed'], produces: null, capability: 'explain', hidden: true, consumes: null, producesArtifact: null, stage: null },
   { path: '/configuration', workspace: 'configuration', label: 'Configuración', requires: [], produces: null, capability: null, hidden: false, consumes: null, producesArtifact: null, stage: null },
-  // D5 (flow-reorganization): /analysis is the SAMPLING tool (reach /
-  // singularity / manipulability), kind:'tool' — NOT a pipeline stage.
-  // Auxiliary-tools-navigation spec: stage null (no stepper position),
-  // requires robotLoaded (the workspace samples a real robot). Distinct from
-  // plan-analysis (useAnalysisStore.report absorbed into the unified /task
-  // workspace in slice 6, kept there after the unify-programming hotfix).
-  // P0-A (workspace-spatial-layout): layout 'full' — the analysis tool is an
-  // analytical/data view; it doesn't need the 3D scene beside it.
-  // P0-B (workspace-spatial-layout): label is now "Workspace Analysis" — the
-  // first-class characterization tool "What can this robot do?", explicitly
-  // separate from Evaluation ("How good/safe is this trajectory?").
-  { path: '/analysis', workspace: 'analysis', label: 'Workspace Analysis', requires: ['robotLoaded'], produces: null, capability: null, hidden: false, consumes: null, producesArtifact: null, stage: null, kind: 'tool', layout: 'full' },
+  // D5 (flow-reorganization) + P0-B (workspace-spatial-layout): /analysis was
+  // the SAMPLING tool (reach / singularity / manipulability), kind:'tool' — NOT
+  // a pipeline stage. P0-B REORGANIZATION removed the standalone route: the
+  // tool moved into TOOLS_BY_PERSPECTIVE.robot (Robot accordion), so it
+  // renders inline beside the persistent 3D viewport and there is no /analysis
+  // path in the registry anymore (clean removal — visiting it 404s).
+  // Distinct from plan-analysis (useAnalysisStore.report lives in the unified
+  // /task workspace) and from Evaluation ("How good/safe is this trajectory?").
 ]
 
 /**

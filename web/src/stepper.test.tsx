@@ -7,7 +7,7 @@ import '@testing-library/jest-dom/vitest'
 import { Stepper } from './stepper'
 import { stepperStages } from '@/shared/workflow/derive'
 import { WORKSPACE_REGISTRY } from '@/shared/workflow/registry'
-import type { WorkspaceEntry } from '@/shared/workflow/types'
+import type { WorkspaceEntry, WorkspaceName } from '@/shared/workflow/types'
 import { useSceneStore } from '@/features/viewport/store'
 import { useSemanticEditor } from '@/features/semantic/store'
 import { useExecutionStore } from '@/features/execution/execution-store'
@@ -180,23 +180,15 @@ describe('Stepper — six registry-derived stages (global-stepper spec S3)', () 
     expect(screen.getAllByRole('button')).toHaveLength(6)
   })
 
-  it('excludes the /analysis tool from the stepper (kind:tool — tools are not pipeline stages)', () => {
-    seedFlags({ robotLoaded: true, compiled: true, executable: true, completed: true, analyzed: true })
-    renderStepper('/sessions')
-    // The auxiliary tool must not render as a stage button (spec: Tools
-    // excluded from stepper — exactly the 6 pipeline stages remain).
-    expect(screen.queryByRole('button', { name: 'Analysis' })).not.toBeInTheDocument()
-    expect(screen.getAllByRole('button')).toHaveLength(6)
-  })
-
   it('stepperStages drops kind:tool entries even when a stage number is present (defensive filter)', () => {
-    // The /analysis entry is stage:null today, so the stage filter alone hides
-    // it. The kind filter is the REAL guard: a future tool that carries a
-    // stage number must still never render in the pipeline.
+    // No tool entries exist in the registry today (P0-B removed /analysis —
+    // Workspace Analysis is a Robot accordion tool), so the stage filter alone
+    // hides them. The kind filter is the REAL guard: a future tool that
+    // carries a stage number must still never render in the pipeline.
     const toolWithStage: WorkspaceEntry = {
-      path: '/analysis',
-      workspace: 'analysis',
-      label: 'Analysis',
+      path: '/tools/ws',
+      workspace: 'ws-tool' as WorkspaceName,
+      label: 'Workspace Analysis',
       requires: ['robotLoaded'],
       produces: null,
       capability: null,
@@ -207,7 +199,7 @@ describe('Stepper — six registry-derived stages (global-stepper spec S3)', () 
       kind: 'tool',
     }
     const stages = stepperStages([...WORKSPACE_REGISTRY, toolWithStage])
-    expect(stages.some((e) => e.workspace === 'analysis')).toBe(false)
+    expect(stages.some((e) => e.workspace === ('ws-tool' as WorkspaceName))).toBe(false)
   })
 
   it('shows future stages whose requirements are met as pending (next step visible)', () => {

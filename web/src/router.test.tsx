@@ -6,7 +6,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import '@testing-library/jest-dom/vitest'
 import { routerConfig, VIEW_REGISTRY } from '@/router'
-import { WORKSPACE_REGISTRY, producerOf } from '@/shared/workflow/registry'
+import { WORKSPACE_REGISTRY } from '@/shared/workflow/registry'
 import { ServicesProvider } from '@/features/viewport/services/service-context'
 import { useSceneStore } from '@/features/viewport/store'
 import { useSemanticEditor } from '@/features/semantic/store'
@@ -323,35 +323,33 @@ describe('the /evaluation route renders the pre-execution EVALUACIÓN', () => {
   })
 })
 
-describe('the /analysis route renders the AnalysisWorkspace tool (PR-D — kind nav model)', () => {
-  it('shows a Workspace Analysis link in the top-bar tools group', () => {
-    seedPrerequisites()
-    renderRouter(['/task'])
-    expect(screen.getByRole('link', { name: 'Workspace Analysis' })).toBeInTheDocument()
-  })
-
-  it('routes /analysis to the WorkspaceAnalysis when a robot is loaded (no modal)', () => {
+describe('Workspace Analysis lives in the Robot tools accordion (P0-B reorg)', () => {
+  it('removes the /analysis route from the registry (clean removal — no redirect entry)', () => {
     seedPrerequisites()
     const { router } = renderRouter(['/analysis'])
 
-    // No redirect: the route is registered (navigation-router "Analysis route
-    // registered"). The inline workspace renders its config + explicit trigger.
+    // The route is gone from the single source of truth: nothing registered at
+    // /analysis (visiting it matches no route) and the top-bar shows no tool link.
+    expect(WORKSPACE_REGISTRY.some((e) => e.path === '/analysis')).toBe(false)
+    expect(screen.queryByRole('link', { name: 'Workspace Analysis' })).not.toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/analysis')
-    expect(screen.getByRole('button', { name: 'Run Analysis' })).toBeInTheDocument()
-    expect(screen.getByText('No data yet — run the analysis')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Run Analysis' })).not.toBeInTheDocument()
   })
 
-  it('redirects /analysis to the root when no robot is loaded (requires robotLoaded)', async () => {
-    act(() => {
-      useSceneStore.setState({ data: null })
-      useSemanticEditor.setState({ result: null, dirty: 0 })
-      useExecutionStore.setState({ status: 'idle' })
-      useAnalysisStore.setState({ report: null })
-    })
-    const { router } = renderRouter(['/analysis'])
+  it('renders Workspace Analysis as an accordion tool inside the Robot shell at /', async () => {
+    seedPrerequisites()
+    const { router } = renderRouter(['/'])
 
-    expect(producerOf('robotLoaded')?.path).toBe('/')
-    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
+    // All panels closed by default: the tool is reachable via its trigger.
+    const trigger = screen.getByRole('button', { name: 'Workspace Analysis' })
+    expect(screen.queryByRole('button', { name: /run analysis/i })).not.toBeInTheDocument()
+
+    fireEvent.click(trigger)
+    await waitFor(() => expect(screen.getByRole('button', { name: /run analysis/i })).toBeInTheDocument())
+
+    // Still inside the panel-layout Robot workspace — the viewport stays mounted.
+    expect(screen.getByTestId('viewport-stub')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/')
   })
 })
 

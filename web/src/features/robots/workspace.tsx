@@ -5,10 +5,11 @@ import { RobotCatalog } from './components/robot-catalog'
 /**
  * RobotShell — landing workspace (`/`).
  *
- * Robot catalog plus the scene tools (FK / IK / TCP) in one side
- * panel. Workspace Analysis moved to its own first-class tool at /analysis
- * (P0-B). The 3D viewport itself lives in the layout route (invariant #1) and
- * is NOT part of this shell.
+ * Robot catalog plus the scene tools (FK / IK / TCP / Workspace Analysis) in
+ * one side panel. P0-B reorg: Workspace Analysis moved from the standalone
+ * /analysis route INTO this accordion (TOOLS_BY_PERSPECTIVE.robot), so it
+ * renders inline beside the persistent 3D viewport. The 3D viewport itself
+ * lives in the layout route (invariant #1) and is NOT part of this shell.
  */
 export function RobotShell() {
   const tools = TOOLS_BY_PERSPECTIVE.robot ?? []

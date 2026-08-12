@@ -11,10 +11,12 @@ import { buttonVariants } from '@/components/ui/button'
  * Hidden entries (sessions/knowledge) render no nav link until their content
  * is delivered. The URL is the single source of truth for the active workspace.
  *
- * Links are grouped by `kind` (auxiliary-tools-navigation spec, PR-D):
- * pipeline stage links first (kind default 'stage'), a decorative divider,
- * then auxiliary tool links (kind 'tool' — /analysis). The divider is
- * aria-hidden: it is purely visual, the links carry the accessible names.
+ * Links are grouped by `kind`: pipeline stage links first (kind default
+ * 'stage'), a decorative divider, then auxiliary tool links (kind 'tool').
+ * P0-B reorg: the last tool entry (/analysis) was removed — Workspace Analysis
+ * now lives inside the Robot accordion, so no tool group renders today. The
+ * divider is aria-hidden: it is purely visual, the links carry the accessible
+ * names.
  *
  * Links reflect guard state (slice 5): when a workspace's `requires` flags are
  * unmet the link is aria-disabled and its click is prevented — the same
