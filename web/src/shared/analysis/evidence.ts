@@ -129,3 +129,15 @@ export function evidenceDirection(key: string): 1 | -1 | 0 {
 export function humanizeKey(key: string): string {
   return key.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
 }
+
+/** Human label for a raw variable name. Accepts both the wire snake_case keys
+ *  ("collision_clearance") and the engine's Debug-formatted names used in trace
+ *  binding keys ("CollisionClearance IS danger" prefix → "CollisionClearance").
+ *  Unknown names fall back to a humanized sentence-case label. */
+export function variableLabel(raw: string): string {
+  const normalized = raw
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/_/g, ' ')
+    .toLowerCase()
+  return VARIABLES[normalized]?.label ?? humanizeKey(normalized)
+}

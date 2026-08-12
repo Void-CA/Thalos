@@ -51,13 +51,16 @@ describe('IntelligentAssessment — section renders when assessment present', ()
     expect(screen.getByText('30')).toBeInTheDocument() // 0.3027 quality → score 30
     expect(screen.getByText('Poor')).toBeInTheDocument() // <50 → Poor
     expect(screen.getByText('Triggered Rules')).toBeInTheDocument()
-    // UX redesign: rules are labeled humanly (raw ids only as hover anchor).
-    const ruleChips = screen.getAllByTestId('assessment-rule')
-    expect(ruleChips[0]).toHaveTextContent('Collision danger')
-    expect(ruleChips[1]).toHaveTextContent('Low manipulability')
+    // UX redesign: rules show human labels + the real reasoning from the trace
+    // (why it fired / what it produced), not bare chips.
+    const ruleRows = screen.getAllByTestId('rule-reasoning-row')
+    expect(ruleRows[0]).toHaveTextContent('Collision danger')
+    expect(within(ruleRows[0]).getByTestId('rule-why')).toHaveTextContent('Collision clearance is danger')
+    expect(ruleRows[1]).toHaveTextContent('Low manipulability')
+    expect(within(ruleRows[1]).getByTestId('rule-produced')).toHaveTextContent('marked danger zone')
     expect(screen.getByText('Recommendations')).toBeInTheDocument()
-    // Collision appears as the rule-group header (and the recommendation kind).
-    expect(screen.getAllByTestId('assessment-rule-group')[0]).toHaveTextContent('Collision')
+    // The category reads as a subtle per-row tag, not a grouped chip header.
+    expect(within(ruleRows[0]).getByText('Collision')).toBeInTheDocument()
   })
 
   it('renders evidence chips with human label, value and semantic reading', () => {

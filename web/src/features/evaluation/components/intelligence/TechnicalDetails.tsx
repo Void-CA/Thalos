@@ -3,18 +3,18 @@ import type {
   AssessmentTraceEntryWire,
   TriggeredRuleWire,
 } from '@/shared/contracts/analysis-report'
-import { TriggeredRules } from './TriggeredRules'
+import { RuleReasoning } from './RuleReasoning'
 import { MembershipBars } from './MembershipBars'
 import { InferenceTrace } from './InferenceTrace'
 
 /**
  * TechnicalDetails (structural UX redesign) — ONE collapsible section that
- * owns ALL the technical detail of the verdict (triggered rules, evidence
+ * owns ALL the technical detail of the verdict (rule reasoning, evidence
  * bars, inference trace), CLOSED by default: these are support material, not
  * the decision. A native `<details>` keeps the semantic closed-by-default
  * state. The count hint ("· N rules · N evidence") makes the section
  * scannable before opening. The three children keep their own testids
- * (`assessment-rule*`, `assessment-evidence*`, `assessment-trace*`). All copy
+ * (`rule-reasoning*`, `assessment-evidence*`, `assessment-trace*`). All copy
  * is English.
  */
 export function TechnicalDetails({
@@ -47,7 +47,7 @@ export function TechnicalDetails({
         </span>
       </summary>
       <div className="mt-3 flex flex-col gap-3" data-testid="technical-details-body">
-        <TriggeredRules rules={rules} />
+        <RuleReasoning rules={rules} trace={trace} />
         <MembershipBars evidence={evidence} />
         <InferenceTrace trace={trace} />
       </div>

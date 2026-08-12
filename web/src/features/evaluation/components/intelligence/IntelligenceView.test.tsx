@@ -152,23 +152,20 @@ describe('IntelligenceView — technical details (ONE collapsible, closed by def
     expect(toggle).toHaveTextContent('4 evidence')
   })
 
-  it('expands to show the triggered rules (grouped, human labels), evidence bars and the trace', () => {
+  it('expands to show the rule reasoning (human labels, category tags), evidence bars and the trace', () => {
     render(<IntelligenceView assessment={assessment} regions={[]} />)
     fireEvent.click(screen.getByTestId('technical-details-toggle'))
     expect((screen.getByTestId('technical-details') as HTMLDetailsElement).open).toBe(true)
 
     expect(screen.getByTestId('assessment-rule-count')).toHaveTextContent('3 rules')
-    const groups = screen.getAllByTestId('assessment-rule-group')
-    expect(groups).toHaveLength(3) // collision, manipulability, trajectory
-    expect(groups[0]).toHaveTextContent('Collision')
-    const chips = screen.getAllByTestId('assessment-rule')
-    expect(chips).toHaveLength(3)
-    expect(chips[0]).toHaveTextContent('Collision danger')
-    expect(chips[0]).toHaveTextContent('priority 10')
+    const rows = screen.getAllByTestId('rule-reasoning-row')
+    expect(rows).toHaveLength(3)
+    expect(rows[0]).toHaveTextContent('Collision danger')
+    // Subtle category tag per row (never the old loud badge).
+    expect(rows[0]).toHaveTextContent('Collision')
+    expect(rows[1]).toHaveTextContent('Manipulability')
     // The KB agenda priority must never be presented as a fuzzy weight.
     expect(screen.queryByText(/weight/i)).not.toBeInTheDocument()
-    // The raw rule id stays only as the traceability anchor.
-    expect(chips[0]).toHaveAttribute('title', 'R01_collision_danger')
 
     const bars = screen.getAllByTestId('membership-bar')
     expect(bars).toHaveLength(4)
@@ -181,25 +178,41 @@ describe('IntelligenceView — technical details (ONE collapsible, closed by def
     expect(traceToggle).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(traceToggle)
     expect(screen.getByTestId('assessment-trace')).toBeInTheDocument()
-    const rows = screen.getAllByTestId('assessment-trace-entry')
-    expect(rows).toHaveLength(1)
-    expect(rows[0]).toHaveTextContent('R01_collision_danger')
+    const rows2 = screen.getAllByTestId('assessment-trace-entry')
+    expect(rows2).toHaveLength(1)
+    expect(rows2[0]).toHaveTextContent('R01_collision_danger')
   })
 
-  it('renders safe/positive rules with a distinct (non-warning) chip', () => {
+  it('renders the reasoning of a safe/positive rule from its trace bindings', () => {
     render(
       <IntelligenceView
         assessment={{
           ...assessment,
           triggered_rules: [{ id: 'R12_safe_plan', category: 'trajectory', priority: 1 }],
+          trace: [
+            {
+              rule_id: 'R12_safe_plan',
+              priority: 1,
+              bindings: {
+                safe_clearance: 'true',
+                'SingularityProximity IS low': '1.000',
+                'Manipulability IS high': '1.000',
+              },
+              derived_output: {},
+            },
+          ],
         }}
         regions={[]}
       />,
     )
     fireEvent.click(screen.getByTestId('technical-details-toggle'))
-    const chip = screen.getByTestId('assessment-rule')
-    expect(chip).toHaveTextContent('Safe plan')
-    expect(chip.className).toContain('success')
+    const row = screen.getByTestId('rule-reasoning-row')
+    expect(row).toHaveTextContent('Safe plan')
+    expect(row).toHaveTextContent('Trajectory')
+    // The FactEquals antecedent reads as a fact, not a raw id.
+    expect(screen.getByTestId('rule-why')).toHaveTextContent('safe clearance is true')
+    expect(screen.getByTestId('rule-why')).toHaveTextContent('Singularity proximity is low')
+    expect(screen.getByTestId('rule-why')).toHaveTextContent('Manipulability is high')
   })
 })
 

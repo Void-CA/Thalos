@@ -6,6 +6,8 @@ import {
   CATEGORY_ORDER,
   ruleLabel,
   isPositiveRule,
+  bindingPhrase,
+  consequentPhrase,
 } from './rules'
 
 /**
@@ -88,5 +90,80 @@ describe('CATEGORY_LABELS / CATEGORY_ORDER — grouping', () => {
       'manipulability',
       'trajectory',
     ])
+  })
+})
+
+describe('bindingPhrase — human "why" from the trace bindings', () => {
+  it('reads the wire shape: set embedded in the key, membership degree as value', () => {
+    expect(bindingPhrase({ 'Manipulability IS low': '0.667' })).toBe('Manipulability is low')
+    expect(bindingPhrase({ 'CollisionClearance IS danger': '1.000' })).toBe(
+      'Collision clearance is danger',
+    )
+    expect(bindingPhrase({ 'SingularityProximity IS high': '0.420' })).toBe(
+      'Singularity proximity is high',
+    )
+    expect(bindingPhrase({ 'TrajectoryComplexity IS high': '0.890' })).toBe(
+      'Trajectory complexity is high',
+    )
+  })
+
+  it('reads the {variable: set} shape defensively', () => {
+    expect(bindingPhrase({ manipulability: 'low' })).toBe('Manipulability is low')
+    expect(bindingPhrase({ trajectory_complexity: 'high' })).toBe('Trajectory complexity is high')
+  })
+
+  it('reads FactEquals bindings as facts', () => {
+    expect(bindingPhrase({ safe_clearance: 'true' })).toBe('safe clearance is true')
+    expect(bindingPhrase({ danger_zone: 'false' })).toBe('danger zone is false')
+  })
+
+  it('joins multiple bindings cleanly in insertion order', () => {
+    expect(
+      bindingPhrase({
+        safe_clearance: 'true',
+        'SingularityProximity IS low': '1.000',
+        'Manipulability IS high': '1.000',
+      }),
+    ).toBe('safe clearance is true; Singularity proximity is low; Manipulability is high')
+  })
+
+  it('falls back to a raw key=value pair for an unreadable binding', () => {
+    expect(bindingPhrase({ weird_key: '0.5' })).toBe('Weird key = 0.5')
+  })
+
+  it('returns "—" for empty bindings', () => {
+    expect(bindingPhrase({})).toBe('—')
+  })
+})
+
+describe('consequentPhrase — human "what" from the derived output', () => {
+  it('reads KB facts as marked consequences', () => {
+    expect(consequentPhrase({ danger_zone: true })).toBe('marked danger zone')
+    expect(consequentPhrase({ safe_clearance: true })).toBe('marked safe clearance')
+    expect(consequentPhrase({ near_singularity: true })).toBe('marked near singularity')
+    expect(consequentPhrase({ good_manipulability: true })).toBe('marked good manipulability')
+  })
+
+  it('reads evidence-mark keys the KB raises alongside derived facts', () => {
+    expect(consequentPhrase({ complexity_high: true })).toBe('marked high complexity')
+    expect(consequentPhrase({ manipulability_low: true })).toBe('marked low manipulability')
+    expect(consequentPhrase({ collision_danger: true })).toBe('marked collision danger')
+  })
+
+  it('reads risk-set keys as a risk raise (defensive)', () => {
+    expect(consequentPhrase({ medium: true })).toBe('raised risk to medium')
+    expect(consequentPhrase({ critical: true })).toBe('raised risk to critical')
+  })
+
+  it('reads false entries as cleared, unknown keys humanized', () => {
+    expect(consequentPhrase({ danger_zone: false })).toBe('cleared danger zone')
+    expect(consequentPhrase({ mystery_flag: true })).toBe('marked mystery flag')
+  })
+
+  it('joins multiple consequents and returns "—" for empty', () => {
+    expect(consequentPhrase({ danger_zone: true, complexity_high: true })).toBe(
+      'marked danger zone, marked high complexity',
+    )
+    expect(consequentPhrase({})).toBe('—')
   })
 })

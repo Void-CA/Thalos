@@ -3,6 +3,7 @@ import {
   evidenceReading,
   evidenceDirection,
   humanizeKey,
+  variableLabel,
   VARIABLE_ORDER,
 } from './evidence'
 
@@ -127,5 +128,23 @@ describe('humanizeKey', () => {
   it('turns snake_case wire keys into title case', () => {
     expect(humanizeKey('collision_danger')).toBe('Collision danger')
     expect(humanizeKey('R12_safe_plan')).toBe('R12 safe plan')
+  })
+})
+
+describe('variableLabel — raw variable name → human label', () => {
+  it('maps the engine Debug names used in trace binding keys', () => {
+    expect(variableLabel('Manipulability')).toBe('Manipulability')
+    expect(variableLabel('SingularityProximity')).toBe('Singularity proximity')
+    expect(variableLabel('CollisionClearance')).toBe('Collision clearance')
+    expect(variableLabel('TrajectoryComplexity')).toBe('Trajectory complexity')
+  })
+
+  it('maps the wire snake_case evidence keys', () => {
+    expect(variableLabel('manipulability')).toBe('Manipulability')
+    expect(variableLabel('singularity_proximity')).toBe('Singularity proximity')
+  })
+
+  it('falls back to a humanized label for unknown names', () => {
+    expect(variableLabel('unknown_thing')).toBe('Unknown thing')
   })
 })
