@@ -196,7 +196,10 @@ export function EvaluationWorkspace() {
             when the report carries no assessment. */}
         {report.assessment && (
           <TabsContent value="intelligence" className="flex-1 min-h-0 overflow-y-auto p-3">
-            <IntelligenceView assessment={report.assessment} />
+            <IntelligenceView
+              assessment={report.assessment}
+              regions={report.problem_regions ?? []}
+            />
           </TabsContent>
         )}
       </Tabs>
