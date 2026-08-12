@@ -102,8 +102,17 @@ impl PlanAnalysisService {
         // Agregación canónica: observaciones → AnalysisReport (D3). El
         // aggregator reasigna ids 1..=n (I8), así que las acciones se generan
         // SOBRE las observaciones del reporte para referenciar ids reales.
-        let mut report =
-            DefaultAggregator::new(DefaultScoringPolicy).aggregate(artifact, observations);
+        // (S1) Las métricas del análisis técnico se pasan AL aggregator
+        // (design ADR-1): pueblan `report.metrics` Y alimentan el componente
+        // continuo del quality_index en la misma llamada — el aggregator es
+        // source-agnostic (no conoce `PlanAnalysis`), el servicio — composition
+        // root — conecta ambas proyecciones. ADITIVO: solo llena un campo que
+        // llegaba vacío (`{}`).
+        let mut report = DefaultAggregator::new(DefaultScoringPolicy).aggregate_with_metrics(
+            artifact,
+            observations,
+            analysis.metrics.to_btree_map(),
+        );
 
         // El Advisor solo interpreta observaciones, nunca recalcula (C2); las
         // acciones viven en el reporte y referencian observaciones por id (I5).
@@ -112,13 +121,6 @@ impl PlanAnalysisService {
             action.id = ActionId((index + 1) as u32);
         }
         report.actions = actions;
-
-        // (S1) Poblar `report.metrics` desde el análisis técnico (design P3):
-        // el aggregator es source-agnostic (no conoce `PlanAnalysis`), así que
-        // el servicio — composition root — conecta ambas proyecciones. El
-        // agregado vive en el reporte canónico y el DTO lo proyecta al wire.
-        // ADITIVO: solo llena un campo que llegaba vacío (`{}`).
-        report.metrics = analysis.metrics.to_btree_map();
 
         // (IA) Paso final PURO: el `Assessor` interpreta `report.metrics` en
         // riesgo/calidad. Se ejecuta DESPUÉS de poblar las métricas y SOLO lee

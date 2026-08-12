@@ -10,13 +10,21 @@
 //! # Scoring separation (design C2)
 //!
 //! [`DefaultAggregator`] is generic over [`ScoringPolicy`]: it composes a
-//! policy (penalties → `quality_index` → `grade`) but never owns weight
-//! values. Only the default policy exists today; the trait is the seam for
-//! future policies.
+//! policy (penalties + continuous metrics → `quality_index` → `grade`, design
+//! ADR-1) but never owns weight values. Only the default policy exists today;
+//! the trait is the seam for future policies.
+//!
+//! # Metrics threading (design ADR-1)
+//!
+//! [`Aggregator::aggregate_with_metrics`] is the production aggregation path:
+//! the metrics map populates `report.metrics` and feeds the summary's
+//! continuous-quality component in one call. The observation-only
+//! [`Aggregator::aggregate`] treats every metric key as ABSENT (NEUTRAL 1.0),
+//! reducing the score to the hard-safety pins — the historical behavior.
 //!
 //! # Sole report constructor (user contract C4)
 //!
-//! [`DefaultAggregator::aggregate`] is the ONLY production path that builds an
+//! [`DefaultAggregator`] is the ONLY production path that builds an
 //! [`AnalysisReport`] and its [`AnalysisSummary`]. No analyzer, service or DTO
 //! constructs a summary by hand, so `quality_index` keeps a single,
 //! aggregator-owned semantics.
@@ -52,7 +60,26 @@ use std::collections::BTreeMap;
 pub trait Aggregator {
     /// Aggregates observations produced by any analyzer(s) into a canonical
     /// report with a derived summary (quality_index, counts, grade).
-    fn aggregate(&self, artifact: ArtifactRef, observations: Vec<Observation>) -> AnalysisReport;
+    ///
+    /// Observation-only path (design ADR-1): with no continuous-metric
+    /// information available, every metric key is treated as ABSENT — the
+    /// continuous component is NEUTRAL (1.0) and the score reduces to the
+    /// hard-safety pins. Backward-compatible; `report.metrics` is empty.
+    fn aggregate(&self, artifact: ArtifactRef, observations: Vec<Observation>) -> AnalysisReport {
+        self.aggregate_with_metrics(artifact, observations, BTreeMap::new())
+    }
+
+    /// Full aggregation (design ADR-1): the metrics map populates
+    /// `report.metrics` AND feeds the summary's continuous-quality component
+    /// in the same call. THE production path — `PlanAnalysisService` (and the
+    /// usability harness that mirrors it) calls this with the technical
+    /// analysis metrics, so the score reflects trajectory reality.
+    fn aggregate_with_metrics(
+        &self,
+        artifact: ArtifactRef,
+        observations: Vec<Observation>,
+        metrics: BTreeMap<String, f64>,
+    ) -> AnalysisReport;
 }
 
 /// Default aggregator implementation, generic over the [`ScoringPolicy`]
@@ -69,9 +96,14 @@ impl<P: ScoringPolicy> DefaultAggregator<P> {
     }
 
     /// Builds the derived summary over the report's observations (I7): a small
-    /// projection computed here, never hand-written by analyzers.
-    fn build_summary(&self, observations: &[Observation]) -> AnalysisSummary {
-        let quality_index = self.policy.quality_index(observations);
+    /// projection computed here, never hand-written by analyzers. The
+    /// continuous metrics feed the score (design ADR-1).
+    fn build_summary(
+        &self,
+        observations: &[Observation],
+        metrics: &BTreeMap<String, f64>,
+    ) -> AnalysisSummary {
+        let quality_index = self.policy.quality_index(observations, metrics);
         let mut severity_distribution = BTreeMap::new();
         for observation in observations {
             *severity_distribution
@@ -88,10 +120,11 @@ impl<P: ScoringPolicy> DefaultAggregator<P> {
 }
 
 impl<P: ScoringPolicy> Aggregator for DefaultAggregator<P> {
-    fn aggregate(
+    fn aggregate_with_metrics(
         &self,
         artifact: ArtifactRef,
         mut observations: Vec<Observation>,
+        metrics: BTreeMap<String, f64>,
     ) -> AnalysisReport {
         // 1. Identity: ignore incoming ids, assign a fresh counter 1..=n in
         //    input order (closed decision; I8 collision-free merging).
@@ -126,12 +159,12 @@ impl<P: ScoringPolicy> Aggregator for DefaultAggregator<P> {
             }
         }
 
-        let summary = self.build_summary(&observations);
+        let summary = self.build_summary(&observations, &metrics);
         let report = AnalysisReport {
             artifact,
             observations,
             actions: Vec::new(),
-            metrics: BTreeMap::new(),
+            metrics,
             summary,
         };
 
@@ -310,6 +343,73 @@ mod tests {
         let report = aggregator().aggregate(artifact(), observations);
         assert_eq!(report.validate(), Ok(()));
     }
+
+    // ─── Metrics threading (design ADR-1, T2) ───────────────────────────
+
+    #[test]
+    fn aggregate_with_metrics_populates_report_metrics() {
+        // The metrics map passed to `aggregate_with_metrics` must ride into
+        // `report.metrics` (the production path: the runtime service populates
+        // the report's metrics via the aggregator, not after it).
+        let mut metrics = BTreeMap::new();
+        metrics.insert("avg_manipulability".to_string(), 0.5);
+        let report = aggregator().aggregate_with_metrics(
+            artifact(),
+            vec![observation(1, Severity::Error)],
+            metrics.clone(),
+        );
+        assert_eq!(report.metrics, metrics);
+    }
+
+    #[test]
+    fn aggregate_with_metrics_feeds_the_summary_quality() {
+        // The summary's quality_index must reflect the metrics: 1 Error scores
+        // 0.70 with neutral/perfect metrics, but LESS when the continuous
+        // component penalizes (avg_manipulability 0.1 → norm 0.2).
+        let good = {
+            let mut m = BTreeMap::new();
+            m.insert("avg_manipulability".to_string(), 0.5);
+            m
+        };
+        let bad = {
+            let mut m = BTreeMap::new();
+            m.insert("avg_manipulability".to_string(), 0.1);
+            m
+        };
+        let observations = vec![observation(1, Severity::Error)];
+        let good_report =
+            aggregator().aggregate_with_metrics(artifact(), observations.clone(), good);
+        let bad_report = aggregator().aggregate_with_metrics(artifact(), observations, bad);
+
+        assert!(
+            (good_report.summary.quality_index - 0.70).abs() < 1e-9,
+            "1 Error + good metrics must score ≈ 0.70, got {}",
+            good_report.summary.quality_index
+        );
+        assert!(
+            bad_report.summary.quality_index < good_report.summary.quality_index,
+            "penalized metrics must lower the score: {} vs {}",
+            bad_report.summary.quality_index,
+            good_report.summary.quality_index
+        );
+        assert!(
+            bad_report.summary.quality_index > 0.0,
+            "1 Error with bad metrics must stay above 0.0 (not saturated)"
+        );
+    }
+
+    #[test]
+    fn observation_only_aggregate_keeps_neutral_continuous() {
+        // The 2-arg `aggregate` (no metrics available) must keep the historical
+        // behavior: absent keys → NEUTRAL 1.0 → score = hard-safety pins.
+        let observations = vec![
+            observation(1, Severity::Error),
+            observation(2, Severity::Error),
+        ];
+        let report = aggregator().aggregate(artifact(), observations);
+        assert!((report.summary.quality_index - 0.40).abs() < 1e-9);
+        assert!(report.metrics.is_empty());
+    }
 }
 
 /// Property tests for the scoring semantics (spec `analysis-score-semantics`
@@ -454,10 +554,10 @@ mod property_tests {
             // appending Info observations leaves the index untouched. The
             // default weights are irrelevant here — only the model matters.
             let policy = ZeroInfoPenaltyPolicy;
-            let base_quality = policy.quality_index(&base);
+            let base_quality = policy.quality_index(&base, &BTreeMap::new());
             let mut union = base;
             union.extend(infos.into_iter().map(|_| info_observation()));
-            let union_quality = policy.quality_index(&union);
+            let union_quality = policy.quality_index(&union, &BTreeMap::new());
             prop_assert_eq!(
                 base_quality,
                 union_quality,
@@ -474,14 +574,14 @@ mod property_tests {
             // non-trivial permutations; the canonical per-severity summation
             // guarantees EXACT float equality, not just tolerance.
             let policy = DefaultScoringPolicy;
-            let quality = policy.quality_index(&observations);
+            let quality = policy.quality_index(&observations, &BTreeMap::new());
             let mut rotated = observations.clone();
             let amount = rotation % rotated.len().max(1);
             rotated.rotate_left(amount);
             let mut reversed = observations.clone();
             reversed.reverse();
-            prop_assert_eq!(quality, policy.quality_index(&rotated));
-            prop_assert_eq!(quality, policy.quality_index(&reversed));
+            prop_assert_eq!(quality, policy.quality_index(&rotated, &BTreeMap::new()));
+            prop_assert_eq!(quality, policy.quality_index(&reversed, &BTreeMap::new()));
         }
 
         #[test]
