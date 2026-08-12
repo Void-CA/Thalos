@@ -1,6 +1,7 @@
 import { Outlet, useLocation } from 'react-router'
 import { TopBar } from './top-bar'
 import { StatusBar } from './status-bar'
+import { ResizablePanel } from './resizable-panel'
 import { Stepper } from '@/stepper'
 import { Viewport } from '@/features/viewport/viewport'
 import { WORKSPACE_REGISTRY } from '@/shared/workflow/registry'
@@ -14,12 +15,13 @@ import { useSceneRobotSync } from '@/features/viewport/synchronization/use-scene
  * #1: the 3D viewport never unmounts when navigating between workspaces, and
  * the stepper keeps showing the workflow position across transitions.
  *
- * HOTFIX (evaluation-workspace): the active workspace's registry `layout`
- * field selects the shell body shape — default 'panel' renders the workspace
- * beside the persistent viewport; 'full' (used by /evaluation) drops the
- * viewport so the workspace IS the focus. This is a DELIBERATE, documented
- * exception to invariant #1: the pre-execution decision must not compete with
- * the 3D view, so the viewport unmounts while /evaluation is active.
+ * HOTFIX (evaluation-workspace) + P0-A (workspace-spatial-layout): the active
+ * workspace's registry `layout` field selects the shell body shape — default
+ * 'panel' renders the workspace in a resizable side panel (ResizablePanel)
+ * beside the persistent viewport; 'full' (used by /evaluation, /sessions and
+ * /analysis) drops the viewport so the workspace IS the focus. This is a
+ * DELIBERATE, documented exception to invariant #1: those areas don't need the
+ * 3D scene beside them, so the viewport unmounts while they're active.
  *
  * The coordinator performs no domain operations and knows nothing about the
  * workspaces: the active workspace and its layout are resolved from the
@@ -38,7 +40,8 @@ export function AppShell() {
       <Stepper />
 
       {/* Body: workspace panel (Outlet) + persistent viewport (or full-width
-          workspace for layout 'full' areas — evaluation drops the viewport). */}
+          workspace for layout 'full' areas — evaluation/sessions/analysis
+          drop the viewport). */}
       <div className="flex flex-1 overflow-hidden">
         {fullWidth ? (
           <main className="flex-1 overflow-hidden">
@@ -46,9 +49,9 @@ export function AppShell() {
           </main>
         ) : (
           <>
-            <main className="flex-shrink-0 w-[380px] overflow-hidden">
+            <ResizablePanel>
               <Outlet />
-            </main>
+            </ResizablePanel>
             <div className="flex-1 relative overflow-hidden">
               <Viewport />
             </div>

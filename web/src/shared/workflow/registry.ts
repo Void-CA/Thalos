@@ -94,7 +94,9 @@ export const WORKSPACE_REGISTRY: Area[] = [
   // REMOVED from /sessions — the browser must show failed/running sessions
   // (status filters), so the guard no longer gates the area. `completed` stays
   // a derived flag (execution still produces it; the status bar consumes it).
-  { path: '/sessions', workspace: 'sessions', label: 'Sesiones', requires: [], produces: null, capability: 'replay', hidden: false, consumes: 'Runtime', producesArtifact: 'ExecutionSession', stage: 6, stepperIndex: 6 },
+  // P0-A (workspace-spatial-layout): layout 'full' — sessions is a data table,
+  // it doesn't need the 3D scene beside it, so it takes the whole body.
+  { path: '/sessions', workspace: 'sessions', label: 'Sesiones', requires: [], produces: null, capability: 'replay', hidden: false, consumes: 'Runtime', producesArtifact: 'ExecutionSession', stage: 6, stepperIndex: 6, layout: 'full' },
   { path: '/knowledge', workspace: 'knowledge', label: 'Knowledge', requires: ['analyzed'], produces: null, capability: 'explain', hidden: true, consumes: null, producesArtifact: null, stage: null },
   { path: '/configuration', workspace: 'configuration', label: 'Configuración', requires: [], produces: null, capability: null, hidden: false, consumes: null, producesArtifact: null, stage: null },
   // D5 (flow-reorganization): /analysis is the SAMPLING tool (reach /
@@ -103,7 +105,9 @@ export const WORKSPACE_REGISTRY: Area[] = [
   // requires robotLoaded (the workspace samples a real robot). Distinct from
   // plan-analysis (useAnalysisStore.report absorbed into the unified /task
   // workspace in slice 6, kept there after the unify-programming hotfix).
-  { path: '/analysis', workspace: 'analysis', label: 'Analysis', requires: ['robotLoaded'], produces: null, capability: null, hidden: false, consumes: null, producesArtifact: null, stage: null, kind: 'tool' },
+  // P0-A (workspace-spatial-layout): layout 'full' — the analysis tool is an
+  // analytical/data view; it doesn't need the 3D scene beside it.
+  { path: '/analysis', workspace: 'analysis', label: 'Analysis', requires: ['robotLoaded'], produces: null, capability: null, hidden: false, consumes: null, producesArtifact: null, stage: null, kind: 'tool', layout: 'full' },
 ]
 
 /**

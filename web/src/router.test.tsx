@@ -192,7 +192,9 @@ describe('hidden routes render placeholders (no 404)', () => {
     renderRouter(['/sessions'])
     expect(screen.getByRole('heading', { name: 'Sesiones' })).toBeInTheDocument()
     expect(await screen.findByText('No sessions yet')).toBeInTheDocument()
-    expect(screen.getByTestId('viewport-stub')).toBeInTheDocument()
+    // P0-A: /sessions is layout 'full' — the viewport is dropped so the data
+    // table takes the whole body.
+    expect(screen.queryByTestId('viewport-stub')).not.toBeInTheDocument()
   })
 
   it('shows nav links for visible workspaces only (Sesiones visible, Knowledge hidden)', () => {
