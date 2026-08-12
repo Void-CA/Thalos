@@ -130,15 +130,15 @@ describe('layout route: persistent viewport (invariant #1)', () => {
     // Full shell resolves at /task; viewport mounted exactly once.
     expect(screen.getByTestId('viewport-stub')).toBeInTheDocument()
     expect(viewportMetrics.mounts).toBe(1)
-    expect(screen.getByRole('link', { name: 'Programación' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Programming' })).toHaveAttribute('aria-current', 'page')
 
     // URL-driven navigation via the TopBar nav link.
-    fireEvent.click(screen.getByRole('link', { name: 'Ejecución' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Execution' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/execution'))
 
     // Only the Outlet content changed; the viewport was never unmounted/remounted.
     expect(screen.getByRole('heading', { name: 'Execution' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Ejecución' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Execution' })).toHaveAttribute('aria-current', 'page')
     expect(viewportMetrics.mounts).toBe(1)
     expect(viewportMetrics.unmounts).toBe(0)
   })
@@ -153,7 +153,7 @@ describe('layout route: persistent viewport (invariant #1)', () => {
       router.navigate(-1)
     })
     await waitFor(() => expect(router.state.location.pathname).toBe('/task'))
-    expect(screen.getByRole('link', { name: 'Programación' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Programming' })).toHaveAttribute('aria-current', 'page')
     expect(viewportMetrics.unmounts).toBe(0)
 
     act(() => {
@@ -173,7 +173,7 @@ describe('direct URL entry renders the full shell', () => {
     expect(screen.getByRole('heading', { name: 'Execution' })).toBeInTheDocument()
     expect(screen.getByTestId('viewport-stub')).toBeInTheDocument()
     expect(screen.getByText('Thalos Robotics')).toBeInTheDocument() // StatusBar
-    expect(screen.getByRole('link', { name: 'Programación' })).toBeInTheDocument() // TopBar nav
+    expect(screen.getByRole('link', { name: 'Programming' })).toBeInTheDocument() // TopBar nav
   })
 })
 
@@ -190,18 +190,18 @@ describe('hidden routes render placeholders (no 404)', () => {
     seedPrerequisites({ completed: true })
     sessionsApiMocks.list.mockResolvedValue([])
     renderRouter(['/sessions'])
-    expect(screen.getByRole('heading', { name: 'Sesiones' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Sessions' })).toBeInTheDocument()
     expect(await screen.findByText('No sessions yet')).toBeInTheDocument()
     // P0-A: /sessions is layout 'full' — the viewport is dropped so the data
     // table takes the whole body.
     expect(screen.queryByTestId('viewport-stub')).not.toBeInTheDocument()
   })
 
-  it('shows nav links for visible workspaces only (Sesiones visible, Knowledge hidden)', () => {
+  it('shows nav links for visible workspaces only (Sessions visible, Knowledge hidden)', () => {
     renderRouter(['/'])
-    expect(screen.getByRole('link', { name: 'Programación' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Ejecución' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Sesiones' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Programming' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Execution' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Sessions' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Knowledge' })).not.toBeInTheDocument()
   })
 })
@@ -209,7 +209,7 @@ describe('hidden routes render placeholders (no 404)', () => {
 describe('top-bar — nav links reflect guard state (slice 5, task 5.2)', () => {
   it('disables links whose requirements are unmet (aria-disabled, no navigation)', async () => {
     // Robot loaded (sceneValid=true) but NOT compiled → Execution (requires
-    // executable) must not navigate; Sesiones (guard relaxed) must.
+    // executable) must not navigate; Sessions (guard relaxed) must.
     act(() => {
       useSceneStore.setState({ data: {} as SceneData })
       useSemanticEditor.setState({ result: null, dirty: 0 })
@@ -217,19 +217,19 @@ describe('top-bar — nav links reflect guard state (slice 5, task 5.2)', () => 
       useAnalysisStore.setState({ report: null })
     })
     const { router } = renderRouter(['/task'])
-    const executionLink = screen.getByRole('link', { name: 'Ejecución' })
+    const executionLink = screen.getByRole('link', { name: 'Execution' })
     expect(executionLink).toHaveAttribute('aria-disabled', 'true')
     fireEvent.click(executionLink)
     expect(router.state.location.pathname).toBe('/task')
-    const sessionsLink = screen.getByRole('link', { name: 'Sesiones' })
+    const sessionsLink = screen.getByRole('link', { name: 'Sessions' })
     expect(sessionsLink).not.toHaveAttribute('aria-disabled')
   })
 
   it('keeps links enabled when their requirements are met', () => {
     seedPrerequisites({ executable: true })
     renderRouter(['/task'])
-    expect(screen.getByRole('link', { name: 'Ejecución' })).not.toHaveAttribute('aria-disabled')
-    expect(screen.getByRole('link', { name: 'Sesiones' })).not.toHaveAttribute('aria-disabled')
+    expect(screen.getByRole('link', { name: 'Execution' })).not.toHaveAttribute('aria-disabled')
+    expect(screen.getByRole('link', { name: 'Sessions' })).not.toHaveAttribute('aria-disabled')
   })
 })
 
@@ -268,21 +268,21 @@ describe('the analysis check left the programming workspace (evaluation-workspac
   })
 })
 
-describe('the /evaluation route renders the pre-execution EVALUACIÓN', () => {
-  it('shows an Evaluación link in the top-bar between Programación and Ejecución', () => {
+describe('the /evaluation route renders the pre-execution EVALUATION', () => {
+  it('shows an Evaluation link in the top-bar between Programming and Execution', () => {
     seedPrerequisites()
     renderRouter(['/task'])
     const links = screen.getAllByRole('link').map((l) => l.textContent?.trim() ?? '')
     const idx = (name: string) => links.indexOf(name)
-    expect(idx('Programación')).toBeGreaterThanOrEqual(0)
-    expect(idx('Evaluación')).toBe(idx('Programación') + 1)
-    expect(idx('Ejecución')).toBe(idx('Evaluación') + 1)
+    expect(idx('Programming')).toBeGreaterThanOrEqual(0)
+    expect(idx('Evaluation')).toBe(idx('Programming') + 1)
+    expect(idx('Execution')).toBe(idx('Evaluation') + 1)
   })
 
   it('renders /evaluation full-width WITHOUT the viewport (the decision is the focus)', () => {
     seedPrerequisites()
     renderRouter(['/evaluation'])
-    expect(screen.getByRole('heading', { name: 'Evaluación' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Evaluation' })).toBeInTheDocument()
     // layout 'full': the viewport is dropped so the decision owns the screen.
     expect(screen.queryByTestId('viewport-stub')).not.toBeInTheDocument()
   })
@@ -291,16 +291,16 @@ describe('the /evaluation route renders the pre-execution EVALUACIÓN', () => {
     seedPrerequisites()
     renderRouter(['/evaluation'])
     expect(
-      screen.getByText(/Evaluá el plan antes de ejecutar/i),
+      screen.getByText(/Evaluate the plan before executing/i),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Volver a Programación' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Back to Programming' })).toBeInTheDocument()
   })
 
   it('shows the evaluation content once the report exists (regions + clean verdict)', () => {
     seedPrerequisites({ analyzed: true })
     renderRouter(['/evaluation'])
     // The clean report has no problem regions → the "no problems" verdict.
-    expect(screen.getByText(/No se detectaron problemas/i)).toBeInTheDocument()
+    expect(screen.getByText(/No problems detected/i)).toBeInTheDocument()
   })
 
   it('unmounts the viewport on /evaluation and remounts it on return (documented invariant #1 exception)', async () => {
@@ -308,12 +308,12 @@ describe('the /evaluation route renders the pre-execution EVALUACIÓN', () => {
     const { router } = renderRouter(['/task'])
     expect(viewportMetrics.mounts).toBe(1)
 
-    fireEvent.click(screen.getByRole('link', { name: 'Evaluación' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Evaluation' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/evaluation'))
     expect(screen.queryByTestId('viewport-stub')).not.toBeInTheDocument()
     expect(viewportMetrics.unmounts).toBe(1)
 
-    // Back to Programación → the viewport returns (remounted fresh).
+    // Back to Programming → the viewport returns (remounted fresh).
     act(() => {
       router.navigate('/task')
     })

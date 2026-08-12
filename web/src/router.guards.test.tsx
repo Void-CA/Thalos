@@ -140,7 +140,7 @@ describe('GuardedRoute — behavior over real router routes', () => {
 
   it('blocks /task without a valid scene, redirecting to the producer of sceneValid', async () => {
     // sceneValid=false (objects cleared) but robot loaded → /task requires
-    // sceneValid → redirect to the Escena area (produces sceneValid).
+    // sceneValid → redirect to the Scene area (produces sceneValid).
     seedWorkflowState({ robotLoaded: true })
     act(() => {
       useDomainSceneStore.setState({ objects: [] })
@@ -151,7 +151,7 @@ describe('GuardedRoute — behavior over real router routes', () => {
     expect(producer?.path).toBe('/scene')
     await waitFor(() => expect(router.state.location.pathname).toBe(producer!.path))
 
-    // Escena panel renders (SceneEditor content); Programación does not.
+    // Scene panel renders (SceneEditor content); Programming does not.
     expect(screen.getByText('Objects')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Program' })).not.toBeInTheDocument()
   })
@@ -182,7 +182,7 @@ describe('GuardedRoute — behavior over real router routes', () => {
     expect(producer?.path).toBe('/task')
     await waitFor(() => expect(router.state.location.pathname).toBe(producer!.path))
 
-    // Execution panel must NOT render; Programación workspace is active.
+    // Execution panel must NOT render; Programming workspace is active.
     expect(screen.queryByRole('heading', { name: 'Execution' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Diagnostics' })).toBeInTheDocument()
   })
@@ -227,7 +227,7 @@ describe('GuardedRoute — behavior over real router routes', () => {
 
     expect(producerOf('planReady')?.path).toBe('/task')
     await waitFor(() => expect(router.state.location.pathname).toBe('/task'))
-    expect(screen.queryByRole('heading', { name: 'Evaluación' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Evaluation' })).not.toBeInTheDocument()
   })
 
   it('renders /evaluation from a compiled plan even WITHOUT a report (analyzed is NOT a gate)', async () => {
@@ -238,8 +238,8 @@ describe('GuardedRoute — behavior over real router routes', () => {
     const router = renderRouter(['/evaluation'])
 
     expect(router.state.location.pathname).toBe('/evaluation')
-    expect(screen.getByRole('heading', { name: 'Evaluación' })).toBeInTheDocument()
-    expect(screen.getByText(/Evaluá el plan antes de ejecutar/i)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Evaluation' })).toBeInTheDocument()
+    expect(screen.getByText(/Evaluate the plan before executing/i)).toBeInTheDocument()
   })
 
   it('renders /evaluation from a planning-preview plan (planReady without compiled)', async () => {
@@ -249,7 +249,7 @@ describe('GuardedRoute — behavior over real router routes', () => {
     const router = renderRouter(['/evaluation'])
 
     expect(router.state.location.pathname).toBe('/evaluation')
-    expect(screen.getByRole('heading', { name: 'Evaluación' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Evaluation' })).toBeInTheDocument()
   })
 
   it('renders /sessions directly without a completed execution (guard relaxed)', async () => {
@@ -261,7 +261,7 @@ describe('GuardedRoute — behavior over real router routes', () => {
     const router = renderRouter(['/sessions'])
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/sessions'))
-    expect(screen.getByRole('heading', { name: 'Sesiones' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Sessions' })).toBeInTheDocument()
   })
 
   it('renders /knowledge once the plan is analyzed', async () => {
@@ -273,12 +273,12 @@ describe('GuardedRoute — behavior over real router routes', () => {
   })
 
   it('renders the /configuration shell with no 404 (non-stage area, area-configuration spec)', async () => {
-    // Configuración requires nothing — no workflow seed needed.
+    // Configuration requires nothing — no workflow seed needed.
     seedWorkflowState({})
     const router = renderRouter(['/configuration'])
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/configuration'))
-    expect(screen.getByRole('heading', { name: 'Configuración' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Configuration' })).toBeInTheDocument()
     expect(screen.getByText(/Settings coming soon/i)).toBeInTheDocument()
   })
 })

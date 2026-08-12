@@ -445,7 +445,7 @@ describe('stepperStages — six stages derived from the registry `stage` order (
     }
   })
 
-  it('excludes areas without a stage (knowledge; Configuración is not a stepper stage)', () => {
+  it('excludes areas without a stage (knowledge; Configuration is not a stepper stage)', () => {
     const stages = stepperStages(WORKSPACE_REGISTRY)
     expect(stages.every((e) => e.stage !== null)).toBe(true)
     expect(stages.some((e) => e.workspace === 'knowledge')).toBe(false)
@@ -473,7 +473,7 @@ describe('deriveStepperStages — per-stage state from flags + active route', ()
     expect(stages.find((s) => s.entry.workspace === 'robot')?.state).toBe('current')
   })
 
-  it('derives the full spec progress scenario (Robot passed … Ejecución pending)', () => {
+  it('derives the full spec progress scenario (Robot passed … Execution pending)', () => {
     const stages = deriveStepperStages(
       { ...ALL_TRUE, executable: true },
       '/task',

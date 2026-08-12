@@ -1,9 +1,8 @@
 /**
- * Tokens de color centralizados.
+ * Centralized color tokens.
  *
- * Todas las referencias a colores en Three.js, Tailwind y componentes
- * deberían venir de acá. Cambiar un valor en este archivo actualiza
- * TODOS los lugares que lo usan.
+ * All color references in Three.js, Tailwind and components should come from
+ * here. Changing a value in this file updates EVERY place that uses it.
  */
 
 // ── Scene / Viewport ──

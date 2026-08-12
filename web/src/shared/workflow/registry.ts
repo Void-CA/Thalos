@@ -11,8 +11,8 @@ export type { Area, ArtifactKind, Capability, WorkspaceEntry, WorkspaceName } fr
  *  Routes, guards, stepper and breadcrumbs all derive from this array — no
  *  ad-hoc nav rules live anywhere else.
  *
- *  Labels are domain vocabulary (navigation-router spec): Robot / Escena /
- *  Programación / Ejecución / Sesiones / Configuración. Robot carries a stage
+ *  Labels are domain vocabulary (navigation-router spec): Robot / Scene /
+ *  Programming / Execution / Sessions / Configuration. Robot carries a stage
  *  marker (stage 1) even though it has no prerequisite. The legacy
  *  plan-analysis `/analysis` was absorbed into `/planning` in slice 6. PR-D
  *  re-introduced `/analysis` as the SAMPLING tool (kind: 'tool' — reach /
@@ -42,9 +42,9 @@ export type { Area, ArtifactKind, Capability, WorkspaceEntry, WorkspaceName } fr
  *    pre-execution VISTA at /evaluation (stage 4).
  *
  *  HOTFIX (evaluation-workspace): the analysis check stops being a tab inside
- *  Programación and becomes a VISTA of its own — an EVALUACIÓN pre-ejecución
- *  between Programación and Ejecución: "¿estás seguro que querés ejecutar
- *  esto?" with concrete actions. Decisions:
+ *  Programming and becomes a VISTA of its own — an EVALUATION pre-flight
+ *  between Programming and Execution: "are you sure you want to execute
+ *  this?" with concrete actions. Decisions:
  *  - `/evaluation` (stage 4) requires `['sceneValid', 'planReady']` — it
  *    evaluates an EXISTING plan (Tasks compile or Motion preview); it never
  *    requires the executable status.
@@ -63,8 +63,8 @@ export type { Area, ArtifactKind, Capability, WorkspaceEntry, WorkspaceName } fr
  *  - `/execution` does NOT require `analyzed`: evaluation is a RECOMMENDED
  *    checkpoint, not a hard gate — the fast path (compile → execute) keeps
  *    working. Documented decision (CDD evaluation-workspace).
- *  - Stepper becomes 6 steps: Robot → Escena → Programación → Evaluación →
- *    Ejecución → Sesiones (execution stage 5, sessions stage 6).
+ *  - Stepper becomes 6 steps: Robot → Scene → Programming → Evaluation →
+ *    Execution → Sessions (execution stage 5, sessions stage 6).
  *
  *  S3.6: typed as `Area[]` (design D1 — the registry describes domain AREAS,
  *  not views). The stepper, guards, breadcrumbs and pipeline derivations all
@@ -73,35 +73,35 @@ export type { Area, ArtifactKind, Capability, WorkspaceEntry, WorkspaceName } fr
  */
 export const WORKSPACE_REGISTRY: Area[] = [
   { path: '/', workspace: 'robot', label: 'Robot', requires: [], produces: 'robotLoaded', capability: null, hidden: false, consumes: 'URDF', producesArtifact: 'RobotModel', stage: 1, stepperIndex: 1 },
-  { path: '/scene', workspace: 'scene', label: 'Escena', requires: ['robotLoaded'], produces: 'sceneValid', capability: null, hidden: false, consumes: 'RobotModel', producesArtifact: 'Scene', stage: 2, stepperIndex: 2 },
+  { path: '/scene', workspace: 'scene', label: 'Scene', requires: ['robotLoaded'], produces: 'sceneValid', capability: null, hidden: false, consumes: 'RobotModel', producesArtifact: 'Scene', stage: 2, stepperIndex: 2 },
   // Unified programming workspace (hotfix unify-programming): /planning merged
   // into /task. One workspace, two tabs (Tasks / Motion). The gate stays
   // `sceneValid`, NOT `compiled` — the Motion Program is built from
   // /scene/preview, so an uncompiled program never blocks access (D2 rule
   // carried over from the old /planning entry).
-  { path: '/task', workspace: 'task', label: 'Programación', requires: ['sceneValid'], produces: 'compiled', capability: 'compile', hidden: false, consumes: 'Scene', producesArtifact: 'MotionPlan', stage: 3, stepperIndex: 3 },
-  // Pre-execution EVALUACIÓN (hotfix evaluation-workspace): the analysis check
-  // leaves Programación and becomes a first-class decision VISTA. Requires an
+  { path: '/task', workspace: 'task', label: 'Programming', requires: ['sceneValid'], produces: 'compiled', capability: 'compile', hidden: false, consumes: 'Scene', producesArtifact: 'MotionPlan', stage: 3, stepperIndex: 3 },
+  // Pre-execution EVALUATION (hotfix evaluation-workspace): the analysis check
+  // leaves Programming and becomes a first-class decision VISTA. Requires an
   // EXISTING plan (sceneValid + planReady — Tasks compile or Motion preview);
   // produces `analyzed` (restored producer — Knowledge's guard lands here).
   // MotionPlan pass-through for the C3 chain; layout 'full' hides the viewport.
-  { path: '/evaluation', workspace: 'evaluation', label: 'Evaluación', requires: ['sceneValid', 'planReady'], produces: 'analyzed', capability: null, hidden: false, consumes: 'MotionPlan', producesArtifact: 'MotionPlan', stage: 4, stepperIndex: 4, layout: 'full' },
+  { path: '/evaluation', workspace: 'evaluation', label: 'Evaluation', requires: ['sceneValid', 'planReady'], produces: 'analyzed', capability: null, hidden: false, consumes: 'MotionPlan', producesArtifact: 'MotionPlan', stage: 4, stepperIndex: 4, layout: 'full' },
   // PR2 (workflow-guards spec): Execution gates on planReady (compiled ∨
   // sceneActivePlanPresent) so BOTH plan paths — Program handoff and Motion
   // Program preview — satisfy the guard. producerOf('planReady') resolves to
   // the producer of its origin (compiled) so "no plan at all" still redirects
   // to /task, the workspace that compiles a plan. `analyzed` is NOT required:
   // evaluation is a recommended checkpoint, not a hard gate.
-  { path: '/execution', workspace: 'execution', label: 'Ejecución', requires: ['sceneValid', 'planReady', 'executionViewable'], produces: 'completed', capability: 'execute', hidden: false, consumes: 'MotionPlan', producesArtifact: 'Runtime', stage: 5, stepperIndex: 5 },
+  { path: '/execution', workspace: 'execution', label: 'Execution', requires: ['sceneValid', 'planReady', 'executionViewable'], produces: 'completed', capability: 'execute', hidden: false, consumes: 'MotionPlan', producesArtifact: 'Runtime', stage: 5, stepperIndex: 5 },
   // S5.1 AUDIT verdict (area-sessions spec): the `completed` requirement was
   // REMOVED from /sessions — the browser must show failed/running sessions
   // (status filters), so the guard no longer gates the area. `completed` stays
   // a derived flag (execution still produces it; the status bar consumes it).
   // P0-A (workspace-spatial-layout): layout 'full' — sessions is a data table,
   // it doesn't need the 3D scene beside it, so it takes the whole body.
-  { path: '/sessions', workspace: 'sessions', label: 'Sesiones', requires: [], produces: null, capability: 'replay', hidden: false, consumes: 'Runtime', producesArtifact: 'ExecutionSession', stage: 6, stepperIndex: 6, layout: 'full' },
+  { path: '/sessions', workspace: 'sessions', label: 'Sessions', requires: [], produces: null, capability: 'replay', hidden: false, consumes: 'Runtime', producesArtifact: 'ExecutionSession', stage: 6, stepperIndex: 6, layout: 'full' },
   { path: '/knowledge', workspace: 'knowledge', label: 'Knowledge', requires: ['analyzed'], produces: null, capability: 'explain', hidden: true, consumes: null, producesArtifact: null, stage: null },
-  { path: '/configuration', workspace: 'configuration', label: 'Configuración', requires: [], produces: null, capability: null, hidden: false, consumes: null, producesArtifact: null, stage: null },
+  { path: '/configuration', workspace: 'configuration', label: 'Configuration', requires: [], produces: null, capability: null, hidden: false, consumes: null, producesArtifact: null, stage: null },
   // D5 (flow-reorganization) + P0-B (workspace-spatial-layout): /analysis was
   // the SAMPLING tool (reach / singularity / manipulability), kind:'tool' — NOT
   // a pipeline stage. P0-B REORGANIZATION removed the standalone route: the
@@ -117,7 +117,7 @@ export const WORKSPACE_REGISTRY: Area[] = [
  * producer the guard should land on. `planReady` is DERIVED (`compiled ∨
  * sceneActivePlanPresent`): when NO plan exists at all, the guard redirects to
  * the producer of its compiled origin (/task) instead of the root — keeping
- * the "no plan → Programación" UX (workflow-guards spec, "No plan at all
+ *  the "no plan → Programming" UX (workflow-guards spec, "No plan at all
  * redirects to Task"). `analyzed` IS produced directly by /evaluation since
  * the evaluation-workspace hotfix — Knowledge's guard (requires analyzed)
  * redirects there when the plan isn't evaluated.

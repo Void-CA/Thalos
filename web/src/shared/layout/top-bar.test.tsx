@@ -56,12 +56,12 @@ describe('TopBar — pipeline stages only (P0-B reorg: no tool group anymore)', 
     const labels = screen.getAllByRole('link').map((l) => l.textContent?.trim() ?? '')
     expect(labels).toEqual([
       'Robot',
-      'Escena',
-      'Programación',
-      'Evaluación',
-      'Ejecución',
-      'Sesiones',
-      'Configuración',
+      'Scene',
+      'Programming',
+      'Evaluation',
+      'Execution',
+      'Sessions',
+      'Configuration',
     ])
 
     // No auxiliary tool entries remain in the registry → the decorative
@@ -74,8 +74,8 @@ describe('TopBar — pipeline stages only (P0-B reorg: no tool group anymore)', 
     seedFlags({ robotLoaded: false })
     const router = renderTopBar('/')
 
-    // Escena requires robotLoaded — unmet → aria-disabled and click prevented.
-    const scene = screen.getByRole('link', { name: 'Escena' })
+    // Scene requires robotLoaded — unmet → aria-disabled and click prevented.
+    const scene = screen.getByRole('link', { name: 'Scene' })
     expect(scene).toHaveAttribute('aria-disabled', 'true')
     fireEvent.click(scene)
     expect(router.state.location.pathname).toBe('/')

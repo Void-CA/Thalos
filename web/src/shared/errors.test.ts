@@ -15,7 +15,7 @@ describe('describeError — known code maps to CTA (error-ux spec)', () => {
   it('maps no_active_plan to the actionable planning CTA, keeping the backend message', () => {
     const err = new ApiError('No plan', { code: 'no_active_plan', status: 412 })
     expect(describeError(err)).toBe(
-      'Preview a motion program in Programación first — No plan',
+      'Preview a motion program in Programming first — No plan',
     )
   })
 
@@ -110,36 +110,36 @@ describe('CTA_BY_CODE — resilience matrix codes (error-ux spec)', () => {
 })
 
 describe('ctaLabelForCode — short actionable button labels (error-ux spec)', () => {
-  it('network_error → Reintentar', () => {
-    expect(ctaLabelForCode('network_error')).toBe('Reintentar')
+  it('network_error → Retry', () => {
+    expect(ctaLabelForCode('network_error')).toBe('Retry')
   })
 
-  it('timeout_error → Reintentar', () => {
-    expect(ctaLabelForCode('timeout_error')).toBe('Reintentar')
+  it('timeout_error → Retry', () => {
+    expect(ctaLabelForCode('timeout_error')).toBe('Retry')
   })
 
-  it('no_firmware → Cambiar a simulación', () => {
-    expect(ctaLabelForCode('no_firmware')).toBe('Cambiar a simulación')
+  it('no_firmware → Switch to Simulation', () => {
+    expect(ctaLabelForCode('no_firmware')).toBe('Switch to Simulation')
   })
 
-  it('port_in_use → Elegir otro puerto', () => {
-    expect(ctaLabelForCode('port_in_use')).toBe('Elegir otro puerto')
+  it('port_in_use → Choose another port', () => {
+    expect(ctaLabelForCode('port_in_use')).toBe('Choose another port')
   })
 
-  it('connection_lost → Reconectar', () => {
-    expect(ctaLabelForCode('connection_lost')).toBe('Reconectar')
+  it('connection_lost → Reconnect', () => {
+    expect(ctaLabelForCode('connection_lost')).toBe('Reconnect')
   })
 
-  it('not_connected → Conectar (R3-001)', () => {
-    expect(ctaLabelForCode('not_connected')).toBe('Conectar')
+  it('not_connected → Connect (R3-001)', () => {
+    expect(ctaLabelForCode('not_connected')).toBe('Connect')
   })
 
-  it('not_found → Volver al catálogo', () => {
-    expect(ctaLabelForCode('not_found')).toBe('Volver al catálogo')
+  it('not_found → Back to catalog', () => {
+    expect(ctaLabelForCode('not_found')).toBe('Back to catalog')
   })
 
-  it('unknown or missing code → Reintentar fallback', () => {
-    expect(ctaLabelForCode('weird_code')).toBe('Reintentar')
-    expect(ctaLabelForCode(undefined)).toBe('Reintentar')
+  it('unknown or missing code → Retry fallback', () => {
+    expect(ctaLabelForCode('weird_code')).toBe('Retry')
+    expect(ctaLabelForCode(undefined)).toBe('Retry')
   })
 })

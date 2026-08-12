@@ -28,10 +28,10 @@ function errorText(error: ErrorBoxError | Error | string): string {
  *  Accepts the structured execution-store error, any Error, or a plain string.
  *
  *  When `onRetry` is provided AND the error carries a machine-readable code,
- *  a CTA button with the code-specific label ("Reintentar", "Reconectar",
- *  "Cambiar a simulación", …) is rendered — the resilience-matrix retry
+ *  a CTA button with the code-specific label ("Retry", "Reconnect",
+ *  "Switch to Simulation", …) is rendered — the resilience-matrix retry
  *  affordance (error-ux spec, "ErrorBox with Retry Button"). Without a code,
- *  `onRetry` renders a plain "Reintentar" fallback. Without `onRetry` the box
+ *  `onRetry` renders a plain "Retry" fallback. Without `onRetry` the box
  *  stays read-only (R3-003 non-coded fallback untouched). */
 export function ErrorBox({
   error,
@@ -44,7 +44,7 @@ export function ErrorBox({
   const coded = typeof error !== 'string' ? isCodedError(error) : false
   const label = coded && typeof error === 'object' && error !== null
     ? ctaLabelForCode((error as ErrorBoxError).code)
-    : 'Reintentar'
+    : 'Retry'
   return (
     <div className="flex flex-col items-start gap-2 px-3 py-2 rounded-lg bg-destructive-weak border border-destructive-weak text-xs text-destructive">
       <div className="flex items-start gap-2 w-full">

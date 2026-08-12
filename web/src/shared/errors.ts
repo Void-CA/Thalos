@@ -44,7 +44,7 @@ export function isApiError(e: unknown): e is ApiError {
  *  and the execution flow). The HTTP status is complementary only — decisions
  *  key on `code`. Lifted from task-editor.tsx (PR4, item 7). */
 export const CTA_BY_CODE: Record<string, string> = {
-  no_active_plan: 'Preview a motion program in Programación first',
+  no_active_plan: 'Preview a motion program in Programming first',
   semantic_validation_error: 'Fix the program errors',
   lowering_error: 'Define the referenced objects/locations in Scene',
   planning_error: 'Planning failed — check the robot and scene targets',
@@ -64,25 +64,25 @@ export const CTA_BY_CODE: Record<string, string> = {
 }
 
 /** Short actionable button label for an error code (error-ux spec, "ErrorBox
- *  with Retry Button"). Falls back to "Reintentar" for unknown codes. */
+ *  with Retry Button"). Falls back to "Retry" for unknown codes. */
 export function ctaLabelForCode(code: string | undefined): string {
   switch (code) {
     case 'no_firmware':
-      return 'Cambiar a simulación'
+      return 'Switch to Simulation'
     case 'port_in_use':
-      return 'Elegir otro puerto'
+      return 'Choose another port'
     case 'connection_lost':
-      return 'Reconectar'
+      return 'Reconnect'
     case 'not_connected':
-      return 'Conectar'
+      return 'Connect'
     case 'not_found':
-      return 'Volver al catálogo'
+      return 'Back to catalog'
     case 'semantic_validation_error':
     case 'lowering_error':
     case 'planning_error':
-      return 'Recompilar'
+      return 'Recompile'
     default:
-      return 'Reintentar'
+      return 'Retry'
   }
 }
 

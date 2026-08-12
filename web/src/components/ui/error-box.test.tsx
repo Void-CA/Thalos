@@ -28,7 +28,7 @@ describe('ErrorBox — renders the real message for every error shape (R3-003)',
   it('renders the code-to-CTA for a coded error (error-ux spec)', () => {
     render(<ErrorBox error={{ message: 'No plan', code: 'no_active_plan' }} />)
     expect(
-      screen.getByText(/Preview a motion program in Programación first/),
+      screen.getByText(/Preview a motion program in Programming first/),
     ).toBeInTheDocument()
   })
 
@@ -44,23 +44,23 @@ describe('ErrorBox — renders the real message for every error shape (R3-003)',
 })
 
 describe('ErrorBox — retry button (error-ux spec, resilience-presentation)', () => {
-  it('renders a Reintentar button for network_error when onRetry is provided', () => {
+  it('renders a Retry button for network_error when onRetry is provided', () => {
     const onRetry = vi.fn()
     render(<ErrorBox error={{ message: 'Backend is offline', code: 'network_error' }} onRetry={onRetry} />)
-    const button = screen.getByRole('button', { name: 'Reintentar' })
+    const button = screen.getByRole('button', { name: 'Retry' })
     expect(button).toBeInTheDocument()
     button.click()
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
 
-  it('renders a Reintentar button for timeout_error when onRetry is provided', () => {
+  it('renders a Retry button for timeout_error when onRetry is provided', () => {
     render(<ErrorBox error={{ message: 'Request timed out', code: 'timeout_error' }} onRetry={() => {}} />)
-    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
   })
 
-  it('renders the code-specific CTA label for no_firmware (Cambiar a simulación)', () => {
+  it('renders the code-specific CTA label for no_firmware (Switch to Simulation)', () => {
     render(<ErrorBox error={{ message: 'No firmware detected', code: 'no_firmware' }} onRetry={() => {}} />)
-    expect(screen.getByRole('button', { name: 'Cambiar a simulación' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Switch to Simulation' })).toBeInTheDocument()
   })
 
   it('shows no button when onRetry is omitted (R3-003 non-coded fallback untouched)', () => {

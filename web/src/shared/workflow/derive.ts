@@ -98,8 +98,8 @@ export function deriveWorkflowState(snapshot: WorkflowSnapshot): WorkflowState {
 
 // ── Stepper + status derivations (global-stepper spec) ──────────────────────
 //
-// The stepper is the workflow pipeline (Robot → Escena → Programación →
-// Evaluación → Ejecución → Sesiones — 6 steps since the evaluation-workspace
+// The stepper is the workflow pipeline (Robot → Scene → Programming →
+// Evaluation → Execution → Sessions — 6 steps since the evaluation-workspace
 // hotfix) and everything it shows derives from the registry + WorkflowState:
 // stage order and labels come from WORKSPACE_REGISTRY (the `stage` field),
 // stage states from the flags. No per-workspace strings live in the views.
@@ -134,9 +134,9 @@ const FLAG_PHRASES: Record<WorkflowFlag, string> = {
  * (`kind: 'tool'`, auxiliary-tools-navigation spec) are never pipeline stages.
  * The `kind` check is DEFENSIVE: tools already carry `stage: null`, so the
  * stage filter hides them today; the kind filter guarantees a future tool that
- * mistakenly gains a stage number still never renders in the stepper. Areas
- * with `stage: null` (knowledge; Configuración when it lands in S5 —
- * area-configuration spec "not a stepper stage") are not pipeline stages.
+ *  mistakenly gains a stage number still never renders in the stepper. Areas
+ *  with `stage: null` (knowledge; Configuration when it lands in S5 —
+ *  area-configuration spec "not a stepper stage") are not pipeline stages.
  * NOTE (C2, for verify): `stepperIndex` is currently redundant — it equals
  * `stage` on every pipeline area; `stage` is the canonical order key. */
 export function stepperStages(registry: readonly WorkspaceEntry[]): WorkspaceEntry[] {

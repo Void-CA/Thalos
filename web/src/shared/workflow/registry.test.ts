@@ -129,11 +129,11 @@ describe('WORKSPACE_REGISTRY (slice 3 — requires/produces/capability)', () => 
 })
 
 describe('WORKSPACE_REGISTRY (slice S1.7 — scene entry, Robot stage marker, labels)', () => {
-  it('has a first-class Escena entry (workflow-guards "Escena entry exists")', () => {
+  it('has a first-class Scene entry (workflow-guards "Scene entry exists")', () => {
     const scene = WORKSPACE_REGISTRY.find((e) => e.workspace === 'scene')
     expect(scene).toBeDefined()
     expect(scene!.path).toBe('/scene')
-    expect(scene!.label).toBe('Escena')
+    expect(scene!.label).toBe('Scene')
     expect(scene!.requires).toEqual(['robotLoaded'])
     expect(scene!.produces).toBe('sceneValid')
     expect(scene!.hidden).toBe(false)
@@ -145,7 +145,7 @@ describe('WORKSPACE_REGISTRY (slice S1.7 — scene entry, Robot stage marker, la
     expect(robot.stepperIndex).toBe(1)
   })
 
-  it('carries a stage marker per pipeline area in chain order (Robot=1 … Sesiones=6; tools are stage null)', () => {
+  it('carries a stage marker per pipeline area in chain order (Robot=1 … Sessions=6; tools are stage null)', () => {
     const stages = WORKSPACE_REGISTRY.map((e) => [e.workspace, e.stage] as const)
     expect(stages).toEqual([
       ['robot', 1],
@@ -188,15 +188,15 @@ describe('WORKSPACE_REGISTRY (slice S1.7 — scene entry, Robot stage marker, la
   it('uses domain-vocabulary labels (navigation-router "TopBar nav links use area labels")', () => {
     expect(WORKSPACE_REGISTRY.map((e) => e.label)).toEqual([
       'Robot',
-      'Escena',
-      'Programación',
-      'Evaluación',
-      'Ejecución',
-      'Sesiones',
+      'Scene',
+      'Programming',
+      'Evaluation',
+      'Execution',
+      'Sessions',
       'Knowledge',
-      'Configuración',
+      'Configuration',
     ])
-    const legacy = ['Task', 'Planning', 'Execution', 'Sessions', 'Planificación', 'Workspace Analysis']
+    const legacy = ['Task', 'Planning', 'Escena', 'Programación', 'Evaluación', 'Ejecución', 'Sesiones', 'Configuración', 'Planificación', 'Workspace Analysis']
     expect(WORKSPACE_REGISTRY.some((e) => legacy.includes(e.label))).toBe(false)
   })
 })
@@ -231,7 +231,7 @@ describe('WORKSPACE_REGISTRY (slice S3.5 — typed domain graph, user criterion 
     // Spot-check the typed chain (R2: RobotModel → Scene → MotionPlan → …).
     expect(staged[1].consumes).toBe('RobotModel')
     expect(staged[2].consumes).toBe('Scene')
-    // Evaluation is a MotionPlan pass-through between Programación and Ejecución.
+    // Evaluation is a MotionPlan pass-through between Programming and Execution.
     expect(staged[3].consumes).toBe('MotionPlan')
     expect(staged[3].producesArtifact).toBe('MotionPlan')
     expect(staged[4].consumes).toBe('MotionPlan')
@@ -333,10 +333,10 @@ describe('WORKSPACE_REGISTRY (unified programming workspace — /planning absorb
     expect(WORKSPACE_REGISTRY.some((e) => e.path === '/planning')).toBe(false)
   })
 
-  it('task stays stage 3 with a single programming step (Robot → Escena → Programación → Ejecución → Sesiones)', () => {
+  it('task stays stage 3 with a single programming step (Robot → Scene → Programming → Execution → Sessions)', () => {
     expect(task.stage).toBe(3)
     expect(task.stepperIndex).toBe(3)
-    expect(task.label).toBe('Programación')
+    expect(task.label).toBe('Programming')
   })
 
   it('task still produces `compiled` — the origin planReady redirects to /task', () => {
@@ -358,10 +358,10 @@ describe('WORKSPACE_REGISTRY (unified programming workspace — /planning absorb
 describe('WORKSPACE_REGISTRY (evaluation workspace — pre-execution VISTA, hotfix)', () => {
   const evaluation = WORKSPACE_REGISTRY.find((e) => e.workspace === 'evaluation')!
 
-  it('is a first-class pipeline stage between Programación and Ejecución', () => {
+  it('is a first-class pipeline stage between Programming and Execution', () => {
     expect(evaluation).toBeDefined()
     expect(evaluation.path).toBe('/evaluation')
-    expect(evaluation.label).toBe('Evaluación')
+    expect(evaluation.label).toBe('Evaluation')
     expect(evaluation.stage).toBe(4)
     expect(evaluation.stepperIndex).toBe(4)
     expect(evaluation.hidden).toBe(false)
