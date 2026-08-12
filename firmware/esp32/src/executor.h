@@ -8,6 +8,10 @@
 // not depend on Protocol internals.
 struct Manifest;
 
+// Forward declaration — Executor holds an optional ServoDriver (null = no
+// servos, graceful degradation). Full definition lives in servo_driver.h.
+class ServoDriver;
+
 // ── Execution sample ─────────────────────────────────────────────────────
 
 struct ExecutionSample {
@@ -58,6 +62,10 @@ public:
     /// Stop execution immediately.
     void stop();
 
+    /// Inject servo driver (optional — null = no servos, graceful
+    /// degradation). Called by main.cpp after the boot-time I2C probe.
+    void set_servo_driver(ServoDriver* servo_driver);
+
 private:
     const Manifest* manifest_ptr_;
     size_t current_sample_index_;
@@ -65,6 +73,7 @@ private:
     unsigned long target_time_us_;      // cumulative time for current waypoint
     unsigned long recorded_sample_count_;
     std::vector<ExecutionSample> recorded_samples_;
+    ServoDriver* servo_driver_;
     State exec_state_;
 
     void step_to(unsigned long now_us);

@@ -319,7 +319,45 @@ void test_probe_sample_invalid_joint_token_rejected() {
     send_and_expect(f, "SAMPLE abc 0 0 0 0 0 100000", "ERROR MALFORMED_SAMPLE");
 }
 
+// ── Tests from test_pca9685.cpp (PCA9685Driver unit tests) ────────────────
+void test_pca9685_begin_configures_MODE1();
+void test_pca9685_begin_configures_MODE2();
+void test_pca9685_begin_configures_PRESCALE();
+void test_pca9685_begin_sequence_order();
+void test_pca9685_begin_clears_all_channels();
+void test_pca9685_setPWM_channel_0();
+void test_pca9685_setPWM_channel_3();
+void test_pca9685_setPWM_channel_15();
+void test_pca9685_setPWM_off_greater_than_4095_constrained();
+void test_pca9685_setPWM_invalid_channel_no_crash();
+
+// ── Tests from test_servo_driver.cpp (ServoDriver unit tests) ─────────────
+void test_servo_driver_min_joint_to_min_pulse();
+void test_servo_driver_max_joint_to_max_pulse();
+void test_servo_driver_midpoint_to_midpoint();
+void test_servo_driver_below_min_clamped();
+void test_servo_driver_above_max_clamped();
+void test_servo_driver_per_channel_calibration();
+void test_servo_driver_insufficient_joints_rejected();
+void test_servo_driver_NaN_rejected();
+void test_servo_driver_positive_Infinity_rejected();
+void test_servo_driver_negative_Infinity_rejected();
+
+// ── Tests from test_executor_servo.cpp (Executor+ServoDriver integration) ─
+void test_executor_RUNNING_writes_servo();
+void test_executor_IDLE_no_write();
+void test_executor_STOP_no_new_writes();
+void test_executor_ERROR_no_new_writes();
+void test_executor_null_driver_no_crash();
+void test_executor_disabled_driver_no_write();
+void test_executor_multiple_stale_waypoints_writes_only_last();
+
 // ── Entry point (native: no Arduino main, provide our own) ────────────────
+//
+// PlatformIO links every test_*.cpp file of the test_protocol group into ONE
+// binary, so the Unity main() lives here and registers ALL test cases (the
+// 27 protocol/executor tests below plus the 26 driver/integration tests
+// declared above).
 
 int main() {
     UNITY_BEGIN();
@@ -350,5 +388,32 @@ int main() {
     RUN_TEST(test_samples_not_available_while_receiving);
     RUN_TEST(test_full_happy_path_execute_complete_collect);
     RUN_TEST(test_probe_sample_invalid_joint_token_rejected);
+    RUN_TEST(test_pca9685_begin_configures_MODE1);
+    RUN_TEST(test_pca9685_begin_configures_MODE2);
+    RUN_TEST(test_pca9685_begin_configures_PRESCALE);
+    RUN_TEST(test_pca9685_begin_sequence_order);
+    RUN_TEST(test_pca9685_begin_clears_all_channels);
+    RUN_TEST(test_pca9685_setPWM_channel_0);
+    RUN_TEST(test_pca9685_setPWM_channel_3);
+    RUN_TEST(test_pca9685_setPWM_channel_15);
+    RUN_TEST(test_pca9685_setPWM_off_greater_than_4095_constrained);
+    RUN_TEST(test_pca9685_setPWM_invalid_channel_no_crash);
+    RUN_TEST(test_servo_driver_min_joint_to_min_pulse);
+    RUN_TEST(test_servo_driver_max_joint_to_max_pulse);
+    RUN_TEST(test_servo_driver_midpoint_to_midpoint);
+    RUN_TEST(test_servo_driver_below_min_clamped);
+    RUN_TEST(test_servo_driver_above_max_clamped);
+    RUN_TEST(test_servo_driver_per_channel_calibration);
+    RUN_TEST(test_servo_driver_insufficient_joints_rejected);
+    RUN_TEST(test_servo_driver_NaN_rejected);
+    RUN_TEST(test_servo_driver_positive_Infinity_rejected);
+    RUN_TEST(test_servo_driver_negative_Infinity_rejected);
+    RUN_TEST(test_executor_RUNNING_writes_servo);
+    RUN_TEST(test_executor_IDLE_no_write);
+    RUN_TEST(test_executor_STOP_no_new_writes);
+    RUN_TEST(test_executor_ERROR_no_new_writes);
+    RUN_TEST(test_executor_null_driver_no_crash);
+    RUN_TEST(test_executor_disabled_driver_no_write);
+    RUN_TEST(test_executor_multiple_stale_waypoints_writes_only_last);
     return UNITY_END();
 }

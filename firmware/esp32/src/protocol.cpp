@@ -316,6 +316,13 @@ void Protocol::send_response(const String& msg) {
 }
 
 void Protocol::set_error(const String& reason) {
+    // Spec: "Error during execution" → halt servo writes. If an error
+    // arrives while EXECUTING, stop the executor so no further waypoints
+    // are commanded; the PCA9685 holds the last PWM output (hold-last).
+    if (state_ == EXECUTING) {
+        executor_.stop();
+    }
+
     error_reason_ = reason;
     state_ = ERROR;
 

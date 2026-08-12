@@ -1,5 +1,6 @@
 #include "executor.h"
 #include "protocol.h"   // for Manifest definition
+#include "servo_driver.h"   // for write()/enabled() during physical actuation
 
 // ── Constructor ──────────────────────────────────────────────────────────
 
@@ -9,6 +10,7 @@ Executor::Executor()
     , start_time_us_(0)
     , target_time_us_(0)
     , recorded_sample_count_(0)
+    , servo_driver_(nullptr)
     , exec_state_(IDLE)
 {
 }
@@ -36,6 +38,10 @@ void Executor::start() {
 
 void Executor::stop() {
     exec_state_ = IDLE;
+}
+
+void Executor::set_servo_driver(ServoDriver* servo_driver) {
+    servo_driver_ = servo_driver;
 }
 
 void Executor::update(unsigned long now_us) {
@@ -85,11 +91,16 @@ void Executor::clear_samples() {
 void Executor::step_to(unsigned long now_us) {
     unsigned long elapsed = now_us - start_time_us_;
 
+    // Track the last stale waypoint for physical actuation (catch-up policy:
+    // ALL waypoints are recorded; only the last stale one is written).
+    const TimedWaypoint* last_stale_wp = nullptr;
+
     // Step through all waypoints whose target time has been reached.
     while (current_sample_index_ < manifest_ptr_->samples.size()) {
         if (elapsed >= target_time_us_) {
             const TimedWaypoint& wp = manifest_ptr_->samples[current_sample_index_];
             record_sample(target_time_us_, wp.joints);
+            last_stale_wp = &wp;
 
             current_sample_index_++;
 
@@ -100,6 +111,14 @@ void Executor::step_to(unsigned long now_us) {
         } else {
             break;
         }
+    }
+
+    // Physical actuation: write ONLY the last stale waypoint (skip
+    // intermediates — they were never physically reached).
+    if (last_stale_wp != nullptr &&
+        servo_driver_ != nullptr &&
+        servo_driver_->enabled()) {
+        servo_driver_->write(last_stale_wp->joints);
     }
 
     // Check for completion.

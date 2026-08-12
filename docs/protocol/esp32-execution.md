@@ -218,6 +218,92 @@ microseconds from execution start, followed by the joint positions
 (`SAMPLE <ts_us> <j0..jN>` — the same collect-direction format as above).
 `count` must be ≥ 1; `SAMPLES 0` is rejected with `ERROR MALFORMED`.
 
+## Physical Actuation (PCA9685 Servo Driver)
+
+The firmware can drive physical servos through a PCA9685 16-channel PWM
+driver over I2C (address 0x40, 50 Hz). Joint positions (radians) from
+execution waypoints are converted to PWM pulses and written to the servo
+channels (see `src/servo_config.h` for pins, channels, pulse ranges and
+joint limits).
+
+### Commanded vs. Reported Position
+
+Servo writes are derived from the **commanded waypoint values** of the
+manifest. There are no encoders or position sensors: the physical position
+of the robot is *reported as commanded*, exactly like execution samples
+(see the sample semantics note above). The firmware never claims to know
+the measured joint position.
+
+### Write Policy: Catch-up (last stale waypoint only)
+
+`Executor::step_to()` records **every** waypoint in the sample log (wire
+contract — samples are the values commanded by the plan, for
+post-execution analysis). Physical actuation writes **only the last stale
+waypoint** per `update()` cycle; intermediate waypoints skipped by a
+delayed loop are not written (they were never physically reached). In
+normal operation (dt ≈ 10 ms, loop ≈ 1 kHz) waypoints never accumulate.
+
+### Hold-Last-Position on STOP / ERROR
+
+STOP and protocol ERROR halt servo writes: the executor stops stepping and
+no further `setPWM()` calls are issued. The PCA9685 retains the last
+commanded PWM output while powered, so the servos hold their last position
+— there is no release, homing, or re-write.
+
+> This is a **hold-by-inaction** policy, not a universal safety guarantee.
+> It does not cover power loss, disconnection, overheating, or mechanical
+> failure.
+
+### Physical Calibration (measured 2026-08-11/12, joint 0 — base)
+
+Field calibration of the DS3240MG (40 kg digital servo) revealed several
+non-obvious facts that drive `servo_config.h`:
+
+1. **The servo's real pulse range is narrower than nominal.** The DS3240MG
+   responds to roughly **350–1725 µs**, not the standard 500–2500 µs. Its
+   "180°" datasheet rating is not reachable in practice (manufacturing
+   variance on low-cost high-torque servos). The firmware must map the joint
+   range over the *measured* pulse range or the servo saturates early.
+
+2. **Pulses outside the accepted range cause a "reset sweep".** Commanding a
+   pulse beyond ~1725 µs makes the servo lose its reference and sweep its
+   full range once (an initialization-like movement). This is how the range
+   limit was confirmed by behavior. The firmware clamp must never emit such
+   pulses.
+
+3. **The calibration tool measures the mapping, not the servo, when the
+   clamp cuts.** `calibrate.py` converts pulse→radians using the current
+   `servo_config.h` mapping, and the firmware clamps back — so if
+   `SERVO_PULSE_MIN/MAX_US` is narrower than the servo's real range, the
+   tool reports the *mapping* limits, not the servo's. Measure with a wide
+   temporary mapping (e.g. 300–2600 µs), then fix the real range with
+   margin.
+
+4. **Servo frequency (50 Hz vs 333 Hz) does not change the reachable
+   range.** A 333 Hz experiment (prescale 0x11) produced the identical
+   useful range. 50 Hz remains the correct production value because the
+   MG90S analog servos cannot survive 333 Hz and the PCA9685 has a single
+   global frequency for all 16 channels.
+
+5. **An asymmetric mechanical range (e.g. +0.40 rad / -1.5 rad) can be a
+   horn mounting offset, not the mechanism.** Re-centering the servo horn
+   restored a balanced, full-range motion. Before trusting measured joint
+   limits, verify the horn is mounted centered (servo at mid-pulse, arm at
+   its visual center).
+
+Final joint 0 configuration: `SERVO_PULSE_MIN/MAX_US = 350/1650`
+(margin below the 1725 µs reset threshold), `JOINT_MIN/MAX_RAD = ±3.14`
+(maps the full usable servo range). The same calibration procedure applies
+to joints 1–3.
+
+### Probe Degradation (PCA9685 absent)
+
+At boot the firmware probes address 0x40 (`endTransmission() == 0` → ACK,
+device present). If the PCA9685 is not found it logs
+`PCA9685 NOT found — servos disabled` and every servo write becomes a
+no-op. Execution, protocol handling and sample recording continue to work
+normally (simulation-only mode).
+
 ## State Machine
 
 ```
