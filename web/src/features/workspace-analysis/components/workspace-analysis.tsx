@@ -12,6 +12,7 @@ import { histogram } from './histogram'
 import { HistogramBars, CategoricalBars } from './histogram-bars'
 import {
   MetricRow,
+  MetricRange,
   MetricValue,
   SectionHeader,
   gradeBadge,
@@ -233,16 +234,10 @@ export function WorkspaceAnalysis() {
               max={10}
               unit="m³"
             />
-            <MetricRow
-              label="Max Reach"
-              value={ws.data.metrics.max_reach}
-              max={2}
-              unit="m"
-            />
-            <MetricRow
-              label="Min Reach"
-              value={ws.data.metrics.min_reach}
-              max={2}
+            <MetricRange
+              label="Reach"
+              min={ws.data.metrics.min_reach}
+              max={ws.data.metrics.max_reach}
               unit="m"
             />
             <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">
@@ -273,20 +268,10 @@ export function WorkspaceAnalysis() {
               <MetricValue label="Near Singular" value={sg.data.metrics.near_singular_count} color="#eebb22" />
               <MetricValue label="Singular" value={sg.data.metrics.singular_count} color="#ee3333" />
             </div>
-            <MetricRow
-              label="Avg Condition Number"
-              value={sg.data.metrics.avg_condition_number}
-              max={500}
-              inverse
-              unit="σ"
-            />
-            <MetricRow
-              label="Min σₘᵢₙ"
-              value={sg.data.metrics.min_condition_number}
-              max={500}
-              inverse
-              unit="σ"
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <MetricValue label="Avg Condition Number" value={sg.data.metrics.avg_condition_number} unit="σ" />
+              <MetricValue label="Min σₘᵢₙ" value={sg.data.metrics.min_condition_number} unit="σ" />
+            </div>
             <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">
               <span>Total samples</span>
               <span className="font-mono tabular-nums text-foreground">{sg.data.metrics.total_samples ?? '—'}</span>
@@ -321,22 +306,10 @@ export function WorkspaceAnalysis() {
               <MetricValue label="Min" value={mp.data.metrics.min_yoshikawa} pct />
               <MetricValue label="Max" value={mp.data.metrics.max_yoshikawa} pct />
             </div>
-            <MetricRow
-              label="Avg Isotropy"
-              value={mp.data.metrics.avg_isotropy}
-              max={1}
-              pct
-            />
-            <MetricRow
-              label="Min Isotropy"
-              value={mp.data.metrics.min_isotropy}
-              max={1}
-              pct
-            />
-            <MetricRow
-              label="Max Isotropy"
-              value={mp.data.metrics.max_isotropy}
-              max={1}
+            <MetricRange
+              label="Isotropy"
+              min={mp.data.metrics.min_isotropy}
+              max={mp.data.metrics.max_isotropy}
               pct
             />
             <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">

@@ -57,13 +57,38 @@ export function MetricRow({
   )
 }
 
+export function MetricRange({
+  label, min, max, unit, pct,
+}: {
+  label: string
+  min?: number
+  max?: number
+  unit?: string
+  pct?: boolean
+}) {
+  const fmt = (v?: number) => (v == null ? '—' : v.toFixed(2))
+  const suffix = pct ? '%' : unit
+  return (
+    <div className="flex items-center justify-between text-xs">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-mono tabular-nums">
+        <span className="text-muted-foreground">{fmt(min)}</span>
+        <span className="text-foreground mx-1">—</span>
+        <span className="text-foreground font-semibold">{fmt(max)}</span>
+        {suffix && <span className="text-muted-foreground font-normal ml-0.5">{suffix}</span>}
+      </span>
+    </div>
+  )
+}
+
 export function MetricValue({
-  label, value, color, pct,
+  label, value, color, pct, unit,
 }: {
   label: string
   value?: number
   color?: string
   pct?: boolean
+  unit?: string
 }) {
   return (
     <div className="flex flex-col gap-0.5 bg-secondary/20 rounded-md px-2.5 py-2">
@@ -71,6 +96,7 @@ export function MetricValue({
       <span className="text-sm font-mono font-semibold tabular-nums" style={{ color: color ?? 'var(--foreground)' }}>
         {value?.toFixed?.(4) ?? '—'}
         {pct && <span className="text-[10px] text-muted-foreground font-normal">%</span>}
+        {unit && <span className="text-[10px] text-muted-foreground font-normal">{unit}</span>}
       </span>
     </div>
   )

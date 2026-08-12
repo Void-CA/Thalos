@@ -157,15 +157,15 @@ describe('WorkspaceAnalysis — explicit trigger runs 3 mutations (spec: Explici
     expect(screen.getByRole('heading', { name: 'Singularity' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Manipulability' })).toBeInTheDocument()
 
-    // MetricRow labels from the resolved metrics.
+    // MetricRow/MetricRange labels from the resolved metrics.
     expect(screen.getByText('Bounding Volume')).toBeInTheDocument()
-    expect(screen.getByText('Max Reach')).toBeInTheDocument()
+    expect(screen.getByText('Reach')).toBeInTheDocument()
     expect(screen.getByText('Avg Condition Number')).toBeInTheDocument()
-    expect(screen.getByText('Avg Isotropy')).toBeInTheDocument()
+    expect(screen.getByText('Isotropy')).toBeInTheDocument()
 
     // Formatted metric values prove real data rendered.
     expect(screen.getByText('1.2500')).toBeInTheDocument()
-    expect(screen.getByText('0.8000')).toBeInTheDocument()
+    expect(screen.getByText('0.80')).toBeInTheDocument()
 
     // No modal overlay — inline section (spec: Non-Blocking Inline Section).
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
