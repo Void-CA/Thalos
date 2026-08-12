@@ -2,13 +2,13 @@ import { sceneApi } from '@/features/viewport/api/scene-api'
 import type { ExecutionModeDto, RuntimeDelta } from '@/features/viewport/api/scene-api.types'
 
 /**
- * ExecutionClient — transporte puro.
+ * ExecutionClient — pure transport.
  *
- * Habla con la API de ejecución del backend.
- * No tiene estado, no conoce React, no conoce stores.
+ * Talks to the backend execution API.
+ * No state, no React, no stores.
  *
- * Si el backend migra de HTTP polling a WebSocket,
- * solo cambia este archivo — el resto del sistema no se entera.
+ * If the backend migrates from HTTP polling to WebSocket,
+ * only this file changes — the rest of the system is unaware.
  */
 export const executionClient = {
   /** Start execution of the scheduled plan. Optional mode (absent → once). */

@@ -188,7 +188,7 @@ export function RegionInspector() {
           <span className="text-xs font-mono text-primary bg-primary-weak px-2 py-0.5 rounded">{wpRange}</span>
           {share.percentOfPlan !== null && (
             <p className="text-[10px] text-muted-foreground mt-1">
-              {share.percentOfPlan.toFixed(1)}% del plan
+              {share.percentOfPlan.toFixed(1)}% of the plan
               {share.durationSecs !== null ? ` · ${formatDuration(share.durationSecs)}` : ''}
             </p>
           )}

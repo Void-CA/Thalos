@@ -9,9 +9,9 @@ import { ctaLabelForCode } from '@/shared/errors'
  *
  * Shows the registered backends (Simulation / Hardware), highlights the active
  * one, and drives the backend lifecycle: activate on selection, connect /
- * disconnect with a serial-port input, and code→CTA recovery for
- * `no_firmware` (Cambiar a simulación), `port_in_use` (Elegir otro puerto)
- * and `connection_lost` (Reconectar). Every failure leaves the selector
+ *  disconnect with a serial-port input, and code→CTA recovery for
+ *  `no_firmware` (Switch to Simulation), `port_in_use` (Choose another port)
+ *  and `connection_lost` (Reconnect). Every failure leaves the selector
  * interactive — buttons re-enabled, spinner stopped (coherent end state).
  */
 export function BackendSelector() {
@@ -106,7 +106,7 @@ export function BackendSelector() {
         <div className="flex items-center gap-1">
           <input
             ref={portInputRef}
-            aria-label="Puerto"
+            aria-label="Port"
             value={portInput}
             onChange={(e) => setPortInput(e.target.value)}
             placeholder="/dev/ttyUSB0"
@@ -117,14 +117,14 @@ export function BackendSelector() {
               onClick={() => active && void disconnect(active.id)}
               className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md border border-border text-muted-foreground hover:text-destructive hover:border-destructive-mid cursor-pointer"
             >
-              <Unplug className="size-2.5" /> Desconectar
+              <Unplug className="size-2.5" /> Disconnect
             </button>
           ) : (
             <button
               onClick={() => active && void connect(active.id, portInput)}
               className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md bg-green-600/20 text-green-500 hover:bg-green-600/30 cursor-pointer"
             >
-              <Plug className="size-2.5" /> Conectar
+              <Plug className="size-2.5" /> Connect
             </button>
           )}
         </div>

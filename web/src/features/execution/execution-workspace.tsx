@@ -88,7 +88,7 @@ export function ExecutionWorkspace() {
     'inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer'
 
   /** connection_lost / not_connected get the connect CTA (reconnect the
-   *  hardware backend + retry); every other failure gets Reintentar
+   *  hardware backend + retry); every other failure gets Retry
    *  (reset + start) — execution-workspace spec + R3-001. */
   const isConnectionLost = error?.code === 'connection_lost'
   const isNotConnected = error?.code === 'not_connected'
@@ -277,8 +277,8 @@ export function ExecutionWorkspace() {
                 {status === 'failed' && (
                   <button
                     onClick={() => {
-                      // Resilience-matrix retry: Reintentar (reset + start) for
-                      // network/timeout failures; Reconectar/Conectar (reconnect
+                      // Resilience-matrix retry: Retry (reset + start) for
+                      // network/timeout failures; Reconnect/Connect (reconnect
                       // the active hardware backend, then reset + start) for
                       // connection_lost / not_connected — execution-workspace
                       // spec + R3-001.
@@ -290,7 +290,7 @@ export function ExecutionWorkspace() {
                     }}
                     className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-green-600/20 text-green-500 hover:bg-green-600/30 cursor-pointer"
                   >
-                    <RefreshCw className="size-3" /> {isConnectionLost ? 'Reconectar' : isNotConnected ? 'Conectar' : 'Reintentar'}
+                    <RefreshCw className="size-3" /> {isConnectionLost ? 'Reconnect' : isNotConnected ? 'Connect' : 'Retry'}
                   </button>
                 )}
               </>

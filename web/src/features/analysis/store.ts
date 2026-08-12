@@ -53,7 +53,7 @@ export const useAnalysisStore = create<AnalysisState>((set) => ({
   }),
 }))
 
-/** Computed: la región seleccionada (o null). Pure derivation from the report.
+/** Computed: the selected region (or null). Pure derivation from the report.
  *  NOTE: the selector returns `report` (a stable state reference), never
  *  `report?.problem_regions ?? []` — a fresh array identity per evaluation
  *  would trip Zustand's useSyncExternalStore infinite-loop guard. */

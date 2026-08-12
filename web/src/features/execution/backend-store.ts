@@ -4,7 +4,7 @@ import { isApiError } from '@/shared/errors'
 
 /** Structured backend-management error (error-ux spec): the backend
  *  machine-readable `code` is preserved so the selector can render the
- *  code→CTA label (Cambiar a simulación, Elegir otro puerto, …). */
+ *  code→CTA label (Switch to Simulation, Choose another port, …). */
 export interface BackendError {
   message: string
   code?: string

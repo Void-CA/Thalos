@@ -226,7 +226,7 @@ describe('Progress and status display (execution-workspace spec)', () => {
     renderWorkspace()
     // error-ux spec: display the CTA from describeError, not the raw message
     expect(
-      screen.getByText(/Preview a motion program in Programación first/),
+      screen.getByText(/Preview a motion program in Programming first/),
     ).toBeInTheDocument()
     expect(screen.queryByText(/^No plan$/)).not.toBeInTheDocument()
   })
@@ -253,22 +253,22 @@ describe('Backend selector replaces the informational badge (execution-workspace
   it('reflects the active backend from the store — Simulation selected, no port input', async () => {
     renderWorkspace()
     await waitFor(() => expect(useBackendStore.getState().activeId).toBe('simulation'))
-    expect(screen.queryByLabelText('Puerto')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Port')).not.toBeInTheDocument()
   })
 })
 
-describe('Reconectar — reconnect + retry on connection_lost (execution-workspace spec)', () => {
-  it('shows a Reconectar button (not Reintentar) when the tick fails with connection_lost', () => {
+describe('Reconnect — reconnect + retry on connection_lost (execution-workspace spec)', () => {
+  it('shows a Reconnect button (not Retry) when the tick fails with connection_lost', () => {
     setStatus('failed', {
       error: { message: 'Connection lost', code: 'connection_lost' },
     } as never)
     renderWorkspace()
     expect(screen.getByText(/Connection lost/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Reconectar' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
   })
 
-  it('Reconectar reconnects the hardware backend, then resets and starts execution', async () => {
+  it('Reconnect reconnects the hardware backend, then resets and starts execution', async () => {
     backendApiMocks.connect.mockResolvedValue({ status: 'ok' })
     backendApiMocks.list.mockResolvedValue([
       { ...SIM_BACKEND, status: 'inactive' },
@@ -289,7 +289,7 @@ describe('Reconectar — reconnect + retry on connection_lost (execution-workspa
     // The selector's fetch resolves; the active backend stays esp32.
     await waitFor(() => expect(useBackendStore.getState().activeId).toBe('esp32'))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reconectar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
 
     // Reconnect with the active hardware backend's port, then reset+start.
     await waitFor(() => expect(backendApiMocks.connect).toHaveBeenCalledWith('esp32', '/dev/ttyUSB0'))
@@ -299,26 +299,26 @@ describe('Reconectar — reconnect + retry on connection_lost (execution-workspa
   })
 })
 
-describe('Reintentar — reset+start retry on execution failure (resilience-matrix spec)', () => {
-  it('shows the code→CTA error and a Reintentar button when a tick fails with network_error', () => {
+describe('Retry — reset+start retry on execution failure (resilience-matrix spec)', () => {
+  it('shows the code→CTA error and a Retry button when a tick fails with network_error', () => {
     setStatus('failed', {
       error: { message: 'Backend is offline', code: 'network_error' },
     } as never)
     renderWorkspace()
     expect(screen.getByText(/Backend is offline/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
   })
 
-  it('shows a Reintentar button for timeout_error', () => {
+  it('shows a Retry button for timeout_error', () => {
     setStatus('failed', {
       error: { message: 'Request timed out', code: 'timeout_error' },
     } as never)
     renderWorkspace()
     expect(screen.getByText(/Request timed out/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
   })
 
-  it('clicking Reintentar performs the reset + start sequence', async () => {
+  it('clicking Retry performs the reset + start sequence', async () => {
     execClientMocks.reset.mockResolvedValue(undefined)
     execClientMocks.start.mockResolvedValue(undefined)
     execClientMocks.tick.mockResolvedValue(completedDelta)
@@ -328,7 +328,7 @@ describe('Reintentar — reset+start retry on execution failure (resilience-matr
     } as never)
     renderWorkspace()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
 
     await waitFor(() => expect(execClientMocks.reset).toHaveBeenCalledTimes(1))
     // Coherent state: start() is triggered immediately after the reset and the
@@ -338,8 +338,8 @@ describe('Reintentar — reset+start retry on execution failure (resilience-matr
   })
 })
 
-describe('Conectar — connect+retry when start fails with not_connected (R3-001)', () => {
-  it('a start failure with not_connected surfaces the error and a Conectar CTA (not a silent 200)', async () => {
+describe('Connect — connect+retry when start fails with not_connected (R3-001)', () => {
+  it('a start failure with not_connected surfaces the error and a Connect CTA (not a silent 200)', async () => {
     execClientMocks.start.mockRejectedValue(
       new ApiError('controller is not connected', { status: 409, code: 'not_connected' }),
     )
@@ -352,13 +352,13 @@ describe('Conectar — connect+retry when start fails with not_connected (R3-001
     // the machine-readable code preserved.
     await waitFor(() => expect(useExecutionStore.getState().status).toBe('failed'))
     expect(useExecutionStore.getState().error?.code).toBe('not_connected')
-    // describeError renders the not_connected CTA + the Conectar button.
+    // describeError renders the not_connected CTA + the Connect button.
     expect(screen.getByText(/controller is not connected/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Conectar' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Reconectar' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reconnect' })).not.toBeInTheDocument()
   })
 
-  it('Conectar reconnects the active hardware backend, then resets and starts', async () => {
+  it('Connect reconnects the active hardware backend, then resets and starts', async () => {
     backendApiMocks.connect.mockResolvedValue({ status: 'ok' })
     backendApiMocks.list.mockResolvedValue([
       { ...SIM_BACKEND, status: 'inactive' },
@@ -384,7 +384,7 @@ describe('Conectar — connect+retry when start fails with not_connected (R3-001
 
     await waitFor(() => expect(useBackendStore.getState().activeId).toBe('esp32'))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Conectar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
 
     // Connect with the active hardware backend's port, then reset+start.
     await waitFor(() => expect(backendApiMocks.connect).toHaveBeenCalledWith('esp32', '/dev/ttyUSB0'))

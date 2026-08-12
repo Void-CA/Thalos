@@ -26,13 +26,13 @@ vi.mock('@/shared/charts/gl-adapter', () => ({
 }))
 
 /**
- * EvaluationWorkspace — the pre-execution EVALUACIÓN (hotfix
- * evaluation-workspace). A DECISION view between Programación and Ejecución:
- * "¿estás seguro que querés ejecutar esto?" with concrete actions.
+ * EvaluationWorkspace — the pre-execution EVALUATION (hotfix
+ * evaluation-workspace). A DECISION view between Programming and Execution:
+ * "are you sure you want to execute this?" with concrete actions.
  *
  * This suite pins the layout + gating contract (CDD evaluation-workspace):
  * - empty state when there is no report yet (analyzed=false) → invites to
- *   program first, with a way back to Programación;
+ *   program first, with a way back to Programming;
  * - plan summary (source Tasks/Motion, plan id, waypoints, duration, DOF);
  * - trajectory view: the FULL evaluated trajectory with problem regions colored;
  * - 3-portion grid: Yoshikawa chart | Jacobian determinant chart | problem
@@ -206,13 +206,13 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('EvaluationWorkspace — empty state (no report yet → analyzed=false)', () => {
-  it('invites to program first and offers a way back to Programación', async () => {
+  it('invites to program first and offers a way back to Programming', async () => {
     const router = renderWorkspace()
-    expect(screen.getByRole('heading', { name: 'Evaluación' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Evaluation' })).toBeInTheDocument()
     expect(
-      screen.getByText(/Evaluá el plan antes de ejecutar/i),
+      screen.getByText(/Evaluate the plan before executing/i),
     ).toBeInTheDocument()
-    const back = screen.getByRole('button', { name: 'Volver a Programación' })
+    const back = screen.getByRole('button', { name: 'Back to Programming' })
     fireEvent.click(back)
     await waitFor(() => expect(router.state.location.pathname).toBe('/task'))
   })
@@ -268,7 +268,7 @@ describe('EvaluationWorkspace — decision focus: trajectory + grouped regions, 
       useSceneStore.setState({ activePlan })
     })
     renderWorkspace()
-    expect(screen.getByText(/No se detectaron problemas/i)).toBeInTheDocument()
+    expect(screen.getByText(/No problems detected/i)).toBeInTheDocument()
   })
 
   it('renders the trajectory view with colored-region legend for the evaluated plan', async () => {
@@ -294,7 +294,7 @@ describe('EvaluationWorkspace — decision focus: trajectory + grouped regions, 
     expect(
       screen.getByRole('button', { name: /Singularity near waypoint 10/i }),
     ).toBeInTheDocument()
-    expect(screen.queryByText(/No se detectaron problemas/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/No problems detected/i)).not.toBeInTheDocument()
     // Post-MVP: repair/optimization SHOWED but did not communicate and had no
     // real way to fix the trajectory — hidden from the evaluation view.
     expect(screen.queryByText('Repair Options')).not.toBeInTheDocument()
@@ -336,7 +336,7 @@ describe('EvaluationWorkspace — plan summary metric chips (R4/R1)', () => {
     expect(container).toBeInTheDocument()
     expect(within(container).getAllByTestId('metric-chip').length).toBeGreaterThanOrEqual(3)
     expect(within(container).getByText('0.456')).toBeInTheDocument() // avg manipulability
-    expect(within(container).getByText(/3 cerca · 1 exactas/)).toBeInTheDocument()
+    expect(within(container).getByText(/3 near · 1 exact/)).toBeInTheDocument()
     expect(within(container).getByText('12.5s')).toBeInTheDocument() // analysis duration
   })
 
@@ -378,14 +378,14 @@ describe('EvaluationWorkspace — plan summary metric chips (R4/R1)', () => {
     expect(screen.getByText(/0.03 m @ wp4/)).toBeInTheDocument()
   })
 
-  it('shows a green "Sin colisiones" chip when the plan has no collisions and no clearance value', () => {
+  it('shows a green "No collisions" chip when the plan has no collisions and no clearance value', () => {
     act(() => {
       useAnalysisStore.setState({
         report: { ...cleanReport, metrics: { waypoint_count: 10, has_collisions: 0 } },
       })
     })
     renderWorkspace()
-    expect(screen.getByText('Sin colisiones')).toBeInTheDocument()
+    expect(screen.getByText('No collisions')).toBeInTheDocument()
   })
 
   it('renders no chips when the report carries no metrics', () => {
@@ -407,7 +407,7 @@ describe('EvaluationWorkspace — problem region share of the plan (R5)', () => 
     })
     renderWorkspace()
     // region waypoint_count 11 of 22 → 50.0%.
-    expect(screen.getByText('50.0% del plan')).toBeInTheDocument()
+    expect(screen.getByText('50.0% of the plan')).toBeInTheDocument()
   })
 
   it('omits the share when the plan metrics carry no waypoint_count', () => {
@@ -416,7 +416,7 @@ describe('EvaluationWorkspace — problem region share of the plan (R5)', () => 
       useSceneStore.setState({ activePlan })
     })
     renderWorkspace()
-    expect(screen.queryByText(/del plan/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/of the plan/)).not.toBeInTheDocument()
   })
 })
 

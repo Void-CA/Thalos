@@ -154,7 +154,7 @@ describe('RegionInspector (PR6 6.5 — zero per-strategy buttons)', () => {
     renderInspector()
 
     // 3 of 30 waypoints → 10.0%; series timestamps 5→7 → 2.0s.
-    expect(screen.getByText('10.0% del plan · 2.0s')).toBeInTheDocument()
+    expect(screen.getByText('10.0% of the plan · 2.0s')).toBeInTheDocument()
   })
 
   it('hides the share when the plan metrics carry no waypoint_count (R5 fallback)', () => {
@@ -163,7 +163,7 @@ describe('RegionInspector (PR6 6.5 — zero per-strategy buttons)', () => {
       selectedRegionId: 7,
     })
     renderInspector()
-    expect(screen.queryByText(/del plan/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/of the plan/)).not.toBeInTheDocument()
   })
 })
 

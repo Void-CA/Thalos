@@ -9,7 +9,7 @@ import { backendApi } from '../backend-api'
 /**
  * Backend selector UI (execution-backend-switch-ui spec): replaces the
  * informational badge with an interactive Simulation/Hardware selector, a port
- * input for hardware, Conectar/Desconectar, and the no_firmware /
+ * input for hardware, Connect/Disconnect, and the no_firmware /
  * port_in_use CTAs. Every failure keeps the selector interactive (coherent
  * state: button re-enabled, error cleared on CTA success).
  */
@@ -59,9 +59,9 @@ describe('BackendSelector — available backends + active highlight (spec)', () 
     await waitFor(() => expect(useBackendStore.getState().activeId).toBe('esp32'))
     // Port input appears, pre-filled from the backend DTO port.
     await waitFor(() => {
-      expect(screen.getByLabelText('Puerto')).toBeInTheDocument()
+      expect(screen.getByLabelText('Port')).toBeInTheDocument()
     })
-    expect((screen.getByLabelText('Puerto') as HTMLInputElement).value).toBe('/dev/ttyUSB0')
+    expect((screen.getByLabelText('Port') as HTMLInputElement).value).toBe('/dev/ttyUSB0')
   })
 
   it('switching back to Simulation hides the port input', async () => {
@@ -73,38 +73,38 @@ describe('BackendSelector — available backends + active highlight (spec)', () 
     fireEvent.click(screen.getByRole('button', { name: /Simulation/ }))
     await waitFor(() => expect(api.activate).toHaveBeenCalledWith('simulation'))
     await waitFor(() => {
-      expect(screen.queryByLabelText('Puerto')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Port')).not.toBeInTheDocument()
     })
   })
 })
 
-describe('BackendSelector — Conectar / Desconectar (spec)', () => {
-  it('Conectar sends POST connect with the entered port and flips to Desconectar on success', async () => {
+describe('BackendSelector — Connect / Disconnect (spec)', () => {
+  it('Connect sends POST connect with the entered port and flips to Disconnect on success', async () => {
     api.connect.mockResolvedValue({ status: 'ok' })
     api.list.mockResolvedValue([{ ...SIM, status: 'inactive' }, { ...ESP, status: 'active', connected: true }])
     useBackendStore.setState({ activeId: 'esp32' })
     render(<BackendSelector />)
 
-    fireEvent.change(screen.getByLabelText('Puerto'), { target: { value: '/dev/ttyUSB0' } })
-    fireEvent.click(screen.getByRole('button', { name: /Conectar/ }))
+    fireEvent.change(screen.getByLabelText('Port'), { target: { value: '/dev/ttyUSB0' } })
+    fireEvent.click(screen.getByRole('button', { name: /Connect/ }))
 
     await waitFor(() => expect(api.connect).toHaveBeenCalledWith('esp32', '/dev/ttyUSB0'))
-    await waitFor(() => expect(screen.getByRole('button', { name: /Desconectar/ })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: /Disconnect/ })).toBeInTheDocument())
     expect(screen.getByText(/Connected/)).toBeInTheDocument()
   })
 
-  it('Desconectar sends POST disconnect and flips back to Conectar', async () => {
+  it('Disconnect sends POST disconnect and flips back to Connect', async () => {
     api.disconnect.mockResolvedValue({ status: 'ok' })
     api.list.mockResolvedValue([{ ...SIM, status: 'inactive' }, { ...ESP, status: 'active', connected: false }])
     useBackendStore.setState({ activeId: 'esp32', backends: [SIM, { ...ESP, status: 'active', connected: true }] })
     render(<BackendSelector />)
 
-    fireEvent.click(screen.getByRole('button', { name: /Desconectar/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Disconnect/ }))
     await waitFor(() => expect(api.disconnect).toHaveBeenCalledWith('esp32'))
-    await waitFor(() => expect(screen.getByRole('button', { name: /Conectar/ })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: /Connect/ })).toBeInTheDocument())
   })
 
-  it('no_firmware error shows the Cambiar a simulación CTA which activates Simulation and clears the error', async () => {
+  it('no_firmware error shows the Switch to Simulation CTA which activates Simulation and clears the error', async () => {
     api.activate.mockResolvedValue({ status: 'ok' })
     api.list.mockResolvedValue([{ ...SIM, status: 'active' }, { ...ESP, status: 'inactive' }])
     useBackendStore.setState({
@@ -113,7 +113,7 @@ describe('BackendSelector — Conectar / Desconectar (spec)', () => {
     })
     render(<BackendSelector />)
 
-    const cta = screen.getByRole('button', { name: 'Cambiar a simulación' })
+    const cta = screen.getByRole('button', { name: 'Switch to Simulation' })
     expect(cta).toBeInTheDocument()
     fireEvent.click(cta)
 
@@ -123,16 +123,16 @@ describe('BackendSelector — Conectar / Desconectar (spec)', () => {
     // Coherent end state: Simulation is selected (aria-pressed) and the port
     // input is gone — the user can immediately start execution.
     expect(screen.getByRole('button', { name: 'Simulation' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.queryByLabelText('Puerto')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Port')).not.toBeInTheDocument()
   })
 
-  it('port_in_use error shows the Elegir otro puerto CTA', () => {
+  it('port_in_use error shows the Choose another port CTA', () => {
     useBackendStore.setState({
       activeId: 'esp32',
       error: { message: 'serial port is in use or cannot be opened: boom', code: 'port_in_use' },
     })
     render(<BackendSelector />)
-    expect(screen.getByRole('button', { name: 'Elegir otro puerto' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Choose another port' })).toBeInTheDocument()
   })
 })
 

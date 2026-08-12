@@ -29,20 +29,20 @@ const TrajectoryView = lazy(() =>
 )
 
 /**
- * EvaluationWorkspace — the pre-execution EVALUACIÓN (hotfix
+ * EvaluationWorkspace — the pre-execution EVALUATION (hotfix
  * evaluation-workspace, /evaluation, stage 4).
  *
- * The analysis check STOPS being a tab inside Programación and becomes a
- * VISTA of its own: a "¿estás seguro que querés ejecutar esto?" checkpoint
- * between Programación and Ejecución, with concrete actions instead of an
+ * The analysis check STOPS being a tab inside Programming and becomes a
+ * VISTA of its own: an "are you sure you want to execute this?" checkpoint
+ * between Programming and Execution, with concrete actions instead of an
  * un-actionable dump of up-to-200 observations.
  *
  * Layout + gating decisions (hotfix evaluation-layout):
  *  - StatusBanner full-width verdict FIRST, then the decision context:
  *    Plan summary (what is about to execute) + the trajectory view.
- *  - 3-portion grid at lg (collapses to stacked below): porción 1 = Yoshikawa
- *    manipulability chart, porción 2 = Jacobian determinant chart (both with
- *    their threshold reference lines), porción 3 = problem regions list + the
+ *  - 3-portion grid at lg (collapses to stacked below): portion 1 = Yoshikawa
+ *    manipulability chart, portion 2 = Jacobian determinant chart (both with
+ *    their threshold reference lines), portion 3 = problem regions list + the
  *    selected region's detail (RegionInspector). Charts are now prominent
  *    instead of buried; region selection drives the detail in-place.
  *  - Recommendations render below the grid with their uniform
@@ -51,7 +51,7 @@ const TrajectoryView = lazy(() =>
  *  - Recommended strategies are NOT shown in the region inspector (the user
  *    does not use them); repair options + optimization stay hidden (post-MVP).
  *  - Empty state when there is no report yet (analyzed=false): invite to
- *    program first + a way back to Programación.
+ *    program first + a way back to Programming.
  *
  * The workspace produces `analyzed` via the registry (the report lives in the
  * analysis store, populated by the programming flow); this view consumes it.
@@ -65,9 +65,9 @@ export function EvaluationWorkspace() {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6 text-center">
         <ShieldCheck className="h-10 w-10 mb-3 text-primary-weak" />
-        <h1 className="text-sm font-bold text-foreground mb-1">Evaluación</h1>
+        <h1 className="text-sm font-bold text-foreground mb-1">Evaluation</h1>
         <p className="text-xs text-muted-foreground mb-4">
-          Evaluá el plan antes de ejecutar — compilá o generá un plan primero.
+          Evaluate the plan before executing — compile or generate a plan first.
         </p>
         <button
           onClick={() => navigate('/task')}
@@ -75,7 +75,7 @@ export function EvaluationWorkspace() {
                      rounded-lg border border-primary-mid bg-primary-weak text-primary
                      hover:bg-primary-weak transition-all cursor-pointer"
         >
-          Volver a Programación
+          Back to Programming
         </button>
       </div>
     )
@@ -103,8 +103,8 @@ export function EvaluationWorkspace() {
       <div className="px-3 py-2 border-b border-border/50 flex items-center gap-2 shrink-0">
         <ShieldCheck className="h-4 w-4 text-primary" />
         <div>
-          <h1 className="text-sm font-bold text-foreground leading-tight">Evaluación</h1>
-          <p className="text-[10px] text-muted-foreground">Revisá el plan antes de ejecutar</p>
+          <h1 className="text-sm font-bold text-foreground leading-tight">Evaluation</h1>
+          <p className="text-[10px] text-muted-foreground">Review the plan before executing</p>
         </div>
       </div>
 
@@ -163,7 +163,7 @@ export function EvaluationWorkspace() {
                       <ProblemRegions />
                     ) : (
                       <p className="text-xs text-muted-foreground text-center py-4 rounded-lg border border-border bg-card/50">
-                        No se detectaron problemas — el plan está listo.
+                        No problems detected — the plan is ready.
                       </p>
                     )}
                   </section>
@@ -245,17 +245,17 @@ function PlanSummary() {
         )}
       </div>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-3">
-        <SummaryItem label="Fuente" value={source} />
+        <SummaryItem label="Source" value={source} />
         <SummaryItem label="Plan" value={report?.artifact.id ?? '—'} />
         <SummaryItem label="Waypoints" value={String(waypoints)} />
-        <SummaryItem label="Duración" value={durationSecs !== null ? formatDuration(durationSecs) : '—'} />
-        <SummaryItem label="Instrucciones" value={instructionCount !== undefined ? String(instructionCount) : '—'} />
+        <SummaryItem label="Duration" value={durationSecs !== null ? formatDuration(durationSecs) : '—'} />
+        <SummaryItem label="Instructions" value={instructionCount !== undefined ? String(instructionCount) : '—'} />
         <SummaryItem label="DOF" value={dof !== null ? String(dof) : '—'} />
       </dl>
       <MetricChips metrics={report?.metrics} />
       {initialJoints && (
         <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-          <span>Joints iniciales</span>
+          <span>Initial joints</span>
           <code className="font-mono text-foreground/80 tabular-nums">{initialJoints}</code>
         </div>
       )}
@@ -291,30 +291,30 @@ function MetricChips({ metrics }: { metrics: Record<string, number> | undefined 
   const exact = metrics['singular_count']
   if ((near ?? 0) > 0 || (exact ?? 0) > 0) {
     chips.push({
-      label: 'Singularidades',
-      value: `${near ?? 0} cerca · ${exact ?? 0} exactas`,
+      label: 'Singularities',
+      value: `${near ?? 0} near · ${exact ?? 0} exact`,
       tone: 'neutral',
     })
   }
   const duration = metrics['trajectory_duration']
   if (duration !== undefined) {
-    chips.push({ label: 'Duración análisis', value: formatDuration(duration), tone: 'neutral' })
+    chips.push({ label: 'Analysis duration', value: formatDuration(duration), tone: 'neutral' })
   }
 
   const minClearance = minClearanceDistance(metrics)
   if (minClearance !== null) {
     const waypoint = minClearanceWaypoint(metrics)
     chips.push({
-      label: 'Distancia mínima a obstáculo',
+      label: 'Min obstacle distance',
       value: waypoint !== null
         ? `${minClearance.toFixed(2)} m @ wp${waypoint}`
         : `${minClearance.toFixed(2)} m`,
       tone: minClearance < 0 ? 'bad' : 'neutral',
     })
   } else if (hasCollisions(metrics)) {
-    chips.push({ label: 'Colisiones', value: 'Sí', tone: 'bad' })
+    chips.push({ label: 'Collisions', value: 'Yes', tone: 'bad' })
   } else if (metrics['has_collisions'] === 0) {
-    chips.push({ label: 'Colisiones', value: 'Sin colisiones', tone: 'good' })
+    chips.push({ label: 'Collisions', value: 'No collisions', tone: 'good' })
   }
 
   if (chips.length === 0) return null

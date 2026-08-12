@@ -7,8 +7,8 @@ import type { ExecutionModeDto } from '@/features/viewport/api/scene-api.types'
 import type { ObjectTransform, ExecutionInfo } from '@/features/viewport/types'
 
 // ── Status ────────────────────────────────────────────────────────────────
-// Misma semántica que backend ExecutionStatusDto, pero en camelCase
-// para el frontend. Terminales: completed | cancelled | failed
+// Same semantics as the backend ExecutionStatusDto, but camelCase
+// for the frontend. Terminal: completed | cancelled | failed
 export type ExecutionStatus =
   | 'idle'
   | 'loading'
@@ -73,20 +73,20 @@ export interface ExecutionState {
 }
 
 interface ExecutionActions {
-  /** Iniciar (o reanudar) la ejecución del plan cargado. Optional mode —
+  /** Start (or resume) the execution of the loaded plan. Optional mode —
    *  absent defaults to `once` (current behavior). */
   start: (mode?: ExecutionModeDto) => Promise<void>
 
-  /** Pausar una ejecución activa. */
+  /** Pause an active execution. */
   pause: () => Promise<void>
 
-  /** Reanudar una ejecución pausada. */
+  /** Resume a paused execution. */
   resume: () => Promise<void>
 
-  /** Cancelar la ejecución actual. */
+  /** Cancel the current execution. */
   cancel: () => Promise<void>
 
-  /** Resetear la sesión de ejecución. */
+  /** Reset the execution session. */
   reset: () => Promise<void>
 
   /** Handoff reception (Invariant #5): the Task workspace hands a compiled
@@ -153,7 +153,7 @@ function startLoop() {
         return
       }
 
-      // Convertir DTO → tipo interno (mismas shape, distinto módulo)
+      // Convert DTO → internal type (same shape, different module)
       const transforms = delta.transforms as unknown as ObjectTransform[]
       const executionInfo: ExecutionInfo = {
         status: delta.execution.status,
@@ -162,10 +162,10 @@ function startLoop() {
         source: delta.execution.source,
       }
 
-      // Escribir el snapshot de ejecución para el viewport (single source of truth)
+      // Write the execution snapshot for the viewport (single source of truth)
       useSceneStore.getState().applyRuntimeDelta(delta.joints, transforms, executionInfo)
 
-      // Mapear estado del backend al nuestro
+      // Map the backend state to ours
       const status = mapStatus(delta.execution.status)
       const isTerminal = TERMINAL.has(status)
 
@@ -207,7 +207,7 @@ function startLoop() {
   loopId = requestAnimationFrame(loop)
 }
 
-/** Mapea ExecutionStatusDto del backend a nuestro status local. */
+/** Maps the backend ExecutionStatusDto to our local status. */
 function mapStatus(dto: string): ExecutionStatus {
   switch (dto) {
     case 'Active':

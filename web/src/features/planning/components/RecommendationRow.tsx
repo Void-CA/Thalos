@@ -8,26 +8,26 @@ import type { RecommendationWire } from '@/shared/contracts/analysis-report'
 import { Check, Eye, Loader2, Play, RotateCcw } from 'lucide-react'
 
 /**
- * RecommendationRow — proyección uniforme de UNA recomendación (spec
+ * RecommendationRow — uniform projection of ONE recommendation (spec
  * advisor-projection "RecommendationRow Projection").
  *
- * Contratos:
- * - CONTROLES UNIFORMES: Preview/Apply/Undo idénticos para TODA
- *   recomendación — el `action.kind` jamás cambia los controles ofrecidos
- *   (no hay match_strategy ni defaultStrategies, cero dispatch por strings).
- * - PR3 (read-only): Preview está ACTIVO — simula la edición en el backend
- *   (nunca muta el runtime) y muestra el overlay 3D con el mismo mecanismo
- *   que OptimizationPanel (`setPreviewPositions` + `trajectoryViewMode`).
- * - PR4 (write-back): Apply está ACTIVO para edits `available` — aplica la
- *   edición en el backend (replace_active_plan, feature-flagged) y refresca
- *   la escena para que el viewport muestre el plan activo resultante.
- *   D8: un edit `unavailable` jamás se aplica — botón deshabilitado.
- * - PR5 (undo O(1)): Undo está ACTIVO tras aplicar ESTA fila — el backend
- *   popea el último comando y aplica su inverse almacenado (sin replay);
- *   la fila vuelve al estado previo y la escena se refresca.
- * - intelligible-repair-loop (3.2/3.3): tras Apply/Undo la fila también
- *   re-fetch del report canónico (`refetchAnalysis`) para que veredicto,
- *   narrativa, regiones y métricas deriven del estado del servidor.
+ * Contracts:
+ * - UNIFORM CONTROLS: Preview/Apply/Undo identical for EVERY
+ *   recommendation — the `action.kind` never changes the controls offered
+ *   (no match_strategy nor defaultStrategies, zero string dispatch).
+ * - PR3 (read-only): Preview is ACTIVE — simulates the edit on the backend
+ *   (never mutates the runtime) and shows the 3D overlay through the same
+ *   mechanism as OptimizationPanel (`setPreviewPositions` + `trajectoryViewMode`).
+ * - PR4 (write-back): Apply is ACTIVE for edits `available` — applies the
+ *   edit on the backend (replace_active_plan, feature-flagged) and refreshes
+ *   the scene so the viewport shows the resulting active plan.
+ *   D8: an `unavailable` edit is never applied — disabled button.
+ * - PR5 (undo O(1)): Undo is ACTIVE after applying THIS row — the backend
+ *   pops the last command and applies its stored inverse (no replay);
+ *   the row returns to its previous state and the scene refreshes.
+ * - intelligible-repair-loop (3.2/3.3): after Apply/Undo the row also
+ *   re-fetches the canonical report (`refetchAnalysis`) so verdict,
+ *   narrative, regions and metrics derive from the server state.
  */
 export function RecommendationRow({ recommendation }: { recommendation: RecommendationWire }) {
   const [previewing, setPreviewing] = useState(false)
@@ -48,8 +48,8 @@ export function RecommendationRow({ recommendation }: { recommendation: Recommen
     try {
       const res = await planAnalysisApi.preview(recommendation.id)
       setPreview(res)
-      // Overlay 3D — mismo patrón que OptimizationPanel: escribir las
-      // posiciones en el store y conmutar la vista de trayectoria.
+      // 3D overlay — same pattern as OptimizationPanel: write the positions to
+      // the store and switch the trajectory view mode.
       setPreviewPositions(res.waypoints)
       setTrajectoryViewMode('preview')
     } catch (err: any) {
@@ -65,8 +65,8 @@ export function RecommendationRow({ recommendation }: { recommendation: Recommen
     try {
       const res = await planAnalysisApi.apply(recommendation.id)
       setApplied(res)
-      // UI refleja el plan ACTIVO: refrescar la escena desde el backend (mismo
-      // patrón que use-scene-loader) — el viewport renderiza el write-back.
+      // UI reflects the ACTIVE plan: refresh the scene from the backend (same
+      // pattern as use-scene-loader) — the viewport renders the write-back.
       const snapshot = await sceneService.loadScene()
       applyScene(
         snapshot.scene,
@@ -76,9 +76,9 @@ export function RecommendationRow({ recommendation }: { recommendation: Recommen
         snapshot.activeTcp,
         snapshot.execution,
       )
-      // intelligible-repair-loop (3.2): el análisis y sus derivados (veredicto,
-      // narrativa, regiones, métricas) también deben reflejar el plan APLICADO —
-      // re-fetch del report canónico (UI deriva del estado del servidor).
+      // intelligible-repair-loop (3.2): the analysis and its derivatives
+      // (verdict, narrative, regions, metrics) must also reflect the APPLIED
+      // plan — re-fetch of the canonical report (UI derives from server state).
       await refetchAnalysis()
     } catch (err: any) {
       setError(err.message ?? 'Apply failed')
@@ -91,11 +91,11 @@ export function RecommendationRow({ recommendation }: { recommendation: Recommen
     setUndoing(true)
     setError(null)
     try {
-      // PR5 undo O(1): el backend popea el último comando aplicado y aplica su
-      // inverse almacenado (sin replay). Esta fila deja de mostrar "Applied".
+      // PR5 undo O(1): the backend pops the last applied command and applies its
+      // stored inverse (no replay). This row stops showing "Applied".
       await planAnalysisApi.undo()
       setApplied(null)
-      // La escena refleja el plan RESTAURADO: refrescar desde el backend.
+      // The scene reflects the RESTORED plan: refresh from the backend.
       const snapshot = await sceneService.loadScene()
       applyScene(
         snapshot.scene,
@@ -105,7 +105,7 @@ export function RecommendationRow({ recommendation }: { recommendation: Recommen
         snapshot.activeTcp,
         snapshot.execution,
       )
-      // intelligible-repair-loop (3.3): el análisis refleja el plan RESTAURADO.
+      // intelligible-repair-loop (3.3): the analysis reflects the RESTORED plan.
       await refetchAnalysis()
     } catch (err: any) {
       setError(err.message ?? 'Undo failed')

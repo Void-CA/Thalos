@@ -10,7 +10,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 type SeverityTier = 'critical' | 'warning' | 'info'
 
 /**
- * ProblemRegions — lista de regiones problemáticas agrupadas por severidad.
+ * ProblemRegions — list of problem regions grouped by severity.
  * Derives from the canonical report's `problem_regions` (backend-projected
  * via ProblemRegionsDtoAdapter; I3: interpretation from kind/severity).
  */
@@ -56,7 +56,7 @@ export function ProblemRegions() {
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Filtros */}
+      {/* Filters */}
       {categories.length > 0 && (
         <div className="flex flex-wrap gap-1">
           <FilterChip label={`All (${regions.length})`} active={activeFilter === null} onClick={() => setActiveFilter(null)} />
@@ -71,7 +71,7 @@ export function ProblemRegions() {
         </div>
       )}
 
-      {/* Grupos por severidad */}
+      {/* Groups by severity */}
       {tiers.map(tier => {
         const list = grouped[tier]
         if (list.length === 0) return null
@@ -158,7 +158,7 @@ function RegionCard({ region, selected, onSelect }: { region: ProblemRegion; sel
         <span className="font-mono">{wpRange}</span>
         {findingCount > 0 && <span>{findingCount} finding{findingCount !== 1 ? 's' : ''}</span>}
         {share.percentOfPlan !== null && (
-          <span className="font-mono tabular-nums">{share.percentOfPlan.toFixed(1)}% del plan</span>
+          <span className="font-mono tabular-nums">{share.percentOfPlan.toFixed(1)}% of the plan</span>
         )}
       </div>
     </button>

@@ -2,7 +2,7 @@ import { EChart, manipulabilityBuilder } from '@/shared/charts'
 import { useAnalysisStore } from '@/features/analysis/store'
 
 /**
- * YoshikawaChart — porción 1 del grid de /evaluation (hotfix evaluation-
+ * YoshikawaChart — portion 1 of the /evaluation grid (hotfix evaluation-
  * layout): the per-waypoint manipulability (Yoshikawa) chart, rendered from the
  * canonical report via the pure `manipulabilityBuilder` (threshold markLine +
  * dataZoom included). Pure consumer: no domain mapping in the component.

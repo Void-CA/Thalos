@@ -201,8 +201,8 @@ describe('PlanningPanel — preview success mirrors the plan into the execution 
   })
 })
 
-describe('PlanningPanel — Recompilar CTA on manifest validation error (PR1)', () => {
-  it('shows a Recompilar button when the preview fails with semantic_validation_error', async () => {
+describe('PlanningPanel — Recompile CTA on manifest validation error (PR1)', () => {
+  it('shows a Recompile button when the preview fails with semantic_validation_error', async () => {
     sceneApiMocks.previewPlan.mockRejectedValue(
       new ApiError('Segment 0 references unknown object', {
         code: 'semantic_validation_error',
@@ -214,14 +214,14 @@ describe('PlanningPanel — Recompilar CTA on manifest validation error (PR1)', 
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Recompilar' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Recompile' })).toBeInTheDocument()
     })
     // planReady is cleared: the failed plan is NOT mirrored executable.
     expect(useExecutionStore.getState().activePlan).toBeNull()
     expect(useExecutionStore.getState().status).not.toBe('ready')
   })
 
-  it('clicking Recompilar re-runs the preview (compile button path)', async () => {
+  it('clicking Recompile re-runs the preview (compile button path)', async () => {
     sceneApiMocks.previewPlan.mockRejectedValueOnce(
       new ApiError('Segment 0 references unknown object', {
         code: 'semantic_validation_error',
@@ -234,10 +234,10 @@ describe('PlanningPanel — Recompilar CTA on manifest validation error (PR1)', 
 
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Recompilar' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Recompile' })).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Recompilar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Recompile' }))
 
     await waitFor(() => {
       expect(sceneApiMocks.previewPlan).toHaveBeenCalledTimes(2)

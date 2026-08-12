@@ -6,7 +6,7 @@ import { TrajectoryColorPicker } from '@/features/planning/components/trajectory
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
 /**
- * ProgrammingWorkspace — the UNIFIED Programación area (/task, stage 3).
+ * ProgrammingWorkspace — the UNIFIED Programming area (/task, stage 3).
  *
  * Hotfix (unify-programming): /task (semantic editor) and /planning (motion
  * program) were the SAME thing — commanding the robot with different
@@ -14,7 +14,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
  * one of the ways to express an order, making it explicit that they are
  * alternate representations of the same interaction medium:
  *
- *   Programación (workflow progress)
+ *   Programming (workflow progress)
  *   ├─ Task   — semantic editor, visual mode (TaskEditor) + compile status
  *   │            (DiagnosticsPanel)
  *   ├─ Motion — segment-by-segment motion program (PlanningPanel +
@@ -23,12 +23,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
  *                script-as-canonical representation of the program
  *
  * HOTFIX (evaluation-workspace): the Analysis TAB was REMOVED — the analysis
- * check is now the /evaluation VISTA (pre-execution EVALUACIÓN, stage 4).
+ * check is now the /evaluation VISTA (pre-execution EVALUATION, stage 4).
  * The evaluation content (regions, recommendations, repair options,
  * optimization) moved there; this workspace keeps ONLY the three plan-authoring
  * tabs. The workspace consumes the Scene ARTIFACT (`sceneValid` via
  * WorkflowState) and renders ZERO Scene editing UI (the Scene editor lives
- * exclusively in Escena, features/scene/SceneWorkspace). It produces the
+ * exclusively in Scene, features/scene/SceneWorkspace). It produces the
  * plan: `compiled` (origin of `planReady`) and the MotionPlan artifact handed
  * to /evaluation and /execution.
  */

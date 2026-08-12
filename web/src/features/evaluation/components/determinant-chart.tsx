@@ -2,7 +2,7 @@ import { EChart, determinantBuilder } from '@/shared/charts'
 import { useAnalysisStore } from '@/features/analysis/store'
 
 /**
- * DeterminantChart — porción 2 del grid de /evaluation (hotfix evaluation-
+ * DeterminantChart — portion 2 of the /evaluation grid (hotfix evaluation-
  * layout): the per-waypoint Jacobian determinant det(J·Jᵀ) chart, rendered
  * from the canonical report via the pure `determinantBuilder` (threshold
  * markLine + dataZoom included). Pure consumer: no domain mapping in the
