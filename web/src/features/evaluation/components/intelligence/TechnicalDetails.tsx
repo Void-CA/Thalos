@@ -5,17 +5,19 @@ import type {
 } from '@/shared/contracts/analysis-report'
 import { RuleReasoning } from './RuleReasoning'
 import { MembershipBars } from './MembershipBars'
-import { InferenceTrace } from './InferenceTrace'
 
 /**
  * TechnicalDetails (structural UX redesign) — ONE collapsible section that
- * owns ALL the technical detail of the verdict (rule reasoning, evidence
- * bars, inference trace), CLOSED by default: these are support material, not
- * the decision. A native `<details>` keeps the semantic closed-by-default
- * state. The count hint ("· N rules · N evidence") makes the section
- * scannable before opening. The three children keep their own testids
- * (`rule-reasoning*`, `assessment-evidence*`, `assessment-trace*`). All copy
- * is English.
+ * owns ALL the technical detail of the verdict (rule reasoning + evidence
+ * table), CLOSED by default: these are support material, not the decision. A
+ * native `<details>` keeps the semantic closed-by-default state. The count
+ * hint ("· N rules · N evidence") makes the section scannable before opening.
+ * Two clean tables with ZERO duplication: RuleReasoning carries the rules
+ * (label, agenda priority, why, produced) and MembershipBars the evidence —
+ * the inference trace table was redundant with RuleReasoning and was removed
+ * (its raw `key=value` strings duplicated what the reasoning table already
+ * humanizes). The children keep their own testids (`rule-reasoning*`,
+ * `assessment-evidence*`). All copy is English.
  */
 export function TechnicalDetails({
   rules,
@@ -49,7 +51,6 @@ export function TechnicalDetails({
       <div className="mt-3 flex flex-col gap-3" data-testid="technical-details-body">
         <RuleReasoning rules={rules} trace={trace} />
         <MembershipBars evidence={evidence} />
-        <InferenceTrace trace={trace} />
       </div>
     </details>
   )

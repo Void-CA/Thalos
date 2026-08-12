@@ -472,15 +472,17 @@ describe('EvaluationWorkspace — intelligence tab (evaluation-intelligence-tab)
     expect(screen.getByTestId('evaluation-master')).toBeInTheDocument()
   })
 
-  it('keeps the trace collapsed by default inside the intelligence tab', () => {
+  it('keeps technical details collapsed by default and shows no redundant trace table', () => {
     act(() => {
       useAnalysisStore.setState({ report: assessedReport })
       useSceneStore.setState({ activePlan })
     })
     renderWorkspace()
     fireEvent.click(screen.getByRole('tab', { name: 'Intelligence' }))
-    const toggle = within(screen.getByTestId('intelligent-assessment')).getByTestId('assessment-trace-toggle')
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    const details = within(screen.getByTestId('intelligent-assessment')).getByTestId('technical-details')
+    expect((details as HTMLDetailsElement).open).toBe(false)
+    // The inference trace was merged into RuleReasoning — no trace table remains.
+    expect(screen.queryByTestId('assessment-trace-toggle')).not.toBeInTheDocument()
     expect(screen.queryByTestId('assessment-trace')).not.toBeInTheDocument()
   })
 })

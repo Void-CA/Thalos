@@ -10,9 +10,10 @@ import type {
 
 /**
  * TechnicalDetails (structural UX redesign) — ONE collapsible detail section
- * owning the rule reasoning, the dense evidence table and the inference trace,
- * CLOSED by default. The child testids (`rule-reasoning*`,
- * `assessment-evidence*`, `assessment-trace*`) survive unchanged.
+ * owning the rule reasoning (with agenda priority) and the dense evidence
+ * table, CLOSED by default. The inference trace table is GONE — its priority
+ * is now a RuleReasoning column, so no `assessment-trace*` testids exist. The
+ * child testids (`rule-reasoning*`, `assessment-evidence*`) survive unchanged.
  */
 
 const rules: TriggeredRuleWire[] = [
@@ -45,21 +46,20 @@ describe('TechnicalDetails — ONE collapsible detail section (closed by default
     expect(toggle).toHaveTextContent('4 evidence')
   })
 
-  it('expands on click to show rule reasoning, the dense evidence table and the inference trace', () => {
+  it('expands on click to show rule reasoning (with priority) and the dense evidence table', () => {
     render(<TechnicalDetails rules={rules} evidence={evidence} trace={trace} />)
     fireEvent.click(screen.getByTestId('technical-details-toggle'))
     expect((screen.getByTestId('technical-details') as HTMLDetailsElement).open).toBe(true)
 
     expect(screen.getByTestId('assessment-rule-count')).toHaveTextContent('3 rules')
-    expect(screen.getAllByTestId('rule-reasoning-row')).toHaveLength(3)
+    const rows = screen.getAllByTestId('rule-reasoning-row')
+    expect(rows).toHaveLength(3)
     expect(screen.getAllByTestId('evidence-row')).toHaveLength(4)
     expect(screen.getAllByTestId('evidence-reading')).toHaveLength(4)
 
-    const traceToggle = screen.getByTestId('assessment-trace-toggle')
-    expect(traceToggle).toHaveTextContent('Show')
-    fireEvent.click(traceToggle)
-    expect(screen.getByTestId('assessment-trace')).toBeInTheDocument()
-    expect(screen.getAllByTestId('assessment-trace-entry')).toHaveLength(1)
+    // The trace table is gone: no `assessment-trace*` testids exist.
+    expect(screen.queryByTestId('assessment-trace-toggle')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('assessment-trace')).not.toBeInTheDocument()
   })
 
   it('shows the real rule reasoning — why (bindings) and produced (derived output) per fired rule', () => {
@@ -127,11 +127,16 @@ describe('TechnicalDetails — ONE collapsible detail section (closed by default
     const table = within(screen.getByTestId('rule-reasoning')).getByRole('table')
     expect(table).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'Rule' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Priority' })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'Why' })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'Produced' })).toBeInTheDocument()
 
     const rows = screen.getAllByTestId('rule-reasoning-row')
     expect(rows).toHaveLength(3)
+    // Agenda priority merged from the trace entry (R01 priority 10).
+    expect(within(rows[0]).getByTestId('rule-priority')).toHaveTextContent('10')
+    // Untraced rules fall back to the rule's own priority.
+    expect(within(rows[2]).getByTestId('rule-priority')).toHaveTextContent('1')
     const firstWhy = within(rows[0]).getByTestId('rule-why')
     expect(firstWhy).toHaveTextContent('Collision clearance is danger')
     expect(firstWhy).toHaveTextContent('· 1.000')

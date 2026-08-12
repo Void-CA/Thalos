@@ -11,7 +11,7 @@ import type { AnalysisReportWire, AssessmentWire } from '@/shared/contracts/anal
  * IntelligenceView — composed Intelligence tab content (structural UX
  * redesign): VerdictHero (ONE risk-tinted decision band) → FactorRows
  * (structured top factors) → Repair recommendations (action) →
- * TechnicalDetails (ONE collapsible owning rules/evidence/trace, closed by
+ * TechnicalDetails (ONE collapsible owning rules/evidence, closed by
  * default) → muted assessment references footer. All copy is English.
  */
 
@@ -142,7 +142,7 @@ describe('IntelligenceView — factor rows "why" (structural redesign)', () => {
 })
 
 describe('IntelligenceView — technical details (ONE collapsible, closed by default)', () => {
-  it('keeps the rules, evidence bars and trace behind a collapsed TechnicalDetails section', () => {
+  it('keeps the rules and evidence behind a collapsed TechnicalDetails section', () => {
     render(<IntelligenceView assessment={assessment} regions={[]} />)
     const details = screen.getByTestId('technical-details') as HTMLDetailsElement
     expect(details.open).toBe(false)
@@ -152,7 +152,7 @@ describe('IntelligenceView — technical details (ONE collapsible, closed by def
     expect(toggle).toHaveTextContent('4 evidence')
   })
 
-  it('expands to show the rule reasoning (human labels, category tags), the dense evidence table and the trace', () => {
+  it('expands to show the rule reasoning (human labels, category tags, priority), the dense evidence table and no trace table', () => {
     render(<IntelligenceView assessment={assessment} regions={[]} />)
     fireEvent.click(screen.getByTestId('technical-details-toggle'))
     expect((screen.getByTestId('technical-details') as HTMLDetailsElement).open).toBe(true)
@@ -164,6 +164,8 @@ describe('IntelligenceView — technical details (ONE collapsible, closed by def
     // Subtle category tag per row (never the old loud badge).
     expect(rows[0]).toHaveTextContent('Collision')
     expect(rows[1]).toHaveTextContent('Manipulability')
+    // Agenda priority merged from the trace into the rules table (R01 → 10).
+    expect(within(rows[0]).getByTestId('rule-priority')).toHaveTextContent('10')
     // The KB agenda priority must never be presented as a fuzzy weight.
     expect(screen.queryByText(/weight/i)).not.toBeInTheDocument()
 
@@ -177,13 +179,9 @@ describe('IntelligenceView — technical details (ONE collapsible, closed by def
     expect(readings[0]).toHaveTextContent('Good')
     expect(readings[1]).toHaveTextContent('Moderate')
 
-    const traceToggle = screen.getByTestId('assessment-trace-toggle')
-    expect(traceToggle).toHaveAttribute('aria-expanded', 'false')
-    fireEvent.click(traceToggle)
-    expect(screen.getByTestId('assessment-trace')).toBeInTheDocument()
-    const rows2 = screen.getAllByTestId('assessment-trace-entry')
-    expect(rows2).toHaveLength(1)
-    expect(rows2[0]).toHaveTextContent('R01_collision_danger')
+    // The redundant trace table is gone — no `assessment-trace*` testids.
+    expect(screen.queryByTestId('assessment-trace-toggle')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('assessment-trace')).not.toBeInTheDocument()
   })
 
   it('renders the reasoning of a safe/positive rule from its trace bindings', () => {

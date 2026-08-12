@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent, within } from '@testing-library/react'
+import { render, screen, cleanup, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { IntelligentAssessment } from './intelligent-assessment'
 import type { AssessmentWire } from '@/shared/contracts/analysis-report'
@@ -90,39 +90,21 @@ describe('IntelligentAssessment — section renders when assessment present', ()
     // v2: no uppercase "Score"/"Risk Level" labels — the hierarchy carries it.
     expect(screen.queryByText('Score')).not.toBeInTheDocument()
     expect(screen.queryByText('Risk Level')).not.toBeInTheDocument()
-    expect(screen.getByText(/Inference trace/i)).toBeInTheDocument()
+    // The inference trace table was merged into the rules table — its copy is gone.
+    expect(screen.queryByText(/Inference trace/i)).not.toBeInTheDocument()
     for (const banned of ['Riesgo', 'Calidad', 'Traza', 'Evaluación']) {
       expect(screen.queryByText(banned)).not.toBeInTheDocument()
     }
   })
-})
 
-describe('IntelligentAssessment — collapsible inference trace', () => {
-  it('is collapsed by default: the trace rows are not visible', () => {
+  it('shows the agenda priority merged from the trace into the rule reasoning rows', () => {
     render(<IntelligentAssessment assessment={assessment} />)
-    const toggle = screen.getByTestId('assessment-trace-toggle')
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    expect(toggle).toHaveTextContent('Inference trace')
-    expect(toggle).toHaveTextContent('Show')
-    expect(screen.queryByTestId('assessment-trace')).not.toBeInTheDocument()
-    expect(screen.queryByText('R01_collision_danger', { selector: 'tr *' })).toBeNull()
-  })
-
-  it('expands on click and shows each fired rule with bindings and derived output in order', () => {
-    render(<IntelligentAssessment assessment={assessment} />)
-    fireEvent.click(screen.getByTestId('assessment-trace-toggle'))
-    const toggle = screen.getByTestId('assessment-trace-toggle')
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    expect(toggle).toHaveTextContent('Inference trace')
-    expect(toggle).toHaveTextContent('Hide')
-
-    const rows = screen.getAllByTestId('assessment-trace-entry')
+    const rows = screen.getAllByTestId('rule-reasoning-row')
     expect(rows).toHaveLength(2)
-    expect(rows[0]).toHaveTextContent('R01_collision_danger')
-    expect(rows[0]).toHaveTextContent('CollisionClearance IS danger=1.000')
-    expect(rows[1]).toHaveTextContent('R07_low_manipulability')
-    expect(rows[1]).toHaveTextContent('Manipulability IS low=0.667')
-    expect(rows[1]).toHaveTextContent('danger_zone=true')
+    expect(within(rows[0]).getByTestId('rule-priority')).toHaveTextContent('10')
+    expect(within(rows[1]).getByTestId('rule-priority')).toHaveTextContent('3')
+    // No redundant trace table remains.
+    expect(screen.queryByTestId('assessment-trace-toggle')).not.toBeInTheDocument()
   })
 
   it('renders no recommendation rows when the assessment carries none', () => {

@@ -51,7 +51,7 @@ function AssessmentRecommendations({ assessment }: { assessment: AssessmentWire 
  *   2. Action      — RecommendationCard list (report recommendations, deduped
  *      like the Evaluation tab) with uniform Preview/Apply/Undo controls.
  *   3. Detail      — TechnicalDetails: ONE collapsible (closed by default)
- *      owning RuleReasoning + MembershipBars + InferenceTrace.
+ *      owning RuleReasoning (rules with priority) + MembershipBars (evidence).
  *   4. References  — AssessmentRecommendations: the assessment's own list,
  *      de-emphasized (kept from the pre-tab section).
  *
