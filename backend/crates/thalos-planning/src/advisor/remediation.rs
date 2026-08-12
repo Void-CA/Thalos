@@ -29,11 +29,13 @@ use thalos_core::{
         jacobian::{GeometricJacobian, JacobianSolver, SingularityReport},
     },
     motion::segment::MotionSegment,
+    robot::joint::JointKind,
     robot::serial_chain::SerialChain,
 };
 
 use crate::feedback::materializer::{MaterializationError, ProposalMaterializer};
 use crate::feedback::operator::ActionProposal;
+use crate::interpolate::joint::trapezoidal_profile;
 
 /// The planner's fixed MoveJ time step (`compiler.rs` MoveJConfig.time_step).
 pub const TIME_STEP: f64 = 0.01;
@@ -43,6 +45,11 @@ pub const TIME_STEP: f64 = 0.01;
 /// departure must clear the FULL cone (cn < 100), not just the Error cone
 /// (cn < 1000, which the full-cone clearance implies).
 const NEAR_SINGULAR_THRESHOLD: f64 = 100.0;
+
+/// Singularity threshold (TrajectoryAnalyzer): condition number ≥ 1000 is a
+/// Singularity Error. The causal-preservation verification requires the
+/// clamped departure to be OUTSIDE this cone from [`CLEAR_BY_WAYPOINT`] on.
+const SINGULARITY_THRESHOLD: f64 = 1000.0;
 
 /// How many waypoints from the segment start a region may begin and still be
 /// treated as "start-anchored" (the fixed-start departure window).
@@ -157,6 +164,195 @@ pub fn departure_limits(
     let v = v_at_exit.max(v_triangular).max(1.0) * 1.5;
 
     (v, a)
+}
+
+/// Physical motion envelope: the per-robot actuation ceiling the departure
+/// operator may NOT exceed (P1 physical-limits contract, 4R findings R1-1 /
+/// R4-2).
+///
+/// ## Limit source
+/// The catalog specs declare POSITION limits only — every toy model builds
+/// its joints with `JointLimits::new(min, max)` leaving `velocity` and
+/// `effort` as `None` (verified `models/*/spec.rs`, M1–M4). There is therefore
+/// NO per-robot velocity/acceleration data on the chain. P1 defines a per-robot
+/// SAFETY CEILING table keyed by the chain's actuated-joint signature
+/// (`dof_count` + joint-kind sequence — the only robot identity the planner
+/// holds; `SerialChain` carries no `RobotModel`), NOT a global constant.
+///
+/// The ceilings are sized to:
+/// 1. cover the documented M3 departures (measured on the real Jacobians:
+///    Planar3R ~22.5 rad/s / ~448 rad/s², Scara ~17.4 rad/s / ~269 rad/s²)
+///    with headroom, so the permanent usability scenarios (24→1, 17→0) keep
+///    passing; and
+/// 2. bound extreme departures (the 4R finding: a straight-extension
+///    departure needs ~61 rad/s / ~1667 rad/s² — unbounded on the old code).
+///
+/// Unknown chains (URDF-loaded robots, future models) fall back to the
+/// conservative [`GENERIC_ENVELOPE`]. The documented extension point for real
+/// robots is `JointLimits.velocity` / `JointLimits.effort` on the chain's
+/// joints — when a spec or URDF declares them, this table is the override
+/// site.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PhysicalEnvelope {
+    /// Maximum joint velocity (rad/s) the departure operator may request.
+    pub max_velocity: f64,
+    /// Maximum joint acceleration (rad/s²) the departure operator may request.
+    pub max_acceleration: f64,
+}
+
+/// SCARA (4 dof: R-R-P-R) safety ceiling.
+pub const SCARA_ENVELOPE: PhysicalEnvelope = PhysicalEnvelope {
+    max_velocity: 25.0,
+    max_acceleration: 600.0,
+};
+
+/// Planar3R / Manipulator3DOF (3 dof, all revolute) safety ceiling.
+pub const PLANAR_3R_ENVELOPE: PhysicalEnvelope = PhysicalEnvelope {
+    max_velocity: 30.0,
+    max_acceleration: 900.0,
+};
+
+/// Planar2R (2 dof, both revolute) safety ceiling.
+pub const PLANAR_2R_ENVELOPE: PhysicalEnvelope = PhysicalEnvelope {
+    max_velocity: 20.0,
+    max_acceleration: 500.0,
+};
+
+/// SingleRevolute (1 dof) safety ceiling.
+pub const SINGLE_REVOLUTE_ENVELOPE: PhysicalEnvelope = PhysicalEnvelope {
+    max_velocity: 15.0,
+    max_acceleration: 400.0,
+};
+
+/// CylindricalRPP (R-P-P) safety ceiling.
+pub const CYLINDRICAL_RPP_ENVELOPE: PhysicalEnvelope = PhysicalEnvelope {
+    max_velocity: 20.0,
+    max_acceleration: 500.0,
+};
+
+/// SphericalPolarRRP (R-R-P) safety ceiling.
+pub const SPHERICAL_POLAR_RRP_ENVELOPE: PhysicalEnvelope = PhysicalEnvelope {
+    max_velocity: 20.0,
+    max_acceleration: 500.0,
+};
+
+/// Manipulator6DOF (6 dof, all revolute) safety ceiling.
+pub const MANIPULATOR_6DOF_ENVELOPE: PhysicalEnvelope = PhysicalEnvelope {
+    max_velocity: 25.0,
+    max_acceleration: 600.0,
+};
+
+/// Generic ceiling for unknown chains (URDF-loaded robots, future models):
+/// the most conservative entry in the table.
+pub const GENERIC_ENVELOPE: PhysicalEnvelope = PhysicalEnvelope {
+    max_velocity: 15.0,
+    max_acceleration: 400.0,
+};
+
+impl PhysicalEnvelope {
+    /// The envelope for the robot the chain describes (P1 per-robot limit
+    /// source): keyed by the actuated-joint signature (`dof_count` + joint
+    /// kinds in segment order).
+    pub fn for_chain(chain: &SerialChain) -> Self {
+        let kinds: Vec<JointKind> = chain
+            .segments
+            .iter()
+            .filter(|s| s.joint.dof() > 0)
+            .map(|s| s.joint.kind())
+            .collect();
+        Self::for_signature(chain.dof_count(), &kinds)
+    }
+
+    /// Envelope for a `(dof_count, joint-kind sequence)` signature. Unknown
+    /// signatures fall back to [`GENERIC_ENVELOPE`].
+    pub fn for_signature(dof: usize, kinds: &[JointKind]) -> Self {
+        use JointKind::{Prismatic, Revolute};
+        match (dof, kinds) {
+            (4, [Revolute, Revolute, Prismatic, Revolute]) => SCARA_ENVELOPE,
+            (6, [Revolute, Revolute, Revolute, Revolute, Revolute, Revolute]) => {
+                MANIPULATOR_6DOF_ENVELOPE
+            }
+            (3, [Revolute, Revolute, Revolute]) => PLANAR_3R_ENVELOPE,
+            (3, [Revolute, Prismatic, Prismatic]) => CYLINDRICAL_RPP_ENVELOPE,
+            (3, [Revolute, Revolute, Prismatic]) => SPHERICAL_POLAR_RRP_ENVELOPE,
+            (2, [Revolute, Revolute]) => PLANAR_2R_ENVELOPE,
+            (1, [Revolute]) => SINGLE_REVOLUTE_ENVELOPE,
+            _ => GENERIC_ENVELOPE,
+        }
+    }
+}
+
+/// The departure limits clamped to the robot's physical envelope, WITH causal
+/// preservation (P1 contract, spec causal-remediation "Physical Limits
+/// Respected").
+///
+/// The flow:
+/// 1. compute the ideal cone-clearing limits ([`departure_limits`]);
+/// 2. clamp both to [`PhysicalEnvelope::for_chain`] — acceleration AND
+///    velocity, per-robot;
+/// 3. RE-VERIFY the causal goal on the clamped profile: walk the SAME
+///    trajectory math the planner uses (`trapezoidal_profile` — the
+///    dispatcher's MoveJ planner at `compiler.rs` runs exactly this) and
+///    check the singular cone (cn ≥ 1000) is still cleared within the
+///    departure window.
+///
+/// Returns `Some((v, a))` when the clamped profile STILL clears the cone —
+/// the edit is honest: the repair keeps its causal goal within the physical
+/// envelope (the DUAL acceptance criterion: acceleration ≤ limit AND the
+/// remediation still removes the promised singular condition).
+///
+/// Returns `None` when the physics cannot clear the cone within the envelope
+/// (e.g. a departure whose target is itself inside the cone): the caller MUST
+/// NOT emit a clamped-but-failing edit — `reparación causal → clamp →
+/// trayectoria que ya no sale del cono` is forbidden. The recommendation
+/// degrades honestly to `Unavailable` (the whole-region gate then reports
+/// `PlanningFailed`).
+pub fn clamped_departure_limits(
+    robot: &SerialChain,
+    start: &[f64],
+    target: &[f64],
+    time_step: f64,
+) -> Option<(f64, f64)> {
+    let (ideal_v, ideal_a) = departure_limits(robot, start, target, time_step);
+    if ideal_a <= 0.0 {
+        return None; // no cone on this line — nothing to reparameterize
+    }
+    let envelope = PhysicalEnvelope::for_chain(robot);
+    let v = ideal_v.min(envelope.max_velocity);
+    let a = ideal_a.min(envelope.max_acceleration);
+    profile_clears_cone(robot, start, target, v, a, time_step).then_some((v, a))
+}
+
+/// Re-verifies causal preservation on the CLAMPED limits (P1): walk the
+/// planner's exact trajectory math ([`trapezoidal_profile`] — the same
+/// function the MoveJ dispatcher runs at `compiler.rs`) and check that every
+/// waypoint at index ≥ [`CLEAR_BY_WAYPOINT`] is OUTSIDE the singular cone
+/// (cn < 1000) — the trajectory clears the cone within the departure window.
+///
+/// The final waypoint (the departure target) is also required to be outside
+/// the cone: a departure whose TARGET is itself inside the cone can never
+/// clear it (degenerate short profiles that end before the window would
+/// otherwise pass vacuously and lie).
+fn profile_clears_cone(
+    robot: &SerialChain,
+    start: &[f64],
+    target: &[f64],
+    max_velocity: f64,
+    max_acceleration: f64,
+    time_step: f64,
+) -> bool {
+    let fk = ForwardKinematics::new(robot.clone());
+    let jacobian = GeometricJacobian::new(fk, *robot.end_effector());
+    let traj = trapezoidal_profile(start, target, max_velocity, max_acceleration, time_step);
+    let cleared = |joints: &[f64]| {
+        SingularityReport::analyze(&jacobian.evaluate(joints)).condition_number
+            < SINGULARITY_THRESHOLD
+    };
+    traj.iter()
+        .enumerate()
+        .skip(CLEAR_BY_WAYPOINT)
+        .all(|(_, wp)| cleared(wp.joints()))
+        && traj.last().is_some_and(|wp| cleared(wp.joints()))
 }
 
 /// Start-anchored singular regions: raise the segment's motion limits so the
@@ -300,7 +496,8 @@ mod tests {
 
     use super::{
         DEFAULT_PERTURBATION, SingularityDetourMaterializer, SingularityStrategy,
-        DepartureReparameterizer, TIME_STEP, departure_limits,
+        DepartureReparameterizer, TIME_STEP, departure_limits, PhysicalEnvelope,
+        clamped_departure_limits,
     };
 
     fn chain(model: RobotModel) -> SerialChain {
@@ -539,6 +736,196 @@ mod tests {
                 assert!(sa > 0.0);
             }
             other => panic!("expected Departure strategy, got {other:?}"),
+        }
+    }
+
+    // ── P1 (4R R1-1 / R4-2): physical limits respected + causal preservation ──
+    //
+    // The departure operator computed limits with NO upper bound (up to ~1667
+    // rad/s² / ~61 rad/s on real geometry) that flowed verbatim into the
+    // plan's MoveJConfig. P1 clamps them to a per-robot physical envelope AND
+    // re-verifies the causal goal on the clamped profile: the repair must
+    // STILL remove the singular condition — a clamp that produces a trajectory
+    // which no longer exits the cone is forbidden (reparación causal → clamp →
+    // trayectoria que ya no sale del cono). When the physics cannot clear the
+    // cone within the envelope, the operator returns `None` and the
+    // recommendation degrades honestly to `Unavailable` — never a
+    // clamped-but-failing edit.
+
+    #[test]
+    fn physical_envelope_is_per_robot_with_named_ceilings() {
+        // P1 limit source: the envelope is per-robot (a SCARA and a Planar3R
+        // have different actuation ceilings), keyed by the chain's
+        // actuated-joint signature — the only robot identity the planner
+        // holds (`SerialChain` carries no `RobotModel`). Unknown chains
+        // (URDF-loaded robots) fall back to the conservative generic ceiling.
+        use thalos_core::robot::joint::JointKind::{Prismatic, Revolute};
+
+        assert_eq!(
+            PhysicalEnvelope::for_signature(4, &[Revolute, Revolute, Prismatic, Revolute]),
+            PhysicalEnvelope { max_velocity: 25.0, max_acceleration: 600.0 },
+            "SCARA ceiling"
+        );
+        assert_eq!(
+            PhysicalEnvelope::for_signature(3, &[Revolute, Revolute, Revolute]),
+            PhysicalEnvelope { max_velocity: 30.0, max_acceleration: 900.0 },
+            "Planar3R / Manipulator3DOF ceiling"
+        );
+        assert_eq!(
+            PhysicalEnvelope::for_signature(2, &[Revolute, Revolute]),
+            PhysicalEnvelope { max_velocity: 20.0, max_acceleration: 500.0 },
+            "Planar2R ceiling"
+        );
+        assert_eq!(
+            PhysicalEnvelope::for_signature(1, &[Revolute]),
+            PhysicalEnvelope { max_velocity: 15.0, max_acceleration: 400.0 },
+            "SingleRevolute ceiling"
+        );
+        assert_eq!(
+            PhysicalEnvelope::for_signature(0, &[]),
+            PhysicalEnvelope { max_velocity: 15.0, max_acceleration: 400.0 },
+            "unknown signature must fall back to the conservative generic ceiling"
+        );
+        // The per-robot requirement: SCARA and Planar3R MUST differ.
+        let scara = PhysicalEnvelope::for_chain(&chain(RobotModel::Scara));
+        let p3r = PhysicalEnvelope::for_chain(&chain(RobotModel::Planar3R));
+        assert_ne!(scara, p3r, "the envelope must be per-robot, never a global constant");
+        assert!(scara.max_acceleration < p3r.max_acceleration);
+    }
+
+    #[test]
+    fn clamped_departure_limits_clamps_both_limits_and_still_clears_the_cone() {
+        // Causal-preservation contract, clamp-bite case: the departure
+        // [0,0,0] → [0.45, 0.1, 0.0] needs IDEAL limits ~34.5 rad/s / ~939
+        // rad/s² — both above the Planar3R envelope (30 / 900). The clamp must
+        // bring BOTH inside the envelope AND the clamped profile must still
+        // clear the singular cone within the departure window (the repair
+        // keeps its causal goal).
+        let robot = chain(RobotModel::Planar3R);
+        let start = vec![0.0, 0.0, 0.0];
+        let target = vec![0.45, 0.1, 0.0];
+        let envelope = PhysicalEnvelope::for_chain(&robot);
+
+        let (ideal_v, ideal_a) = departure_limits(&robot, &start, &target, TIME_STEP);
+        assert!(
+            ideal_v > envelope.max_velocity && ideal_a > envelope.max_acceleration,
+            "precondition: the ideal limits must exceed the envelope, got v={ideal_v} a={ideal_a} vs {envelope:?}"
+        );
+
+        let (v, a) = clamped_departure_limits(&robot, &start, &target, TIME_STEP)
+            .expect("the clamped departure must still clear the cone");
+        assert!(
+            v <= envelope.max_velocity && a <= envelope.max_acceleration,
+            "the clamp must respect the envelope, got v={v} a={a}"
+        );
+        assert_cone_cleared(&robot, &start, &target, v, a);
+    }
+
+    #[test]
+    fn clamped_departure_limits_preserves_the_m3_causal_scenarios() {
+        // The permanent usability scenarios (24→1 Planar3R, 17→0 Scara) must
+        // keep passing: their ideal limits (~22.5 rad/s / ~448 rad/s² and
+        // ~17.4 rad/s / ~269 rad/s², measured on the real Jacobians) are
+        // INSIDE the envelope, so the clamp is a no-op AND the causal
+        // clearance within ≤3 waypoints is preserved.
+        let scenarios = [
+            (
+                RobotModel::Planar3R,
+                vec![0.0, 0.0, 0.0],
+                vec![0.5, -0.3, 0.1],
+            ),
+            (
+                RobotModel::Scara,
+                vec![0.0, 0.0, 0.0, 0.0],
+                vec![0.5, -0.3, -0.1, 0.0],
+            ),
+        ];
+        for (model, start, target) in scenarios {
+            let robot = chain(model);
+            let envelope = PhysicalEnvelope::for_chain(&robot);
+            let (v, a) = clamped_departure_limits(&robot, &start, &target, TIME_STEP)
+                .expect("the documented M3 departures must remain repairable");
+            assert!(v <= envelope.max_velocity && a <= envelope.max_acceleration);
+            assert_cone_cleared(&robot, &start, &target, v, a);
+        }
+    }
+
+    #[test]
+    fn clamped_departure_limits_returns_none_when_physics_cannot_clear_the_cone() {
+        // The 4R finding (R1-1) distilled: the straight-extension departure
+        // [0,0,0] → [0.5, 0.0, 0.0] keeps the WHOLE line inside the cone —
+        // ideal a ≈ 1667 rad/s², v ≈ 61 rad/s, NO upper bound on the old
+        // code. The clamped profile cannot reach the cone exit within the
+        // departure window, so the operator MUST return `None` — never a
+        // clamped-but-failing edit that looks valid but does not remove the
+        // singular condition.
+        let robot = chain(RobotModel::Planar3R);
+        let start = vec![0.0, 0.0, 0.0];
+        let target = vec![0.5, 0.0, 0.0];
+
+        let (ideal_v, ideal_a) = departure_limits(&robot, &start, &target, TIME_STEP);
+        assert!(
+            ideal_a > 1500.0,
+            "precondition: the ideal acceleration must far exceed the envelope, got {ideal_a}"
+        );
+        assert!(
+            ideal_v > 50.0,
+            "precondition: the ideal velocity must far exceed the envelope, got {ideal_v}"
+        );
+
+        assert_eq!(
+            clamped_departure_limits(&robot, &start, &target, TIME_STEP),
+            None,
+            "when the clamped profile cannot clear the cone, the operator must return None"
+        );
+    }
+
+    #[test]
+    fn clamped_departure_limits_never_exceeds_the_envelope_across_geometries() {
+        // Triangulation: for a spread of departures on both catalog robots,
+        // the operator either returns None (the physics genuinely cannot
+        // clear the cone — the ideal limits exceed the envelope) or limits
+        // inside the envelope that still clear the cone. A None without an
+        // envelope violation would mask a bug.
+        let cases: Vec<(RobotModel, Vec<f64>, Vec<f64>)> = vec![
+            (RobotModel::Planar3R, vec![0.0, 0.0, 0.0], vec![0.5, -0.3, 0.1]),
+            (RobotModel::Planar3R, vec![0.0, 0.0, 0.0], vec![0.45, 0.1, 0.0]),
+            (RobotModel::Planar3R, vec![0.0, 0.0, 0.0], vec![2.0, -1.0, 0.5]),
+            (RobotModel::Planar3R, vec![0.0, 0.0, 0.0], vec![0.5, 0.0, 0.0]),
+            (RobotModel::Planar3R, vec![0.0, 0.0, 0.0], vec![0.6, 0.1, 0.0]),
+            (
+                RobotModel::Scara,
+                vec![0.0, 0.0, 0.0, 0.0],
+                vec![0.5, -0.3, -0.1, 0.0],
+            ),
+            (
+                RobotModel::Scara,
+                vec![0.0, 0.0, 0.0, 0.0],
+                vec![1.5, -0.8, -0.3, 0.5],
+            ),
+        ];
+        for (model, start, target) in cases {
+            let robot = chain(model);
+            let envelope = PhysicalEnvelope::for_chain(&robot);
+            match clamped_departure_limits(&robot, &start, &target, TIME_STEP) {
+                Some((v, a)) => {
+                    assert!(v > 0.0 && a > 0.0, "clamped limits must be positive");
+                    assert!(
+                        v <= envelope.max_velocity && a <= envelope.max_acceleration,
+                        "clamped limits must respect the envelope (v={v} a={a} vs {envelope:?})"
+                    );
+                    assert_cone_cleared(&robot, &start, &target, v, a);
+                }
+                None => {
+                    let (ideal_v, ideal_a) =
+                        departure_limits(&robot, &start, &target, TIME_STEP);
+                    assert!(
+                        ideal_v > envelope.max_velocity || ideal_a > envelope.max_acceleration,
+                        "None without an envelope violation would mask a bug \
+                         (ideal v={ideal_v} a={ideal_a} vs {envelope:?})"
+                    );
+                }
+            }
         }
     }
 }

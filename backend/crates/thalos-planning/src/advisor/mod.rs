@@ -46,7 +46,7 @@ use crate::recommendation::{
 pub mod remediation;
 use remediation::{
     DepartureReparameterizer, SingularityDetourMaterializer, SingularityStrategy, TIME_STEP,
-    departure_limits, DEPARTURE_WINDOW, DEFAULT_PERTURBATION,
+    clamped_departure_limits, DEPARTURE_WINDOW, DEFAULT_PERTURBATION,
 };
 
 /// Generador de acciones.
@@ -490,12 +490,27 @@ impl PlanAdvisor {
                     perturbation: DEFAULT_PERTURBATION,
                 });
             };
-            let (max_velocity, max_acceleration) = departure_limits(chain, start_joints, target, TIME_STEP);
-            if max_acceleration > 0.0 {
-                return Some(SingularityStrategy::Departure {
-                    max_velocity,
-                    max_acceleration,
-                });
+            // P1 (4R R1-1 / R4-2): the departure limits are clamped to the
+            // robot's PHYSICAL envelope AND re-verified for causal
+            // preservation — the clamped profile must still clear the cone
+            // within the departure window. When the physics cannot clear it
+            // within the envelope, `clamped_departure_limits` returns None
+            // and the operator degrades to the Detour: a clamped-but-failing
+            // Departure edit (reparación causal → clamp → trayectoria que ya
+            // no sale del cono) is NEVER emitted — the whole-region gate then
+            // honestly marks the recommendation `Unavailable { PlanningFailed }`.
+            match clamped_departure_limits(chain, start_joints, target, TIME_STEP) {
+                Some((max_velocity, max_acceleration)) => {
+                    return Some(SingularityStrategy::Departure {
+                        max_velocity,
+                        max_acceleration,
+                    });
+                }
+                None => {
+                    return Some(SingularityStrategy::Detour {
+                        perturbation: DEFAULT_PERTURBATION,
+                    });
+                }
             }
         }
         Some(SingularityStrategy::Detour {
@@ -1579,6 +1594,92 @@ mod tests {
     // threads the TCP into the verification context. An identity TCP at the
     // flange is semantically identical to no TCP, so the recommendations must
     // be identical — a deterministic behavioral proof the TCP flows through.
+
+    #[test]
+    fn physics_limited_departure_is_unavailable_not_a_clamped_lying_edit() {
+        // P1 (4R R1-1 / R4-2) end-to-end: a start-anchored departure whose
+        // cone cannot be cleared within the physical envelope ([0,0,0] →
+        // [0.5,0,0] on the Planar3R: ideal ~61 rad/s / ~1667 rad/s², far
+        // beyond the 30/900 ceiling — the WHOLE straight-extension line stays
+        // singular). The recommendation MUST be `Unavailable { PlanningFailed }`
+        // — NEVER an `Available` edit that looks valid but does not remove the
+        // singular condition (reparación causal → clamp → trayectoria que ya
+        // no sale del cono is forbidden).
+        let robot = RobotRegistry::create_default(RobotModel::Planar3R);
+        let program = crate::motion::program::PlanningProgram::new(vec![MotionSegment::MoveJ {
+            origin: thalos_core::ids::OperationId("op-j".to_string()),
+            target: vec![0.5, 0.0, 0.0],
+            max_velocity: None,
+            max_acceleration: None,
+        }]);
+        let start = vec![0.0, 0.0, 0.0];
+        let solver = real_solver(&robot);
+        let state = RobotState::new(start.clone());
+        let ctx = SegmentPlanningContext {
+            robot: &robot,
+            current_state: &state,
+            ik_solver: &solver,
+            tcp: None,
+        };
+        let compiled = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()))
+            .compile(&program, &ctx)
+            .expect("the base program must compile");
+        let artifact = ArtifactRef::MotionPlan(MotionPlanId("p1-physics".to_string()));
+        let (_analysis, observations) = TrajectoryAnalyzer::new(&robot, None)
+            .analyze_with_observations(artifact, &compiled.merged_trajectory)
+            .expect("analysis must succeed");
+        assert!(
+            observations
+                .iter()
+                .filter(|o| o.kind == ObservationKind::Singularity)
+                .count()
+                >= 4,
+            "precondition: the straight-extension departure must saturate the score"
+        );
+
+        let recommendations =
+            PlanAdvisor.recommend(&observations, &program, &solver, &start);
+        assert!(
+            !recommendations.iter().any(|r| {
+                r.action.kind == ActionKind::Singularity
+                    && r.status == Some(RecommendationStatus::Available)
+            }),
+            "a departure the physics cannot clear must NEVER be Available"
+        );
+        let singularity = recommendations
+            .iter()
+            .find(|r| r.action.kind == ActionKind::Singularity)
+            .expect("the singularity remediation must still be present");
+        assert_eq!(
+            singularity.status,
+            Some(RecommendationStatus::Unavailable),
+            "the honest outcome for a physics-limited departure is Unavailable"
+        );
+        assert_eq!(
+            singularity.reason,
+            Some(UnavailabilityReason::PlanningFailed),
+            "the honest reason is planning_failed — the region gate must reject the degraded edit"
+        );
+        // The edit must NOT be a clamped Departure: it carries no limits at
+        // all (the Detour keeps the original `None`), so nothing above the
+        // envelope can flow into a plan.
+        match &singularity.edit {
+            ProgramEdit::ReplaceSegment { replacement, .. } => match &replacement[0] {
+                MotionSegment::MoveJ {
+                    max_velocity,
+                    max_acceleration,
+                    ..
+                } => {
+                    assert!(
+                        max_velocity.is_none() && max_acceleration.is_none(),
+                        "the degraded edit must not carry clamped-but-failing departure limits"
+                    );
+                }
+                other => panic!("expected a MoveJ replacement, got {other:?}"),
+            },
+            other => panic!("expected ReplaceSegment, got {other:?}"),
+        }
+    }
 
     #[test]
     fn tcp_identity_at_flange_is_equivalent_to_no_tcp() {
