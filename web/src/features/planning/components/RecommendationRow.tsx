@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { planAnalysisApi } from '@/features/analysis/api/plan-analysis-api'
+import { refetchAnalysis } from '@/features/analysis/api/refetch-analysis'
 import type { ApplyResponse, PreviewResponse } from '@/features/analysis/api/plan-analysis.types'
 import { useSceneStore } from '@/features/viewport/store'
 import { sceneService } from '@/features/viewport/services/scene.service'
@@ -24,6 +25,9 @@ import { Check, Eye, Loader2, Play, RotateCcw } from 'lucide-react'
  * - PR5 (undo O(1)): Undo está ACTIVO tras aplicar ESTA fila — el backend
  *   popea el último comando y aplica su inverse almacenado (sin replay);
  *   la fila vuelve al estado previo y la escena se refresca.
+ * - intelligible-repair-loop (3.2/3.3): tras Apply/Undo la fila también
+ *   re-fetch del report canónico (`refetchAnalysis`) para que veredicto,
+ *   narrativa, regiones y métricas deriven del estado del servidor.
  */
 export function RecommendationRow({ recommendation }: { recommendation: RecommendationWire }) {
   const [previewing, setPreviewing] = useState(false)
@@ -72,6 +76,10 @@ export function RecommendationRow({ recommendation }: { recommendation: Recommen
         snapshot.activeTcp,
         snapshot.execution,
       )
+      // intelligible-repair-loop (3.2): el análisis y sus derivados (veredicto,
+      // narrativa, regiones, métricas) también deben reflejar el plan APLICADO —
+      // re-fetch del report canónico (UI deriva del estado del servidor).
+      await refetchAnalysis()
     } catch (err: any) {
       setError(err.message ?? 'Apply failed')
     } finally {
@@ -97,6 +105,8 @@ export function RecommendationRow({ recommendation }: { recommendation: Recommen
         snapshot.activeTcp,
         snapshot.execution,
       )
+      // intelligible-repair-loop (3.3): el análisis refleja el plan RESTAURADO.
+      await refetchAnalysis()
     } catch (err: any) {
       setError(err.message ?? 'Undo failed')
     } finally {

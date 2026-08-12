@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import { act } from 'react'
 import '@testing-library/jest-dom/vitest'
 import { RecommendationCard } from './RecommendationCard'
+import { useAnalysisStore } from '@/features/analysis/store'
 import { useSceneStore } from '@/features/viewport/store'
 import type {
   AnalysisReportWire,
@@ -127,6 +128,7 @@ const undoResponse: UndoResponse = {
 
 beforeEach(() => {
   act(() => {
+    useAnalysisStore.getState().clear()
     useSceneStore.getState().reset()
   })
   apiMocks.preview.mockReset()
@@ -202,5 +204,96 @@ describe('RecommendationCard — preview (3.1)', () => {
     // store stays untouched (RecommendationRow owns that mechanism).
     expect(useSceneStore.getState().trajectoryViewMode).toBe('original')
     expect(useSceneStore.getState().previewPositions).toBeNull()
+  })
+})
+
+describe('RecommendationCard — apply/undo re-fetch flow (3.2/3.3, UI derives from server state)', () => {
+  it('apply re-fetches the analysis and replaces the store report (never builds from PreviewResponse)', async () => {
+    const updatedReport: AnalysisReportWire = {
+      ...report,
+      artifact: { ...report.artifact, id: 'plan-2' },
+    }
+    apiMocks.analyze.mockResolvedValue(updatedReport)
+    act(() => {
+      useAnalysisStore.getState().setAnalysis(report)
+    })
+
+    render(<RecommendationCard recommendation={recommendation} report={report} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    await waitFor(() => {
+      expect(apiMocks.analyze).toHaveBeenCalledTimes(1)
+    })
+    expect(apiMocks.apply).toHaveBeenCalledWith(recommendation.id)
+    // The canonical report in the store IS the re-fetched server report.
+    expect(useAnalysisStore.getState().report).toBe(updatedReport)
+  })
+
+  it('enables Undo from the SERVER history_length (ApplyResponse) — never local arithmetic', async () => {
+    apiMocks.apply.mockResolvedValue({ ...applyResponse, history_length: 2 })
+    render(<RecommendationCard recommendation={recommendation} report={report} />)
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled()
+    })
+  })
+
+  it('undo re-fetches the analysis again and restores the previous assessment', async () => {
+    const appliedReport: AnalysisReportWire = {
+      ...report,
+      artifact: { ...report.artifact, id: 'plan-2' },
+    }
+    const restoredReport: AnalysisReportWire = {
+      ...report,
+      artifact: { ...report.artifact, id: 'plan-1' },
+    }
+    apiMocks.analyze
+      .mockResolvedValueOnce(appliedReport) // after apply
+      .mockResolvedValueOnce(restoredReport) // after undo
+    act(() => {
+      useAnalysisStore.getState().setAnalysis(report)
+    })
+
+    render(<RecommendationCard recommendation={recommendation} report={report} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    await waitFor(() => {
+      expect(apiMocks.analyze).toHaveBeenCalledTimes(1)
+    })
+    expect(useAnalysisStore.getState().report).toBe(appliedReport)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    await waitFor(() => {
+      expect(apiMocks.analyze).toHaveBeenCalledTimes(2)
+    })
+    expect(apiMocks.undo).toHaveBeenCalledTimes(1)
+    expect(useAnalysisStore.getState().report).toBe(restoredReport)
+    // The applied feedback is cleared after the undo.
+    expect(screen.queryByTestId('recommendation-applied')).not.toBeInTheDocument()
+  })
+
+  it('disables Undo when the server reports an empty history (UndoResponse history_length 0)', async () => {
+    apiMocks.undo.mockResolvedValue({ ...undoResponse, history_length: 0 })
+    apiMocks.analyze.mockResolvedValue(report)
+    render(<RecommendationCard recommendation={recommendation} report={report} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled()
+    })
+    expect(apiMocks.undo).toHaveBeenCalledTimes(1)
+  })
+
+  it('preview never re-fetches the analysis (read-only simulation)', async () => {
+    render(<RecommendationCard recommendation={recommendation} report={report} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    await screen.findByTestId('recommendation-preview')
+    expect(apiMocks.analyze).not.toHaveBeenCalled()
   })
 })

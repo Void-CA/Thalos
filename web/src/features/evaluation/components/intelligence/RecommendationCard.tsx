@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { planAnalysisApi } from '@/features/analysis/api/plan-analysis-api'
+import { refetchAnalysis } from '@/features/analysis/api/refetch-analysis'
 import type {
   ApplyResponse,
   PreviewResponse,
@@ -25,8 +26,11 @@ import { Check, Eye, Loader2, Play, RotateCcw } from 'lucide-react'
  * Proposed → Improvement + continuity panel. D8: an `unavailable` edit never
  * applies — the Apply button is disabled.
  *
- * The apply/undo re-fetch (UI derives from server state) lives in the flow
- * tasks (3.2/3.3) — see `refetch-analysis.ts`.
+ * Apply/Undo re-fetch the analysis through `refetchAnalysis` (UI derives from
+ * server state): the displayed assessment/narrative/metrics always match the
+ * persisted program, never a PreviewResponse or a local delta. `history_length`
+ * is SERVER-RETURNED state (ApplyResponse/UndoResponse) — Undo renders only
+ * while the latest server value is > 0; the card never ++/-- locally.
  */
 export function RecommendationCard({
   recommendation,
@@ -40,6 +44,9 @@ export function RecommendationCard({
   const [applying, setApplying] = useState(false)
   const [applied, setApplied] = useState<ApplyResponse | null>(null)
   const [undoing, setUndoing] = useState(false)
+  /** Undo-history size as LAST RETURNED by the server (Apply/UndoResponse).
+   *  Null until the first flow response; Undo renders only when > 0. */
+  const [historyLength, setHistoryLength] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const unavailable = recommendation.status === 'unavailable'
@@ -82,6 +89,10 @@ export function RecommendationCard({
     try {
       const res = await planAnalysisApi.apply(recommendation.id)
       setApplied(res)
+      setHistoryLength(res.history_length)
+      // The displayed assessment/narrative/metrics MUST match the APPLIED
+      // program — re-fetch the canonical report (never build from preview).
+      await refetchAnalysis()
     } catch (err: any) {
       setError(err.message ?? 'Apply failed')
     } finally {
@@ -93,8 +104,11 @@ export function RecommendationCard({
     setUndoing(true)
     setError(null)
     try {
-      await planAnalysisApi.undo()
+      const res = await planAnalysisApi.undo()
       setApplied(null)
+      setHistoryLength(res.history_length)
+      // Display restores the PREVIOUS assessment — re-fetch the report.
+      await refetchAnalysis()
     } catch (err: any) {
       setError(err.message ?? 'Undo failed')
     } finally {
@@ -134,9 +148,9 @@ export function RecommendationCard({
           </button>
           <button
             onClick={handleUndo}
-            disabled={undoing || applied === null}
+            disabled={undoing || historyLength === null || historyLength <= 0}
             title={
-              applied === null
+              historyLength === null || historyLength <= 0
                 ? 'No applied command to undo'
                 : 'Undo the last applied command (O(1) via stored inverse)'
             }
