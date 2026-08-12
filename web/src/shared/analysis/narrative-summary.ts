@@ -51,8 +51,8 @@ const RISK_HEADLINES: Record<AssessmentWire['risk'], string> = {
 
 /** Risk contribution direction per canonical variable: -1 means lower is worse
  *  (manipulability, clearance), +1 means higher is worse (proximity,
- *  complexity) — the fuzzy KB semantics. Unknown keys score 0 and are never
- *  promoted as primary factors. */
+ *  complexity) — the fuzzy KB semantics. Keys outside this table are excluded
+ *  from `primary_factors` (direction unknown → cannot be ranked). */
 const RISK_DIRECTION: Record<string, number> = {
   manipulability: -1,
   collision_clearance: -1,
@@ -74,9 +74,11 @@ function humanizeKey(key: string): string {
 
 /** The most problematic evidence variables PRESENT in the input, ranked by
  *  risk contribution (top 3, stable order). Only keys actually carried by the
- *  wire are ever included — traceability invariant. */
+ *  wire AND with a known risk direction are ever included — traceability
+ *  invariant; unknown keys cannot be ranked (direction unknown). */
 function primaryFactorsOf(evidence: Record<string, number>): NarrativeFactor[] {
   return Object.entries(evidence)
+    .filter(([key]) => RISK_DIRECTION[key] !== undefined)
     .map(([key, value]) => ({ key, score: problemScore(key, value) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 3)
