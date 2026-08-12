@@ -113,6 +113,25 @@ export function bindingPhrase(bindings: Record<string, string>): string {
   return phrases.length > 0 ? phrases.join('; ') : '—'
 }
 
+/** One trace binding rendered in the "why" cell: the human phrase plus the
+ *  numeric membership degree when it is one (the real wire shape
+ *  `{"Manipulability IS low": "0.667"}`). Fact / set-name bindings carry no
+ *  degree — their phrase already shows the value. */
+export interface BindingEntry {
+  phrase: string
+  degree: string | null
+}
+
+/** Human "why" entries, one per antecedent binding — each with its phrase and,
+ *  for a metric membership degree, the raw numeric value (rendered beside the
+ *  phrase as "· 0.667"). Empty bindings → `[]`. */
+export function bindingEntries(bindings: Record<string, string>): BindingEntry[] {
+  return Object.entries(bindings).map(([key, value]) => ({
+    phrase: bindingEntryPhrase(key, value),
+    degree: /^.+?\s+IS\s+\w+$/i.test(key) ? value.trim() : null,
+  }))
+}
+
 /** Human "what": the rule's derived output read as produced consequences, e.g.
  *  `{danger_zone: true}` → "marked danger zone". Risk-set keys read as
  *  "raised risk to …". Empty → "—". */

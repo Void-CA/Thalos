@@ -7,6 +7,7 @@ import {
   ruleLabel,
   isPositiveRule,
   bindingPhrase,
+  bindingEntries,
   consequentPhrase,
 } from './rules'
 
@@ -133,6 +134,30 @@ describe('bindingPhrase — human "why" from the trace bindings', () => {
 
   it('returns "—" for empty bindings', () => {
     expect(bindingPhrase({})).toBe('—')
+  })
+})
+
+describe('bindingEntries — per-binding phrase + membership degree for the table', () => {
+  it('pairs each wire IS binding with its numeric membership degree', () => {
+    expect(bindingEntries({ 'Manipulability IS low': '0.667' })).toEqual([
+      { phrase: 'Manipulability is low', degree: '0.667' },
+    ])
+    expect(bindingEntries({ 'CollisionClearance IS danger': '1.000' })).toEqual([
+      { phrase: 'Collision clearance is danger', degree: '1.000' },
+    ])
+  })
+
+  it('carries no degree for set-name and fact bindings (the phrase already shows them)', () => {
+    expect(bindingEntries({ manipulability: 'low' })).toEqual([
+      { phrase: 'Manipulability is low', degree: null },
+    ])
+    expect(bindingEntries({ safe_clearance: 'true' })).toEqual([
+      { phrase: 'safe clearance is true', degree: null },
+    ])
+  })
+
+  it('returns an empty array for empty bindings', () => {
+    expect(bindingEntries({})).toEqual([])
   })
 })
 

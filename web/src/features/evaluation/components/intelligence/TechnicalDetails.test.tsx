@@ -106,6 +106,43 @@ describe('TechnicalDetails — ONE collapsible detail section (closed by default
     expect(row).toHaveTextContent('Collision danger')
   })
 
+  it('renders the reasoning as a dense audit table with aligned columns and degrees', () => {
+    const reasonedTrace: AssessmentTraceEntryWire[] = [
+      {
+        rule_id: 'R01_collision_danger',
+        priority: 10,
+        bindings: { 'CollisionClearance IS danger': '1.000' },
+        derived_output: {},
+      },
+      {
+        rule_id: 'R07_low_manipulability',
+        priority: 3,
+        bindings: { 'Manipulability IS low': '0.667' },
+        derived_output: { danger_zone: true },
+      },
+    ]
+    render(<TechnicalDetails rules={rules} evidence={evidence} trace={reasonedTrace} />)
+    fireEvent.click(screen.getByTestId('technical-details-toggle'))
+
+    const table = screen.getByRole('table')
+    expect(table).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Rule' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Why' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Produced' })).toBeInTheDocument()
+
+    const rows = screen.getAllByTestId('rule-reasoning-row')
+    expect(rows).toHaveLength(3)
+    const firstWhy = within(rows[0]).getByTestId('rule-why')
+    expect(firstWhy).toHaveTextContent('Collision clearance is danger')
+    expect(firstWhy).toHaveTextContent('· 1.000')
+    const secondWhy = within(rows[1]).getByTestId('rule-why')
+    expect(secondWhy).toHaveTextContent('Manipulability is low')
+    expect(secondWhy).toHaveTextContent('· 0.667')
+    expect(within(rows[1]).getByTestId('rule-produced')).toHaveTextContent('marked danger zone')
+    // A rule without a trace entry still renders a row, with "—" for why/produced.
+    expect(within(rows[2]).getByTestId('rule-why')).toHaveTextContent('—')
+  })
+
   it('singularizes the rule count', () => {
     render(<TechnicalDetails rules={[rules[0]]} evidence={{}} trace={[]} />)
     expect(screen.getByTestId('technical-details-toggle')).toHaveTextContent('1 rule')
