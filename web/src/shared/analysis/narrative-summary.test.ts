@@ -17,6 +17,10 @@ import type { AssessmentWire, ProblemRegionWire } from '@/shared/contracts/analy
  * - `recommendation_context` is null when the assessment references no
  *   recommendations;
  * - no factor/key absent from the input evidence is ever asserted.
+ *
+ * UX redesign (binding brief): the summary reads like a human verdict —
+ * plain English, no raw rule ids, no raw evidence keys, human factor labels
+ * derived from evidence value + risk direction.
  */
 
 const baseAssessment: AssessmentWire = {
@@ -68,15 +72,14 @@ describe('buildNarrativeSummary — headline (risk tier)', () => {
 })
 
 describe('buildNarrativeSummary — summary grounding (critical + region)', () => {
-  it('cites the criticality and the region evidence (cause + span) when a critical verdict meets a region', () => {
+  it('cites the criticality and the region evidence (cause + human span) when a critical verdict meets a region', () => {
     const narrative = buildNarrativeSummary(
       { ...baseAssessment, risk: 'critical' },
       [criticalRegion],
     )
     expect(narrative.summary.toLowerCase()).toContain('critical')
     expect(narrative.summary).toContain('Singularity near waypoint 10')
-    expect(narrative.summary).toContain('wp10')
-    expect(narrative.summary).toContain('wp20')
+    expect(narrative.summary).toContain('waypoints 10\u201320')
   })
 
   it('keeps the summary silent about evidence keys absent from the input', () => {
@@ -86,6 +89,78 @@ describe('buildNarrativeSummary — summary grounding (critical + region)', () =
     )
     expect(narrative.summary).not.toContain('singularity_proximity')
     expect(narrative.summary).not.toContain('collision_clearance')
+  })
+
+  it('stays within 2-4 sentences', () => {
+    const narrative = buildNarrativeSummary(
+      { ...baseAssessment, risk: 'high' },
+      [criticalRegion, criticalRegion, criticalRegion],
+    )
+    const sentences = narrative.summary.match(/[^.!?]+[.!?]/g) ?? []
+    expect(sentences.length).toBeGreaterThanOrEqual(2)
+    expect(sentences.length).toBeLessThanOrEqual(4)
+  })
+})
+
+describe('buildNarrativeSummary — human phrasing (UX redesign)', () => {
+  it('phrases the summary in plain English with no raw rule ids or raw evidence keys', () => {
+    const narrative = buildNarrativeSummary(
+      {
+        ...baseAssessment,
+        risk: 'medium',
+        triggered_rules: [
+          { id: 'R06_high_complexity', category: 'trajectory', priority: 4 },
+          { id: 'R10_manipulability_high', category: 'manipulability', priority: 2 },
+        ],
+        evidence: {
+          trajectory_complexity: 100.44,
+          manipulability: 0.649,
+          singularity_proximity: 0.044,
+        },
+      },
+      [],
+    )
+    expect(narrative.summary.toLowerCase()).toContain('trajectory complexity is very high')
+    expect(narrative.summary.toLowerCase()).toContain('manipulability is moderate')
+    // No raw rule ids, no snake_case evidence keys, no rules-triggered sentence.
+    expect(narrative.summary).not.toContain('R06_high_complexity')
+    expect(narrative.summary).not.toContain('R10_manipulability_high')
+    expect(narrative.summary).not.toContain('trajectory_complexity')
+    expect(narrative.summary).not.toContain('singularity_proximity')
+    expect(narrative.summary).not.toMatch(/R\d\d_[a-z_]+/)
+    expect(narrative.summary).not.toMatch(/triggered/i)
+  })
+
+  it('labels the primary factors humanly from the evidence value + direction', () => {
+    const narrative = buildNarrativeSummary(
+      {
+        ...baseAssessment,
+        evidence: {
+          trajectory_complexity: 100.44,
+          manipulability: 0.649,
+          collision_clearance: -0.05,
+        },
+      },
+      [],
+    )
+    const labels = narrative.primary_factors.map((f) => f.label)
+    expect(labels).toContain('Very high trajectory complexity')
+    expect(labels).toContain('Moderate manipulability')
+    expect(labels).toContain('Collision danger')
+    // No raw key ever becomes a visible label.
+    expect(labels).not.toContain('trajectory_complexity')
+  })
+
+  it('omits the triggered-rules sentence even when rules fired', () => {
+    const narrative = buildNarrativeSummary(
+      {
+        ...baseAssessment,
+        triggered_rules: [{ id: 'R01_collision_danger', category: 'collision', priority: 10 }],
+        evidence: {},
+      },
+      [],
+    )
+    expect(narrative.summary).not.toMatch(/rule/i)
   })
 })
 
