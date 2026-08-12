@@ -385,7 +385,7 @@ function MetricChips({ metrics }: { metrics: Record<string, number> | undefined 
   }
 
   return (
-    <div data-testid="metric-chips" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+    <div data-testid="metric-chips" className="grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
       {chips.map((chip) => (
         <div
           key={chip.label}
