@@ -2,8 +2,16 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useWorkspaceStore, type CloudPoint } from '@/features/workspace-analysis/workspace-analysis-store'
 import { CLOUD_WORKSPACE, CLOUD_GENERIC, SINGULAR_NORMAL, SINGULAR_NEAR, SINGULAR_SINGULAR, MANIP_HIGH, MANIP_MED, MANIP_LOW } from '@/shared/tokens'
+import { useSceneStore } from '../store'
+import { scaleFromRefDim } from './scale'
 
 export function PointCloud() {
+  // Point size scales with the scene's referenceDimension (spec
+  // scene-viewport-entities "Overlay Sizes Scale with referenceDimension") —
+  // on small robots (icebot ~0.2 m) a fixed 0.015 point is proportionally 5×
+  // bigger than on a 1 m robot. Absent scene data degrades to 1.0 via
+  // scaleFromRefDim (no-op, current sizes preserved).
+  const refDim = useSceneStore(s => s.data?.referenceDimension) ?? 1.0
   const colorMode = useWorkspaceStore(s => s.colorMode)
   const visible = useWorkspaceStore(s => s.showPointCloud)
   const ws = useWorkspaceStore(s => s.workspaceSamples)
@@ -36,7 +44,7 @@ export function PointCloud() {
 
   return (
     <points geometry={buffer}>
-      <pointsMaterial size={0.015} sizeAttenuation vertexColors transparent opacity={0.7} depthTest depthWrite={false} blending={THREE.AdditiveBlending} />
+      <pointsMaterial size={scaleFromRefDim(refDim, 0.015)} sizeAttenuation vertexColors transparent opacity={0.7} depthTest depthWrite={false} blending={THREE.AdditiveBlending} />
     </points>
   )
 }
