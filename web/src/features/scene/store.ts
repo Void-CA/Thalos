@@ -24,6 +24,8 @@ interface SceneState {
   locations: SceneLocation[]
   tools: SceneTool[]
   homePose: PoseDef
+  /** SCARA approach/retreat transit height (metres) — always-on for MVP. */
+  approachHeight: number
 
   addObject: (obj: SceneObject) => void
   removeObject: (id: string) => void
@@ -37,6 +39,7 @@ interface SceneState {
   removeTool: (id: string) => void
 
   setHomePose: (pose: PoseDef) => void
+  setApproachHeight: (height: number) => void
 
   /** Build a TaskDocument from the current scene + operations */
   toTaskDocument: (operations: SemanticOp[]) => TaskDocument
@@ -62,6 +65,9 @@ export const SEEDED_LOCATIONS: SceneLocation[] = [
   { id: 'tray-1', name: 'Tray', pose: { ...defaultLocationPose } },
 ]
 
+/** Default SCARA approach height (m) — matches the backend serde default. */
+export const DEFAULT_APPROACH_HEIGHT = 0.05
+
 /**
  * Domain scene store (design D4, area-scene spec "Scene Store Renamed").
  *
@@ -79,6 +85,7 @@ export const useDomainSceneStore = create<SceneState>()(
       locations: SEEDED_LOCATIONS.map((l) => ({ ...l })),
       tools: [],
       homePose: { ...defaultPose },
+      approachHeight: DEFAULT_APPROACH_HEIGHT,
 
       addObject: (obj) => set((s) => ({ objects: [...s.objects, obj] })),
       removeObject: (id) =>
@@ -106,6 +113,8 @@ export const useDomainSceneStore = create<SceneState>()(
 
       setHomePose: (pose) => set({ homePose: pose }),
 
+      setApproachHeight: (height) => set({ approachHeight: height }),
+
       toTaskDocument: (operations) => {
         const s = get()
         const scene: SceneContent = {
@@ -123,6 +132,7 @@ export const useDomainSceneStore = create<SceneState>()(
           })),
           tools: s.tools.map((t) => ({ id: t.id, name: t.name })),
           home_pose: s.homePose,
+          approach_height: s.approachHeight,
         }
         const metadata: DocMetadata = {
           name: 'Task',

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent, within } from '@testing-library/react'
+import { render, screen, cleanup, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { TechnicalDetails } from './TechnicalDetails'
 import type {
@@ -9,24 +9,22 @@ import type {
 } from '@/shared/contracts/analysis-report'
 
 /**
- * TechnicalDetails (structural UX redesign) — ONE collapsible detail section
- * owning the rule reasoning (with agenda priority) and the dense evidence
- * table, CLOSED by default. The inference trace table is GONE — its priority
- * is now a RuleReasoning column, so no `assessment-trace*` testids exist. The
- * child testids (`rule-reasoning*`, `assessment-evidence*`) survive unchanged.
+ * TechnicalDetails — the inference AUDIT, ALWAYS visible (no collapsible): the
+ * Intelligence tab is pure assessment now that the Advisor lives in its own
+ * Repairs tab, so the reasoning no longer hides. Pins: the section header
+ * "Inference trace" + count hint; rule reasoning (with priority) and the dense
+ * evidence table render without any click.
  */
 
 const rules: TriggeredRuleWire[] = [
   { id: 'R01_collision_danger', category: 'collision', priority: 10 },
   { id: 'R07_low_manipulability', category: 'manipulability', priority: 3 },
-  { id: 'R06_high_complexity', category: 'trajectory', priority: 1 },
 ]
 
 const evidence = {
   manipulability: 0.75,
   singularity_proximity: 0.2,
   collision_clearance: 0.6,
-  trajectory_complexity: 0.4,
 }
 
 const trace: AssessmentTraceEntryWire[] = [
@@ -36,30 +34,23 @@ const trace: AssessmentTraceEntryWire[] = [
 beforeEach(() => cleanup())
 afterEach(() => cleanup())
 
-describe('TechnicalDetails — ONE collapsible detail section (closed by default)', () => {
-  it('is collapsed by default and shows the count hint in the toggle', () => {
+describe('TechnicalDetails — the inference audit, always visible', () => {
+  it('renders the section with the count hint (no collapsible)', () => {
     render(<TechnicalDetails rules={rules} evidence={evidence} trace={trace} />)
-    expect((screen.getByTestId('technical-details') as HTMLDetailsElement).open).toBe(false)
-    const toggle = screen.getByTestId('technical-details-toggle')
-    expect(toggle).toHaveTextContent('Technical details')
-    expect(toggle).toHaveTextContent('3 rules')
-    expect(toggle).toHaveTextContent('4 evidence')
+    const section = screen.getByTestId('technical-details')
+    expect(section.tagName).toBe('SECTION')
+    expect(section).toHaveTextContent('Inference trace')
+    expect(section).toHaveTextContent('2 rules')
+    expect(section).toHaveTextContent('3 evidence')
   })
 
-  it('expands on click to show rule reasoning (with priority) and the dense evidence table', () => {
+  it('shows the rule reasoning (with priority) and the dense evidence table without any click', () => {
     render(<TechnicalDetails rules={rules} evidence={evidence} trace={trace} />)
-    fireEvent.click(screen.getByTestId('technical-details-toggle'))
-    expect((screen.getByTestId('technical-details') as HTMLDetailsElement).open).toBe(true)
-
-    expect(screen.getByTestId('assessment-rule-count')).toHaveTextContent('3 rules')
+    expect(screen.getByTestId('assessment-rule-count')).toHaveTextContent('2 rules')
     const rows = screen.getAllByTestId('rule-reasoning-row')
-    expect(rows).toHaveLength(3)
-    expect(screen.getAllByTestId('evidence-row')).toHaveLength(4)
-    expect(screen.getAllByTestId('evidence-reading')).toHaveLength(4)
-
-    // The trace table is gone: no `assessment-trace*` testids exist.
-    expect(screen.queryByTestId('assessment-trace-toggle')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('assessment-trace')).not.toBeInTheDocument()
+    expect(rows).toHaveLength(2)
+    expect(screen.getAllByTestId('evidence-row')).toHaveLength(3)
+    expect(screen.getAllByTestId('evidence-reading')).toHaveLength(3)
   })
 
   it('shows the real rule reasoning — why (bindings) and produced (derived output) per fired rule', () => {
@@ -74,15 +65,14 @@ describe('TechnicalDetails — ONE collapsible detail section (closed by default
         rule_id: 'R07_low_manipulability',
         priority: 3,
         bindings: { 'Manipulability IS low': '0.667' },
-        derived_output: { danger_zone: true },
+        derived_output: { low_manipulability: true },
       },
     ]
     render(<TechnicalDetails rules={rules} evidence={evidence} trace={reasonedTrace} />)
-    fireEvent.click(screen.getByTestId('technical-details-toggle'))
 
     const rows = screen.getAllByTestId('rule-reasoning-row')
-    // Trace (firing) order wins: R01, R07, then the untraced rule in rules order.
-    expect(rows).toHaveLength(3)
+    // Trace (firing) order wins: R01, then R07.
+    expect(rows).toHaveLength(2)
 
     expect(rows[0]).toHaveTextContent('Collision danger')
     expect(within(rows[0]).getByTestId('rule-why')).toHaveTextContent('Collision clearance is danger')
@@ -90,17 +80,11 @@ describe('TechnicalDetails — ONE collapsible detail section (closed by default
 
     expect(rows[1]).toHaveTextContent('Low manipulability')
     expect(within(rows[1]).getByTestId('rule-why')).toHaveTextContent('Manipulability is low')
-    expect(within(rows[1]).getByTestId('rule-produced')).toHaveTextContent('marked danger zone')
-
-    // A rule with no trace entry still renders, with "—" for why/produced.
-    expect(rows[2]).toHaveTextContent('High trajectory complexity')
-    expect(within(rows[2]).getByTestId('rule-why')).toHaveTextContent('—')
-    expect(within(rows[2]).getByTestId('rule-produced')).toHaveTextContent('—')
+    expect(within(rows[1]).getByTestId('rule-produced')).toHaveTextContent('marked low manipulability')
   })
 
   it('shows the subtle category tag per reasoning row', () => {
     render(<TechnicalDetails rules={rules} evidence={evidence} trace={trace} />)
-    fireEvent.click(screen.getByTestId('technical-details-toggle'))
     const row = screen.getAllByTestId('rule-reasoning-row')[0]
     expect(row).toHaveTextContent('Collision')
     expect(row).toHaveTextContent('Collision danger')
@@ -118,11 +102,10 @@ describe('TechnicalDetails — ONE collapsible detail section (closed by default
         rule_id: 'R07_low_manipulability',
         priority: 3,
         bindings: { 'Manipulability IS low': '0.667' },
-        derived_output: { danger_zone: true },
+        derived_output: { low_manipulability: true },
       },
     ]
     render(<TechnicalDetails rules={rules} evidence={evidence} trace={reasonedTrace} />)
-    fireEvent.click(screen.getByTestId('technical-details-toggle'))
 
     const table = within(screen.getByTestId('rule-reasoning')).getByRole('table')
     expect(table).toBeInTheDocument()
@@ -132,24 +115,20 @@ describe('TechnicalDetails — ONE collapsible detail section (closed by default
     expect(screen.getByRole('columnheader', { name: 'Produced' })).toBeInTheDocument()
 
     const rows = screen.getAllByTestId('rule-reasoning-row')
-    expect(rows).toHaveLength(3)
-    // Agenda priority merged from the trace entry (R01 priority 10).
+    expect(rows).toHaveLength(2)
     expect(within(rows[0]).getByTestId('rule-priority')).toHaveTextContent('10')
-    // Untraced rules fall back to the rule's own priority.
-    expect(within(rows[2]).getByTestId('rule-priority')).toHaveTextContent('1')
+    expect(within(rows[1]).getByTestId('rule-priority')).toHaveTextContent('3')
     const firstWhy = within(rows[0]).getByTestId('rule-why')
     expect(firstWhy).toHaveTextContent('Collision clearance is danger')
     expect(firstWhy).toHaveTextContent('· 1.000')
     const secondWhy = within(rows[1]).getByTestId('rule-why')
     expect(secondWhy).toHaveTextContent('Manipulability is low')
     expect(secondWhy).toHaveTextContent('· 0.667')
-    expect(within(rows[1]).getByTestId('rule-produced')).toHaveTextContent('marked danger zone')
-    // A rule without a trace entry still renders a row, with "—" for why/produced.
-    expect(within(rows[2]).getByTestId('rule-why')).toHaveTextContent('—')
+    expect(within(rows[1]).getByTestId('rule-produced')).toHaveTextContent('marked low manipulability')
   })
 
   it('singularizes the rule count', () => {
     render(<TechnicalDetails rules={[rules[0]]} evidence={{}} trace={[]} />)
-    expect(screen.getByTestId('technical-details-toggle')).toHaveTextContent('1 rule')
+    expect(screen.getByTestId('technical-details')).toHaveTextContent('1 rule')
   })
 })

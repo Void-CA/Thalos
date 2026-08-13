@@ -12,7 +12,6 @@ import {
   minClearanceDistance,
   minClearanceWaypoint,
   recommendationKey,
-  recommendationRegionId,
 } from '@/shared/contracts/analysis-report'
 import { YoshikawaChart } from './components/yoshikawa-chart'
 import { DeterminantChart } from './components/determinant-chart'
@@ -98,20 +97,9 @@ export function EvaluationWorkspace() {
   }
 
   const hasProblemRegions = (report.problem_regions ?? []).length > 0
+  // The ADVISOR layer lives in its own Repairs tab: the full deduped list
+  // (single home — the region-contextual copy on the detail column is gone).
   const recommendations = dedupeRecommendations(report.recommendations ?? [])
-
-  // Master-detail (CDD redesign): the detail pane is contextual on the
-  // selected region. Recommendations tied to THAT region come first;
-  // plan-general ones (no resolvable region chain — see
-  // `recommendationRegionId`) are always actionable and stay visible;
-  // recommendations of OTHER regions are hidden — they belong to that
-  // region's own drill-down.
-  const visibleRecommendations = selectedRegion
-    ? recommendations.filter((recommendation) => {
-        const regionId = recommendationRegionId(recommendation, report)
-        return regionId === selectedRegion.id || regionId === null
-      })
-    : recommendations
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -131,6 +119,7 @@ export function EvaluationWorkspace() {
         <TabsList className="mx-3 mt-3 shrink-0">
           <TabsTrigger value="evaluation">Evaluation</TabsTrigger>
           {report.assessment && <TabsTrigger value="intelligence">Intelligence</TabsTrigger>}
+          {recommendations.length > 0 && <TabsTrigger value="repairs">Repairs</TabsTrigger>}
         </TabsList>
 
         {/* Evaluation tab — starts directly with the master-detail decision grid. */}
@@ -181,25 +170,6 @@ export function EvaluationWorkspace() {
               {selectedRegion && <RegionInspector />}
 
               <ProgramView />
-
-              {/* Recommendations — the base of the post-MVP resolution strategy
-                  (Preview/Apply/Undo). */}
-              {visibleRecommendations.length > 0 && (
-                <section className="flex flex-col gap-2">
-                  <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
-                    Recommendations
-                  </h2>
-                  <ul className="flex flex-col gap-1.5">
-                    {visibleRecommendations.map((recommendation) => (
-                      <RecommendationRow
-                        key={recommendationKey(recommendation)}
-                        recommendation={recommendation}
-                        report={report}
-                      />
-                    ))}
-                  </ul>
-                </section>
-              )}
             </aside>
           </div>
 
@@ -221,6 +191,27 @@ export function EvaluationWorkspace() {
               assessment={report.assessment}
               regions={report.problem_regions ?? []}
             />
+          </TabsContent>
+        )}
+
+        {/* Repairs tab — the ADVISOR layer (single home): the full deduped
+            recommendation list with Preview/Apply/Undo. */}
+        {recommendations.length > 0 && (
+          <TabsContent value="repairs" className="flex-1 min-h-0 overflow-y-auto p-3">
+            <div className="flex flex-col gap-2.5">
+              <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                Repair recommendations
+              </h2>
+              <ul className="flex flex-col gap-1.5">
+                {recommendations.map((recommendation) => (
+                  <RecommendationRow
+                    key={recommendationKey(recommendation)}
+                    recommendation={recommendation}
+                    report={report}
+                  />
+                ))}
+              </ul>
+            </div>
           </TabsContent>
         )}
       </Tabs>

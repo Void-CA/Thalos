@@ -65,7 +65,7 @@ export function MembershipBars({ evidence }: { evidence: Record<string, number> 
   return (
     <div className="flex flex-col gap-2" data-testid="assessment-evidence">
       <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Evidence
+        Evidence · fuzzification inputs
       </h3>
       <div className="overflow-x-auto">
         <table className="w-full table-fixed border-collapse">

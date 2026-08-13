@@ -16,6 +16,8 @@ export function SceneEditor() {
   const addTool = useDomainSceneStore((s) => s.addTool)
   const removeTool = useDomainSceneStore((s) => s.removeTool)
   const setHomePose = useDomainSceneStore((s) => s.setHomePose)
+  const approachHeight = useDomainSceneStore((s) => s.approachHeight)
+  const setApproachHeight = useDomainSceneStore((s) => s.setApproachHeight)
 
   const nextSeq = {
     obj: objects.length + 1,
@@ -172,7 +174,7 @@ export function SceneEditor() {
       </section>
 
       {/* Home pose */}
-      <section className="px-3 py-2">
+      <section className="px-3 py-2 border-b border-border/50">
         <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider block mb-1.5">
           Home
         </h3>
@@ -217,6 +219,29 @@ export function SceneEditor() {
             className="w-14 px-1.5 py-0.5 text-[11px] rounded border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
+      </section>
+
+      {/* SCARA approach height — prismatic transit retraction (always-on, MVP) */}
+      <section className="px-3 py-2">
+        <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider block mb-1.5">
+          SCARA approach
+        </h3>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-muted-foreground font-mono">Z↑ (m)</span>
+          <input
+            type="number"
+            aria-label="SCARA approach height (metres)"
+            value={approachHeight}
+            onChange={(e) => setApproachHeight(parseFloat(e.target.value) || 0)}
+            step={0.01}
+            min={0}
+            className="w-16 px-1.5 py-0.5 text-[11px] rounded border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <p className="text-[10px] text-muted-foreground/60 italic mt-1">
+          Prismatic retraction height — pick/place approach and retreat sit this
+          far above the grasp point before descending.
+        </p>
       </section>
     </div>
   )

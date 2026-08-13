@@ -1,18 +1,17 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent, within, act } from '@testing-library/react'
+import { render, screen, cleanup, within, act } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { IntelligenceView } from './IntelligenceView'
-import { gradeFromScore } from '@/shared/analysis/verdict'
 import { useAnalysisStore } from '@/features/analysis/store'
 import type { AnalysisReportWire, AssessmentWire } from '@/shared/contracts/analysis-report'
 
 /**
- * IntelligenceView — composed Intelligence tab content (structural UX
- * redesign): VerdictHero (ONE risk-tinted decision band) → FactorRows
- * (structured top factors) → Repair recommendations (action) →
- * TechnicalDetails (ONE collapsible owning rules/evidence, closed by
- * default) → muted assessment references footer. All copy is English.
+ * IntelligenceView — composed Intelligence tab content. The AI verdict is the
+ * protagonist (risk word + crisp risk · quality), the analyzer health is
+ * clearly-labeled secondary, the elevation story (why) explains the verdict,
+ * and the inference trace is ALWAYS visible (no collapsible — the Advisor now
+ * lives in its own Repairs tab). All copy is English.
  */
 
 const assessment: AssessmentWire = {
@@ -21,13 +20,11 @@ const assessment: AssessmentWire = {
   triggered_rules: [
     { id: 'R01_collision_danger', category: 'collision', priority: 10 },
     { id: 'R07_low_manipulability', category: 'manipulability', priority: 3 },
-    { id: 'R06_high_complexity', category: 'trajectory', priority: 1 },
   ],
   evidence: {
     manipulability: 0.75,
     singularity_proximity: 0.2,
     collision_clearance: 0.6,
-    trajectory_complexity: 0.4,
   },
   recommendations: [],
   trace: [
@@ -49,25 +46,6 @@ const report: AnalysisReportWire = {
   },
 }
 
-const recommendationsReport: AnalysisReportWire = {
-  ...report,
-  recommendations: [
-    {
-      id: 1,
-      action: {
-        id: 1,
-        kind: 'MoveWaypoint',
-        target_observation: 3,
-        priority: 'high',
-        impact: 'reposition',
-        parameters: {},
-      },
-      edit: { MoveWaypoint: { segment_index: 0, new_target: [0.5, 0, 0] } },
-      status: 'available',
-    },
-  ],
-}
-
 beforeEach(() => {
   cleanup()
   act(() => {
@@ -76,156 +54,97 @@ beforeEach(() => {
 })
 afterEach(() => cleanup())
 
-describe('IntelligenceView — verdict hero (v2: number + scale + inline grade)', () => {
-  it('shows the canonical score + inline grade and the categorical risk in ONE hero band', () => {
-    render(<IntelligenceView assessment={assessment} regions={[]} />)
-    const hero = screen.getByTestId('intelligence-verdict-hero')
-    expect(hero).toHaveTextContent('82') // no report → 0.82 quality → score 82
-    expect(hero).toHaveTextContent('Good') // ≥70 → Good
-    expect(hero).toHaveTextContent('low risk')
-    // The hero is the ONLY verdict number on the tab — no competing gauge.
-    expect(screen.queryByText('Score')).not.toBeInTheDocument()
-    expect(screen.queryByText('Risk Level')).not.toBeInTheDocument()
-    expect(screen.queryByText('Narrative Summary')).not.toBeInTheDocument()
-  })
-
-  it('maps the canonical grade bands aligned with the backend (≥90 Excellent, ≥70 Good, ≥50 Fair)', () => {
-    expect(gradeFromScore(95)).toBe('Excellent')
-    expect(gradeFromScore(82)).toBe('Good')
-    expect(gradeFromScore(60)).toBe('Fair')
-    expect(gradeFromScore(30)).toBe('Poor')
-  })
-})
-
-describe('IntelligenceView — score reconciliation (P1.1 kept: hero matches Evaluation)', () => {
-  it('shows the SAME canonical score as Evaluation (report.summary.score) when the report is present', () => {
+describe('IntelligenceView — verdict hero (v3: the AI verdict is the protagonist)', () => {
+  it('leads with the assessor risk word + crisp risk · quality, and shows analyzer health as labeled secondary', () => {
     act(() => {
       useAnalysisStore.getState().setAnalysis(report)
     })
-    render(
-      <IntelligenceView
-        assessment={{ ...assessment, quality: 0.68 }}
-        regions={[]}
-      />,
+    render(<IntelligenceView assessment={{ ...assessment, quality: 0.68 }} regions={[]} />)
+    const hero = screen.getByTestId('intelligence-verdict-hero')
+    // AI verdict leads: risk word + Risk/Quality derived from the assessor.
+    expect(within(hero).getByTestId('verdict-risk-word')).toHaveTextContent('low')
+    expect(within(hero).getByTestId('verdict-risk-quality')).toHaveTextContent(
+      'Risk 0.320 · Quality 68.0%',
     )
-    const hero = within(screen.getByTestId('intelligence-verdict-hero'))
-    // Evaluation shows report.summary.score 72 / Good — Intelligence must too,
-    // never the assessment-derived 68 (which would contradict Evaluation).
-    expect(hero.getByText('72')).toBeInTheDocument()
-    expect(hero.getByText('Good')).toBeInTheDocument()
-    expect(hero.queryByText('68')).not.toBeInTheDocument()
-    expect(hero.queryByText('Fair')).not.toBeInTheDocument()
-    // The assessment's risk stays as the secondary chip.
-    expect(hero.getByText('low risk')).toBeInTheDocument()
-    // Report score present → no fallback note.
-    expect(screen.queryByTestId('verdict-source-note')).not.toBeInTheDocument()
+    // The analyzer score is NOT the primary verdict.
+    expect(within(hero).queryByTestId('verdict-score')).not.toBeInTheDocument()
+    // Analyzer health is clearly-labeled secondary context.
+    const health = within(hero).getByTestId('analyzer-health')
+    expect(health).toHaveTextContent('Analyzer health: 72')
+    expect(health).toHaveTextContent('strict fault-penalty score')
+    // No competing gauge / score labels.
+    expect(screen.queryByText('Score')).not.toBeInTheDocument()
+    expect(screen.queryByText('Risk Level')).not.toBeInTheDocument()
   })
 
-  it('falls back to the assessment quality with a subtle note when no report score exists', () => {
-    render(<IntelligenceView assessment={assessment} regions={[]} />)
-    expect(screen.getByTestId('verdict-source-note')).toHaveTextContent('derived from assessment quality')
-  })
-})
-
-describe('IntelligenceView — factor rows "why" (structural redesign)', () => {
-  it('renders one row per narrative primary factor with a human label, value and semantic reading', () => {
-    render(<IntelligenceView assessment={assessment} regions={[]} />)
-    const rows = screen.getAllByTestId('factor-row')
-    // Top factors by risk contribution: clearance, complexity, manipulability.
-    expect(rows.length).toBeGreaterThanOrEqual(3)
-    expect(rows[0]).toHaveTextContent('Safe clearance')
-    expect(rows[0]).toHaveTextContent('0.6 m')
-    expect(rows[0]).toHaveTextContent('Safe')
-    // Human labels, never raw evidence keys.
-    expect(screen.queryByText(/trajectory_complexity/i)).not.toBeInTheDocument()
-  })
-})
-
-describe('IntelligenceView — technical details (ONE collapsible, closed by default)', () => {
-  it('keeps the rules and evidence behind a collapsed TechnicalDetails section', () => {
-    render(<IntelligenceView assessment={assessment} regions={[]} />)
-    const details = screen.getByTestId('technical-details') as HTMLDetailsElement
-    expect(details.open).toBe(false)
-    const toggle = screen.getByTestId('technical-details-toggle')
-    expect(toggle).toHaveTextContent('Technical details')
-    expect(toggle).toHaveTextContent('3 rules')
-    expect(toggle).toHaveTextContent('4 evidence')
-  })
-
-  it('expands to show the rule reasoning (human labels, category tags, priority), the dense evidence table and no trace table', () => {
-    render(<IntelligenceView assessment={assessment} regions={[]} />)
-    fireEvent.click(screen.getByTestId('technical-details-toggle'))
-    expect((screen.getByTestId('technical-details') as HTMLDetailsElement).open).toBe(true)
-
-    expect(screen.getByTestId('assessment-rule-count')).toHaveTextContent('3 rules')
-    const rows = screen.getAllByTestId('rule-reasoning-row')
-    expect(rows).toHaveLength(3)
-    expect(rows[0]).toHaveTextContent('Collision danger')
-    // Subtle category tag per row (never the old loud badge).
-    expect(rows[0]).toHaveTextContent('Collision')
-    expect(rows[1]).toHaveTextContent('Manipulability')
-    // Agenda priority merged from the trace into the rules table (R01 → 10).
-    expect(within(rows[0]).getByTestId('rule-priority')).toHaveTextContent('10')
-    // The KB agenda priority must never be presented as a fuzzy weight.
-    expect(screen.queryByText(/weight/i)).not.toBeInTheDocument()
-
-    // Dense evidence table, no bars: one row per canonical variable with the
-    // raw value and the tone-colored semantic reading.
-    const evidenceRows = screen.getAllByTestId('evidence-row')
-    expect(evidenceRows).toHaveLength(4)
-    expect(evidenceRows[0]).toHaveTextContent('Manipulability')
-    expect(evidenceRows[0]).toHaveTextContent('0.750')
-    const readings = screen.getAllByTestId('evidence-reading')
-    expect(readings[0]).toHaveTextContent('Good')
-    expect(readings[1]).toHaveTextContent('Moderate')
-
-    // The redundant trace table is gone — no `assessment-trace*` testids.
-    expect(screen.queryByTestId('assessment-trace-toggle')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('assessment-trace')).not.toBeInTheDocument()
-  })
-
-  it('renders the reasoning of a safe/positive rule from its trace bindings', () => {
+  it('renders the elevation story (why line) and the Why block when a singular event is present', () => {
     render(
       <IntelligenceView
         assessment={{
           ...assessment,
-          triggered_rules: [{ id: 'R12_safe_plan', category: 'trajectory', priority: 1 }],
+          risk: 'high',
+          quality: 0.44,
+          evidence: { ...assessment.evidence, singularity_proximity: 0.5 },
           trace: [
-            {
-              rule_id: 'R12_safe_plan',
-              priority: 1,
-              bindings: {
-                safe_clearance: 'true',
-                'SingularityProximity IS low': '1.000',
-                'Manipulability IS high': '1.000',
-              },
-              derived_output: {},
-            },
+            { rule_id: 'R09_near_singularity', priority: 3, bindings: {}, derived_output: {} },
           ],
         }}
         regions={[]}
       />,
     )
-    fireEvent.click(screen.getByTestId('technical-details-toggle'))
-    const row = screen.getByTestId('rule-reasoning-row')
-    expect(row).toHaveTextContent('Safe plan')
-    expect(row).toHaveTextContent('Trajectory')
-    // The FactEquals antecedent reads as a fact, not a raw id.
-    expect(screen.getByTestId('rule-why')).toHaveTextContent('safe clearance is true')
-    expect(screen.getByTestId('rule-why')).toHaveTextContent('Singularity proximity is low')
-    expect(screen.getByTestId('rule-why')).toHaveTextContent('Manipulability is high')
+    // Hero: the why line tells the story without opening anything.
+    expect(screen.getByTestId('verdict-why')).toHaveTextContent(
+      'Singular event detected → risk elevated to High',
+    )
+    // The Why block names the mechanism.
+    const whyBlock = screen.getByTestId('intelligence-why')
+    expect(whyBlock).toHaveTextContent('Why High?')
+    expect(whyBlock).toHaveTextContent('R09_near_singularity classified the evidence as high risk.')
+  })
+
+  it('renders no Why block when no singular event is present', () => {
+    render(<IntelligenceView assessment={assessment} regions={[]} />)
+    expect(screen.queryByTestId('intelligence-why')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('verdict-why')).not.toBeInTheDocument()
   })
 })
 
-describe('IntelligenceView — repair recommendations action section', () => {
-  it('renders the Action section with the deduped recommendation cards', () => {
-    act(() => {
-      useAnalysisStore.getState().setAnalysis(recommendationsReport)
-    })
+describe('IntelligenceView — factor rows (scannable table)', () => {
+  it('renders one row per factor with a human label, value and semantic reading', () => {
     render(<IntelligenceView assessment={assessment} regions={[]} />)
-    expect(screen.getByText('Action · Repair recommendations')).toBeInTheDocument()
-    const list = screen.getByTestId('intelligence-recommendations')
-    expect(within(list).getAllByTestId('recommendation-card')).toHaveLength(1)
+    const rows = screen.getAllByTestId('factor-row')
+    // Ranked by risk contribution: clearance(0.4), manipulability(0.25), singularity(0.2).
+    expect(rows[0]).toHaveTextContent('Safe clearance')
+    expect(rows[0]).toHaveTextContent('0.6 m')
+    expect(rows[0]).toHaveTextContent('Safe')
+    // Human labels, never raw evidence keys.
+    expect(screen.queryByText(/singularity_proximity/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('IntelligenceView — inference trace (ALWAYS visible, no collapsible)', () => {
+  it('renders the rules and evidence in an open section labeled Inference trace', () => {
+    render(<IntelligenceView assessment={assessment} regions={[]} />)
+    const section = screen.getByTestId('technical-details')
+    expect(section.tagName).toBe('SECTION')
+    expect(section).toHaveTextContent('Inference trace')
+    expect(section).toHaveTextContent('2 rules')
+    expect(section).toHaveTextContent('3 evidence')
+  })
+
+  it('shows the rule reasoning and the dense evidence table without any click', () => {
+    render(<IntelligenceView assessment={assessment} regions={[]} />)
+    const rows = screen.getAllByTestId('rule-reasoning-row')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toHaveTextContent('Collision danger')
+    expect(within(rows[0]).getByTestId('rule-priority')).toHaveTextContent('10')
+
+    const evidenceRows = screen.getAllByTestId('evidence-row')
+    expect(evidenceRows).toHaveLength(3)
+    expect(evidenceRows[0]).toHaveTextContent('Manipulability')
+    expect(evidenceRows[0]).toHaveTextContent('0.750')
+    const readings = screen.getAllByTestId('evidence-reading')
+    expect(readings[0]).toHaveTextContent('Good')
   })
 })
 
@@ -257,8 +176,8 @@ describe('IntelligenceView — narrative wiring (hero one-liner)', () => {
   })
 })
 
-describe('IntelligenceView — assessment references footer', () => {
-  it('renders the muted assessment recommendation references when present', () => {
+describe('IntelligenceView — assessment references footer is GONE', () => {
+  it('never renders the assessment references list (it duplicated the advisor)', () => {
     render(
       <IntelligenceView
         assessment={{
@@ -274,12 +193,7 @@ describe('IntelligenceView — assessment references footer', () => {
         regions={[]}
       />,
     )
-    expect(screen.getByTestId('assessment-recommendation')).toHaveTextContent('Manipulability')
-  })
-
-  it('renders no references when the assessment carries none', () => {
-    render(<IntelligenceView assessment={assessment} regions={[]} />)
     expect(screen.queryByTestId('assessment-recommendation')).not.toBeInTheDocument()
-    expect(screen.queryByText('Recommendations')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('assessment-recommendations')).not.toBeInTheDocument()
   })
 })

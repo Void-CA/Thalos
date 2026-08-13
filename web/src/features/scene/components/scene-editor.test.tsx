@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { act } from 'react'
 import '@testing-library/jest-dom/vitest'
 import { SceneEditor } from './scene-editor'
@@ -44,5 +44,13 @@ describe('SceneEditor — visual audit headings and list layout (V6, V9)', () =>
     expect(screen.getByDisplayValue('Object 1')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Object 2')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Object 3')).toBeInTheDocument()
+  })
+
+  it('renders the SCARA approach height field and edits it', () => {
+    render(<SceneEditor />)
+    const input = screen.getByLabelText('SCARA approach height (metres)')
+    expect(input).toBeInTheDocument()
+    fireEvent.change(input, { target: { value: '0.12' } })
+    expect(useDomainSceneStore.getState().approachHeight).toBe(0.12)
   })
 })

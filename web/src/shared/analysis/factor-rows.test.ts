@@ -13,25 +13,25 @@ import { factorRows, formatEvidenceValue } from './factor-rows'
 describe('factorRows — ranking and derivation', () => {
   it('ranks known variables by risk contribution (desc) and derives label/tone/reading', () => {
     const rows = factorRows({
-      manipulability: 0.2, // risk 1 - 0.2 = 0.8
-      singularity_proximity: 0.4, // risk 0.4
-      trajectory_complexity: 100.4, // risk clamped to 1.0
+      manipulability: 0.0, // risk 1 - 0.0 = 1.0 — Low / danger
+      singularity_proximity: 0.5, // risk 0.5 — Singular event / danger
+      collision_clearance: 0.6, // risk 0.4 — Safe / good
     })
     expect(rows.map((row) => row.key)).toEqual([
-      'trajectory_complexity',
       'manipulability',
       'singularity_proximity',
+      'collision_clearance',
     ])
     expect(rows[0]).toMatchObject({
-      label: 'Very high trajectory complexity',
-      tone: 'danger',
-      reading: 'Very high',
-      risk: 1,
-    })
-    expect(rows[1]).toMatchObject({
       label: 'Low manipulability',
       tone: 'danger',
       reading: 'Low',
+      risk: 1,
+    })
+    expect(rows[1]).toMatchObject({
+      label: 'Singular event',
+      tone: 'danger',
+      reading: 'Singular',
     })
   })
 
@@ -69,9 +69,9 @@ describe('factorRows — values and unknown keys', () => {
   })
 
   it('keeps the raw value and clamps the risk contribution to [0,1]', () => {
-    const rows = factorRows({ trajectory_complexity: 100.4 })
+    const rows = factorRows({ manipulability: -0.5 })
     expect(rows[0].risk).toBe(1)
-    expect(rows[0].value).toBe(100.4)
+    expect(rows[0].value).toBe(-0.5)
   })
 })
 

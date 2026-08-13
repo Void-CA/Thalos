@@ -1,19 +1,24 @@
 import type { AnalysisReportWire, AssessmentWire } from '@/shared/contracts/analysis-report'
-import { gradeFromScore, verdictFromQuality, type VerdictGrade } from '@/shared/analysis/verdict'
+import { gradeFromScore, type VerdictGrade } from '@/shared/analysis/verdict'
 
-/** Risk-tier accent for the decision band: the WHOLE band is tinted by the
- *  categorical verdict (critical → destructive tones, high/medium → warning
- *  tones, low → neutral/success). Reuses existing semantic tokens only. */
-const RISK_ACCENT: Record<AssessmentWire['risk'], string> = {
-  low: 'border-success-mid/60 bg-success-weak',
-  medium: 'border-warning-mid bg-warning-weak/50',
-  high: 'border-warning-mid bg-warning-weak',
-  critical: 'border-destructive-mid bg-destructive-weak',
+/** Risk-band tint for the decision band: strong border + colored verdict word,
+ *  so the AI verdict is unmistakable (not a `-weak` wash). */
+const RISK_BAND: Record<AssessmentWire['risk'], string> = {
+  low: 'border-success-mid/70 bg-success-weak',
+  medium: 'border-warning-mid bg-warning-weak/70',
+  high: 'border-warning-mid bg-warning-weak/80',
+  critical: 'border-destructive-mid bg-destructive-weak/80',
 }
 
-/** Inline grade tone (canonical score→grade language): the grade word sits
- *  baseline-aligned next to the number as ONE statement — colored text only,
- *  no pill chrome, so the number + word read as a single verdict. */
+/** The verdict WORD color — the strong accent that carries the verdict. */
+const RISK_WORD: Record<AssessmentWire['risk'], string> = {
+  low: 'text-chart-3',
+  medium: 'text-chart-4',
+  high: 'text-chart-5',
+  critical: 'text-destructive',
+}
+
+/** Inline grade tone for the secondary analyzer-health context. */
 const GRADE_TONES: Record<VerdictGrade, string> = {
   Excellent: 'text-chart-3',
   Good: 'text-chart-3',
@@ -21,119 +26,83 @@ const GRADE_TONES: Record<VerdictGrade, string> = {
   Poor: 'text-destructive',
 }
 
-/** Fill tone for the 0–100 score scale, keyed by the grade (the accent carries
- *  the verdict; the track stays monochrome). */
-const SCALE_TONES: Record<VerdictGrade, string> = {
-  Excellent: 'bg-chart-3',
-  Good: 'bg-chart-3',
-  Fair: 'bg-chart-4',
-  Poor: 'bg-destructive',
-}
-
-/** Color-coded risk chip tones (green/yellow/orange/red). */
-const RISK_TONES: Record<AssessmentWire['risk'], string> = {
-  low: 'bg-success-weak text-chart-3',
-  medium: 'bg-warning-weak text-chart-4',
-  high: 'bg-warning-weak text-chart-5',
-  critical: 'bg-destructive-weak text-destructive',
-}
-
 /**
- * VerdictHero (UX redesign v2) — the decision band at the top of the
- * Intelligence tab: ONE full-width band tinted by RISK carrying a single
- * dominant statement — the big score with the grade word INLINE (baseline-
- * aligned, colored, not a pill) — anchored on a thin 0–100 score scale, with
- * risk demoted to a small secondary chip and one human summary line. No
- * uppercase "Score"/"Risk Level" labels: the hierarchy carries the meaning.
- * This is the ONLY verdict number on the tab — the old gauge is gone.
+ * VerdictHero (v3 — the AI verdict is the protagonist) — the decision band at
+ * the top of the Intelligence tab. Semantics follow the frozen system:
  *
- * Score reconciliation (P1.1 — kept): the primary number is the canonical
- * score the Evaluation tab shows — `report.summary.score` with its
- * backend-aligned grade (`gradeFromScore`). The assessment's `risk` stays as
- * the secondary chip (it expresses a different thing — safety). Only when no
- * report score is present does the hero fall back to
- * `verdictFromQuality(assessment.quality)` (same projection the backend uses),
- * flagged with a subtle note. The two vocabularies can therefore never
- * contradict each other on screen.
+ *   HIGH
+ *   Risk 0.557 · Quality 44.3%
+ *   Singular event detected → risk elevated to High
  *
- * `summary` is the human one-liner from `buildNarrativeSummary` (English
- * phrasing — never raw rule ids / evidence keys). All copy is English.
+ * - The categorical verdict WORD is the primary statement, large and strongly
+ *   colored (the risk accent), with the crisp risk + quality derived from the
+ *   ASSESSOR (`quality = 1 − crisp risk`) directly beneath.
+ * - The `whyLine` (elevation story) sits immediately after — the verdict did
+ *   not appear magically.
+ * - The ANALYZER's `health` (`report.summary.score` + grade — a strict
+ *   fault-penalty score) is clearly-labeled SECONDARY context, never competing
+ *   visually with the intelligent diagnosis.
+ * - The human narrative summary (regions) renders as secondary detail.
  */
 export function VerdictHero({
   assessment,
   report,
   summary,
+  whyLine,
 }: {
   assessment: AssessmentWire
   report: AnalysisReportWire | null
   summary: string
+  whyLine?: string | null
 }) {
+  const crisp = 1 - assessment.quality
+  const qualityPct = assessment.quality * 100
   const reportScore = report?.summary.score
-  const isFallback = reportScore === undefined || reportScore === null
-  const primary = isFallback
-    ? verdictFromQuality(assessment.quality)
-    : { score: reportScore, grade: gradeFromScore(reportScore) }
+  const grade = reportScore !== undefined && reportScore !== null ? gradeFromScore(reportScore) : null
 
   return (
     <div
       data-testid="intelligence-verdict-hero"
-      className={`flex flex-col gap-3 rounded-lg border p-5 ${RISK_ACCENT[assessment.risk]}`}
+      className={`flex flex-col gap-3 rounded-lg border p-5 ${RISK_BAND[assessment.risk]}`}
     >
-      <div
-        data-testid="assessment-verdict"
-        className="flex flex-wrap items-start justify-between gap-4"
-      >
-        <div className="flex min-w-0 flex-1 flex-col gap-2.5">
-          <span className="flex items-baseline gap-2">
-            <span
-              data-testid="verdict-score"
-              className="text-5xl font-bold leading-none font-mono tabular-nums text-foreground"
-            >
-              {primary.score}
-            </span>
-            <span className="text-xs font-semibold tabular-nums text-muted-foreground">
-              / 100
-            </span>
-            <span
-              data-testid="verdict-grade"
-              className={`text-xl font-bold tracking-tight ${GRADE_TONES[primary.grade]}`}
-            >
-              {primary.grade}
-            </span>
-          </span>
-          <div
-            data-testid="verdict-scale"
-            className="relative h-1.5 w-full overflow-hidden rounded-full bg-border"
-            aria-hidden="true"
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <span
+            data-testid="verdict-risk-word"
+            className={`text-4xl font-bold uppercase leading-none tracking-tight ${RISK_WORD[assessment.risk]}`}
           >
-            <div
-              data-testid="verdict-scale-fill"
-              className={`absolute inset-y-0 left-0 rounded-full ${SCALE_TONES[primary.grade]}`}
-              style={{ width: `${primary.score}%` }}
-            />
-          </div>
+            {assessment.risk}
+          </span>
+          <span
+            data-testid="verdict-risk-quality"
+            className="text-sm font-medium tabular-nums text-foreground/90"
+          >
+            Risk {crisp.toFixed(3)} · Quality {qualityPct.toFixed(1)}%
+          </span>
         </div>
-        <span
-          data-testid="verdict-risk"
-          className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${RISK_TONES[assessment.risk]}`}
-        >
-          {assessment.risk} risk
-        </span>
+        {reportScore !== undefined && reportScore !== null && grade && (
+          <span
+            data-testid="analyzer-health"
+            className="rounded-md border border-border bg-card/70 px-2 py-1 text-right text-[10px] leading-tight text-muted-foreground"
+          >
+            <span className="block font-semibold">
+              Analyzer health: {reportScore} <span className={GRADE_TONES[grade]}>{grade}</span>
+            </span>
+            <span className="block text-muted-foreground/70">strict fault-penalty score</span>
+          </span>
+        )}
       </div>
+      {whyLine && (
+        <p data-testid="verdict-why" className="text-sm font-semibold text-foreground">
+          {whyLine}
+        </p>
+      )}
       <p
         data-testid="verdict-summary"
-        className="max-w-[65ch] text-sm leading-relaxed text-foreground"
+        className="max-w-[65ch] text-sm leading-relaxed text-muted-foreground"
       >
         {summary}
       </p>
-      {isFallback && (
-        <span
-          data-testid="verdict-source-note"
-          className="self-start text-[10px] text-muted-foreground"
-        >
-          derived from assessment quality
-        </span>
-      )}
     </div>
   )
 }

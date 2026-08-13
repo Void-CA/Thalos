@@ -156,6 +156,11 @@ export interface SceneContent {
   locations: SceneResourceDef[]
   tools: { id: string; name: string }[]
   home_pose: PoseDef
+  /** SCARA approach/retreat transit height (metres): the Z offset above the
+   *  grasp/drop pose where pick/place approach and retreat frames sit. The
+   *  prismatic joint retracts to this height during transit. Backend default
+   *  is 0.05 m when omitted. Always-on for MVP (no enable/disable toggle). */
+  approach_height?: number
 }
 
 /** Metadata for a TaskDocument */

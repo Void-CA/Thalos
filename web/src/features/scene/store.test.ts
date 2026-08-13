@@ -5,6 +5,7 @@ import {
   SEEDED_LOCATIONS,
   defaultObjectPose,
   defaultLocationPose,
+  DEFAULT_APPROACH_HEIGHT,
 } from './store'
 import type { PoseDef } from '@/shared/contracts'
 
@@ -16,6 +17,7 @@ function resetToCanonicalSeed() {
     locations: SEEDED_LOCATIONS.map((l) => ({ ...l })),
     tools: [],
     homePose: { ...seedHome },
+    approachHeight: DEFAULT_APPROACH_HEIGHT,
   })
 }
 
@@ -71,5 +73,12 @@ describe('scene store state', () => {
     })
     expect(doc.scene.tools).toEqual([])
     expect(doc.scene.home_pose).toEqual(seedHome)
+    expect(doc.scene.approach_height).toBe(DEFAULT_APPROACH_HEIGHT)
+  })
+
+  it('setApproachHeight updates the serialized SCARA approach height', () => {
+    useDomainSceneStore.getState().setApproachHeight(0.12)
+    const doc = useDomainSceneStore.getState().toTaskDocument([])
+    expect(doc.scene.approach_height).toBe(0.12)
   })
 })

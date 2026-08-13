@@ -449,12 +449,16 @@ describe('EvaluationWorkspace — intelligence tab (evaluation-intelligence-tab)
     fireEvent.click(screen.getByRole('tab', { name: 'Intelligence' }))
     const section = screen.getByTestId('intelligent-assessment')
     expect(section).toBeInTheDocument()
-    // Verdict visible: risk + canonical score + human-labeled rules.
-    expect(within(section).getByText('high risk')).toBeInTheDocument()
-    // Score reconciliation: Intelligence shows the SAME canonical score as
-    // Evaluation (report.summary.score 95), never the assessment-derived 31.
-    expect(within(section).getByText('95')).toBeInTheDocument()
-    expect(within(section).getByText('Excellent')).toBeInTheDocument() // gradeFromScore(95)
+    // The AI verdict leads: risk word + crisp risk · quality (the protagonist).
+    expect(within(section).getByTestId('verdict-risk-word')).toHaveTextContent('high')
+    expect(within(section).getByTestId('verdict-risk-quality')).toBeInTheDocument()
+    // The analyzer health is clearly-labeled SECONDARY context — provenance
+    // explicit, never the primary verdict (it must not compete with the
+    // intelligent diagnosis).
+    const health = within(section).getByTestId('analyzer-health')
+    expect(health).toHaveTextContent('95')
+    expect(health).toHaveTextContent('Excellent')
+    expect(health).toHaveTextContent('strict fault-penalty score')
     // The human label appears in both the narrative factors and the rule chips.
     expect(within(section).getAllByText('Low manipulability').length).toBeGreaterThan(0)
   })
@@ -472,15 +476,15 @@ describe('EvaluationWorkspace — intelligence tab (evaluation-intelligence-tab)
     expect(screen.getByTestId('evaluation-master')).toBeInTheDocument()
   })
 
-  it('keeps technical details collapsed by default and shows no redundant trace table', () => {
+  it('shows the inference trace as an always-visible section (no collapsible)', () => {
     act(() => {
       useAnalysisStore.setState({ report: assessedReport })
       useSceneStore.setState({ activePlan })
     })
     renderWorkspace()
     fireEvent.click(screen.getByRole('tab', { name: 'Intelligence' }))
-    const details = within(screen.getByTestId('intelligent-assessment')).getByTestId('technical-details')
-    expect((details as HTMLDetailsElement).open).toBe(false)
+    const section = within(screen.getByTestId('intelligent-assessment')).getByTestId('technical-details')
+    expect(section.tagName).toBe('SECTION')
     // The inference trace was merged into RuleReasoning — no trace table remains.
     expect(screen.queryByTestId('assessment-trace-toggle')).not.toBeInTheDocument()
     expect(screen.queryByTestId('assessment-trace')).not.toBeInTheDocument()
@@ -488,22 +492,24 @@ describe('EvaluationWorkspace — intelligence tab (evaluation-intelligence-tab)
 })
 
 describe('EvaluationWorkspace — recommendations with uniform Preview/Apply/Undo', () => {
-  it('renders one RecommendationRow per recommendation when present', () => {
+  it('renders one RecommendationRow per recommendation on the Repairs tab', () => {
     act(() => {
       useAnalysisStore.setState({ report: recommendationReport })
     })
     renderWorkspace()
+    fireEvent.click(screen.getByRole('tab', { name: 'Repairs' }))
     expect(screen.getByTestId('recommendation-row')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Preview' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Apply' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
   })
 
-  it('renders no recommendation rows when the report carries none', () => {
+  it('renders no Repairs tab when the report carries no recommendations', () => {
     act(() => {
       useAnalysisStore.setState({ report: cleanReport })
     })
     renderWorkspace()
+    expect(screen.queryByRole('tab', { name: 'Repairs' })).not.toBeInTheDocument()
     expect(screen.queryByTestId('recommendation-row')).not.toBeInTheDocument()
   })
 })
@@ -572,7 +578,7 @@ describe('EvaluationWorkspace — master-detail layout (context | action)', () =
     expect(charts).toHaveLength(2)
   })
 
-  it('shows the ProblemRegions chooser, ProgramView and Recommendations in the detail when no region is selected', () => {
+  it('shows the ProblemRegions chooser and ProgramView in the detail when no region is selected', () => {
     act(() => {
       useAnalysisStore.setState({ report: recommendationReport })
       useSceneStore.setState({ activePlan })
@@ -584,7 +590,8 @@ describe('EvaluationWorkspace — master-detail layout (context | action)', () =
       within(detail).getByRole('button', { name: /Singularity near waypoint 10/i }),
     ).toBeInTheDocument()
     expect(within(detail).getByTestId('program-view')).toBeInTheDocument()
-    expect(within(detail).getByTestId('recommendation-row')).toBeInTheDocument()
+    // The ADVISOR lives on its own Repairs tab — not in the detail column.
+    expect(within(detail).queryByTestId('recommendation-row')).not.toBeInTheDocument()
     expect(
       within(detail).queryByRole('heading', { name: 'Region Details' }),
     ).not.toBeInTheDocument()
@@ -626,7 +633,7 @@ describe('EvaluationWorkspace — master-detail layout (context | action)', () =
     expect(screen.getByTestId('program-view')).toBeInTheDocument()
   })
 
-  it('filters recommendations to the selected region, keeping plan-general ones', () => {
+  it('shows ALL recommendations on the Repairs tab regardless of the selected region', () => {
     const twoRegionReport: AnalysisReportWire = {
       ...cleanReport,
       problem_regions: [
@@ -703,21 +710,15 @@ describe('EvaluationWorkspace — master-detail layout (context | action)', () =
       useSceneStore.setState({ activePlan })
     })
     renderWorkspace()
-    // No selection → all recommendations.
+    fireEvent.click(screen.getByRole('tab', { name: 'Repairs' }))
+    // The Repairs tab is the advisor's single home: ALL recommendations.
     expect(screen.getAllByTestId('recommendation-row')).toHaveLength(2)
-    // Selecting region 7 (wp 10–20) keeps only the recommendation whose
-    // target observation anchors at wp 15.
+    // Selecting a region does NOT filter the Repairs tab (no hidden region
+    // drill-down duplication — the advisor is one list).
     act(() => {
       useAnalysisStore.getState().selectRegion(7)
     })
-    expect(screen.getAllByTestId('recommendation-row')).toHaveLength(1)
-    expect(screen.getByText('Move Waypoint')).toBeInTheDocument()
-    // Selecting region 8 (wp 30–40) keeps only the wp 35 recommendation.
-    act(() => {
-      useAnalysisStore.getState().selectRegion(8)
-    })
-    expect(screen.getAllByTestId('recommendation-row')).toHaveLength(1)
-    expect(screen.getByText('Rotate Tool')).toBeInTheDocument()
+    expect(screen.getAllByTestId('recommendation-row')).toHaveLength(2)
   })
 })
 
@@ -749,6 +750,7 @@ describe('EvaluationWorkspace — recommendation dedup (frontend safety net)', (
       })
     })
     renderWorkspace()
+    fireEvent.click(screen.getByRole('tab', { name: 'Repairs' }))
     expect(screen.getAllByTestId('recommendation-row')).toHaveLength(1)
   })
 
@@ -765,6 +767,7 @@ describe('EvaluationWorkspace — recommendation dedup (frontend safety net)', (
       })
     })
     renderWorkspace()
+    fireEvent.click(screen.getByRole('tab', { name: 'Repairs' }))
     expect(screen.getAllByTestId('recommendation-row')).toHaveLength(2)
   })
 })

@@ -1,6 +1,6 @@
 /**
  * Rule semantics — the human labels for the thalos-intelligence KB rules
- * (backend `crates/thalos-intelligence/src/kb.rs`, frozen 12-rule base).
+ * (backend `crates/thalos-intelligence/src/kb.rs`, frozen 11-rule base).
  * Pure: rule id in, human label / tone out; unknown ids fall back to a
  * humanized version of the id so the UI never shows a raw moniker.
  *
@@ -17,12 +17,11 @@ export const RULE_LABELS: Record<string, string> = {
   R03_collision_danger_evidence: 'Collision danger confirmed',
   R04_singularity_medium: 'Moderate singularity proximity',
   R05_manipulability_medium: 'Moderate manipulability',
-  R06_high_complexity: 'High trajectory complexity',
   R07_low_manipulability: 'Low manipulability',
   R08_safe_clearance: 'Safe clearance',
   R09_near_singularity: 'Near singularity',
   R10_manipulability_high: 'High manipulability',
-  R11_danger_zone: 'Danger zone',
+  R11_compromised_manipulability: 'Compromised manipulability',
   R12_safe_plan: 'Safe plan',
 }
 
@@ -74,14 +73,14 @@ const RISK_KEYS: ReadonlySet<string> = new Set(['low', 'medium', 'high', 'critic
 
 /** derived_output key → noun phrase for a "marked …" reading. Keys beyond the
  *  KB facts ("danger_zone", "safe_clearance", "near_singularity",
- *  "good_manipulability") fall back to the humanized key, so a "marked" reading
- *  is never invented for an unknown key. */
+ *  "low_manipulability", "good_manipulability") fall back to the humanized key,
+ *  so a "marked" reading is never invented for an unknown key. */
 const DERIVED_LABELS: Record<string, string> = {
   danger_zone: 'danger zone',
   safe_clearance: 'safe clearance',
   near_singularity: 'near singularity',
   good_manipulability: 'good manipulability',
-  complexity_high: 'high complexity',
+  low_manipulability: 'low manipulability',
   manipulability_low: 'low manipulability',
   collision_danger: 'collision danger',
   singularity_high: 'high singularity proximity',

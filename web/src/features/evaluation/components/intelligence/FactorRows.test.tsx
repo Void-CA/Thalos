@@ -5,60 +5,51 @@ import '@testing-library/jest-dom/vitest'
 import { FactorRows } from './FactorRows'
 
 /**
- * FactorRows (structural UX redesign) — the structured "why": one scannable
- * row per top factor (icon | label | value | severity bar | reading). Pins:
+ * FactorRows — the scannable factor table (label | value | reading). Pins:
  * - rows rank by risk contribution (biggest problem leads);
- * - problem factors carry an AlertTriangle, positive a CheckCircle;
- * - bar and reading are colored by the semantic tone;
+ * - the reading is color-coded by the semantic tone (no bars, no icons — the
+ *   information is the hierarchy);
  * - narrative `primary_factors` select which rows render (hero ↔ rows agree);
  * - unknown keys never get a row.
  */
 
 const evidence = {
   manipulability: 0.2, // risk 0.8 — Low / danger
-  singularity_proximity: 0.5, // risk 0.5 — Near / danger
+  singularity_proximity: 0.5, // risk 0.5 — Singular event / danger
   collision_clearance: 0.6, // risk 0.4 — Safe / good
-  trajectory_complexity: 12, // risk 1.0 — Very high / danger
 }
 
 beforeEach(() => cleanup())
 afterEach(() => cleanup())
 
-describe('FactorRows — structured rows (structural redesign)', () => {
-  it('renders one row per factor: human label, formatted value, bar and reading', () => {
+describe('FactorRows — scannable factor table', () => {
+  it('renders one row per factor: human label, formatted value and semantic reading', () => {
     render(<FactorRows evidence={evidence} />)
     const rows = screen.getAllByTestId('factor-row')
-    expect(rows).toHaveLength(4)
-    // Ranked by risk: complexity(1.0), manipulability(0.8), singularity(0.5), clearance(0.4).
-    expect(rows[0]).toHaveTextContent('Very high trajectory complexity')
-    expect(rows[0]).toHaveTextContent('12')
-    expect(rows[0]).toHaveTextContent('Very high')
-    expect(rows[1]).toHaveTextContent('Low manipulability')
-    expect(rows[1]).toHaveTextContent('0.2')
-    expect(rows[2]).toHaveTextContent('Near singularity')
-    expect(rows[3]).toHaveTextContent('Safe clearance')
-    expect(rows[3]).toHaveTextContent('0.6 m')
+    expect(rows).toHaveLength(3)
+    // Ranked by risk: manipulability(0.8), singularity(0.5), clearance(0.4).
+    expect(rows[0]).toHaveTextContent('Low manipulability')
+    expect(rows[0]).toHaveTextContent('0.2')
+    expect(rows[0]).toHaveTextContent('Low')
+    expect(rows[1]).toHaveTextContent('Singular event')
+    expect(rows[1]).toHaveTextContent('0.5')
+    expect(rows[1]).toHaveTextContent('Singular')
+    expect(rows[2]).toHaveTextContent('Safe clearance')
+    expect(rows[2]).toHaveTextContent('0.6 m')
+    expect(rows[2]).toHaveTextContent('Safe')
     // Human labels, never raw evidence keys.
-    expect(screen.queryByText(/trajectory_complexity/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/singularity_proximity/i)).not.toBeInTheDocument()
   })
 
-  it('uses AlertTriangle for problem factors and CheckCircle for positive factors', () => {
+  it('colors the reading by the semantic tone (danger / warn / good)', () => {
     render(<FactorRows evidence={evidence} />)
     const rows = screen.getAllByTestId('factor-row')
-    expect(rows[0].querySelector('[data-icon="alert"]')).not.toBeNull()
-    expect(rows[1].querySelector('[data-icon="alert"]')).not.toBeNull()
-    expect(rows[2].querySelector('[data-icon="alert"]')).not.toBeNull()
-    expect(rows[3].querySelector('[data-icon="check"]')).not.toBeNull()
-  })
-
-  it('colors bar and reading by semantic tone', () => {
-    render(<FactorRows evidence={evidence} />)
-    const rows = screen.getAllByTestId('factor-row')
-    const dangerBar = rows[0].querySelector('[data-testid="factor-row-bar"]')
-    expect(dangerBar?.className).toContain('bg-destructive')
-    const safeBar = rows[3].querySelector('[data-testid="factor-row-bar"]')
-    expect(safeBar?.className).toContain('bg-chart-3')
-    expect(rows[3].querySelector('[data-testid="factor-row-reading"]')).toHaveTextContent('Safe')
+    expect(rows[0].querySelector('[data-testid="factor-row-reading"]')?.className).toContain(
+      'text-destructive',
+    )
+    expect(rows[2].querySelector('[data-testid="factor-row-reading"]')?.className).toContain(
+      'text-chart-3',
+    )
   })
 
   it('limits the rows to the narrative primary factors when provided', () => {
