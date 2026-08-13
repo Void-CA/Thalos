@@ -25,32 +25,41 @@ void ServoDriver::set_enabled(bool enabled) {
 
 // ── Actuation ────────────────────────────────────────────────────────────
 
-void ServoDriver::write(const std::vector<float>& joints) {
+bool ServoDriver::write(const std::vector<float>& joints) {
     // Whole-waypoint validation FIRST — reject before any physical write so
     // a bad waypoint never leaves the robot in a partially-commanded state.
     if (joints.size() < NUM_SERVO_CHANNELS) {
-        return;
+        return false;
     }
     for (size_t i = 0; i < NUM_SERVO_CHANNELS; ++i) {
         if (!std::isfinite(joints[i])) {
-            return;   // NaN or ±Inf → reject the entire waypoint
+            return false;   // NaN or ±Inf → reject the entire waypoint
         }
     }
+
+    // SAFETY_ENVELOPE enforcement (ADR-2, defensive last barrier): any joint
+    // outside the envelope rejects the ENTIRE waypoint. There is NO clamp to
+    // the enforcement envelope — an invalid command must never be silently
+    // transformed into a valid one. (JOINT_MIN/MAX_RAD is the calibration map
+    // only; it is NOT checked here and NOT used for clamping.)
+    for (size_t i = 0; i < NUM_SERVO_CHANNELS; ++i) {
+        const SafetyEnvelope& env = SAFETY_ENVELOPE[i];
+        if (joints[i] < env.position_min_rad || joints[i] > env.position_max_rad) {
+            return false;
+        }
+    }
+
     if (pca9685_ == nullptr || !enabled_) {
-        return;
+        return false;
     }
 
     for (uint8_t ch = 0; ch < NUM_SERVO_CHANNELS; ++ch) {
         float rad = joints[ch];
-
-        // Clamp to per-channel joint limits (prevents overtravel).
-        if (rad < JOINT_MIN_RAD[ch]) rad = JOINT_MIN_RAD[ch];
-        if (rad > JOINT_MAX_RAD[ch]) rad = JOINT_MAX_RAD[ch];
-
         float    pulse_us = radToPulseUS(ch, rad);
         uint16_t steps    = pulseUSToSteps(pulse_us);
         pca9685_->setPWM(SERVO_CHANNELS[ch], 0, steps);
     }
+    return true;
 }
 
 // ── Conversion helpers ────────────────────────────────────────────────────

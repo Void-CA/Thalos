@@ -33,14 +33,56 @@ constexpr uint8_t SERVO_CHANNELS[NUM_SERVO_CHANNELS] = {15, 14, 13, 12};
 constexpr uint16_t SERVO_PULSE_MIN_US[NUM_SERVO_CHANNELS] = {350, 350, 300, 500};
 constexpr uint16_t SERVO_PULSE_MAX_US[NUM_SERVO_CHANNELS] = {1650, 2050, 2600, 2500};
 
-// ── Joint Limits (radians) ─────────────────────────────────────────────────
-// Per-channel joint range: clamp input to prevent overtravel
-// MODE MEDICION (2026-08-11): revolute ampliados a ±3.14 (recorrido completo
-//   del servo) para descubrir los limites REALES del mecanismo con
-//   move_joint.py. DESPUES de medir, fijar los limites con margen (~15%) y
-//   restaurar la proteccion. El canal 3 (prismatico) conserva su mapeo.
-constexpr float JOINT_MIN_RAD[NUM_SERVO_CHANNELS] = {-3.14f, -3.14f, -3.14f, 0.0f};
-constexpr float JOINT_MAX_RAD[NUM_SERVO_CHANNELS] = { 3.14f,  3.14f,  3.14f, 0.06f};
+// ── Joint Limits (radians) — CALIBRATION MAP ONLY ──────────────────────────
+// Per-channel rad→pulse linear-interpolation endpoints (the calibration /
+// reference map used by ServoDriver::radToPulseUS()). They describe HOW a
+// commanded radian maps to a pulse width; they are NOT the execution
+// enforcement authority (design ADR-1 authority split, M1).
+//
+// Enforcement lives EXCLUSIVELY in SAFETY_ENVELOPE below: a value inside this
+// map but outside the envelope is rejected, never clamped. M1 restores the
+// mechanism-safe calibration endpoints (the measurement-mode ±3.14 expansion
+// is gone): the map spans the same mechanism-safe travel as the envelope, so
+// the full calibrated pulse range is reachable for every ACCEPTED joint value.
+constexpr float JOINT_MIN_RAD[NUM_SERVO_CHANNELS] = {-1.5708f, 0.0f,   -3.1416f, 0.0f};
+constexpr float JOINT_MAX_RAD[NUM_SERVO_CHANNELS] = { 1.5708f, 2.0944f, 3.1416f, 0.06f};
+
+// ── SafetyEnvelope — EXECUTION ENFORCEMENT AUTHORITY (ADR-1) ───────────────
+// What may PHYSICALLY execute. Every layer that can stop a command enforces
+// this envelope: protocol per-sample, validator whole-manifest, ServoDriver
+// defensive write. Distinct from JOINT_MIN/MAX_RAD — recalibrating the
+// mapping never changes enforcement, and vice versa.
+enum class LimitSource : uint8_t {
+    URDF,        // declared by the mechanism's URDF model
+    Measured,    // found by physical measurement/calibration
+    Configured,  // operator/tuning configuration
+    Temporary    // provisional — NOT physically validated yet
+};
+
+struct SafetyEnvelope {
+    float position_min_rad, position_max_rad;
+    uint16_t pulse_min_us, pulse_max_us;
+    float max_velocity_rad_per_s;
+    LimitSource position_source, pulse_source, velocity_source;
+};
+
+constexpr SafetyEnvelope SAFETY_ENVELOPE[NUM_SERVO_CHANNELS] = {
+    // base (0): URDF mechanism-safe ±1.5708 rad; pulse Configured; velocity URDF.
+    { -1.5708f,  1.5708f, SERVO_PULSE_MIN_US[0], SERVO_PULSE_MAX_US[0], 1.0f,
+      LimitSource::URDF, LimitSource::Configured, LimitSource::URDF },
+    // elbow (1): URDF 0..2.0944 rad.
+    {  0.0f,     2.0944f, SERVO_PULSE_MIN_US[1], SERVO_PULSE_MAX_US[1], 1.0f,
+      LimitSource::URDF, LimitSource::Configured, LimitSource::URDF },
+    // wrist (2): ⚠️ TEMPORARY — full servo travel ±3.1416 rad. NOT physically
+    // validated; deliberately NOT tightened (do not invent a safer number
+    // without measurement) until real calibration replaces it.
+    { -3.1416f,  3.1416f, SERVO_PULSE_MIN_US[2], SERVO_PULSE_MAX_US[2], 2.0f,
+      LimitSource::Temporary, LimitSource::Temporary, LimitSource::Temporary },
+    // prismatic (3): URDF 0..0.06 m (linear actuator; the rad fields hold
+    // metres).
+    {  0.0f,     0.06f,   SERVO_PULSE_MIN_US[3], SERVO_PULSE_MAX_US[3], 0.5f,
+      LimitSource::URDF, LimitSource::Configured, LimitSource::URDF },
+};
 
 // ── PCA9685 Constants (NOMINAL) ────────────────────────────────────────────
 // 50 Hz PWM → prescale value 0x79 (see PCA9685 datasheet)

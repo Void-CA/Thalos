@@ -3,6 +3,8 @@
 #include "validator.h"
 
 #include <cstdlib>
+#include <cerrno>
+#include <cmath>
 
 // ── Constructor ──────────────────────────────────────────────────────────
 
@@ -174,17 +176,46 @@ void Protocol::handle_sample(const String& line) {
     for (size_t i = 1; i < tokens.size() - 1; ++i) {
         const char* tok = tokens[i].c_str();
         char* end = nullptr;
+        errno = 0;
         // Arduino String::toFloat() is SILENT: garbage like "abc" parses to
         // 0.0, silently corrupting the manifest. Reject non-numeric joint
-        // tokens instead of accepting 0.0.
+        // tokens instead of accepting 0.0 (full-token consumption check).
         float value = strtof(tok, &end);
-        if (end == tok || *end != '\0') {
+        if (end == tok || *end != '\0' ||
+            !std::isfinite(value) || errno == ERANGE) {
+            // NaN / ±Inf / overflow ("1e39" → +Inf via ERANGE) are rejected
+            // at PARSE time (design ADR-4, spec firmware-safety-envelope) —
+            // before the validator or executor ever sees them.
             set_error(F("MALFORMED_SAMPLE"));
             return;
         }
         wp.joints.push_back(value);
     }
-    wp.dt_us = static_cast<uint32_t>(tokens[tokens.size() - 1].toInt());
+
+    // dt_us: parse as SIGNED first. A negative dt must be rejected BEFORE the
+    // uint32_t cast — the pre-fix toInt()→cast silently wrapped -500 into
+    // 4294966796 us and could pass the timing validator (ADR-4). Same
+    // MALFORMED_SAMPLE code as the other parse failures (spec test 7).
+    {
+        const char* tok = tokens[tokens.size() - 1].c_str();
+        char* end = nullptr;
+        errno = 0;
+        long dt = strtol(tok, &end, 10);
+        if (end == tok || *end != '\0' || errno == ERANGE || dt < 0) {
+            set_error(F("MALFORMED_SAMPLE"));
+            return;
+        }
+        wp.dt_us = static_cast<uint32_t>(dt);
+    }
+
+    // Per-sample physical-envelope enforcement (ADR-2): an out-of-envelope
+    // joint is rejected IMMEDIATELY at the SAMPLE line with INVALID_JOINT —
+    // it never enters the manifest and no actuator ever sees it.
+    Validator::ValidationResult envelope = validator_.check_physical_envelope(wp.joints);
+    if (!envelope.valid) {
+        set_error(envelope.error_reason);
+        return;
+    }
 
     manifest_.samples.push_back(wp);
     send_response(F("OK"));

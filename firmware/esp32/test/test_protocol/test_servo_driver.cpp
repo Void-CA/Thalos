@@ -1,9 +1,9 @@
 // Thalos firmware — ServoDriver unit tests (host, no hardware).
 //
 // Exercises the real src/servo_driver.cpp against the real PCA9685Driver
-// and the Wire stub. Covers radian→pulse→steps conversion, per-channel
-// clamping, per-channel calibration and whole-waypoint validation
-// (size < 4, NaN, ±Inf).
+// and the Wire stub. Covers radian→pulse→steps conversion, SAFETY_ENVELOPE
+// rejection (no clamping), per-channel calibration and whole-waypoint
+// validation (size < 4, NaN, ±Inf).
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -90,34 +90,37 @@ void test_servo_driver_midpoint_to_midpoint() {
     TEST_ASSERT_EQUAL(expected_steps(3, 0.03f), off_steps_of(Wire.tx_log()[3]));
 }
 
-// ── Clamping ──────────────────────────────────────────────────────────────
+// ── Envelope rejection (reject-not-clamp, ADR-2) ─────────────────────────
 
-void test_servo_driver_below_min_clamped() {
+void test_servo_driver_below_min_rejected() {
+    // CONTRACT CORRECTION (M1, ADR-2): the pre-fix driver silently clamped
+    // values below the joint limit to the minimum. Under reject-not-clamp the
+    // driver REJECTS the whole waypoint — write() returns false and no
+    // PCA9685 write occurs. The firmware never silently transforms an invalid
+    // command into a valid one.
     PCA9685Driver pca;
     ServoDriver servo;
     fresh_driver(pca, servo);
 
-    // Values below JOINT_MIN_RAD are clamped to the minimum (config-derived).
-    servo.write(joints4(-10.0f, -10.0f, -10.0f, -0.5f));
+    // All four joints are below their SAFETY_ENVELOPE minimums.
+    bool accepted = servo.write(joints4(-10.0f, -10.0f, -10.0f, -0.5f));
 
-    TEST_ASSERT_EQUAL(4, (int)Wire.tx_count());
-    for (size_t i = 0; i < 4; ++i) {
-        TEST_ASSERT_EQUAL(expected_steps(i, JOINT_MIN_RAD[i]), off_steps_of(Wire.tx_log()[i]));
-    }
+    TEST_ASSERT_FALSE(accepted);
+    TEST_ASSERT_EQUAL(0, (int)Wire.tx_count());
 }
 
-void test_servo_driver_above_max_clamped() {
+void test_servo_driver_above_max_rejected() {
+    // CONTRACT CORRECTION (M1, ADR-2): same rejection contract on the upper
+    // side — values above the SAFETY_ENVELOPE maximums are rejected, never
+    // clamped, and never written.
     PCA9685Driver pca;
     ServoDriver servo;
     fresh_driver(pca, servo);
 
-    // Values above JOINT_MAX_RAD are clamped to the maximum (config-derived).
-    servo.write(joints4(10.0f, 10.0f, 10.0f, 0.5f));
+    bool accepted = servo.write(joints4(10.0f, 10.0f, 10.0f, 0.5f));
 
-    TEST_ASSERT_EQUAL(4, (int)Wire.tx_count());
-    for (size_t i = 0; i < 4; ++i) {
-        TEST_ASSERT_EQUAL(expected_steps(i, JOINT_MAX_RAD[i]), off_steps_of(Wire.tx_log()[i]));
-    }
+    TEST_ASSERT_FALSE(accepted);
+    TEST_ASSERT_EQUAL(0, (int)Wire.tx_count());
 }
 
 // ── Per-channel calibration ───────────────────────────────────────────────

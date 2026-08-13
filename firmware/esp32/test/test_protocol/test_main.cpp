@@ -87,8 +87,8 @@ static void reach_executing(Fixture& f) {
     send_and_expect(f, "MANIFEST 6 3 200000", "OK");
     send_and_expect(f, "SEGMENT 0 movej 0 3", "OK");
     send_and_expect(f, "SAMPLE 0 0 0 0 0 0 0", "OK");
-    send_and_expect(f, "SAMPLE 10 20 30 40 50 60 100000", "OK");
-    send_and_expect(f, "SAMPLE 20 40 60 80 100 120 100000", "OK");
+    send_and_expect(f, "SAMPLE 1.0 1.0 1.0 0.03 0.0 0.0 100000", "OK");
+    send_and_expect(f, "SAMPLE 1.5 2.0 2.0 0.05 0.0 0.0 100000", "OK");
     send_and_expect(f, "END_UPLOAD", "READY");
     send_and_expect(f, "EXECUTE", "OK");
 }
@@ -185,8 +185,8 @@ void test_end_upload_waypoint_count_rejected() {
     send_and_expect(f, "MANIFEST 6 4 200000", "OK");
     send_and_expect(f, "SEGMENT 0 movej 0 4", "OK");
     send_and_expect(f, "SAMPLE 0 0 0 0 0 0 0", "OK");
-    send_and_expect(f, "SAMPLE 10 20 30 40 50 60 100000", "OK");
-    send_and_expect(f, "SAMPLE 20 40 60 80 100 120 100000", "OK");
+    send_and_expect(f, "SAMPLE 1.0 1.0 1.0 0.03 0.0 0.0 100000", "OK");
+    send_and_expect(f, "SAMPLE 1.5 2.0 2.0 0.05 0.0 0.0 100000", "OK");
     send_and_expect(f, "END_UPLOAD", "ERROR WAYPOINT_COUNT");
 }
 
@@ -196,8 +196,8 @@ void test_end_upload_segment_order_rejected() {
     send_and_expect(f, "SEGMENT 1 movej 0 3", "OK");
     send_and_expect(f, "SEGMENT 0 movej 0 3", "OK");
     send_and_expect(f, "SAMPLE 0 0 0 0 0 0 0", "OK");
-    send_and_expect(f, "SAMPLE 10 20 30 40 50 60 100000", "OK");
-    send_and_expect(f, "SAMPLE 20 40 60 80 100 120 100000", "OK");
+    send_and_expect(f, "SAMPLE 1.0 1.0 1.0 0.03 0.0 0.0 100000", "OK");
+    send_and_expect(f, "SAMPLE 1.5 2.0 2.0 0.05 0.0 0.0 100000", "OK");
     send_and_expect(f, "END_UPLOAD", "ERROR SEGMENT_ORDER");
 }
 
@@ -207,8 +207,8 @@ void test_end_upload_segment_coverage_rejected() {
     // Segment covers only [0, 2) of 3 samples -> coverage gap.
     send_and_expect(f, "SEGMENT 0 movej 0 2", "OK");
     send_and_expect(f, "SAMPLE 0 0 0 0 0 0 0", "OK");
-    send_and_expect(f, "SAMPLE 10 20 30 40 50 60 100000", "OK");
-    send_and_expect(f, "SAMPLE 20 40 60 80 100 120 100000", "OK");
+    send_and_expect(f, "SAMPLE 1.0 1.0 1.0 0.03 0.0 0.0 100000", "OK");
+    send_and_expect(f, "SAMPLE 1.5 2.0 2.0 0.05 0.0 0.0 100000", "OK");
     send_and_expect(f, "END_UPLOAD", "ERROR SEGMENT_COVERAGE");
 }
 
@@ -218,8 +218,8 @@ void test_end_upload_timing_invalid_rejected() {
     send_and_expect(f, "MANIFEST 6 3 500000", "OK");
     send_and_expect(f, "SEGMENT 0 movej 0 3", "OK");
     send_and_expect(f, "SAMPLE 0 0 0 0 0 0 0", "OK");
-    send_and_expect(f, "SAMPLE 10 20 30 40 50 60 100000", "OK");
-    send_and_expect(f, "SAMPLE 20 40 60 80 100 120 100000", "OK");
+    send_and_expect(f, "SAMPLE 1.0 1.0 1.0 0.03 0.0 0.0 100000", "OK");
+    send_and_expect(f, "SAMPLE 1.5 2.0 2.0 0.05 0.0 0.0 100000", "OK");
     send_and_expect(f, "END_UPLOAD", "ERROR TIMING_INVALID");
 }
 
@@ -289,8 +289,8 @@ void test_full_happy_path_execute_complete_collect() {
     send_and_expect(f, "MANIFEST 6 3 200000", "OK");
     send_and_expect(f, "SEGMENT 0 movej 0 3", "OK");
     send_and_expect(f, "SAMPLE 0 0 0 0 0 0 0", "OK");
-    send_and_expect(f, "SAMPLE 10 20 30 40 50 60 100000", "OK");
-    send_and_expect(f, "SAMPLE 20 40 60 80 100 120 100000", "OK");
+    send_and_expect(f, "SAMPLE 1.0 1.0 1.0 0.03 0.0 0.0 100000", "OK");
+    send_and_expect(f, "SAMPLE 1.5 2.0 2.0 0.05 0.0 0.0 100000", "OK");
     send_and_expect(f, "END_UPLOAD", "READY");
     send_and_expect(f, "STATUS", "STATUS READY");
     send_and_expect(f, "EXECUTE", "OK");
@@ -335,8 +335,8 @@ void test_pca9685_setPWM_invalid_channel_no_crash();
 void test_servo_driver_min_joint_to_min_pulse();
 void test_servo_driver_max_joint_to_max_pulse();
 void test_servo_driver_midpoint_to_midpoint();
-void test_servo_driver_below_min_clamped();
-void test_servo_driver_above_max_clamped();
+void test_servo_driver_below_min_rejected();
+void test_servo_driver_above_max_rejected();
 void test_servo_driver_per_channel_calibration();
 void test_servo_driver_insufficient_joints_rejected();
 void test_servo_driver_NaN_rejected();
@@ -352,12 +352,27 @@ void test_executor_null_driver_no_crash();
 void test_executor_disabled_driver_no_write();
 void test_executor_multiple_stale_waypoints_writes_only_last();
 
+// ── Tests from test_safety_contract.cpp (wire→actuator safety contract) ───
+void test_safety_valid_measurement_command_accepts_and_executes();
+void test_safety_command_at_envelope_boundary_accepts();
+void test_safety_beyond_physical_safe_range_must_not_move_actuator();
+void test_safety_command_beyond_envelope_rejected_with_diagnostic();
+void test_safety_nan_command_rejected_at_protocol();
+void test_safety_inf_command_rejected_at_protocol();
+void test_safety_negative_dt_rejected();
+void test_safety_zero_dt_manifest_must_not_jump_trajectory();
+void test_safety_catch_up_jump_bounded_by_velocity();
+void test_safety_rejected_command_leaves_actuator_unmoved_and_reported();
+void test_safety_backend_manifest_out_of_envelope_must_be_rejected();
+void test_safety_samples_report_commanded_not_executed_is_documented();
+
 // ── Entry point (native: no Arduino main, provide our own) ────────────────
 //
 // PlatformIO links every test_*.cpp file of the test_protocol group into ONE
 // binary, so the Unity main() lives here and registers ALL test cases (the
-// 27 protocol/executor tests below plus the 26 driver/integration tests
-// declared above).
+// 27 protocol/executor tests below, the 27 driver/integration tests declared
+// above — 10 PCA9685Driver + 10 ServoDriver + 7 Executor — and the 12
+// safety-contract tests from test_safety_contract.cpp).
 
 int main() {
     UNITY_BEGIN();
@@ -401,8 +416,8 @@ int main() {
     RUN_TEST(test_servo_driver_min_joint_to_min_pulse);
     RUN_TEST(test_servo_driver_max_joint_to_max_pulse);
     RUN_TEST(test_servo_driver_midpoint_to_midpoint);
-    RUN_TEST(test_servo_driver_below_min_clamped);
-    RUN_TEST(test_servo_driver_above_max_clamped);
+    RUN_TEST(test_servo_driver_below_min_rejected);
+    RUN_TEST(test_servo_driver_above_max_rejected);
     RUN_TEST(test_servo_driver_per_channel_calibration);
     RUN_TEST(test_servo_driver_insufficient_joints_rejected);
     RUN_TEST(test_servo_driver_NaN_rejected);
@@ -415,5 +430,17 @@ int main() {
     RUN_TEST(test_executor_null_driver_no_crash);
     RUN_TEST(test_executor_disabled_driver_no_write);
     RUN_TEST(test_executor_multiple_stale_waypoints_writes_only_last);
+    RUN_TEST(test_safety_valid_measurement_command_accepts_and_executes);
+    RUN_TEST(test_safety_command_at_envelope_boundary_accepts);
+    RUN_TEST(test_safety_beyond_physical_safe_range_must_not_move_actuator);
+    RUN_TEST(test_safety_command_beyond_envelope_rejected_with_diagnostic);
+    RUN_TEST(test_safety_nan_command_rejected_at_protocol);
+    RUN_TEST(test_safety_inf_command_rejected_at_protocol);
+    RUN_TEST(test_safety_negative_dt_rejected);
+    RUN_TEST(test_safety_zero_dt_manifest_must_not_jump_trajectory);
+    RUN_TEST(test_safety_catch_up_jump_bounded_by_velocity);
+    RUN_TEST(test_safety_rejected_command_leaves_actuator_unmoved_and_reported);
+    RUN_TEST(test_safety_backend_manifest_out_of_envelope_must_be_rejected);
+    RUN_TEST(test_safety_samples_report_commanded_not_executed_is_documented);
     return UNITY_END();
 }

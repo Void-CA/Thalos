@@ -10,10 +10,10 @@
 /// Per-channel servo abstraction: joint positions (radians) → PWM pulses.
 ///
 /// Owns validation and physical constraints: whole-waypoint validation
-/// (size >= NUM_SERVO_CHANNELS, all joints finite), per-channel clamping,
-/// radian→pulse→steps conversion and the enabled() availability state
-/// (probe result + init success). Physical I2C writes delegate to
-/// PCA9685Driver.
+/// (size >= NUM_SERVO_CHANNELS, all joints finite), SAFETY_ENVELOPE
+/// enforcement (reject — NEVER silent clamp; ADR-2), radian→pulse→steps
+/// conversion and the enabled() availability state (probe result + init
+/// success). Physical I2C writes delegate to PCA9685Driver.
 class ServoDriver {
 public:
     ServoDriver();
@@ -22,10 +22,13 @@ public:
     void init(PCA9685Driver& pca9685);
 
     /// Write joint positions (radians) to servo channels.
-    /// Validates: size >= NUM_SERVO_CHANNELS, all joints finite.
-    /// Rejects the ENTIRE waypoint if validation fails (no partial writes).
+    /// Validates: size >= NUM_SERVO_CHANNELS, all joints finite, every joint
+    /// inside SAFETY_ENVELOPE. Returns false and performs NO PCA9685 write
+    /// when validation fails (rejects the ENTIRE waypoint — no partial
+    /// writes, no clamping). Returns true when the write was issued.
     /// @param joints joint values, one per channel
-    void write(const std::vector<float>& joints);
+    /// @return true if the write was performed, false if rejected
+    bool write(const std::vector<float>& joints);
 
     /// Whether the driver is enabled (probe succeeded + init called).
     bool enabled() const;

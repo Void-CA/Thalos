@@ -167,8 +167,14 @@ void test_executor_ERROR_no_new_writes() {
     send_and_expect(protocol, "MANIFEST 4 3 200000", "OK");
     send_and_expect(protocol, "SEGMENT 0 movej 0 3", "OK");
     send_and_expect(protocol, "SAMPLE 0 0 0 0.03 0", "OK");
-    send_and_expect(protocol, "SAMPLE -1.57 -2.09 -3.14 0 100000", "OK");
-    send_and_expect(protocol, "SAMPLE 1.57 2.09 3.14 0.06 100000", "OK");
+    // HARNESS CORRECTION (M1, ADR-2): the samples were literals written for
+    // the pre-fix measurement mode. The old elbow value (-2.09 rad) is
+    // outside the URDF SAFETY_ENVELOPE [0, 2.0944] and would now be rejected
+    // at the SAMPLE line (per-sample enforcement), before the test could
+    // exercise its real subject: protocol ERROR during EXECUTING halting
+    // writes. These in-envelope values keep that intent unchanged.
+    send_and_expect(protocol, "SAMPLE -1.57 0.5 -3.14 0.03 100000", "OK");
+    send_and_expect(protocol, "SAMPLE 1.57 2.0 3.14 0.05 100000", "OK");
     send_and_expect(protocol, "END_UPLOAD", "READY");
     send_and_expect(protocol, "EXECUTE", "OK");
 

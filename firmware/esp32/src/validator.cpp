@@ -1,4 +1,5 @@
 #include "validator.h"
+#include "servo_config.h"
 
 // ── Public validate ──────────────────────────────────────────────────────
 
@@ -18,22 +19,52 @@ Validator::ValidationResult Validator::validate_manifest(const Manifest& manifes
         return {false, F("WAYPOINT_COUNT")};
     }
 
-    // 4. Segments are in ascending index order
+    // 4. Physical envelope (defense-in-depth: the protocol already rejects
+    //    out-of-envelope samples at SAMPLE time; this guards direct API use).
+    if (!check_manifest_envelope(manifest)) {
+        return {false, F("INVALID_JOINT")};
+    }
+
+    // 5. Segments are in ascending index order
     if (!check_segments_ordered(manifest)) {
         return {false, F("SEGMENT_ORDER")};
     }
 
-    // 5. Segments collectively cover all samples without gaps
+    // 6. Segments collectively cover all samples without gaps
     if (!check_segments_cover_all_samples(manifest)) {
         return {false, F("SEGMENT_COVERAGE")};
     }
 
-    // 6. Timing integrity
+    // 7. Timing integrity
     if (!check_timing_integrity(manifest)) {
         return {false, F("TIMING_INVALID")};
     }
 
     return {true, String()};
+}
+
+// ── Physical envelope ────────────────────────────────────────────────────
+
+Validator::ValidationResult Validator::check_physical_envelope(const std::vector<float>& joints) {
+    const size_t n = (joints.size() < NUM_SERVO_CHANNELS)
+                         ? joints.size()
+                         : NUM_SERVO_CHANNELS;
+    for (size_t i = 0; i < n; ++i) {
+        const SafetyEnvelope& env = SAFETY_ENVELOPE[i];
+        if (joints[i] < env.position_min_rad || joints[i] > env.position_max_rad) {
+            return {false, F("INVALID_JOINT")};
+        }
+    }
+    return {true, String()};
+}
+
+bool Validator::check_manifest_envelope(const Manifest& m) {
+    for (const auto& sample : m.samples) {
+        if (!check_physical_envelope(sample.joints).valid) {
+            return false;
+        }
+    }
+    return true;
 }
 
 // ── Private checks ──────────────────────────────────────────────────────
