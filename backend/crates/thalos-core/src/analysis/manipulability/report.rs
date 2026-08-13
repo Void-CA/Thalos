@@ -19,7 +19,7 @@ pub struct ManipulabilityAnalysis {
     pub metrics: ManipulabilityMetrics,
 }
 
-fn aggregate(samples: &[ManipulabilitySample]) -> ManipulabilityMetrics {
+fn aggregate(samples: &[ManipulabilitySample], reference_dimension: f64) -> ManipulabilityMetrics {
     let total = samples.len();
     let mut sum_y = 0.0_f64;
     let mut min_y = f64::MAX;
@@ -55,12 +55,13 @@ fn aggregate(samples: &[ManipulabilitySample]) -> ManipulabilityMetrics {
         avg_isotropy: if total > 0 { sum_i / total as f64 } else { 0.0 },
         min_isotropy: if min_i == f64::MAX { 0.0 } else { min_i },
         max_isotropy: max_i,
+        reference_dimension,
     }
 }
 
 impl ManipulabilityAnalysis {
-    pub fn from_samples(samples: Vec<ManipulabilitySample>) -> Self {
-        let metrics = aggregate(&samples);
+    pub fn from_samples(samples: Vec<ManipulabilitySample>, reference_dimension: f64) -> Self {
+        let metrics = aggregate(&samples, reference_dimension);
         Self { samples, metrics }
     }
 }
@@ -83,13 +84,14 @@ mod tests {
             manipulability: ManipulabilityReport {
                 yoshikawa,
                 isotropy,
+                ..Default::default()
             },
         }
     }
 
     #[test]
     fn aggregate_single() {
-        let a = ManipulabilityAnalysis::from_samples(vec![sample(10.0, 0.5)]);
+        let a = ManipulabilityAnalysis::from_samples(vec![sample(10.0, 0.5)], 2.3);
         assert_eq!(a.metrics.total_samples, 1);
         assert!((a.metrics.avg_yoshikawa - 10.0).abs() < 1e-12);
         assert!((a.metrics.avg_isotropy - 0.5).abs() < 1e-12);
@@ -98,7 +100,7 @@ mod tests {
     #[test]
     fn aggregate_multiple() {
         let samples = vec![sample(10.0, 0.9), sample(2.0, 0.1), sample(6.0, 0.5)];
-        let a = ManipulabilityAnalysis::from_samples(samples);
+        let a = ManipulabilityAnalysis::from_samples(samples, 1.8);
         assert_eq!(a.metrics.total_samples, 3);
         assert!((a.metrics.avg_yoshikawa - 6.0).abs() < 1e-12);
         assert!((a.metrics.min_yoshikawa - 2.0).abs() < 1e-12);
@@ -106,5 +108,18 @@ mod tests {
         assert!((a.metrics.avg_isotropy - 0.5).abs() < 1e-12);
         assert!((a.metrics.min_isotropy - 0.1).abs() < 1e-12);
         assert!((a.metrics.max_isotropy - 0.9).abs() < 1e-12);
+    }
+
+    #[test]
+    fn metrics_expose_reference_dimension() {
+        // Task 2.2 (spec analysis-report-contract "Additive Reference
+        // Dimension on Metrics"): the aggregate metrics carry the chain-side
+        // L_ref so consumers (workspace DTO, dashboard) can expose it.
+        let samples = vec![sample(4.0, 0.5), sample(9.0, 0.5)];
+        let a = ManipulabilityAnalysis::from_samples(samples, 2.3);
+        assert!(
+            (a.metrics.reference_dimension - 2.3).abs() < 1e-12,
+            "metrics must expose reference_dimension = 2.3"
+        );
     }
 }

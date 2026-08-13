@@ -1,19 +1,25 @@
 use crate::analysis::workspace::Workspace;
-use crate::kinematics::jacobian::{JacobianSolver, ManipulabilityReport, SingularityReport};
+use crate::kinematics::jacobian::{
+    JacobianSolver, ManipulabilityReport, SingularityReport,
+};
+use crate::robot::serial_chain::SerialChain;
 
 use super::report::{ManipulabilityAnalysis, ManipulabilitySample};
 
 /// Stateless analyzer that derives manipulability for every sample
 /// in a [`Workspace`].
 ///
-/// Internally calls `SingularityReport::analyze` (SVD) and then derives
-/// `ManipulabilityReport` from the singular values — no redundant SVD.
+/// Internally calls `SingularityReport::analyze` (SVD on the ORIGINAL
+/// Jacobian) and derives the raw `ManipulabilityReport` from its singular
+/// values, then re-SVDs the scale-normalized linear Jacobian `J'` for the
+/// normalized measure + grade (design "Where re-SVD on J' happens").
 pub struct ManipulabilityAnalyzer;
 
 impl ManipulabilityAnalyzer {
     pub fn analyze(
         workspace: &Workspace,
         jacobian_solver: &impl JacobianSolver,
+        chain: &SerialChain,
     ) -> ManipulabilityAnalysis {
         let samples: Vec<ManipulabilitySample> = workspace
             .samples()
@@ -22,7 +28,8 @@ impl ManipulabilityAnalyzer {
                 let q = &ws_sample.q;
                 let jacobian = jacobian_solver.evaluate(q);
                 let singularity = SingularityReport::analyze(&jacobian);
-                let manipulability = ManipulabilityReport::compute(&singularity);
+                let manipulability =
+                    ManipulabilityReport::compute_with_normalization(&singularity, &jacobian, chain);
 
                 ManipulabilitySample {
                     q: q.clone(),
@@ -33,7 +40,10 @@ impl ManipulabilityAnalyzer {
             })
             .collect();
 
-        ManipulabilityAnalysis::from_samples(samples)
+        ManipulabilityAnalysis::from_samples(
+            samples,
+            crate::robot::scale::manipulability_reference_dimension(chain),
+        )
     }
 }
 
@@ -111,7 +121,7 @@ mod tests {
             )
             .expect("sampling failed");
 
-        let analysis = ManipulabilityAnalyzer::analyze(&ws, &jac);
+        let analysis = ManipulabilityAnalyzer::analyze(&ws, &jac, &chain);
         assert_eq!(analysis.metrics.total_samples, 100);
         assert_eq!(analysis.samples.len(), 100);
 
@@ -120,11 +130,61 @@ mod tests {
             assert!(s.manipulability.yoshikawa >= 0.0);
             assert!(s.manipulability.isotropy >= 0.0);
             assert!(s.manipulability.isotropy <= 1.0);
+            // Task 2.1: normalized + grade populated per sample
+            assert!(s.manipulability.manipulability_grade.is_some());
+            assert!(s.manipulability.normalized_yoshikawa.is_finite());
         }
 
         println!(
             "Planar 2R: avg_yoshikawa={:.4}, avg_isotropy={:.4}",
             analysis.metrics.avg_yoshikawa, analysis.metrics.avg_isotropy,
+        );
+    }
+
+    #[test]
+    fn analyze_scara_populates_normalized_and_grade() {
+        // Task 2.1 integration: SCARA canonical through the analyzer must
+        // carry the normalized measure and a classified grade on every
+        // sample, while the raw metrics remain untouched (raw preservation).
+        use crate::models::scara::ScaraSpec;
+
+        let chain = ScaraSpec::canonical().build();
+        let ee = chain.end_effector.clone();
+        let fk = ForwardKinematics::new(chain.clone());
+        let jac = GeometricJacobian::new(fk, ee);
+
+        let mut rng = StdRng::seed_from_u64(7);
+        let ws = WorkspaceSampler
+            .sample(
+                &chain,
+                WorkspaceConfig {
+                    samples: 80,
+                    seed: 7,
+                    tolerance: 1e-3,
+                },
+                &mut rng,
+            )
+            .expect("sampling failed");
+
+        let analysis = ManipulabilityAnalyzer::analyze(&ws, &jac, &chain);
+        assert_eq!(analysis.samples.len(), 80);
+
+        for s in &analysis.samples {
+            let report = &s.manipulability;
+            assert!(report.manipulability_grade.is_some(), "grade must be classified");
+            assert!(
+                report.normalized_yoshikawa.is_finite() && report.normalized_yoshikawa >= 0.0,
+                "normalized must be finite and non-negative"
+            );
+        }
+
+        // Spot-check raw preservation on the first sample: raw yoshikawa must
+        // equal the product of the ORIGINAL singular values.
+        let first = &analysis.samples[0];
+        let raw_product: f64 = first.singularity.singular_values.iter().product();
+        assert!(
+            (first.manipulability.yoshikawa - raw_product).abs() < 1e-12,
+            "raw yoshikawa must stay the product of the original singular values"
         );
     }
 }

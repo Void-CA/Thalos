@@ -8,4 +8,9 @@ pub struct ManipulabilityMetrics {
     pub avg_isotropy: f64,
     pub min_isotropy: f64,
     pub max_isotropy: f64,
+    /// Chain-side canonical robot-scale normalization factor (`L_ref`,
+    /// meters) — the reference dimension the normalized measure was
+    /// computed against (spec analysis-report-contract "Additive Reference
+    /// Dimension on Metrics").
+    pub reference_dimension: f64,
 }
