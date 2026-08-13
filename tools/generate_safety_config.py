@@ -17,7 +17,14 @@ The C++ f32 literals are byte-identical to the former hand-authored values in
 ``firmware/esp32/src/servo_config.h`` (e.g. ``1.5708f``, ``0.06f``), so the
 firmware tests' ``expected_steps()`` math is unchanged.
 
-Usage: python3 tools/generate_safety_config.py
+Validation (ADR-2, spec "TOML Validation Before Generation"): before anything
+is written, the TOML is checked against the 11 rules in :func:`validate_toml`
+(schema version, dof count, range ordering, provenance enums, envelope within
+calibration, hardware channels). Invalid TOML → exit 1 and NO files written.
+
+Usage: python3 tools/generate_safety_config.py [--out-dir DIR]
+``--out-dir`` writes both artifacts flat into DIR (used by the determinism
+test; the committed locations are left untouched).
 """
 
 from __future__ import annotations
@@ -57,6 +64,113 @@ _SOURCE_TO_RS = {
     "Configured": "Configured",
     "Temporary": "Temporary",
 }
+
+VALID_SOURCES = frozenset({"URDF", "Measured", "Configured", "Temporary"})
+SUPPORTED_SCHEMA_VERSIONS = frozenset({1})
+# PCA9685 has 16 outputs (0..15) — servo channel indices must fit.
+MAX_SERVO_CHANNELS = 15
+
+
+def validate_toml(data: dict) -> list[str]:
+    """The 11 TOML validation rules (spec: "TOML Validation Before Generation").
+
+    Returns a list of human-readable violations (``[]`` = valid). Called by the
+    generator BEFORE emitting (invalid TOML → exit 1, nothing written) and by
+    the parity gate (invalid TOML cannot be graded).
+
+        R1   metadata.schema_version present
+        R2   metadata.schema_version supported (== 1)
+        R3   metadata.dof_count == len(channel)
+        R4   envelope position_min_rad < position_max_rad (per channel)
+        R5   pulse min_us < max_us (per channel)
+        R6   envelope.max_velocity_rad_per_s >= 0 (per channel)
+        R7   envelope.position_source ∈ {URDF, Measured, Configured, Temporary}
+        R8   pulse.source ∈ {URDF, Measured, Configured, Temporary}
+        R9   envelope.velocity_source ∈ {URDF, Measured, Configured, Temporary}
+        R10  envelope position range ⊆ calibration joint range (per channel)
+        R11  hardware: servo channel indices within 0..15, num_servo_channels
+             matches len(servo_channels), channel indices contiguous 0-based
+    """
+    errors: list[str] = []
+    meta = data.get("metadata", {})
+    channels = data.get("channel", [])
+
+    if "schema_version" not in meta:
+        errors.append("R1 metadata.schema_version is missing")
+    elif meta["schema_version"] not in SUPPORTED_SCHEMA_VERSIONS:
+        errors.append(
+            f"R2 unsupported metadata.schema_version={meta['schema_version']!r} "
+            f"(supported: {sorted(SUPPORTED_SCHEMA_VERSIONS)})"
+        )
+
+    dof = meta.get("dof_count")
+    if dof is None:
+        errors.append("R3 metadata.dof_count is missing")
+    elif dof != len(channels):
+        errors.append(f"R3 metadata.dof_count={dof} != len(channel)={len(channels)}")
+
+    for ch in channels:
+        tag = f"channel[{ch.get('index', '?')}] {ch.get('name', '?')}".rstrip()
+        env = ch.get("envelope", {})
+        cal = ch.get("calibration", {})
+        pulse = ch.get("pulse", {})
+
+        pmin, pmax = env.get("position_min_rad"), env.get("position_max_rad")
+        if pmin is not None and pmax is not None and not pmin < pmax:
+            errors.append(
+                f"R4 {tag}.envelope position range [{pmin}, {pmax}] must satisfy "
+                "position_min_rad < position_max_rad"
+            )
+
+        mn, mx = pulse.get("min_us"), pulse.get("max_us")
+        if mn is not None and mx is not None and not mn < mx:
+            errors.append(
+                f"R5 {tag}.pulse range [{mn}, {mx}] must satisfy min_us < max_us"
+            )
+
+        vel = env.get("max_velocity_rad_per_s")
+        if vel is not None and vel < 0:
+            errors.append(
+                f"R6 {tag}.envelope.max_velocity_rad_per_s={vel} must be >= 0"
+            )
+
+        for rule, field, src in (
+            ("R7", f"{tag}.envelope.position_source", env.get("position_source")),
+            ("R8", f"{tag}.pulse.source", pulse.get("source")),
+            ("R9", f"{tag}.envelope.velocity_source", env.get("velocity_source")),
+        ):
+            if src is not None and src not in VALID_SOURCES:
+                errors.append(
+                    f"{rule} {field}={src!r} not in {sorted(VALID_SOURCES)}"
+                )
+
+        if pmin is not None and pmax is not None:
+            cmin, cmax = cal.get("joint_min_rad"), cal.get("joint_max_rad")
+            if cmin is not None and cmax is not None and (pmin < cmin or pmax > cmax):
+                errors.append(
+                    f"R10 {tag}.envelope [{pmin}, {pmax}] exceeds calibration "
+                    f"joint range [{cmin}, {cmax}]"
+                )
+
+    hw = data.get("hardware", {})
+    servo_channels = hw.get("servo_channels", [])
+    for idx in servo_channels:
+        if not isinstance(idx, int) or not 0 <= idx <= MAX_SERVO_CHANNELS:
+            errors.append(
+                f"R11 hardware.servo_channels entry {idx!r} outside "
+                f"0..{MAX_SERVO_CHANNELS}"
+            )
+    num = hw.get("num_servo_channels")
+    if num is not None and num != len(servo_channels):
+        errors.append(
+            f"R11 hardware.num_servo_channels={num} != "
+            f"len(servo_channels)={len(servo_channels)}"
+        )
+    indices = [ch.get("index") for ch in channels]
+    if indices and sorted(indices) != list(range(len(channels))):
+        errors.append(f"R11 channel indices {indices} are not contiguous 0-based")
+
+    return errors
 
 
 def fmt_f32(value: float) -> str:
@@ -202,18 +316,51 @@ def emit_rust(meta: dict, channels: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def main() -> int:
+def _display(path: pathlib.Path) -> str:
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--out-dir",
+        metavar="DIR",
+        default=None,
+        help="write both generated files flat into DIR instead of the "
+        "committed locations (determinism test)",
+    )
+    args = parser.parse_args(argv)
+
     with TOML_PATH.open("rb") as f:
         data = tomllib.load(f)
+
+    errors = validate_toml(data)
+    if errors:
+        for e in errors:
+            print(f"{TOML_PATH.name}: invalid: {e}", file=sys.stderr)
+        print("no files written", file=sys.stderr)
+        return 1
+
     meta = data["metadata"]
     channels = sorted(data["channel"], key=lambda ch: ch["index"])
 
-    # M1: emit only. TOML validation (11 rules) arrives in M2
-    # (tools/check_safety_parity.py).
-    OUT_CXX.write_text(emit_cxx(meta, channels), encoding="utf-8")
-    OUT_RUST.write_text(emit_rust(meta, channels), encoding="utf-8")
-    print(f"wrote {OUT_CXX.relative_to(REPO_ROOT)}")
-    print(f"wrote {OUT_RUST.relative_to(REPO_ROOT)}")
+    if args.out_dir is not None:
+        out_dir = pathlib.Path(args.out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_cxx = out_dir / "servo_safety.h"
+        out_rust = out_dir / "safety_envelope_generated.rs"
+    else:
+        out_cxx, out_rust = OUT_CXX, OUT_RUST
+
+    out_cxx.write_text(emit_cxx(meta, channels), encoding="utf-8")
+    out_rust.write_text(emit_rust(meta, channels), encoding="utf-8")
+    print(f"wrote {_display(out_cxx)}")
+    print(f"wrote {_display(out_rust)}")
     return 0
 
 

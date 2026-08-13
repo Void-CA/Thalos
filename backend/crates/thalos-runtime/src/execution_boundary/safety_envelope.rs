@@ -151,50 +151,60 @@ impl SafetyEnvelope {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
+    use std::process::Command;
 
-    /// Parity: the Rust mirror MUST reproduce the firmware `SAFETY_ENVELOPE`
-    /// values exactly (single canonical source: `config/safety-envelope.toml`,
-    /// generated into `safety_envelope_generated.rs` and `servo_safety.h`).
+    /// Parity gate: the Rust mirror MUST reproduce the firmware `SAFETY_ENVELOPE`
+    /// exactly (single canonical source: `config/safety-envelope.toml`).
+    ///
+    /// Replaces the former self-referential test
+    /// `mirror_matches_firmware_servo_config_values`, which asserted hardcoded
+    /// literals against THIS file's own constants — a defective tautology that
+    /// could never catch drift. The authority is now
+    /// `tools/check_safety_parity.py` (ADR-3): it regenerates both
+    /// `servo_safety.h` and `safety_envelope_generated.rs` from the TOML,
+    /// diffs them byte-for-byte against the committed artifacts, and compares
+    /// every field C++↔Rust↔TOML. If the two representations stop matching the
+    /// canonical contract, the script exits 1 and THIS test fails.
     #[test]
-    fn mirror_matches_firmware_servo_config_values() {
-        // base (0): ±1.5708 rad, 1.0 rad/s, URDF/URDF; pulse 350-1650 Configured
-        assert_eq!(SAFETY_ENVELOPE[0].position_min_rad, -1.5708);
-        assert_eq!(SAFETY_ENVELOPE[0].position_max_rad, 1.5708);
-        assert_eq!(SAFETY_ENVELOPE[0].max_velocity_rad_per_s, 1.0);
-        assert_eq!(SAFETY_ENVELOPE[0].position_source, LimitSource::Urdf);
-        assert_eq!(SAFETY_ENVELOPE[0].velocity_source, LimitSource::Urdf);
-        assert_eq!(SAFETY_ENVELOPE[0].pulse_min_us, 350);
-        assert_eq!(SAFETY_ENVELOPE[0].pulse_max_us, 1650);
-        assert_eq!(SAFETY_ENVELOPE[0].pulse_source, LimitSource::Configured);
-        // elbow (1): 0..2.0944 rad, 1.0 rad/s, URDF/URDF; pulse 350-2050 Configured
-        assert_eq!(SAFETY_ENVELOPE[1].position_min_rad, 0.0);
-        assert_eq!(SAFETY_ENVELOPE[1].position_max_rad, 2.0944);
-        assert_eq!(SAFETY_ENVELOPE[1].max_velocity_rad_per_s, 1.0);
-        assert_eq!(SAFETY_ENVELOPE[1].pulse_min_us, 350);
-        assert_eq!(SAFETY_ENVELOPE[1].pulse_max_us, 2050);
-        assert_eq!(SAFETY_ENVELOPE[1].pulse_source, LimitSource::Configured);
-        // wrist (2): ±3.1416 rad TEMPORARY, 2.0 rad/s, Temporary/Temporary; pulse
-        // 300-2600 Temporary
-        assert_eq!(SAFETY_ENVELOPE[2].position_min_rad, -3.1416);
-        assert_eq!(SAFETY_ENVELOPE[2].position_max_rad, 3.1416);
-        assert_eq!(SAFETY_ENVELOPE[2].max_velocity_rad_per_s, 2.0);
-        assert_eq!(SAFETY_ENVELOPE[2].position_source, LimitSource::Temporary);
-        assert_eq!(SAFETY_ENVELOPE[2].velocity_source, LimitSource::Temporary);
-        assert_eq!(SAFETY_ENVELOPE[2].pulse_min_us, 300);
-        assert_eq!(SAFETY_ENVELOPE[2].pulse_max_us, 2600);
-        assert_eq!(SAFETY_ENVELOPE[2].pulse_source, LimitSource::Temporary);
-        // prismatic (3): 0..0.06 m, 0.5 rad/s (rad fields hold metres), URDF;
-        // pulse 500-2500 Configured
-        assert_eq!(SAFETY_ENVELOPE[3].position_min_rad, 0.0);
-        assert_eq!(SAFETY_ENVELOPE[3].position_max_rad, 0.06);
-        assert_eq!(SAFETY_ENVELOPE[3].max_velocity_rad_per_s, 0.5);
-        assert_eq!(SAFETY_ENVELOPE[3].position_source, LimitSource::Urdf);
-        assert_eq!(SAFETY_ENVELOPE[3].pulse_min_us, 500);
-        assert_eq!(SAFETY_ENVELOPE[3].pulse_max_us, 2500);
-        assert_eq!(SAFETY_ENVELOPE[3].pulse_source, LimitSource::Configured);
+    fn generated_artifacts_match_canonical_toml() {
+        // Repo root = three levels above CARGO_MANIFEST_DIR
+        // (backend/crates/thalos-runtime → backend → thalos).
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let repo_root = manifest_dir
+            .join("..")
+            .join("..")
+            .join("..")
+            .canonicalize()
+            .unwrap_or_else(|e| {
+                panic!("cannot resolve repo root from {manifest_dir:?}: {e}")
+            });
+        let parity = repo_root.join("tools").join("check_safety_parity.py");
 
-        // The envelope is exactly 4 channels — one per icebot actuated joint.
-        assert_eq!(SAFETY_ENVELOPE.len(), 4);
+        // A missing python3 is an environment gap, not a contract violation:
+        // skip with a note instead of failing spuriously (the parity script is
+        // still the authority — run `python3 tools/check_safety_parity.py` from
+        // the repo root on any machine with Python).
+        if Command::new("python3").arg("--version").output().is_err() {
+            eprintln!(
+                "skipping parity gate: python3 not on PATH — run manually: \
+                 python3 tools/check_safety_parity.py (repo root)"
+            );
+            return;
+        }
+
+        let out = Command::new("python3")
+            .arg(&parity)
+            .current_dir(&repo_root)
+            .output()
+            .expect("failed to execute the parity script");
+        assert!(
+            out.status.success(),
+            "safety-envelope parity FAILED — C++/Rust drifted from \
+             config/safety-envelope.toml:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr),
+        );
     }
 
     /// Boundary positions are ACCEPTED (inclusive limits, like the firmware
