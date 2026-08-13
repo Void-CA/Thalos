@@ -21,18 +21,56 @@ Safety rules:
   - NEVER leave the servo stalling for more than a couple of seconds.
   - First waypoint may jump to 0 rad (neutral) — hold the arm.
 
-After measuring, update JOINT_MIN_RAD / JOINT_MAX_RAD for that channel in
-firmware/esp32/src/servo_config.h so the firmware clamp protects the arm.
+After measuring, the tool writes the measured joint limits BACK to the
+canonical ``config/safety-envelope.toml`` (single source of truth — spec
+safety-envelope-canonical-source) via ``safety_config`` — one field at a
+time, old/new shown first (7-step flow, see docs/calibration.md) — then
+prints the regeneration and parity commands. ``write_joint_limits`` is a
+pure function (no serial / no hardware) so it is unit-testable
+independently.
 
 Usage:
-    python3 tools/limit_finder.py --joint 1 --step 0.02 --hold-ms 1500
+    python3 firmware/esp32/tools/limit_finder.py --joint 1 --step 0.02 --hold-ms 1500
 """
 import argparse
-import serial
-import time
+import pathlib
 import sys
 
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO_ROOT / "tools"))
+import safety_config  # noqa: E402
+
+
+def write_joint_limits(channel_index, min_rad, max_rad, toml_path=None):
+    """Write the measured safe joint limits for ONE channel back to the TOML.
+
+    Pure (no serial / no hardware): the candidate values are injected, so CI
+    can exercise the write-back without a robot. Shows old/new for each field
+    (flow step 3), writes ONLY the two calibration fields of that channel
+    (flow step 4), then prints the regeneration + parity commands (steps
+    6-7). A warning is emitted if the envelope now exceeds the calibration
+    range (spec R10).
+    """
+    path = toml_path or safety_config.DEFAULT_TOML
+    old_min = safety_config.get_field(channel_index, "calibration", "joint_min_rad", path)
+    old_max = safety_config.get_field(channel_index, "calibration", "joint_max_rad", path)
+    safety_config.show_old_new(channel_index, "calibration", "joint_min_rad", old_min, min_rad)
+    safety_config.update_channel_field(
+        channel_index, "calibration", "joint_min_rad", min_rad, toml_path=path
+    )
+    safety_config.show_old_new(channel_index, "calibration", "joint_max_rad", old_max, max_rad)
+    safety_config.update_channel_field(
+        channel_index, "calibration", "joint_max_rad", max_rad, toml_path=path
+    )
+    print("  Escrito en config/safety-envelope.toml. Proximos pasos:")
+    print("    python3 tools/generate_safety_config.py")
+    print("    python3 tools/check_safety_parity.py")
+
+
 def main():
+    import serial
+    import time
+
     ap = argparse.ArgumentParser(description="Thalos safe joint limit finder")
     ap.add_argument("--port", default="/dev/ttyUSB0")
     ap.add_argument("--baud", type=int, default=115200)
@@ -168,8 +206,9 @@ def main():
     print(f"\n=== LIMITES SEGUROS joint {args.joint} ===")
     print(f"  JOINT_MIN_RAD = {min(neg_ok)}")
     print(f"  JOINT_MAX_RAD = {max(pos_ok)}")
-    print("  Actualiza servo_config.h y re-flashea para que el clamp proteja el brazo.")
+    write_joint_limits(args.joint, min(neg_ok), max(pos_ok))
     ser.close()
+
 
 if __name__ == "__main__":
     main()

@@ -19,7 +19,7 @@ pip install pyserial
 4. La calibración de rango se hace SIEMPRE con el servo **desacoplado** del
    mecanismo. Nunca forzar contra el tope interno (daña el engranaje).
 
-## Mapeo de canales (firmware/esp32/src/servo_config.h)
+## Mapeo de canales (config/safety-envelope.toml — fuente unica)
 
 | Joint | Articulación | Canal PCA9685 |
 |-------|--------------|---------------|
@@ -40,12 +40,12 @@ python3 tools/move_joint.py --joint 0 --range 0.2 --dt-ms 1000   # lento
 python3 tools/move_joint.py --joint 0 --range 0.2 --dt-ms 100 --step 0.02  # suave
 
 # 3. Calibrar el rango de pulso REAL de un servo (desacoplado)
-#    Devuelve PULSE_MIN_US / PULSE_MAX_US para servo_config.h
+#    Escribe PULSE_MIN_US / PULSE_MAX_US en config/safety-envelope.toml
 python3 tools/calibrate.py --joint 0
 
 # 3b. Servo MONTADO (no se puede desacoplar): hallar el limite SEGURO del
 #     mecanismo, paso a paso, parando ante el primer stall.
-#     Devuelve JOINT_MIN_RAD / JOINT_MAX_RAD para servo_config.h
+#     Escribe JOINT_MIN_RAD / JOINT_MAX_RAD en config/safety-envelope.toml
 python3 tools/limit_finder.py --joint 1 --step 0.02 --hold-ms 1500
 
 # 4. Suite de tests host (sin hardware)
@@ -63,8 +63,11 @@ mecanismo**, que es el que importa para operar:
 2. **Fase 2 (limit_finder.py)**: pasos de ~0.02 rad con pausa larga, mano en
    el brazo para sentir el stall. Al primer zumbido/resistencia → parar esa
    dirección. Nunca dejar en stall más de 2 segundos.
-3. Escribir los límites hallados en `JOINT_MIN_RAD/MAX_RAD` de
-   `servo_config.h` — el clamp del firmware protege el brazo de ahí en más.
+3. El propio `limit_finder.py` escribe los límites hallados en
+   `JOINT_MIN_RAD/MAX_RAD` de `config/safety-envelope.toml` — después de
+   calibrar, regenerar con `python3 tools/generate_safety_config.py` y
+   verificar con `python3 tools/check_safety_parity.py` para que el clamp del
+   firmware proteja el brazo.
 
 ## Lecciones de calibración (base, DS3240MG — 2026-08-11/12)
 
@@ -104,5 +107,5 @@ reinicio), joints ±3.14 rad (mapea todo el rango útil del servo).
 2. `move_joint.py --joint 0 --range 0.15 --dt-ms 1000` → primer movimiento.
 3. Aumentar densidad (`--dt-ms 100`) → verificar suavidad.
 4. Repetir por canal 1, 2 y 3 (cada uno solo, con su rango conservador).
-5. `calibrate.py` por cada servo → ajustar `servo_config.h`.
+5. `calibrate.py` por cada servo → regenerar: `python3 tools/generate_safety_config.py`.
 6. Recién después: trayectoria completa desde el backend/UI.

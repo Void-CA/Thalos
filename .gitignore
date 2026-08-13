@@ -4,3 +4,4 @@ roadmap*
 architecture*
 .opencode
 .vscode/
+__pycache__/

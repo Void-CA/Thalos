@@ -9,7 +9,15 @@ reached the mechanical end stop -> that pulse is the real maximum. Then it
 walks downward from centre to find the real minimum.
 
 The pulse is expressed as the equivalent joint angle (radians) using the
-current mapping in servo_config.h, so no firmware changes are needed.
+current mapping in the canonical ``config/safety-envelope.toml`` (single
+source of truth — spec safety-envelope-canonical-source), so no firmware
+changes are needed.
+
+After measuring, the tool writes the measured pulse range BACK to the TOML
+via ``safety_config`` (one field at a time, old/new shown first — the 7-step
+calibration flow, see docs/calibration.md), then prints the regeneration and
+parity commands. ``write_pulse_range`` is a pure function (no serial / no
+hardware) so it is unit-testable independently.
 
 REQUIREMENTS (important):
   - The servo must be DESACOPLADO (not driving the arm / no load).
@@ -20,43 +28,30 @@ REQUIREMENTS (important):
     damages the gearbox.
 
 Usage:
-    python3 tools/calibrate.py --joint 0
-    python3 tools/calibrate.py --joint 2 --step-us 50
-
-After measuring, update SERVO_PULSE_MIN_US / SERVO_PULSE_MAX_US for that
-channel in firmware/esp32/src/servo_config.h and reflash.
+    python3 firmware/esp32/tools/calibrate.py --joint 0
+    python3 firmware/esp32/tools/calibrate.py --joint 2 --step-us 50
 """
 import argparse
-import os
-import re
-import serial
-import time
+import pathlib
 import sys
 
-# ── Lee los valores REALES de servo_config.h (nunca desincronizados) ──────
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                           "..", "src", "servo_config.h")
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO_ROOT / "tools"))
+import safety_config  # noqa: E402
 
-
-def _extract(name, cfg):
-    m = re.search(name + r"\[NUM_SERVO_CHANNELS\]\s*=\s*\{(.*?)\}", cfg, re.S)
-    if not m:
-        raise SystemExit(f"No pude parsear {name} de servo_config.h")
-    return [float(x.strip().rstrip("f")) for x in m.group(1).split(",")]
-
-
-def load_config():
-    with open(CONFIG_PATH) as f:
-        cfg = f.read()
+# ── Lee los valores REALES de config/safety-envelope.toml (la única fuente) ─
+def _load_config():
+    data = safety_config.load()
+    channels = sorted(data["channel"], key=lambda ch: ch["index"])
     return {
-        "pulse_min": _extract("SERVO_PULSE_MIN_US", cfg),
-        "pulse_max": _extract("SERVO_PULSE_MAX_US", cfg),
-        "joint_min": _extract("JOINT_MIN_RAD", cfg),
-        "joint_max": _extract("JOINT_MAX_RAD", cfg),
+        "pulse_min": [ch["pulse"]["min_us"] for ch in channels],
+        "pulse_max": [ch["pulse"]["max_us"] for ch in channels],
+        "joint_min": [ch["calibration"]["joint_min_rad"] for ch in channels],
+        "joint_max": [ch["calibration"]["joint_max_rad"] for ch in channels],
     }
 
 
-CFG = load_config()
+CFG = _load_config()
 
 
 def pulse_to_rad(joint, pulse_us):
@@ -68,7 +63,34 @@ def pulse_to_rad(joint, pulse_us):
     return jmin + frac * (jmax - jmin)
 
 
+def write_pulse_range(channel_index, min_us, max_us, toml_path=None):
+    """Write the measured pulse range for ONE channel back to the TOML.
+
+    Pure (no serial / no hardware): the candidate values are injected, so CI
+    can exercise the write-back without a robot. Shows old/new for each field
+    (flow step 3), writes ONLY the two pulse fields of that channel (flow
+    step 4), then prints the regeneration + parity commands (steps 6-7).
+    """
+    path = toml_path or safety_config.DEFAULT_TOML
+    old_min = safety_config.get_field(channel_index, "pulse", "min_us", path)
+    old_max = safety_config.get_field(channel_index, "pulse", "max_us", path)
+    safety_config.show_old_new(channel_index, "pulse", "min_us", old_min, min_us)
+    safety_config.update_channel_field(
+        channel_index, "pulse", "min_us", min_us, toml_path=path
+    )
+    safety_config.show_old_new(channel_index, "pulse", "max_us", old_max, max_us)
+    safety_config.update_channel_field(
+        channel_index, "pulse", "max_us", max_us, toml_path=path
+    )
+    print("  Escrito en config/safety-envelope.toml. Proximos pasos:")
+    print("    python3 tools/generate_safety_config.py")
+    print("    python3 tools/check_safety_parity.py")
+
+
 def main():
+    import serial
+    import time
+
     ap = argparse.ArgumentParser(description="Thalos servo range calibration")
     ap.add_argument("--port", default="/dev/ttyUSB0")
     ap.add_argument("--baud", type=int, default=115200)
@@ -151,8 +173,9 @@ def main():
     print(f"  PULSE_MIN_US = {min_us}")
     print(f"  PULSE_MAX_US = {max_us}")
     print(f"  Rango de pulso util: {max_us - min_us} us")
-    print("  Actualiza servo_config.h y re-flashea.")
+    write_pulse_range(args.joint, min_us, max_us)
     ser.close()
+
 
 if __name__ == "__main__":
     main()

@@ -236,8 +236,9 @@ microseconds from execution start, followed by the joint positions
 The firmware can drive physical servos through a PCA9685 16-channel PWM
 driver over I2C (address 0x40, 50 Hz). Joint positions (radians) from
 execution waypoints are converted to PWM pulses and written to the servo
-channels (see `src/servo_config.h` for pins, channels, pulse ranges and
-joint limits).
+channels (see the canonical `config/safety-envelope.toml` — single source
+of truth — plus the generated `src/servo_safety.h` and hand-authored
+`src/servo_hw_config.h` for pins, channels, pulse ranges and joint limits).
 
 ### Commanded vs. Reported Position
 
@@ -276,7 +277,8 @@ commanded PWM output while powered, so the servos hold their last position
 ### Physical Calibration (measured 2026-08-11/12, joint 0 — base)
 
 Field calibration of the DS3240MG (40 kg digital servo) revealed several
-non-obvious facts that drive `servo_config.h`:
+non-obvious facts that drive `config/safety-envelope.toml` (the canonical
+source; the firmware consumes the regenerated `src/servo_safety.h`):
 
 1. **The servo's real pulse range is narrower than nominal.** The DS3240MG
    responds to roughly **350–1725 µs**, not the standard 500–2500 µs. Its
@@ -293,7 +295,7 @@ non-obvious facts that drive `servo_config.h`:
 
 3. **The calibration tool measures the mapping, not the servo, when the
    clamp cuts.** `calibrate.py` converts pulse→radians using the current
-   `servo_config.h` mapping, and the firmware clamps back — so if
+   `config/safety-envelope.toml` mapping, and the firmware clamps back — so if
    `SERVO_PULSE_MIN/MAX_US` is narrower than the servo's real range, the
    tool reports the *mapping* limits, not the servo's. Measure with a wide
    temporary mapping (e.g. 300–2600 µs), then fix the real range with
@@ -311,7 +313,8 @@ non-obvious facts that drive `servo_config.h`:
    limits, verify the horn is mounted centered (servo at mid-pulse, arm at
    its visual center).
 
-Final joint 0 configuration: `SERVO_PULSE_MIN/MAX_US = 350/1650`
+Final joint 0 configuration (stored in `config/safety-envelope.toml`):
+`SERVO_PULSE_MIN/MAX_US = 350/1650`
 (margin below the 1725 µs reset threshold), `JOINT_MIN/MAX_RAD = ±1.5708`
 (mechanism-safe calibration map, restored in M1 — the enforcement boundary
 is the SAFETY_ENVELOPE, which spans the same mechanism-safe travel; see the
@@ -343,8 +346,9 @@ diagnostic. A rejected command produces **no actuator movement**.
 
 ### Safety Envelope (per channel)
 
-`src/servo_config.h` declares a `SafetyEnvelope` per actuated channel — the
-**execution enforcement authority** (ADR-1):
+`src/servo_safety.h` (generated from the canonical
+`config/safety-envelope.toml`) declares a `SafetyEnvelope` per actuated
+channel — the **execution enforcement authority** (ADR-1):
 
 | Channel | Position (rad) | Pulse (µs) | Max velocity (rad/s) | Pos source | Pulse source | Vel source |
 |---------|---------------|------------|----------------------|------------|--------------|------------|
