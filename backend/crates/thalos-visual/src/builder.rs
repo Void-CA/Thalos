@@ -123,19 +123,15 @@ impl SceneBuilder {
         let mut links = Vec::new();
         let mut joint_axes = Vec::new();
 
-        // 1. Compute reference dimension from chain structure (link translations).
-        //    This is the maximum possible reach when fully stretched — stable across
-        //    FK config changes, so the grid/gizmo sizes don't jump on FK movement.
-        let ref_dim = self
-            .chain
-            .segments
-            .iter()
-            .map(|s| {
-                let t = &s.link.transform.translation;
-                (t.x * t.x + t.y * t.y + t.z * t.z).sqrt()
-            })
-            .sum::<f64>()
-            .max(0.01);
+        // 1. Compute reference dimension from chain structure — the canonical
+        //    chain-side factor (thalos-core::robot::scale::scene_reference_dimension).
+        //    This is the maximum possible reach when fully stretched — stable
+        //    across FK config changes, so the grid/gizmo sizes don't jump on FK
+        //    movement. The chain-side function sums BOTH link translations AND
+        //    joint origins (the URDF adapter stores lengths on origins, links
+        //    are identity) — fixing the URDF path that degenerated to 0.01.
+        //    The 0.01 floor stays as a visual guardrail for degenerate chains.
+        let ref_dim = thalos_core::robot::scale::scene_reference_dimension(&self.chain).max(0.01);
 
         // 2. Determine frame style: explicit override or auto-scaled
         let style = self

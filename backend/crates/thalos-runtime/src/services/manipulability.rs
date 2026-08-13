@@ -65,7 +65,7 @@ impl ManipulabilityService {
             GeometricJacobian::new(fk, chain.end_effector.clone())
         };
 
-        let analysis = ManipulabilityAnalyzer::analyze(&ws, &jac);
+        let analysis = ManipulabilityAnalyzer::analyze(&ws, &jac, chain);
 
         Ok(analysis)
     }

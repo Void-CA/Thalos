@@ -189,14 +189,14 @@ pub struct ManipulabilityRequest {
     pub include_samples: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ManipulabilityResponse {
     pub metrics: ManipulabilityMetricsDto,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub samples: Option<Vec<ManipulabilitySampleDto>>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ManipulabilityMetricsDto {
     pub total_samples: usize,
     pub avg_yoshikawa: f64,
@@ -205,6 +205,12 @@ pub struct ManipulabilityMetricsDto {
     pub avg_isotropy: f64,
     pub min_isotropy: f64,
     pub max_isotropy: f64,
+    /// Chain-side canonical robot-scale normalization factor (`L_ref`,
+    /// meters). ADITIVO (`#[serde(default)]` → 0.0): payloads legacy sin el
+    /// campo deserializan sin error (spec analysis-report-contract "Additive
+    /// Reference Dimension on Metrics").
+    #[serde(default)]
+    pub reference_dimension: f64,
 }
 
 impl From<ManipulabilityMetrics> for ManipulabilityMetricsDto {
@@ -217,15 +223,25 @@ impl From<ManipulabilityMetrics> for ManipulabilityMetricsDto {
             avg_isotropy: m.avg_isotropy,
             min_isotropy: m.min_isotropy,
             max_isotropy: m.max_isotropy,
+            reference_dimension: m.reference_dimension,
         }
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ManipulabilitySampleDto {
     pub position: PointDto,
     pub yoshikawa: f64,
     pub isotropy: f64,
+    /// Medida dimensionless `∏σ′ᵢ` (spec analysis-report-contract "Additive
+    /// Normalized Manipulability on Wire"). ADITIVO (`#[serde(default)]` →
+    /// 0.0): payloads legacy sin el campo deserializan sin error.
+    #[serde(default)]
+    pub normalized_yoshikawa: f64,
+    /// Grade clasificado por el backend (`"low" | "medium" | "high"`).
+    /// `None` = payload legacy → fallback frontend.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manipulability_grade: Option<String>,
 }
 
 impl From<&thalos_core::analysis::manipulability::ManipulabilitySample>
@@ -240,6 +256,11 @@ impl From<&thalos_core::analysis::manipulability::ManipulabilitySample>
             },
             yoshikawa: s.manipulability.yoshikawa,
             isotropy: s.manipulability.isotropy,
+            normalized_yoshikawa: s.manipulability.normalized_yoshikawa,
+            manipulability_grade: s
+                .manipulability
+                .manipulability_grade
+                .map(|g| g.as_str().to_string()),
         }
     }
 }
@@ -327,4 +348,127 @@ pub struct ActiveSingularityRequest {
     pub near_singular_condition_threshold: f64,
     #[serde(default)]
     pub include_samples: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use thalos_core::analysis::manipulability::{ManipulabilityMetrics, ManipulabilitySample};
+    use thalos_core::kinematics::jacobian::manipulability::ManipulabilityGrade;
+    use thalos_core::kinematics::jacobian::ManipulabilityReport;
+    use thalos_core::kinematics::jacobian::SingularityReport;
+
+    // ─── Task 3.3: additive normalized + grade + reference_dimension ────────
+    //
+    // Spec analysis-report-contract: ManipulabilitySampleDto carries
+    // normalized_yoshikawa + manipulability_grade (additive); metrics expose
+    // reference_dimension (additive).
+
+    fn sample_with_normalization(normalized: f64, grade: ManipulabilityGrade) -> ManipulabilitySample {
+        ManipulabilitySample {
+            q: vec![0.1, 0.2],
+            position: Vector3::new(0.3, 0.4, 0.5),
+            singularity: SingularityReport {
+                det_jtj: 0.01,
+                condition_number: 2.0,
+                rank: 2,
+                singular_values: vec![0.5, 0.2],
+            },
+            manipulability: ManipulabilityReport {
+                yoshikawa: 0.1,
+                isotropy: 0.4,
+                normalized_yoshikawa: normalized,
+                manipulability_grade: Some(grade),
+            },
+        }
+    }
+
+    #[test]
+    fn manipulability_sample_projects_normalized_and_grade() {
+        let sample = sample_with_normalization(0.22, ManipulabilityGrade::Medium);
+        let dto = ManipulabilitySampleDto::from(&sample);
+        let value = serde_json::to_value(&dto).expect("serialize");
+
+        assert!(
+            (value["normalized_yoshikawa"].as_f64().expect("f64") - 0.22).abs() < 1e-12,
+            "normalized_yoshikawa must project"
+        );
+        assert_eq!(
+            value["manipulability_grade"], "medium",
+            "grade must project lowercase"
+        );
+        assert!((value["yoshikawa"].as_f64().expect("f64") - 0.1).abs() < 1e-12);
+        assert!((value["isotropy"].as_f64().expect("f64") - 0.4).abs() < 1e-12);
+        assert_eq!(value["position"]["x"], 0.3);
+    }
+
+    #[test]
+    fn metrics_dto_exposes_reference_dimension() {
+        let metrics = ManipulabilityMetrics {
+            total_samples: 10,
+            avg_yoshikawa: 0.5,
+            min_yoshikawa: 0.1,
+            max_yoshikawa: 0.9,
+            avg_isotropy: 0.4,
+            min_isotropy: 0.1,
+            max_isotropy: 0.8,
+            reference_dimension: 2.3,
+        };
+        let dto = ManipulabilityMetricsDto::from(metrics);
+        let value = serde_json::to_value(&dto).expect("serialize");
+        assert!(
+            (value["reference_dimension"].as_f64().expect("f64") - 2.3).abs() < 1e-12,
+            "reference_dimension must project (spec scenario: L_ref = 0.5 → 0.5)"
+        );
+    }
+
+    #[test]
+    fn legacy_manipulability_payload_round_trips_with_defaults() {
+        // Spec "Legacy payload missing normalized fields" + "Legacy payload
+        // without reference_dimension": fields absent on the wire deserialize
+        // to 0.0 / None — never an error.
+        let response = ManipulabilityResponse {
+            metrics: ManipulabilityMetricsDto {
+                total_samples: 1,
+                avg_yoshikawa: 0.5,
+                min_yoshikawa: 0.5,
+                max_yoshikawa: 0.5,
+                avg_isotropy: 0.4,
+                min_isotropy: 0.4,
+                max_isotropy: 0.4,
+                reference_dimension: 2.3,
+            },
+            samples: Some(vec![ManipulabilitySampleDto {
+                position: PointDto { x: 0.3, y: 0.4, z: 0.5 },
+                yoshikawa: 0.5,
+                isotropy: 0.4,
+                normalized_yoshikawa: 0.22,
+                manipulability_grade: Some("medium".to_string()),
+            }]),
+        };
+
+        let mut value = serde_json::to_value(response).expect("serialize");
+        value["samples"][0]
+            .as_object_mut()
+            .expect("sample")
+            .remove("normalized_yoshikawa");
+        value["samples"][0]
+            .as_object_mut()
+            .expect("sample")
+            .remove("manipulability_grade");
+        value["metrics"]
+            .as_object_mut()
+            .expect("metrics")
+            .remove("reference_dimension");
+
+        let back: ManipulabilityResponse =
+            serde_json::from_value(value).expect("legacy payload must deserialize");
+        assert_eq!(back.samples.as_ref().expect("samples")[0].normalized_yoshikawa, 0.0);
+        assert_eq!(back.samples.as_ref().expect("samples")[0].manipulability_grade, None);
+        assert_eq!(back.metrics.reference_dimension, 0.0);
+        assert!(
+            (back.samples.as_ref().expect("samples")[0].yoshikawa - 0.5).abs() < 1e-12,
+            "pre-existing fields keep their values"
+        );
+    }
 }

@@ -256,6 +256,18 @@ impl PlanAnalysisResponse {
                         .as_ref()
                         .map(|s| s.det_jtj)
                         .unwrap_or_else(|| m.yoshikawa * m.yoshikawa),
+                    // Proyección aditiva del normalized + grade ya computados
+                    // por el runtime (spec analysis-report-contract): el DTO
+                    // nunca recalcula — solo proyecta al wire.
+                    // `manipulability_grade` es la señal de presencia (design):
+                    // el normalized SOLO se emite cuando hay grade (path
+                    // normalizado); un path raw (`compute()`, S1 — planning)
+                    // deja el campo en None → omitido del wire, el frontend
+                    // cae a su fallback.
+                    normalized_yoshikawa: m
+                        .manipulability_grade
+                        .map(|_| m.normalized_yoshikawa),
+                    manipulability_grade: m.manipulability_grade.map(|g| g.as_str().to_string()),
                 })
             })
             .collect();
@@ -301,6 +313,20 @@ pub struct ManipulabilityPointDto {
     /// Determinante de J·Jᵀ (producto de los valores singulares al cuadrado).
     #[serde(default)]
     pub det_jtj: f64,
+    /// Medida dimensionless `∏σ′ᵢ` del SVD del Jacobiano escalado (spec
+    /// analysis-report-contract "Additive Normalized Manipulability on
+    /// Wire"). ADITIVO + OMITIDO cuando `None`: un payload raw (sin grade)
+    /// no serializa el campo — `manipulability_grade` es la señal de
+    /// presencia y el frontend cae al fallback local. `0.0` es un valor
+    /// normalizado VÁLIDO (singularidad), por eso el wire nunca debe
+    /// fabricarlo como placeholder de un path raw.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub normalized_yoshikawa: Option<f64>,
+    /// Grade clasificado por el backend (`"low" | "medium" | "high"`).
+    /// `None` = payload legacy → el frontend aplica su fallback. El
+    /// exponente `n_sv` NUNCA viaja en el contrato (decisión de diseño).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manipulability_grade: Option<String>,
 }
 
 /// Ancla de artefacto en el wire — kind + id real (O3).
@@ -1102,6 +1128,7 @@ mod tests {
                         manipulability: Some(ManipulabilityReport {
                             yoshikawa,
                             isotropy: 1.0,
+                            ..Default::default()
                         }),
                         min_collision_distance: None,
                     }
@@ -1296,6 +1323,189 @@ mod tests {
             (back.manipulability_series[0].yoshikawa - 0.1).abs() < 1e-12,
             "pre-existing series fields keep their values"
         );
+    }
+
+    // ─── Task 3.2: additive normalized_yoshikawa + manipulability_grade ─────
+    //
+    // Spec analysis-report-contract "Additive Normalized Manipulability on
+    // Wire": both fields are additive (#[serde(default)]); the raw yoshikawa
+    // stays untouched; the exponent n_sv never appears on the wire.
+
+    use thalos_core::kinematics::jacobian::manipulability::ManipulabilityGrade;
+
+    /// Same shape as `sample_analysis` but each waypoint carries the
+    /// normalized measure + backend-classified grade (new-backend payload).
+    fn sample_analysis_normalized(count: usize) -> PlanAnalysis {
+        let base = sample_analysis(count);
+        PlanAnalysis {
+            waypoints: base
+                .waypoints
+                .into_iter()
+                .map(|mut w| {
+                    let normalized = w.index as f64 * 0.05 + 0.15;
+                    w.manipulability = w.manipulability.map(|mut m| {
+                        m.normalized_yoshikawa = normalized;
+                        m.manipulability_grade = Some(if normalized < 0.25 {
+                            ManipulabilityGrade::Medium
+                        } else {
+                            ManipulabilityGrade::High
+                        });
+                        m
+                    });
+                    w
+                })
+                .collect(),
+            ..base
+        }
+    }
+
+    #[test]
+    fn manipulability_series_projects_normalized_and_grade() {
+        // Spec "New client receives normalized fields": the wire carries
+        // normalized_yoshikawa + manipulability_grade per point.
+        let report = sample_report();
+        let analysis = sample_analysis_normalized(3);
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[], None);
+
+        let value = serde_json::to_value(response).expect("serialize");
+        let series = value["manipulability_series"]
+            .as_array()
+            .expect("manipulability_series must be an array");
+        assert_eq!(series.len(), 3);
+        assert!(
+            (series[1]["normalized_yoshikawa"].as_f64().expect("f64") - 0.2).abs() < 1e-12,
+            "normalized_yoshikawa must be projected per point"
+        );
+        assert_eq!(
+            series[1]["manipulability_grade"], "medium",
+            "manipulability_grade must be the lowercase string on the wire"
+        );
+        assert!(
+            (series[2]["normalized_yoshikawa"].as_f64().expect("f64") - 0.25).abs() < 1e-12
+        );
+        assert_eq!(series[2]["manipulability_grade"], "high");
+        // Raw yoshikawa stays untouched on the wire.
+        assert!((series[1]["yoshikawa"].as_f64().expect("f64") - 0.11).abs() < 1e-12);
+        // The exponent n_sv is never exposed.
+        for point in series.iter() {
+            assert!(
+                point.get("n_sv").is_none() && point.get("exponent").is_none(),
+                "the exponent must not leak into the wire contract"
+            );
+        }
+    }
+
+    #[test]
+    fn raw_payload_omits_normalized_yoshikawa_from_wire() {
+        // Review blocker: the `/plan/analyze` path (S1) still computes raw
+        // (`ManipulabilityReport::compute()` → grade None, normalized 0.0).
+        // Serializing `normalized_yoshikawa: 0.0` made the frontend treat the
+        // payload as normalized (presence signal) and plot flat zeros. The DTO
+        // must OMIT the field for a grade-less (raw) payload — the chart then
+        // runs its local fallback.
+        let report = sample_report();
+        let analysis = sample_analysis(3);
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[], None);
+
+        let value = serde_json::to_value(response).expect("serialize");
+        let series = value["manipulability_series"]
+            .as_array()
+            .expect("manipulability_series must be an array");
+        assert_eq!(series.len(), 3);
+        for point in series.iter() {
+            assert!(
+                point.get("normalized_yoshikawa").is_none(),
+                "a raw (grade-less) payload must omit normalized_yoshikawa — got {point}"
+            );
+            assert!(point.get("manipulability_grade").is_none());
+            assert!(
+                point["yoshikawa"].is_f64(),
+                "the raw yoshikawa stays on the wire"
+            );
+        }
+    }
+
+    #[test]
+    fn normalized_payload_serializes_normalized_yoshikawa() {
+        // Contrast: a normalized payload (grade present) DOES carry
+        // normalized_yoshikawa — the chart consumes it verbatim.
+        let report = sample_report();
+        let analysis = sample_analysis_normalized(2);
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[], None);
+
+        let value = serde_json::to_value(response).expect("serialize");
+        let series = value["manipulability_series"]
+            .as_array()
+            .expect("manipulability_series must be an array");
+        assert!(
+            series[0]["normalized_yoshikawa"].is_f64(),
+            "a normalized payload must serialize normalized_yoshikawa"
+        );
+        assert_eq!(series[0]["manipulability_grade"], "medium");
+    }
+
+    #[test]
+    fn legacy_series_point_without_normalized_fields_deserializes() {
+        // Spec "Legacy payload missing normalized fields": a payload without
+        // normalized_yoshikawa / manipulability_grade deserializes with the
+        // defaults (0.0 / None).
+        let report = sample_report();
+        let analysis = sample_analysis_normalized(2);
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[], None);
+
+        let mut value = serde_json::to_value(response).expect("serialize");
+        for i in 0..2 {
+            value["manipulability_series"][i]
+                .as_object_mut()
+                .expect("series point")
+                .remove("normalized_yoshikawa");
+            value["manipulability_series"][i]
+                .as_object_mut()
+                .expect("series point")
+                .remove("manipulability_grade");
+        }
+
+        let back: PlanAnalysisResponse =
+            serde_json::from_value(value).expect("legacy point must deserialize");
+        assert_eq!(back.manipulability_series[0].normalized_yoshikawa, None);
+        assert_eq!(back.manipulability_series[0].manipulability_grade, None);
+        assert!(
+            (back.manipulability_series[0].yoshikawa - 0.1).abs() < 1e-12,
+            "pre-existing fields keep their values"
+        );
+    }
+
+    #[test]
+    fn new_series_point_ignored_by_old_client() {
+        // Spec "Old client backward compatibility": deserializing into a
+        // client that does NOT know the new fields must succeed — serde
+        // ignores unknown fields (no deny_unknown_fields here).
+        let report = sample_report();
+        let analysis = sample_analysis_normalized(2);
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[], None);
+        let json = serde_json::to_string(&response).expect("serialize");
+
+        // A minimal legacy-shaped DTO: only the pre-existing fields.
+        #[derive(serde::Deserialize)]
+        struct LegacyPoint {
+            waypoint: u32,
+            #[serde(default)]
+            timestamp: f64,
+            yoshikawa: f64,
+            #[serde(default)]
+            det_jtj: f64,
+        }
+        let value: serde_json::Value = serde_json::from_str(&json).expect("parse");
+        let legacy: LegacyPoint =
+            serde_json::from_value(value["manipulability_series"][0].clone())
+                .expect("old client must ignore the new fields");
+        assert_eq!(legacy.waypoint, 0);
+        assert!((legacy.yoshikawa - 0.1).abs() < 1e-12);
     }
 
     // ─── PR2: recommendations[] additive wire field (spec recommendation-model

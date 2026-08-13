@@ -143,3 +143,38 @@ fn dump_json() {
     let json = serde_json::to_string_pretty(&scene).unwrap();
     println!("{}", json);
 }
+
+/// Regression guard for the URDF reference-dimension bug: the old inline
+/// ref_dim summed ONLY link translations, but the URDF adapter stores
+/// lengths on joint origins (links are identity), so URDF robots collapsed
+/// to the 0.01 floor. The chain-side `reference_dimension` (link + origin
+/// norms) recovers the true scale: SCARA canonical = 0.5 + 1.0 + 0.8 = 2.3.
+#[test]
+fn urdf_scara_reference_dimension_is_not_the_broken_floor() {
+    use std::fs;
+    use std::path::PathBuf;
+
+    use thalos_core::kinematics::forward::ForwardKinematics;
+    use thalos_core::robot::adapter;
+    use thalos_models::urdf::parser::parse_robot;
+
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let fixture = manifest
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("crates/thalos-models/tests/fixtures/scara.urdf");
+    let source = fs::read_to_string(fixture).expect("SCARA fixture file not found");
+    let robot = parse_robot(&source).expect("SCARA should parse");
+    let chain = adapter::from_tip(&robot, "tool0").expect("from_tip with tool0");
+
+    let fk = ForwardKinematics::new(chain.clone());
+    let scene = SceneBuilder::new(&chain).from_fk(&fk.evaluate(&[0.0, 0.0, 0.0, 0.0]));
+
+    assert!(
+        (scene.reference_dimension - 2.3).abs() < 1e-9,
+        "URDF SCARA reference_dimension must be 2.3, got {}",
+        scene.reference_dimension
+    );
+}
