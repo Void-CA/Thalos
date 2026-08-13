@@ -28,6 +28,12 @@
 // 1.5708 rad (reject-not-clamp, ADR-2). Test 12 was harness-corrected to
 // assert REJECTION (not clamp) — on pre-fix firmware it fails because 4.0 rad
 // is silently clamped with an OK response.
+//
+// M4 added the Safety Golden Path integration test (last in this file): one
+// deliberately-invalid command walked through the WHOLE chain — manifest →
+// protocol → validator → executor → servo_driver — asserting rejection with
+// diagnostic, no executor advance, and zero actuator writes (spec
+// planner-firmware-consistency, scenario safety_golden_path_invalid_command).
 
 #include <Arduino.h>
 #include <cmath>
@@ -418,4 +424,57 @@ void test_safety_accepted_command_write_bounded_within_envelope() {
         TEST_ASSERT_EQUAL_UINT16(
             static_cast<uint16_t>(expected_steps(ch, bounded)), steps);
     }
+}
+
+// ── Safety Golden Path (ADR-7, spec planner-firmware-consistency
+//    § "Safety Golden Path Integration") ─────────────────────────────────────
+
+void test_safety_golden_path_invalid_command_rejected_end_to_end() {
+    // The firmware equivalent of the intelligence Golden Path: ONE canonical
+    // deliberately-invalid command (base 4.0 rad — beyond the ±1.5708
+    // envelope) walked through the WHOLE chain and stopped at the LAST
+    // barrier:
+    //
+    //   manifest  →  protocol  →  validator  →  executor  →  servo_driver
+    //      |            |            |             |             |
+    //   uploads     parses the   rejects at    never        write() is
+    //   the 6-DOF   SAMPLE line  SAMPLE time   starts (no   NEVER called
+    //   manifest    (syntactic   with          waypoint     → the Wire bus
+    //   (OK)        OK)          INVALID_JOINT entered the   sees zero new
+    //                                           manifest)   transactions
+    //
+    // The assertion set pins every link of the chain: the rejection AND its
+    // diagnostic at protocol/validator, the executor not advancing, and zero
+    // actuator writes (spec scenario safety_golden_path_invalid_command).
+    Fixture f;
+    const size_t tx_before = Wire.tx_count();  // after fixture init (incl. pca.begin())
+
+    // 1. manifest → protocol: a valid 6-DOF manifest opens (MANIFEST 6 … OK).
+    begin_upload_6dof(f);
+
+    // 2. protocol → validator: the out-of-envelope SAMPLE is rejected AT
+    //    SAMPLE time by handle_sample() → check_physical_envelope(). The
+    //    waypoint never enters the manifest, so the validator's
+    //    whole-manifest check at END_UPLOAD is never even reached.
+    send_and_expect(f, "SAMPLE 4.0 0.3 0.1 0.0 0.0 0.0 200000", "ERROR INVALID_JOINT");
+
+    // 3. Diagnostic emitted: the rejection is visible in protocol state.
+    send_and_expect(f, "STATUS", "STATUS ERROR INVALID_JOINT");
+
+    // 4. Executor does NOT advance: no waypoint ever entered the manifest,
+    //    so there is nothing to step — the executor never left IDLE and
+    //    recorded no samples.
+    TEST_ASSERT_EQUAL(static_cast<int>(Executor::IDLE),
+                      static_cast<int>(f.executor.current_state()));
+    TEST_ASSERT_TRUE(f.executor.samples().empty());
+
+    // 5. servo_driver.write() NEVER called: the Wire bus saw zero new
+    //    transactions across the whole exchange (no actuator movement).
+    TEST_ASSERT_EQUAL(tx_before, Wire.tx_count());
+
+    // State machine latch (documented error handling): ERROR blocks a fresh
+    // upload until the host recovers via STOP.
+    send_and_expect(f, "MANIFEST 6 1 200000", "ERROR NOT_IDLE");
+    send_and_expect(f, "STOP", "OK");
+    send_and_expect(f, "STATUS", "STATUS IDLE");
 }

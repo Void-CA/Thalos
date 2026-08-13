@@ -144,8 +144,10 @@ transitions to the Ready state, or returns an error.
 |-------|---------|
 | `DOF_MISMATCH` | Joint count differs from manifest metadata |
 | `WAYPOINT_COUNT` | Sample count differs from metadata |
-| `TIMING_COUNT` | Timing values malformed |
+| `TIMING_INVALID` | Timing values malformed (accumulated `dt_us` vs declared duration, 1 % tolerance) |
 | `EMPTY_MANIFEST` | No waypoints received |
+| `INVALID_JOINT` | A joint lies outside its channel's `SAFETY_ENVELOPE` — reject-not-clamp (see [Safety Contract](#safety-contract-execution-safety-envelope)) |
+| `MALFORMED_SAMPLE` | A `SAMPLE` line failed parse hardening — NaN/Inf/overflow/non-numeric/negative-`dt_us` (see [Safety Contract](#safety-contract-execution-safety-envelope)) |
 
 **Example (success):**
 ```
@@ -268,8 +270,9 @@ non-obvious facts that drive `servo_config.h`:
 2. **Pulses outside the accepted range cause a "reset sweep".** Commanding a
    pulse beyond ~1725 µs makes the servo lose its reference and sweep its
    full range once (an initialization-like movement). This is how the range
-   limit was confirmed by behavior. The firmware clamp must never emit such
-   pulses.
+   limit was confirmed by behavior. The firmware must never emit such pulses
+   — the safety contract rejects the commanding joint value instead (there
+   is no clamp; see the [Safety Contract](#safety-contract-execution-safety-envelope)).
 
 3. **The calibration tool measures the mapping, not the servo, when the
    clamp cuts.** `calibrate.py` converts pulse→radians using the current
@@ -292,9 +295,11 @@ non-obvious facts that drive `servo_config.h`:
    its visual center).
 
 Final joint 0 configuration: `SERVO_PULSE_MIN/MAX_US = 350/1650`
-(margin below the 1725 µs reset threshold), `JOINT_MIN/MAX_RAD = ±3.14`
-(maps the full usable servo range). The same calibration procedure applies
-to joints 1–3.
+(margin below the 1725 µs reset threshold), `JOINT_MIN/MAX_RAD = ±1.5708`
+(mechanism-safe calibration map, restored in M1 — the enforcement boundary
+is the SAFETY_ENVELOPE, which spans the same mechanism-safe travel; see the
+[Safety Contract](#safety-contract-execution-safety-envelope)). The same
+calibration procedure applies to joints 1–3.
 
 ### Probe Degradation (PCA9685 absent)
 
@@ -303,6 +308,145 @@ device present). If the PCA9685 is not found it logs
 `PCA9685 NOT found — servos disabled` and every servo write becomes a
 no-op. Execution, protocol handling and sample recording continue to work
 normally (simulation-only mode).
+
+## Safety Contract (Execution Safety Envelope)
+
+The firmware is the **last barrier** between a wire command and a physical
+actuator write. It NEVER silently transforms an invalid command into a valid
+one (design ADR-2): every layer that can stop a command — protocol parse,
+validator, executor, ServoDriver — rejects it with an identifiable
+diagnostic. A rejected command produces **no actuator movement**.
+
+### Error Codes
+
+| Error | Layer | Triggers |
+|-------|-------|----------|
+| `MALFORMED_SAMPLE` | Protocol parse (`handle_sample`) | NaN joint token; `+Inf` / `-Inf` joint token; numeric overflow (`strtof` sets `ERANGE`, e.g. `1e39` → +Inf); non-numeric joint token (full-token consumption check — `abc` is rejected, never silently parsed as 0.0); negative `dt_us` (parsed as signed and rejected before the uint32 cast — a negative value must never wrap to a huge positive duration) |
+| `INVALID_JOINT` | Validator (`check_physical_envelope`) | A joint outside its channel's `SAFETY_ENVELOPE` position range. Enforced **per-sample at `SAMPLE` time** (the waypoint never enters the manifest) and **whole-manifest at `END_UPLOAD`** (defense-in-depth for direct API use). |
+
+### Safety Envelope (per channel)
+
+`src/servo_config.h` declares a `SafetyEnvelope` per actuated channel — the
+**execution enforcement authority** (ADR-1):
+
+| Channel | Position (rad) | Pulse (µs) | Max velocity (rad/s) | Pos source | Pulse source | Vel source |
+|---------|---------------|------------|----------------------|------------|--------------|------------|
+| base (0) | [-1.5708, +1.5708] | [350, 1650] | 1.0 | URDF | Configured | URDF |
+| elbow (1) | [0.0, +2.0944] | [350, 2050] | 1.0 | URDF | Configured | URDF |
+| wrist (2) | [-3.1416, +3.1416] | [300, 2600] | 2.0 | **Temporary** | **Temporary** | **Temporary** |
+| prismatic (3) | [0.0, +0.06] | [500, 2500] | 0.5 | URDF | Configured | URDF |
+
+> The prismatic joint's "rad" fields hold **metres** (linear actuator); its
+> position range is URDF-declared mechanism travel.
+
+### LimitSource Provenance Semantics
+
+Every limit declares its provenance via
+`enum class LimitSource { URDF, Measured, Configured, Temporary }`. This is
+not decorative: a `Temporary` limit carries different epistemological weight
+than a `URDF` or `Measured` limit, and the contract treats it accordingly.
+
+- **URDF** — declared by the mechanism's URDF model (mechanism-safe travel).
+  The ±1.57 rad base / ±2.09 rad elbow discrepancy vs full servo travel is
+  resolved by explicit authority: the URDF mechanism-safe limit wins.
+- **Measured** — found by physical measurement/calibration.
+- **Configured** — operator/tuning configuration. Pulse ranges are Configured
+  because the URDF cannot express pulse widths (see the calibration notes
+  below).
+- **Temporary** — provisional, **NOT physically validated yet**. The wrist
+  (2) envelope is Temporary: ±3.1416 rad / 2.0 rad/s spans full servo travel
+  and is deliberately NOT tightened to an invented "safer" number. It carries
+  no enforcement weight until real measurement replaces it (see
+  [Gate B](#gate-b-honesty-software-contract-vs-physical-envelope)).
+
+### Calibration Map vs Enforcement Authority
+
+Two per-channel tables coexist and MUST NOT be conflated:
+
+| Table | Role |
+|-------|------|
+| `JOINT_MIN/MAX_RAD` + `SERVO_PULSE_MIN/MAX_US` | **Calibration map only** — the rad→pulse linear-interpolation endpoints used by `ServoDriver::radToPulseUS()`. Describes HOW a commanded radian maps to a pulse width. |
+| `SAFETY_ENVELOPE` | **Enforcement authority** — what may PHYSICALLY execute. Enforced by protocol (per-sample), validator (whole-manifest), and ServoDriver (defensive write). |
+
+A value inside the calibration map but outside the envelope is **rejected,
+never clamped**. Recalibrating the mapping never changes enforcement, and
+vice versa.
+
+### No-Movement Property
+
+For every command C outside the envelope: `validate(C) == Reject` AND
+`actuator_state_after(C) == actuator_state_before(C)`. An out-of-envelope
+command → rejected → **actuator writes == 0** (the Wire bus sees no new
+transaction) → diagnostic emitted (`ERROR INVALID_JOINT` /
+`ERROR MALFORMED_SAMPLE`). The executor never starts on a rejected manifest,
+and the state machine latches in `ERROR` until the host recovers via `STOP`.
+
+### Velocity-Bounding (catch-up)
+
+`Executor::step_to()` caps the per-update physical advance:
+
+```
+max_advance[ch] = SAFETY_ENVELOPE[ch].max_velocity_rad_per_s × elapsed_since_last_write
+```
+
+where `elapsed_since_last_write` is real time since the last **successful**
+write, clamped to 1 h as a defensive bound against 32-bit `micros()` wrap or
+a stale timestamp. A delayed `update()` (loop stall) NEVER teleports the arm
+to a far waypoint: catch-up writes only the last stale waypoint, and even
+that is velocity-bounded. A write is committed only if
+`ServoDriver::write()` accepts it; a rejected write leaves the position and
+the write clock untouched (defensive backstop — never a clamp).
+
+### dt_us==0 Protocol Semantics
+
+When a waypoint carries `dt_us == 0`, physical velocity v = Δq/Δt is
+**UNDEFINED** (Δt = 0). This is a **protocol contract**, not an implementation
+detail (design ADR-3):
+
+- The firmware MUST NOT infer host velocity from the commanded delta
+  (`Δq/0` is not a velocity).
+- The firmware **controls advancement**: at most ONE zero-dt waypoint is
+  consumed per `update()` call — a degenerate all-zero-dt manifest is stepped
+  one waypoint per update, never consumed in a single jump — and the physical
+  write advances by at most `max_velocity × elapsed_real_time`.
+- Telemetry is preserved: every commanded waypoint is recorded in the sample
+  log (recorded BEFORE the write); only the bounded physical write is
+  limited.
+
+### Position → Pulse Transformation (rad → pulse)
+
+The transformation from planner domain (rad) to firmware domain (µs, PCA9685
+steps) is an explicit linear map (ADR-6):
+
+```
+pulse_us = pulse_min + ((rad - pos_min) / (pos_max - pos_min)) × (pulse_max - pulse_min)
+steps    = round(pulse_us × PCA9685_STEPS_PER_US)          // 0.2048 steps/µs at 50 Hz
+```
+
+`pos_min/pos_max` are the channel's `JOINT_MIN/MAX_RAD` calibration endpoints;
+`pulse_min/pulse_max` are `SERVO_PULSE_MIN/MAX_US`. `steps` saturates to the
+12-bit `[0, 4095]` range. Because the map is linear and documented, "planner
+says valid → pulse conversion → firmware rejects" is **intentional
+(conservative defense)**, never an accidental bug.
+
+### Gate B Honesty: Software Contract vs Physical Envelope
+
+Verification distinguishes two very different claims:
+
+- **PASS — software safety contract**: parsing (NaN/Inf/overflow/
+  negative-`dt_us` rejection), validation (envelope rejection,
+  `INVALID_JOINT`), state machine (`ERROR` latch, `STOP` recovery),
+  no-write-on-reject (Wire tx_count unchanged), velocity-bounding and
+  dt_us==0 semantics, protocol behavior. Proven by the host test suite
+  (`pio test -e native`, 54 pre-existing + 15 safety-contract tests).
+- **NOT VERIFIED — physical actuator envelope** until real
+  calibration/measurement: PWM↔pulse correspondence (PCA9685 step register ↔
+  actual µs), the servo actually respecting its declared limits, mechanical
+  overtravel, the PCA9685/servo producing the expected motion, and the
+  correctness of the derived (rad→pulse) limits. The wrist (2) channel is
+  explicitly **Temporary**: its ±3.1416 rad / 2.0 rad/s envelope is NOT
+  physically validated and requires measurement before it carries enforcement
+  weight.
 
 ## State Machine
 
@@ -353,7 +497,10 @@ ERROR <reason>
 ```
 
 The `<reason>` is a human-readable string describing the problem
-(e.g., `NOT_READY`, `DOF_MISMATCH`, `EXECUTION_FAILED`).
+(e.g., `NOT_READY`, `DOF_MISMATCH`, `INVALID_JOINT`, `MALFORMED_SAMPLE`,
+`EXECUTION_FAILED`). The full set of safety-related reasons and their
+triggers is documented in the
+[Safety Contract](#safety-contract-execution-safety-envelope).
 
 The host treats any `ERROR` response as a protocol error and aborts
 the current operation. Unexpected responses (e.g., `READY` when
