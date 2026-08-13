@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <cstdint>
-#include "servo_config.h"
+#include "servo_hw_config.h"
 
 // ── PCA9685 register map (datasheet) ─────────────────────────────────────
 

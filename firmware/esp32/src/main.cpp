@@ -11,7 +11,7 @@
 #include "validator.h"
 #include "pca9685_driver.h"
 #include "servo_driver.h"
-#include "servo_config.h"
+#include "servo_hw_config.h"
 
 // ── Global instances ─────────────────────────────────────────────────────
 

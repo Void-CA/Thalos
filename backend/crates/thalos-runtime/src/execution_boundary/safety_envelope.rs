@@ -1,11 +1,12 @@
 //! Rust mirror of the firmware `SAFETY_ENVELOPE` — parity contract (ADR-1,
-//! ADR-5). The values below MUST stay bit-for-bit in sync with
-//! `firmware/esp32/src/servo_config.h`; that header is the source of truth.
-//! If the firmware envelope changes, this mirror MUST change with it — the
-//! backend rejects at the SAME limits the firmware enforces (test 11 parity).
+//! ADR-5). The values are GENERATED from `config/safety-envelope.toml` (the
+//! single canonical source) via `tools/generate_safety_config.py` into
+//! `safety_envelope_generated.rs` (included below); the firmware's
+//! `servo_safety.h` derives from the SAME TOML. If the TOML envelope changes,
+//! regenerate — the backend rejects at the SAME limits the firmware enforces.
 
 /// Provenance of a limit value — mirrors `enum class LimitSource` in
-/// `firmware/esp32/src/servo_config.h`.
+/// `firmware/esp32/src/servo_safety.h`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LimitSource {
     /// Declared by the mechanism's URDF model.
@@ -19,7 +20,7 @@ pub enum LimitSource {
 }
 
 /// Per-channel physical safety envelope — mirrors the `SafetyEnvelope` struct
-/// and `SAFETY_ENVELOPE[4]` table in `firmware/esp32/src/servo_config.h`.
+/// and `SAFETY_ENVELOPE` table in `firmware/esp32/src/servo_safety.h`.
 ///
 /// Channel order is joint index order: joint `i` ↔ channel `i` (base 0,
 /// elbow 1, wrist 2, prismatic 3). Joints beyond channel 3 (robots with more
@@ -29,57 +30,18 @@ pub enum LimitSource {
 pub struct ChannelEnvelope {
     pub position_min_rad: f64,
     pub position_max_rad: f64,
+    pub pulse_min_us: i64,
+    pub pulse_max_us: i64,
     pub max_velocity_rad_per_s: f64,
     pub position_source: LimitSource,
+    pub pulse_source: LimitSource,
     pub velocity_source: LimitSource,
 }
 
-/// The 4-channel enforcement envelope — THE parity contract. The position and
-/// velocity values mirror `SAFETY_ENVELOPE` in `servo_config.h` EXACTLY:
-///
-/// | Channel | Position (rad) | Velocity (rad/s) | Pos Source | Vel Source |
-/// |---------|----------------|------------------|------------|------------|
-/// | base (0) | [-1.5708, +1.5708] | 1.0 | URDF | URDF |
-/// | elbow (1) | [0.0, +2.0944] | 1.0 | URDF | URDF |
-/// | wrist (2) | [-3.1416, +3.1416] | 2.0 | Temporary | Temporary |
-/// | prismatic (3) | [0.0, +0.06] | 0.5 | URDF | URDF |
-///
-/// Wrist is TEMPORARY (not physically validated) exactly like the firmware —
-/// do NOT invent a "safer" number without measurement.
-pub const SAFETY_ENVELOPE: [ChannelEnvelope; 4] = [
-    // base (0): URDF mechanism-safe ±1.5708 rad; velocity URDF 1.0 rad/s.
-    ChannelEnvelope {
-        position_min_rad: -1.5708,
-        position_max_rad: 1.5708,
-        max_velocity_rad_per_s: 1.0,
-        position_source: LimitSource::Urdf,
-        velocity_source: LimitSource::Urdf,
-    },
-    // elbow (1): URDF 0..2.0944 rad.
-    ChannelEnvelope {
-        position_min_rad: 0.0,
-        position_max_rad: 2.0944,
-        max_velocity_rad_per_s: 1.0,
-        position_source: LimitSource::Urdf,
-        velocity_source: LimitSource::Urdf,
-    },
-    // wrist (2): TEMPORARY full servo travel ±3.1416 rad.
-    ChannelEnvelope {
-        position_min_rad: -3.1416,
-        position_max_rad: 3.1416,
-        max_velocity_rad_per_s: 2.0,
-        position_source: LimitSource::Temporary,
-        velocity_source: LimitSource::Temporary,
-    },
-    // prismatic (3): URDF 0..0.06 m (rad fields hold metres).
-    ChannelEnvelope {
-        position_min_rad: 0.0,
-        position_max_rad: 0.06,
-        max_velocity_rad_per_s: 0.5,
-        position_source: LimitSource::Urdf,
-        velocity_source: LimitSource::Urdf,
-    },
-];
+/// The 4-channel enforcement envelope — THE parity contract. Generated from
+/// `config/safety-envelope.toml` (single canonical source) — do not edit by
+/// hand; regenerate with `python3 tools/generate_safety_config.py`.
+include!("safety_envelope_generated.rs");
 
 /// Why a joint value was rejected.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -191,30 +153,45 @@ mod tests {
     use super::*;
 
     /// Parity: the Rust mirror MUST reproduce the firmware `SAFETY_ENVELOPE`
-    /// values exactly (source of truth: `firmware/esp32/src/servo_config.h`).
+    /// values exactly (single canonical source: `config/safety-envelope.toml`,
+    /// generated into `safety_envelope_generated.rs` and `servo_safety.h`).
     #[test]
     fn mirror_matches_firmware_servo_config_values() {
-        // base (0): ±1.5708 rad, 1.0 rad/s, URDF/URDF
+        // base (0): ±1.5708 rad, 1.0 rad/s, URDF/URDF; pulse 350-1650 Configured
         assert_eq!(SAFETY_ENVELOPE[0].position_min_rad, -1.5708);
         assert_eq!(SAFETY_ENVELOPE[0].position_max_rad, 1.5708);
         assert_eq!(SAFETY_ENVELOPE[0].max_velocity_rad_per_s, 1.0);
         assert_eq!(SAFETY_ENVELOPE[0].position_source, LimitSource::Urdf);
         assert_eq!(SAFETY_ENVELOPE[0].velocity_source, LimitSource::Urdf);
-        // elbow (1): 0..2.0944 rad, 1.0 rad/s, URDF/URDF
+        assert_eq!(SAFETY_ENVELOPE[0].pulse_min_us, 350);
+        assert_eq!(SAFETY_ENVELOPE[0].pulse_max_us, 1650);
+        assert_eq!(SAFETY_ENVELOPE[0].pulse_source, LimitSource::Configured);
+        // elbow (1): 0..2.0944 rad, 1.0 rad/s, URDF/URDF; pulse 350-2050 Configured
         assert_eq!(SAFETY_ENVELOPE[1].position_min_rad, 0.0);
         assert_eq!(SAFETY_ENVELOPE[1].position_max_rad, 2.0944);
         assert_eq!(SAFETY_ENVELOPE[1].max_velocity_rad_per_s, 1.0);
-        // wrist (2): ±3.1416 rad TEMPORARY, 2.0 rad/s, Temporary/Temporary
+        assert_eq!(SAFETY_ENVELOPE[1].pulse_min_us, 350);
+        assert_eq!(SAFETY_ENVELOPE[1].pulse_max_us, 2050);
+        assert_eq!(SAFETY_ENVELOPE[1].pulse_source, LimitSource::Configured);
+        // wrist (2): ±3.1416 rad TEMPORARY, 2.0 rad/s, Temporary/Temporary; pulse
+        // 300-2600 Temporary
         assert_eq!(SAFETY_ENVELOPE[2].position_min_rad, -3.1416);
         assert_eq!(SAFETY_ENVELOPE[2].position_max_rad, 3.1416);
         assert_eq!(SAFETY_ENVELOPE[2].max_velocity_rad_per_s, 2.0);
         assert_eq!(SAFETY_ENVELOPE[2].position_source, LimitSource::Temporary);
         assert_eq!(SAFETY_ENVELOPE[2].velocity_source, LimitSource::Temporary);
-        // prismatic (3): 0..0.06 m, 0.5 rad/s (rad fields hold metres), URDF
+        assert_eq!(SAFETY_ENVELOPE[2].pulse_min_us, 300);
+        assert_eq!(SAFETY_ENVELOPE[2].pulse_max_us, 2600);
+        assert_eq!(SAFETY_ENVELOPE[2].pulse_source, LimitSource::Temporary);
+        // prismatic (3): 0..0.06 m, 0.5 rad/s (rad fields hold metres), URDF;
+        // pulse 500-2500 Configured
         assert_eq!(SAFETY_ENVELOPE[3].position_min_rad, 0.0);
         assert_eq!(SAFETY_ENVELOPE[3].position_max_rad, 0.06);
         assert_eq!(SAFETY_ENVELOPE[3].max_velocity_rad_per_s, 0.5);
         assert_eq!(SAFETY_ENVELOPE[3].position_source, LimitSource::Urdf);
+        assert_eq!(SAFETY_ENVELOPE[3].pulse_min_us, 500);
+        assert_eq!(SAFETY_ENVELOPE[3].pulse_max_us, 2500);
+        assert_eq!(SAFETY_ENVELOPE[3].pulse_source, LimitSource::Configured);
 
         // The envelope is exactly 4 channels — one per icebot actuated joint.
         assert_eq!(SAFETY_ENVELOPE.len(), 4);

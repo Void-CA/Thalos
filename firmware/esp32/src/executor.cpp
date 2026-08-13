@@ -1,6 +1,6 @@
 #include "executor.h"
 #include "protocol.h"   // for Manifest definition
-#include "servo_config.h"   // for SAFETY_ENVELOPE / NUM_SERVO_CHANNELS
+#include "servo_safety.h"   // for SAFETY_ENVELOPE / NUM_SERVO_CHANNELS
 #include "servo_driver.h"   // for write()/enabled() during physical actuation
 
 #include <algorithm>

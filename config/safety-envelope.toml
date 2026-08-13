@@ -1,0 +1,113 @@
+# Thalos safety envelope — SINGLE CANONICAL SOURCE (spec: safety-envelope-canonical-source).
+# Every safety value (position, pulse, velocity, provenance) lives HERE and
+# nowhere else. The generated artifacts
+#   - firmware/esp32/src/servo_safety.h
+#   - backend/crates/thalos-runtime/src/execution_boundary/safety_envelope_generated.rs
+# are DERIVED — never edit them by hand. Regenerate after changing this file:
+#   python3 tools/generate_safety_config.py
+# Values below reproduce the former hand-authored firmware/esp32/src/servo_config.h
+# byte-identically (M1 gate: 71 firmware + 288 runtime tests, zero assertion
+# changes).
+
+[metadata]
+schema_version = 1
+robot = "icebot"
+dof_count = 4
+
+# Firmware-only physical wiring facts (ADR-2): mirrored by the hand-authored
+# firmware/esp32/src/servo_hw_config.h; the Rust backend ignores this section.
+[hardware]
+i2c_sda_gpio = 4
+i2c_scl_gpio = 5
+pca9685_address = "0x40"
+pca9685_prescale = "0x79"
+pca9685_steps_per_us = 0.2048
+servo_channels = [15, 14, 13, 12]
+num_servo_channels = 4
+
+# base (0): URDF mechanism-safe ±1.5708 rad; pulse Configured; velocity URDF.
+[[channel]]
+name = "base"
+index = 0
+
+[channel.calibration]
+joint_min_rad = -1.5708
+joint_max_rad = 1.5708
+
+[channel.pulse]
+min_us = 350
+max_us = 1650
+source = "Configured"
+
+[channel.envelope]
+position_min_rad = -1.5708
+position_max_rad = 1.5708
+position_source = "URDF"
+max_velocity_rad_per_s = 1.0
+velocity_source = "URDF"
+
+# elbow (1): URDF 0..2.0944 rad; pulse Configured; velocity URDF.
+[[channel]]
+name = "elbow"
+index = 1
+
+[channel.calibration]
+joint_min_rad = 0.0
+joint_max_rad = 2.0944
+
+[channel.pulse]
+min_us = 350
+max_us = 2050
+source = "Configured"
+
+[channel.envelope]
+position_min_rad = 0.0
+position_max_rad = 2.0944
+position_source = "URDF"
+max_velocity_rad_per_s = 1.0
+velocity_source = "URDF"
+
+# wrist (2): ⚠️ TEMPORARY — full servo travel ±3.1416 rad. NOT physically
+# validated; deliberately NOT tightened (do not invent a safer number without
+# measurement) until real calibration replaces it.
+[[channel]]
+name = "wrist"
+index = 2
+
+[channel.calibration]
+joint_min_rad = -3.1416
+joint_max_rad = 3.1416
+
+[channel.pulse]
+min_us = 300
+max_us = 2600
+source = "Temporary"
+
+[channel.envelope]
+position_min_rad = -3.1416
+position_max_rad = 3.1416
+position_source = "Temporary"
+max_velocity_rad_per_s = 2.0
+velocity_source = "Temporary"
+
+# prismatic (3): URDF 0..0.06 m (linear actuator; the rad fields hold metres);
+# pulse Configured; velocity URDF.
+[[channel]]
+name = "prismatic"
+index = 3
+
+[channel.calibration]
+joint_min_rad = 0.0
+joint_max_rad = 0.06
+
+[channel.pulse]
+min_us = 500
+max_us = 2500
+source = "Configured"
+
+[channel.envelope]
+position_min_rad = 0.0
+position_max_rad = 0.06
+position_source = "URDF"
+max_velocity_rad_per_s = 0.5
+velocity_source = "URDF"

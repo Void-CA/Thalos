@@ -1,5 +1,5 @@
 #include "validator.h"
-#include "servo_config.h"
+#include "servo_safety.h"
 
 // ── Public validate ──────────────────────────────────────────────────────
 

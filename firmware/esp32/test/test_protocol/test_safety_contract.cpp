@@ -46,7 +46,7 @@
 #include "validator.h"
 #include "servo_driver.h"
 #include "pca9685_driver.h"
-#include "servo_config.h"
+#include "servo_safety.h"
 #include "unity.h"
 
 // ── Helpers (mirror test_main.cpp conventions) ─────────────────────────────

@@ -5,7 +5,7 @@
 #include <cmath>
 #include <vector>
 #include "pca9685_driver.h"
-#include "servo_config.h"
+#include "servo_safety.h"
 
 /// Per-channel servo abstraction: joint positions (radians) → PWM pulses.
 ///
