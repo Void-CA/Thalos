@@ -1,0 +1,73 @@
+# Engineering + safety gates on every push/PR to main (ci-safety-gate).
+# Mirrors the structure of docs.yml but runs the four gates that make the
+# safety contract a repository property:
+#   1. cargo test --workspace    (backend)
+#   2. pio test -e native        (firmware)
+#   3. stale-artifact check      (regenerate + git diff — TOML edits MUST land
+#                                with regenerated C++/Rust artifacts)
+#   4. parity gate               (check_safety_parity.py — C++/Rust vs TOML)
+# Intentionally minimal: single job, no matrix, no artifact upload.
+# NOTE: this workflow NEVER sets THALOS_ALLOW_PARITY_SKIP — a missing python3
+# in CI must hard-fail the parity test, not skip it.
+
+name: Safety Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  safety-gate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          # 3.11+ required for tomllib (generator + parity gate); ubuntu-latest
+          # ships 3.12, but pin explicitly so the Python version is a decision.
+          python-version: "3.12"
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: platformio-${{ runner.os }}-${{ hashFiles('firmware/esp32/platformio.ini') }}
+          restore-keys: |
+            platformio-${{ runner.os }}-
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Backend tests
+        working-directory: backend
+        run: cargo test --workspace
+
+      - name: Firmware tests (native)
+        working-directory: firmware/esp32
+        # `pio test` exits with the FAILURE COUNT, not a boolean. A non-zero
+        # exit still fails this step (bash -e), but the count can wrap mod 256,
+        # so re-run the built Unity binary directly: it reports the real count,
+        # making a 0 exit here a true pass.
+        run: |
+          pio test -e native
+          ./.pio/build/native/program
+
+      - name: Stale-artifact check
+        run: |
+          python3 tools/generate_safety_config.py
+          git diff --exit-code
+
+      - name: Safety parity gate
+        run: python3 tools/check_safety_parity.py

@@ -66,6 +66,27 @@ propagates it to both languages.
 Steps 5–7 are mandatory after every measurement. A measurement that is never
 regenerated is invisible to the firmware and the backend.
 
+## CI safety gate
+
+Every push/PR to `main` runs the **safety gate** (`.github/workflows/safety-gate.yml`),
+four checks in order:
+
+1. `cargo test --workspace` (backend)
+2. `pio test -e native` (firmware)
+3. **Stale-artifact check**: `python3 tools/generate_safety_config.py` then
+   `git diff --exit-code` — if you changed `config/safety-envelope.toml` without
+   regenerating the C++/Rust artifacts, this step FAILS. Regenerate before you push.
+4. **Parity gate**: `python3 tools/check_safety_parity.py` — C++ and Rust must
+   represent exactly the same contract as the TOML.
+
+The parity test also runs inside `cargo test` (thalos-runtime). If `python3` is
+missing from PATH there, the test now **hard-fails** instead of silently
+skipping. The only escape is `THALOS_ALLOW_PARITY_SKIP=1`, and it is a
+**local-development convenience ONLY — never set it in CI** (the CI workflow
+never sets it; a missing python3 in CI is a hard failure by design). You
+should not need it: CI runners always have python3, and any normal dev machine
+does too.
+
 ## Calibration map vs enforcement authority
 
 Two per-channel tables coexist and MUST NOT be conflated:

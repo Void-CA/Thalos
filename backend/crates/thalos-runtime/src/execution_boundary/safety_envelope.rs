@@ -154,6 +154,37 @@ mod tests {
     use std::path::Path;
     use std::process::Command;
 
+    /// Whether the local escape hatch `THALOS_ALLOW_PARITY_SKIP=1` is set.
+    ///
+    /// Local-development convenience ONLY — the CI safety-gate workflow
+    /// (`ci-safety-gate`) never sets it, so a missing python3 in CI is ALWAYS
+    /// a hard failure. Only the literal value "1" honors the hatch.
+    fn parity_skip_requested() -> bool {
+        std::env::var("THALOS_ALLOW_PARITY_SKIP").as_deref() == Ok("1")
+    }
+
+    /// The parity gate's verdict when python3 is missing from PATH.
+    ///
+    /// - `Err(msg)` → the gate MUST hard-fail (default; CI always has python3,
+    ///   so in CI this is a genuine failure, not an environment quirk).
+    /// - `Ok(())` → skip with a warning (escape hatch set — local only).
+    fn parity_missing_python3_verdict(skip_requested: bool) -> Result<(), String> {
+        if skip_requested {
+            eprintln!(
+                "WARNING: skipping parity gate (THALOS_ALLOW_PARITY_SKIP=1) — \
+                 local-only convenience, NEVER set in CI"
+            );
+            Ok(())
+        } else {
+            Err(
+                "python3 not on PATH — the safety parity gate did not run; install \
+                 python3 or set THALOS_ALLOW_PARITY_SKIP=1 to skip \
+                 (local only, never in CI)"
+                    .to_string(),
+            )
+        }
+    }
+
     /// Parity gate: the Rust mirror MUST reproduce the firmware `SAFETY_ENVELOPE`
     /// exactly (single canonical source: `config/safety-envelope.toml`).
     ///
@@ -181,15 +212,15 @@ mod tests {
             });
         let parity = repo_root.join("tools").join("check_safety_parity.py");
 
-        // A missing python3 is an environment gap, not a contract violation:
-        // skip with a note instead of failing spuriously (the parity script is
-        // still the authority — run `python3 tools/check_safety_parity.py` from
-        // the repo root on any machine with Python).
+        // A missing python3 is NOT a contract violation — but neither is it a
+        // silent skip: PASS must mean "the parity gate ran and held". Default
+        // is a HARD FAIL (panic); the only escape is the explicit, local-only
+        // `THALOS_ALLOW_PARITY_SKIP=1` env var (the CI workflow never sets it).
         if Command::new("python3").arg("--version").output().is_err() {
-            eprintln!(
-                "skipping parity gate: python3 not on PATH — run manually: \
-                 python3 tools/check_safety_parity.py (repo root)"
-            );
+            let skip = parity_skip_requested();
+            if let Err(msg) = parity_missing_python3_verdict(skip) {
+                panic!("parity gate FAILED: {msg}");
+            }
             return;
         }
 
@@ -205,6 +236,59 @@ mod tests {
             String::from_utf8_lossy(&out.stdout),
             String::from_utf8_lossy(&out.stderr),
         );
+    }
+
+    /// Spec scenario `missing_python3_fails_parity_test`: python3 missing and
+    /// NO escape hatch → the gate MUST hard-fail (panic), never a silent skip.
+    #[test]
+    fn missing_python3_hard_fails_without_escape_hatch() {
+        let err = parity_missing_python3_verdict(false).unwrap_err();
+        assert!(
+            err.contains("python3 not on PATH"),
+            "message must name python3: {err}"
+        );
+        assert!(
+            err.contains("THALOS_ALLOW_PARITY_SKIP=1"),
+            "message must point at the escape hatch: {err}"
+        );
+        assert!(
+            err.contains("local only, never in CI"),
+            "message must forbid the hatch in CI: {err}"
+        );
+    }
+
+    /// Spec scenario `escape_hatch_allows_skip_locally`: python3 missing +
+    /// `THALOS_ALLOW_PARITY_SKIP=1` → skip with a warning (not a failure).
+    #[test]
+    fn missing_python3_skips_with_escape_hatch() {
+        assert!(
+            parity_missing_python3_verdict(true).is_ok(),
+            "escape hatch must allow the skip"
+        );
+    }
+
+    /// Only the literal value "1" honors the escape hatch — unset, "0", or any
+    /// other value keeps the hard-fail default (never an accidental skip).
+    #[test]
+    fn escape_hatch_only_honors_literal_one() {
+        // SAFETY: env mutation is confined to this single test and restored
+        // before it ends; no other test reads this variable on machines where
+        // python3 is present (the main parity test reads it only when python3
+        // is missing).
+        unsafe { std::env::remove_var("THALOS_ALLOW_PARITY_SKIP") };
+        assert!(!parity_skip_requested(), "unset var must NOT skip");
+
+        unsafe { std::env::set_var("THALOS_ALLOW_PARITY_SKIP", "1") };
+        assert!(parity_skip_requested(), "THALOS_ALLOW_PARITY_SKIP=1 must skip");
+
+        unsafe { std::env::set_var("THALOS_ALLOW_PARITY_SKIP", "0") };
+        assert!(!parity_skip_requested(), "THALOS_ALLOW_PARITY_SKIP=0 must NOT skip");
+
+        unsafe { std::env::set_var("THALOS_ALLOW_PARITY_SKIP", "yes") };
+        assert!(!parity_skip_requested(), "non-'1' value must NOT skip");
+
+        unsafe { std::env::remove_var("THALOS_ALLOW_PARITY_SKIP") };
+        assert!(!parity_skip_requested(), "restored unset must NOT skip");
     }
 
     /// Boundary positions are ACCEPTED (inclusive limits, like the firmware
