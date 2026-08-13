@@ -30,6 +30,7 @@
 // is silently clamped with an OK response.
 
 #include <Arduino.h>
+#include <cmath>
 #include "protocol.h"
 #include "executor.h"
 #include "validator.h"
@@ -358,4 +359,63 @@ void test_safety_monotonic_rejection_farther_out_also_rejected() {
     TEST_ASSERT_EQUAL_STRING(
         "INVALID_JOINT",
         v.check_physical_envelope(farther).error_reason.c_str());
+}
+
+void test_safety_accepted_command_write_bounded_within_envelope() {
+    // Property (task 2.3, spec scenario accepted_command_stays_within_envelope):
+    // Accepted Means Bounded. An ACCEPTED command must produce physical output
+    // within the envelope:
+    //   (a) every written pulse is within [pulse_min_us, pulse_max_us] per
+    //       channel (position ∈ envelope);
+    //   (b) the implied velocity (advance / elapsed) is within
+    //       max_velocity_rad_per_s.
+    // Distinct from tests 8/9 (which bound the DELAYED/dt==0 writes): this
+    // pins the accepted-path write — the executor bounded-advance logic must
+    // keep a valid command's output inside the envelope, never beyond it.
+    const float wps[2][4] = {
+        {0.0f, 0.0f, 0.0f, 0.03f},   // start pose (in envelope)
+        {1.0f, 1.0f, 2.0f, 0.05f},   // accepted target (in envelope)
+    };
+    const uint32_t dt[2] = {0, 100000};
+    Manifest m = make_4dof_manifest(2, wps, dt, 100000);
+
+    Executor exec;
+    PCA9685Driver pca;
+    pca.begin();
+    ServoDriver servo;
+    servo.init(pca);
+    servo.set_enabled(true);
+    exec.set_servo_driver(&servo);
+    exec.load(m);
+    g_micros = 0;
+    exec.start();
+    Wire.clear();
+
+    // One update advances from the start pose toward the target; both
+    // waypoints are stale, so the write is the bounded catch-up.
+    exec.update(100000);
+
+    const float elapsed_s = 100000.0f * 1e-6f;   // same math as the executor
+    for (size_t ch = 0; ch < 4; ++ch) {
+        uint16_t steps = 0;
+        TEST_ASSERT_TRUE(last_pwm_steps_for(static_cast<uint8_t>(ch), steps));
+
+        // (a) position ∈ envelope: pulse within the channel's calibrated range
+        //     (position_min/max_rad map linearly to pulse_min/max_us).
+        TEST_ASSERT_TRUE(steps >= expected_steps(ch, SAFETY_ENVELOPE[ch].position_min_rad));
+        TEST_ASSERT_TRUE(steps <= expected_steps(ch, SAFETY_ENVELOPE[ch].position_max_rad));
+
+        // (b) velocity ≤ envelope: advance from the last-written pose is at
+        //     most max_velocity × elapsed_s (bounded catch-up, ADR-3).
+        const float last_written = wps[0][ch];
+        const float target       = wps[1][ch];
+        const float max_advance  = SAFETY_ENVELOPE[ch].max_velocity_rad_per_s * elapsed_s;
+        float delta = target - last_written;
+        if (std::fabs(delta) > max_advance) {
+            delta = (delta > 0.0f) ? max_advance : -max_advance;
+        }
+        const float bounded = last_written + delta;
+        TEST_ASSERT_EQUAL_UINT16(
+            static_cast<uint16_t>(expected_steps(ch, bounded)), steps);
+    }
 }
