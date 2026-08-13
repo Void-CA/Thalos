@@ -24,6 +24,27 @@ struct ExecutionSample {
 // Protocol-independent waypoint stepper. Receives a validated manifest,
 // steps through timed waypoints using micros() as time authority, and
 // records execution samples.
+//
+// ── Velocity-bounding + dt_us==0 PROTOCOL SEMANTICS (ADR-3, Correction D) ─
+//
+// The PHYSICAL write is velocity-bounded per update:
+//     max_advance[ch] = SAFETY_ENVELOPE[ch].max_velocity_rad_per_s
+//                       × elapsed_since_last_write
+// The arm advances by at most max_advance from its last-written position —
+// never by a full trajectory jump, no matter how stale the waypoints are.
+//
+// dt_us == 0 is a PROTOCOL CONTRACT, not an implementation detail: when a
+// waypoint carries dt_us == 0, physical velocity v = Δq/Δt is UNDEFINED
+// (Δt = 0). The firmware MUST NOT infer host velocity from the commanded
+// delta. The firmware controls advancement:
+//   - at most ONE zero-dt waypoint is consumed per update() call, so a
+//     degenerate all-zero-dt manifest is never consumed in a single update
+//     (that would be an infinite-velocity jump from start to end);
+//   - the physical write advances by at most max_velocity × elapsed real
+//     time since the last write.
+//
+// Telemetry is preserved: EVERY commanded waypoint is recorded in samples()
+// (recorded BEFORE the write); only the bounded physical write is limited.
 
 class Executor {
 public:
@@ -70,8 +91,10 @@ private:
     const Manifest* manifest_ptr_;
     size_t current_sample_index_;
     unsigned long start_time_us_;       // micros() at start()
+    unsigned long last_write_time_us_;  // micros() at last successful physical write
     unsigned long target_time_us_;      // cumulative time for current waypoint
     unsigned long recorded_sample_count_;
+    std::vector<float> current_position_;   // last physically-written joint positions
     std::vector<ExecutionSample> recorded_samples_;
     ServoDriver* servo_driver_;
     State exec_state_;

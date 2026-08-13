@@ -118,12 +118,17 @@ static Manifest make_4dof_manifest(size_t count, const float wps[][4],
 
 // Decode the last setPWM write for `channel` from the Wire stub log.
 // setPWM writes [reg, onL, onH, offL, offH]; off (the steps) is bytes 3-4.
+// FIXTURE FIX (M2): ServoDriver writes PHYSICAL channels (SERVO_CHANNELS[ch]
+// = 15/14/13/12), so the register must be derived from the physical channel:
+// reg = LED0_ON_L + SERVO_CHANNELS[channel] * 4. Decoding with the raw
+// logical index (LED0_ON_L + channel * 4) misses every write — the helper
+// must mirror the real driver's channel mapping or `wrote` is always false.
 static bool last_pwm_steps_for(uint8_t channel, uint16_t& steps_out) {
     const auto& log = Wire.tx_log();
     for (auto it = log.rbegin(); it != log.rend(); ++it) {
         if (it->data.size() == 5) {
             uint8_t reg = it->data[0];
-            uint8_t expected_reg = PCA9685_LED0_ON_L + channel * 4;
+            uint8_t expected_reg = PCA9685_LED0_ON_L + SERVO_CHANNELS[channel] * 4;
             if (reg == expected_reg) {
                 steps_out = static_cast<uint16_t>(it->data[3]) |
                             (static_cast<uint16_t>(it->data[4]) << 8);
@@ -225,9 +230,16 @@ void test_safety_zero_dt_manifest_must_not_jump_trajectory() {
     const uint32_t dt[3] = {0, 0, 0};   // all zero → undefined host velocity
     Manifest m = make_4dof_manifest(3, wps, dt, 0);
 
+    // FIXTURE FIX (M2): the driver was never initialized here, so
+    // ServoDriver::enabled() stayed false and NO write ever reached the Wire
+    // stub — last_pwm_steps_for() found nothing and `wrote` was false. Init
+    // the driver like the Fixture struct does so the write is captured.
     Executor exec;
     PCA9685Driver pca;
+    pca.begin();
     ServoDriver servo;
+    servo.init(pca);
+    servo.set_enabled(true);
     exec.set_servo_driver(&servo);
     exec.load(m);
     g_micros = 0;
@@ -258,9 +270,14 @@ void test_safety_catch_up_jump_bounded_by_velocity() {
     const uint32_t dt[3] = {0, 100000, 100000};
     Manifest m = make_4dof_manifest(3, wps, dt, 200000);
 
+    // FIXTURE FIX (M2): same as test 8 — the driver was never init/enabled,
+    // so the executor never wrote and `wrote` was false.
     Executor exec;
     PCA9685Driver pca;
+    pca.begin();
     ServoDriver servo;
+    servo.init(pca);
+    servo.set_enabled(true);
     exec.set_servo_driver(&servo);
     exec.load(m);
     g_micros = 0;
@@ -320,4 +337,25 @@ void test_safety_samples_report_commanded_not_executed_is_documented() {
     begin_upload_6dof(f);
     send_and_expect(f, "SAMPLE 4.0 0.3 0.1 0.0 0.0 0.0 200000", "ERROR INVALID_JOINT");
     send_and_expect(f, "STATUS", "STATUS ERROR INVALID_JOINT");
+}
+
+void test_safety_monotonic_rejection_farther_out_also_rejected() {
+    // Property (task 2.4): Safety Is Monotonic. If a command is rejected for
+    // being outside the envelope, a command FARTHER outside is rejected too.
+    // Protects against limit-off-by-one and broken comparison branches —
+    // safety MUST NOT become less restrictive as the violation grows.
+    // Base envelope is ±1.5708 rad: the boundary value is accepted (edge of
+    // acceptance, cf. test 2), 2.5 rad is rejected, and 4.0 rad (farther out)
+    // is also rejected with the same diagnostic.
+    Validator v;
+    const std::vector<float> at_boundary = {1.5708f, 0.3f, 0.1f, 0.03f};
+    const std::vector<float> beyond      = {2.5f,    0.3f, 0.1f, 0.03f};
+    const std::vector<float> farther     = {4.0f,    0.3f, 0.1f, 0.03f};
+
+    TEST_ASSERT_TRUE(v.check_physical_envelope(at_boundary).valid);
+    TEST_ASSERT_FALSE(v.check_physical_envelope(beyond).valid);
+    TEST_ASSERT_FALSE(v.check_physical_envelope(farther).valid);
+    TEST_ASSERT_EQUAL_STRING(
+        "INVALID_JOINT",
+        v.check_physical_envelope(farther).error_reason.c_str());
 }

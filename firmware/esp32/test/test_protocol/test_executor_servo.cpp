@@ -262,11 +262,26 @@ void test_executor_multiple_stale_waypoints_writes_only_last() {
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, JOINT_MIN_RAD[0], exec.samples()[1].joints[0]);
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, JOINT_MAX_RAD[0], exec.samples()[2].joints[0]);
 
-    // (b) PHYSICAL — only the LAST stale waypoint (wp2) is written:
-    //     4 channel transactions, each encoding wp2's max pulse (config-derived).
+    // (b) PHYSICAL — CONTRACT CORRECTION (M2, ADR-3): the write TARGET is
+    //     still the last stale waypoint (wp2 — catch-up policy preserved),
+    //     but the physical write is VELOCITY-BOUNDED. Pre-fix this asserted
+    //     the full wp2 jump (JOINT_MAX_RAD) after the 250 ms stall — exactly
+    //     the unbounded catch-up the safety contract forbids. Now each
+    //     channel advances at most max_velocity × elapsed (250 ms → base
+    //     0.25 rad at 1 rad/s) from the last-written pose (wp0), never the
+    //     full 1.5708 rad teleport to wp2.
     TEST_ASSERT_EQUAL(4, (int)Wire.tx_count());
+    const float elapsed_s = 250000.0f * 1e-6f;   // same math as the executor
     for (size_t i = 0; i < 4; ++i) {
-        TEST_ASSERT_EQUAL(expected_steps(i, JOINT_MAX_RAD[i]), off_steps_of(Wire.tx_log()[i]));
+        const float last_written = wps[0][i];   // wp0 pose was physically written at t=0
+        const float target      = JOINT_MAX_RAD[i];   // wp2 = last stale waypoint
+        const float max_advance = SAFETY_ENVELOPE[i].max_velocity_rad_per_s * elapsed_s;
+        float delta = target - last_written;
+        if (std::fabs(delta) > max_advance) {
+            delta = (delta > 0.0f) ? max_advance : -max_advance;
+        }
+        TEST_ASSERT_EQUAL(expected_steps(i, last_written + delta),
+                          off_steps_of(Wire.tx_log()[i]));
     }
 }
 
