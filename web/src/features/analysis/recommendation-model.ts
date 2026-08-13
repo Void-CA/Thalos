@@ -73,6 +73,11 @@ function healthDeltaPct(before: number, after: number): string {
   return `${((after - before) / before) * 100 >= 0 ? '+' : ''}${(((after - before) / before) * 100).toFixed(1)}%`
 }
 
+/** Improvement epsilon — a health delta within ±0.005 is a no-op (flat),
+ *  not an improvement or regression. Matches the threshold the presentations
+ *  already used for no-op detection. */
+const IMPROVEMENT_EPSILON = 0.005
+
 /** Externally-tagged ProgramEdit variant key (e.g. "ReplaceSegment"). */
 function editVariant(edit: Record<string, unknown>): string {
   return Object.keys(edit)[0] ?? ''
@@ -137,12 +142,16 @@ export interface AppliedRecommendationSummary {
 }
 
 /** The preview simulation the presentations render (health delta + metrics).
- *  Same comparison semantics as the applied summary. */
+ *  Three-state verdict: improved / regressed / noop (flat within epsilon).
+ *  Distinct from the applied summary, which only carries a boolean `improved`
+ *  (the row does not color applied health). */
 export interface PreviewRecommendationSummary {
   beforePct: string
   afterPct: string
   deltaPct: string
   improved: boolean
+  regressed: boolean
+  noop: boolean
   waypointsBefore: string
   waypointsAfter: string
   continuity: 'continuous' | 'broken'
@@ -273,7 +282,7 @@ export function useRecommendation(
             planId: applied.plan_id,
             beforePct: healthPercent(applied.health_before),
             afterPct: healthPercent(applied.health_after),
-            improved: applied.health_after >= applied.health_before,
+            improved: applied.health_after > applied.health_before,
           }
         : null,
       preview: preview
@@ -281,7 +290,9 @@ export function useRecommendation(
             beforePct: healthPercent(preview.health_before),
             afterPct: healthPercent(preview.health_after),
             deltaPct: healthDeltaPct(preview.health_before, preview.health_after),
-            improved: preview.improvement >= 0,
+            improved: preview.improvement > IMPROVEMENT_EPSILON,
+            regressed: preview.improvement < -IMPROVEMENT_EPSILON,
+            noop: Math.abs(preview.improvement) <= IMPROVEMENT_EPSILON,
             waypointsBefore: String(preview.metrics_before.waypoint_count ?? '-'),
             waypointsAfter: String(preview.metrics_after.waypoint_count ?? '-'),
             continuity: preview.continuity ? 'continuous' : 'broken',

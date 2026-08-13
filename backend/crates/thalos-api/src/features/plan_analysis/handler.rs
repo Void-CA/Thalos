@@ -265,10 +265,11 @@ pub async fn preview_command(
         .collect();
 
     // 7. Continuidad: la trayectoria recompilada es un continuo sin huecos
-    //    (timestamps estrictamente crecientes — la compilación es atómica).
+    //    (timestamps monotónicos no-decrecientes — el waypoint de frontera
+    //    entre segmentos se comparte, no se duplica).
     let continuity = {
         let wps = compiled.merged_trajectory.waypoints();
-        !wps.is_empty() && wps.windows(2).all(|w| w[1].timestamp() > w[0].timestamp())
+        !wps.is_empty() && wps.windows(2).all(|w| w[1].timestamp() >= w[0].timestamp())
     };
 
     let health_before = before.report.summary.quality_index;

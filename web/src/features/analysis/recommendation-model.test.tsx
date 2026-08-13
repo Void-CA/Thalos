@@ -366,6 +366,8 @@ describe('useRecommendation — derived data (single source for both presentatio
       afterPct: '62%',
       deltaPct: '+24.0%',
       improved: true,
+      regressed: false,
+      noop: false,
       waypointsBefore: '10',
       waypointsAfter: '8',
       continuity: 'continuous',

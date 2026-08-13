@@ -408,6 +408,29 @@ describe('RecommendationCard — no-op detection (UX redesign: never present a n
     expect(within(panel).queryByText('(0%)')).not.toBeInTheDocument()
   })
 
+  it('preview of 0→0 with CHANGED waypoints still renders a muted "No improvement" state (waypoint delta is not an improvement)', async () => {
+    apiMocks.preview.mockResolvedValue({
+      recommendation_id: 1,
+      status: 'available',
+      waypoints: [],
+      metrics_before: { waypoint_count: 932 },
+      metrics_after: { waypoint_count: 537 },
+      health_before: 0,
+      health_after: 0,
+      improvement: 0,
+      continuity: false,
+    })
+    render(<RecommendationCard recommendation={recommendation} report={report} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+
+    const panel = await screen.findByTestId('recommendation-preview')
+    expect(panel).toHaveTextContent('No improvement')
+    expect(panel).not.toHaveTextContent('improved')
+    expect(panel).toHaveTextContent('Waypoints 932 → 537')
+    // No green "(0%)" delta badge either.
+    expect(within(panel).queryByText('(0%)')).not.toBeInTheDocument()
+  })
+
   it('apply of 0→0 health renders "No improvement" instead of a green "improved" badge', async () => {
     apiMocks.apply.mockResolvedValue({
       recommendation_id: 1,

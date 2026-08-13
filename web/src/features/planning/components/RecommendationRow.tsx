@@ -148,10 +148,10 @@ export function RecommendationRow({
             <span className="text-muted-foreground">Health</span>
             <span className="font-mono tabular-nums">{preview.beforePct}</span>
             <span className="text-muted-foreground">→</span>
-            <span className={`font-mono tabular-nums font-semibold ${preview.improved ? 'text-green-600' : 'text-red-500'}`}>
+            <span className={`font-mono tabular-nums font-semibold ${preview.improved ? 'text-green-600' : preview.regressed ? 'text-red-500' : 'text-muted-foreground'}`}>
               {preview.afterPct}
             </span>
-            <span className={`text-[10px] ${preview.improved ? 'text-green-600' : 'text-red-500'}`}>
+            <span className={`text-[10px] ${preview.improved ? 'text-green-600' : preview.regressed ? 'text-red-500' : 'text-muted-foreground'}`}>
               ({preview.deltaPct})
             </span>
           </div>

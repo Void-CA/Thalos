@@ -41,15 +41,12 @@ export function RecommendationCard({
     rawReason === 'unreachable_configuration' || rawReason === 'not_applicable'
 
   // No-op detection (UX redesign: never present a no-op as success). A preview
-  // or apply that changes nothing — health flat (~0 improvement), waypoints
-  // unchanged, continuity broken (preview) — renders a muted "No improvement"
-  // state instead of a green delta. Presentation-only; the backend fix is a
-  // separate change.
-  const previewNoop =
-    previewRaw !== null &&
-    Math.abs(previewRaw.improvement) < 0.005 &&
-    previewRaw.metrics_before.waypoint_count === previewRaw.metrics_after.waypoint_count &&
-    previewRaw.continuity === false
+  // whose health is flat within epsilon (|improvement| <= 0.005) renders a
+  // muted "No improvement" state instead of a green delta — regardless of
+  // waypoint-count changes or continuity (a legitimate singularity detour
+  // reduces waypoint count at fixed dt). Presentation-only; the backend
+  // continuity fix is a separate change.
+  const previewNoop = previewRaw !== null && Math.abs(previewRaw.improvement) <= 0.005
   const appliedNoop =
     appliedRaw !== null &&
     appliedRaw.health_after === appliedRaw.health_before &&
@@ -235,8 +232,10 @@ export function RecommendationCard({
                 No improvement
               </span>
             ) : (
-              <span className={`text-xs font-semibold ${preview.improved ? 'text-chart-3' : 'text-destructive'}`}>
-                ({preview.deltaPct})
+              <span
+                className={`rounded-md px-1.5 py-0.5 text-xs font-semibold ${preview.improved ? 'bg-chart-3/15 text-chart-3' : 'bg-destructive-weak text-destructive'}`}
+              >
+                {preview.improved ? 'improved' : 'regressed'}
               </span>
             )}
           </div>
