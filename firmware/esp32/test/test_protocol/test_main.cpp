@@ -368,13 +368,15 @@ void test_safety_samples_report_commanded_not_executed_is_documented();
 void test_safety_monotonic_rejection_farther_out_also_rejected();
 void test_safety_accepted_command_write_bounded_within_envelope();
 void test_safety_golden_path_invalid_command_rejected_end_to_end();
+void test_safety_golden_path_nan_command_rejected_end_to_end();
+void test_safety_golden_path_valid_command_reaches_servo_end_to_end();
 
 // ── Entry point (native: no Arduino main, provide our own) ────────────────
 //
 // PlatformIO links every test_*.cpp file of the test_protocol group into ONE
 // binary, so the Unity main() lives here and registers ALL test cases (the
 // 27 protocol/executor tests below, the 27 driver/integration tests declared
-// above — 10 PCA9685Driver + 10 ServoDriver + 7 Executor — and the 15
+// above — 10 PCA9685Driver + 10 ServoDriver + 7 Executor — and the 17
 // safety-contract tests from test_safety_contract.cpp).
 
 int main() {
@@ -448,5 +450,7 @@ int main() {
     RUN_TEST(test_safety_monotonic_rejection_farther_out_also_rejected);
     RUN_TEST(test_safety_accepted_command_write_bounded_within_envelope);
     RUN_TEST(test_safety_golden_path_invalid_command_rejected_end_to_end);
+    RUN_TEST(test_safety_golden_path_nan_command_rejected_end_to_end);
+    RUN_TEST(test_safety_golden_path_valid_command_reaches_servo_end_to_end);
     return UNITY_END();
 }

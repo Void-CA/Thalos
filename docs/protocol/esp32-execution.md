@@ -89,6 +89,7 @@ OK
 ```
 HOST → ESP: SAMPLE <j0> <j1> ... <jN> <dt_us>
 ESP → HOST: OK
+         or: ERROR <reason>
 ```
 
 Uploads a single timed waypoint. The host sends all samples during
@@ -99,12 +100,22 @@ the manifest upload phase, between `MANIFEST` and `END_UPLOAD`.
 | `j0..jN` | f64 | Joint positions (N = `dof_count` values) |
 | `dt_us` | u32 | Microseconds since previous waypoint (0 for first sample) |
 
+Every sample is checked **at parse time** against the safety contract (see
+[Safety Contract](#safety-contract-execution-safety-envelope)):
+a syntactically malformed or non-finite value is rejected with
+`ERROR MALFORMED_SAMPLE`, and a joint outside the per-channel safety envelope
+is rejected with `ERROR INVALID_JOINT`. A rejected sample never enters the
+manifest and no actuator write occurs. The protocol state machine latches into
+`ERROR` until the host recovers via `STOP`.
+
 **Example:**
 ```
 SAMPLE 0.0 0.0 0.0 0.0 0.0 0.0 0
 OK
 SAMPLE 0.1 0.05 -0.02 0.3 0.0 0.0 20000
 OK
+SAMPLE 4.0 0.3 0.1 0.0 0.0 0.0 20000      (base beyond ±1.5708 rad)
+ERROR INVALID_JOINT
 ```
 
 **Collect direction (ESP → HOST):**
@@ -236,7 +247,7 @@ of the robot is *reported as commanded*, exactly like execution samples
 (see the sample semantics note above). The firmware never claims to know
 the measured joint position.
 
-### Write Policy: Catch-up (last stale waypoint only)
+### Write Policy: Catch-up (last stale waypoint only, velocity-bounded)
 
 `Executor::step_to()` records **every** waypoint in the sample log (wire
 contract — samples are the values commanded by the plan, for
@@ -244,6 +255,12 @@ post-execution analysis). Physical actuation writes **only the last stale
 waypoint** per `update()` cycle; intermediate waypoints skipped by a
 delayed loop are not written (they were never physically reached). In
 normal operation (dt ≈ 10 ms, loop ≈ 1 kHz) waypoints never accumulate.
+
+Every physical write is additionally **velocity-bounded** (ADR-3): the
+per-channel advance from the last written position is capped at
+`max_velocity_rad_per_s × elapsed_since_last_write`, so a delayed
+`update()` can never teleport the arm to a far waypoint — catch-up is
+always velocity-bounded, never a full-trajectory jump.
 
 ### Hold-Last-Position on STOP / ERROR
 
@@ -429,6 +446,32 @@ steps    = round(pulse_us × PCA9685_STEPS_PER_US)          // 0.2048 steps/µs 
 says valid → pulse conversion → firmware rejects" is **intentional
 (conservative defense)**, never an accidental bug.
 
+### Planner→Firmware Consistency (PlannerAccepted ⇒ FirmwareAcceptable)
+
+Two authorities exist with an explicit relationship (spec
+`planner-firmware-consistency`): the planner's `PhysicalEnvelope`
+(velocity/acceleration ceilings per robot, rad/s, rad/s²) and the firmware's
+`SafetyEnvelope` (position rad, pulse µs per actuator). **Every plan the
+planner accepts MUST be acceptable to the firmware** — the planner envelope
+MUST produce commands within the firmware's envelope:
+
+| Property | Planner | Firmware |
+|----------|---------|----------|
+| position (rad) | planning | enforcement |
+| velocity (rad/s) | planning | enforcement |
+| acceleration (rad/s²) | planning | enforcement (via `dt_us` + velocity-bounding) |
+| pulse width (µs) | derived (rad→pulse linear map) | enforcement |
+| actuator-specific limits | model | final authority |
+
+The domain transformation is explicit: planner velocity/acceleration
+(rad/s, rad/s²) map to firmware position (rad) and pulse (µs) through the
+documented linear rad→pulse map above. Planner velocity is enforced by the
+executor's velocity-bounding (`max_velocity_rad_per_s`); planner acceleration
+is enforced indirectly through `dt_us` timing plus velocity-bounding. The
+converse is NOT required: the firmware MAY be more conservative than the
+planner, and "planner says valid → firmware rejects" is **intentional**
+(conservative defense — the firmware is the last barrier).
+
 ### Gate B Honesty: Software Contract vs Physical Envelope
 
 Verification distinguishes two very different claims:
@@ -438,7 +481,8 @@ Verification distinguishes two very different claims:
   `INVALID_JOINT`), state machine (`ERROR` latch, `STOP` recovery),
   no-write-on-reject (Wire tx_count unchanged), velocity-bounding and
   dt_us==0 semantics, protocol behavior. Proven by the host test suite
-  (`pio test -e native`, 54 pre-existing + 15 safety-contract tests).
+  (`pio test -e native`, 54 pre-existing + 17 safety-contract tests,
+  including the Safety Golden Path chain tests).
 - **NOT VERIFIED — physical actuator envelope** until real
   calibration/measurement: PWM↔pulse correspondence (PCA9685 step register ↔
   actual µs), the servo actually respecting its declared limits, mechanical

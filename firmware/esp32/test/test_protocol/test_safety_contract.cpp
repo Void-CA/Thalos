@@ -29,11 +29,15 @@
 // assert REJECTION (not clamp) — on pre-fix firmware it fails because 4.0 rad
 // is silently clamped with an OK response.
 //
-// M4 added the Safety Golden Path integration test (last in this file): one
+// M4 added the Safety Golden Path integration tests (last in this file): a
 // deliberately-invalid command walked through the WHOLE chain — manifest →
-// protocol → validator → executor → servo_driver — asserting rejection with
-// diagnostic, no executor advance, and zero actuator writes (spec
-// planner-firmware-consistency, scenario safety_golden_path_invalid_command).
+// protocol → validator → executor → servo_driver — asserting rejection at the
+// earliest layer with diagnostic, no executor advance, and zero actuator
+// writes (spec planner-firmware-consistency, scenarios
+// safety_golden_path_invalid_command and safety_golden_path_nan_command),
+// plus a positive control proving the chain is live (a valid command reaches
+// the servo, so the zero-write result is caused by rejection, not a dead
+// chain).
 
 #include <Arduino.h>
 #include <cmath>
@@ -53,14 +57,22 @@ static std::string rtrim(const std::string& s) {
     return s.substr(0, b + 1);
 }
 
-struct Fixture {
+struct SafetyFixture {
     Executor executor;
     Validator validator;
     Protocol protocol;
     PCA9685Driver pca9685;
     ServoDriver servo;
 
-    Fixture() : protocol(executor, validator) {
+    // NOTE: named `SafetyFixture` (not `Fixture`) on purpose. test_main.cpp
+    // defines its OWN `struct Fixture`; two structs with the same name and an
+    // inline (weak) constructor collide at link time (ODR violation) and the
+    // linker picks ONE definition for ALL callers. The Safety Golden Path
+    // tests exposed this: they were the first to access `servo`/`pca9685`,
+    // which the other Fixture does not contain — reading out-of-bounds stack
+    // memory (garbage `enabled()`, no writes). Keep this name unique.
+
+    SafetyFixture() : protocol(executor, validator) {
         g_millis = 0;
         g_micros = 0;
         Serial.clearInput();
@@ -72,7 +84,7 @@ struct Fixture {
     }
 };
 
-static void send_and_expect(Fixture& f, const char* line, const char* expected) {
+static void send_and_expect(SafetyFixture& f, const char* line, const char* expected) {
     Serial.clearOutput();
     Serial.feedLine(line);
     f.protocol.poll();
@@ -81,7 +93,7 @@ static void send_and_expect(Fixture& f, const char* line, const char* expected) 
 
 // A 6-DOF manifest matching the wire protocol used by the harness (MANIFEST 6).
 // The firmware hardware has 4 servo channels; channels beyond NUM_SERVO_CHANNELS are ignored by ServoDriver.
-static void begin_upload_6dof(Fixture& f) {
+static void begin_upload_6dof(SafetyFixture& f) {
     send_and_expect(f, "MANIFEST 6 1 200000", "OK");
     send_and_expect(f, "SEGMENT 0 movej 0 1", "OK");
 }
@@ -151,7 +163,7 @@ static bool last_pwm_steps_for(uint8_t channel, uint16_t& steps_out) {
 void test_safety_valid_measurement_command_accepts_and_executes() {
     // A command inside the envelope parses, validates, executes; the PCA9685
     // receives the config-derived pulse for each channel.
-    Fixture f;
+    SafetyFixture f;
     begin_upload_6dof(f);
     send_and_expect(f, "SAMPLE 0.5 0.3 0.1 0.0 0.0 0.0 200000", "OK");
     send_and_expect(f, "END_UPLOAD", "READY");
@@ -169,7 +181,7 @@ void test_safety_command_at_envelope_boundary_accepts() {
     // enforcement boundary is the envelope's 1.5708 rad; 3.14 rad is now
     // rejected (see test 3/4). The hazard flag below documents the mechanism
     // vs full-travel discrepancy.
-    Fixture f;
+    SafetyFixture f;
     begin_upload_6dof(f);
     send_and_expect(f, "SAMPLE 1.5708 0.3 0.1 0.0 0.0 0.0 200000", "OK");
     send_and_expect(f, "END_UPLOAD", "READY");
@@ -184,7 +196,7 @@ void test_safety_beyond_physical_safe_range_must_not_move_actuator() {
     // A command beyond the mechanism's safe range must NOT move the actuator
     // to the clamped value. SAFE: base 2.5 rad must be rejected, not clamped
     // to the ±3.14 measurement-mode endpoint.
-    Fixture f;
+    SafetyFixture f;
     begin_upload_6dof(f);
     send_and_expect(f, "SAMPLE 2.5 0.3 0.1 0.0 0.0 0.0 200000", "ERROR INVALID_JOINT");
     send_and_expect(f, "STATUS", "STATUS ERROR INVALID_JOINT");
@@ -193,7 +205,7 @@ void test_safety_beyond_physical_safe_range_must_not_move_actuator() {
 void test_safety_command_beyond_envelope_rejected_with_diagnostic() {
     // A command beyond the configured envelope (base 4.0 rad) is REJECTED with
     // an identifiable diagnostic — never silently clamped.
-    Fixture f;
+    SafetyFixture f;
     begin_upload_6dof(f);
     send_and_expect(f, "SAMPLE 4.0 0.3 0.1 0.0 0.0 0.0 200000", "ERROR INVALID_JOINT");
     send_and_expect(f, "STATUS", "STATUS ERROR INVALID_JOINT");
@@ -202,7 +214,7 @@ void test_safety_command_beyond_envelope_rejected_with_diagnostic() {
 void test_safety_nan_command_rejected_at_protocol() {
     // NaN joint token is rejected at parse time — before the validator and
     // executor. The pre-fix strtof-only-token-consumption check accepts it.
-    Fixture f;
+    SafetyFixture f;
     begin_upload_6dof(f);
     send_and_expect(f, "SAMPLE nan 0.3 0.1 0.0 0.0 0.0 200000", "ERROR MALFORMED_SAMPLE");
     send_and_expect(f, "STATUS", "STATUS ERROR MALFORMED_SAMPLE");
@@ -210,7 +222,7 @@ void test_safety_nan_command_rejected_at_protocol() {
 
 void test_safety_inf_command_rejected_at_protocol() {
     // ±Inf joint token (and 1e39-style overflow to Inf) rejected at parse.
-    Fixture f;
+    SafetyFixture f;
     begin_upload_6dof(f);
     send_and_expect(f, "SAMPLE inf 0.3 0.1 0.0 0.0 0.0 200000", "ERROR MALFORMED_SAMPLE");
     send_and_expect(f, "STATUS", "STATUS ERROR MALFORMED_SAMPLE");
@@ -219,7 +231,7 @@ void test_safety_inf_command_rejected_at_protocol() {
 void test_safety_negative_dt_rejected() {
     // Negative dt_us must be rejected at parse (the pre-fix silent uint32 wrap
     // turns -500 into 4294966796 us and can pass the timing validator).
-    Fixture f;
+    SafetyFixture f;
     begin_upload_6dof(f);
     send_and_expect(f, "SAMPLE 0.5 0.3 0.1 0.0 0.0 0.0 -500", "ERROR MALFORMED_SAMPLE");
     send_and_expect(f, "STATUS", "STATUS ERROR MALFORMED_SAMPLE");
@@ -240,7 +252,7 @@ void test_safety_zero_dt_manifest_must_not_jump_trajectory() {
     // FIXTURE FIX (M2): the driver was never initialized here, so
     // ServoDriver::enabled() stayed false and NO write ever reached the Wire
     // stub — last_pwm_steps_for() found nothing and `wrote` was false. Init
-    // the driver like the Fixture struct does so the write is captured.
+    // the driver like the SafetyFixture struct does so the write is captured.
     Executor exec;
     PCA9685Driver pca;
     pca.begin();
@@ -311,7 +323,7 @@ void test_safety_catch_up_jump_bounded_by_velocity() {
 void test_safety_rejected_command_leaves_actuator_unmoved_and_reported() {
     // A rejected command must (a) produce NO new pulse on the Wire bus and
     // (b) emit a protocol diagnostic (error state, not OK/READY).
-    Fixture f;
+    SafetyFixture f;
     size_t before = Wire.tx_count();
     begin_upload_6dof(f);
     send_and_expect(f, "SAMPLE 4.0 0.3 0.1 0.0 0.0 0.0 200000", "ERROR INVALID_JOINT");
@@ -322,7 +334,7 @@ void test_safety_rejected_command_leaves_actuator_unmoved_and_reported() {
 void test_safety_backend_manifest_out_of_envelope_must_be_rejected() {
     // The validator must reject a manifest with joints outside the configured
     // envelope (whole-manifest check at END_UPLOAD).
-    Fixture f;
+    SafetyFixture f;
     send_and_expect(f, "MANIFEST 6 1 200000", "OK");
     send_and_expect(f, "SEGMENT 0 movej 0 1", "OK");
     // Drive the check through the wire: an out-of-envelope sample is rejected
@@ -340,7 +352,7 @@ void test_safety_samples_report_commanded_not_executed_is_documented() {
     // exactly WHY silent clamp is dangerous. Under the safe contract the
     // out-of-envelope command is rejected before it reaches a write, so there
     // is no "commanded-but-clamped" state to report.
-    Fixture f;
+    SafetyFixture f;
     begin_upload_6dof(f);
     send_and_expect(f, "SAMPLE 4.0 0.3 0.1 0.0 0.0 0.0 200000", "ERROR INVALID_JOINT");
     send_and_expect(f, "STATUS", "STATUS ERROR INVALID_JOINT");
@@ -446,7 +458,12 @@ void test_safety_golden_path_invalid_command_rejected_end_to_end() {
     // The assertion set pins every link of the chain: the rejection AND its
     // diagnostic at protocol/validator, the executor not advancing, and zero
     // actuator writes (spec scenario safety_golden_path_invalid_command).
-    Fixture f;
+    SafetyFixture f;
+    // Wire the REAL physical chain: protocol → executor → servo_driver →
+    // PCA9685 (Wire stub). Without set_servo_driver() the executor can never
+    // write, so "zero Wire transactions" would be vacuous (see positive
+    // control below for the live-chain proof).
+    f.executor.set_servo_driver(&f.servo);
     const size_t tx_before = Wire.tx_count();  // after fixture init (incl. pca.begin())
 
     // 1. manifest → protocol: a valid 6-DOF manifest opens (MANIFEST 6 … OK).
@@ -462,14 +479,18 @@ void test_safety_golden_path_invalid_command_rejected_end_to_end() {
     send_and_expect(f, "STATUS", "STATUS ERROR INVALID_JOINT");
 
     // 4. Executor does NOT advance: no waypoint ever entered the manifest,
-    //    so there is nothing to step — the executor never left IDLE and
-    //    recorded no samples.
+    //    so there is nothing to step — the executor never left IDLE, recorded
+    //    no samples, and an update() tick is a no-op.
     TEST_ASSERT_EQUAL(static_cast<int>(Executor::IDLE),
                       static_cast<int>(f.executor.current_state()));
     TEST_ASSERT_TRUE(f.executor.samples().empty());
+    f.executor.update(1000);
 
-    // 5. servo_driver.write() NEVER called: the Wire bus saw zero new
-    //    transactions across the whole exchange (no actuator movement).
+    // 5. servo_driver.write() NEVER called: across the whole exchange — the
+    //    rejection AND the no-op update tick — the Wire bus saw zero new
+    //    transactions (no actuator movement). The chain is LIVE (wired
+    //    above; the positive control below proves a valid command writes),
+    //    so this zero is caused by rejection, not by a dead chain.
     TEST_ASSERT_EQUAL(tx_before, Wire.tx_count());
 
     // State machine latch (documented error handling): ERROR blocks a fresh
@@ -477,4 +498,62 @@ void test_safety_golden_path_invalid_command_rejected_end_to_end() {
     send_and_expect(f, "MANIFEST 6 1 200000", "ERROR NOT_IDLE");
     send_and_expect(f, "STOP", "OK");
     send_and_expect(f, "STATUS", "STATUS IDLE");
+}
+
+void test_safety_golden_path_nan_command_rejected_end_to_end() {
+    // Golden-path variant 2 (spec scenario safety_golden_path_nan_command):
+    // a NaN joint token is stopped at the EARLIEST layer of the whole chain —
+    // protocol parse (strtof + isfinite, ADR-4) — so the manifest NEVER
+    // reaches the validator, the executor never starts, servo_driver.write()
+    // is never called, and the diagnostic is MALFORMED_SAMPLE.
+    SafetyFixture f;
+    f.executor.set_servo_driver(&f.servo);
+    const size_t tx_before = Wire.tx_count();
+
+    begin_upload_6dof(f);
+    send_and_expect(f, "SAMPLE nan 0.3 0.1 0.0 0.0 0.0 200000", "ERROR MALFORMED_SAMPLE");
+    send_and_expect(f, "STATUS", "STATUS ERROR MALFORMED_SAMPLE");
+
+    // Same chain-stop assertions as the INVALID_JOINT golden path: the
+    // executor never advanced and no actuator write ever reached the Wire bus.
+    TEST_ASSERT_EQUAL(static_cast<int>(Executor::IDLE),
+                      static_cast<int>(f.executor.current_state()));
+    TEST_ASSERT_TRUE(f.executor.samples().empty());
+    f.executor.update(1000);
+    TEST_ASSERT_EQUAL(tx_before, Wire.tx_count());
+}
+
+void test_safety_golden_path_valid_command_reaches_servo_end_to_end() {
+    // Positive control for the golden path: the SAME fully-wired chain with a
+    // VALID command must reach the servo — a pulse appears on the Wire bus.
+    // This is what makes the zero-write assertions of the two rejection tests
+    // meaningful: the chain is live, so a zero write can only mean rejection.
+    // The manifest enters via the WIRE (protocol → validator → executor), and
+    // the resulting write is asserted with the executor's own
+    // velocity-bounding math (the same assertion pattern as test 14, but
+    // through the full protocol chain instead of load()).
+    SafetyFixture f;
+    f.executor.set_servo_driver(&f.servo);
+
+    send_and_expect(f, "MANIFEST 6 2 100000", "OK");
+    send_and_expect(f, "SEGMENT 0 movej 0 2", "OK");
+    send_and_expect(f, "SAMPLE 0.0 0.0 0.0 0.03 0.0 0.0 0", "OK");
+    send_and_expect(f, "SAMPLE 0.5 0.3 0.1 0.05 0.0 0.0 100000", "OK");
+    send_and_expect(f, "END_UPLOAD", "READY");
+    send_and_expect(f, "EXECUTE", "OK");
+    Wire.clear();                   // fresh baseline: only the write counts
+    f.executor.update(100000);      // one bounded step, elapsed 100 ms
+
+    // The executor wrote the velocity-bounded catch-up pose: base 0.5 → 0.1
+    // rad (1.0 rad/s × 0.1 s), elbow 0.3 → 0.1 rad, wrist 0.1 rad (under its
+    // 0.2 rad budget), prismatic 0.03 → 0.05 (under its 0.05 rad budget).
+    const float bounded[4] = {0.1f, 0.1f, 0.1f, 0.05f};
+    for (size_t ch = 0; ch < 4; ++ch) {
+        uint16_t steps = 0;
+        TEST_ASSERT_TRUE(last_pwm_steps_for(static_cast<uint8_t>(ch), steps));
+        TEST_ASSERT_EQUAL_UINT16(
+            static_cast<uint16_t>(expected_steps(static_cast<uint8_t>(ch), bounded[ch])),
+            steps);
+    }
+    send_and_expect(f, "STATUS", "STATUS COMPLETED 2");
 }
