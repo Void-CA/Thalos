@@ -41,8 +41,8 @@ use thalos_planning::motion::{
     program::PlanningProgram,
 };
 use thalos_runtime::{
-    RobotController,
     backends::{esp32::Esp32Backend, transport::FakeTransport},
+    ControllerError, RobotController,
 };
 
 // ---------------------------------------------------------------------------
@@ -252,6 +252,62 @@ async fn plan_compile_then_esp32_execute() {
 
     // ── 5. Cleanup ─────────────────────────────────────────────────────
     backend.stop().await.expect("stop should succeed");
+}
+
+/// R1-1 (CRITICAL review finding): a movej at 5.0 rad/s COMPILES (the
+/// planner's PhysicalEnvelope ceiling is ~25 rad/s — ~25× the firmware
+/// SAFETY_ENVELOPE 1.0 rad/s) and passes the API, but the firmware envelope
+/// rejects it. `Esp32Backend::execute()` must reject it GRACEFULLY
+/// (`ControllerError::InvalidManifest` → HTTP 400 `invalid_manifest`, spec
+/// `backend_manifest_out_of_envelope_must_be_rejected`) — the pre-fix code
+/// PANICKED via the deprecated `build_manifest` shim's `.expect()`
+/// (VELOCITY_EXCEEDED), a DoS on the live start-execution path.
+#[tokio::test]
+async fn fast_movej_compiles_but_execute_rejects_gracefully() {
+    let (_chain, ctx) = build_planar2r_context();
+    let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
+
+    // MoveJ at 5.0 rad/s, accel 50 rad/s² (so the short 1.0 rad move reaches
+    // cruise velocity instead of a sub-1.0 rad/s triangular peak). The
+    // planner accepts it; the firmware envelope (1.0 rad/s) does not.
+    let segments: Vec<MotionSegment> = vec![MotionSegment::MoveJ {
+        origin: OperationId("test".to_string()),
+        target: vec![1.0, 0.8],
+        max_velocity: Some(5.0),
+        max_acceleration: Some(50.0),
+    }];
+    let program = PlanningProgram::new(segments);
+    let plan = compiler
+        .compile(&program, &ctx)
+        .expect("5 rad/s movej must compile (planner ceiling is 25 rad/s)");
+
+    let waypoints: Vec<Vec<f64>> = plan
+        .merged_trajectory
+        .waypoints()
+        .iter()
+        .map(|wp| wp.joints().to_vec())
+        .collect();
+    assert!(
+        waypoints.len() >= 2,
+        "fast movej should produce a multi-waypoint trajectory"
+    );
+
+    let transport = transport_with_responses(waypoints.len());
+    let mut backend = Esp32Backend::new(Box::new(transport));
+    backend.connect().await.expect("connect should succeed");
+
+    // Pre-fix this PANICKED (shim `.expect()` on VELOCITY_EXCEEDED).
+    let result = backend.execute(waypoints, plan.duration).await;
+    match result {
+        Ok(()) => panic!("fast movej must be rejected, not executed"),
+        Err(ControllerError::InvalidManifest(msg)) => {
+            assert!(
+                msg.contains("VELOCITY_EXCEEDED"),
+                "rejection must name the VELOCITY_EXCEEDED diagnostic: {msg}"
+            );
+        }
+        Err(other) => panic!("expected InvalidManifest, got {other:?}"),
+    }
 }
 
 /// Compilación de programa vacío → Esp32Backend recibe error de validación.

@@ -13,11 +13,12 @@ use async_trait::async_trait;
 use crate::backends::controller::{BackendCapabilities, RobotController};
 use crate::backends::transport::{Transport, TransportError};
 use crate::error::ControllerError;
-use crate::execution_boundary::ExecutionSample;
 use crate::execution_boundary::manifest::{
     ExecutionManifest, ManifestInstruction, ManifestMetadata, ManifestSegment, TimedWaypoint,
 };
 use crate::execution_boundary::manifest_builder::ExecutionManifestBuilder;
+use crate::execution_boundary::safety_envelope::SafetyEnvelope;
+use crate::execution_boundary::ExecutionSample;
 use crate::session::execution_source::ExecutionSource;
 use crate::state::robot_state::{MotionMode, RobotState};
 use thalos_core::execution::plan::{
@@ -90,15 +91,19 @@ impl Esp32Backend {
     /// same input. The one exception is a sub-(N−1)-microsecond duration,
     /// handled by the degenerate branch in the body (see its comment).
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if the pure builder rejects the input. After the degenerate
-    /// sub-microsecond branch, the only builder rejection still reachable is
-    /// an empty waypoint slice (`EMPTY_MANIFEST`); the production call site
-    /// (`execute`) validates via `validate_manifest` first, so the panic is
-    /// unreachable there.
+    /// Returns [`ControllerError::InvalidManifest`] if the pure builder
+    /// rejects the input. R1-1 (CRITICAL): the builder now runs the firmware
+    /// physical-envelope checks (`INVALID_JOINT` / `VELOCITY_EXCEEDED`) that
+    /// the structural `validate_manifest` does not cover — a fast or
+    /// out-of-envelope plan MUST surface as a graceful error (4xx at the
+    /// API), NEVER a panic. Fail loud, reject-not-clamp.
     #[deprecated(note = "use ExecutionManifestBuilder via ExecutionPlanBuilder")]
-    fn build_manifest(waypoints: &[Vec<f64>], duration: f64) -> ExecutionManifest {
+    fn build_manifest(
+        waypoints: &[Vec<f64>],
+        duration: f64,
+    ) -> Result<ExecutionManifest, ControllerError> {
         let total_samples = waypoints.len();
         let duration_us = (duration * 1_000_000.0) as u64;
         // Legacy even-spacing: integer division, first sample dt = 0.
@@ -112,7 +117,7 @@ impl Esp32Backend {
         // per-gap delta to zero, so every reconstructed timestamp collapses
         // to 0.0 and the builder's dedup CANNOT represent the input — it
         // either returns `Err(DedupConflict)` (equal timestamp, different
-        // joints), panicking the `.expect()` below inside the production
+        // joints), failing the Result below inside the production
         // `execute()` path, or silently collapses N distinct commanded
         // waypoints into one sample when joints are bit-equal. Legacy
         // behavior was total: an N-sample manifest with all `dt_us = 0`
@@ -129,7 +134,7 @@ impl Esp32Backend {
         // docs/protocol/esp32-execution.md). The backend never infers host
         // velocity from Δq over a zero dt.
         if total_samples > 1 && dt_per_sample == 0 {
-            return ExecutionManifest {
+            return Ok(ExecutionManifest {
                 metadata: ManifestMetadata {
                     dof_count: waypoints.first().map(|w| w.len()).unwrap_or(0),
                     total_samples,
@@ -148,7 +153,7 @@ impl Esp32Backend {
                         dt_us: 0,
                     })
                     .collect(),
-            };
+            });
         }
 
         // Absolute timestamps chosen so the builder's `round()` reproduces
@@ -173,9 +178,18 @@ impl Esp32Backend {
             duration: (total_samples.saturating_sub(1) as u64 * dt_per_sample) as f64 / 1_000_000.0,
         };
 
-        ExecutionManifestBuilder::build(&plan).expect(
-            "build_manifest inputs are validated by execute(); the pure builder only rejects degenerate input",
-        )
+        ExecutionManifestBuilder::build(&plan).map_err(|e| {
+            // R1-1 (CRITICAL): the pure builder rejects plans the structural
+            // `validate_manifest` passes — out-of-envelope positions
+            // (INVALID_JOINT) and implied velocities above the firmware
+            // ceilings (VELOCITY_EXCEEDED). The shim MUST NOT panic: surface
+            // a graceful ControllerError so the API answers 4xx (invalid_manifest)
+            // instead of the backend crashing. Fail loud, reject-not-clamp —
+            // never silent clamp/mutation of the commanded plan.
+            ControllerError::InvalidManifest(format!(
+                "manifest rejected by the firmware-parity validator: {e}"
+            ))
+        })
     }
 
     /// Get a mutable reference to the protocol, if connected.
@@ -274,6 +288,49 @@ impl Esp32Backend {
                 "inconsistent DOF across waypoints".into(),
             ));
         }
+
+        // R1-1 (CRITICAL): surface the firmware physical-envelope rejection
+        // HERE, before plan construction and any wire traffic — the firmware
+        // SafetyEnvelope is authoritative for the live path. Position check
+        // per waypoint; implied velocity Δq/Δt per gap over the SAME
+        // even-spacing dt the shim reconstructs (bit-exact with the builder's
+        // `round()`). The diagnostic code (INVALID_JOINT / VELOCITY_EXCEEDED)
+        // matches `firmware/esp32/src/validator.cpp`. Reject-not-clamp: the
+        // plan is refused unmodified, never silently clamped/mutated.
+        for (i, w) in waypoints.iter().enumerate() {
+            if let Err(v) = SafetyEnvelope::check_joints(w) {
+                return Err(ControllerError::InvalidManifest(format!(
+                    "plan rejected by the firmware safety envelope: {} ({}) at waypoint {i}",
+                    v.diagnostic_code(),
+                    v
+                )));
+            }
+        }
+        // dt == 0 gaps (sub-microsecond durations) make velocity UNDEFINED —
+        // skipped, the firmware executor velocity-bounds advancement (ADR-3).
+        if waypoints.len() > 1 {
+            let duration_us = (duration * 1_000_000.0) as u64;
+            let dt_per_gap_us = duration_us / (waypoints.len() - 1) as u64;
+            if dt_per_gap_us > 0 {
+                for i in 1..waypoints.len() {
+                    let delta_q: Vec<f64> = waypoints[i]
+                        .iter()
+                        .zip(&waypoints[i - 1])
+                        .map(|(a, b)| a - b)
+                        .collect();
+                    if let Err(v) =
+                        SafetyEnvelope::check_gap_velocity(&delta_q, dt_per_gap_us as u32)
+                    {
+                        return Err(ControllerError::InvalidManifest(format!(
+                            "plan rejected by the firmware safety envelope: {} ({}) at gap {}",
+                            v.diagnostic_code(),
+                            v,
+                            i - 1
+                        )));
+                    }
+                }
+            }
+        }
         Ok(())
     }
 }
@@ -309,7 +366,8 @@ impl RobotController for Esp32Backend {
         // Stale poll cache / collected samples must not leak across connects.
         *self.cached_state.lock().await = None;
         *self.collected_samples.lock().await = None;
-        self.last_status_logged.store(0, std::sync::atomic::Ordering::SeqCst);
+        self.last_status_logged
+            .store(0, std::sync::atomic::Ordering::SeqCst);
         if let Some(protocol) = self.protocol.get_mut().as_mut() {
             let _ = protocol.stop().await;
         }
@@ -345,8 +403,20 @@ impl RobotController for Esp32Backend {
         let protocol = self.protocol_mut()?;
         // The legacy shim is deprecated; execute() still consumes it until the
         // RobotController path migrates to the pure chain (separate SDD).
+        // R1-1 (CRITICAL): the shim is FALLIBLE — the builder can reject a
+        // plan the structural checks passed (INVALID_JOINT/VELOCITY_EXCEEDED),
+        // and a rejection MUST surface as a graceful `InvalidManifest` error
+        // (→ 4xx at the API), never a panic. No wire traffic has happened yet.
         #[allow(deprecated)]
-        let manifest = Self::build_manifest(&waypoints, duration);
+        let manifest = Self::build_manifest(&waypoints, duration).map_err(|e| {
+            tracing::error!(
+                error = %e,
+                waypoints = waypoints.len(),
+                duration_s = duration,
+                "ESP32 execute rejected by manifest builder (no wire traffic)"
+            );
+            e
+        })?;
 
         // Upload → READY. One NOT_IDLE recovery: a stale firmware state
         // (READY/EXECUTING/ERROR left over from a previous session) rejects
@@ -915,6 +985,94 @@ mod tests {
         );
     }
 
+    // ── R1-1 (CRITICAL review finding): out-of-envelope plans MUST be ──
+    // ── rejected gracefully by execute() — NEVER panic.               ──
+
+    /// R1-1 (CRITICAL, deterministic): P2 added INVALID_JOINT/
+    /// VELOCITY_EXCEEDED checks to `ExecutionManifestBuilder::validate`, but
+    /// `execute()`'s deprecated `build_manifest` shim `.expect()` PANICKED
+    /// when the pure builder rejected the plan — a DoS on the live
+    /// start-execution path. A movej whose implied velocity exceeds the
+    /// firmware SAFETY_ENVELOPE ceiling (base 1.0 rad over 0.2 s =
+    /// 5.0 rad/s > 1.0 rad/s) passes the API planner (PhysicalEnvelope
+    /// ceiling 25 rad/s) and previously crashed the backend. It MUST now
+    /// surface as `ControllerError::InvalidManifest` (→ HTTP 400
+    /// `invalid_manifest`) with the VELOCITY_EXCEEDED diagnostic — fail
+    /// loud, reject-not-clamp, no wire traffic.
+    #[tokio::test]
+    async fn execute_rejects_out_of_envelope_velocity_without_panic() {
+        let transport = FakeTransport::new();
+        let mut backend = make_connected_backend(transport).await;
+
+        // Base 1.0 rad over 0.2 s = 5.0 rad/s implied velocity — inside the
+        // planner envelope (25 rad/s), outside the firmware envelope (1.0).
+        let result = backend
+            .execute(vec![vec![0.0, 0.0], vec![1.0, 0.0]], 0.2)
+            .await;
+
+        match result {
+            Ok(()) => panic!("out-of-envelope velocity plan must be rejected, not executed"),
+            Err(ControllerError::InvalidManifest(msg)) => {
+                assert!(
+                    msg.contains("VELOCITY_EXCEEDED"),
+                    "rejection must name the VELOCITY_EXCEEDED diagnostic: {msg}"
+                );
+            }
+            Err(other) => panic!("expected InvalidManifest, got {other:?}"),
+        }
+
+        // Rejected BEFORE wire traffic: still connected, only the HELLO from
+        // connect was sent.
+        assert!(backend.is_connected());
+        let sent = backend
+            .protocol
+            .lock()
+            .await
+            .as_ref()
+            .unwrap()
+            .test_sent_commands();
+        assert_eq!(sent.len(), 1, "only HELLO from connect — no upload traffic");
+        assert_eq!(String::from_utf8(sent[0].clone()).unwrap(), "HELLO 1\n");
+    }
+
+    /// R1-1 (CRITICAL): an out-of-envelope POSITION plan (base at 4.0 rad —
+    /// outside the firmware ±1.5708 rad envelope) previously PANICKED the
+    /// shim's `.expect()` (INVALID_JOINT). It MUST now be rejected
+    /// gracefully with the INVALID_JOINT diagnostic — never clamped, never
+    /// executed, no wire traffic.
+    #[tokio::test]
+    async fn execute_rejects_out_of_envelope_position_without_panic() {
+        let transport = FakeTransport::new();
+        let mut backend = make_connected_backend(transport).await;
+
+        // Base 4.0 rad — the planner accepts it (URDF planning envelope),
+        // the firmware SafetyEnvelope rejects it.
+        let result = backend
+            .execute(vec![vec![0.0, 0.0], vec![4.0, 0.0]], 1.0)
+            .await;
+
+        match result {
+            Ok(()) => panic!("out-of-envelope position plan must be rejected, not executed"),
+            Err(ControllerError::InvalidManifest(msg)) => {
+                assert!(
+                    msg.contains("INVALID_JOINT"),
+                    "rejection must name the INVALID_JOINT diagnostic: {msg}"
+                );
+            }
+            Err(other) => panic!("expected InvalidManifest, got {other:?}"),
+        }
+
+        assert!(backend.is_connected());
+        let sent = backend
+            .protocol
+            .lock()
+            .await
+            .as_ref()
+            .unwrap()
+            .test_sent_commands();
+        assert_eq!(sent.len(), 1, "only HELLO from connect — no upload traffic");
+    }
+
     // ── Additional backend tests ─────────────────────────────────────
 
     #[tokio::test]
@@ -963,7 +1121,8 @@ mod tests {
     #[test]
     fn build_manifest_creates_correct_structure() {
         let waypoints = vec![vec![0.0, 0.0], vec![0.5, 0.3], vec![1.0, 0.5]];
-        let manifest = Esp32Backend::build_manifest(&waypoints, 2.0);
+        let manifest = Esp32Backend::build_manifest(&waypoints, 2.0)
+            .expect("in-envelope waypoints must build");
 
         assert_eq!(manifest.metadata.dof_count, 2);
         assert_eq!(manifest.metadata.total_samples, 3);
@@ -995,7 +1154,8 @@ mod tests {
         let duration = 2.0;
 
         // Legacy wrapper output.
-        let legacy = Esp32Backend::build_manifest(&waypoints, duration);
+        let legacy = Esp32Backend::build_manifest(&waypoints, duration)
+            .expect("in-envelope waypoints must build");
 
         // The pure chain, fed the plan the wrapper constructs (same even
         // spacing reconstructed from the raw signature).
@@ -1053,7 +1213,8 @@ mod tests {
         let duration = 1.5e-6;
 
         // Must NOT panic (the builder would return Err(DedupConflict) here).
-        let manifest = Esp32Backend::build_manifest(&waypoints, duration);
+        let manifest = Esp32Backend::build_manifest(&waypoints, duration)
+            .expect("sub-microsecond duration must take the degenerate branch");
 
         assert_eq!(manifest.metadata.dof_count, 2);
         assert_eq!(manifest.metadata.total_samples, 3);
@@ -1089,7 +1250,8 @@ mod tests {
             vec![0.5, 0.5, 0.5, 0.02],
             vec![1.0, 1.0, 1.0, 0.03],
         ];
-        let manifest = Esp32Backend::build_manifest(&waypoints, 1.5e-6);
+        let manifest = Esp32Backend::build_manifest(&waypoints, 1.5e-6)
+            .expect("sub-microsecond duration must take the degenerate branch");
 
         // Every gap is dt_us == 0: no sample pair carries an implied Δq/Δt.
         assert_eq!(manifest.metadata.duration_us, 0, "no duration claim");
@@ -1193,4 +1355,3 @@ mod tests {
         assert!(backend.is_connected());
     }
 }
-
