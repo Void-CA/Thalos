@@ -5,6 +5,7 @@ pub mod error;
 pub mod joint;
 pub mod link;
 pub mod segment;
+pub mod scale;
 pub mod serial_chain;
 pub mod state;
 pub mod tool_frame;
