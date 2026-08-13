@@ -49,8 +49,69 @@ pub enum LinguisticVar {
     Manipulability,
     SingularityProximity,
     CollisionClearance,
-    TrajectoryComplexity,
 }
+
+/// Scale contract for a crisp input entering the fuzzy KB (ADR-004 "Derived
+/// Feature Scale Contract for the Intelligence KB"). Every derived feature
+/// that crosses the derived-features → KB frontier MUST declare all five
+/// elements — definition, unit, domain, normalization, semantic evidence —
+/// plus the per-feature missing-data default. Contracts are `const` data:
+/// they document and are test-visible, they do not gate at runtime (MVP).
+#[derive(Debug, Clone, Copy)]
+pub struct FeatureContract {
+    /// The linguistic variable this contract describes.
+    pub variable: LinguisticVar,
+    /// One-sentence semantic description of the feature.
+    pub definition: &'static str,
+    /// Measurement unit, or "dimensionless".
+    pub unit: &'static str,
+    /// Numeric bounds of the fuzzy domain, `[min, max]`.
+    pub domain: [f64; 2],
+    /// How raw values map into the fuzzy domain.
+    pub normalization: &'static str,
+    /// Citation of the analyzer threshold or empirical basis anchoring the scale.
+    pub semantic_evidence: &'static str,
+    /// Value used when the metric is absent from the report.
+    pub missing_default: f64,
+    /// What the missing-data default represents semantically.
+    pub missing_default_semantics: &'static str,
+}
+
+/// The three KB input variables, each with its declared scale contract (spec
+/// "Three contracts declared for the three KB inputs"). The web-side
+/// `evidence.ts` semantics table mirrors this declaration.
+pub const FEATURE_CONTRACTS: &[FeatureContract] = &[
+    FeatureContract {
+        variable: LinguisticVar::Manipulability,
+        definition: "Average (or minimum) manipulability over the trajectory",
+        unit: "dimensionless",
+        domain: [0.0, 1.0],
+        normalization: "raw value; < MANIPULABILITY_LOW_THRESHOLD → `low` fuzzy set",
+        semantic_evidence: "MANIPULABILITY_LOW_THRESHOLD (0.3) from the trajectory analyzer",
+        missing_default: 0.0,
+        missing_default_semantics: "worst case (no dexterity)",
+    },
+    FeatureContract {
+        variable: LinguisticVar::SingularityProximity,
+        definition: "Presence/severity of singularity events on the trajectory",
+        unit: "dimensionless",
+        domain: [0.0, 1.0],
+        normalization: "discrete presence/severity: 0.0 absent, 0.15 near-singular only, 0.5 singular event — both paths (observations + fallback) share this scale; never events / waypoint_count",
+        semantic_evidence: "SINGULAR_CONDITION_THRESHOLD (1000.0) and the shared near-singular threshold (100.0) from SingularityConfig; observations path maps Singularity → 0.5, NearSingularity → 0.15",
+        missing_default: 0.0,
+        missing_default_semantics: "no singularity event observed",
+    },
+    FeatureContract {
+        variable: LinguisticVar::CollisionClearance,
+        definition: "Minimum collision clearance along the trajectory",
+        unit: "m",
+        domain: [-1.0, 1.0],
+        normalization: "raw value in meters; ≤ COLLISION_DISTANCE → `danger`, ≤ NEAR_COLLISION_DISTANCE → `near`, else `safe`",
+        semantic_evidence: "COLLISION_DISTANCE (0.0) and NEAR_COLLISION_DISTANCE (0.05) from the trajectory analyzer",
+        missing_default: 1.0,
+        missing_default_semantics: "no obstacle seen (safe)",
+    },
+];
 
 /// A rule antecedent. `MetricIs` matches a fuzzy membership degree; a
 /// `FactEquals` antecedent matches a derived working-memory fact (an absent
@@ -184,22 +245,6 @@ pub fn default_kb() -> Vec<Rule> {
             consequents: vec![RiskIs { set: Medium }],
         },
         Rule {
-            id: "R06_high_complexity",
-            category: Category::Trajectory,
-            priority: 4,
-            antecedents: vec![MetricIs {
-                variable: TrajectoryComplexity,
-                set: "high",
-            }],
-            consequents: vec![
-                RiskIs { set: Medium },
-                MarkEvidence {
-                    key: "complexity_high",
-                    value: 1.0,
-                },
-            ],
-        },
-        Rule {
             id: "R07_low_manipulability",
             category: Category::Manipulability,
             priority: 3,
@@ -208,8 +253,9 @@ pub fn default_kb() -> Vec<Rule> {
                 set: "low",
             }],
             consequents: vec![
+                RiskIs { set: High },
                 DeriveFact {
-                    fact: "danger_zone",
+                    fact: "low_manipulability",
                     value: true,
                 },
                 MarkEvidence {
@@ -240,6 +286,7 @@ pub fn default_kb() -> Vec<Rule> {
                 set: "high",
             }],
             consequents: vec![
+                RiskIs { set: High },
                 DeriveFact {
                     fact: "near_singularity",
                     value: true,
@@ -264,23 +311,23 @@ pub fn default_kb() -> Vec<Rule> {
             }],
         },
         Rule {
-            id: "R11_danger_zone",
+            id: "R11_compromised_manipulability",
             category: Category::Manipulability,
             priority: 10,
             antecedents: vec![
                 FactEquals {
-                    fact: "danger_zone",
+                    fact: "low_manipulability",
                     value: true,
                 },
-                MetricIs {
-                    variable: Manipulability,
-                    set: "low",
+                FactEquals {
+                    fact: "near_singularity",
+                    value: true,
                 },
             ],
             consequents: vec![
                 RiskIs { set: Critical },
                 MarkEvidence {
-                    key: "danger_zone",
+                    key: "critical_combination",
                     value: 1.0,
                 },
             ],
@@ -327,7 +374,7 @@ pub fn validate(kb: &[Rule]) -> Result<(), KbError> {
     Ok(())
 }
 
-/// The four linguistic input variables (design "Four linguistic variables"),
+/// The three linguistic input variables (design "Three linguistic variables"),
 /// each anchored to analyzer thresholds (see module docs and `golden.rs`).
 pub fn input_variables() -> Vec<LinguisticVariable> {
     vec![
@@ -336,30 +383,37 @@ pub fn input_variables() -> Vec<LinguisticVariable> {
             sets: vec![
                 FuzzySet {
                     name: "low",
-                    // Left slope from 0 to the analyzer threshold (0.3): the
-                    // spec "Triangular Membership Evaluation" scenario demands
-                    // low(0.15) = 0.5 and the anchoring test demands
-                    // low(0.29) > 0.5.
-                    shape: MembershipShape::Triangular {
-                        a: 0.0,
-                        b: MANIPULABILITY_LOW_THRESHOLD,
-                        c: 0.6,
+                    // Monotonic "clearly low": 1.0 at manipulability 0, falling
+                    // linearly to 0 at the analyzer threshold (0.3). A value
+                    // just below the threshold (0.29) is only MARGINALLY low,
+                    // so it belongs to `medium` — this stops marginal plans
+                    // from over-escalating to Critical.
+                    shape: MembershipShape::LeftShoulder {
+                        plateau: 0.0,
+                        zero: MANIPULABILITY_LOW_THRESHOLD,
                     },
                 },
                 FuzzySet {
                     name: "medium",
+                    // Marginal zone: peaks at the analyzer threshold (0.3) and
+                    // falls off by 0.5, so a value just below 0.3 reads as
+                    // "medium" (recoverable) rather than "low" (clearly bad).
                     shape: MembershipShape::Triangular {
                         a: 0.15,
                         b: MANIPULABILITY_LOW_THRESHOLD,
-                        c: 0.6,
+                        c: 0.5,
                     },
                 },
                 FuzzySet {
                     name: "high",
-                    shape: MembershipShape::Triangular {
-                        a: 0.3,
-                        b: 0.6,
-                        c: 1.0,
+                    // Monotonic "clearly good": rises from 0 at 0.5 to 1.0 at
+                    // 0.7 and beyond. No support in the medium band (0.458 is
+                    // NOT "high") and never decreases at the top — a clearly
+                    // healthy 0.9 is fully "high", unlike the old bump that
+                    // peaked at 0.6 and fell off.
+                    shape: MembershipShape::RightShoulder {
+                        start: 0.5,
+                        plateau: 0.7,
                     },
                 },
             ],
@@ -420,33 +474,6 @@ pub fn input_variables() -> Vec<LinguisticVariable> {
                 },
             ],
         },
-        LinguisticVariable {
-            name: "trajectory_complexity",
-            sets: vec![
-                FuzzySet {
-                    name: "low",
-                    shape: MembershipShape::LeftShoulder {
-                        plateau: 2.0,
-                        zero: 5.0,
-                    },
-                },
-                FuzzySet {
-                    name: "medium",
-                    shape: MembershipShape::Triangular {
-                        a: 2.0,
-                        b: 5.0,
-                        c: 15.0,
-                    },
-                },
-                FuzzySet {
-                    name: "high",
-                    shape: MembershipShape::RightShoulder {
-                        start: 10.0,
-                        plateau: 15.0,
-                    },
-                },
-            ],
-        },
     ]
 }
 
@@ -464,18 +491,22 @@ pub fn risk_variable() -> LinguisticVariable {
             },
             FuzzySet {
                 name: "medium",
+                // Centroid ~0.375 — inside the Medium bucket [0.25, 0.5). A
+                // lone medium signal must land Medium, not on the 0.5 boundary.
                 shape: MembershipShape::Triangular {
                     a: 0.25,
-                    b: 0.5,
-                    c: 0.75,
+                    b: 0.375,
+                    c: 0.5,
                 },
             },
             FuzzySet {
                 name: "high",
+                // Centroid ~0.625 — inside the High bucket [0.5, 0.75). A lone
+                // high signal must land High, not on the 0.75 Critical edge.
                 shape: MembershipShape::Triangular {
                     a: 0.5,
-                    b: 0.75,
-                    c: 1.0,
+                    b: 0.625,
+                    c: 0.75,
                 },
             },
             FuzzySet {
@@ -632,9 +663,9 @@ mod tests {
     }
 
     #[test]
-    fn input_variables_are_exactly_four() {
+    fn input_variables_are_exactly_three() {
         let variables = input_variables();
-        assert_eq!(variables.len(), 4);
+        assert_eq!(variables.len(), 3);
         let names: Vec<&str> = variables.iter().map(|v| v.name).collect();
         assert_eq!(
             names,
@@ -642,7 +673,6 @@ mod tests {
                 "manipulability",
                 "singularity_proximity",
                 "collision_clearance",
-                "trajectory_complexity",
             ]
         );
     }
@@ -655,20 +685,72 @@ mod tests {
     }
 
     #[test]
-    fn manipulability_low_degree_at_analyzer_boundary_exceeds_half() {
-        // Behavioral anchor (task 2.1): the analyzer emits `LowManipulability`
-        // when avg_manipulability < 0.3; the IA `low` membership at 0.29 must
-        // agree (degree > 0.5) so the two surfaces never drift.
+    fn manipulability_membership_is_monotonic_around_threshold() {
+        // Behavioral anchor (recalibrated): the analyzer emits
+        // `LowManipulability` when avg_manipulability < 0.3. The fuzzy layer
+        // refines that crisp threshold into a gradient:
+        //   - far below 0.3 (0.1) → clearly `low` (degree > 0.5);
+        //   - just below 0.3 (0.29) → marginal → `medium` dominates (degree >
+        //     0.5), NOT `low` — so marginal plans are Medium, not Critical.
         let variable = &input_variables()[0];
-        let low = variable
+
+        let low_at_01 = variable
+            .fuzzify(0.1)
+            .into_iter()
+            .find(|(name, _)| *name == "low")
+            .expect("low set present");
+        assert!(
+            low_at_01.1 > 0.5,
+            "low(0.1) must exceed 0.5 (clearly low), got {}",
+            low_at_01.1
+        );
+
+        let medium_at_029 = variable
+            .fuzzify(0.29)
+            .into_iter()
+            .find(|(name, _)| *name == "medium")
+            .expect("medium set present");
+        assert!(
+            medium_at_029.1 > 0.5,
+            "medium(0.29) must exceed 0.5 (marginal), got {}",
+            medium_at_029.1
+        );
+
+        // `low` must be monotonically DECREASING: higher at 0.1 than at 0.29.
+        let low_at_029 = variable
             .fuzzify(0.29)
             .into_iter()
             .find(|(name, _)| *name == "low")
             .expect("low set present");
         assert!(
-            low.1 > 0.5,
-            "IA low MF at 0.29 must exceed 0.5, got {}",
-            low.1
+            low_at_01.1 > low_at_029.1,
+            "low must decrease as manipulability rises: low(0.1)={} > low(0.29)={}",
+            low_at_01.1,
+            low_at_029.1
+        );
+
+        // `high` must be monotonic and ABSENT in the medium band: an
+        // intermediate 0.458 is NOT "high", and a clearly healthy 0.9 is fully
+        // "high" (the old bump peaked at 0.6 and then decreased).
+        let high_at_0458 = variable
+            .fuzzify(0.458)
+            .into_iter()
+            .find(|(name, _)| *name == "high")
+            .expect("high set present");
+        assert!(
+            high_at_0458.1 == 0.0,
+            "high(0.458) must be 0 (medium band), got {}",
+            high_at_0458.1
+        );
+        let high_at_09 = variable
+            .fuzzify(0.9)
+            .into_iter()
+            .find(|(name, _)| *name == "high")
+            .expect("high set present");
+        assert!(
+            (high_at_09.1 - 1.0).abs() < 1e-9,
+            "high(0.9) must be 1.0 (clearly healthy), got {}",
+            high_at_09.1
         );
     }
 
@@ -705,5 +787,90 @@ mod tests {
             "IA singularity high MF at 0.3 must exceed 0.5, got {}",
             high.1
         );
+    }
+
+    #[test]
+    fn feature_contracts_are_declared() {
+        // Spec "Three contracts declared for the three KB inputs": exactly one
+        // `FEATURE_CONTRACT` per fuzzy input variable, each complete with the
+        // 5-element scale contract (definition, unit, domain, normalization,
+        // semantic_evidence) plus the per-feature missing-data default.
+        assert_eq!(
+            FEATURE_CONTRACTS.len(),
+            3,
+            "one contract per KB input variable"
+        );
+
+        let variable_name = |v: LinguisticVar| match v {
+            LinguisticVar::Manipulability => "manipulability",
+            LinguisticVar::SingularityProximity => "singularity_proximity",
+            LinguisticVar::CollisionClearance => "collision_clearance",
+        };
+
+        // Every KB input variable must have a declared contract, and every
+        // contract must describe a real KB input (no orphans either way).
+        let declared: std::collections::HashSet<&str> = FEATURE_CONTRACTS
+            .iter()
+            .map(|c| variable_name(c.variable))
+            .collect();
+        let kb_variables: std::collections::HashSet<&str> =
+            input_variables().iter().map(|v| v.name).collect();
+        assert_eq!(
+            declared, kb_variables,
+            "FEATURE_CONTRACTS must cover exactly the input_variables() set"
+        );
+
+        // Spec "Contract anchors to analyzer threshold": the manipulability
+        // contract cites the analyzer threshold and describes the < 0.3 → low
+        // normalization.
+        let manip = FEATURE_CONTRACTS
+            .iter()
+            .find(|c| c.variable == LinguisticVar::Manipulability)
+            .expect("manipulability contract present");
+        assert!(
+            manip
+                .semantic_evidence
+                .contains("MANIPULABILITY_LOW_THRESHOLD"),
+            "manipulability contract must cite MANIPULABILITY_LOW_THRESHOLD"
+        );
+        assert!(
+            manip.normalization.contains("low"),
+            "manipulability normalization must describe the low fuzzy set"
+        );
+
+        // Every field of every contract must be filled in — an empty element
+        // means the feature has no scale contract and must not enter diagnosis.
+        for contract in FEATURE_CONTRACTS {
+            assert!(
+                !contract.definition.is_empty(),
+                "{:?} missing definition",
+                contract.variable
+            );
+            assert!(
+                !contract.unit.is_empty(),
+                "{:?} missing unit",
+                contract.variable
+            );
+            assert!(
+                contract.domain[0] <= contract.domain[1],
+                "{:?} has an inverted domain",
+                contract.variable
+            );
+            assert!(
+                !contract.normalization.is_empty(),
+                "{:?} missing normalization",
+                contract.variable
+            );
+            assert!(
+                !contract.semantic_evidence.is_empty(),
+                "{:?} missing semantic evidence",
+                contract.variable
+            );
+            assert!(
+                !contract.missing_default_semantics.is_empty(),
+                "{:?} missing missing-default semantics",
+                contract.variable
+            );
+        }
     }
 }

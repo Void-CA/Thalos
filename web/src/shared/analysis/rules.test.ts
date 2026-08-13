@@ -18,19 +18,18 @@ import {
  */
 
 describe('RULE_LABELS — covers the full KB rule base', () => {
-  it('labels all 12 frozen KB rules', () => {
+  it('labels all 11 frozen KB rules', () => {
     const kbIds = [
       'R01_collision_danger',
       'R02_collision_near',
       'R03_collision_danger_evidence',
       'R04_singularity_medium',
       'R05_manipulability_medium',
-      'R06_high_complexity',
       'R07_low_manipulability',
       'R08_safe_clearance',
       'R09_near_singularity',
       'R10_manipulability_high',
-      'R11_danger_zone',
+      'R11_compromised_manipulability',
       'R12_safe_plan',
     ]
     for (const id of kbIds) {
@@ -41,9 +40,10 @@ describe('RULE_LABELS — covers the full KB rule base', () => {
   it('maps the headline rules to the binding brief labels', () => {
     expect(RULE_LABELS.R01_collision_danger).toBe('Collision danger')
     expect(RULE_LABELS.R02_collision_near).toBe('Near collision')
-    expect(RULE_LABELS.R06_high_complexity).toBe('High trajectory complexity')
+    expect(RULE_LABELS.R07_low_manipulability).toBe('Low manipulability')
     expect(RULE_LABELS.R08_safe_clearance).toBe('Safe clearance')
-    expect(RULE_LABELS.R10_manipulability_high).toBe('High manipulability')
+    expect(RULE_LABELS.R09_near_singularity).toBe('Near singularity')
+    expect(RULE_LABELS.R11_compromised_manipulability).toBe('Compromised manipulability')
     expect(RULE_LABELS.R12_safe_plan).toBe('Safe plan')
   })
 })
@@ -100,17 +100,15 @@ describe('bindingPhrase — human "why" from the trace bindings', () => {
     expect(bindingPhrase({ 'CollisionClearance IS danger': '1.000' })).toBe(
       'Collision clearance is danger',
     )
-    expect(bindingPhrase({ 'SingularityProximity IS high': '0.420' })).toBe(
-      'Singularity proximity is high',
-    )
-    expect(bindingPhrase({ 'TrajectoryComplexity IS high': '0.890' })).toBe(
-      'Trajectory complexity is high',
+    expect(bindingPhrase({ 'SingularityProximity IS high': '0.420' })).toBe('Singularity is high')
+    expect(bindingPhrase({ 'SingularityProximity IS medium': '0.750' })).toBe(
+      'Singularity is medium',
     )
   })
 
   it('reads the {variable: set} shape defensively', () => {
     expect(bindingPhrase({ manipulability: 'low' })).toBe('Manipulability is low')
-    expect(bindingPhrase({ trajectory_complexity: 'high' })).toBe('Trajectory complexity is high')
+    expect(bindingPhrase({ singularity_proximity: 'medium' })).toBe('Singularity is medium')
   })
 
   it('reads FactEquals bindings as facts', () => {
@@ -125,7 +123,7 @@ describe('bindingPhrase — human "why" from the trace bindings', () => {
         'SingularityProximity IS low': '1.000',
         'Manipulability IS high': '1.000',
       }),
-    ).toBe('safe clearance is true; Singularity proximity is low; Manipulability is high')
+    ).toBe('safe clearance is true; Singularity is low; Manipulability is high')
   })
 
   it('falls back to a raw key=value pair for an unreadable binding', () => {
@@ -170,7 +168,7 @@ describe('consequentPhrase — human "what" from the derived output', () => {
   })
 
   it('reads evidence-mark keys the KB raises alongside derived facts', () => {
-    expect(consequentPhrase({ complexity_high: true })).toBe('marked high complexity')
+    expect(consequentPhrase({ low_manipulability: true })).toBe('marked low manipulability')
     expect(consequentPhrase({ manipulability_low: true })).toBe('marked low manipulability')
     expect(consequentPhrase({ collision_danger: true })).toBe('marked collision danger')
   })
@@ -186,8 +184,8 @@ describe('consequentPhrase — human "what" from the derived output', () => {
   })
 
   it('joins multiple consequents and returns "—" for empty', () => {
-    expect(consequentPhrase({ danger_zone: true, complexity_high: true })).toBe(
-      'marked danger zone, marked high complexity',
+    expect(consequentPhrase({ danger_zone: true, low_manipulability: true })).toBe(
+      'marked danger zone, marked low manipulability',
     )
     expect(consequentPhrase({})).toBe('—')
   })

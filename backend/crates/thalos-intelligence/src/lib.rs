@@ -49,6 +49,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use thalos_core::analysis::action::ActionKind;
 use thalos_core::analysis::location::Location;
+use thalos_core::analysis::observation::{Observation, ObservationKind};
 use thalos_core::analysis::report::AnalysisReport;
 
 use crate::engine::Memberships;
@@ -68,7 +69,7 @@ impl Assessor {
         let inputs = extract_inputs(report);
         let kb = kb::default_kb();
 
-        // 1. Fuzzify the four linguistic variables.
+        // 1. Fuzzify the three linguistic variables.
         let memberships = fuzzify(&inputs);
 
         // 2. Forward chain (symbolic): derived facts + trace + evidence.
@@ -86,15 +87,11 @@ impl Assessor {
         evidence.insert("manipulability".to_string(), inputs.manipulability);
         evidence.insert(
             "singularity_proximity".to_string(),
-            inputs.singularity_proximity,
+            inputs.localized_singularity,
         );
         evidence.insert(
             "collision_clearance".to_string(),
             inputs.collision_clearance,
-        );
-        evidence.insert(
-            "trajectory_complexity".to_string(),
-            inputs.trajectory_complexity,
         );
         evidence.extend(engine_output.evidence.clone());
 
@@ -130,72 +127,111 @@ impl Assessor {
     }
 }
 
-/// The four derived/crisp inputs of the fuzzy layer, read from the report's
-/// metrics (pure read — the report is never modified).
-struct AssessorInputs {
+/// The fuzzy layer's crisp inputs. Carries BOTH global trajectory-level
+/// aggregates AND localized evidence — phenomena the analyzer detected that
+/// would be DILUTED if expressed only as whole-trajectory aggregates (e.g. a
+/// localized singularity event is ~3% of a densely-interpolated trajectory).
+///
+/// Every field feeds the fuzzy layer. `min_manipulability` was considered as
+/// localized low-manipulability evidence but is deliberately NOT a fuzzy input
+/// in the MVP: the analyzer already emits `LowManipulability` observations for
+/// localized dips, and a second manipulability input would double-count the
+/// same signal without a demonstrated failure — see the project informe.
+///
+/// Pure read — the report is never modified.
+struct FuzzyInputs {
+    /// Global: average manipulability over the trajectory.
     manipulability: f64,
-    singularity_proximity: f64,
+    /// Localized: the minimum collision clearance (a local extreme by nature).
     collision_clearance: f64,
-    trajectory_complexity: f64,
+    /// Localized: presence/severity of singularity events on the discrete
+    /// scale {0.0, 0.15, 0.5} — interpolation-invariant, unlike the old
+    /// waypoint fraction.
+    localized_singularity: f64,
 }
 
-/// Extract the four linguistic-variable inputs from `report.metrics`.
+/// Extract the fuzzy inputs from a report.
 ///
-/// `singularity_proximity` and `trajectory_complexity` are DERIVED inside the
-/// Assessor from existing metric keys — they are NOT Thalos metrics and are
-/// never written back to the report.
-fn extract_inputs(report: &AnalysisReport) -> AssessorInputs {
+/// `localized_singularity` is a presence/severity score on the discrete scale
+/// {0.0, 0.15, 0.5}. It comes from the analyzer's canonical observations
+/// (presence + severity). When the report carries no observations (metric-only
+/// consumer), it falls back to the SAME discrete mapping over the aggregated
+/// counts — never `events / waypoint_count` (see ADR-004 and
+/// `tests/density_invariance.rs`). Both paths share one scale.
+fn extract_inputs(report: &AnalysisReport) -> FuzzyInputs {
     let metrics = &report.metrics;
     let avg = metrics.get("avg_manipulability").copied();
     let min_manip = metrics.get("min_manipulability").copied();
     let manipulability = avg.or(min_manip).unwrap_or(0.0);
-
-    let near = metrics.get("near_singular_count").copied().unwrap_or(0.0);
-    let singular = metrics.get("singular_count").copied().unwrap_or(0.0);
-    let waypoints = metrics.get("waypoint_count").copied().unwrap_or(0.0);
-    let singularity_proximity = if waypoints > 0.0 {
-        (near + singular) / waypoints
-    } else {
-        0.0
-    };
 
     let collision_clearance = metrics
         .get("min_collision_distance")
         .copied()
         .unwrap_or(1.0);
 
-    let duration = metrics.get("trajectory_duration").copied().unwrap_or(0.0);
-    let trajectory_complexity = if duration > 0.0 && waypoints > 0.0 {
-        waypoints / duration
+    let localized_singularity = if report.observations.is_empty() {
+        // Metric-only report: discrete presence/severity mapping from the
+        // aggregated counts — the SAME scale as the observations path
+        // ({0.0, 0.15, 0.5}). NOT `(near + singular) / waypoint_count`: that
+        // ratio dilutes localized events (13/392 ≈ 0.033 → Low on a
+        // trajectory flagged 13×) and varies with interpolation density.
+        let near = metrics.get("near_singular_count").copied().unwrap_or(0.0);
+        let singular = metrics.get("singular_count").copied().unwrap_or(0.0);
+        if singular > 0.0 {
+            0.5
+        } else if near > 0.0 {
+            0.15
+        } else {
+            0.0
+        }
     } else {
-        0.0
+        localized_singularity_from_observations(&report.observations)
     };
 
-    AssessorInputs {
+    FuzzyInputs {
         manipulability,
-        singularity_proximity,
         collision_clearance,
-        trajectory_complexity,
+        localized_singularity,
     }
 }
 
-/// Fuzzify the four inputs against the KB's linguistic variables.
-fn fuzzify(inputs: &AssessorInputs) -> Memberships {
+/// Map the analyzer's singularity observations onto a presence/severity score
+/// in the `singularity_proximity` fuzzy domain:
+///   - no singularity findings              → 0.0  (low zone)
+///   - near-singular events only            → 0.15 (medium zone)
+///   - at least one true singularity event  → 0.5  (high zone)
+fn localized_singularity_from_observations(observations: &[Observation]) -> f64 {
+    let mut singular = 0usize;
+    let mut near = 0usize;
+    for o in observations {
+        match o.kind {
+            ObservationKind::Singularity => singular += 1,
+            ObservationKind::NearSingularity => near += 1,
+            _ => {}
+        }
+    }
+    if singular > 0 {
+        0.5
+    } else if near > 0 {
+        0.15
+    } else {
+        0.0
+    }
+}
+
+/// Fuzzify the three crisp inputs against the KB's linguistic variables.
+fn fuzzify(inputs: &FuzzyInputs) -> Memberships {
     let mut memberships = HashMap::new();
     let variables = kb::input_variables();
     let pairs = [
         (kb::LinguisticVar::Manipulability, inputs.manipulability),
         (
             kb::LinguisticVar::SingularityProximity,
-            inputs.singularity_proximity,
+            inputs.localized_singularity,
         ),
         (
             kb::LinguisticVar::CollisionClearance,
             inputs.collision_clearance,
-        ),
-        (
-            kb::LinguisticVar::TrajectoryComplexity,
-            inputs.trajectory_complexity,
         ),
     ];
     for (variable, x) in pairs {
@@ -217,7 +253,6 @@ fn variable_name(variable: kb::LinguisticVar) -> &'static str {
         kb::LinguisticVar::Manipulability => "manipulability",
         kb::LinguisticVar::SingularityProximity => "singularity_proximity",
         kb::LinguisticVar::CollisionClearance => "collision_clearance",
-        kb::LinguisticVar::TrajectoryComplexity => "trajectory_complexity",
     }
 }
 
@@ -376,7 +411,7 @@ mod tests {
             assessment
                 .trace
                 .iter()
-                .all(|t| t.rule_id != "R11_danger_zone")
+                .all(|t| t.rule_id != "R11_compromised_manipulability")
         );
     }
 
@@ -408,8 +443,10 @@ mod tests {
 
     #[test]
     fn assess_derives_singularity_proximity_without_mutating_report() {
-        // Spec "Singularity Proximity Computation" (near=3, wp=10 → 0.3) and
-        // "report stays byte-identical after assess".
+        // Spec "Two-Path Singularity Semantics — fallback path, near-singular
+        // only": near_singular_count=3 (waypoint_count=10) → 0.15 on the
+        // discrete presence/severity scale (NOT 3/10 = 0.3). Plus "report
+        // stays byte-identical after assess".
         let metrics = BTreeMap::from([
             ("waypoint_count".to_string(), 10.0),
             ("near_singular_count".to_string(), 3.0),
@@ -422,8 +459,8 @@ mod tests {
         let assessment = Assessor::assess(&report);
 
         assert!(
-            (assessment.evidence["singularity_proximity"] - 0.3).abs() < 1e-9,
-            "proximity must be 0.3, got {}",
+            (assessment.evidence["singularity_proximity"] - 0.15).abs() < 1e-9,
+            "proximity must be 0.15, got {}",
             assessment.evidence["singularity_proximity"]
         );
 
@@ -455,7 +492,7 @@ mod tests {
             ("trajectory_duration".to_string(), 5.0),
             ("avg_manipulability".to_string(), 0.1),
             ("near_singular_count".to_string(), 5.0),
-            ("singular_count".to_string(), 0.0),
+            ("singular_count".to_string(), 1.0),
             ("min_collision_distance".to_string(), -0.4),
         ])));
         assert!(clean.quality > 0.7);

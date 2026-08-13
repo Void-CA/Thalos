@@ -92,8 +92,8 @@ fn golden_low_verdicts_low_risk_with_high_quality() {
         !assessment
             .trace
             .iter()
-            .any(|t| t.rule_id == "R11_danger_zone"),
-        "a clean plan must not fire the danger-zone rule"
+            .any(|t| t.rule_id == "R11_compromised_manipulability"),
+        "a clean plan must not fire the compromised-manipulability rule"
     );
 }
 
@@ -142,18 +142,21 @@ fn golden_high_verdicts_high_or_critical_risk() {
 #[test]
 fn golden_chained_inference_trace_is_exact() {
     // Spec "Chained Inference Golden": the trace SHALL equal exactly
-    // ["R07_low_manipulability", "R09_near_singularity", "R11_danger_zone"] —
-    // proves the mechanism, not just the result. The fixture is designed so
-    // R07 derives `danger_zone` from low manipulability, R09 derives
-    // `near_singularity` from high proximity, and R11 consumes the derived
-    // fact in a later pass.
+    // ["R07_low_manipulability", "R09_near_singularity",
+    //  "R11_compromised_manipulability"] — proves the mechanism, not just the
+    // result. The fixture is designed so R07 derives `low_manipulability` from
+    // low manipulability, R09 derives `near_singularity` from high proximity,
+    // and R11 consumes BOTH derived facts in a later pass → Critical.
     let assessment = Assessor::assess(&report(metrics(&[
         ("waypoint_count", 10.0),
         ("trajectory_duration", 10.0),
         ("avg_manipulability", 0.1),
         ("min_manipulability", 0.1),
         ("near_singular_count", 4.0),
-        ("singular_count", 0.0),
+        // One real singular event → the discrete fallback maps it to 0.5 (high
+        // proximity zone). NOT the old 4/10 = 0.4 ratio: near-only events map
+        // to 0.15 (medium) and would fire R04 instead of R09.
+        ("singular_count", 1.0),
         ("min_collision_distance", 0.05),
         ("has_collisions", 0.0),
     ])));
@@ -161,7 +164,7 @@ fn golden_chained_inference_trace_is_exact() {
     let expected = [
         "R07_low_manipulability",
         "R09_near_singularity",
-        "R11_danger_zone",
+        "R11_compromised_manipulability",
     ];
     assert_eq!(
         trace_ids(&assessment),
@@ -200,23 +203,30 @@ fn golden_fuzzy_boundary_anchors_manipulability_threshold() {
     );
     assert_eq!(MANIPULABILITY_LOW_THRESHOLD, 0.3);
 
-    // The IA `low` membership at 0.29 agrees (degree > 0.5).
+    // The IA `medium` membership at 0.29 dominates (degree > 0.5): a value
+    // just below the analyzer threshold is MARGINAL (recoverable), not clearly
+    // low — the fuzzy layer refines the analyzer's crisp boundary.
     let variable = &thalos_intelligence::kb::input_variables()[0];
-    let low = variable
+    let medium = variable
         .fuzzify(0.29)
         .into_iter()
-        .find(|(name, _)| *name == "low")
-        .expect("low set present");
-    assert!(low.1 > 0.5, "low(0.29) must exceed 0.5, got {}", low.1);
+        .find(|(name, _)| *name == "medium")
+        .expect("medium set present");
+    assert!(
+        medium.1 > 0.5,
+        "medium(0.29) must exceed 0.5, got {}",
+        medium.1
+    );
 
-    // And the full assessment still runs on the boundary report.
+    // And the full assessment still runs on the boundary report: the marginal
+    // value fires the MEDIUM rule (R05), not the low-manipulability rule.
     let assessment = Assessor::assess(&boundary);
     assert!(
         assessment
             .trace
             .iter()
-            .any(|t| t.rule_id == "R07_low_manipulability"),
-        "boundary manipulability must fire R07"
+            .any(|t| t.rule_id == "R05_manipulability_medium"),
+        "marginal manipulability must fire R05"
     );
 }
 

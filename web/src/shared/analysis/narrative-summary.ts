@@ -15,7 +15,7 @@ import { evidenceDirection, evidenceReading, humanizeKey } from './evidence'
  * `RecommendationWire`; `recommendation_context` derives from
  * `assessment.recommendations` presence. No factor absent from the input
  * evidence is ever asserted (traceability). Rules are NOT narrative — the
- * "N rules triggered: R06, R08…" sentence is gone; triggered rules belong to
+ * "N rules triggered: R08, R09…" sentence is gone; triggered rules belong to
  * the TriggeredRules component.
  *
  * UX redesign (binding brief): the summary reads like a human verdict in
@@ -143,5 +143,32 @@ export function buildNarrativeSummary(
     summary: sentences.join(' '),
     primary_factors,
     recommendation_context,
+  }
+}
+
+export interface WhySummary {
+  /** Short hero line — the elevation story: "Singular event detected →
+   *  risk elevated to High". */
+  line: string
+  /** Explanation block: the mechanism that produced the verdict. */
+  detail: string
+}
+
+/**
+ * The "why" of the verdict when a LOCALIZED singular event is present
+ * (`evidence.singularity_proximity >= 0.5` — the analyzer detected a real
+ * singular event). This is the elevation story the defense must tell: the
+ * verdict did not appear magically. Null when no singular event is present.
+ */
+export function buildWhy(assessment: AssessmentWire): WhySummary | null {
+  const singularScore = assessment.evidence['singularity_proximity']
+  if (singularScore === undefined || singularScore < 0.5) return null
+  const riskWord = assessment.risk.charAt(0).toUpperCase() + assessment.risk.slice(1)
+  const singularRule = assessment.trace.find((t) => t.rule_id === 'R09_near_singularity')
+  return {
+    line: `Singular event detected → risk elevated to ${riskWord}`,
+    detail: singularRule
+      ? `A singular event was detected in the trajectory. ${singularRule.rule_id} classified the evidence as ${assessment.risk} risk.`
+      : `A singular event was detected in the trajectory, elevating the risk to ${assessment.risk}.`,
   }
 }

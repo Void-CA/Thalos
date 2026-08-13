@@ -31,7 +31,6 @@ const baseAssessment: AssessmentWire = {
     manipulability: 0.75,
     singularity_proximity: 0.2,
     collision_clearance: 0.6,
-    trajectory_complexity: 0.4,
   },
   recommendations: [],
   trace: [],
@@ -109,23 +108,22 @@ describe('buildNarrativeSummary — human phrasing (UX redesign)', () => {
         ...baseAssessment,
         risk: 'medium',
         triggered_rules: [
-          { id: 'R06_high_complexity', category: 'trajectory', priority: 4 },
+          { id: 'R09_near_singularity', category: 'singularity', priority: 3 },
           { id: 'R10_manipulability_high', category: 'manipulability', priority: 2 },
         ],
         evidence: {
-          trajectory_complexity: 100.44,
+          singularity_proximity: 0.5,
           manipulability: 0.649,
-          singularity_proximity: 0.044,
+          collision_clearance: 0.6,
         },
       },
       [],
     )
-    expect(narrative.summary.toLowerCase()).toContain('trajectory complexity is very high')
+    expect(narrative.summary.toLowerCase()).toContain('a singular event was detected')
     expect(narrative.summary.toLowerCase()).toContain('manipulability is moderate')
     // No raw rule ids, no snake_case evidence keys, no rules-triggered sentence.
-    expect(narrative.summary).not.toContain('R06_high_complexity')
+    expect(narrative.summary).not.toContain('R09_near_singularity')
     expect(narrative.summary).not.toContain('R10_manipulability_high')
-    expect(narrative.summary).not.toContain('trajectory_complexity')
     expect(narrative.summary).not.toContain('singularity_proximity')
     expect(narrative.summary).not.toMatch(/R\d\d_[a-z_]+/)
     expect(narrative.summary).not.toMatch(/triggered/i)
@@ -136,7 +134,7 @@ describe('buildNarrativeSummary — human phrasing (UX redesign)', () => {
       {
         ...baseAssessment,
         evidence: {
-          trajectory_complexity: 100.44,
+          singularity_proximity: 0.5,
           manipulability: 0.649,
           collision_clearance: -0.05,
         },
@@ -144,11 +142,11 @@ describe('buildNarrativeSummary — human phrasing (UX redesign)', () => {
       [],
     )
     const labels = narrative.primary_factors.map((f) => f.label)
-    expect(labels).toContain('Very high trajectory complexity')
+    expect(labels).toContain('Singular event')
     expect(labels).toContain('Moderate manipulability')
     expect(labels).toContain('Collision danger')
     // No raw key ever becomes a visible label.
-    expect(labels).not.toContain('trajectory_complexity')
+    expect(labels).not.toContain('singularity_proximity')
   })
 
   it('omits the triggered-rules sentence even when rules fired', () => {
