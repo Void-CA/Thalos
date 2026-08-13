@@ -184,3 +184,13 @@ describe('determinantBuilder', () => {
     expect(model.empty?.message).toBeTruthy()
   })
 })
+
+describe('DET_JTJ_THRESHOLD — decoupled from the normalized chart (task 5.2)', () => {
+  it('stays a literal 0.09, not a derivative of YOSHIKAWA_THRESHOLD', () => {
+    // Decision (proposal #12, design manipulability-normalization): the raw
+    // det(J·Jᵀ) threshold stays 0.09 = 0.3² — the RAW low-manipulability
+    // boundary. It must NOT track the normalized chart's T_LOW/T_HIGH
+    // (dimensionless, different metric). Literal constant, not `0.3 ** 2`.
+    expect(DET_JTJ_THRESHOLD).toBe(0.09)
+  })
+})

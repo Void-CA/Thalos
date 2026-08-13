@@ -21,14 +21,17 @@
 import type { AnalysisReportWire, ManipulabilityPointWire } from '@/shared/contracts/analysis-report'
 import { manipulabilitySeriesOf, waypointOf } from '@/shared/contracts/analysis-report'
 import type { ChartModel } from '../types'
-import { seriesXAxis, xCoordinateOf, YOSHIKAWA_THRESHOLD } from './manipulability'
+import { seriesXAxis, xCoordinateOf } from './manipulability'
 
 /**
- * det(J·Jᵀ) warning threshold. Mathematically identical to the backend's
- * low-manipulability threshold: det(J·Jᵀ) = ∏σᵢ² = (∏σᵢ)² = yoshikawa², so the
- * same condition "yoshikawa < 0.3" reads "det_jtj < 0.09" (analysis/mod.rs).
+ * det(J·Jᵀ) warning threshold — RAW metric boundary, LITERAL and decoupled
+ * from the normalized chart (design manipulability-normalization, proposal
+ * #12: explicit decision, not a TODO). `det(J·Jᵀ) = ∏σᵢ² = yoshikawa²`, so
+ * the raw low-manipulability condition "yoshikawa < 0.3" reads
+ * "det_jtj < 0.09" (0.3²). The dimensionless normalized chart's T_LOW/T_HIGH
+ * belong to a DIFFERENT metric and must never drive this raw line.
  */
-export const DET_JTJ_THRESHOLD = YOSHIKAWA_THRESHOLD ** 2
+export const DET_JTJ_THRESHOLD = 0.09
 
 type Severity = 'Error' | 'Warning' | 'Info'
 

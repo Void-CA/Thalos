@@ -111,3 +111,40 @@ describe('WorkspaceService — /active targeting for the scene robot (spec R3)',
     })
   })
 })
+
+describe('manipulability grade mapping (task 5.3, spec manipulability-normalization)', () => {
+  it('maps manipulability_grade from the wire onto CloudPoint.grade', async () => {
+    mocks.post.mockResolvedValue({
+      data: {
+        metrics: { avg_yoshikawa: 0.1, reference_dimension: 2.3 },
+        samples: [
+          { position: { x: 0.1, y: 0.2, z: 0.3 }, yoshikawa: 0.05, manipulability_grade: 'low' },
+          { position: { x: 0.2, y: 0.1, z: 0.3 }, yoshikawa: 0.4, manipulability_grade: 'medium' },
+          { position: { x: 0.3, y: 0.0, z: 0.3 }, yoshikawa: 0.9, manipulability_grade: 'high' },
+        ],
+      },
+    })
+    const service = new WorkspaceService(apiClient)
+
+    const result = await service.analyzeManipulability('scara', sampleParams)
+
+    expect(result.samples?.map((s) => s.grade)).toEqual(['low', 'medium', 'high'])
+    // Raw measure still mapped alongside the grade.
+    expect(result.samples?.[1]?.yoshikawa).toBeCloseTo(0.4)
+  })
+
+  it('leaves grade undefined for legacy payloads without the field', async () => {
+    mocks.post.mockResolvedValue({
+      data: {
+        metrics: { avg_yoshikawa: 0.1 },
+        samples: [{ position: { x: 0.1, y: 0.2, z: 0.3 }, yoshikawa: 0.05 }],
+      },
+    })
+    const service = new WorkspaceService(apiClient)
+
+    const result = await service.analyzeManipulability(null, sampleParams)
+
+    expect(result.samples?.[0]?.grade).toBeUndefined()
+    expect(result.samples?.[0]?.yoshikawa).toBeCloseTo(0.05)
+  })
+})

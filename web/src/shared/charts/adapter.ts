@@ -119,7 +119,11 @@ export function toEChartsOption(model: ChartModel): EChartsOption {
   }
 
   if (model.tooltip !== undefined) {
-    option.tooltip = { trigger: model.tooltip.trigger, confine: true }
+    option.tooltip = {
+      trigger: model.tooltip.trigger,
+      confine: true,
+      ...(model.tooltip.formatter ? { formatter: model.tooltip.formatter } : {}),
+    }
   }
 
   if (model.legend !== undefined) {

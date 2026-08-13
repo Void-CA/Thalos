@@ -76,6 +76,11 @@ export interface LegendConfig {
 
 export interface TooltipConfig {
   trigger: 'axis' | 'item'
+  /** Optional presentation formatter (additive, task 5.1 spec
+   *  manipulability-chart "Tooltip on Hover"): pure builder functions may
+   *  attach a formatter that renders per-point context (e.g. normalized +
+   *  grade + raw). Receives the ECharts tooltip params; returns HTML. */
+  formatter?: (params: unknown) => string
 }
 
 export interface DataZoomConfig {

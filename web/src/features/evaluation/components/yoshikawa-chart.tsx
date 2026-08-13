@@ -1,5 +1,6 @@
 import { EChart, manipulabilityBuilder } from '@/shared/charts'
 import { useAnalysisStore } from '@/features/analysis/store'
+import { useSceneStore } from '@/features/viewport/store'
 
 /**
  * YoshikawaChart — portion 1 of the /evaluation grid (hotfix evaluation-
@@ -9,11 +10,14 @@ import { useAnalysisStore } from '@/features/analysis/store'
  */
 export function YoshikawaChart() {
   const report = useAnalysisStore((s) => s.report)
+  // L_ref for the legacy-payload fallback comes from the loaded scene;
+  // absent scene data degrades to 1.0 (the builder's documented no-op).
+  const refDim = useSceneStore((s) => s.data?.referenceDimension) ?? 1.0
   if (!report) return null
 
   return (
     <section className="flex min-w-0 rounded-lg border border-border bg-card px-3 py-2.5">
-      <EChart model={manipulabilityBuilder(report)} className="h-80 w-full" />
+      <EChart model={manipulabilityBuilder(report, refDim)} className="h-80 w-full" />
     </section>
   )
 }

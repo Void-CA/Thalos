@@ -7,6 +7,10 @@ export interface CloudPoint {
   state?: string
   /** Only available in manipulability samples. */
   yoshikawa?: number
+  /** Backend-classified manipulability grade ("low" | "medium" | "high").
+   *  Only available in manipulability samples from NEW backends; absent on
+   *  legacy payloads → the point-cloud falls back to raw thresholds. */
+  grade?: 'low' | 'medium' | 'high'
 }
 
 export type PointCloudColorMode = 'none' | 'workspace' | 'singularity' | 'manipulability'

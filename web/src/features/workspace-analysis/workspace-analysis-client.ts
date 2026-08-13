@@ -40,6 +40,9 @@ function extractPoints(arr: unknown[] | undefined | null, stateKey?: string): Cl
     position: [s.position?.x ?? 0, s.position?.y ?? 0, s.position?.z ?? 0] as [number, number, number],
     ...(stateKey ? { state: s[stateKey] ?? 'unknown' } : {}),
     ...(s.yoshikawa !== undefined ? { yoshikawa: s.yoshikawa } : {}),
+    // Backend-classified grade (task 5.3, spec "Point-cloud consumes grade"):
+    // mapped verbatim from the wire; absent on legacy payloads.
+    ...(s.manipulability_grade !== undefined ? { grade: s.manipulability_grade } : {}),
   }))
 }
 
