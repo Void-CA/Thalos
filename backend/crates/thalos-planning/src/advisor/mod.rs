@@ -18,8 +18,6 @@ use std::ops::Range;
 use thalos_core::analysis::action::{Action, ActionId, ActionImpact, ActionKind, ActionPriority};
 use thalos_core::analysis::location::Location;
 use thalos_core::analysis::observation::{ArtifactRef, Observation, ObservationKind};
-use thalos_core::analysis::region::{ProblemRegion, RegionKind};
-use thalos_core::analysis::RegionGrouper;
 use thalos_core::ids::MotionPlanId;
 use thalos_core::kinematics::inverse::IKSolver;
 use thalos_core::motion::segment::MotionSegment;
@@ -44,10 +42,7 @@ use crate::recommendation::{
 };
 
 pub mod remediation;
-use remediation::{
-    DepartureReparameterizer, SingularityDetourMaterializer, SingularityStrategy, TIME_STEP,
-    clamped_departure_limits, DEPARTURE_WINDOW, DEFAULT_PERTURBATION,
-};
+use remediation::SingularityResolveMaterializer;
 
 /// Generador de acciones.
 ///
@@ -226,7 +221,6 @@ impl PlanAdvisor {
         robot: Option<&SerialChain>,
         tcp: Option<&ToolFrame>,
     ) -> Vec<Recommendation> {
-        let regions = RegionGrouper::default().group(observations);
         let mut recommendations = Vec::new();
         let mut seen: HashSet<(usize, ActionKind)> = HashSet::new();
         let mut counter: u32 = 0;
@@ -259,26 +253,7 @@ impl PlanAdvisor {
                     Some(plan) => segment_start_joints(plan, index, current_joints),
                     None => current_joints.to_vec(),
                 };
-                // T12/T13 (M3): Singularity recommendations are CAUSAL — the
-                // advisor routes start-anchored regions to the departure
-                // operator (raise motion limits computed from the robot's
-                // cone geometry) and interior regions to the joint-space
-                // detour. The strategy carries the precomputed parameters.
-                let singularity = if kind == ActionKind::Singularity {
-                    Self::singularity_strategy(
-                        robot,
-                        compiled,
-                        program,
-                        index,
-                        &regions,
-                        &observation.location,
-                        &start_joints,
-                    )
-                } else {
-                    None
-                };
-                let Some(materializer) =
-                    Self::materializer_for(kind, ik_solver, &start_joints, singularity.as_ref())
+                let Some(materializer) = Self::materializer_for(kind, ik_solver, &start_joints)
                 else {
                     continue; // C2: sin materializador no hay edit que poblar
                 };
@@ -379,33 +354,24 @@ impl PlanAdvisor {
     /// resuelven desde ELLAS — el contexto determinista que la compilación
     /// usará — nunca el snapshot del runtime.
     ///
-    /// T12 (M3): la remediación de Singularity es CAUSAL. El advisor enruta la
-    /// región (start-anchored → [`DepartureReparameterizer`] con los límites
-    /// que despejan el cono; interior → [`SingularityDetourMaterializer`] con
-    /// la perturbación articular). `RotateToolMaterializer` queda fuera del
-    /// registro: rotar la herramienta no remueve la singularidad articular (y
-    /// su pose rotada es inalcanzable en los robots planares) — ver M2
-    /// surprises. El materializador rotacional sigue en
-    /// `feedback/materializer.rs` con sus tests, pero ya no es la
-    /// recomendación de Singularity.
+    /// La remediación de Singularity es CAUSAL (root-cause fix, ADR-5 REVISION
+    /// 3): el [`SingularityResolveMaterializer`] re-suelve IK desde las joints
+    /// de inicio de segmento hacia la MISMA posición cartesiana del target,
+    /// convergiendo al codo del MISMO lado (no cruza la extensión).
     fn materializer_for<'a>(
         kind: ActionKind,
         ik_solver: &'a dyn IKSolver,
         segment_start_joints: &'a [f64],
-        singularity: Option<&SingularityStrategy>,
     ) -> Option<Box<dyn ProposalMaterializer + 'a>> {
         match kind {
             ActionKind::Manipulability => Some(Box::new(LiftTcpMaterializer::new(
                 ik_solver,
                 segment_start_joints,
             ))),
-            ActionKind::Singularity => Some(match singularity {
-                Some(SingularityStrategy::Departure {
-                    max_velocity,
-                    max_acceleration,
-                }) => Box::new(DepartureReparameterizer::new(*max_velocity, *max_acceleration)),
-                _ => Box::new(SingularityDetourMaterializer::new(DEFAULT_PERTURBATION)),
-            }),
+            ActionKind::Singularity => Some(Box::new(SingularityResolveMaterializer::new(
+                ik_solver,
+                segment_start_joints,
+            ))),
             ActionKind::Waypoint => Some(Box::new(InsertWaypointMaterializer::new())),
             _ => None,
         }
@@ -415,10 +381,10 @@ impl PlanAdvisor {
     /// REVISION 1 + T12 M3).
     ///
     /// Las remediaciones articulares (`Singularity`) apuntan al segmento DUEÑO
-    /// del waypoint — sea MoveJ o MoveL — porque los operadores causales
-    /// (departure/detour) actúan sobre él. Las remediaciones cartesianas
-    /// (`Manipulability`, `Waypoint`) mantienen la resolución MoveL-only con
-    /// fallback al primer segmento cartesiano.
+    /// del waypoint — sea MoveJ o MoveL — porque el operador causal (IK
+    /// re-solve al codo del mismo lado) actúa sobre él. Las remediaciones
+    /// cartesianas (`Manipulability`, `Waypoint`) mantienen la resolución
+    /// MoveL-only con fallback al primer segmento cartesiano.
     fn target_segment_for<'a>(
         kind: ActionKind,
         compiled: Option<&CompiledPlan>,
@@ -440,82 +406,6 @@ impl PlanAdvisor {
             }
             _ => Self::target_segment(compiled, program, location),
         }
-    }
-
-    /// Enruta una región singular a su estrategia de remediación causal
-    /// (design ADR-5 REVISION 2, spec causal-remediation "Departure-
-    /// Reparameterization" trigger scenarios).
-    ///
-    /// Start-anchored (la región comienza dentro de la ventana de partida del
-    /// segmento — el cono del arranque FIJO): [`SingularityStrategy::Departure`]
-    /// con los límites que despejan el cono en ≤3 waypoints, computados sobre
-    /// la geometría real del robot. Interior: [`SingularityStrategy::Detour`]
-    /// (perturbación articular). Sin modelo cinemático o sin lever (MoveL),
-    /// degrada honestamente al Detour — la verificación fin-a-fin juzga.
-    fn singularity_strategy(
-        robot: Option<&SerialChain>,
-        compiled: Option<&CompiledPlan>,
-        program: &PlanningProgram,
-        segment_index: usize,
-        regions: &[ProblemRegion],
-        location: &Location,
-        start_joints: &[f64],
-    ) -> Option<SingularityStrategy> {
-        let waypoint = match location {
-            Location::Waypoint(wp) => *wp,
-            _ => return None,
-        };
-        let region = regions
-            .iter()
-            .find(|r| r.kind == RegionKind::Singularity && r.waypoint_range.contains(&waypoint))?;
-        let segment_start = compiled
-            .and_then(|plan| plan.segments.get(segment_index))
-            .map(|segment| segment.waypoint_range.start);
-        let start_anchored = segment_start
-            .is_some_and(|start| region.waypoint_range.start <= start + DEPARTURE_WINDOW);
-
-        if start_anchored {
-            let Some(chain) = robot else {
-                // Sin modelo cinemático no hay límites que computar — el
-                // Detour degrada y la verificación fin-a-fin decide.
-                return Some(SingularityStrategy::Detour {
-                    perturbation: DEFAULT_PERTURBATION,
-                });
-            };
-            let Some(MotionSegment::MoveJ { target, .. }) = program.segments.get(segment_index)
-            else {
-                // MoveL start-anchored: no hay límites de movimiento que subir
-                // (el cono del arranque fijo de un MoveL es M4 scope).
-                return Some(SingularityStrategy::Detour {
-                    perturbation: DEFAULT_PERTURBATION,
-                });
-            };
-            // P1 (4R R1-1 / R4-2): the departure limits are clamped to the
-            // robot's PHYSICAL envelope AND re-verified for causal
-            // preservation — the clamped profile must still clear the cone
-            // within the departure window. When the physics cannot clear it
-            // within the envelope, `clamped_departure_limits` returns None
-            // and the operator degrades to the Detour: a clamped-but-failing
-            // Departure edit (reparación causal → clamp → trayectoria que ya
-            // no sale del cono) is NEVER emitted — the whole-region gate then
-            // honestly marks the recommendation `Unavailable { PlanningFailed }`.
-            match clamped_departure_limits(chain, start_joints, target, TIME_STEP) {
-                Some((max_velocity, max_acceleration)) => {
-                    return Some(SingularityStrategy::Departure {
-                        max_velocity,
-                        max_acceleration,
-                    });
-                }
-                None => {
-                    return Some(SingularityStrategy::Detour {
-                        perturbation: DEFAULT_PERTURBATION,
-                    });
-                }
-            }
-        }
-        Some(SingularityStrategy::Detour {
-            perturbation: DEFAULT_PERTURBATION,
-        })
     }
 
     /// Resuelve el segmento objetivo de una observación en el programa
@@ -1228,15 +1118,15 @@ mod tests {
         );
     }
 
-    // ── T12/T13 (M3): causal singularity remediation ────────────────────────
+    // ── T12/T13 (M4): causal singularity remediation (root-cause fix) ───────
     //
-    // Design ADR-5 REVISION 2: start-anchored singular regions (the segment
-    // departs from a FIXED singular start) get the DepartureReparameterizer;
-    // interior regions get the joint-space perturbation (SingularityDetour).
-    // The Scara's first waypoint can be non-singular (its prismatic Z column
-    // keeps the linear Jacobian full-rank at q2 = 0), so the grouped region
-    // starts ONE waypoint after the segment start — the trigger uses a
-    // departure window, not strict equality.
+    // Design ADR-5 REVISION 3: an INTERIOR singular region (the MoveJ path
+    // crosses the full extension mid-segment) is repaired by re-solving IK from
+    // the segment-start joints toward the SAME cartesian position, converging
+    // to the same-side elbow posture. The SingularityResolveMaterializer
+    // returns a clean 1:1 MoveJ replacement, so the existing projected_range
+    // (single target_index segment) stays correct and the whole-region gate
+    // verifies the re-solved posture clears every Singularity observation.
 
     fn singular_obs(id: u32, waypoint: usize) -> Observation {
         use thalos_core::analysis::observation::Severity;
@@ -1253,27 +1143,25 @@ mod tests {
     }
 
     #[test]
-    fn singularity_strategy_routes_start_anchored_to_departure_and_interior_to_detour() {
-        // Spec causal-remediation trigger scenarios: a region whose first
-        // waypoint sits within the segment's departure window → Departure
-        // (raise motion limits); a region deep inside the segment → Detour
-        // (joint-space perturbation).
+    fn singularity_crossing_recommendation_is_available_and_clears_the_region() {
+        // Root-cause fix (ADR-5 REVISION 3): a MoveJ whose target crosses the
+        // full extension produces Singularity observations mid-segment. The
+        // Singularity recommendation must be Available (the IK re-solve to the
+        // same-side elbow is a clean 1:1 replacement) AND applying it must
+        // leave the re-analyzed target region FREE of Singularity observations.
         use crate::motion::program::PlanningProgram;
         use thalos_core::ids::OperationId;
 
         let robot = RobotRegistry::create_default(RobotModel::Scara);
-        let program = PlanningProgram::new(vec![
-            MotionSegment::MoveJ {
-                origin: OperationId("j".to_string()),
-                target: vec![0.5, -0.3, -0.1, 0.0],
-                max_velocity: None,
-                max_acceleration: None,
-            },
-            move_l_segment(0),
-        ]);
-        let start = vec![0.0, 0.0, 0.0, 0.0];
+        let program = PlanningProgram::new(vec![MotionSegment::MoveJ {
+            origin: OperationId("op-j".to_string()),
+            target: vec![0.5, 0.6, -0.15, 0.0],
+            max_velocity: None,
+            max_acceleration: None,
+        }]);
+        let home = vec![0.0, -1.31, -0.1, 0.0];
         let solver = real_solver(&robot);
-        let state = RobotState::new(start.clone());
+        let state = RobotState::new(home.clone());
         let ctx = SegmentPlanningContext {
             robot: &robot,
             current_state: &state,
@@ -1281,47 +1169,70 @@ mod tests {
             tcp: None,
         };
         let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
-        let compiled = compiler.compile(&program, &ctx).expect("compile");
+        let compiled = compiler.compile(&program, &ctx).expect("original must compile");
 
-        // Start-anchored: singular observations at waypoints 0..4, inside the
-        // segment's departure window (segment 0 starts at waypoint 0).
-        let start_obs: Vec<Observation> = (0..5).map(|i| singular_obs((i + 1) as u32, i)).collect();
-        let regions = RegionGrouper::default().group(&start_obs);
-        let strategy = PlanAdvisor::singularity_strategy(
-            Some(&robot),
-            Some(&compiled),
-            &program,
-            0,
-            &regions,
-            &Location::Waypoint(0),
-            &start,
-        );
-        match strategy {
-            Some(SingularityStrategy::Departure {
-                max_acceleration: a, ..
-            }) => assert!(
-                a >= 6.0,
-                "the Scara departure must clear the cone with a >= ~6 rad/s^2, got {a}"
-            ),
-            other => panic!("start-anchored region must route to Departure, got {other:?}"),
-        }
-
-        // Interior: singular observations deep inside segment 0 (waypoints
-        // 100..104 — the segment spans 0..~200 waypoints).
-        let interior_obs: Vec<Observation> = (100..105).map(|i| singular_obs((i + 1) as u32, i)).collect();
-        let regions = RegionGrouper::default().group(&interior_obs);
-        let strategy = PlanAdvisor::singularity_strategy(
-            Some(&robot),
-            Some(&compiled),
-            &program,
-            0,
-            &regions,
-            &Location::Waypoint(100),
-            &start,
-        );
+        let artifact = ArtifactRef::MotionPlan(MotionPlanId("m4-crossing".to_string()));
+        let (_analysis, observations) = TrajectoryAnalyzer::new(&robot, None)
+            .analyze_with_observations(artifact, &compiled.merged_trajectory)
+            .expect("analysis must succeed");
+        let errors_before = observations
+            .iter()
+            .filter(|o| o.kind == ObservationKind::Singularity)
+            .count();
         assert!(
-            matches!(strategy, Some(SingularityStrategy::Detour { .. })),
-            "interior region must route to the joint-space Detour, got {strategy:?}"
+            errors_before > 0,
+            "precondition: the crossing target must produce Singularity observations (got {errors_before})"
+        );
+
+        let recommendations = PlanAdvisor.recommend_with_segment_context(
+            &observations,
+            &program,
+            &solver,
+            &compiled,
+            None,
+        );
+        let singularity = recommendations
+            .iter()
+            .find(|r| {
+                r.action.kind == ActionKind::Singularity
+                    && r.status == Some(RecommendationStatus::Available)
+            })
+            .expect("the crossing Singularity recommendation must be Available");
+
+        // The edit must be a clean 1:1 MoveJ replacement (not a split).
+        let ProgramEdit::ReplaceSegment {
+            index,
+            replacement,
+            ..
+        } = &singularity.edit
+        else {
+            panic!("a singularity edit must be ReplaceSegment");
+        };
+        assert_eq!(
+            replacement.len(),
+            1,
+            "the re-solve is a 1:1 replacement, not a segment split"
+        );
+
+        let edited = singularity
+            .edit
+            .apply(&program)
+            .expect("the available edit must apply");
+        let recompiled = compiler
+            .compile(&edited, &ctx)
+            .expect("the edited program must recompile");
+        let (_r2, reanalyzed) = TrajectoryAnalyzer::new(&robot, None)
+            .analyze_with_observations(
+                ArtifactRef::MotionPlan(MotionPlanId("m4-crossing-2".to_string())),
+                &recompiled.merged_trajectory,
+            )
+            .expect("reanalysis must succeed");
+
+        let range = recompiled.segments[*index].waypoint_range.clone();
+        assert_eq!(
+            region_singularity_observations(&reanalyzed, &range, *index == 0),
+            0,
+            "the re-solved posture must clear the whole target region of Singularity observations"
         );
     }
 
@@ -1413,118 +1324,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn singularity_available_requires_whole_region_clear_except_fixed_start() {
-        // End-to-end on the M3 Planar3R scenario: the fixed-start departure
-        // saturates the score (≥ 4 Errors); the Available remediation
-        // (departure reparameterization) must leave the recompiled target
-        // segment free of Singularity observations EXCEPT the irreducible
-        // fixed start (waypoint 0). This guards the strengthened gate against
-        // flipping the 24→1 result to Unavailable.
-        use thalos_core::analysis::observation::Severity;
-        use crate::analysis::TrajectoryAnalyzer;
-
-        let robot = RobotRegistry::create_default(RobotModel::Planar3R);
-        let program = crate::motion::program::PlanningProgram::new(vec![
-            MotionSegment::MoveJ {
-                origin: thalos_core::ids::OperationId("op-j".to_string()),
-                target: vec![0.5, -0.3, 0.1],
-                max_velocity: None,
-                max_acceleration: None,
-            },
-            move_l_segment(0),
-        ]);
-        let start = vec![0.0, 0.0, 0.0];
-        let solver = real_solver(&robot);
-        let state = RobotState::new(start.clone());
-        let ctx = SegmentPlanningContext {
-            robot: &robot,
-            current_state: &state,
-            ik_solver: &solver,
-            tcp: None,
-        };
-        let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
-        let compiled = compiler.compile(&program, &ctx).expect("original must compile");
-
-        let artifact = ArtifactRef::MotionPlan(MotionPlanId("m3-whole-region".to_string()));
-        let (_analysis, observations) = TrajectoryAnalyzer::new(&robot, None)
-            .analyze_with_observations(artifact, &compiled.merged_trajectory)
-            .expect("analysis must succeed");
-        let errors_before = observations
-            .iter()
-            .filter(|o| o.kind == ObservationKind::Singularity)
-            .count();
-        assert!(
-            errors_before >= 4,
-            "precondition: the fixed-start departure must saturate the score (got {errors_before} Errors)"
-        );
-
-        let recommendations = PlanAdvisor.recommend_with_segment_context(
-            &observations,
-            &program,
-            &solver,
-            &compiled,
-            None,
-        );
-        let singularity = recommendations
-            .iter()
-            .find(|r| {
-                r.action.kind == ActionKind::Singularity
-                    && r.status == Some(RecommendationStatus::Available)
-            })
-            .expect(
-                "the departure remediation must stay Available under the strengthened gate (24→1)",
-            );
-
-        let index = match singularity.edit {
-            ProgramEdit::ReplaceSegment { index, .. } => index,
-            _ => panic!("a singularity edit must be ReplaceSegment"),
-        };
-        let edited = singularity
-            .edit
-            .apply(&program)
-            .expect("the available edit must apply");
-        let recompiled = compiler
-            .compile(&edited, &ctx)
-            .expect("the edited program must recompile");
-        let (_r2, reanalyzed) = TrajectoryAnalyzer::new(&robot, None)
-            .analyze_with_observations(
-                ArtifactRef::MotionPlan(MotionPlanId("m3-whole-region-2".to_string())),
-                &recompiled.merged_trajectory,
-            )
-            .expect("reanalysis must succeed");
-
-        let range = recompiled.segments[index].waypoint_range.clone();
-        let raw: Vec<usize> = reanalyzed
-            .iter()
-            .filter_map(|o| {
-                if o.kind == ObservationKind::Singularity {
-                    if let Location::Waypoint(wp) = o.location {
-                        if range.contains(&wp) {
-                            return Some(wp);
-                        }
-                    }
-                }
-                None
-            })
-            .collect();
-        assert!(
-            raw.len() <= 1,
-            "the recompiled departure must leave AT MOST the fixed-start waypoint singular, got {raw:?}"
-        );
-        if let Some(wp) = raw.first() {
-            assert_eq!(
-                *wp, 0,
-                "the only remaining singularity must be the irreducible fixed start (waypoint 0), got {raw:?}"
-            );
-        }
-        assert_eq!(
-            region_singularity_observations(&reanalyzed, &range, index == 0),
-            0,
-            "the whole region must be free of Singularity observations once the fixed start is excluded"
-        );
-    }
-
     // ── R3-2 (P0): honest no-context arm ────────────────────────────────────
     //
     // The old `_ => (edit, Available, None)` arm claimed Available whenever
@@ -1536,13 +1335,18 @@ mod tests {
     //   Honest verdict: `None` (not evaluated), never a claimed Available.
 
     #[test]
-    fn base_compile_failure_marks_recommendation_unavailable_compile_failed() {
+    fn base_compile_failure_marks_recommendation_unavailable() {
         // R3-2: when the base program does not compile (real robot), the
-        // no-context arm must NOT claim Available — the D8 gate would let the
-        // user "fix" a program that cannot even compile.
+        // recommendation must NOT claim Available — the D8 gate would let the
+        // user "fix" a program that cannot even compile. With the
+        // SingularityResolve materializer, a MoveJ target far beyond the ±π
+        // joint limits fails its IK re-solve (the target position is
+        // unreachable from the segment start), so the honest verdict is
+        // `Unavailable { IkFailed }` — never Available.
         let robot = RobotRegistry::create_default(RobotModel::Planar2R);
         // MoveJ target far beyond the ±π joint limits → InvalidGoal → compile
-        // failure (NOT an IK failure — maps to CompileFailed).
+        // failure, AND the materializer's IK re-solve from the start cannot
+        // converge on that unreachable position.
         let program = crate::motion::program::PlanningProgram::new(vec![MotionSegment::MoveJ {
             origin: thalos_core::ids::OperationId("op-j".to_string()),
             target: vec![10.0, 10.0],
@@ -1581,8 +1385,8 @@ mod tests {
         );
         assert_eq!(
             singularity.reason,
-            Some(UnavailabilityReason::CompileFailed),
-            "the honest reason for an uncompilable base is compile_failed"
+            Some(UnavailabilityReason::IkFailed),
+            "the materializer's IK re-solve must fail on an unreachable target (ik_failed)"
         );
     }
 
@@ -1594,92 +1398,6 @@ mod tests {
     // threads the TCP into the verification context. An identity TCP at the
     // flange is semantically identical to no TCP, so the recommendations must
     // be identical — a deterministic behavioral proof the TCP flows through.
-
-    #[test]
-    fn physics_limited_departure_is_unavailable_not_a_clamped_lying_edit() {
-        // P1 (4R R1-1 / R4-2) end-to-end: a start-anchored departure whose
-        // cone cannot be cleared within the physical envelope ([0,0,0] →
-        // [0.5,0,0] on the Planar3R: ideal ~61 rad/s / ~1667 rad/s², far
-        // beyond the 30/900 ceiling — the WHOLE straight-extension line stays
-        // singular). The recommendation MUST be `Unavailable { PlanningFailed }`
-        // — NEVER an `Available` edit that looks valid but does not remove the
-        // singular condition (reparación causal → clamp → trayectoria que ya
-        // no sale del cono is forbidden).
-        let robot = RobotRegistry::create_default(RobotModel::Planar3R);
-        let program = crate::motion::program::PlanningProgram::new(vec![MotionSegment::MoveJ {
-            origin: thalos_core::ids::OperationId("op-j".to_string()),
-            target: vec![0.5, 0.0, 0.0],
-            max_velocity: None,
-            max_acceleration: None,
-        }]);
-        let start = vec![0.0, 0.0, 0.0];
-        let solver = real_solver(&robot);
-        let state = RobotState::new(start.clone());
-        let ctx = SegmentPlanningContext {
-            robot: &robot,
-            current_state: &state,
-            ik_solver: &solver,
-            tcp: None,
-        };
-        let compiled = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()))
-            .compile(&program, &ctx)
-            .expect("the base program must compile");
-        let artifact = ArtifactRef::MotionPlan(MotionPlanId("p1-physics".to_string()));
-        let (_analysis, observations) = TrajectoryAnalyzer::new(&robot, None)
-            .analyze_with_observations(artifact, &compiled.merged_trajectory)
-            .expect("analysis must succeed");
-        assert!(
-            observations
-                .iter()
-                .filter(|o| o.kind == ObservationKind::Singularity)
-                .count()
-                >= 4,
-            "precondition: the straight-extension departure must saturate the score"
-        );
-
-        let recommendations =
-            PlanAdvisor.recommend(&observations, &program, &solver, &start);
-        assert!(
-            !recommendations.iter().any(|r| {
-                r.action.kind == ActionKind::Singularity
-                    && r.status == Some(RecommendationStatus::Available)
-            }),
-            "a departure the physics cannot clear must NEVER be Available"
-        );
-        let singularity = recommendations
-            .iter()
-            .find(|r| r.action.kind == ActionKind::Singularity)
-            .expect("the singularity remediation must still be present");
-        assert_eq!(
-            singularity.status,
-            Some(RecommendationStatus::Unavailable),
-            "the honest outcome for a physics-limited departure is Unavailable"
-        );
-        assert_eq!(
-            singularity.reason,
-            Some(UnavailabilityReason::PlanningFailed),
-            "the honest reason is planning_failed — the region gate must reject the degraded edit"
-        );
-        // The edit must NOT be a clamped Departure: it carries no limits at
-        // all (the Detour keeps the original `None`), so nothing above the
-        // envelope can flow into a plan.
-        match &singularity.edit {
-            ProgramEdit::ReplaceSegment { replacement, .. } => match &replacement[0] {
-                MotionSegment::MoveJ {
-                    max_velocity,
-                    max_acceleration,
-                    ..
-                } => {
-                    assert!(
-                        max_velocity.is_none() && max_acceleration.is_none(),
-                        "the degraded edit must not carry clamped-but-failing departure limits"
-                    );
-                }
-                other => panic!("expected a MoveJ replacement, got {other:?}"),
-            },
-            other => panic!("expected ReplaceSegment, got {other:?}"),
-        }
-    }
 
     #[test]
     fn tcp_identity_at_flange_is_equivalent_to_no_tcp() {

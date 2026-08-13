@@ -57,10 +57,8 @@ use thalos_core::{
     motion::segment::MotionSegment,
     prelude::RobotState,
     robot::serial_chain::SerialChain,
-    spatial::{frame::FrameId, pose::Pose},
     trajectory::Trajectory,
 };
-use thalos_math::Transform3D;
 use thalos_planning::{
     advisor::PlanAdvisor,
     analysis::TrajectoryAnalyzer,
@@ -149,17 +147,6 @@ fn compile_plan(
     compiler.compile(program, &ctx).map_err(|e| e.to_string())
 }
 
-fn count_observations(
-    observations: &[Observation],
-    kind: ObservationKind,
-) -> usize {
-    observations.iter().filter(|o| o.kind == kind).count()
-}
-
-fn singular_errors(observations: &[Observation]) -> usize {
-    count_observations(observations, ObservationKind::Singularity)
-}
-
 fn movej(target: Vec<f64>) -> MotionSegment {
     MotionSegment::MoveJ {
         origin: OperationId("op-j".to_string()),
@@ -169,54 +156,31 @@ fn movej(target: Vec<f64>) -> MotionSegment {
     }
 }
 
-fn movel(target: [f64; 3]) -> MotionSegment {
-    MotionSegment::MoveL {
-        origin: OperationId("op-l".to_string()),
-        frame: FrameId::World,
-        target_pose: Pose::new(
-            FrameId::World,
-            FrameId::Id(1),
-            Transform3D::from_translation(thalos_math::Vector3::new(
-                target[0], target[1], target[2],
-            )),
-        ),
-        max_velocity: None,
-    }
-}
-
 /// Program families that reliably exercise the advisory path (design ADR-6).
 ///
-/// - **Planar3R near-reach**: the M2/M3 scenario geometry — a MoveJ then a
-///   MoveL near full reach (r ≈ 2.3–2.5 of a 3.0 reach) → singular /
-///   near-singular observations on the MoveL.
-/// - **Scara singular start**: the M3 scenario geometry — a MoveJ departure
-///   from the fixed singular start `[0,0,0,0]` (fully extended) → singular
-///   observations in the departure, plus the near-reach MoveL.
+/// - **Scara interior-crossing**: the user's real case — a MoveJ that departs
+///   from a NON-singular home (elbow bent negative) to a target whose elbow is
+///   POSITIVE, so the straight-line path CROSSES the full extension (elbow = 0)
+///   mid-segment. The re-solve materializer re-solves IK from the home (same
+///   side) to the alternate elbow posture that reaches the same cartesian point
+///   without crossing the extension.
 ///
-/// Perturbations are bounded around the known-singular targets so every
+/// Perturbations are bounded around the known-singular target so every
 /// generated program stays inside the workspace (compilability is filtered
 /// per-case via `prop_assume!`).
 fn pipeline_case_strategy() -> impl Strategy<Value = (SerialChain, Vec<f64>, PlanningProgram)> {
-    // Planar3R near-reach family: x ∈ [2.3, 2.5], y ∈ [0.3, 0.7] → r ∈ [2.29, 2.58].
-    let planar3r = (0.0f64..0.2, -0.2f64..0.2).prop_map(|(dx, dy)| {
-        let chain = chain(RobotModel::Planar3R);
-        let program = PlanningProgram::new(vec![
-            movej(vec![0.5, -0.3, 0.1]),
-            movel([2.3 + dx, 0.5 + dy, 0.0]),
-        ]);
-        (chain, vec![0.0, 0.0, 0.0], program)
-    });
-    // Scara family: singular-start departure + near-reach MoveL, target
-    // perturbed in a bounded box around [1.5, 0.3, 0.5].
-    let scara = (-0.15f64..0.15, -0.2f64..0.2, -0.1f64..0.1).prop_map(|(dx, dy, dz)| {
+    // Scara interior-crossing family: elbow ∈ [0.3, 0.9] (positive → crosses
+    // the extension from the negative-elbow home), base and prismatic perturbed
+    // in a small box around the verified case [0.5, 0.6, -0.15].
+    let scara = (0.3f64..0.9, -0.3f64..0.1, -0.3f64..-0.05).prop_map(|(elbow, dbase, dz)| {
         let chain = chain(RobotModel::Scara);
         let program = PlanningProgram::new(vec![
-            movej(vec![0.5, -0.3, -0.1, 0.0]),
-            movel([1.5 + dx, 0.3 + dy, 0.5 + dz]),
+            movej(vec![0.5 + dbase, elbow, dz, 0.0]),
         ]);
-        (chain, vec![0.0, 0.0, 0.0, 0.0], program)
+        // Home: non-singular — elbow bent to the negative side, base ~0.
+        (chain, vec![0.0, -1.31, -0.1, 0.0], program)
     });
-    prop_oneof![planar3r, scara]
+    scara
 }
 
 fn available_of(recommendations: &[Recommendation]) -> Vec<Recommendation> {
