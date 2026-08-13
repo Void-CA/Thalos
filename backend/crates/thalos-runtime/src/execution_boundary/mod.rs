@@ -20,6 +20,7 @@
 
 pub mod manifest;
 pub mod manifest_builder;
+pub mod safety_envelope;
 pub mod sample;
 
 pub use manifest::{

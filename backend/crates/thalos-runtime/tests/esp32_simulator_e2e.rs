@@ -52,11 +52,20 @@ const SAMPLE_STEP_US: u64 = 200_000;
 
 /// A 3-waypoint, 6-DOF plan (joints in radians). All waypoints share the
 /// same DOF so the manifest is valid and every collected sample has 6 joints.
+///
+/// M3 contract correction (ADR-5 parity): the backend manifest builder now
+/// applies the firmware `check_physical_envelope` to the FIRST min(dof, 4)
+/// joints — exactly like the firmware validator. Joint 3 maps to the
+/// prismatic channel envelope [0, 0.06] rad, so the fixture's joint 3 moves
+/// 0.01 → 0.03 → 0.05 (the pre-M3 −0.1/0.1/0.4/0.3 values are out-of-envelope
+/// and would be REJECTED by the real firmware too). Joints 4–5 have no
+/// firmware channel authority and stay unconstrained (parity). The E2E
+/// assertions cover upload/collect flow and trace timestamps — unchanged.
 fn six_dof_waypoints() -> Vec<Vec<f64>> {
     vec![
-        vec![0.0, 0.1, 0.2, -0.1, 0.3, 0.05],
-        vec![0.2, 0.15, 0.4, 0.1, 0.1, 0.2],
-        vec![0.5, 0.3, 0.1, 0.4, 0.6, 0.0],
+        vec![0.0, 0.1, 0.2, 0.01, 0.3, 0.05],
+        vec![0.2, 0.15, 0.4, 0.03, 0.1, 0.2],
+        vec![0.5, 0.3, 0.1, 0.05, 0.6, 0.0],
     ]
 }
 

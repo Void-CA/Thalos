@@ -143,7 +143,10 @@ async fn plan_compile_then_esp32_execute() {
     let compiler = PlanCompiler::new(Box::new(DefaultPlannerDispatcher::default()));
 
     // ── 2. Compile ──────────────────────────────────────────────────────
-    let plan = compile_movej_program(&compiler, vec![vec![0.5, -0.3], vec![1.0, 0.8]], &ctx);
+    // M3 contract correction: the first target's elbow is 0.3 (the pre-M3
+    // −0.3 is out of the firmware elbow envelope [0, 2.0944] — the backend
+    // now applies the firmware physical checks to compiled plans).
+    let plan = compile_movej_program(&compiler, vec![vec![0.5, 0.3], vec![1.0, 0.8]], &ctx);
 
     // Verify compilation integrity
     assert!(

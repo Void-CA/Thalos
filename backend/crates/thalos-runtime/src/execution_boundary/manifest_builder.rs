@@ -10,6 +10,7 @@
 
 use thalos_core::execution::plan::{BuilderError, ExecutionInstruction, ExecutionPlan};
 
+use crate::execution_boundary::safety_envelope::SafetyEnvelope;
 use crate::execution_boundary::{
     ExecutionManifest, ManifestInstruction, ManifestMetadata, ManifestSegment, TimedWaypoint,
 };
@@ -151,6 +152,39 @@ impl ExecutionManifestBuilder {
             return Err(BuilderError::Validation("TIMING_INVALID".to_string()));
         }
 
+        // 7. INVALID_JOINT — every waypoint joint inside the firmware
+        //    SafetyEnvelope position limits (ADR-5 parity with the firmware
+        //    validator's `check_physical_envelope`; spec test 11). The Rust
+        //    mirror `SafetyEnvelope` holds the SAME values as
+        //    `firmware/esp32/src/servo_config.h` — the backend rejects at the
+        //    exact limits the firmware enforces.
+        for sample in &manifest.samples {
+            SafetyEnvelope::check_joints(&sample.joints)
+                .map_err(|_| BuilderError::Validation("INVALID_JOINT".to_string()))?;
+        }
+
+        // 8. VELOCITY_EXCEEDED — implied velocity Δq/Δt ≤ the channel ceiling
+        //    for dt > 0 gaps (ADR-5 / spec `backend_dt_us_zero_velocity_bounded`).
+        //    dt_us == 0 makes physical velocity UNDEFINED (Δt = 0): the gap is
+        //    skipped and the FIRMWARE executor velocity-bounds advancement
+        //    (ADR-3 — dt_us==0 is PROTOCOL SEMANTICS, firmware-authoritative
+        //    for velocity-bounding; the backend does NOT infer host velocity).
+        for pair in manifest.samples.windows(2) {
+            let dt = pair[1].dt_us;
+            if dt == 0 {
+                continue;
+            }
+            let delta_q: Vec<f64> = pair[1]
+                .joints
+                .iter()
+                .zip(&pair[0].joints)
+                .map(|(a, b)| a - b)
+                .collect();
+            SafetyEnvelope::check_gap_velocity(&delta_q, dt).map_err(|_| {
+                BuilderError::Validation("VELOCITY_EXCEEDED".to_string())
+            })?;
+        }
+
         Ok(())
     }
 }
@@ -160,6 +194,8 @@ mod tests {
     use std::ops::Range;
 
     use thalos_core::execution::plan::{ExecutionInstruction, ExecutionSegment, ExecutionWaypoint};
+
+    use crate::execution_boundary::safety_envelope::SafetyEnvelope;
 
     use super::*;
 
@@ -233,7 +269,10 @@ mod tests {
     }
 
     /// `metadata.duration_us` MUST be within 1% of `plan.duration * 1e6`
-    /// (here: within 1% of 2_000_000 for a 2.0 s plan).
+    /// (here: within 1% of 2_000_000 for a 2.0 s plan). Joints are kept
+    /// INSIDE the firmware SafetyEnvelope (M3 physical checks): the base
+    /// ceiling is +1.5708 rad, so the final waypoint uses 1.4 rad instead of
+    /// the pre-M3 2.0 rad — the TIMING rule under test is unchanged.
     #[test]
     fn manifest_duration_matches_plan() {
         let p = plan(
@@ -241,7 +280,7 @@ mod tests {
                 wp(vec![0.0, 0.0], 0.0),
                 wp(vec![0.5, 0.5], 0.5),
                 wp(vec![1.0, 1.0], 1.0),
-                wp(vec![2.0, 2.0], 2.0),
+                wp(vec![1.4, 1.4], 2.0),
             ],
             vec![seg(0, 0, ExecutionInstruction::MoveJ, 0..4)],
             2.0,
@@ -472,13 +511,15 @@ mod tests {
 
     /// Rule 6c — the timing tolerance has a 1000 µs floor: on a 0.05 s plan the
     /// 1% allowance is 500 µs, so a 600 µs drift passes ONLY via the floor.
+    /// Joints are small (0.02 rad per 0.0247 s gap ≈ 0.81 rad/s) so the M3
+    /// velocity check (rule 8) does not shadow the TIMING rule under test.
     #[test]
     fn timing_min_tolerance_floor_applied() {
         let p = plan(
             vec![
                 wp(vec![0.0, 0.0], 0.0),
-                wp(vec![0.5, 0.5], 0.0247),
-                wp(vec![1.0, 1.0], 0.0494),
+                wp(vec![0.02, 0.02], 0.0247),
+                wp(vec![0.04, 0.04], 0.0494),
             ],
             vec![seg(0, 0, ExecutionInstruction::MoveJ, 0..3)],
             0.05,
@@ -492,6 +533,216 @@ mod tests {
             manifest.metadata.duration_us / 100,
             500,
             "1% allowance < floor"
+        );
+    }
+
+    // ── M3: physical-envelope checks (ADR-5 parity with the firmware validator) ──
+
+    /// 4-DOF (RRPR icebot) waypoint — every joint inside its channel envelope.
+    fn icebot_wp(joints: [f64; 4], timestamp: f64) -> ExecutionWaypoint {
+        ExecutionWaypoint {
+            joints: joints.to_vec(),
+            timestamp,
+        }
+    }
+
+    fn icebot_plan(waypoints: Vec<ExecutionWaypoint>, duration: f64) -> ExecutionPlan {
+        let n = waypoints.len();
+        plan(
+            waypoints,
+            vec![seg(0, 0, ExecutionInstruction::MoveJ, 0..n)],
+            duration,
+        )
+    }
+
+    /// Rule 7 (spec scenario `backend_manifest_out_of_envelope_rejected`,
+    /// firmware test 11): a manifest whose waypoint joints are outside the
+    /// firmware SafetyEnvelope (base at 2.5 rad > +1.5708) MUST be rejected
+    /// with the firmware diagnostic code INVALID_JOINT — never clamped.
+    #[test]
+    fn physical_envelope_violation_rejected() {
+        let p = icebot_plan(
+            vec![
+                icebot_wp([0.0, 0.0, 0.0, 0.01], 0.0),
+                icebot_wp([2.5, 0.5, 0.5, 0.02], 0.5), // base 2.5 rad — out of ±1.5708
+                icebot_wp([0.0, 0.0, 0.0, 0.01], 1.0),
+            ],
+            1.0,
+        );
+
+        let err = ExecutionManifestBuilder::build(&p).expect_err("build must fail");
+        assert!(
+            matches!(err, BuilderError::Validation(ref code) if code == "INVALID_JOINT"),
+            "expected INVALID_JOINT, got {err:?}"
+        );
+    }
+
+    /// Rule 7 — the elbow envelope is asymmetric (0..2.0944): a negative elbow
+    /// joint is out-of-envelope even when |q| is small.
+    #[test]
+    fn physical_envelope_rejects_negative_elbow() {
+        let p = icebot_plan(
+            vec![
+                icebot_wp([0.0, 0.0, 0.0, 0.01], 0.0),
+                icebot_wp([0.5, -0.1, 0.0, 0.02], 0.5), // elbow −0.1 < 0.0
+                icebot_wp([0.0, 0.0, 0.0, 0.01], 1.0),
+            ],
+            1.0,
+        );
+
+        let err = ExecutionManifestBuilder::build(&p).expect_err("build must fail");
+        assert!(
+            matches!(err, BuilderError::Validation(ref code) if code == "INVALID_JOINT"),
+            "expected INVALID_JOINT, got {err:?}"
+        );
+    }
+
+    /// Rule 8 — implied velocity Δq/Δt must be ≤ the channel ceiling: base
+    /// 1.0 rad over 0.5 s = 2.0 rad/s > 1.0 ceiling → VELOCITY_EXCEEDED.
+    #[test]
+    fn implied_velocity_exceeds_envelope_rejected() {
+        let p = icebot_plan(
+            vec![
+                icebot_wp([0.0, 0.0, 0.0, 0.01], 0.0),
+                icebot_wp([1.0, 0.1, 0.1, 0.02], 0.5), // base Δq = 1.0 over 0.5 s
+                icebot_wp([0.0, 0.0, 0.0, 0.01], 1.0),
+            ],
+            1.0,
+        );
+
+        let err = ExecutionManifestBuilder::build(&p).expect_err("build must fail");
+        assert!(
+            matches!(err, BuilderError::Validation(ref code) if code == "VELOCITY_EXCEEDED"),
+            "expected VELOCITY_EXCEEDED, got {err:?}"
+        );
+    }
+
+    /// Rule 8 — dt_us == 0 makes physical velocity UNDEFINED (Δt = 0): the
+    /// backend MUST NOT reject the manifest, the firmware executor
+    /// velocity-bounds advancement (ADR-3, dt_us==0 PROTOCOL SEMANTICS —
+    /// firmware-authoritative). A hand-built manifest with a huge joint jump
+    /// and all-zero dt_us must still validate on timing/velocity (structure
+    /// rules still apply).
+    #[test]
+    fn zero_dt_velocity_skipped_firmware_authoritative() {
+        let mut m = two_segment_manifest();
+        // Forge the degenerate all-zero-dt shape: same joints as the fixture
+        // (all inside the envelope) but every dt_us = 0.
+        for s in m.samples.iter_mut() {
+            s.dt_us = 0;
+        }
+        m.metadata.duration_us = 0;
+
+        // Position is fine; velocity is UNDEFINED (dt = 0) → must NOT reject.
+        ExecutionManifestBuilder::validate(&m).expect("all-zero dt must not reject");
+    }
+
+    /// ADR-6 (spec `planner_valid_movej_accepted_by_firmware`,
+    /// PlannerAccepted ⇒ FirmwareAcceptable): a movej the planner accepts
+    /// (joints within envelope, requested velocity within ceilings) MUST
+    /// produce a manifest every position waypoint AND every implied velocity
+    /// the firmware SafetyEnvelope accepts. The converse is NOT required.
+    #[test]
+    fn planner_accepted_movej_is_firmware_acceptable() {
+        // Planner-accepted movej: base/elbow/wrist 0→1.0 rad at 1.0 rad/s,
+        // prismatic 0.01→0.03 at 0.04 m/s — all within the envelope.
+        let p = icebot_plan(
+            vec![
+                icebot_wp([0.0, 0.0, 0.0, 0.01], 0.0),
+                icebot_wp([1.0, 1.0, 1.0, 0.03], 1.0),
+            ],
+            1.0,
+        );
+
+        let manifest = ExecutionManifestBuilder::build(&p).expect("planner-accepted movej builds");
+
+        // Position: every waypoint inside the firmware SafetyEnvelope.
+        for (i, sample) in manifest.samples.iter().enumerate() {
+            SafetyEnvelope::check_joints(&sample.joints)
+                .unwrap_or_else(|v| panic!("sample {i} out of firmware envelope: {v}"));
+        }
+        // Implied velocity: Δq/Δt ≤ ceiling for every dt > 0 gap.
+        for (i, pair) in manifest.samples.windows(2).enumerate() {
+            let dt = pair[1].dt_us;
+            if dt == 0 {
+                continue; // undefined velocity — firmware-authoritative
+            }
+            let delta_q: Vec<f64> = pair[1]
+                .joints
+                .iter()
+                .zip(&pair[0].joints)
+                .map(|(q1, q0)| q1 - q0)
+                .collect();
+            SafetyEnvelope::check_gap_velocity(&delta_q, dt)
+                .unwrap_or_else(|v| panic!("gap {i} exceeds firmware velocity ceiling: {v}"));
+        }
+    }
+
+    /// ADR-6 (spec `remediation_profile_accepted_by_firmware`): a remediation
+    /// trajectory (PhysicalEnvelope-bounded, 1.0 rad/s / 600 rad/s² ceilings)
+    /// must also produce a firmware-acceptable manifest.
+    #[test]
+    fn remediation_profile_is_firmware_acceptable() {
+        // Clamped_departure_limits-style profile: base 0 → 1.0 rad in 1.0 s.
+        let p = icebot_plan(
+            vec![
+                icebot_wp([0.0, 0.0, 0.0, 0.01], 0.0),
+                icebot_wp([0.5, 0.5, 0.5, 0.02], 0.5),
+                icebot_wp([1.0, 1.0, 1.0, 0.03], 1.0),
+            ],
+            1.0,
+        );
+
+        let manifest = ExecutionManifestBuilder::build(&p).expect("remediation profile builds");
+        for sample in &manifest.samples {
+            SafetyEnvelope::check_joints(&sample.joints).expect("remediation joint in envelope");
+        }
+        // The 0.5 s gaps imply 1.0 rad/s for revolute joints — at the ceiling.
+        assert_eq!(manifest.samples[1].dt_us, 500_000);
+    }
+
+    /// ADR-2 / spec `No Silent Mutation` (Correction F): an out-of-envelope
+    /// joint MUST be REJECTED, never silently clamped to the envelope. The
+    /// builder returns an error — no manifest with modified joints exists.
+    #[test]
+    fn out_of_envelope_joint_rejected_never_clamped() {
+        // base requested at 2.0 rad (would have been clamped to 1.5708 on
+        // pre-change code) — must be an explicit rejection.
+        let p = icebot_plan(
+            vec![
+                icebot_wp([0.0, 0.0, 0.0, 0.01], 0.0),
+                icebot_wp([2.0, 0.5, 0.5, 0.02], 0.5),
+                icebot_wp([0.0, 0.0, 0.0, 0.01], 1.0),
+            ],
+            1.0,
+        );
+
+        let err = ExecutionManifestBuilder::build(&p).expect_err("build must reject, never clamp");
+        assert!(
+            matches!(err, BuilderError::Validation(ref code) if code == "INVALID_JOINT"),
+            "expected explicit INVALID_JOINT rejection, got {err:?}"
+        );
+    }
+
+    /// ADR-2 no-silent-mutation (backend half): `validate()` on a hand-built
+    /// manifest MUST return the error AND leave the input manifest bit-exact —
+    /// the reject path never rewrites joints into the envelope.
+    #[test]
+    fn validate_rejects_out_of_envelope_without_mutating_input() {
+        let mut m = two_segment_manifest();
+        // Corrupt ONLY the middle sample's base joint (in place).
+        m.samples[1].joints[0] = 2.0; // > +1.5708
+
+        let err = ExecutionManifestBuilder::validate(&m).expect_err("must reject");
+        assert!(
+            matches!(err, BuilderError::Validation(ref code) if code == "INVALID_JOINT"),
+            "expected INVALID_JOINT, got {err:?}"
+        );
+
+        // The input was NOT silently clamped to 1.5708 — it still holds 2.0.
+        assert_eq!(
+            m.samples[1].joints[0], 2.0,
+            "validate() must never mutate the manifest joints"
         );
     }
 }

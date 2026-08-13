@@ -119,6 +119,15 @@ impl Esp32Backend {
         // (`duration_us` = 0) that the firmware validator accepts (timing
         // diff 0 <= 1000 µs floor). Bypass the builder and reproduce that
         // output exactly.
+        //
+        // M3 (ADR-3/ADR-5): this all-dt_us==0 output is NOT an instant-jump
+        // plan. dt_us==0 makes physical velocity v = Δq/Δt UNDEFINED — the
+        // manifest carries NO timing claim the executor could read as a jump.
+        // Velocity-bounding is FIRMWARE-AUTHORITATIVE: the executor controls
+        // advancement as max_velocity × elapsed_real_time and steps at most
+        // one dt_us==0 waypoint per update (PROTOCOL SEMANTICS, documented in
+        // docs/protocol/esp32-execution.md). The backend never infers host
+        // velocity from Δq over a zero dt.
         if total_samples > 1 && dt_per_sample == 0 {
             return ExecutionManifest {
                 metadata: ManifestMetadata {
@@ -565,6 +574,7 @@ mod tests {
     use crate::backends::transport::{FakeTransport, TransportError};
     use crate::execution_boundary::manifest::ManifestInstruction;
     use crate::execution_boundary::manifest_builder::ExecutionManifestBuilder;
+    use crate::execution_boundary::safety_envelope::SafetyEnvelope;
     use thalos_core::execution::plan::{
         ExecutionInstruction, ExecutionPlan, ExecutionSegment, ExecutionWaypoint,
     };
@@ -1061,6 +1071,50 @@ mod tests {
         // Every sample retains its original commanded joints — nothing collapsed.
         for (sample, expected) in manifest.samples.iter().zip(&waypoints) {
             assert_eq!(sample.joints, *expected);
+        }
+    }
+
+    /// M3 no-instant-jump contract (spec `backend_dt_us_zero_velocity_bounded`,
+    /// ADR-3/ADR-5): the degenerate all-dt_us==0 branch MUST NOT produce a plan
+    /// the executor could read as an instant jump. The manifest carries NO
+    /// Δq/Δt timing claim (every dt_us == 0, duration_us == 0) — physical
+    /// velocity is UNDEFINED, so the firmware executor velocity-bounds
+    /// advancement (max_velocity × elapsed real time, one waypoint per
+    /// update). The backend never emits a fabricated dt that implies a jump.
+    #[test]
+    fn degenerate_zero_dt_manifest_has_no_instant_jump_timing_claim() {
+        // 4 distinct commanded joints over a sub-microsecond duration.
+        let waypoints = vec![
+            vec![0.0, 0.0, 0.0, 0.01],
+            vec![0.5, 0.5, 0.5, 0.02],
+            vec![1.0, 1.0, 1.0, 0.03],
+        ];
+        let manifest = Esp32Backend::build_manifest(&waypoints, 1.5e-6);
+
+        // Every gap is dt_us == 0: no sample pair carries an implied Δq/Δt.
+        assert_eq!(manifest.metadata.duration_us, 0, "no duration claim");
+        for (i, sample) in manifest.samples.iter().enumerate() {
+            assert_eq!(
+                sample.dt_us, 0,
+                "sample {i} must not fabricate a timing claim (instant-jump read)"
+            );
+        }
+        // All commanded joints preserved — the firmware velocity-bounds each
+        // waypoint in turn; nothing is collapsed or re-timed by the backend.
+        for (sample, expected) in manifest.samples.iter().zip(&waypoints) {
+            assert_eq!(sample.joints, *expected);
+        }
+        // And the mirror's velocity check treats dt==0 as UNDEFINED (skipped):
+        // the same manifest passes the backend's physical validation.
+        for pair in manifest.samples.windows(2) {
+            let delta_q: Vec<f64> = pair[1]
+                .joints
+                .iter()
+                .zip(&pair[0].joints)
+                .map(|(a, b)| a - b)
+                .collect();
+            SafetyEnvelope::check_gap_velocity(&delta_q, pair[1].dt_us)
+                .expect("dt==0 velocity must be skipped (firmware-authoritative)");
         }
     }
 
