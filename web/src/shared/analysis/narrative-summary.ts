@@ -26,7 +26,7 @@ import { evidenceDirection, evidenceReading, humanizeKey } from './evidence'
 export interface NarrativeFactor {
   /** Evidence key — MUST exist in `AssessmentWire.evidence` (traceability). */
   key: string
-  /** Human-readable chip label, e.g. "Very high trajectory complexity". */
+  /** Human-readable chip label, e.g. "Low manipulability". */
   label: string
 }
 

@@ -6,11 +6,11 @@
  * Thresholds are pinned to the thalos-intelligence KB (backend
  * `crates/thalos-intelligence/src/kb.rs`), NOT re-derived:
  *  - manipulability < 0.3 → low (MANIPULABILITY_LOW_THRESHOLD);
- *  - singularity_proximity: (near + singular) / waypoints, 0..1; high set
- *    ramps from 0.2/0.3 (Near ≥ 0.3);
+ *  - singularity_proximity: LOCALIZED presence score from the analyzer's
+ *    observations — 0.0 = absent, 0.15 = near-singular only, 0.5 = a singular
+ *    event was detected (NOT a waypoint fraction);
  *  - collision_clearance: min_collision_distance in METERS; danger at ≤ 0.0,
- *    near up to 0.05 (NEAR_COLLISION_DISTANCE), safe ≥ 0.05;
- *  - trajectory_complexity: waypoints / duration; high set starts at 10.
+ *    near up to 0.05 (NEAR_COLLISION_DISTANCE), safe ≥ 0.05.
  *
  * These bands are PRESENTATION semantics (honest, threshold-anchored) — the
  * raw value always stays visible next to the reading.
@@ -26,7 +26,7 @@ export interface EvidenceReading {
   reading: string
   /** Semantic tone for coloring (green / amber / red). */
   tone: EvidenceTone
-  /** Full factor-chip label, e.g. "Very high trajectory complexity". */
+  /** Full factor-chip label, e.g. "Low manipulability". */
   chipLabel: string
   /** Narrative phrase, e.g. "trajectory complexity is very high". */
   phrase: string
@@ -63,13 +63,13 @@ const VARIABLES: Record<string, VariableConfig> = {
     ],
   },
   singularity_proximity: {
-    label: 'Singularity proximity',
+    label: 'Singularity',
     direction: 1,
     unit: null,
     bands: [
-      { min: 0.3, reading: 'Near', tone: 'danger', chip: 'Near singularity', phrase: 'singularity proximity is high' },
-      { min: 0.1, reading: 'Moderate', tone: 'warn', chip: 'Moderate singularity proximity', phrase: 'singularity proximity is moderate' },
-      { min: -Infinity, reading: 'Low', tone: 'good', chip: 'Low singularity proximity', phrase: 'singularity proximity is low' },
+      { min: 0.3, reading: 'Singular', tone: 'danger', chip: 'Singular event', phrase: 'a singular event was detected' },
+      { min: 0.1, reading: 'Near', tone: 'warn', chip: 'Near singularity', phrase: 'singularity proximity is elevated' },
+      { min: -Infinity, reading: 'None', tone: 'good', chip: 'No singularity', phrase: 'no singularity proximity' },
     ],
   },
   collision_clearance: {
@@ -82,24 +82,13 @@ const VARIABLES: Record<string, VariableConfig> = {
       { min: -Infinity, reading: 'Danger', tone: 'danger', chip: 'Collision danger', phrase: 'there is no collision clearance' },
     ],
   },
-  trajectory_complexity: {
-    label: 'Trajectory complexity',
-    direction: 1,
-    unit: null,
-    bands: [
-      { min: 10, reading: 'Very high', tone: 'danger', chip: 'Very high trajectory complexity', phrase: 'trajectory complexity is very high' },
-      { min: 5, reading: 'Moderate', tone: 'warn', chip: 'Moderate trajectory complexity', phrase: 'trajectory complexity is moderate' },
-      { min: -Infinity, reading: 'Low', tone: 'good', chip: 'Low trajectory complexity', phrase: 'trajectory complexity is low' },
-    ],
-  },
 }
 
-/** The four canonical evidence variables in display order. */
+/** The three canonical evidence variables in display order. */
 export const VARIABLE_ORDER: readonly string[] = [
   'manipulability',
   'singularity_proximity',
   'collision_clearance',
-  'trajectory_complexity',
 ]
 
 /** Human reading of one evidence entry, or `null` when the key is unknown —
@@ -139,5 +128,7 @@ export function variableLabel(raw: string): string {
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/_/g, ' ')
     .toLowerCase()
-  return VARIABLES[normalized]?.label ?? humanizeKey(normalized)
+  // Lookup key is the canonical snake_case wire form (space-separated → _).
+  const lookup = normalized.replace(/ /g, '_')
+  return VARIABLES[lookup]?.label ?? humanizeKey(normalized)
 }

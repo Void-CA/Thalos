@@ -167,11 +167,12 @@ fn same_scale_observations_vs_fallback() {
 #[test]
 fn healthy_dense_trajectory_stays_low() {
     // Spec "Behavior Test — Healthy Dense Trajectory Not Promoted": a healthy
-    // dense trajectory (high manipulability, safe clearance, 100 waypoints, no
+    // dense trajectory (high manipulability, safe clearance, ~100 waypoints per
+    // second — the real-pipeline density that fired R06, e.g. 392/3.9, no
     // observations) must stay Risk::Low — the removed R06 / complexity signal
     // cannot promote it, and no complexity/trajectory rule fires.
     let assessment = Assessor::assess(&report(BTreeMap::from([
-        ("waypoint_count".to_string(), 100.0),
+        ("waypoint_count".to_string(), 1000.0),
         ("trajectory_duration".to_string(), 10.0),
         ("avg_manipulability".to_string(), 0.9),
         ("near_singular_count".to_string(), 0.0),

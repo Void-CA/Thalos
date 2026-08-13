@@ -20,7 +20,7 @@ import { evidenceDirection, evidenceReading, type EvidenceTone } from './evidenc
 export interface FactorRow {
   /** Evidence key — MUST exist in the input evidence (traceability). */
   key: string
-  /** Human factor label, e.g. "Very high trajectory complexity". */
+  /** Human factor label, e.g. "Low manipulability". */
   label: string
   /** Raw wire value. */
   value: number
