@@ -179,3 +179,36 @@ describe('assessment (additive delta, spec analysis-report-contract)', () => {
     expect(ids).toEqual(['R07_low_manipulability', 'R11_danger_zone'])
   })
 })
+
+describe('normalized_yoshikawa + manipulability_grade (additive delta, spec analysis-report-contract)', () => {
+  it('new backend payload carries normalized + grade per point', () => {
+    const report: AnalysisReportWire = {
+      ...baseReport(),
+      manipulability_series: [
+        { waypoint: 0, yoshikawa: 0.42, det_jtj: 0.18, normalized_yoshikawa: 0.21, manipulability_grade: 'medium' },
+        { waypoint: 1, yoshikawa: 0.05, normalized_yoshikawa: 0.02, manipulability_grade: 'low' },
+        { waypoint: 2, yoshikawa: 0.9, normalized_yoshikawa: 0.6, manipulability_grade: 'high' },
+      ],
+    }
+
+    expect(report.manipulability_series?.[0]?.normalized_yoshikawa).toBeCloseTo(0.21)
+    expect(report.manipulability_series?.[0]?.manipulability_grade).toBe('medium')
+    expect(report.manipulability_series?.[1]?.manipulability_grade).toBe('low')
+    expect(report.manipulability_series?.[2]?.manipulability_grade).toBe('high')
+    // Raw yoshikawa remains on the wire untouched (spec "raw yoshikawa stays").
+    expect(report.manipulability_series?.[2]?.yoshikawa).toBeCloseTo(0.9)
+  })
+
+  it('legacy payload omits the new fields (undefined = fallback signal)', () => {
+    const legacy: AnalysisReportWire = {
+      ...baseReport(),
+      manipulability_series: [{ waypoint: 0, yoshikawa: 0.42, det_jtj: 0.18 }],
+    }
+
+    // Absence IS the presence signal for the frontend fallback (grade None =
+    // legacy payload). Field must be undefined, never a fabricated value.
+    expect(legacy.manipulability_series?.[0]?.normalized_yoshikawa).toBeUndefined()
+    expect(legacy.manipulability_series?.[0]?.manipulability_grade).toBeUndefined()
+    expect(manipulabilitySeriesOf(legacy)).toHaveLength(1)
+  })
+})

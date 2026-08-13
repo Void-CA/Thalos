@@ -97,6 +97,17 @@ export interface ManipulabilityPointWire {
    *  backward compatibility: older backends omit it, so consumers must
    *  tolerate its absence). */
   det_jtj?: number
+  /** Dimensionless normalized Yoshikawa measure ∏σ′ᵢ (pre-SVD scaled
+   *  Jacobian, spec analysis-report-contract "Additive Normalized
+   *  Manipulability on Wire"). ADDITIVE — ABSENT on legacy payloads; the
+   *  frontend then computes its local fallback from `yoshikawa` + `L_ref`.
+   *  Absence is the signal — never a fabricated value. */
+  normalized_yoshikawa?: number
+  /** Backend-classified manipulability grade: "low" | "medium" | "high"
+   *  (constant dimensionless thresholds T_LOW/T_HIGH, identical for every
+   *  robot). ADDITIVE — `undefined` on legacy payloads triggers the
+   *  frontend fallback classification. */
+  manipulability_grade?: 'low' | 'medium' | 'high'
 }
 
 /** A remediation recommendation (spec recommendation-model "Wire Contract").
