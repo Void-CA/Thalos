@@ -53,6 +53,12 @@ vi.mock('@/features/sessions/api/session-api', async (importOriginal) => {
   return { ...actual, sessionApi: sessionsApiMocks }
 })
 
+// The /demos workspace fetches the catalog on mount — stub it so the router
+// renders the empty state without real HTTP (per-workspace behavior is covered
+// in features/demos/workspace.test.tsx).
+const demosApiMocks = vi.hoisted(() => ({ listDemos: vi.fn() }))
+vi.mock('@/features/demos/api', () => demosApiMocks)
+
 const compileResult: CompileResponse = {
   status: 'ok',
   validation: { errors: [], warnings: [] },
@@ -114,6 +120,8 @@ beforeEach(() => {
   viewportMetrics.mounts = 0
   viewportMetrics.unmounts = 0
   sessionsApiMocks.list.mockReset()
+  demosApiMocks.listDemos.mockReset()
+  demosApiMocks.listDemos.mockResolvedValue([])
   // Fresh workflow state per test (guards read these stores).
   useSceneStore.getState().reset()
   useSemanticEditor.getState().reset()
@@ -358,6 +366,14 @@ describe('router covers every registered workspace', () => {
     for (const entry of WORKSPACE_REGISTRY) {
       expect(VIEW_REGISTRY[entry.workspace]).toBeDefined()
     }
+  })
+
+  it('renders the Demos tool workspace at /demos (demos-workspace spec, kind tool route)', async () => {
+    seedPrerequisites()
+    renderRouter(['/demos'])
+    expect(await screen.findByRole('heading', { name: 'Demos' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Demos' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByTestId('viewport-stub')).toBeInTheDocument()
   })
 
   it.each(WORKSPACE_REGISTRY.filter((e) => !e.hidden))(

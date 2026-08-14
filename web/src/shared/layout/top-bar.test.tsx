@@ -16,11 +16,10 @@ import type { SceneData } from '@/features/viewport/types'
  *
  * The top-bar groups registry entries by kind: pipeline stage links first
  * (kind default 'stage'), a decorative divider, then auxiliary tool links
- * (kind 'tool'). P0-B reorg: the last tool entry (/analysis) was REMOVED —
- * Workspace Analysis is a Robot accordion tool now, so no tool group (and no
- * divider) renders. Guard state comes from the same registry + WorkflowState
- * contract the GuardedRoute enforces: an unmet requirement aria-disables the
- * link and prevents its click.
+ * (kind 'tool'). The Demos workspace (showcase-scenarios, D5) is the current
+ * tool entry — it renders after the divider. Guard state comes from the same
+ * registry + WorkflowState contract the GuardedRoute enforces: an unmet
+ * requirement aria-disables the link and prevents its click.
  */
 function seedFlags(opts: { robotLoaded?: boolean } = {}) {
   const { robotLoaded = true } = opts
@@ -48,8 +47,8 @@ beforeEach(() => {
 })
 afterEach(() => cleanup())
 
-describe('TopBar — pipeline stages only (P0-B reorg: no tool group anymore)', () => {
-  it('renders every stage link and no tool link / divider (Workspace Analysis is a Robot accordion tool)', () => {
+describe('TopBar — pipeline stages, then a divider, then tool links (kind model)', () => {
+  it('renders stage links, the decorative divider, and the Demos tool link after it', () => {
     seedFlags({ robotLoaded: true })
     renderTopBar('/')
 
@@ -62,12 +61,20 @@ describe('TopBar — pipeline stages only (P0-B reorg: no tool group anymore)', 
       'Execution',
       'Sessions',
       'Configuration',
+      'Demos',
     ])
 
-    // No auxiliary tool entries remain in the registry → the decorative
-    // divider (which only renders when tool links exist) is gone too.
+    // The Demos workspace (kind 'tool', showcase-scenarios D5) renders in the
+    // auxiliary group AFTER the divider — the divider exists only when tool
+    // links exist, and Demos is the sole tool entry today (the labels array
+    // above pins Demos as the last link, i.e. after every stage link).
     expect(screen.queryByRole('link', { name: 'Workspace Analysis' })).not.toBeInTheDocument()
-    expect(screen.queryByTestId('nav-divider')).not.toBeInTheDocument()
+    const divider = screen.getByTestId('nav-divider')
+    expect(divider).toBeInTheDocument()
+    const demos = screen.getByRole('link', { name: 'Demos' })
+    // The divider is aria-hidden — the link carries the accessible name.
+    expect(divider).toHaveAttribute('aria-hidden')
+    expect(demos).not.toHaveAttribute('aria-disabled')
   })
 
   it('aria-disables stage links whose guards are unmet (guard state, no navigation)', async () => {
