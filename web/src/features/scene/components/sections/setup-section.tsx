@@ -1,3 +1,5 @@
+import { Info } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { PoseDef, RobotRef } from '@/shared/contracts'
 
 export interface SetupSectionProps {
@@ -92,6 +94,20 @@ export function SetupSection({
           className="w-16 px-1.5 py-0.5 text-[11px] rounded border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         />
         <span className="text-[10px] text-muted-foreground font-mono">m</span>
+        <TooltipProvider delay={0}>
+          <Tooltip>
+            <TooltipTrigger
+              aria-label="SCARA approach height help"
+              className="inline-flex items-center text-muted-foreground hover:text-foreground cursor-pointer"
+            >
+              <Info className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              Prismatic retraction height — pick/place approach and retreat sit
+              this far above the grasp point before descending.
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </div>
   )

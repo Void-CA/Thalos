@@ -109,6 +109,19 @@ describe('SceneEditor — list layout (V6) + SCARA wiring', () => {
     fireEvent.change(input, { target: { value: '0.12' } })
     expect(useDomainSceneStore.getState().approachHeight).toBe(0.12)
   })
+
+  it('R3 — approach height is a single labeled line; the explanation lives in a ⓘ tooltip, never in permanent multi-line space', async () => {
+    render(<SceneEditor />)
+    // Single labeled line: label + input + unit.
+    expect(screen.getByLabelText('SCARA approach height (metres)')).toBeInTheDocument()
+    // The explanation must NOT occupy permanent space — absent until the
+    // tooltip opens.
+    expect(screen.queryByText(/Prismatic retraction height/)).not.toBeInTheDocument()
+    // ⓘ hover opens the contextual tooltip.
+    const help = screen.getByRole('button', { name: 'SCARA approach height help' })
+    fireEvent.mouseEnter(help)
+    expect(await screen.findByText(/Prismatic retraction height/)).toBeInTheDocument()
+  })
 })
 
 describe('SceneEditor — numeric panel + Load/Save Scene IO (D12/D14)', () => {
