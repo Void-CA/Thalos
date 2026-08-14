@@ -9,7 +9,10 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::id::{LocationId, ObjectId};
 use crate::pose::Pose;
+use crate::resource::{Location, Object};
+use crate::scene::SceneContent;
 
 /// Supported SceneFile schema version.
 pub const SCENE_FILE_SCHEMA_VERSION: &str = "1";
@@ -90,6 +93,53 @@ pub struct GeometryDef {
     pub size: Vec<f64>,
 }
 
+impl SceneFile {
+    /// Explicit `SceneFile → SceneContent` mapping (D4, amended: no field is
+    /// dropped from the mapping):
+    ///
+    /// - `SceneObjectDef.id → Object.id`, `kind → Object.category`,
+    ///   `name → Object.name` (fallback to `id` when absent),
+    ///   `pose → Object.pose`
+    /// - `SceneObjectDef.geometry` → **DROPPED** in v1 (visualization-only)
+    /// - `SceneLocationDef.id → Location.id`, `pose → Location.pose`
+    ///   (`name` falls back to `id`; no description in the file format)
+    /// - `home_pose → home_pose`, `approach_height → approach_height` 1:1
+    ///   (backend `SceneContent` carries it — D6 RESOLVED)
+    /// - `robot` → dropped (validation-only, D11 identity checked at tier (c))
+    /// - `fixtures` → dropped (presentational only, not lowering input)
+    pub fn into_scene_content(self) -> SceneContent {
+        let objects = self
+            .objects
+            .into_iter()
+            .map(|obj| Object {
+                id: ObjectId(obj.id.clone()),
+                name: obj.name.clone().unwrap_or_else(|| obj.id.clone()),
+                category: Some(obj.kind),
+                pose: obj.pose,
+            })
+            .collect();
+
+        let locations = self
+            .locations
+            .into_iter()
+            .map(|loc| Location {
+                id: LocationId(loc.id.clone()),
+                name: loc.id,
+                description: None,
+                pose: loc.pose,
+            })
+            .collect();
+
+        SceneContent {
+            objects,
+            locations,
+            tools: Vec::new(),
+            home_pose: self.home_pose,
+            approach_height: self.approach_height,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -159,5 +209,93 @@ mod tests {
         );
         let back: SceneFile = serde_json::from_str(&json).expect("re-parse");
         assert_eq!(file, back);
+    }
+
+    // ── 1.5: SceneFile → SceneContent mapping (D4 amended) ───────────────
+
+    #[test]
+    fn into_scene_content_maps_scene_semantics() {
+        let file: SceneFile = serde_json::from_str(SAMPLE_JSON).expect("parse");
+        let content = file.into_scene_content();
+
+        assert_eq!(content.objects.len(), 2, "both objects map");
+        let boxed = content
+            .objects
+            .iter()
+            .find(|o| o.id.as_str() == "box-1")
+            .expect("box-1 mapped");
+        assert_eq!(boxed.name, "Box 1", "name maps 1:1 when present");
+        assert_eq!(
+            boxed.category.as_deref(),
+            Some("box"),
+            "kind maps to category"
+        );
+        assert_eq!(boxed.pose.position, [0.2, 0.1, 0.0], "pose maps 1:1");
+        let bolt = content
+            .objects
+            .iter()
+            .find(|o| o.id.as_str() == "bolt-1")
+            .expect("bolt-1 mapped");
+        assert_eq!(bolt.name, "bolt-1", "name falls back to id");
+        assert_eq!(bolt.category.as_deref(), Some("bolt"));
+
+        assert_eq!(content.locations.len(), 1, "location maps");
+        assert_eq!(content.locations[0].id.as_str(), "tray-1");
+        assert_eq!(
+            content.locations[0].pose.position,
+            [0.3, -0.2, 0.0],
+            "location pose maps 1:1"
+        );
+
+        assert_eq!(content.home_pose.position, [0.0, 0.0, 0.5]);
+        assert_eq!(content.approach_height, 0.05, "approach_height maps 1:1 (D6 RESOLVED)");
+    }
+
+    #[test]
+    fn into_scene_content_drops_fixtures_robot_and_geometry() {
+        let file: SceneFile = serde_json::from_str(SAMPLE_JSON).expect("parse");
+        assert!(!file.fixtures.is_empty(), "precondition: sample has fixtures");
+        let content = file.into_scene_content();
+
+        assert!(
+            content.objects.iter().all(|o| o.category.is_some()),
+            "geometry must not leak into mapped objects (visualization-only)"
+        );
+        assert_eq!(
+            content.objects.iter().filter(|o| o.id.as_str() == "fence-1").count(),
+            0,
+            "fixture ids must not appear as objects"
+        );
+    }
+
+    #[test]
+    fn into_scene_content_maps_approach_height_1to1_via_value() {
+        let mut file: SceneFile = serde_json::from_str(SAMPLE_JSON).expect("parse");
+        file.approach_height = 0.12;
+        let content = file.into_scene_content();
+        assert_eq!(content.approach_height, 0.12, "explicit value forwarded");
+    }
+
+    #[test]
+    fn into_scene_content_empty_lists_map_empty() {
+        let file = SceneFile {
+            schema_version: "1".into(),
+            robot: RobotRef {
+                name: "icebot".into(),
+                urdf: "docs/robot/icebot.urdf".into(),
+            },
+            objects: vec![],
+            fixtures: vec![],
+            locations: vec![],
+            home_pose: Pose {
+                position: [0.0, 0.0, 0.5],
+                orientation: [0.0, 0.0, 0.0, 1.0],
+            },
+            approach_height: 0.05,
+        };
+        let content = file.into_scene_content();
+        assert!(content.objects.is_empty());
+        assert!(content.locations.is_empty());
+        assert!(content.tools.is_empty());
     }
 }
