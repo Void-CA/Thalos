@@ -54,6 +54,17 @@ const IK_CONFIG: IKConfig = IKConfig {
     lambda: 0.1,
 };
 
+/// Default motion profile for the semantic planner (spec
+/// `move-l-velocity-profile`): a PLANNER BEHAVIOR default (0.1 m/s,
+/// 0.5 m/s²), NOT a physical property of the robot — the URDF joint
+/// velocity/effort limits remain separate actuator constraints enforced at
+/// the execution boundary.
+const DEFAULT_PROFILE: MotionProfile = MotionProfile {
+    max_velocity: 0.1,
+    max_acceleration: 0.5,
+    max_jerk: None,
+};
+
 /// Compile semantic task → ExecutionProgram.
 pub async fn compile_semantic(
     State(_state): State<Arc<AppState>>,
@@ -88,11 +99,7 @@ pub async fn compile_semantic(
     let ctx = LoweringContext {
         provider: &provider,
         default_tool: None,
-        default_profile: MotionProfile {
-            max_velocity: 1.0,
-            max_acceleration: 0.5,
-            max_jerk: None,
-        },
+        default_profile: DEFAULT_PROFILE,
     };
     let mp = SemanticLowering::lower(&task.program, &ctx).map_err(|e| {
         (
@@ -189,11 +196,7 @@ pub async fn run_semantic(
         let ctx = LoweringContext {
             provider: &provider,
             default_tool: None,
-            default_profile: MotionProfile {
-                max_velocity: 1.0,
-                max_acceleration: 0.5,
-                max_jerk: None,
-            },
+            default_profile: DEFAULT_PROFILE,
         };
         let mp = SemanticLowering::lower(&task.program, &ctx).map_err(|e| {
             (
@@ -207,8 +210,7 @@ pub async fn run_semantic(
         // `ForwardKinematics` → `DampedLeastSquaresSolver`).
         let dof = chain.dof_count();
         let fk = ForwardKinematics::new(chain.clone());
-        let ik_solver =
-            DampedLeastSquaresSolver::from_config(fk, *chain.end_effector(), IK_CONFIG);
+        let ik_solver = DampedLeastSquaresSolver::from_config(fk, *chain.end_effector(), IK_CONFIG);
 
         // Frame registry for the frame names the semantic layer emits.
         let mut registry = FrameRegistry::new();

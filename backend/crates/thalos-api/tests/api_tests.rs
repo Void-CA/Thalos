@@ -3019,7 +3019,7 @@ fn home_wait_execution_program() -> Value {
                     "orientation": [0.0, 0.0, 0.0, 1.0],
                     "frame": "world"
                 },
-                "profile": {"max_velocity": 1.0, "max_acceleration": 0.5, "max_jerk": null}
+                "profile": {"max_velocity": 0.1, "max_acceleration": 0.5, "max_jerk": null}
             },
             {"type": "delay", "origin": "op_1", "duration": {"secs": 0, "nanos": 500000000}}
         ],
