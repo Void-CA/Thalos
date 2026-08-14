@@ -1,9 +1,12 @@
-import { Plus, Trash2 } from 'lucide-react'
 import { useRef, useState, type ChangeEvent } from 'react'
 import {
-  useDomainSceneStore, defaultObjectPose, defaultLocationPose, isSceneFile,
+  useDomainSceneStore, isSceneFile,
 } from '../store'
-import { PoseInputs } from './pose-inputs'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { SetupSection } from './sections/setup-section'
+import { ObjectsSection } from './sections/objects-section'
+import { LocationsSection } from './sections/locations-section'
+import { ToolsSection } from './sections/tools-section'
 import { downloadTextFile } from '@/shared/download'
 import type { SceneFile } from '@/shared/contracts'
 
@@ -14,6 +17,16 @@ export interface SceneEditorProps {
   loadDemoScene?: () => Promise<SceneFile>
 }
 
+/**
+ * SceneEditor — density refactor (ui-workspace-density spec R1/R2/R3/R11).
+ *
+ * The panel is an Accordion with four sections in fixed order:
+ * Setup (open by default — scene-wide config) / Objects / Locations / Tools
+ * (collapsed by default — entity-specific lists, minimal context). `multiple`
+ * keeps the pre-refactor UX where any set of sections can stay open at once.
+ * Zero store/API/semantic changes: every action, handler and wire path is
+ * identical to the pre-refactor editor; only layout moved.
+ */
 export function SceneEditor({ loadDemoScene }: SceneEditorProps = {}) {
   const objects = useDomainSceneStore((s) => s.objects)
   const locations = useDomainSceneStore((s) => s.locations)
@@ -81,12 +94,6 @@ export function SceneEditor({ loadDemoScene }: SceneEditorProps = {}) {
     downloadTextFile('scene.json', JSON.stringify(file, null, 2), 'application/json')
   }
 
-  const nextSeq = {
-    obj: objects.length + 1,
-    loc: locations.length + 1,
-    tool: tools.length + 1,
-  }
-
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* D12 IO toolbar */}
@@ -118,233 +125,64 @@ export function SceneEditor({ loadDemoScene }: SceneEditorProps = {}) {
         )}
       </div>
 
-      {/* Robot — read-only identity (D14: display only, no selection in the
-          numeric panel; the ref comes from the loaded SceneFile, D11 `name`). */}
-      <section className="px-3 py-2 border-b border-border/50">
-        <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider block mb-1.5">
-          Robot
-        </h3>
-        <p className="text-[11px] text-foreground font-mono truncate">
-          {robot?.name ?? '—'}
-        </p>
-      </section>
+      {/* R1 — accordion: Setup open by default; entity lists collapsed. */}
+      <Accordion multiple defaultValue={['setup']} className="w-full overflow-y-auto">
+        <AccordionItem value="setup" className="border-b border-border/50">
+          <AccordionTrigger className="px-3 py-2 pr-2 text-xs font-semibold text-foreground uppercase tracking-wider hover:no-underline hover:bg-accent/40 cursor-pointer [&>svg]:text-muted-foreground [&>svg]:h-3.5 [&>svg]:w-3.5">
+            Setup
+          </AccordionTrigger>
+          <AccordionContent>
+            <SetupSection
+              robot={robot}
+              homePose={homePose}
+              setHomePose={setHomePose}
+              approachHeight={approachHeight}
+              setApproachHeight={setApproachHeight}
+            />
+          </AccordionContent>
+        </AccordionItem>
 
-      {/* Objects */}
-      <section className="px-3 py-2 border-b border-border/50">
-        <div className="flex items-center justify-between mb-1.5">
-          <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+        <AccordionItem value="objects" className="border-b border-border/50">
+          <AccordionTrigger className="px-3 py-2 pr-2 text-xs font-semibold text-foreground uppercase tracking-wider hover:no-underline hover:bg-accent/40 cursor-pointer [&>svg]:text-muted-foreground [&>svg]:h-3.5 [&>svg]:w-3.5">
             Objects
-          </h3>
-          <button
-            aria-label="Add object"
-            onClick={() =>
-              addObject({
-                id: `obj-${nextSeq.obj}`,
-                name: `Object ${nextSeq.obj}`,
-                // Design D6: add defaults come from the store — no inline literals.
-                pose: { ...defaultObjectPose },
-              })
-            }
-            className="text-muted-foreground hover:text-foreground cursor-pointer"
-          >
-            <Plus className="size-3.5" />
-          </button>
-        </div>
-        <div className="space-y-1">
-          {objects.map((obj) => (
-            <div key={obj.id} className="flex flex-col gap-0.5 group">
-              <div className="flex items-center gap-1.5">
-                <input
-                  value={obj.name}
-                  onChange={(e) => updateObject(obj.id, { name: e.target.value })}
-                  className="flex-1 px-1.5 py-0.5 text-[11px] rounded border border-border bg-background
-                             text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-                <button
-                  aria-label={`Remove ${obj.name}`}
-                  onClick={() => removeObject(obj.id)}
-                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive cursor-pointer"
-                >
-                  <Trash2 className="size-3" />
-                </button>
-              </div>
-              <PoseInputs
-                pose={obj.pose}
-                onChange={(pose) => updateObject(obj.id, { pose })}
-                idPrefix={obj.id}
-              />
-            </div>
-          ))}
-          {objects.length === 0 && (
-            <p className="text-[10px] text-muted-foreground/60 italic">
-              No objects defined
-            </p>
-          )}
-        </div>
-      </section>
+          </AccordionTrigger>
+          <AccordionContent>
+            <ObjectsSection
+              objects={objects}
+              addObject={addObject}
+              removeObject={removeObject}
+              updateObject={updateObject}
+            />
+          </AccordionContent>
+        </AccordionItem>
 
-      {/* Locations */}
-      <section className="px-3 py-2 border-b border-border/50">
-        <div className="flex items-center justify-between mb-1.5">
-          <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+        <AccordionItem value="locations" className="border-b border-border/50">
+          <AccordionTrigger className="px-3 py-2 pr-2 text-xs font-semibold text-foreground uppercase tracking-wider hover:no-underline hover:bg-accent/40 cursor-pointer [&>svg]:text-muted-foreground [&>svg]:h-3.5 [&>svg]:w-3.5">
             Locations
-          </h3>
-          <button
-            aria-label="Add location"
-            onClick={() =>
-              addLocation({
-                id: `loc-${nextSeq.loc}`,
-                name: `Location ${nextSeq.loc}`,
-                // Design D6: add defaults come from the store — no inline literals.
-                pose: { ...defaultLocationPose },
-              })
-            }
-            className="text-muted-foreground hover:text-foreground cursor-pointer"
-          >
-            <Plus className="size-3.5" />
-          </button>
-        </div>
-        <div className="space-y-1">
-          {locations.map((loc) => (
-            <div key={loc.id} className="flex flex-col gap-0.5 group">
-              <div className="flex items-center gap-1.5">
-                <input
-                  value={loc.name}
-                  onChange={(e) => updateLocation(loc.id, { name: e.target.value })}
-                  className="flex-1 px-1.5 py-0.5 text-[11px] rounded border border-border bg-background
-                             text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-                <button
-                  aria-label={`Remove ${loc.name}`}
-                  onClick={() => removeLocation(loc.id)}
-                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive cursor-pointer"
-                >
-                  <Trash2 className="size-3" />
-                </button>
-              </div>
-              <PoseInputs
-                pose={loc.pose}
-                onChange={(pose) => updateLocation(loc.id, { pose })}
-                idPrefix={loc.id}
-              />
-            </div>
-          ))}
-          {locations.length === 0 && (
-            <p className="text-[10px] text-muted-foreground/60 italic">
-              No locations defined
-            </p>
-          )}
-        </div>
-      </section>
+          </AccordionTrigger>
+          <AccordionContent>
+            <LocationsSection
+              locations={locations}
+              addLocation={addLocation}
+              removeLocation={removeLocation}
+              updateLocation={updateLocation}
+            />
+          </AccordionContent>
+        </AccordionItem>
 
-      {/* Tools */}
-      <section className="px-3 py-2 border-b border-border/50">
-        <div className="flex items-center justify-between mb-1.5">
-          <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+        <AccordionItem value="tools" className="border-b border-border/50">
+          <AccordionTrigger className="px-3 py-2 pr-2 text-xs font-semibold text-foreground uppercase tracking-wider hover:no-underline hover:bg-accent/40 cursor-pointer [&>svg]:text-muted-foreground [&>svg]:h-3.5 [&>svg]:w-3.5">
             Tools
-          </h3>
-          <button
-            aria-label="Add tool"
-            onClick={() =>
-              addTool({ id: `tool-${nextSeq.tool}`, name: `Tool ${nextSeq.tool}` })
-            }
-            className="text-muted-foreground hover:text-foreground cursor-pointer"
-          >
-            <Plus className="size-3.5" />
-          </button>
-        </div>
-        <div className="space-y-1">
-          {tools.map((tool) => (
-            <div key={tool.id} className="flex items-center gap-1.5 group">
-              <span className="flex-1 text-[11px] text-foreground truncate px-1">
-                {tool.name}
-              </span>
-              <button
-                onClick={() => removeTool(tool.id)}
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive cursor-pointer"
-              >
-                <Trash2 className="size-3" />
-              </button>
-            </div>
-          ))}
-          {tools.length === 0 && (
-            <p className="text-[10px] text-muted-foreground/60 italic">
-              No tools defined
-            </p>
-          )}
-        </div>
-      </section>
-
-      {/* Home pose */}
-      <section className="px-3 py-2 border-b border-border/50">
-        <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider block mb-1.5">
-          Home
-        </h3>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-muted-foreground font-mono">X</span>
-          <input
-            type="number"
-            value={homePose.position[0]}
-            onChange={(e) =>
-              setHomePose({
-                ...homePose,
-                position: [parseFloat(e.target.value) || 0, homePose.position[1], homePose.position[2]],
-              })
-            }
-            step={0.1}
-            className="w-14 px-1.5 py-0.5 text-[11px] rounded border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-          <span className="text-[10px] text-muted-foreground font-mono">Y</span>
-          <input
-            type="number"
-            value={homePose.position[1]}
-            onChange={(e) =>
-              setHomePose({
-                ...homePose,
-                position: [homePose.position[0], parseFloat(e.target.value) || 0, homePose.position[2]],
-              })
-            }
-            step={0.1}
-            className="w-14 px-1.5 py-0.5 text-[11px] rounded border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-          <span className="text-[10px] text-muted-foreground font-mono">Z</span>
-          <input
-            type="number"
-            value={homePose.position[2]}
-            onChange={(e) =>
-              setHomePose({
-                ...homePose,
-                position: [homePose.position[0], homePose.position[1], parseFloat(e.target.value) || 0],
-              })
-            }
-            step={0.1}
-            className="w-14 px-1.5 py-0.5 text-[11px] rounded border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-        </div>
-      </section>
-
-      {/* SCARA approach height — prismatic transit retraction (always-on, MVP) */}
-      <section className="px-3 py-2">
-        <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider block mb-1.5">
-          SCARA approach
-        </h3>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-muted-foreground font-mono">Z↑ (m)</span>
-          <input
-            type="number"
-            aria-label="SCARA approach height (metres)"
-            value={approachHeight}
-            onChange={(e) => setApproachHeight(parseFloat(e.target.value) || 0)}
-            step={0.01}
-            min={0}
-            className="w-16 px-1.5 py-0.5 text-[11px] rounded border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-        </div>
-        <p className="text-[10px] text-muted-foreground/60 italic mt-1">
-          Prismatic retraction height — pick/place approach and retreat sit this
-          far above the grasp point before descending.
-        </p>
-      </section>
+          </AccordionTrigger>
+          <AccordionContent>
+            <ToolsSection
+              tools={tools}
+              addTool={addTool}
+              removeTool={removeTool}
+            />
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   )
 }
