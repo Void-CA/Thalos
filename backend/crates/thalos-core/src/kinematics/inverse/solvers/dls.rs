@@ -1,6 +1,6 @@
 use crate::kinematics::forward::ForwardKinematics;
 use crate::kinematics::inverse::{
-    IKSolver,
+    IKConfig, IKSolver,
     error::IkError,
     result::IKResult,
     solver::{IKGoal, compute_pose_error},
@@ -22,6 +22,25 @@ pub struct DampedLeastSquaresSolver {
 }
 
 impl DampedLeastSquaresSolver {
+    /// Build the solver from an explicit shared [`IKConfig`] (spec `ik-config`).
+    ///
+    /// All construction sites (semantic compilation, plan analysis, runtime
+    /// execution) pass their `IKConfig` here — one explicit type, no hidden
+    /// global default.
+    pub fn from_config(fk: ForwardKinematics, end_effector: FrameId, config: IKConfig) -> Self {
+        let jacobian = GeometricJacobian::new(fk.clone(), end_effector);
+        Self {
+            jacobian,
+            fk,
+            end_effector,
+            max_iters: config.max_iterations,
+            tolerance: config.tolerance,
+            lambda: config.lambda,
+            track_history: false,
+        }
+    }
+
+    /// Legacy positional constructor — delegates to [`Self::from_config`].
     pub fn new(
         fk: ForwardKinematics,
         end_effector: FrameId,
@@ -29,16 +48,15 @@ impl DampedLeastSquaresSolver {
         tolerance: f64,
         lambda: f64,
     ) -> Self {
-        let jacobian = GeometricJacobian::new(fk.clone(), end_effector);
-        Self {
-            jacobian,
+        Self::from_config(
             fk,
             end_effector,
-            max_iters,
-            tolerance,
-            lambda,
-            track_history: false,
-        }
+            IKConfig {
+                max_iterations: max_iters,
+                tolerance,
+                lambda,
+            },
+        )
     }
 
     /// Habilita el registro del historial de error por iteración.

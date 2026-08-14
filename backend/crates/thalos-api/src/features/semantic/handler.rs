@@ -5,7 +5,9 @@ use axum::{Json, extract::State, http::StatusCode};
 use thalos_core::analysis::location::Location;
 use thalos_core::analysis::observation::{Observation, Severity};
 use thalos_core::{
-    kinematics::{forward::ForwardKinematics, inverse::DampedLeastSquaresSolver},
+    kinematics::{
+        forward::ForwardKinematics, inverse::DampedLeastSquaresSolver, inverse::IKConfig,
+    },
     motion::MotionProfile,
     robot::state::RobotState,
     spatial::frame::FrameRegistry,
@@ -41,6 +43,16 @@ fn validation_message(o: &Observation) -> String {
     };
     format!("[{:?}] {:?} (op: {op})", o.severity, o.kind)
 }
+
+/// IK solver configuration for semantic compilation (spec `ik-config`).
+///
+/// Preserved site values (1000/1e-4/0.1) — unifying the TYPE across sites,
+/// not the values. Value convergence is a separate follow-up decision.
+const IK_CONFIG: IKConfig = IKConfig {
+    max_iterations: 1000,
+    tolerance: 1e-4,
+    lambda: 0.1,
+};
 
 /// Compile semantic task → ExecutionProgram.
 pub async fn compile_semantic(
@@ -195,7 +207,8 @@ pub async fn run_semantic(
         // `ForwardKinematics` → `DampedLeastSquaresSolver`).
         let dof = chain.dof_count();
         let fk = ForwardKinematics::new(chain.clone());
-        let ik_solver = DampedLeastSquaresSolver::new(fk, *chain.end_effector(), 1000, 1e-4, 0.1);
+        let ik_solver =
+            DampedLeastSquaresSolver::from_config(fk, *chain.end_effector(), IK_CONFIG);
 
         // Frame registry for the frame names the semantic layer emits.
         let mut registry = FrameRegistry::new();

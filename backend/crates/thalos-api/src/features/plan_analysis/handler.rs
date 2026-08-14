@@ -13,8 +13,8 @@ use axum::{Json, extract::State};
 
 use thalos_core::{
     analysis::observation::ArtifactRef, ids::MotionPlanId, kinematics::forward::ForwardKinematics,
-    kinematics::inverse::DampedLeastSquaresSolver, motion::segment::MotionSegment,
-    robot::state::RobotState,
+    kinematics::inverse::DampedLeastSquaresSolver, kinematics::inverse::IKConfig,
+    motion::segment::MotionSegment, robot::state::RobotState,
 };
 use thalos_optimization::{
     PlanMetrics,
@@ -43,6 +43,17 @@ use crate::features::plan_analysis::dto::{
     ApplyRequest, ApplyResponse, EditProgramRequest, MetricsComparisonDto, OperatorAppliedDto,
     OptimizeResponse, PlanAnalysisRequest, PlanAnalysisResponse, PreviewRequest, PreviewResponse,
     UndoResponse,
+};
+
+/// IK solver configuration for plan analysis (spec `ik-config`).
+///
+/// Preserved site values (500/1e-6/0.1) — the same set the runtime service
+/// uses. Unifying the TYPE across sites, not the values: semantic compilation
+/// keeps its own (1000/1e-4/0.1). Value convergence is a separate follow-up.
+const IK_CONFIG: IKConfig = IKConfig {
+    max_iterations: 500,
+    tolerance: 1e-6,
+    lambda: 0.1,
 };
 
 /// POST /api/v1/plan/analyze
@@ -83,8 +94,7 @@ pub async fn analyze_plan(
     // inexistente, documentado (campo aditivo en el wire).
     let program = PlanningProgram::new(segments.iter().map(|s| s.source.clone()).collect());
     let fk = ForwardKinematics::new(snapshot.chain.clone());
-    let solver =
-        DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
+    let solver = DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
 
     // PR3: cuando programa + solver están disponibles (la MISMA condición que
     // el análisis con recomendaciones), el flujo también compone el pipeline
@@ -196,8 +206,7 @@ pub async fn preview_command(
     )?;
 
     let fk = ForwardKinematics::new(snapshot.chain.clone());
-    let solver =
-        DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
+    let solver = DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
 
     // M2 (design ADR-3): compile the program to obtain the segment context
     // (waypoint_range + segment-start joints) and let the advisor verify
@@ -358,8 +367,7 @@ pub async fn apply_command(
     )?;
 
     let fk = ForwardKinematics::new(snapshot.chain.clone());
-    let solver =
-        DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
+    let solver = DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
 
     // M2 (design ADR-3): same compiled-plan context as the analyze service
     // (deterministic recommendation ids across analyze → preview → apply).
@@ -528,8 +536,7 @@ async fn apply_program_edit(
     // 2. Recompilar desde el mismo estado inicial que el plan activo (mismo
     //    start que preview/apply).
     let fk = ForwardKinematics::new(snapshot.chain.clone());
-    let solver =
-        DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
+    let solver = DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
     let start_joints = snapshot
         .active_plan
         .as_ref()
@@ -653,8 +660,7 @@ pub async fn undo_command(State(state): State<Arc<AppState>>) -> ApiResult<UndoR
     //    start que preview/apply — el programa restaurado es el previo al
     //    comando deshecho).
     let fk = ForwardKinematics::new(snapshot.chain.clone());
-    let solver =
-        DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
+    let solver = DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
     let start_joints = active_plan
         .trajectory
         .waypoints()

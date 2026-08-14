@@ -6,7 +6,9 @@ use thalos_core::{
     execution::runtime::RuntimeProgram,
     kinematics::{
         forward::{ForwardKinematics, result::FKResult},
-        inverse::{DampedLeastSquaresSolver, IKGoal, IKSolver, result::IKResult},
+        inverse::{
+            DampedLeastSquaresSolver, IKConfig, IKGoal, IKSolver, result::IKResult,
+        },
     },
     models::{RobotModel, RobotRegistry},
     robot::serial_chain::SerialChain,
@@ -51,10 +53,14 @@ struct RecordingState {
     total_iterations: Option<u32>,
 }
 
-/// Derive an ExecutionSession from a RobotState.
-const IK_MAX_ITERS: usize = 500;
-const IK_TOLERANCE: f64 = 1e-6;
-const IK_LAMBDA: f64 = 0.1;
+/// Runtime IK solver configuration (spec `ik-config`): the runtime service
+/// constructs its solver through the shared [`IKConfig`] type from these
+/// preserved values (500/1e-6/0.1) — same set as plan analysis.
+const IK_CONFIG: IKConfig = IKConfig {
+    max_iterations: 500,
+    tolerance: 1e-6,
+    lambda: 0.1,
+};
 
 fn session_from_state(
     state: &Arc<crate::state::robot_state::RobotState>,
@@ -224,8 +230,7 @@ impl SceneService {
     ) -> Result<(Vec<f64>, IKResult), RuntimeError> {
         let runtime = self.runtime.read().await;
         let fk = ForwardKinematics::new(runtime.active_robot.chain.clone());
-        let solver =
-            DampedLeastSquaresSolver::new(fk, frame, IK_MAX_ITERS, IK_TOLERANCE, IK_LAMBDA);
+        let solver = DampedLeastSquaresSolver::from_config(fk, frame, IK_CONFIG);
         let q0 = runtime.active_robot.joints.clone();
         let result = solver.solve(&q0, goal)?;
         Ok((result.q.clone(), result))
