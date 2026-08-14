@@ -1,6 +1,7 @@
+pub mod backend;
+pub mod demos;
 pub mod motion;
 pub mod plan_analysis;
-pub mod backend;
 pub mod robots;
 pub mod scene;
 pub mod semantic;
