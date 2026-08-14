@@ -3005,8 +3005,10 @@ async fn semantic_compile_with_task_document_and_scene() {
 
 /// The ExecutionProgram the semantic lowering produces for the
 /// planar2r_task_payload(home + wait) TaskDocument used below: `home` lowers
-/// to MoveJ toward the scene home pose with the default profile, `wait`
-/// lowers to Delay (see thalos-semantic lowering).
+/// to MoveJ toward the scene home pose with the JOINT default profile (1.0
+/// rad/s — MoveJ plans in radians), `wait` lowers to Delay (see
+/// thalos-semantic lowering). The direct-path payload must match the
+/// lowering's emitted profile for the parity assertion.
 fn home_wait_execution_program() -> Value {
     json!({
         "instructions": [
@@ -3019,7 +3021,7 @@ fn home_wait_execution_program() -> Value {
                     "orientation": [0.0, 0.0, 0.0, 1.0],
                     "frame": "world"
                 },
-                "profile": {"max_velocity": 0.1, "max_acceleration": 0.5, "max_jerk": null}
+                "profile": {"max_velocity": 1.0, "max_acceleration": 0.5, "max_jerk": null}
             },
             {"type": "delay", "origin": "op_1", "duration": {"secs": 0, "nanos": 500000000}}
         ],

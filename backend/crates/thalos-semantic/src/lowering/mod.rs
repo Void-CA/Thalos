@@ -89,20 +89,19 @@ impl SemanticLowering {
         ctx: &LoweringContext,
     ) {
         let origin = pick.origin.clone();
-        let profile = ctx.default_profile.clone();
 
-        // 1. Approach (MoveJ)
+        // 1. Approach (MoveJ — joint-space: the JOINT profile in rad/s).
         instructions.push(ExecutionInstruction::MoveJ {
             origin: origin.clone(),
             target: MotionTarget::Pose(plan.approach_frame.clone()),
-            profile: profile.clone(),
+            profile: ctx.default_profile.clone(),
         });
 
-        // 2. Grasp (MoveL)
+        // 2. Grasp (MoveL — cartesian: the CARTESIAN profile in m/s).
         instructions.push(ExecutionInstruction::MoveL {
             origin: origin.clone(),
             target: MotionTarget::Pose(plan.grasp_frame.clone()),
-            profile: profile.clone(),
+            profile: ctx.cartesian_profile(),
         });
 
         // 3. Grip (SetOutput)
@@ -112,11 +111,11 @@ impl SemanticLowering {
             value: thalos_core::motion::OutputValue::Bool(true),
         });
 
-        // 4. Retract (MoveL)
+        // 4. Retract (MoveL — cartesian profile).
         instructions.push(ExecutionInstruction::MoveL {
             origin,
             target: MotionTarget::Pose(plan.retreat_frame.clone()),
-            profile,
+            profile: ctx.cartesian_profile(),
         });
     }
 
@@ -128,20 +127,19 @@ impl SemanticLowering {
         ctx: &LoweringContext,
     ) {
         let origin = place.origin.clone();
-        let profile = ctx.default_profile.clone();
 
-        // 1. Approach (MoveJ)
+        // 1. Approach (MoveJ — JOINT profile).
         instructions.push(ExecutionInstruction::MoveJ {
             origin: origin.clone(),
             target: MotionTarget::Pose(plan.approach_frame.clone()),
-            profile: profile.clone(),
+            profile: ctx.default_profile.clone(),
         });
 
-        // 2. Drop (MoveL)
+        // 2. Drop (MoveL — CARTESIAN profile).
         instructions.push(ExecutionInstruction::MoveL {
             origin: origin.clone(),
             target: MotionTarget::Pose(plan.drop_frame.clone()),
-            profile: profile.clone(),
+            profile: ctx.cartesian_profile(),
         });
 
         // 3. Ungrip (SetOutput)
@@ -151,11 +149,11 @@ impl SemanticLowering {
             value: thalos_core::motion::OutputValue::Bool(false),
         });
 
-        // 4. Retract (MoveL)
+        // 4. Retract (MoveL — cartesian profile).
         instructions.push(ExecutionInstruction::MoveL {
             origin,
             target: MotionTarget::Pose(plan.retreat_frame.clone()),
-            profile,
+            profile: ctx.cartesian_profile(),
         });
     }
 
@@ -253,6 +251,145 @@ mod tests {
             provider,
             default_tool: None,
             default_profile: sample_profile(),
+            default_cartesian_profile: None,
+        }
+    }
+
+    // ── Profile selection per instruction type (follow-up fix) ─────────────
+    //
+    // MoveJ plans in RADIANS: the cartesian demo default (0.1 m/s) must not
+    // leak into joint-space MoveJ (0.1 rad/s ≈ 5.7°/s makes a 1.5 rad move
+    // take ~15s). The lowering separates the profiles: approach/Home/MoveTo
+    // (MoveJ) use the JOINT profile; grasp/drop/retract (MoveL) use the
+    // CARTESIAN profile.
+
+    fn joint_profile() -> MotionProfile {
+        MotionProfile {
+            max_velocity: 1.0,
+            max_acceleration: 0.5,
+            max_jerk: None,
+        }
+    }
+
+    fn cartesian_profile() -> MotionProfile {
+        MotionProfile {
+            max_velocity: 0.1,
+            max_acceleration: 0.5,
+            max_jerk: None,
+        }
+    }
+
+    fn split_profile_ctx(provider: &MockKnowledgeProvider) -> LoweringContext<'_> {
+        LoweringContext {
+            provider,
+            default_tool: None,
+            default_profile: joint_profile(),
+            default_cartesian_profile: Some(cartesian_profile()),
+        }
+    }
+
+    #[test]
+    fn pick_uses_joint_profile_for_approach_and_cartesian_for_movel() {
+        let op = SemanticOperation::Pick(PickOp {
+            origin: OperationId("pick-1".to_string()),
+            object: ObjectId("bolt-1".to_string()),
+            tool: None,
+        });
+        let program = SemanticProgram::new(vec![op]);
+        let provider = sample_provider();
+        let ctx = split_profile_ctx(&provider);
+
+        let ep = SemanticLowering::lower(&program, &ctx).unwrap();
+        let insts = &ep.instructions;
+
+        match &insts[0] {
+            ExecutionInstruction::MoveJ { profile, .. } => {
+                assert_eq!(
+                    *profile,
+                    joint_profile(),
+                    "approach MoveJ must use the JOINT profile (rad/s), got {profile:?}"
+                );
+            }
+            other => panic!("first instruction must be MoveJ, got {other:?}"),
+        }
+        for (i, inst) in insts.iter().enumerate().skip(1) {
+            match inst {
+                ExecutionInstruction::MoveL { profile, .. } => assert_eq!(
+                    *profile,
+                    cartesian_profile(),
+                    "MoveL {i} must use the CARTESIAN profile (m/s), got {profile:?}"
+                ),
+                ExecutionInstruction::SetOutput { .. } => {}
+                other => panic!("unexpected instruction {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn place_uses_joint_profile_for_approach_and_cartesian_for_movel() {
+        let op = SemanticOperation::Place(PlaceOp {
+            origin: OperationId("place-1".to_string()),
+            object: ObjectId("bolt-1".to_string()),
+            destination: LocationId("tray-1".to_string()),
+            tool: None,
+        });
+        let program = SemanticProgram::new(vec![op]);
+        let provider = sample_provider();
+        let ctx = split_profile_ctx(&provider);
+
+        let ep = SemanticLowering::lower(&program, &ctx).unwrap();
+        let insts = &ep.instructions;
+
+        match &insts[0] {
+            ExecutionInstruction::MoveJ { profile, .. } => {
+                assert_eq!(
+                    *profile,
+                    joint_profile(),
+                    "approach MoveJ must use the JOINT profile"
+                );
+            }
+            other => panic!("first instruction must be MoveJ, got {other:?}"),
+        }
+        for (i, inst) in insts.iter().enumerate().skip(1) {
+            match inst {
+                ExecutionInstruction::MoveL { profile, .. } => assert_eq!(
+                    *profile,
+                    cartesian_profile(),
+                    "MoveL {i} must use the CARTESIAN profile, got {profile:?}"
+                ),
+                ExecutionInstruction::SetOutput { .. } => {}
+                other => panic!("unexpected instruction {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn move_to_and_home_use_the_joint_profile() {
+        // MoveTo and Home are joint-space MoveJ — they must use the JOINT
+        // profile even when a cartesian profile is configured.
+        let provider = sample_provider();
+        let ctx = split_profile_ctx(&provider);
+
+        let program = SemanticProgram::new(vec![
+            SemanticOperation::MoveTo(MoveToOp {
+                origin: OperationId("move-1".to_string()),
+                destination: LocationId("shelf-a".to_string()),
+                tool: None,
+            }),
+            SemanticOperation::Home(HomeOp {
+                origin: OperationId("home-1".to_string()),
+            }),
+        ]);
+        let ep = SemanticLowering::lower(&program, &ctx).unwrap();
+        for (i, inst) in ep.instructions.iter().enumerate() {
+            match inst {
+                ExecutionInstruction::MoveJ { profile, .. } => assert_eq!(
+                    *profile,
+                    joint_profile(),
+                    "MoveJ {i} must use the JOINT profile, got {profile:?}"
+                ),
+                other => panic!("expected MoveJ, got {other:?}"),
+            }
         }
     }
 
@@ -556,6 +693,7 @@ mod tests {
             provider: &provider,
             default_tool: None,
             default_profile: sample_profile(),
+            default_cartesian_profile: None,
         };
 
         let op = SemanticOperation::Pick(PickOp {
@@ -579,6 +717,7 @@ mod tests {
             provider: &provider,
             default_tool: None,
             default_profile: sample_profile(),
+            default_cartesian_profile: None,
         };
 
         let op = SemanticOperation::MoveTo(MoveToOp {
@@ -600,6 +739,7 @@ mod tests {
             provider: &provider,
             default_tool: None,
             default_profile: sample_profile(),
+            default_cartesian_profile: None,
         };
 
         let op = SemanticOperation::Home(HomeOp {

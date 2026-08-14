@@ -54,12 +54,26 @@ const IK_CONFIG: IKConfig = IKConfig {
     lambda: 0.1,
 };
 
-/// Default motion profile for the semantic planner (spec
-/// `move-l-velocity-profile`): a PLANNER BEHAVIOR default (0.1 m/s,
-/// 0.5 m/s²), NOT a physical property of the robot — the URDF joint
-/// velocity/effort limits remain separate actuator constraints enforced at
-/// the execution boundary.
-const DEFAULT_PROFILE: MotionProfile = MotionProfile {
+/// Default JOINT-space motion profile for the semantic planner (spec
+/// `move-l-velocity-profile`): 1.0 rad/s, 0.5 rad/s² — the pre-change
+/// default, consistent with the icebot URDF rotational velocity limits
+/// (1.0/2.0 rad/s). MoveJ plans in RADIANS, so this is deliberately NOT the
+/// cartesian default. Planner behavior defaults, NOT physical robot
+/// properties — the URDF joint velocity/effort limits remain separate
+/// actuator constraints enforced at the execution boundary.
+const JOINT_PROFILE: MotionProfile = MotionProfile {
+    max_velocity: 1.0,
+    max_acceleration: 0.5,
+    max_jerk: None,
+};
+
+/// Default CARTESIAN-space motion profile for the semantic planner (spec
+/// `move-l-velocity-profile`): 0.1 m/s, 0.5 m/s² — the visible ~0.4s demo
+/// descent for short MoveL moves. Used ONLY for MoveL instructions (MoveJ
+/// uses [`JOINT_PROFILE`]). Planner behavior default, NOT a physical robot
+/// property — the URDF joint velocity/effort limits remain separate actuator
+/// constraints.
+const CARTESIAN_PROFILE: MotionProfile = MotionProfile {
     max_velocity: 0.1,
     max_acceleration: 0.5,
     max_jerk: None,
@@ -99,7 +113,8 @@ pub async fn compile_semantic(
     let ctx = LoweringContext {
         provider: &provider,
         default_tool: None,
-        default_profile: DEFAULT_PROFILE,
+        default_profile: JOINT_PROFILE,
+        default_cartesian_profile: Some(CARTESIAN_PROFILE),
     };
     let mp = SemanticLowering::lower(&task.program, &ctx).map_err(|e| {
         (
@@ -196,7 +211,8 @@ pub async fn run_semantic(
         let ctx = LoweringContext {
             provider: &provider,
             default_tool: None,
-            default_profile: DEFAULT_PROFILE,
+            default_profile: JOINT_PROFILE,
+            default_cartesian_profile: Some(CARTESIAN_PROFILE),
         };
         let mp = SemanticLowering::lower(&task.program, &ctx).map_err(|e| {
             (

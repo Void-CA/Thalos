@@ -106,6 +106,9 @@ pub fn default_ctx(provider: &MockKnowledgeProvider) -> LoweringContext<'_> {
             max_acceleration: 0.5,
             max_jerk: None,
         },
+        // Legacy caller: cartesian instructions fall back to the joint
+        // profile (backward compatible).
+        default_cartesian_profile: None,
     }
 }
 

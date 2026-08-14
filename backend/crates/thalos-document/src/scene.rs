@@ -364,6 +364,9 @@ mod tests {
                 max_acceleration: 0.5,
                 max_jerk: None,
             },
+            // Legacy callers only set the joint profile: cartesian
+            // instructions fall back to it (backward compatible).
+            default_cartesian_profile: None,
         };
 
         let program = SemanticProgram::new(vec![SemanticOperation::Home(HomeOp {
