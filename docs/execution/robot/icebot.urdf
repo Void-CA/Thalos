@@ -80,7 +80,7 @@
     is OUT OF REPO SCOPE: this file keeps the current value (0 0 -0.12) as
     BASELINE until the real tip is measured. Do NOT change this origin blindly.
 
-    Procedure (see docs/robot/pen-tip-procedure.md):
+    Procedure (see docs/execution/robot/pen-tip-procedure.md):
       1. Mount the fabricated pen tip (cylinder with 8 mm rod hole + funnel
          for the pen) on the prismatic rod.
       2. Measure the REAL length from the end_effector datum to the pen tip

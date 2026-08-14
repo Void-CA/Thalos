@@ -10,7 +10,7 @@ produces the calibration dataset consumed by the Slice 2 `CalibrationField`
 1. Generate the 3×3 grid target JSON (NINE nodes — not 5×5 in this phase):
 
    ```bash
-   python3 tools/calibration_driver.py targets --grid \
+   python3 firmware/esp32/tools/calibration_driver.py targets --grid \
        --rows 3 --cols 3 --width-m 0.08 --height-m 0.08 \
        --center-xy 0.30 0.10 --out targets/grid_3x3.json
    ```
@@ -18,6 +18,7 @@ produces the calibration dataset consumed by the Slice 2 `CalibrationField`
 2. For every node, solve IK (`POST /api/v1/scene/from-fk` or the UI) and
    fill the `joints` array in the JSON. The commanded XY stays as generated;
    the joints are the physical way to reach it.
+   (solve IK via `POST /api/v1/scene/solve-ik-position` or the UI.)
 
 3. Execute the grid — and repeat it 2–3 times. The analysis separates the
    systematic error (mean of the repetitions per node) from the variation
@@ -25,7 +26,7 @@ produces the calibration dataset consumed by the Slice 2 `CalibrationField`
    floor and is NOT compensable.
 
    ```bash
-   python3 tools/calibration_driver.py grid \
+   python3 firmware/esp32/tools/calibration_driver.py grid \
        --port /dev/ttyUSB0 --targets targets/grid_3x3.json \
        --out measurements/grid_rep1.csv
    # run the same command with grid_rep2.csv / grid_rep3.csv
@@ -37,7 +38,7 @@ produces the calibration dataset consumed by the Slice 2 `CalibrationField`
 5. Compute systematic vs variation and emit the calibration dataset:
 
    ```bash
-   python3 tools/calibration_analysis.py grid-analysis \
+   python3 firmware/esp32/tools/calibration_analysis.py grid-analysis \
        --csvs measurements/grid_rep1.csv measurements/grid_rep2.csv \
        --out measurements/calibration_dataset.csv
    ```
@@ -45,8 +46,8 @@ produces the calibration dataset consumed by the Slice 2 `CalibrationField`
 6. Produce the feasibility report including the grid section:
 
    ```bash
-   python3 tools/calibration_analysis.py report \
-       --urdf docs/robot/icebot.urdf \
+   python3 firmware/esp32/tools/calibration_analysis.py report \
+       --urdf docs/execution/robot/icebot.urdf \
        --repeatability-csv measurements/repeatability.csv \
        --baseline-csv measurements/baseline_square.csv \
        --grid-csvs measurements/grid_rep1.csv measurements/grid_rep2.csv \

@@ -72,7 +72,7 @@ Done
 
 - Backend binary is `thalos_api` (not `thalos-api`): `cargo run -p thalos_api` from `backend/`.
 - Backend binds `127.0.0.1:3000`; Vite dev server binds `:5173` with proxy `/api → localhost:3000`.
-- URDF fixtures at runtime: `backend/crates/thalos-models/tests/fixtures/scara.urdf` and `ur5.urdf` (docs/robot/icebot.urdf is test-only via include_str!).
+- URDF fixtures at runtime: `backend/crates/thalos-models/tests/fixtures/scara.urdf` and `ur5.urdf` (docs/execution/robot/icebot.urdf is test-only via include_str!).
 - Smoke evidence saved at `/tmp/opencode/thalos-smoke/` (backend.log, web.log, plan.json, analyze.json, preview.json, scene_after_preview.json).
 
 ## Reproducción paso a paso (payloads exactos)
@@ -234,7 +234,7 @@ El trabajo del MVP se organiza en 4 bloques SDD (specs en `docs/intelligent-plan
 
 > Cómo flashear y operar el firmware ESP32 por serial para la demo con
 > backend físico. El firmware vive en `firmware/esp32/` (PlatformIO, Arduino
-> framework); el protocolo wire completo está en `docs/protocol/esp32-execution.md`.
+> framework); el protocolo wire completo está en `docs/architecture/protocol/esp32-execution.md`.
 
 ### Build + flash (PlatformIO)
 

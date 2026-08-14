@@ -19,14 +19,14 @@ calibration infrastructure is built. This is why GATE A runs BEFORE Phases
    N = 10 times:
 
    ```bash
-   python3 tools/calibration_driver.py repeatability \
+   python3 firmware/esp32/tools/calibration_driver.py repeatability \
        --port /dev/ttyUSB0 \
        --point-xy 0.30 0.10 --joints <J0> <J1> <J2> <J3> \
        --repetitions 10 --out measurements/repeatability.csv
    ```
 
    `<J0..J3>` are the joint angles that place the TCP at the reference point
-   (solve IK first: `POST /api/v1/scene/from-fk` or the UI). The joint angles
+   (solve IK first: `POST /api/v1/scene/solve-ik-position` or the UI). The joint angles
    must be IDENTICAL for every repetition.
 
 2. After each landing, measure where the pen tip actually touches with a
@@ -37,15 +37,15 @@ calibration infrastructure is built. This is why GATE A runs BEFORE Phases
 3. Compute the statistics and the Gate A ratio:
 
    ```bash
-   python3 tools/calibration_analysis.py repeatability \
+   python3 firmware/esp32/tools/calibration_analysis.py repeatability \
        --csv measurements/repeatability.csv --task-tolerance-mm 2.0
    ```
 
 4. Produce this feasibility template with the measured numbers:
 
    ```bash
-   python3 tools/calibration_analysis.py report \
-       --urdf docs/robot/icebot.urdf \
+   python3 firmware/esp32/tools/calibration_analysis.py report \
+       --urdf docs/execution/robot/icebot.urdf \
        --repeatability-csv measurements/repeatability.csv \
        --task-tolerance-mm 2.0
    ```

@@ -2,7 +2,7 @@
 
 Calibration-field change — Phase 0 (TCP characterization). This procedure
 produces the physical pen tip and the measured TCP offset that feeds
-`docs/robot/icebot.urdf` (`tcp_joint` origin) and every calibration
+`docs/execution/robot/icebot.urdf` (`tcp_joint` origin) and every calibration
 measurement that follows.
 
 ## Goal
@@ -33,7 +33,7 @@ drawing end that seats the pen (e.g. a standard ballpoint pen body).
    rod shoulder) to the pen tip contact point.
 2. Take 3 measurements, rotate the assembly between them, and use the mean.
    Record with at least 3 decimals in METERS (e.g. 0.145 m, not 14.5 cm).
-3. Update `docs/robot/icebot.urdf`:
+3. Update `docs/execution/robot/icebot.urdf`:
    - `tcp_joint` origin `xyz="0 0 -0.12"` (current baseline) → the measured
      offset (negative Z: the tip points down).
    - Follow the XML comment above `tcp_joint`: procedure + FK verification.
