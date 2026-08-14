@@ -1,0 +1,437 @@
+# Análisis de Workspace {#sec-workspace-analysis}
+
+## Introducción
+
+El análisis de workspace es una técnica fundamental en robótica que permite
+**caracterizar el espacio de trabajo** de un manipulador: el conjunto de
+posiciones (y opcionalmente orientaciones) que el end-effector puede alcanzar
+dadas las limitaciones físicas de sus articulaciones.
+
+Thalos implementa análisis de workspace mediante **muestreo Monte Carlo**:
+en lugar de calcular analíticamente la frontera del workspace (complejo y
+dependiente de la geometría del robot), se muestrean configuraciones
+articulares aleatorias uniformes, se evalúa la cinemática directa (FK) para
+cada una, y se construye un dataset de posiciones alcanzables.
+
+Este enfoque tiene varias ventajas:
+
+- **Robot-agnóstico**: funciona para cualquier `SerialChain`
+- **Paralelizable**: cada muestra es independiente (embarazosamente paralelo)
+- **Aproximación probabilística**: la calidad mejora con más muestras
+- **Base para análisis avanzados**: singularidades, manipulabilidad,
+  validación de trayectorias
+
+```{dot}
+//| fig-cap: "Diagrama conceptual del pipeline de análisis de workspace"
+//| label: fig-workspace-pipeline
+digraph workspace_pipeline {
+    rankdir=LR;
+    splines=ortho;
+    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=10, margin="0.3,0.1"];
+    edge [penwidth=1.5];
+
+    config [label="WorkspaceConfig\n(samples, seed, tolerance)"];
+    chain [label="SerialChain\n(joints, links, FK)"];
+    sampler [label="WorkspaceSampler\n::sample()", fillcolor="#d4e6f1", style="rounded,filled"];
+    ws [label="Workspace\n(dataset inmutable)", fillcolor="#d5f5e3", style="rounded,filled"];
+    reach [label="Reachability\nquery", fillcolor="#fcf3cf", style="rounded,filled"];
+    visual [label="WorkspaceVisual\n(wireframe + point cloud)", fillcolor="#f0e6f6", style="rounded,filled"];
+    api [label="API HTTP\nJSON DTOs", fillcolor="#fadbd8", style="rounded,filled"];
+
+    config -> sampler;
+    chain -> sampler;
+    sampler -> ws;
+    ws -> reach;
+    ws -> visual;
+    ws -> api;
+}
+```
+
+## Conceptos fundamentales
+
+### WorkspaceSample
+
+La **unidad atómica** del análisis: una configuración articular `q` y la
+posición 3D del end-effector que produce.
+
+```rust
+pub struct WorkspaceSample {
+    pub q: Vec<f64>,          // configuración articular
+    pub position: Vector3,    // posición del end-effector
+}
+```
+
+Invariante: `position == FK(chain, q).ee_position()` (garantizado por el
+sampler).
+
+### BoundingBox
+
+Caja alineada a ejes (AABB) que **envuelve** todas las posiciones muestreadas.
+Es la aproximación más simple del workspace: un ortoedro definido por sus
+esquinas mínima y máxima.
+
+```rust
+pub struct BoundingBox {
+    pub min: Vector3,
+    pub max: Vector3,
+}
+```
+
+### WorkspaceMetrics
+
+Métricas derivadas del conjunto de posiciones. Calculadas en una pasada O(n)
+durante la construcción del `Workspace`.
+
+```rust
+pub struct WorkspaceMetrics {
+    pub bounding_volume: f64, // volumen del AABB (no del workspace real)
+    pub max_reach: f64,       // distancia máxima al origen
+    pub min_reach: f64,       // distancia mínima al origen
+    pub centroid: Vector3,    // media aritmética de posiciones
+    pub sample_count: usize,  // número de muestras
+}
+```
+
+> **⚠️ `bounding_volume` ≠ volumen del workspace real**. El volumen del AABB
+> sobreestima drásticamente el workspace (especialmente para robots con
+> huecos internos). Métricas de forma real (convex hull, voxelización) están
+> planificadas para fases futuras.
+
+### WorkspaceConfig
+
+Parámetros de configuración para el muestreo y las consultas de alcanzabilidad.
+
+```rust
+pub struct WorkspaceConfig {
+    pub samples: usize,   // > 0, número de configuraciones a muestrear
+    pub seed: u64,        // semilla determinista (StdRng::seed_from_u64)
+    pub tolerance: f64,   // >= 0, tolerancia en metros para reachability
+}
+```
+
+Valores por defecto: `samples = 10_000`, `seed = 0xDEAD_BEEF`, `tolerance = 1e-3`.
+
+### Workspace
+
+Dataset inmutable que contiene las muestras, bounds y métricas derivadas.
+
+```rust
+pub struct Workspace {
+    samples: Vec<WorkspaceSample>,  // privado
+    bounds: BoundingBox,            // privado
+    metrics: WorkspaceMetrics,      // privado
+}
+```
+
+Métodos públicos:
+
+- `from_samples(samples)` — constructor único, O(n) secuencial, rechaza vacío
+- `samples() -> &[WorkspaceSample]` — vista de las muestras
+- `bounds() -> &BoundingBox` — AABB derivado
+- `metrics() -> &WorkspaceMetrics` — métricas derivadas
+- `is_reachable(point, tolerance) -> Result<Reachability, WorkspaceError>` —
+  consulta de alcanzabilidad
+
+## Muestreo Monte Carlo {#sec-workspace-sampling}
+
+El `WorkspaceSampler` implementa el algoritmo de muestreo:
+
+1. Recibe un `SerialChain` + `WorkspaceConfig` + RNG
+2. Para cada muestra:
+   a. Genera una configuración articular aleatoria **uniforme** dentro de los
+      límites de cada joint
+   b. Evalúa FK con `ForwardKinematics::evaluate(q)`
+   c. Extrae `ee_position()` del resultado
+3. Construye un `Workspace` con todas las muestras
+
+```rust
+pub struct WorkspaceSampler;
+
+impl WorkspaceSampler {
+    pub fn sample<R: Rng + SeedableRng>(
+        &self,
+        chain: &SerialChain,
+        config: WorkspaceConfig,
+        rng: &mut R,
+    ) -> Result<Workspace, WorkspaceError>;
+}
+```
+
+El RNG se inyecta externamente, lo que permite:
+
+- **Tests deterministas** (R1): fijando la semilla, el mismo `chain` + `config`
+  produce siempre el mismo `Workspace`
+- **Producción**: `WorkspaceService::sample()` usa `StdRng::seed_from_u64(seed)`
+  para crear un RNG determinista a partir de la semilla
+
+La función que genera un joint value aleatorio es:
+
+```
+q_j ~ U(limit_j.min, limit_j.max)
+```
+
+donde `limit_j` son los límites físicos del `j`-ésimo joint. Cada joint se
+muestrea independientemente.
+
+### Invariantes clave
+
+| ID | Invariante | ¿Dónde se valida? |
+|----|-----------|-------------------|
+| FK | `position == FK(chain, q).ee_position()` | Sampler (garantizado) |
+| R1 | Mismo `chain + config + seed` → mismo `Workspace` | Tests de integración |
+| R2 | `sample_count == config.samples` | `Workspace::from_samples()` |
+| R3 | `samples.q[i].len() == n_dof` | Por construcción |
+| R8 | Rechaza `samples = 0` | `WorkspaceError::InvalidSampleCount` |
+
+## Consulta de alcanzabilidad {#sec-workspace-reachability}
+
+La consulta de alcanzabilidad determina si un punto `p` en el espacio 3D es
+alcanzable por el end-effector, dentro de una tolerancia dada.
+
+```rust
+pub enum Reachability {
+    /// El punto está dentro de la tolerancia de al menos una muestra.
+    Reachable,
+    /// El punto está más lejos que la tolerancia de toda muestra.
+    OutOfWorkspace {
+        nearest_distance: f64,  // distancia mínima a cualquier muestra
+    },
+}
+```
+
+### Algoritmo (`Workspace::is_reachable`)
+
+1. **Validación de entrada**:
+   - `tolerance` >= 0 y no NaN → `InvalidTolerance` si falla
+   - `point` sin NaN ni Infinity → `InvalidPoint` si falla
+2. **Búsqueda lineal** O(n) sobre todas las posiciones muestreadas
+3. Si `min_distance <= tolerance` → `Reachable`
+4. Si no → `OutOfWorkspace { nearest_distance: min_distance }`
+
+> La búsqueda lineal es deliberada (D1): para datasets de ~10K-100K muestras
+> es suficiente. Optimizaciones espaciales (KD-tree, octree) están
+> planificadas para cuando el tamaño del workspace lo justifique.
+
+## Arquitectura por capas
+
+El análisis de workspace atraviesa todas las capas del sistema, manteniendo la
+separación de responsabilidades:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    thalos-core (dominio)                     │
+│  Workspace │ WorkspaceSample │ WorkspaceSampler              │
+│  BoundingBox │ WorkspaceMetrics │ Reachability               │
+│  WorkspaceConfig │ WorkspaceError                           │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  thalos-runtime (orquestación)               │
+│  WorkspaceService (stateless)                                │
+│    · sample(model, config) → Arc<Workspace>                  │
+│    · query(ws, point, tolerance) → Reachability              │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+              ┌────────┴────────┐
+              ▼                  ▼
+┌─────────────────────┐  ┌──────────────────────────┐
+│   thalos-api (HTTP)  │  │ thalos-visual (visual)    │
+│                      │  │                          │
+│ POST /workspace/     │  │ WorkspaceVisual           │
+│   sample             │  │ · BoundsWireframe         │
+│ POST /workspace/     │  │ · SamplePointCloud        │
+│   reachability       │  │ · robot_overlay           │
+└──────────┬──────────┘  └──────────┬───────────────┘
+           │                        │
+           └────────┬───────────────┘
+                    ▼
+┌────────────────────────────────────┐
+│       Frontend (React)             │
+│  WorkspacePanel (form + metrics)   │
+│  WorkspaceRenderer (Three.js)      │
+└────────────────────────────────────┘
+```
+
+### thalos-core
+
+**Responsabilidad**: tipos de dominio y algoritmo de muestreo. No sabe de
+HTTP, visualización ni runtime.
+
+Crate puro: depende solo de `nalgebra` para tipos matemáticos, `thiserror` para
+errores, y `rand` para el sampler.
+
+### thalos-runtime
+
+**`WorkspaceService`** — servicio stateless (sin estado mutable). Toma un
+`RobotModel` y config, construye la `SerialChain` via `RobotRegistry`, crea
+un `StdRng` con la semilla, y delega en `WorkspaceSampler`.
+
+Todas las funciones son `pub fn` estáticas — no requieren instancia:
+
+```rust
+impl WorkspaceService {
+    pub fn sample(model: RobotModel, config: WorkspaceConfig)
+        -> Result<Arc<Workspace>, RuntimeError>;
+
+    pub fn query(workspace: &Workspace, point: &Vector3, tolerance: f64)
+        -> Result<Reachability, WorkspaceError>;
+}
+```
+
+Devuelve `Arc<Workspace>` para permitir compartir el dataset entre hilos sin
+copia (D10). Un futuro cacheo con `HashMap<WorkspaceKey, Arc<Workspace>>` es
+trivial de agregar.
+
+### thalos-api
+
+Dos endpoints HTTP, ambos `POST`:
+
+#### `POST /api/v1/workspace/sample`
+
+```json
+// Request
+{
+  "robot_id": "scara",
+  "samples": 50000,
+  "seed": 42,
+  "tolerance": 0.001,
+  "include_samples": false
+}
+
+// Response (include_samples: false)
+{
+  "metrics": {
+    "bounding_volume": 8.234,
+    "max_reach": 2.121,
+    "min_reach": 0.453,
+    "centroid": { "x": 0.0, "y": 0.8, "z": -0.2 },
+    "sample_count": 50000
+  },
+  "bounds": {
+    "min": { "x": -1.5, "y": -1.5, "z": -0.5 },
+    "max": { "x":  1.5, "y":  1.5, "z":  0.5 }
+  }
+}
+```
+
+#### `POST /api/v1/workspace/reachability`
+
+Autocontenido: muestrea un workspace SCARA con parámetros por defecto
+(10K muestras, tolerancia 1e-3) y ejecuta la consulta:
+
+```json
+// Request
+{
+  "point": { "x": 0.5, "y": 0.5, "z": 0.0 },
+  "tolerance": 0.01
+}
+
+// Response
+{
+  "reachable": true,
+  "nearest_distance": 0.0023
+}
+```
+
+### thalos-visual
+
+**`WorkspaceVisual`** — representación visual completa del workspace:
+
+- `BoundsWireframe`: AABB como 12 aristas (wireframe) definido por `min`/`max`
+- `SamplePointCloud`: nube de puntos 3D (todas las posiciones muestreadas)
+- `robot_overlay: Option<VisualScene>`: escena del robot superpuesta
+  (opcional, para contexto visual)
+
+```rust
+pub struct WorkspaceVisual {
+    pub bounds_wireframe: BoundsWireframe,
+    pub samples_points: SamplePointCloud,
+    pub robot_overlay: Option<VisualScene>,
+}
+```
+
+```rust
+pub struct BoundsWireframe {
+    pub min: [f64; 3],
+    pub max: [f64; 3],
+}
+// Provee edges() -> 12 segmentos [(start, end); 12]
+
+pub struct SamplePointCloud {
+    pub points: Vec<[f64; 3]>,
+    pub count: usize,
+}
+```
+
+### Frontend (React) {#sec-workspace-frontend}
+
+La feature de análisis de workspace vive en `features/viewport/`:
+
+#### AnalysisWorkspace
+
+`AnalysisWorkspace` (ruta `/analysis`) expone la sección inline de sampleo:
+
+- **Formulario**: samples, seed, tolerance (estado local, sin auto-run)
+- **Trigger explícito**: botón "Run Analysis" corre workspace, singularidad y
+  manipulabilidad contra los endpoints `/active` del backend
+- **Métricas**: `bounding_volume`, `max_reach`, `min_reach`, sample count,
+  singularidad (condition number) y manipulabilidad (Yoshikawa / isotropía)
+- **Controles de punto cloud**: color por modo (workspace / singularity /
+  manipulability) y toggle de visibilidad
+
+Estado reactivo via `useWorkspaceStore` (zustand):
+
+```typescript
+interface WorkspaceState {
+  workspaceSamples: CloudPoint[] | null;
+  singularitySamples: CloudPoint[] | null;
+  manipulabilitySamples: CloudPoint[] | null;
+  showPointCloud: boolean;
+  colorMode: PointCloudColorMode;
+  loading: boolean;
+  error: string | null;
+}
+```
+
+#### PointCloud
+
+Componente R3F dentro de `SceneCanvas` que renderiza la nube de puntos 3D
+con `THREE.BufferGeometry`, coloreada según el modo (`CloudPoint.state` para
+singularidad, `yoshikawa` para manipulabilidad). El `WorkspacePanel` mantiene
+solo los controles de color/visibilidad sobre el viewport persistente.
+
+## Mapa de errores
+
+| Error | Causa | Código HTTP |
+|-------|-------|-------------|
+| `InvalidSampleCount(n)` | `samples == 0` | 422 |
+| `InvalidTolerance(t)` | `tolerance < 0` o `NaN` | 422 |
+| `InvalidPoint(s)` | coordenada NaN o Infinity | 422 |
+| `EmptyWorkspace` | dataset interno vacío (no debería ocurrir si se usa el sampler) | 500 |
+| `RobotModelError` | `robot_id` no existe en el catálogo | 404 |
+
+## Tests
+
+El workspace analysis tiene **71 tests unitarios + 7 tests de visualización**,
+distribuidos así:
+
+| Capa | Tests | Cobertura |
+|------|-------|-----------|
+| Core (dominio) | 44 | `Workspace`, `Sampler`, `Reachability`, `BoundingBox`, `Metrics` |
+| Runtime | 11 | `WorkspaceService::sample`, `WorkspaceService::query` |
+| API (integración) | 5 | Endpoints HTTP, DTO conversion, error mapping |
+| Visual | 7 (2 snapshot) | `WorkspaceVisual`, `BoundsWireframe::edges`, `SamplePointCloud` |
+
+### Invariantes bajo test
+
+- **R1** (determinismo): mismo seed → mismo workspace
+- **R2** (conteo): `samples.len() == config.samples`
+- **R3** (dimensionalidad): cada `q` tiene `n_dof` elementos
+- **R4** (reachability): punto conocido → `Reachable`; punto lejano → `OutOfWorkspace`
+- **R5** (tolerance): `tolerance = 0` → solo puntos exactos
+- **R6** (punto inválido): NaN o Infinity → `InvalidPoint`
+- **R7** (parámetros inválidos): `samples = 0` → error; `tolerance < 0` → error
+- **R8** (jacobiano): FK produce `ee_position` para joint values aleatorios
+- **D4** (RNG): `StdRng::seed_from_u64` para determinismo
+- **D1** (búsqueda lineal): implementación O(n) actual, optimización futura

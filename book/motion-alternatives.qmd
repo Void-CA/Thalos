@@ -1,0 +1,151 @@
+# Alternativas de movimiento guiadas por evaluación {#sec-motion-alternatives}
+
+Thalos puede generar alternativas geométricas de un plan semilla, evaluarlas
+con el mismo `Assessor` congelado del análisis normal y seleccionar la mejor
+por una función objetivo ponderada (`J`). El mecanismo es **aditivo**: el
+camino normal de análisis no cambia, y la selección nunca altera los extremos
+ni la secuencia de tareas del plan.
+
+```text
+semilla (Direct, siempre candidato 0)  →  generar  →  [compilar → analizar →
+evaluar] por candidato  →  mapear (runtime)  →  filtrar (gate)  →  rankear  →  seleccionar
+```
+
+## Pipeline de candidatos
+
+El flujo completo vive en `thalos-runtime` (`analyze_plan_with_candidates`) y
+compone módulos de `thalos-planning`:
+
+```{dot}
+//| fig-cap: "Pipeline de candidatos — generate → compile → analyze → assess → map → gate → rank"
+//| label: fig-candidate-pipeline
+digraph candidatos {
+    rankdir=TB;
+    splines=ortho;
+    nodesep=0.4;
+    ranksep=0.4;
+
+    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=10, margin="0.25,0.1"];
+    edge [fontsize=8, fontname="sans-serif"];
+
+    seed  [label="Plan semilla\n(PlanningProgram)"];
+    gen   [label="CandidateGenerator::generate\nDirect (candidato 0) + InsertWaypoint + AlternateElbow"];
+    cand  [label="Por candidato:"];
+    comp  [label="PlanCompiler\ncompile()"];
+    an    [label="TrajectoryAnalyzer\nanalyze_with_observations()"];
+    agg   [label="DefaultAggregator\nAnalysisReport"];
+    ass   [label="Assessor::assess()\n(congelado — autoridad única de riesgo)"];
+    map   [label="Runtime adapter (ADR-5)\nAssessment → CandidateAssessment\nrisk = 1 − quality · Critical → Rejected"];
+    gate  [label="AdmissibilityGate\nfase 1: invariantes geométricas\nfase 2: política de riesgo"];
+    rank  [label="CandidateEvaluator\nJ = Σ wᵢ·normᵢ (min-max por set)\nselección = argmin J"];
+    out   [label="CandidateRanking\n+ SelectionReason derivado"];
+
+    seed -> gen;
+    gen -> cand;
+    cand -> comp -> an -> agg -> ass -> map;
+    map -> gate;
+    gate -> rank -> out;
+    seed -> gate [label="extremos ε + identidad de tarea", style=dashed, color="#2c3e50"];
+}
+```
+
+| Etapa | Responsabilidad | Componente |
+|-------|-----------------|------------|
+| Generar | Produce geometrías alternativas; sin conocimiento de riesgo | `CandidateGenerator` + estrategias acotadas |
+| Compilar | Resuelve IK y arma la trayectoria (convergencia, C0) | `PlanCompiler` |
+| Analizar | Observaciones canónicas + métricas técnicas | `TrajectoryAnalyzer` + `DefaultAggregator` |
+| Evaluar | Verdicto de riesgo/calidad sobre el reporte | `Assessor::assess` (frozen) |
+| Mapear | Traduce `Assessment` al contrato neutro de planning | runtime (composition root) |
+| Filtrar | Invariantes geométricas + política de riesgo | `AdmissibilityGate` |
+| Rankear | Normaliza y pondera; elige `argmin J` | `CandidateEvaluator` (SafetyFirst: 0.5/0.2/0.2/0.1) |
+
+## Límite de contrato (ADR-5)
+
+`thalos-planning/src/candidate/` **no depende de `thalos-intelligence`**. La
+generación y la evaluación operan sobre contratos neutros de planning
+(`CandidateAssessment { risk, admissibility }`); el runtime es el único
+componente que conoce ambos lados y adapta el `Assessment` congelado — incluida
+la regla `Risk::Critical → RiskAdmissibility::Rejected` (el umbral de
+"Critical" nunca se duplica en planning).
+
+```bash
+$ rg "thalos_intelligence|thalos-intelligence" crates/thalos-planning/src/candidate/
+# → vacío (sin salida)
+```
+
+| Componente | Conoce riesgo | Conoce candidatos | Adapta el contrato |
+|------------|---------------|-------------------|--------------------|
+| `candidate/` (generación) | No — produce geometrías | Sí | No |
+| `Assessor` (inteligencia) | Sí — autoridad única | No | No |
+| Evaluador (planning) | Solo el `CandidateAssessment` neutro | Sí | No |
+| Runtime (composition root) | Sí | Sí | **Sí** (ADR-5) |
+
+## El hallazgo del segmento intermedio
+
+`AlternateElbow` solo contribuye cuando el segmento transformado **no es el
+joint goal** del programa. La invariante de extremos (ADR-1) compara el último
+objetivo `MoveJ` con tolerancia `ε = 1e-4` rad por junta; `AlternateElbow`
+re-resuelve el objetivo cartesiano del segmento a la postura de codo del mismo
+lado, lo que **cambia el joint goal** — y un candidato así se rechaza por
+`EndpointDrift`. Por eso el escenario demostrativo cruza por un segmento
+**intermedio**:
+
+```text
+[MoveJ home (0.0, -1.31, -0.1, 0.0) → MoveJ cross (0.5, 0.6, -0.15, 0.0)
+ → MoveJ goal (0.5, -1.31, -0.15, 0.0)],  target_segment = 1
+```
+
+El segmento 1 cruza la extensión completa (q1 pasa por 0) → el seed se evalúa
+`High` (riesgo crisp 0.557). `AlternateElbow` re-resuelve ese segmento desde
+las juntas de inicio del segmento a la postura del mismo lado (misma posición
+cartesiana, q1 permanece negativo → sin cruce), preservando el `MoveJ` inicial
+y el joint goal. En un programa de un solo segmento, la única alternativa
+generada sería estructuralmente rechazada; la selección del segmento es una
+política del llamador, nunca de la estrategia.
+
+## Convenciones documentadas
+
+### `L` = longitud de trayectoria en espacio articular
+
+`MotionMetrics.path_length` es la longitud L2 en el espacio articular,
+`L = Σ ||qᵢ₊₁ − qᵢ||₂` entre waypoints consecutivos — la misma convención del
+`TraceAnalyzer` del runtime. Es una propiedad directa de la articulación
+ejecutada, independiente del frame TCP, y para `AlternateElbow vs Direct` es
+exactamente el cambio geométrico que se quiere comparar. Una longitud TCP
+cartesiana (`L_tcp`) queda diferida a un futuro perfil `PathEfficiency`; no se
+mezclan geometrías dentro de `J`.
+
+### `±π` = fallback operacional, no un rango físico
+
+Las juntas sin límites declarados degradan a `[−π, π]` en el check
+defense-in-depth del gate (`joint_bounds_from_chain`) — la misma convención del
+handler de optimize de la API. Es un **fallback operacional** para el check de
+límites, no una afirmación sobre el rango físico real del robot. No debe
+interpretarse como un límite real.
+
+## Garantía de equivalencia baseline
+
+El camino de candidatos **no cambia la evaluación del seed**. Para el mismo
+programa semilla y el mismo contexto, el candidato `Direct` (el seed mismo,
+siempre candidato 0) recibe exactamente la misma evaluación que el camino
+normal `analyze_plan`: mismo `risk`, misma `quality`, mismo `evidence`
+(métricas del reporte) y misma `trace` (trayectoria ejecutada, waypoint por
+waypoint). La prueba estructural vive en `plan_analysis.rs`
+(`candidates_flow_preserves_the_seed_assessment_and_report`) y compara el
+`Assessment` completo y el `AnalysisReport` completo con igualdad estructural
+(`PartialEq`), no por muestreo. Esto se verifica también dentro de la demo:
+`candidate_counterfactual.rs` afirma que el assessment del candidato `Direct`
+coincide con el del seed evaluado por el camino llano.
+
+## Reproducción
+
+```bash
+# Demo del contrafactual (tabla rankeada + veredicto de equivalencia baseline)
+cargo test -p thalos-planning --test candidate_counterfactual -- --nocapture
+
+# Verificación de factibilidad (mismo escenario, invariantes de PR3)
+cargo test -p thalos-planning --test candidate_feasibility -- --nocapture
+
+# Equivalencia baseline a nivel runtime (ambos caminos sobre el mismo seed)
+cargo test -p thalos_runtime plan_analysis
+```

@@ -1,0 +1,235 @@
+# Glosario {#sec-glossary}
+
+## Términos generales
+
+**Serial Chain** — Secuencia ordenada de segmentos donde cada joint conecta
+exactamente dos links, formando una cadena abierta. Es la única topología
+soportada actualmente por Thalos.
+
+**Forward Kinematics (FK)** — Dada una configuración de joints `q`, calcular
+la pose (posición + orientación) de cada frame en la cadena.
+
+**Jacobiano** — Matriz que relaciona velocidades articulares `q̇` con
+velocidades del end-effector `v = J · q̇`. Thalos implementa el jacobiano
+geométrico (analítico) y el numérico (diferencias finitas).
+
+**DOF** — *Degrees of Freedom*. Grados de libertad del robot. Un robot con
+`n` joints tiene `n` DOF.
+
+**End Effector** — Frame terminal de la cadena cinemática. Es el punto de
+interés para el análisis (posición del gripper, herramienta, etc.).
+
+## Términos del dominio
+
+**Frame** — Sistema de referencia espacial. Identificado por `FrameId` (World
+o Id). Tiene un nombre legible. Es la unidad fundamental de la representación
+espacial.
+
+**Pose** — Relación espacial entre dos frames: `Transform3D` de `reference` a
+`target`.
+
+**FrameRegistry** — Registro central que mapea `FrameId`s a `Frame`s. La
+`SerialChain` contiene un `FrameRegistry` que indexa todos los frames de la
+cadena.
+
+**Segment** — Unidad estructural que modela un eslabón completo: joint + link
++ conexión entre parent y child frames.
+
+**Joint** — Articulación que introduce movimiento. Puede ser rotacional
+(`RevoluteJoint`) o de deslizamiento (`PrismaticJoint`).
+
+**Link** — Elemento rígido con una transformación fija.
+
+**Model** — Robot concreto con parámetros específicos. Ej: `Planar2R { l1:
+1.0, l2: 1.0 }`.
+
+**Kinematic Chain** — Conjunto de bodies y joints conectados. Thalos solo
+maneja *serial* chains (abiertas). No soporta cadenas cerradas (parallel) ni
+ramificaciones (tree).
+
+## Términos del workspace (Cargo)
+
+**Crate** — Paquete de Rust. Thalos tiene 8: `thalos-math`, `thalos-core`,
+`thalos-models`, `thalos-collision`, `thalos-planning`, `thalos-visual`,
+`thalos-runtime`, `thalos-api`.
+
+**Workspace** — Conjunto de crates que comparten un `Cargo.lock` y
+configuración de build.
+
+**Feature** — Módulo funcional dentro de `thalos-api` (`scene`, `robots`,
+`motion`, `workspace`).
+
+## Términos de IK y cinemática inversa
+
+**Inverse Kinematics (IK)** — Dada una pose deseada del end-effector, calcular
+la configuración articular `q` que la produce. Thalos implementa DLS
+(Damped Least Squares) y JT (Jacobian Transpose).
+
+**IKGoal** — Meta del solver de IK: `Position(Vector3)` o `Pose(Pose)`.
+
+**IKResult** — Resultado del solver: `q` (solución articular), `final_error`,
+`iterations`, `status` (Converged, MaxIterationsReached, Singularity).
+
+**Damped Least Squares (DLS)** — Solver IK robusto cerca de singularidades.
+Usa damping `λ` para estabilizar la pseudo-inversa del jacobiano.
+
+**Jacobian Transpose (JT)** — Solver IK basado en `Jᵀ` en lugar de pseudo-inversa.
+
+## Términos de Flange y TCP
+
+**Flange** — Último frame mecánico del robot (`chain.end_effector`). Es el punto
+donde se monta la herramienta. Inmutable durante la vida del robot.
+
+**TCP (Tool Center Point)** — Punto de trabajo de la herramienta activa.
+Definido como un offset desde un frame base (típicamente el flange). Puede
+cambiarse en runtime.
+
+**ToolFrame** — Estructura que define un TCP: `base_frame` + `transform` (offset).
+
+## Términos de colisiones
+
+**NaiveCollisionChecker** — Detector O(n²) que compara todos los pares de
+objetos sin optimizaciones espaciales.
+
+**SAT (Separating Axis Theorem)** — Algoritmo para detectar intersección entre
+cajas orientadas (OBB).
+
+## Términos de planificación
+
+**MoveJ** — Movimiento en joint space: interpolación sincronizada de todos los
+joints desde la configuración actual a la target.
+
+**MoveL** — Movimiento en cartesian space: el end-effector sigue una línea recta
+desde la posición actual a la target.
+
+**MoveJPlanner** — Planificador que genera trayectorias en joint space con
+rampas de velocidad y aceleración.
+
+**Trajectory** — Secuencia de waypoints con metadatos (tipo de movimiento,
+timestamps). Produce `TrajectoryMetadata` con duración total y distancia.
+
+**GoalResolver** — Valida que una meta sea alcanzable dado el estado actual y
+las políticas de planificación (límites articulares, strict_limits).
+
+## Términos del workspace analysis
+
+**Workspace Analysis** — Técnica para caracterizar el espacio de trabajo de un
+manipulador mediante muestreo Monte Carlo de configuraciones articulares.
+
+**Workspace** — Dataset inmutable de muestras de configuraciones articulares
+con posiciones del end-effector, bounds y métricas derivadas.
+
+**WorkspaceSample** — Unidad atómica del análisis: configuración articular `q`
++ posición 3D del end-effector.
+
+**BoundingBox** — Caja alineada a ejes (AABB) que envuelve todas las
+posiciones muestreadas. No es el volumen real del workspace.
+
+**WorkspaceMetrics** — Métricas derivadas del conjunto de posiciones:
+`bounding_volume`, `max_reach`, `min_reach`, `centroid`, `sample_count`.
+
+**WorkspaceConfig** — Parámetros de muestreo: `samples`, `seed`, `tolerance`.
+
+**WorkspaceSampler** — Algoritmo de muestreo Monte Carlo que genera configuraciones
+articulares uniformes dentro de los límites y evalúa FK.
+
+**Reachability** — Resultado de una consulta de alcanzabilidad: `Reachable` u
+`OutOfWorkspace { nearest_distance }`.
+
+**WorkspaceService** — Servicio stateless en `thalos-runtime` que orquesta el
+muestreo y las consultas de alcanzabilidad.
+
+**WorkspaceVisual** — Representación visual compuesta por `BoundsWireframe`
+(AABB como 12 aristas) y `SamplePointCloud` (nube de puntos 3D) con overlay
+opcional del robot.
+
+**WorkspacePanel** — Componente React con los controles del punto cloud: modo
+de color (workspace / singularity / manipulability) y toggle de visibilidad,
+sobre el viewport 3D.
+
+**WorkspaceRenderer** — Renderizado de la nube de puntos. El equivalente real
+es `PointCloud` (componente R3F dentro de `SceneCanvas`), que dibuja las
+muestras con `THREE.BufferGeometry` coloreada según el modo.
+
+## Términos del runtime
+
+**SceneService** — Orquestador central. Mantiene `SceneRuntime` (el estado mutable)
+y expone `snapshot()` y `execute(Command)`. Es el punto único de entrada para
+toda mutación del sistema.
+
+**Command** — Enum que tipa las mutaciones del runtime: `SetJoints(Vec<f64>)`
+y `LoadRobot(String)`. Se ejecutan via `SceneService::execute()`.
+
+**RuntimeSnapshot** — Estado puntual del sistema: robot activo, joints actuales,
+escena visual validada y timestamp. Es el valor de retorno unificado.
+
+**SceneRuntime** — Contenedor del estado mutable: envuelve `ActiveRobot` dentro
+de un `RwLock` para acceso concurrente.
+
+**ActiveRobot** — Robot actualmente cargado: modelo, cadena cinemática
+(`SerialChain`) y ángulos articulares (`Vec<f64>`).
+
+**RobotBackend** — Trait (strategy) para resolver modelos robóticos por ID.
+`InternalBackend` usa el catálogo built-in; implementaciones custom pueden
+integrar hardware, archivos de configuración o redes.
+
+## Términos del frontend
+
+**useSceneStore** — Store **zustand** con el estado del viewport 3D. Recibe el
+`RuntimeStateResponse` del backend y lo aplica vía `applyScene()`,
+`applyFkUpdate()` o `applyRuntimeDelta()`; los componentes consumen el estado
+con selectors (no hay RxJS ni signals).
+
+**useRobotStore** — Store zustand para el catálogo de robots. Expone `robots`,
+`selectedId`, `loading` y `error`. `select(id)` registra el robot pedido;
+`useSceneRobotSync` en `AppShell` lo convierte en un load al backend.
+
+**SceneCanvas** — Componente React (@react-three/fiber) que monta el `<Canvas>`
+Z-up y renderiza `RobotModel`, `IkGizmo`, `TcpOverlay`, `PointCloud` y
+`Trajectory` sobre `SceneData`.
+
+**RobotCatalog** — Componente que lista robots del catálogo (`robot-api`) y al
+seleccionar uno dispara `useRobotStore.select()`; el robot activo confirmado
+vive en el runtime del backend (`runtime.robot.id`).
+
+**adapter** (`features/viewport/adapter.ts`) — Traduce DTOs del API
+(snake_case) a tipos internos del frontend (camelCase): `toSceneData()`,
+`toRuntimeInfo()`, `toIkResult()`, `toActivePlan()`, `toToolFrame()` y
+`toExecutionInfo()`.
+
+## Términos visuales
+
+**VisualPrimitive** — Elemento 3D con volumen (cilindro, esfera, caja) que
+complementa frames y links en la escena. Tiene `id`, `translation`, `rotation`
+y `geometry`. Ej: base column del SCARA, cuerpos de links.
+
+**FrameStyle** — Configuración visual de un frame individual: longitud/radio de
+ejes, colores RGB, esfera de origen y etiquetas. Cada `VisualFrame` puede
+tener su propio `FrameStyle` o usar defaults del frontend.
+
+**ScaraVisualBuilder** — Builder específico para el robot SCARA. Genera
+primitivas geométricas (base column, link bodies) además de los frames y links
+estándar. Es un ejemplo del patrón "builder por robot".
+
+**cylinder_between** — Helper que construye un `VisualPrimitive::Cylinder`
+entre dos puntos 3D, calculando altura (distancia), punto medio y rotación
+(para alinear el eje Y del cilindro con la dirección del segmento).
+
+**align_y_to** — Helper que produce un quaternion que rota el eje Y canónico
+(0,1,0) para alinearse con una dirección arbitraria. Se usa internamente por
+`cylinder_between` y es exportado para uso en builders personalizados.
+
+## Convenciones de código
+
+**Error explícito** — Toda operación que pueda fallar retorna `Result`. No
+hay `unwrap()` ocultos, `expect()` silenciosos, ni fallbacks mágicos.
+
+**Invariante de construcción** — Un tipo que representa un concepto con
+restricciones matemáticas valida esas restricciones en `new()`.
+`UnitQuaternion::new()` falla si la norma no es ≈ 1.
+
+**Normalización controlada** — `VisualPrecision` expone explícitamente los
+parámetros de redondeo. Nada se normaliza "porque sí".
+
+**PhantomData** — Uso de tipos fantasma para asegurar en compilación que
+transformaciones entre frames incompatibles no se compongan accidentalmente.

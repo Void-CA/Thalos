@@ -1,0 +1,771 @@
+# Arquitectura del workspace {#sec-workspace}
+
+El workspace de Thalos está organizado en **once crates** dentro de un
+workspace Cargo.
+
+```
+backend/
+├── Cargo.toml                    # workspace root
+├── crates/
+│   ├── thalos-math/              # Tipos matemáticos puros
+│   ├── thalos-core/              # Núcleo matemático-robótico
+│   ├── thalos-models/            # Estructura canónica de robot (URDF mirror)
+│   ├── thalos-collision/         # Detección de colisiones
+│   ├── thalos-planning/          # Planificación de movimiento
+│   ├── thalos-semantic/          # Modelo de programación de tareas
+│   ├── thalos-optimization/      # Optimización de trayectorias
+│   ├── thalos-document/          # Documento de tarea (TaskDocument)
+│   ├── thalos-visual/            # Representación visual
+│   ├── thalos-runtime/           # Orquestación runtime
+│   └── thalos-api/               # Exposición externa (HTTP)
+```
+
+## thalos-math {#sec-math}
+
+**Responsabilidad**: Tipos matemáticos fundamentales desacoplados del dominio
+robótico. Originalmente parte de `thalos-core`, separados para permitir reuso
+en contextos no robóticos.
+
+**Depende de**: `nalgebra`.
+
+```
+thalos-math/src/
+├── lib.rs                        # Punto de entrada
+├── geometry/
+│   ├── vectors/                  # Vector3, UnitVector3
+│   ├── rotations/                # Quaternion, UnitQuaternion
+│   └── rigid/                    # Transform3D, Transform<From,To>
+├── algebra/                      # DynamicMatrix, DynamicVector
+├── dh.rs                         # Parámetros Denavit-Hartenberg
+├── matrix.rs                     # Matrix4x4
+├── traits.rs                     # Cross, Dot
+├── constants.rs                  # EPS, PI, DEG_TO_RAD
+├── error.rs                      # MathError
+└── transform.rs                  # Transform helpers
+```
+
+## thalos-core {#sec-core}
+
+**Responsabilidad**: Núcleo matemático y robótico del sistema. Es el crate
+fundacional — todo lo demás depende de él.
+
+**Depende de**: `thalos-math`, `nalgebra`, `thiserror`.
+
+### Estructura interna
+
+```
+thalos-core/src/
+├── lib.rs                        # Punto de entrada, declara módulos públicos
+├── prelude.rs                    # Re-exportaciones convenientes
+├── math/                         # (deprecated — usar thalos-math)
+├── robot/                        # Representación estructural de robots
+│   ├── joint/                    # JointType, RevoluteJoint, PrismaticJoint
+│   ├── link.rs                   # Link (id + transform)
+│   ├── segment.rs                # Segment (parent + child + joint + link)
+│   ├── serial_chain.rs           # SerialChain (segments + frames + end_effector)
+│   ├── builder.rs                # SerialChainBuilder
+│   ├── tool_frame.rs             # ToolFrame (TCP con offset configurable)
+│   ├── active_robot.rs           # ActiveRobot (model + chain + joints)
+│   ├── state.rs                  # RobotState (snapshot de joints)
+│   ├── adapter.rs                # Adaptador URDF → SerialChain
+│   └── error.rs                  # RobotBuilderError
+├── kinematics/                   # Cálculos cinemáticos
+│   ├── forward/                  # ForwardKinematics, FKResult
+│   ├── jacobian/                 # Jacobian, GeometricJacobian, NumericalJacobian
+│   └── inverse/                  # IK solvers (DLS, JT), IKResult, IKGoal
+├── spatial/                      # Representación espacial y frames
+│   ├── frame/                    # FrameId, Frame, FrameRegistry, FrameGraph
+│   ├── pose.rs                   # Pose (reference + target + transform)
+│   └── distance.rs               # DistanceMetrics
+└── models/                       # Implementaciones de robots concretos
+    ├── single_revolute/          # Robot de 1 joint rotacional
+    ├── planar_2r/                # Robot planar de 2 revoluciones
+    ├── planar_3r/                # Robot planar de 3 revoluciones
+    ├── scara/                    # Robot SCARA (4 DOF)
+    ├── manipulator_3dof/         # Manipulador espacial 3DOF
+    ├── manipulator_6dof/         # Manipulador espacial 6DOF
+    ├── cylindrical_rpp/          # Robot cilíndrico RPP
+    ├── spherical_polar_rrp/      # Robot esférico-polar RRP
+    ├── factory.rs                # RobotRegistry, RobotModel enum (8 variantes), RobotSpec
+    ├── metadata.rs               # RobotMetadata (id, display_name, dof, joints)
+    └── error.rs                  # RobotModelError
+```
+
+### Submódulos clave
+
+#### `math::geometry::vectors`
+
+Define `Vector3` y `UnitVector3`. Operaciones: suma, resta, multiplicación
+por escalar, magnitud, normalización (con error si zero).
+
+#### `math::geometry::rotations`
+
+Define `Quaternion` (modelo algebraico puro) y `UnitQuaternion` (rotaciones
+SO(3) con invariante de norma). `UnitQuaternion::new()` valida la norma;
+`from_axis_angle()` y `from_euler()` construyen garantizando norma = 1.
+
+#### `math::geometry::rigid`
+
+Define `Transform3D` (traslación + rotación) con `compose()`. También
+`Transform<From, To>` con `PhantomData` para type safety entre frames.
+
+#### `robot::serial_chain`
+
+`SerialChain` es la estructura central del dominio robótico. Contiene:
+- `segments: Vec<Segment>` — secuencia ordenada de segmentos
+- `frames: FrameRegistry` — registro de todos los frames
+- `end_effector: FrameId` — identifica el frame terminal
+
+#### `robot::builder`
+
+`SerialChainBuilder` es el constructor con validación. Verifica que todos los
+frames referenciados por los segments existan en el registry antes de
+construir.
+
+#### `kinematics::forward`
+
+`ForwardKinematics::evaluate(q)` recorre los segments secuencialmente,
+componiendo transforms: `t = t ∘ joint.origin ∘ joint.motion(qⱼ) ∘ link.transform`.
+Devuelve `FKResult` con poses globales de cada frame.
+
+#### `kinematics::jacobian`
+
+Dos implementaciones del trait `JacobianSolver`:
+- `GeometricJacobian` — analítico, usa producto cruz `zᵢ × (pₑ − pᵢ)`
+- `NumericalJacobian` — diferencias finitas centrales, `(f(q+ε) − f(q−ε)) / 2ε`
+
+#### `spatial::frame`
+
+- `FrameId`: enum con `World` y `Id(u64)` — identificador único de frame
+- `Frame`: metadatos (id, name)
+- `FrameRegistry`: mapa `HashMap<FrameId, Frame>` con creación auto-incremental
+- `FrameGraph`: grafo de relaciones entre frames (esqueleto inicial)
+
+#### `models`
+
+Catálogo de robots concretos con fábricas. `RobotRegistry::create(model, spec)`
+valida que el `RobotSpec` coincida con el `RobotModel` esperado.
+
+### Jerarquía de tipos
+
+```
+FrameId (World | Id(u64))
+    │
+Frame { id, name }
+    │
+FrameRegistry { map<FrameId, Frame> }
+    │
+    ├── SerialChain { segments, frames, end_effector }
+    │       │
+    │       ├── Segment { parent, child, joint, link }
+    │       │               │              │
+    │       │               │              └── Link { id, transform }
+    │       │               │
+    │       │               └── JointType
+    │       │                   ├── Revolute { id, axis, limits, origin }
+    │       │                   └── Prismatic { id, direction, limits, origin }
+    │       │
+    │       └── ForwardKinematics.evaluate(q) → FKResult { poses: Map<FrameId, Pose> }
+    │
+    └── Pose { reference, target, transform }
+```
+
+## thalos-visual {#sec-visual}
+
+**Responsabilidad**: Representación y validación visual **desacoplada** del
+núcleo matemático.
+
+**Depende de**: `thalos-core`, `serde`.
+
+```
+thalos-visual/src/
+├── lib.rs               # Punto de entrada
+├── scene/
+│   ├── mod.rs           # VisualScene, VisualFrame, VisualLink, VisualJointAxis, VisualTwist
+│   ├── precision.rs     # VisualPrecision (normalización numérica)
+│   └── diff.rs          # SceneDiff, ChangedFrame
+├── builder.rs           # SceneBuilder (FKResult → VisualScene)
+├── validator.rs         # SceneValidator (valida invariantes visuales)
+└── utils.rs             # clean() — utilidad de limpieza numérica
+```
+
+### `VisualScene`
+
+```rust
+pub struct VisualScene {
+    pub frames: Vec<VisualFrame>,         // frames con id, parent, translation, rotation
+    pub links: Vec<VisualLink>,           // segmentos visuales (start → end)
+    pub joint_axes: Vec<VisualJointAxis>, // ejes de joints (origin + direction)
+    pub twists: Vec<VisualTwist>,         // twists jacobianos (origin + linear + angular)
+}
+```
+
+Todas las coordenadas usan `[f64; 3]` o `[f64; 4]` — **sin tipos del core**.
+Es una representación serializable (derive `Serialize, Deserialize`).
+
+### `SceneValidator`
+
+Valida 8 invariantes de una escena:
+
+1. **World frame existe** — debe haber un frame con id `"world"`
+2. **IDs únicos** — sin duplicados
+3. **Parents existen** — todo parent reference a un frame existente
+4. **Sin ciclos** — el grafo parent→child no debe tener loops
+5. **Conectividad** — todos los frames son alcanzables desde `"world"`
+6. **Valores finitos** — sin NaN o Infinity
+7. **Norma de quaternions** — ‖rot‖ ≈ 1
+8. **Links consistentes** — cada link coincide con la geometría esperada
+
+### `SceneDiff`
+
+`SceneDiff::between(old, new, epsilon)` detecta frames agregados, eliminados
+y modificados (con delta de traslación y ángulo de rotación geodésico).
+
+### Primitivas geométricas
+
+`VisualScene` ahora incluye `primitives: Vec<VisualPrimitive>` para representar
+objetos 3D con volumen (cilindros, esferas, cajas) que complementan los frames
+y links. Cada primitiva tiene `id`, `translation`, `rotation` y `geometry`.
+
+Esto permite modelar elementos visuales concretos como la base column del SCARA,
+los cuerpos de los links, o marcadores TCP, **sin modificar el core**.
+
+### FrameStyle
+
+`FrameStyle` permite personalizar el aspecto visual de cada frame individual:
+
+```rust
+pub struct FrameStyle {
+    pub axis_length: f64,     // longitud de cada eje
+    pub axis_radius: f64,     // radio del cilindro del eje (0 = línea)
+    pub origin_radius: f64,   // radio de la esfera del origen
+    pub show_labels: bool,    // etiquetas X/Y/Z
+    pub color_x: [f64; 3],    // color RGB del eje X
+    pub color_y: [f64; 3],    // color RGB del eje Y
+    pub color_z: [f64; 3],    // color RGB del eje Z
+}
+```
+
+`VisualFrame.style` es `Option<FrameStyle>` — si es `None`, el frontend usa
+sus valores por defecto.
+
+Helpers geométricos: `cylinder_between(from, to, radius)` crea un cilindro
+entre dos puntos 3D; `align_y_to(direction)` produce el quaternion que alinea
+el eje Y con la dirección dada.
+
+## thalos-models
+
+Además de `SceneBuilder` (genérico), existen builders específicos:
+
+- **`ScaraVisualBuilder`** — genera primitivas geométricas para el SCARA:
+  `base_column`, `link_1_body` y `link_2_body` como cilindros posicionados
+  dinámicamente según la FK actual.
+
+Helpers geométricos: `cylinder_between(from, to, radius)` crea un cilindro
+entre dos puntos 3D; `align_y_to(direction)` produce el quaternion que alinea
+el eje Y con la dirección dada.
+
+## thalos-models {#sec-models}
+
+**Responsabilidad**: Estructura canónica de un robot, mapeando 1:1 a conceptos
+URDF. Datos puros — sin algoritmos cinemáticos, sin runtime, sin frames.
+
+**Depende de**: `thalos-math`.
+
+```
+thalos-models/src/
+├── lib.rs               # Punto de entrada, re-exportaciones
+├── robot.rs             # Robot (contendor top-level con links + joints)
+├── link.rs              # Link, Inertial
+├── joint.rs             # Joint, JointKind (Revolute/Continuous/Prismatic/...), JointLimits
+├── geometry.rs          # Geometry, Visual, Collision, primitivas (Sphere, Box, Cylinder, Mesh)
+├── material.rs          # Material, Color
+├── graph.rs             # RobotGraph, Path, LinkId, JointId (grafo de conectividad)
+└── urdf/                # Parser URDF
+```
+
+**No debe contener**: estado mutable, HTTP, cinemática, visualización,
+algoritmos de planning.
+
+## thalos-collision {#sec-collision}
+
+**Responsabilidad**: Algoritmos concretos de detección de colisiones.
+
+**Depende de**: `thalos-core` (trait `CollisionChecker` + tipos geométricos).
+
+```
+thalos-collision/src/
+├── lib.rs               # NaiveCollisionChecker (re-export)
+├── naive.rs             # NaiveCollisionChecker — O(n²), sin optimizaciones
+├── intersect.rs         # Primitivas de intersección (SAT, esferas, cajas)
+└── classify.rs          # Clasificación semántica del tipo de colisión
+```
+
+**No debe contener**: estado mutable, HTTP, lógica de planificación.
+
+## thalos-planning {#sec-planning}
+
+**Responsabilidad**: Planificadores de movimiento e interpolación de trayectorias.
+
+**Depende de**: `thalos-core` (tipos de dominio, cinemática).
+
+```
+thalos-planning/src/
+├── lib.rs               # Punto de entrada
+├── motion/
+│   ├── mod.rs           # MotionPlanner trait
+│   ├── planner.rs       # PlanningContext
+│   ├── move_j.rs        # MoveJPlanner (joint space)
+│   └── move_l.rs        # MoveLPlanner (cartesian space, esqueleto)
+├── goal/
+│   ├── mod.rs           # GoalResolver, ValidatedGoal, JointGoal
+│   └── resolver.rs      # GoalResolverConfig, PlanningPolicy, PlanningAssessment
+├── trajectory/
+│   ├── mod.rs           # Trajectory, Waypoint, TrajectoryMetadata
+│   └── interpolation.rs # InterpolationMode, TimeScaling
+├── interpolate/
+│   ├── mod.rs           # JointInterpolator, CartesianInterpolator
+│   └── ramp.rs          # VelocityRamp, AccelerationProfile
+├── collision.rs         # CollisionCheck durante planificación
+└── error.rs             # PlanningError
+```
+
+**No debe contener**: estado mutable, HTTP, representaciones visuales.
+
+## thalos-runtime {#sec-runtime}
+
+**Responsabilidad**: Orquestación del estado mutable del sistema — el "cerebro"
+que conecta el análisis cinemático con la visualización, la planificación y la
+ejecución.
+
+**Depende de**: `thalos-core`, `thalos-models`, `thalos-planning`, `thalos-visual`,
+`thiserror`, `chrono`.
+
+**Posición arquitectónica**: se encuentra entre `thalos-visual` y `thalos-api`.
+La API consume el runtime, no llama al core ni al visual directamente.
+
+```
+thalos-runtime/src/
+├── lib.rs               # Re-exportaciones públicas
+├── error.rs             # RuntimeError
+├── commands/
+│   ├── mod.rs           # Command enum (dispatchea a sub-comandos)
+│   ├── dispatch.rs      # Command enum: SetJoints, LoadRobot, LoadUrdfRobot,
+│   │                    #   Kinematics, Motion, SelectToolFrame
+│   ├── kinematics.rs    # KinematicsCommand: MoveToPosition, MoveToPose
+│   ├── motion.rs        # MotionCommands: MoveJ, PlanAndMoveJ, PlanAndMoveL
+│   └── handler.rs       # ExecutableCommand trait
+├── state/
+│   ├── mod.rs
+│   └── robot.rs         # SceneRuntime, ActiveRobot, JointMeta
+├── plan/
+│   ├── mod.rs           # ActiveMotionPlan, CompiledPlan, ExecutionSession,
+│   │                    #   PlanState, SessionStatus, MotionType
+│   └── plan_state.rs    # Máquinas de estado del plan y la sesión
+├── services/
+│   ├── mod.rs
+│   └── scene.rs         # SceneService (orquestador principal)
+├── backends/
+│   ├── mod.rs           # RobotBackend trait
+│   └── internal.rs      # InternalBackend (catálogo built-in)
+└── snapshots/
+    ├── mod.rs
+    └── scene.rs         # RuntimeSnapshot (point-in-time state)
+```
+
+### SceneService
+
+`SceneService` es el orquestador central. Mantiene el estado mutable
+(`SceneRuntime` envuelto en `RwLock`) y expone dos operaciones principales:
+
+```rust
+impl SceneService {
+    /// Snapshot del estado actual (FK + visual scene).
+    pub fn snapshot(&self) -> Result<RuntimeSnapshot, RuntimeError>;
+
+    /// Aplica un comando y devuelve el snapshot resultante.
+    pub fn execute(&self, cmd: Command) -> Result<RuntimeSnapshot, RuntimeError>;
+}
+```
+
+Cada `execute()`:
+1. Aplica la mutación (setear joints, cargar robot, resolver IK, etc.)
+2. Corre FK sobre el nuevo estado
+3. Construye la escena visual (con el builder correspondiente al modelo)
+4. Valida la escena con `SceneValidator`
+5. Construye el snapshot con estado + timestamp
+
+### Command pattern
+
+Las mutaciones están tipadas como `Command`, con sub-comandos para IK y motion:
+
+```rust
+pub enum Command {
+    // Comandos base
+    SetJoints(Vec<f64>),
+    LoadRobot(RobotModel),
+    LoadUrdfRobot { name, joints_meta, chain, robot },
+    SelectToolFrame(Option<ToolFrame>),
+
+    // Sub-comandos de cinemática inversa
+    Kinematics(KinematicsCommand),
+    // Sub-comandos de planificación de movimiento
+    Motion(MotionCommands),
+}
+
+pub enum KinematicsCommand {
+    MoveToPosition { frame, target },
+    MoveToPose { frame, target },
+}
+
+pub enum MotionCommands {
+    MoveJ { target },
+    PlanAndMoveJ { target, max_velocity, max_acceleration, time_step },
+    PlanAndMoveL { frame, target_pose, ... },
+}
+```
+
+Esto permite que `SceneService::execute()` sea un punto único de entrada para
+toda mutación, facilitando auditoría, logging y futuros undo/redo.
+
+### TCP (Tool Center Point)
+
+`SceneRuntime` soporta un TCP activo (`active_tcp: Option<ToolFrame>`).
+Cuando está presente, todos los análisis (workspace, jacobiano, singularidad,
+planning) referencian el TCP en lugar del flange. Ver ADR-0002.
+
+### State
+
+`SceneRuntime` y `ActiveRobot` modelan el estado mutable:
+
+```rust
+pub struct SceneRuntime {
+    pub active_robot: ActiveRobot,
+    pub active_tcp: Option<ToolFrame>,
+    pub active_plan: Option<ActiveMotionPlan>,
+    pub robot_name: String,
+    pub joints_meta: Vec<JointMeta>,
+    pub robot_source: Option<Robot>,
+}
+
+pub struct ActiveRobot {
+    pub model: RobotModel,
+    pub chain: SerialChain,
+    pub joints: Vec<f64>,
+}
+```
+
+### WorkspaceService
+
+Servicio stateless para análisis de workspace via muestreo Monte Carlo:
+
+```rust
+impl WorkspaceService {
+    pub fn sample(model, config) -> Result<Arc<Workspace>, RuntimeError>;
+    pub fn query(workspace, point, tolerance) -> Result<Reachability, WorkspaceError>;
+    pub fn singularities(chain, config) -> Result<Vec<SingularityResult>, RuntimeError>;
+    pub fn manipulability(chain, config) -> Result<Vec<ManipulabilityResult>, RuntimeError>;
+}
+```
+
+### RobotBackend (trait)
+
+Strategy para resolución de modelos robóticos:
+
+```rust
+pub trait RobotBackend: Send + Sync {
+    fn resolve_model(&id: &str) -> Result<RobotModel, RuntimeError>;
+}
+```
+
+`InternalBackend` resuelve contra el catálogo built-in de `thalos-core`.
+Se pueden implementar backends personalizados (hardware, archivos, red).
+
+### RuntimeSnapshot
+
+Valor de retorno unificado:
+
+```rust
+pub struct RuntimeSnapshot {
+    pub robot: RobotModel,
+    pub joints: Vec<f64>,
+    pub scene: VisualScene,
+    pub ik_result: Option<IKResult>,
+    pub active_plan: Option<ActiveMotionPlan>,
+    pub execution: Option<ExecutionSession>,
+    pub generated_at: DateTime<Utc>,
+}
+```
+
+La API convierte esto a `RuntimeStateResponse` (DTO HTTP) con `From`.
+
+## thalos-api {#sec-api}
+
+**Responsabilidad**: Exponer funcionalidades de Thalos hacia sistemas externos
+via HTTP.
+
+**Depende de**: `thalos-core`, `thalos-visual`, `thalos-runtime`, `axum`,
+`tokio`, `serde`, `chrono`, `tower-http`.
+
+```
+thalos-api/src/
+├── main.rs              # Entrypoint: monta router con CORS, inicia servidor
+├── lib.rs               # Re-exportaciones públicas
+├── app/
+│   ├── mod.rs           # AppState, Services
+│   ├── prelude.rs       # Re-exportaciones del crate
+│   ├── state.rs         # Estado global: scene + robots + workspace services
+│   ├── dto.rs           # ErrorResponse, ErrorCode
+│   ├── error.rs         # ApiError (conversión a respuesta HTTP)
+│   └── types.rs         # ApiResult alias
+├── features/
+│   ├── scene/
+│   │   ├── mod.rs       # Re-exportaciones
+│   │   ├── handler.rs   # Handlers axum
+│   │   ├── dto/         # Request/Response DTOs
+│   │   │   ├── mod.rs
+│   │   │   ├── requests.rs
+│   │   │   ├── responses.rs
+│   │   │   └── mappers/ # Mappers entre DTOs del dominio
+│   │   └── error.rs     # SceneError conversion
+│   ├── robots/
+│   │   ├── mod.rs
+│   │   ├── handler.rs
+│   │   ├── service.rs   # RobotService (catálogo)
+│   │   ├── dto.rs       # RobotMetadataDto
+│   │   └── error.rs
+│   ├── motion/
+│   │   ├── mod.rs
+│   │   ├── handler.rs   # Handlers MoveJ/MoveL
+│   │   └── dto/
+│   │       ├── requests.rs
+│   │       └── responses.rs
+│   └── workspace/
+│       ├── mod.rs
+│       ├── handler.rs   # Handlers workspace analysis
+│       ├── dto.rs       # Workspace DTOs
+│       └── error.rs     # WorkspaceError conversion
+└── http/
+    ├── mod.rs           # app_router() — monta rutas
+    └── routes/
+        ├── mod.rs
+        ├── scene.rs     # Rutas de escena
+        ├── robots.rs    # Rutas de robots
+        ├── motion.rs    # Rutas de motion
+        └── workspace.rs # Rutas de workspace analysis
+```
+
+### Endpoints — Scene
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `GET` | `/api/v1/scene` | Snapshot del runtime actual |
+| `POST` | `/api/v1/scene/joints` | Mutar joints (`SetJoints`) |
+| `POST` | `/api/v1/scene/robot` | Cargar robot de catálogo |
+| `POST` | `/api/v1/scene/robot/from-urdf` | Cargar robot desde URDF |
+| `POST` | `/api/v1/scene/tcp` | Seleccionar/limpiar TCP |
+| `POST` | `/api/v1/scene/move-to-position` | IK: mover frame a posición |
+| `POST` | `/api/v1/scene/move-to-pose` | IK: mover frame a pose |
+| `POST` | `/api/v1/scene/solve-ik-position` | IK resolver (sin mutar) |
+| `POST` | `/api/v1/scene/solve-ik-pose` | IK resolver pose (sin mutar) |
+| `POST` | `/api/v1/scene/execute-ik` | IK resolver + aplicar joints |
+| `POST` | `/api/v1/scene/motion/plan` | Compilar plan (preview) |
+| `POST` | `/api/v1/scene/motion/start` | Iniciar ejecución. Body opcional `{"mode":"once"}` o `{"mode":{"repeat":{"count":N}}}` con N en 1..=1000; ausente = `once` |
+| `POST` | `/api/v1/scene/motion/pause` | Pausar ejecución |
+| `POST` | `/api/v1/scene/motion/resume` | Reanudar ejecución |
+| `POST` | `/api/v1/scene/motion/cancel` | Cancelar ejecución |
+| `POST` | `/api/v1/scene/motion/reset` | Resetear ejecución |
+| `POST` | `/api/v1/scene/motion/tick` | Tick de ejecución (polling 50ms) |
+| `POST` | `/api/v1/scene/validate` | Validar escena arbitraria |
+| `POST` | `/api/v1/scene/diff` | Diff entre dos escenas |
+
+### Endpoints — Robots
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `GET` | `/api/v1/robots` | Listar catálogo de robots |
+| `GET` | `/api/v1/robots/{id}` | Metadata de un robot |
+
+### Endpoints — Motion
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `POST` | `/api/v1/motion/movej` | MoveJ directo (target en joint space) |
+| `POST` | `/api/v1/motion/movel` | MoveL directo (target en cartesian space) |
+
+### Endpoints — Workspace Analysis
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `POST` | `/api/v1/workspace/sample` | Muestrear workspace (Monte Carlo) |
+| `POST` | `/api/v1/workspace/sample/active` | Sample sobre robot activo |
+| `POST` | `/api/v1/workspace/bounds/active` | Bounding box del robot activo |
+| `POST` | `/api/v1/workspace/analyze/active` | Análisis completo |
+| `POST` | `/api/v1/workspace/reachability` | Consulta de alcanzabilidad |
+| `POST` | `/api/v1/workspace/singularity` | Análisis de singularidad |
+| `POST` | `/api/v1/workspace/singularity/active` | Singularidad del robot activo |
+| `POST` | `/api/v1/workspace/manipulability` | Análisis de manipulabilidad |
+| `POST` | `/api/v1/workspace/manipulability/active` | Manipulabilidad del robot activo |
+
+Los handlers de scene **no contienen lógica de dominio**: delegan en
+`thalos_runtime::SceneService::execute()`. La API solo traduce HTTP ↔ Command.
+
+### Mapa de errores
+
+| Rust Error → | HTTP Status | Código |
+|--------------|-------------|--------|
+| `SceneError::MissingWorld` | 422 | `MISSING_WORLD` |
+| `SceneError::MissingFrame` | 422 | `MISSING_FRAME` |
+| `SceneError::DuplicateId` | 422 | `DUPLICATE_ID` |
+| `SceneError::BrokenTopology` | 422 | `BROKEN_TOPOLOGY` |
+| `SceneError::NonFiniteValue` | 422 | `NON_FINITE_VALUE` |
+| `SceneError::InvalidQuaternion` | 422 | `INVALID_QUATERNION` |
+| `RobotModelError` | 404 | `ROBOT_NOT_FOUND` |
+| `WorkspaceError::InvalidSampleCount` | 422 | `INVALID_SAMPLE_COUNT` |
+| `WorkspaceError::InvalidTolerance` | 422 | `INVALID_TOLERANCE` |
+| `WorkspaceError::InvalidPoint` | 422 | `INVALID_POINT` |
+
+## Esquema general del workspace
+
+```
+Thalos Workspace
+│
+├── thalos-math           # Tipos matemáticos puros
+│   ├── geometry          # Vector3, Quaternion, Transform3D
+│   ├── algebra           # DynamicMatrix
+│   ├── dh                # Parámetros Denavit-Hartenberg
+│   └── traits            # Cross, Dot
+│
+├── thalos-core           # Núcleo robótico
+│   ├── robot             # Joints, Links, Segments, SerialChain, ToolFrame
+│   ├── kinematics        # FK, Jacobianos, IK (DLS, JT)
+│   ├── spatial           # Frames, Poses, FrameRegistry
+│   └── models            # 8 robots: Planar2R/3R, SCARA, Manipulator3DOF/6DOF,
+│                          #   CylindricalRPP, SphericalPolarRRP, SingleRevolute
+│
+├── thalos-models         # Estructura canónica de robot (URDF mirror)
+│   ├── robot             # Robot, Link, Joint, Geometry
+│   ├── graph             # RobotGraph, Path
+│   └── urdf              # Parser URDF
+│
+├── thalos-collision      # Detección de colisiones
+│   ├── naive             # NaiveCollisionChecker (O(n²))
+│   ├── intersect         # SAT, esfera-caja
+│   └── classify          # Clasificación semántica
+│
+├── thalos-planning       # Planificación de movimiento
+│   ├── motion            # MoveJPlanner, MoveLPlanner
+│   ├── goal              # GoalResolver
+│   ├── trajectory        # Trajectory, Waypoint
+│   └── interpolate       # Joint/Cartesian interpolation
+│
+├── thalos-semantic       # Modelo de programación de tareas
+│   ├── program           # SemanticProgram, SemanticOp
+│   ├── validation        # Validación L1 (secuencia) y L2 (recursos)
+│   └── lowering          # SemanticLowering → ExecutionProgram
+│
+├── thalos-optimization   # Optimización de trayectorias
+│   ├── domain            # Operator trait, scoring, assessment
+│   └── pipeline          # Pipeline iterativo de optimización
+│
+├── thalos-document       # Documento de tarea (TaskDocument)
+│   ├── task_document     # TaskDocument serializable
+│   └── scene             # SceneContent (objetos, locations, tools)
+│
+├── thalos-visual         # Visualización desacoplada
+│   ├── scene             # VisualScene, SceneDiff, FrameStyle, VisualPrimitive
+│   ├── builder           # SceneBuilder, ScaraVisualBuilder
+│   └── validator         # SceneValidator (8 invariantes)
+│
+├── thalos-runtime        # Orquestación runtime
+│   ├── commands          # Command enum + dispatch (SetJoints, LoadRobot,
+│   │                     #   LoadUrdfRobot, Kinematics, Motion, SelectToolFrame)
+│   ├── state             # SceneRuntime, ActiveRobot, JointMeta
+│   ├── plan              # ActiveMotionPlan, ExecutionSession, PlanState
+│   ├── services          # SceneService, WorkspaceService
+│   ├── backends          # RobotBackend trait + InternalBackend
+│   └── snapshots         # RuntimeSnapshot
+│
+└── thalos-api            # API HTTP
+    ├── app               # AppState, Services, ApiError
+    ├── features          # scene, robots, motion, workspace
+    └── http/routes       # Rutas REST (axum Router) + CORS
+```
+
+## Frontend (React 19)
+
+El frontend está organizado por **features**, cada uno con sus propios stores
+(zustand), servicios, tipos y componentes. Usa **React 19 + TypeScript + Vite**
+con **Tailwind CSS**, **zustand** para el estado global, **@react-three/fiber**
+para el renderizado 3D (sobre Three.js), **echarts 6 + echarts-gl** para
+gráficos y **react-router 7** para el enrutado.
+
+```
+web/
+├── package.json              # scripts: dev (vite), build (tsc -b && vite build),
+│                             #   lint (oxlint), test (vitest)
+├── src/
+│   ├── main.tsx              # Entry point: createRoot + <App/>
+│   ├── App.tsx               # Providers: React Query, Services, Tooltip, Router
+│   ├── router.tsx            # react-router 7, derivado de WORKSPACE_REGISTRY
+│   ├── index.css             # Tailwind CSS
+│   │
+│   ├── components/ui/        # shadcn/@base-ui (button, dialog, tabs, tooltip, accordion)
+│   │
+│   ├── features/             # Áreas funcionales por feature
+│   │   ├── robots/           # Catálogo de robots (robot-api, use-robots, robot-catalog, robot-card)
+│   │   ├── scene/            # Escena: objetos, locations, tools, home pose (store zustand)
+│   │   ├── planning/         # Planificación (planning-panel, store, recommendations)
+│   │   ├── programming/      # Programación unificada (/task: Tasks + Motion)
+│   │   ├── semantic/         # Editor semántico (script parser/serializer, pipeline-status, diagnostics)
+│   │   ├── evaluation/       # Evaluación pre-ejecución (/evaluation, charts yoshikawa/determinant)
+│   │   ├── execution/        # Ejecución (backend-selector, execution-store, execution-client)
+│   │   ├── sessions/         # Sesiones (browser, detail, timeline/trace/comparison/export, CSV)
+│   │   ├── knowledge/        # Knowledge (/knowledge)
+│   │   ├── configuration/    # Configuración (/configuration)
+│   │   ├── analysis/         # Análisis de plan (plan-analysis-api, region-inspector, problem-regions)
+│   │   └── viewport/         # Viewport 3D: scene-canvas (R3F), robot-model, ik-gizmo,
+│   │                         #   tcp-overlay, point-cloud, trajectory, scene service
+│   │
+│   └── shared/
+│       ├── api-client.ts     # Cliente axios base /api/v1 + wrapping de errores
+│       ├── charts/           # Adapter echarts 6 + echarts-gl (EChart, builders, trajectory3d)
+│       ├── contracts/        # Tipos DTO (RuntimeStateResponse, ExecutionProgram, MotionPlan)
+│       ├── layout/           # AppShell, top-bar, status-bar
+│       └── workflow/         # WORKSPACE_REGISTRY, guards, guarded-route, stepper
+```
+
+### Arquitectura del store (useSceneStore)
+
+El estado del viewport se maneja con un store **zustand** (`useSceneStore`):
+los datos llegan del backend como `RuntimeStateResponse` (DTO snake_case), se
+adaptan a `SceneData` interno (camelCase) con `toSceneData()` y se escriben
+mediante acciones como `applyScene()`, `applyFkUpdate()` o
+`applyRuntimeDelta()`. Los componentes consumen el estado con selectors — no
+hay `BehaviorSubject` ni pipelines RxJS:
+
+```
+POST /scene/joints ──→ RuntimeStateResponse ──→ adapter.toSceneData()
+                                                        ↓
+                                                useSceneStore.applyScene()
+                                                        ↓
+                                componentes: selectors (s => s.data) → re-render
+```
+
+Las rutas y guards se derivan de `WORKSPACE_REGISTRY` (una única fuente de
+verdad declarativa por área), y `AppShell` mantiene el viewport 3D montado
+fuera del `<Outlet/>` para que no se desmonte al navegar entre workspaces.
+
+### SceneCanvas (renderizado 3D con R3F)
+
+`SceneCanvas` monta un `<Canvas>` de **@react-three/fiber** con convención
+**Z-up** (cámara con `up = (0, 0, 1)`), `OrbitControls`, grid y luces.
+Renderiza:
+
+- **RobotModel** — frames, links y primitivas a partir de `SceneData`
+- **IkGizmo** / **TcpOverlay** — overlays de IK y TCP activo
+- **PointCloud** — nube de puntos del workspace
+- **Trajectory** — trayectorias con color por segmento / calidad / manipulabilidad
+
+Rotación: Rust serializa quaternions como `[w, x, y, z]` → Three.js espera
+`(x, y, z, w)`. `rustQuatToThree()` (robot-model) aplica esta conversión.

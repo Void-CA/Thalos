@@ -1,0 +1,271 @@
+# Flujo interno del sistema {#sec-flow}
+
+Esta sección describe cómo viajan los datos a través del sistema, desde que
+el usuario mueve un slider hasta que ve el resultado en pantalla.
+
+## Pipeline completo (end-to-end)
+
+Hay dos flujos principales: **set joints** (actualizar ángulos) y **load robot**
+(cambiar de modelo). Ambos pasan por `SceneService::execute(Command)`.
+
+### Flujo: SetJoints
+
+```{dot}
+//| fig-cap: "Pipeline SetJoints — el usuario mueve un slider y ve el resultado"
+//| label: fig-pipeline-e2e
+digraph e2e {
+    rankdir=TB;
+    splines=ortho;
+    nodesep=0.5;
+    ranksep=0.5;
+    
+    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=10, margin="0.25,0.1"];
+    edge [fontsize=8, fontname="sans-serif"];
+
+    subgraph cluster_frontend {
+        label="Frontend (React)";
+        style=dashed;
+        penwidth=1;
+        fontsize=10;
+        color="#2c3e50";
+        
+        user    [label="Usuario", shape=oval, penwidth=2];
+        jctrl   [label="JointControl\n(signal + slider)"];
+        sstore  [label="SceneStore\nmerge + scan + toSignal"];
+        asvc    [label="SceneApiService\nHTTP client"];
+        sview   [label="SceneViewer\n(Three.js)"];
+        
+        user -> jctrl;
+        jctrl -> sstore [label="setJointAngles(q)"];
+        sstore -> asvc;
+    }
+
+    subgraph cluster_runtime {
+        label="Runtime (thalos-runtime)";
+        style=dashed;
+        penwidth=1;
+        fontsize=10;
+        color="#2c3e50";
+        
+        handler [label="Handler"];
+        service [label="SceneService\n::execute(Command::SetJoints)"];
+        runtime [label="RwLock<SceneRuntime>\n(mut: joints)"];
+        fk      [label="FK::evaluate(q)"];
+        builder [label="SceneBuilder\n::from_fk()"];
+        vld     [label="SceneValidator"];
+        
+        handler -> service;
+        service -> runtime;
+        runtime -> fk;
+        fk -> builder;
+        builder -> vld;
+    }
+
+    asvc -> handler [label="POST /scene/joints", penwidth=1.5];
+    vld -> sstore [label="JSON 200 (RuntimeStateResponse)", penwidth=1.5, dir=back];
+    sstore -> sview [style=invis];
+    
+    { rank=same; asvc; handler; }
+    { rank=same; vld; sstore; }
+}
+```
+
+### Flujo: LoadRobot
+
+```{dot}
+//| fig-cap: "Pipeline LoadRobot — cambiar el modelo activo"
+//| label: fig-pipeline-load
+digraph load {
+    rankdir=TB;
+    splines=ortho;
+    nodesep=0.5;
+    ranksep=0.5;
+    
+    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=10, margin="0.25,0.1"];
+    edge [fontsize=8, fontname="sans-serif"];
+
+    subgraph cluster_frontend {
+        label="Frontend (React)";
+        style=dashed;
+        penwidth=1;
+        fontsize=10;
+        color="#2c3e50";
+        
+        user    [label="Usuario", shape=oval, penwidth=2];
+        catalog [label="RobotCatalog"];
+        rstore  [label="RobotStore"];
+        sstore2 [label="SceneStore\nloadRobot(id)"];
+        asvc2   [label="SceneApiService"];
+        
+        user -> catalog;
+        catalog -> rstore [label="select(id)"];
+        catalog -> sstore2 [label="loadRobot(id)", style=dashed];
+        sstore2 -> asvc2;
+    }
+
+    subgraph cluster_backend {
+        label="Backend (Rust)";
+        style=dashed;
+        penwidth=1;
+        fontsize=10;
+        color="#2c3e50";
+        
+        handler2 [label="Handler"];
+        service2 [label="SceneService\n::execute(Command::LoadRobot)"];
+        backend  [label="RobotBackend\n::resolve_model()"];
+        chain    [label="RobotRegistry\n::create_default()"];
+        runtime2 [label="RwLock<SceneRuntime>\n(new ActiveRobot)"];
+        fk2      [label="FK::evaluate(q)"];
+        builder2 [label="SceneBuilder\n::from_fk()"];
+        vld2     [label="SceneValidator"];
+        
+        handler2 -> service2;
+        service2 -> backend;
+        backend -> chain;
+        chain -> runtime2;
+        runtime2 -> fk2;
+        fk2 -> builder2;
+        builder2 -> vld2;
+    }
+
+    asvc2 -> handler2 [label="POST /scene/robot", penwidth=1.5];
+    vld2 -> sstore2 [label="JSON 200 (RuntimeStateResponse)", penwidth=1.5, dir=back];
+    
+    { rank=same; asvc2; handler2; }
+    { rank=same; vld2; sstore2; }
+}
+```
+
+## Flujo de FK (detalle matemático)
+
+El algoritmo de `ForwardKinematics::evaluate(q)`:
+
+```
+t₀ = Identity
+     ↓
+Para cada segmento i:
+     ↓
+tᵢ = tᵢ₋₁                     // transform acumulado del segmento anterior
+tᵢ = tᵢ ∘ jointᵢ.origin()     // transform local del joint
+tᵢ = tᵢ ∘ jointᵢ.motion(qᵢ)   // movimiento articular
+tᵢ = tᵢ ∘ linkᵢ.transform      // eslabón rígido
+     ↓
+Pose(childᵢ) = (World, childᵢ, tᵢ)
+```
+
+Donde `joint.motion(q)` para cada tipo:
+
+- **Revolute**: `Transform3D::from_rotation(UnitQuaternion::from_axis_angle(axis, q))`
+- **Prismatic**: `Transform3D::from_translation(direction * q)`
+
+## Flujo de Jacobiano (detalle matemático)
+
+### Geométrico
+
+```
+Para cada joint i:
+  pₑ = posición global del end-effector
+  pᵢ = posición del joint i (parent ∘ origin)
+  zᵢ = eje del joint i en frame global
+
+  Si Revolute:
+    J_linear[:,i] = zᵢ × (pₑ - pᵢ)
+    J_angular[:,i] = zᵢ
+
+  Si Prismatic:
+    J_linear[:,i] = zᵢ
+    J_angular[:,i] = 0
+```
+
+### Numérico (diferencias finitas centrales)
+
+```
+Para cada joint i:
+  q₊ = q,  q₊[i] += ε
+  q₋ = q,  q₋[i] -= ε
+
+  p₊ = FK(q₊).end_effector_position
+  p₋ = FK(q₋).end_effector_position
+
+  J_linear[:,i] = (p₊ - p₋) / (2ε)
+  J_angular[:,i] = 0  (solo posición)
+```
+
+## Flujo de SceneDiff
+
+```
+SceneDiff::between(old, new, epsilon)
+
+1. Frames eliminados: en old pero no en new
+2. Frames agregados: en new pero no en old
+3. Frames modificados:
+   - Distancia euclídea de traslación: ‖t_new − t_old‖
+   - Ángulo geodésico de rotación: 2·acos(|q_new · q_old|)
+   - Si alguno > epsilon → se reporta como cambio
+```
+
+## Flujo de Primitives
+
+Las primitivas geométricas se construyen en `SceneBuilder` (o builders
+específicos como `ScaraVisualBuilder`) y viajan dentro de `VisualScene` hasta
+el frontend.
+
+```
+ScaraVisualBuilder::build(fk, chain)
+
+1. SceneBuilder::from_fk(fk) → VisualScene base (frames + links + axes)
+2. Extraer poses de link_1 y link_2 del FKResult
+3. Crear primitives:
+   - "base_column": Cylinder(radius=0.08, height=0.4) en [0, 0, -0.2]
+   - "link_1_body": cylinder_between(world, link_1, radius=0.045)
+   - "link_2_body": cylinder_between(link_1, link_2, radius=0.035)
+4. Pushear primitives a scene.primitives
+5. Devolver VisualScene completa
+```
+
+En el frontend, `ThreeRendererService.renderPrimitives()` recorre las
+primitives y crea meshes Three.js:
+
+```
+Por cada primitiva:
+  geometry → switch(type):
+    Cylinder → CylinderGeometry(radius, height)
+    Sphere   → SphereGeometry(radius)
+    Box      → BoxGeometry(width, height, depth)
+
+  color ← heuristic: id.includes("column") → gris
+                         id.includes("link_1") → azul
+                         id.includes("link_2") → verde
+
+  mesh = new Mesh(geometry, material)
+  mesh.position = primitive.translation
+  mesh.quaternion = [rot.y, rot.z, rot.w, rot.x]  // Rust → Three.js
+```
+
+## Relación entre conceptos
+
+```{dot}
+//| fig-cap: "Relación entre conceptos del dominio"
+//| label: fig-concept-relations
+digraph relations {
+    rankdir=TB;
+    splines=ortho;
+    node [shape=box, style=rounded, penwidth=1.5, fontname="sans-serif", fontsize=11, margin="0.3,0.15"];
+
+    model   [label="RobotRegistry\n::create()"];
+    chain   [label="SerialChain"];
+
+    fk      [label="ForwardKinematics\n::evaluate(q)"];
+    fkout   [label="FKResult →\nSceneBuilder →\nVisualScene"];
+
+    jcb     [label="JacobianSolver\n::evaluate(q)"];
+    jcbout  [label="Jacobian →\nSceneBuilder →\nVisualScene\n+ Twists"];
+
+    model -> chain;
+    chain -> fk;
+    fk -> fkout;
+
+    chain -> jcb;
+    jcb -> jcbout;
+}
+```
