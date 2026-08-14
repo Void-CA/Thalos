@@ -147,6 +147,7 @@ mod tests {
             actions: Vec::new(),
             metrics: BTreeMap::new(),
             summary: summary(),
+            robot_id: None,
         };
         assert_eq!(report.validate(), Ok(()));
     }
@@ -163,6 +164,7 @@ mod tests {
             actions: Vec::new(),
             metrics: BTreeMap::new(),
             summary: summary(),
+            robot_id: None,
         };
         report.observations[0].causes = vec![ObservationId(2)];
 

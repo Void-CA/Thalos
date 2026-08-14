@@ -224,6 +224,14 @@ pub struct PlanAnalysisResponse {
     /// task 5.1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub candidate_ranking: Option<CandidateRankingDto>,
+    /// Stable identity of the analyzed robot (spec `robot-identity`): the
+    /// scene-owned identity (`metadata.id` for catalog robots, `urdf:<hash>`
+    /// for URDF imports), stamped by the handler from the runtime snapshot —
+    /// never derived from the chain. ADITIVE: `#[serde(default)]` + omitted
+    /// when absent — old backends without the field keep working, and the
+    /// frontend ignores it (contract note only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub robot_id: Option<String>,
 }
 
 impl PlanAnalysisResponse {
@@ -301,6 +309,7 @@ impl PlanAnalysisResponse {
                 .collect(),
             assessment: assessment.map(AssessmentDto::from),
             candidate_ranking: None,
+            robot_id: report.robot_id.clone(),
         }
     }
 
@@ -1157,6 +1166,7 @@ mod tests {
                 severity_distribution,
                 grade: Grade::Poor,
             },
+            robot_id: None,
         }
     }
 
@@ -1182,6 +1192,37 @@ mod tests {
         assert!(
             obj["problem_regions"].is_array(),
             "near-singular observations must project problem_regions (legacy contract)"
+        );
+    }
+
+    #[test]
+    fn robot_id_is_projected_on_the_wire_when_present() {
+        // Spec robot-identity "Report from loaded scene": the report's
+        // scene-owned `robot_id` projects to the wire response.
+        let mut report = sample_report();
+        report.robot_id = Some("icebot-scene-42".to_string());
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response =
+            PlanAnalysisResponse::from_report(&report, &sample_analysis(0), &segments, &[], None);
+        let value = serde_json::to_value(response).expect("serialize");
+        assert_eq!(
+            value["robot_id"], "icebot-scene-42",
+            "the wire must carry the report's robot_id"
+        );
+    }
+
+    #[test]
+    fn robot_id_is_omitted_from_the_wire_when_absent() {
+        // ADITIVE contract: a report without robot_id (e.g. legacy analysis
+        // path) omits the field entirely — old clients never see a null.
+        let report = sample_report(); // robot_id: None
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response =
+            PlanAnalysisResponse::from_report(&report, &sample_analysis(0), &segments, &[], None);
+        let value = serde_json::to_value(response).expect("serialize");
+        assert!(
+            !value.as_object().expect("object").contains_key("robot_id"),
+            "robot_id must be omitted when absent (skip_serializing_if)"
         );
     }
 

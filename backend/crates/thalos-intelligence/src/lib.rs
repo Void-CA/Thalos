@@ -382,6 +382,7 @@ mod tests {
                 severity_distribution: BTreeMap::new(),
                 grade: Grade::Good,
             },
+            robot_id: None,
         }
     }
 

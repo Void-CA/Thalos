@@ -107,7 +107,7 @@ pub async fn analyze_plan(
     // `select_candidate_target_segment`. Cuando NO existe segmento elegible,
     // el flujo de candidatos se omite honestamente: el ranking queda ausente
     // (nunca filas falsas o degeneradas).
-    let result = match select_candidate_target_segment(&program) {
+    let mut result = match select_candidate_target_segment(&program) {
         Some(target_segment) => PlanAnalysisService::analyze_plan_with_candidates(
             &snapshot.chain,
             trajectory,
@@ -130,6 +130,12 @@ pub async fn analyze_plan(
             &snapshot.joints,
         )?,
     };
+
+    // Robot identity provenance (spec `robot-identity`): the report carries the
+    // SCENE-owned identity (`RuntimeSnapshot.robot_id` — catalog `metadata.id`
+    // or `urdf:<hash>`), never something derived from the chain. The
+    // aggregator cannot know it, so the handler stamps it from the snapshot.
+    result.report.robot_id = Some(snapshot.robot_id.clone());
 
     // El wire es una proyección del reporte canónico (I6): el handler no
     // construye modelos intermedios entre dominio y contrato. El `assessment`

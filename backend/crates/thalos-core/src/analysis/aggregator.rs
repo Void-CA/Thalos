@@ -166,6 +166,10 @@ impl<P: ScoringPolicy> Aggregator for DefaultAggregator<P> {
             actions: Vec::new(),
             metrics,
             summary,
+            // The aggregator does not know the robot identity (spec
+            // robot-identity): the scene-owned `robot_id` is stamped by the
+            // caller (plan_analysis handler) from the runtime snapshot.
+            robot_id: None,
         };
 
         // 3. Structural safety net (design C1): the aggregator guarantees
