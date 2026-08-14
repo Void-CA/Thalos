@@ -1,0 +1,23 @@
+{
+  "schema_version": "1",
+  "robot": { "name": "icebot", "urdf": "docs/robot/icebot.urdf" },
+  "objects": [
+    {
+      "id": "box-1",
+      "kind": "box",
+      "name": "Box-1",
+      "geometry": { "type": "box", "size": [0.03, 0.03, 0.03] },
+      "pose": { "position": [0.26, 0.0, 0.02], "orientation": [0.0, 0.0, 0.0, 1.0] }
+    }
+  ],
+  "fixtures": [],
+  "locations": [
+    {
+      "id": "tray-1",
+      "kind": "placement_target",
+      "pose": { "position": [0.12, 0.10, 0.02], "orientation": [0.0, 0.0, 0.0, 1.0] }
+    }
+  ],
+  "home_pose": { "position": [0.136448, 0.156284, 0.02], "orientation": [0.0, 0.0, 0.0, 1.0] },
+  "approach_height": 0.02
+}

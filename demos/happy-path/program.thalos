@@ -1,0 +1,7 @@
+# happy-path — pick a box and place it on a tray, then home.
+# A pure pick/place/home task with no interior carry segment: the pipeline
+# generates NO repair candidates and keeps the Direct realization.
+home
+pick box-1
+place box-1 at tray-1
+home
