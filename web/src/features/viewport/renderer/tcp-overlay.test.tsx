@@ -4,7 +4,7 @@ import { render, screen, cleanup } from '@testing-library/react'
 import { act } from 'react'
 import * as THREE from 'three'
 import '@testing-library/jest-dom/vitest'
-import { TcpOverlay, resolveTcpPosition, tcpPyramidDimensions } from './tcp-overlay'
+import { TcpOverlay, resolveTcpPosition, resolveFramePosition, tcpPyramidDimensions } from './tcp-overlay'
 import { useSceneStore } from '../store'
 import type { SceneData, ToolFrame, TransformSnapshot } from '../types'
 
@@ -61,6 +61,43 @@ describe('resolveTcpPosition — resolved pose wins, local derivation fallback (
 
   it('returns null when the frame cannot be resolved', () => {
     expect(resolveTcpPosition(tcpNoPose, idle, null)).toBeNull()
+  })
+})
+
+describe('resolveFramePosition — shared frame position resolution (R6)', () => {
+  it('resolves from execution transforms when the snapshot is an execution tick', () => {
+    const execution: TransformSnapshot = {
+      kind: 'execution',
+      transforms: [{ id: '2', translation: [0.7, 0.8, 0.5], rotation: [1, 0, 0, 0], scale: [1, 1, 1] }],
+    }
+    expect(resolveFramePosition('2', execution, sceneData)).toEqual([0.7, 0.8, 0.5])
+  })
+
+  it('resolves from the FK frame map when the snapshot is an FK solve', () => {
+    const fk: TransformSnapshot = { kind: 'fk', frames: new Map([['2', { pos: [0.2, 0.3, 0.4], quat: [1, 0, 0, 0] }]]) }
+    expect(resolveFramePosition('2', fk, sceneData)).toEqual([0.2, 0.3, 0.4])
+  })
+
+  it('falls back to the static scene frame when idle', () => {
+    expect(resolveFramePosition('1', idle, sceneData)).toEqual([0, 0, 0])
+    expect(resolveFramePosition('2', idle, sceneData)).toEqual([0.5, 0, 0])
+  })
+
+  it('prefers the execution transform over the static frame (different code path)', () => {
+    const execution: TransformSnapshot = {
+      kind: 'execution',
+      transforms: [{ id: '1', translation: [9, 9, 9], rotation: [1, 0, 0, 0], scale: [1, 1, 1] }],
+    }
+    expect(resolveFramePosition('1', execution, sceneData)).toEqual([9, 9, 9])
+  })
+
+  it('returns null when the frame cannot be resolved from any source', () => {
+    expect(resolveFramePosition('missing', idle, sceneData)).toBeNull()
+    expect(resolveFramePosition('missing', idle, null)).toBeNull()
+  })
+
+  it('does NOT apply any TCP offset — raw frame position only (offset belongs to resolveTcpPosition)', () => {
+    expect(resolveFramePosition('2', idle, sceneData)).toEqual([0.5, 0, 0])
   })
 })
 

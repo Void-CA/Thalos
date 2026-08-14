@@ -1,6 +1,27 @@
 import { useMemo } from 'react'
 import { useSceneStore } from '../store'
-import { resolveTcpPosition } from '../renderer/tcp-overlay'
+import { resolveTcpPosition, resolveFramePosition } from '../renderer/tcp-overlay'
+import type { SceneFrame } from '../types'
+
+/**
+ * Derive the end-effector frame id from the scene frames: the leaf frame —
+ * an id that never appears as another frame's parent (R5). Multiple leaves
+ * pick the highest array index (deterministic). `null` when there are no
+ * frames or every id is a parent of some frame (cycle). Pure — tested
+ * directly.
+ */
+export function deriveEndEffectorId(frames: SceneFrame[] | null | undefined): string | null {
+  if (!frames || frames.length === 0) return null
+  const parentIds = new Set<string>()
+  for (const frame of frames) {
+    if (frame.parent !== null) parentIds.add(frame.parent)
+  }
+  let leafIndex = -1
+  for (let i = 0; i < frames.length; i++) {
+    if (!parentIds.has(frames[i].id)) leafIndex = i
+  }
+  return leafIndex === -1 ? null : frames[leafIndex].id
+}
 
 /**
  * Format a world-space distance for the TCP HUD (fmtDelta style): values
@@ -13,25 +34,36 @@ export function fmtTcpPosition(meters: number): string {
 }
 
 /**
- * ViewportTcpHud — floating chip (viewport bottom-left, diff-overlay pattern)
- * showing the resolved TCP position as X/Y/Z in mm while a TCP is active.
+ * ViewportTcpHud — floating chip (viewport bottom-left, grid-legend pattern)
+ * showing the resolved TCP position as X/Y/Z in mm.
  *
- * SHARED SUBSCRIPTION (spec viewport-tcp-hud): the HUD reads the SAME
- * `activeTcp` / `transformSnapshot` / `data` state as TcpOverlay and the robot
- * model — a single source of truth. There is NO polling, NO setInterval, NO
- * second snapshot fetch: position updates arrive through the store
- * subscription on the next execution tick (same render cycle as the robot).
- * Hidden when no TCP is active or the position cannot be resolved.
+ * ALWAYS VISIBLE WITH SCENE DATA (spec tcp-trace-grid-units R1): when
+ * `activeTcp` is set the chip shows the TCP position via `resolveTcpPosition`;
+ * when `activeTcp` is null the chip derives the end-effector frame
+ * (`deriveEndEffectorId`) and resolves its position via `resolveFramePosition`.
+ *
+ * SHARED SUBSCRIPTION (R2): the HUD reads the SAME `activeTcp` /
+ * `transformSnapshot` / `data` state as TcpOverlay and the robot model — a
+ * single source of truth. There is NO polling, NO setInterval, NO second
+ * snapshot fetch: position updates arrive through the store subscription on
+ * the next execution tick (same render cycle as the robot).
+ *
+ * GRACEFUL DEGRADATION (R4): hidden when no position can be resolved — no
+ * scene data, no frames and no TCP, or an unresolvable frame. Never renders
+ * partial or invalid values.
  */
 export function ViewportTcpHud() {
   const activeTcp = useSceneStore(s => s.activeTcp)
   const transformSnapshot = useSceneStore(s => s.transformSnapshot)
   const data = useSceneStore(s => s.data)
 
-  const position = useMemo(
-    () => (activeTcp ? resolveTcpPosition(activeTcp, transformSnapshot, data) : null),
-    [activeTcp, transformSnapshot, data],
-  )
+  const position = useMemo(() => {
+    if (!data) return null
+    if (activeTcp) return resolveTcpPosition(activeTcp, transformSnapshot, data)
+    const endEffectorId = deriveEndEffectorId(data.frames)
+    if (!endEffectorId) return null
+    return resolveFramePosition(endEffectorId, transformSnapshot, data)
+  }, [activeTcp, transformSnapshot, data])
 
   if (!position) return null
 
