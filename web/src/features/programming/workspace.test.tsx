@@ -113,4 +113,20 @@ describe('ProgrammingWorkspace — unified tabs (Task | Motion | Code)', () => {
     renderWorkspace()
     expect(screen.queryByRole('tab', { name: 'Analysis' })).not.toBeInTheDocument()
   })
+
+  it('R6 — separates the three visual layers into distinct containers: feedback (PipelineStatus), navigation (tabs), commands (toolbar)', () => {
+    renderWorkspace()
+    const feedback = document.querySelector('[data-layer="feedback"]')
+    const navigation = document.querySelector('[data-layer="navigation"]')
+    const commands = document.querySelector('[data-layer="commands"]')
+    // All three layers render.
+    expect(feedback).not.toBeNull()
+    expect(navigation).not.toBeNull()
+    expect(commands).not.toBeNull()
+    // No layer is merged into another — each keeps its own container so the
+    // styling can differentiate tabs (navigation) from PipelineStatus
+    // (feedback) from command buttons (actions).
+    expect(feedback).not.toBe(navigation)
+    expect(navigation).not.toBe(commands)
+  })
 })

@@ -35,13 +35,15 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 export function ProgrammingWorkspace() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* ── Programming header: workflow progress ── */}
-      <div className="px-3 py-2 border-b border-border/50">
+      {/* ── Programming header: workflow progress (feedback layer, R6) ── */}
+      <div data-layer="feedback" className="px-3 py-2 border-b border-border/50">
         <PipelineStatus />
       </div>
 
       <Tabs defaultValue="tasks" className="flex flex-col h-full overflow-hidden min-h-0">
-        <TabsList className="mx-3 mt-3 shrink-0">
+        {/* Navigation layer (R6) — visually distinct from feedback and
+            commands so the three toolbar categories never read as one bar. */}
+        <TabsList data-layer="navigation" className="mx-3 mt-3 shrink-0">
           <TabsTrigger value="tasks">Task</TabsTrigger>
           <TabsTrigger value="motion">Motion</TabsTrigger>
           <TabsTrigger value="code">Code</TabsTrigger>

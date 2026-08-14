@@ -684,6 +684,54 @@ describe('S3.5 — editor help in Text mode', () => {
   })
 })
 
+describe('TaskEditor toolbar — grouped command bar (R7/R8/R10)', () => {
+  it('R7/R10 — buttons live in three separated groups (Program | File I/O | Execution)', () => {
+    seedTask()
+    renderEditor()
+    // Two visible separators divide the three command groups.
+    const separators = screen.getAllByRole('separator')
+    expect(separators).toHaveLength(2)
+    // Every button belongs to its group container.
+    expect(screen.getByRole('button', { name: 'Add' }).closest('[data-group="program"]')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Reset' }).closest('[data-group="program"]')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Load Program' }).closest('[data-group="file-io"]')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Save Program' }).closest('[data-group="file-io"]')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Run' }).closest('[data-group="execution"]')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Compile' }).closest('[data-group="execution"]')).not.toBeNull()
+  })
+
+  it('R8 — Run, Save Program and Compile carry visible text labels (never icon-only)', () => {
+    seedTask()
+    renderEditor()
+    expect(screen.getByRole('button', { name: 'Run' })).toHaveTextContent('Run')
+    expect(screen.getByRole('button', { name: 'Save Program' })).toHaveTextContent('Save Program')
+    expect(screen.getByRole('button', { name: 'Compile' })).toHaveTextContent('Compile')
+  })
+
+  it('R8 — the compiled state keeps a visible text label on the unified action ("Send to Execution")', async () => {
+    apiMocks.compileSemantic.mockResolvedValue(compileResult)
+    seedTask()
+    renderRouter(['/task'])
+    fireEvent.click(await screen.findByRole('button', { name: 'Compile' }))
+    const send = await screen.findByRole('button', { name: /Send to Execution/ })
+    expect(send).toHaveTextContent('Send to Execution')
+    expect(send).toHaveAttribute('data-weight', 'primary')
+  })
+})
+
+describe('TaskEditor toolbar — button weight hierarchy (R9)', () => {
+  it('R9 — Add normal, Reset secondary, Load/Save secondary, Run + Compile primary', () => {
+    seedTask()
+    renderEditor()
+    expect(screen.getByRole('button', { name: 'Add' })).toHaveAttribute('data-weight', 'normal')
+    expect(screen.getByRole('button', { name: 'Reset' })).toHaveAttribute('data-weight', 'secondary')
+    expect(screen.getByRole('button', { name: 'Load Program' })).toHaveAttribute('data-weight', 'secondary')
+    expect(screen.getByRole('button', { name: 'Save Program' })).toHaveAttribute('data-weight', 'secondary')
+    expect(screen.getByRole('button', { name: 'Run' })).toHaveAttribute('data-weight', 'primary')
+    expect(screen.getByRole('button', { name: 'Compile' })).toHaveAttribute('data-weight', 'primary')
+  })
+})
+
 describe('TaskEditor — Load Program / Save Program / Run (D12/D13)', () => {
   afterEach(() => {
     vi.restoreAllMocks()
