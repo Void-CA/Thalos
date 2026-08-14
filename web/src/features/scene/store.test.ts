@@ -19,7 +19,7 @@ const seedHome: PoseDef = { position: [1.8, 0.0, 0.5], orientation: [0, 0, 0, 1]
  *  domain store carries (D4: fixtures are presentational → dropped). */
 const GOLDEN_SCENE_FILE: SceneFile = {
   schema_version: '1',
-  robot: { name: 'icebot', urdf: 'docs/robot/icebot.urdf' },
+  robot: { name: 'icebot', urdf: 'docs/execution/robot/icebot.urdf' },
   objects: [
     {
       id: 'box-1',
@@ -135,7 +135,7 @@ describe('loadSceneFile — hydrate from a SceneFile (demos-workspace spec, D12/
     expect(s.tools).toEqual([])
     expect(s.homePose).toEqual(GOLDEN_SCENE_FILE.home_pose)
     expect(s.approachHeight).toBe(0.05)
-    expect(s.robot).toEqual({ name: 'icebot', urdf: 'docs/robot/icebot.urdf' })
+    expect(s.robot).toEqual({ name: 'icebot', urdf: 'docs/execution/robot/icebot.urdf' })
   })
 
   it('maps objects 1:1 with name fallback to id and preserves kind/geometry (D4)', () => {

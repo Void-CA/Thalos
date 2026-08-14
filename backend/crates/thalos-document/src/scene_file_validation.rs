@@ -199,7 +199,7 @@ mod tests {
             schema_version: "1".into(),
             robot: RobotRef {
                 name: "icebot".into(),
-                urdf: "docs/robot/icebot.urdf".into(),
+                urdf: "docs/execution/robot/icebot.urdf".into(),
             },
             objects: vec![object("box-1", "box")],
             fixtures: vec![fixture("fence-1")],

@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "robot": { "name": "icebot", "urdf": "docs/robot/icebot.urdf" },
+  "robot": { "name": "icebot", "urdf": "docs/execution/robot/icebot.urdf" },
   "objects": [
     {
       "id": "box-1",

@@ -1,7 +1,6 @@
 .atl/
 openspec/
-roadmap*
-architecture*
 .opencode
 .vscode/
 __pycache__/
+.pytest_cache/

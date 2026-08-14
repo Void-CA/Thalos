@@ -131,7 +131,7 @@ impl Esp32Backend {
         // Velocity-bounding is FIRMWARE-AUTHORITATIVE: the executor controls
         // advancement as max_velocity × elapsed_real_time and steps at most
         // one dt_us==0 waypoint per update (PROTOCOL SEMANTICS, documented in
-        // docs/protocol/esp32-execution.md). The backend never infers host
+        // docs/architecture/protocol/esp32-execution.md). The backend never infers host
         // velocity from Δq over a zero dt.
         if total_samples > 1 && dt_per_sample == 0 {
             return Ok(ExecutionManifest {

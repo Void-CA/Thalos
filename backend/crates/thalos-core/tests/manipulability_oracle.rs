@@ -130,7 +130,7 @@ fn oracle_scara_grade_partition_reproduced_point_to_point() {
 fn oracle_icebot_not_force_promoted_and_scale_artifact_gone() {
     let src = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../../docs/robot/icebot.urdf"
+        "/../../../docs/execution/robot/icebot.urdf"
     ));
     let robot = thalos_models::urdf::parser::parse_robot(src).expect("icebot URDF");
     let chain = adapter::auto(&robot).expect("icebot chain");

@@ -6,7 +6,7 @@
 //! possible).
 //!
 //! The concrete skip reasons (UnsupportedSegment / InvariantViolation) are
-//! DIAGNOSTIC — documented in docs/demo-scenarios.md, never asserted.
+//! DIAGNOSTIC — documented in docs/execution/demos/demo-scenarios.md, never asserted.
 
 use super::*;
 use thalos_core::models::RobotModel;

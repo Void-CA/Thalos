@@ -64,7 +64,7 @@ vi.mock('@/features/analysis/api/plan-analysis-api', async (importOriginal) => {
 
 const demoScene: SceneFile = {
   schema_version: '1',
-  robot: { name: 'icebot', urdf: 'docs/robot/icebot.urdf' },
+  robot: { name: 'icebot', urdf: 'docs/execution/robot/icebot.urdf' },
   objects: [
     { id: 'box-1', kind: 'box', name: 'Box', pose: { position: [0.2, 0.1, 0], orientation: [1, 0, 0, 0] } },
   ],
@@ -209,7 +209,7 @@ describe('DemosWorkspace — [Load Demo] hydrates WITHOUT executing (D13, load �
       expect.objectContaining({ id: 'tray-1' }),
     ])
     expect(useDomainSceneStore.getState().homePose.position).toEqual([0.2, 0, 0.1])
-    expect(useDomainSceneStore.getState().robot).toEqual({ name: 'icebot', urdf: 'docs/robot/icebot.urdf' })
+    expect(useDomainSceneStore.getState().robot).toEqual({ name: 'icebot', urdf: 'docs/execution/robot/icebot.urdf' })
     // Program store replaced from the demo program text.
     expect(useSemanticEditor.getState().operations.map((o) => o.type)).toEqual(['pick', 'place', 'home'])
     // THE load ≠ run invariant: hydration must never trigger the pipeline.

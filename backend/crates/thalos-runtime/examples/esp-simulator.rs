@@ -3,7 +3,7 @@
 //!
 //! This is NOT a second firmware and NOT a kinematics simulation. It is a
 //! fake ESP32 that speaks EXACTLY the current wire protocol (see
-//! `docs/protocol/esp32-execution.md`, `backends/esp32/protocol.rs` for the
+//! `docs/architecture/protocol/esp32-execution.md`, `backends/esp32/protocol.rs` for the
 //! host side, `firmware/esp32/src/protocol.cpp` for the reference firmware)
 //! and produces deterministic states, responses, and execution samples so
 //! the host backend (`Esp32Backend` over `TcpTransport`) can be exercised

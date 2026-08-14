@@ -26,7 +26,7 @@
 //! path → `alternative_exists == false` (admissible but not strictly better)
 //! AND the evaluator keeps Direct (J 0.45 vs 0.55). All three contract rows
 //! hold on real geometry. The sub-epsilon tie-break is documented as evidence
-//! in docs/demo-scenarios.md (reference only, not asserted).
+//! in docs/execution/demos/demo-scenarios.md (reference only, not asserted).
 
 use super::*;
 use thalos_core::models::RobotModel;

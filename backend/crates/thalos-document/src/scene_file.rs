@@ -149,7 +149,7 @@ mod tests {
     /// geometry, others do not; one object references a placement location.
     const SAMPLE_JSON: &str = r#"{
         "schema_version": "1",
-        "robot": { "name": "icebot", "urdf": "docs/robot/icebot.urdf" },
+        "robot": { "name": "icebot", "urdf": "docs/execution/robot/icebot.urdf" },
         "objects": [
             { "id": "box-1", "kind": "box", "name": "Box 1", "location_ref": "tray-1",
               "geometry": { "type": "box", "size": [0.1, 0.1, 0.1] },
@@ -282,7 +282,7 @@ mod tests {
             schema_version: "1".into(),
             robot: RobotRef {
                 name: "icebot".into(),
-                urdf: "docs/robot/icebot.urdf".into(),
+                urdf: "docs/execution/robot/icebot.urdf".into(),
             },
             objects: vec![],
             fixtures: vec![],

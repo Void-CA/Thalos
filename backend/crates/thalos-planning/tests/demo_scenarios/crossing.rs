@@ -6,7 +6,7 @@
 //! assesses High; `AlternateElbow` re-solves the crossing to the same-side
 //! elbow posture (same cartesian path, q1 stays negative → no full-extension
 //! crossing) and is selected. Evidence numbers (0.5571 / 0.1625) are
-//! REFERENCE ONLY — see docs/demo-scenarios.md.
+//! REFERENCE ONLY — see docs/execution/demos/demo-scenarios.md.
 
 use super::*;
 use thalos_core::models::RobotModel;

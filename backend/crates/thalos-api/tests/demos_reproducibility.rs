@@ -27,7 +27,7 @@ use tower::ServiceExt;
 use thalos_document::scene_file::SceneFile;
 use thalos_semantic::script;
 
-const ICEBOT_URDF: &str = include_str!("../../../../docs/robot/icebot.urdf");
+const ICEBOT_URDF: &str = include_str!("../../../../docs/execution/robot/icebot.urdf");
 
 /// Repo `demos/` root — the default `THALOS_DEMOS_ROOT` (`./demos`, D9):
 /// `demos/index.json` is the catalog authority (D10).
