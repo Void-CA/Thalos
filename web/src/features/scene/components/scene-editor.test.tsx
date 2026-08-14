@@ -75,6 +75,24 @@ describe('SceneEditor — robot identity inline in Setup (R2)', () => {
   })
 })
 
+describe('SceneEditor — keyboard accessibility (R12)', () => {
+  afterEach(() => cleanup())
+
+  it('R12 — the accordion trigger is a focusable native button; activation toggles the section and keeps focus on the trigger', () => {
+    render(<SceneEditor />)
+    const trigger = screen.getByRole('button', { name: 'Objects' })
+    // Native button: browsers fire click on Enter/Space (implicit keyboard
+    // activation) — the keyboard path reduces to this activation.
+    expect(trigger.tagName).toBe('BUTTON')
+    trigger.focus()
+    expect(trigger).toHaveFocus()
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    expect(trigger).toHaveFocus()
+  })
+})
+
 describe('SceneEditor — list layout (V6) + SCARA wiring', () => {
   beforeEach(() => {
     act(() => {
@@ -108,6 +126,14 @@ describe('SceneEditor — list layout (V6) + SCARA wiring', () => {
     expect(input).toBeInTheDocument()
     fireEvent.change(input, { target: { value: '0.12' } })
     expect(useDomainSceneStore.getState().approachHeight).toBe(0.12)
+  })
+
+  it('R11 — editing the Home pose in Setup writes through setHomePose to the store', () => {
+    render(<SceneEditor />)
+    fireEvent.change(screen.getByLabelText('Home X'), { target: { value: '0.9' } })
+    fireEvent.change(screen.getByLabelText('Home Z'), { target: { value: '0.42' } })
+    expect(useDomainSceneStore.getState().homePose.position[0]).toBe(0.9)
+    expect(useDomainSceneStore.getState().homePose.position[2]).toBe(0.42)
   })
 
   it('R3 — approach height is a single labeled line; the explanation lives in a ⓘ tooltip, never in permanent multi-line space', async () => {

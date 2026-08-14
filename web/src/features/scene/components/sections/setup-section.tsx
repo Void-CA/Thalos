@@ -40,6 +40,7 @@ export function SetupSection({
           <span className="text-[10px] text-muted-foreground font-mono">X</span>
           <input
             type="number"
+            aria-label="Home X"
             value={homePose.position[0]}
             onChange={(e) =>
               setHomePose({
@@ -53,6 +54,7 @@ export function SetupSection({
           <span className="text-[10px] text-muted-foreground font-mono">Y</span>
           <input
             type="number"
+            aria-label="Home Y"
             value={homePose.position[1]}
             onChange={(e) =>
               setHomePose({
@@ -66,6 +68,7 @@ export function SetupSection({
           <span className="text-[10px] text-muted-foreground font-mono">Z</span>
           <input
             type="number"
+            aria-label="Home Z"
             value={homePose.position[2]}
             onChange={(e) =>
               setHomePose({

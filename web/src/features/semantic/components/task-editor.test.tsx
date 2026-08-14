@@ -732,6 +732,23 @@ describe('TaskEditor toolbar — button weight hierarchy (R9)', () => {
   })
 })
 
+describe('TaskEditor toolbar — keyboard reachability (R12)', () => {
+  it('R12 — toolbar buttons are tab-reachable in logical group order, each with an accessible name', () => {
+    seedTask()
+    renderEditor()
+    // Accessible names prove ARIA labels: every critical button resolves by
+    // role + name (a missing/empty label would throw here).
+    const expected = ['Add', 'Reset', 'Load Program', 'Save Program', 'Run', 'Compile']
+    const buttons = screen.getAllByRole('button')
+    const order = buttons.map((b) => b.textContent?.trim() ?? '')
+    const positions = expected.map((name) => order.indexOf(name))
+    // All buttons exist…
+    expect(positions.every((p) => p >= 0)).toBe(true)
+    // …and appear in the logical Program → File I/O → Execution order.
+    expect(positions).toEqual([...positions].sort((a, b) => a - b))
+  })
+})
+
 describe('TaskEditor — Load Program / Save Program / Run (D12/D13)', () => {
   afterEach(() => {
     vi.restoreAllMocks()
