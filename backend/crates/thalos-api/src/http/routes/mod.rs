@@ -1,4 +1,5 @@
 pub mod backend;
+pub mod demos;
 pub mod motion;
 pub mod plan;
 pub mod robots;
