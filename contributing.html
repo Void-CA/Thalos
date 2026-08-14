@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>9&nbsp; Contribución a Thalos – Thalos — Documentación Técnica</title>
+<title>10&nbsp; Contribución a Thalos – Thalos — Documentación Técnica</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -82,7 +82,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-c231d902041a91e206bb88b802561316.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-46fa63fc235414d8fd709832f52bc7a9.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "sidebar",
   "copy-button": false,
@@ -123,7 +123,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./contributing.html"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Contribución a Thalos</span></a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./contributing.html"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Contribución a Thalos</span></a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
       <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
@@ -195,14 +195,20 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="./motion-alternatives.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Alternativas de movimiento guiadas por evaluación</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="./maturity.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Estado de madurez</span></span></a>
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Estado de madurez</span></span></a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./contributing.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Contribución a Thalos</span></span></a>
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Contribución a Thalos</span></span></a>
   </div>
 </li>
         <li class="sidebar-item sidebar-item-section">
@@ -232,27 +238,27 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">Table of contents</h2>
    
   <ul>
-  <li><a href="#convenciones-generales" id="toc-convenciones-generales" class="nav-link active" data-scroll-target="#convenciones-generales"><span class="header-section-number">9.1</span> Convenciones generales</a></li>
-  <li><a href="#estructura-esperada-por-crate" id="toc-estructura-esperada-por-crate" class="nav-link" data-scroll-target="#estructura-esperada-por-crate"><span class="header-section-number">9.2</span> Estructura esperada por crate</a>
+  <li><a href="#convenciones-generales" id="toc-convenciones-generales" class="nav-link active" data-scroll-target="#convenciones-generales"><span class="header-section-number">10.1</span> Convenciones generales</a></li>
+  <li><a href="#estructura-esperada-por-crate" id="toc-estructura-esperada-por-crate" class="nav-link" data-scroll-target="#estructura-esperada-por-crate"><span class="header-section-number">10.2</span> Estructura esperada por crate</a>
   <ul class="collapse">
-  <li><a href="#thalos-core" id="toc-thalos-core" class="nav-link" data-scroll-target="#thalos-core"><span class="header-section-number">9.2.1</span> thalos-core</a></li>
-  <li><a href="#thalos-visual" id="toc-thalos-visual" class="nav-link" data-scroll-target="#thalos-visual"><span class="header-section-number">9.2.2</span> thalos-visual</a></li>
-  <li><a href="#thalos-runtime" id="toc-thalos-runtime" class="nav-link" data-scroll-target="#thalos-runtime"><span class="header-section-number">9.2.3</span> thalos-runtime</a></li>
-  <li><a href="#thalos-api" id="toc-thalos-api" class="nav-link" data-scroll-target="#thalos-api"><span class="header-section-number">9.2.4</span> thalos-api</a></li>
+  <li><a href="#thalos-core" id="toc-thalos-core" class="nav-link" data-scroll-target="#thalos-core"><span class="header-section-number">10.2.1</span> thalos-core</a></li>
+  <li><a href="#thalos-visual" id="toc-thalos-visual" class="nav-link" data-scroll-target="#thalos-visual"><span class="header-section-number">10.2.2</span> thalos-visual</a></li>
+  <li><a href="#thalos-runtime" id="toc-thalos-runtime" class="nav-link" data-scroll-target="#thalos-runtime"><span class="header-section-number">10.2.3</span> thalos-runtime</a></li>
+  <li><a href="#thalos-api" id="toc-thalos-api" class="nav-link" data-scroll-target="#thalos-api"><span class="header-section-number">10.2.4</span> thalos-api</a></li>
   </ul></li>
-  <li><a href="#cómo-agregar-un-modelo-robótico-nuevo" id="toc-cómo-agregar-un-modelo-robótico-nuevo" class="nav-link" data-scroll-target="#cómo-agregar-un-modelo-robótico-nuevo"><span class="header-section-number">9.3</span> Cómo agregar un modelo robótico nuevo</a></li>
-  <li><a href="#cómo-agregar-tests" id="toc-cómo-agregar-tests" class="nav-link" data-scroll-target="#cómo-agregar-tests"><span class="header-section-number">9.4</span> Cómo agregar tests</a>
+  <li><a href="#cómo-agregar-un-modelo-robótico-nuevo" id="toc-cómo-agregar-un-modelo-robótico-nuevo" class="nav-link" data-scroll-target="#cómo-agregar-un-modelo-robótico-nuevo"><span class="header-section-number">10.3</span> Cómo agregar un modelo robótico nuevo</a></li>
+  <li><a href="#cómo-agregar-tests" id="toc-cómo-agregar-tests" class="nav-link" data-scroll-target="#cómo-agregar-tests"><span class="header-section-number">10.4</span> Cómo agregar tests</a>
   <ul class="collapse">
-  <li><a href="#tests-unitarios-en-el-mismo-archivo" id="toc-tests-unitarios-en-el-mismo-archivo" class="nav-link" data-scroll-target="#tests-unitarios-en-el-mismo-archivo"><span class="header-section-number">9.4.1</span> Tests unitarios (en el mismo archivo)</a></li>
-  <li><a href="#tests-de-integración-en-tests" id="toc-tests-de-integración-en-tests" class="nav-link" data-scroll-target="#tests-de-integración-en-tests"><span class="header-section-number">9.4.2</span> Tests de integración (en <code>tests/</code>)</a></li>
+  <li><a href="#tests-unitarios-en-el-mismo-archivo" id="toc-tests-unitarios-en-el-mismo-archivo" class="nav-link" data-scroll-target="#tests-unitarios-en-el-mismo-archivo"><span class="header-section-number">10.4.1</span> Tests unitarios (en el mismo archivo)</a></li>
+  <li><a href="#tests-de-integración-en-tests" id="toc-tests-de-integración-en-tests" class="nav-link" data-scroll-target="#tests-de-integración-en-tests"><span class="header-section-number">10.4.2</span> Tests de integración (en <code>tests/</code>)</a></li>
   </ul></li>
-  <li><a href="#qué-evitar" id="toc-qué-evitar" class="nav-link" data-scroll-target="#qué-evitar"><span class="header-section-number">9.5</span> Qué evitar</a>
+  <li><a href="#qué-evitar" id="toc-qué-evitar" class="nav-link" data-scroll-target="#qué-evitar"><span class="header-section-number">10.5</span> Qué evitar</a>
   <ul class="collapse">
-  <li><a href="#no-hacer" id="toc-no-hacer" class="nav-link" data-scroll-target="#no-hacer"><span class="header-section-number">9.5.1</span> No hacer</a></li>
-  <li><a href="#sí-hacer" id="toc-sí-hacer" class="nav-link" data-scroll-target="#sí-hacer"><span class="header-section-number">9.5.2</span> Sí hacer</a></li>
+  <li><a href="#no-hacer" id="toc-no-hacer" class="nav-link" data-scroll-target="#no-hacer"><span class="header-section-number">10.5.1</span> No hacer</a></li>
+  <li><a href="#sí-hacer" id="toc-sí-hacer" class="nav-link" data-scroll-target="#sí-hacer"><span class="header-section-number">10.5.2</span> Sí hacer</a></li>
   </ul></li>
-  <li><a href="#flujo-de-trabajo-para-contribuciones" id="toc-flujo-de-trabajo-para-contribuciones" class="nav-link" data-scroll-target="#flujo-de-trabajo-para-contribuciones"><span class="header-section-number">9.6</span> Flujo de trabajo para contribuciones</a></li>
-  <li><a href="#checklist-pre-pr" id="toc-checklist-pre-pr" class="nav-link" data-scroll-target="#checklist-pre-pr"><span class="header-section-number">9.7</span> Checklist pre-PR</a></li>
+  <li><a href="#flujo-de-trabajo-para-contribuciones" id="toc-flujo-de-trabajo-para-contribuciones" class="nav-link" data-scroll-target="#flujo-de-trabajo-para-contribuciones"><span class="header-section-number">10.6</span> Flujo de trabajo para contribuciones</a></li>
+  <li><a href="#checklist-pre-pr" id="toc-checklist-pre-pr" class="nav-link" data-scroll-target="#checklist-pre-pr"><span class="header-section-number">10.7</span> Checklist pre-PR</a></li>
   </ul>
 </nav>
     </div>
@@ -261,7 +267,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title"><span id="sec-contributing" class="quarto-section-identifier"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Contribución a Thalos</span></span></h1>
+<h1 class="title"><span id="sec-contributing" class="quarto-section-identifier"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Contribución a Thalos</span></span></h1>
 </div>
 
 
@@ -279,8 +285,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <p>Esta guía asume que ya leíste las secciones de arquitectura (<a href="architecture.html" class="quarto-xref"><span>Chapter 3</span></a>) y dominio (<a href="domain.html" class="quarto-xref"><span>Chapter 6</span></a>). Este documento cubre <strong>cómo contribuir</strong> de forma efectiva y consistente.</p>
-<section id="convenciones-generales" class="level2" data-number="9.1">
-<h2 data-number="9.1" class="anchored" data-anchor-id="convenciones-generales"><span class="header-section-number">9.1</span> Convenciones generales</h2>
+<section id="convenciones-generales" class="level2" data-number="10.1">
+<h2 data-number="10.1" class="anchored" data-anchor-id="convenciones-generales"><span class="header-section-number">10.1</span> Convenciones generales</h2>
 <ul>
 <li><strong>Idioma del código</strong>: inglés (nombres de tipos, funciones, tests, mensajes de error)</li>
 <li><strong>Idioma de la documentación</strong>: español (este libro)</li>
@@ -289,10 +295,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><strong>Lints</strong>: <code>cargo clippy</code> sin warnings</li>
 </ul>
 </section>
-<section id="estructura-esperada-por-crate" class="level2" data-number="9.2">
-<h2 data-number="9.2" class="anchored" data-anchor-id="estructura-esperada-por-crate"><span class="header-section-number">9.2</span> Estructura esperada por crate</h2>
-<section id="thalos-core" class="level3" data-number="9.2.1">
-<h3 data-number="9.2.1" class="anchored" data-anchor-id="thalos-core"><span class="header-section-number">9.2.1</span> thalos-core</h3>
+<section id="estructura-esperada-por-crate" class="level2" data-number="10.2">
+<h2 data-number="10.2" class="anchored" data-anchor-id="estructura-esperada-por-crate"><span class="header-section-number">10.2</span> Estructura esperada por crate</h2>
+<section id="thalos-core" class="level3" data-number="10.2.1">
+<h3 data-number="10.2.1" class="anchored" data-anchor-id="thalos-core"><span class="header-section-number">10.2.1</span> thalos-core</h3>
 <pre><code>crates/thalos-core/src/
 ├── lib.rs            # Declaración de módulos públicos
 ├── prelude.rs        # Re-exportaciones convenientes (opcional)
@@ -308,8 +314,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li>Las <strong>fábricas de modelos</strong> concretos van en <code>models/&lt;name&gt;/factory.rs</code>.</li>
 </ul>
 </section>
-<section id="thalos-visual" class="level3" data-number="9.2.2">
-<h3 data-number="9.2.2" class="anchored" data-anchor-id="thalos-visual"><span class="header-section-number">9.2.2</span> thalos-visual</h3>
+<section id="thalos-visual" class="level3" data-number="10.2.2">
+<h3 data-number="10.2.2" class="anchored" data-anchor-id="thalos-visual"><span class="header-section-number">10.2.2</span> thalos-visual</h3>
 <pre><code>crates/thalos-visual/src/
 ├── lib.rs            # Re-exportaciones públicas
 ├── scene/
@@ -328,8 +334,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li>Los <strong>helpers geométricos</strong> (<code>cylinder_between</code>, <code>align_y_to</code>) viven en <code>builder.rs</code> y se exportan para reuso.</li>
 </ul>
 </section>
-<section id="thalos-runtime" class="level3" data-number="9.2.3">
-<h3 data-number="9.2.3" class="anchored" data-anchor-id="thalos-runtime"><span class="header-section-number">9.2.3</span> thalos-runtime</h3>
+<section id="thalos-runtime" class="level3" data-number="10.2.3">
+<h3 data-number="10.2.3" class="anchored" data-anchor-id="thalos-runtime"><span class="header-section-number">10.2.3</span> thalos-runtime</h3>
 <pre><code>crates/thalos-runtime/src/
 ├── lib.rs            # Re-exportaciones públicas
 ├── error.rs          # RuntimeError
@@ -356,8 +362,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><code>SceneService::execute()</code> siempre devuelve un <code>RuntimeSnapshot</code> completo.</li>
 </ul>
 </section>
-<section id="thalos-api" class="level3" data-number="9.2.4">
-<h3 data-number="9.2.4" class="anchored" data-anchor-id="thalos-api"><span class="header-section-number">9.2.4</span> thalos-api</h3>
+<section id="thalos-api" class="level3" data-number="10.2.4">
+<h3 data-number="10.2.4" class="anchored" data-anchor-id="thalos-api"><span class="header-section-number">10.2.4</span> thalos-api</h3>
 <pre><code>crates/thalos-api/src/
 ├── main.rs           # Entrypoint
 ├── lib.rs            # Re-exportaciones
@@ -391,8 +397,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
         └── robots.rs # Rutas de robots</code></pre>
 </section>
 </section>
-<section id="cómo-agregar-un-modelo-robótico-nuevo" class="level2" data-number="9.3">
-<h2 data-number="9.3" class="anchored" data-anchor-id="cómo-agregar-un-modelo-robótico-nuevo"><span class="header-section-number">9.3</span> Cómo agregar un modelo robótico nuevo</h2>
+<section id="cómo-agregar-un-modelo-robótico-nuevo" class="level2" data-number="10.3">
+<h2 data-number="10.3" class="anchored" data-anchor-id="cómo-agregar-un-modelo-robótico-nuevo"><span class="header-section-number">10.3</span> Cómo agregar un modelo robótico nuevo</h2>
 <p>Agregar un robot concreto (ej: <code>RRBot</code>) requiere:</p>
 <p><strong>1. Crear la estructura de directorios</strong></p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> robot NAME=rrbot</span>
@@ -457,10 +463,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
 <span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="cómo-agregar-tests" class="level2" data-number="9.4">
-<h2 data-number="9.4" class="anchored" data-anchor-id="cómo-agregar-tests"><span class="header-section-number">9.4</span> Cómo agregar tests</h2>
-<section id="tests-unitarios-en-el-mismo-archivo" class="level3" data-number="9.4.1">
-<h3 data-number="9.4.1" class="anchored" data-anchor-id="tests-unitarios-en-el-mismo-archivo"><span class="header-section-number">9.4.1</span> Tests unitarios (en el mismo archivo)</h3>
+<section id="cómo-agregar-tests" class="level2" data-number="10.4">
+<h2 data-number="10.4" class="anchored" data-anchor-id="cómo-agregar-tests"><span class="header-section-number">10.4</span> Cómo agregar tests</h2>
+<section id="tests-unitarios-en-el-mismo-archivo" class="level3" data-number="10.4.1">
+<h3 data-number="10.4.1" class="anchored" data-anchor-id="tests-unitarios-en-el-mismo-archivo"><span class="header-section-number">10.4.1</span> Tests unitarios (en el mismo archivo)</h3>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="at">#[</span>cfg<span class="at">(</span>test<span class="at">)]</span></span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="kw">mod</span> vector3_tests <span class="op">{</span></span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">use</span> <span class="kw">super</span><span class="pp">::</span><span class="op">*;</span></span>
@@ -472,8 +478,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
 <span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="tests-de-integración-en-tests" class="level3" data-number="9.4.2">
-<h3 data-number="9.4.2" class="anchored" data-anchor-id="tests-de-integración-en-tests"><span class="header-section-number">9.4.2</span> Tests de integración (en <code>tests/</code>)</h3>
+<section id="tests-de-integración-en-tests" class="level3" data-number="10.4.2">
+<h3 data-number="10.4.2" class="anchored" data-anchor-id="tests-de-integración-en-tests"><span class="header-section-number">10.4.2</span> Tests de integración (en <code>tests/</code>)</h3>
 <p>Usar <code>insta</code> para snapshots cuando sea posible:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode rust code-with-copy"><code class="sourceCode rust"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="at">#[</span>test<span class="at">]</span></span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> test_planar_2r_scene() <span class="op">{</span></span>
@@ -486,10 +492,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Los snapshots permiten detectar visualmente cambios no deseados en CI sin abrir un visor 3D.</p>
 </section>
 </section>
-<section id="qué-evitar" class="level2" data-number="9.5">
-<h2 data-number="9.5" class="anchored" data-anchor-id="qué-evitar"><span class="header-section-number">9.5</span> Qué evitar</h2>
-<section id="no-hacer" class="level3" data-number="9.5.1">
-<h3 data-number="9.5.1" class="anchored" data-anchor-id="no-hacer"><span class="header-section-number">9.5.1</span> No hacer</h3>
+<section id="qué-evitar" class="level2" data-number="10.5">
+<h2 data-number="10.5" class="anchored" data-anchor-id="qué-evitar"><span class="header-section-number">10.5</span> Qué evitar</h2>
+<section id="no-hacer" class="level3" data-number="10.5.1">
+<h3 data-number="10.5.1" class="anchored" data-anchor-id="no-hacer"><span class="header-section-number">10.5.1</span> No hacer</h3>
 <ul>
 <li>Importar <code>thalos-visual</code>, <code>thalos-runtime</code> o <code>thalos-api</code> desde <code>thalos-core</code></li>
 <li>Poner lógica de negocios en handlers HTTP</li>
@@ -499,8 +505,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li>Mezclar DTOs con tipos del dominio — los DTOs de API son independientes</li>
 </ul>
 </section>
-<section id="sí-hacer" class="level3" data-number="9.5.2">
-<h3 data-number="9.5.2" class="anchored" data-anchor-id="sí-hacer"><span class="header-section-number">9.5.2</span> Sí hacer</h3>
+<section id="sí-hacer" class="level3" data-number="10.5.2">
+<h3 data-number="10.5.2" class="anchored" data-anchor-id="sí-hacer"><span class="header-section-number">10.5.2</span> Sí hacer</h3>
 <ul>
 <li>Validar invariantes en construcción (<code>new()</code> retorna <code>Result</code>)</li>
 <li>Documentar el <code>por qué</code> de las decisiones (no solo el <code>qué</code>)</li>
@@ -510,8 +516,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </ul>
 </section>
 </section>
-<section id="flujo-de-trabajo-para-contribuciones" class="level2" data-number="9.6">
-<h2 data-number="9.6" class="anchored" data-anchor-id="flujo-de-trabajo-para-contribuciones"><span class="header-section-number">9.6</span> Flujo de trabajo para contribuciones</h2>
+<section id="flujo-de-trabajo-para-contribuciones" class="level2" data-number="10.6">
+<h2 data-number="10.6" class="anchored" data-anchor-id="flujo-de-trabajo-para-contribuciones"><span class="header-section-number">10.6</span> Flujo de trabajo para contribuciones</h2>
 <ol type="1">
 <li>Leer la documentación de dominio y arquitectura</li>
 <li>Crear un issue o discussion describiendo el cambio</li>
@@ -521,8 +527,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li>Enviar PR con conventional commit</li>
 </ol>
 </section>
-<section id="checklist-pre-pr" class="level2" data-number="9.7">
-<h2 data-number="9.7" class="anchored" data-anchor-id="checklist-pre-pr"><span class="header-section-number">9.7</span> Checklist pre-PR</h2>
+<section id="checklist-pre-pr" class="level2" data-number="10.7">
+<h2 data-number="10.7" class="anchored" data-anchor-id="checklist-pre-pr"><span class="header-section-number">10.7</span> Checklist pre-PR</h2>
 <ul class="task-list">
 <li><label><input type="checkbox"><code>cargo fmt</code> aplicado</label></li>
 <li><label><input type="checkbox"><code>cargo clippy</code> sin warnings</label></li>
@@ -940,7 +946,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <nav class="page-navigation">
   <div class="nav-page nav-page-previous">
       <a href="./maturity.html" class="pagination-link" aria-label="Estado de madurez">
-        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Estado de madurez</span></span>
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Estado de madurez</span></span>
       </a>          
   </div>
   <div class="nav-page nav-page-next">

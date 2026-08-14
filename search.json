@@ -560,123 +560,193 @@
     ]
   },
   {
+    "objectID": "motion-alternatives.html",
+    "href": "motion-alternatives.html",
+    "title": "8  Alternativas de movimiento guiadas por evaluación",
+    "section": "",
+    "text": "8.1 Pipeline de candidatos\nThalos puede generar alternativas geométricas de un plan semilla, evaluarlas con el mismo Assessor congelado del análisis normal y seleccionar la mejor por una función objetivo ponderada (J). El mecanismo es aditivo: el camino normal de análisis no cambia, y la selección nunca altera los extremos ni la secuencia de tareas del plan.\nEl flujo completo vive en thalos-runtime (analyze_plan_with_candidates) y compone módulos de thalos-planning:\ncandidatos\n\n\n\nseed\n\nPlan semilla\n(PlanningProgram)\n\n\n\ngen\n\nCandidateGenerator::generate\nDirect (candidato 0) + InsertWaypoint + AlternateElbow\n\n\n\nseed-&gt;gen\n\n\n\n\n\ngate\n\nAdmissibilityGate\nfase 1: invariantes geométricas\nfase 2: política de riesgo\n\n\n\nseed-&gt;gate\n\n\nextremos ε + identidad de tarea\n\n\n\ncand\n\nPor candidato:\n\n\n\ngen-&gt;cand\n\n\n\n\n\ncomp\n\nPlanCompiler\ncompile()\n\n\n\ncand-&gt;comp\n\n\n\n\n\nan\n\nTrajectoryAnalyzer\nanalyze_with_observations()\n\n\n\ncomp-&gt;an\n\n\n\n\n\nagg\n\nDefaultAggregator\nAnalysisReport\n\n\n\nan-&gt;agg\n\n\n\n\n\nass\n\nAssessor::assess()\n(congelado — autoridad única de riesgo)\n\n\n\nagg-&gt;ass\n\n\n\n\n\nmap\n\nRuntime adapter (ADR-5)\nAssessment → CandidateAssessment\nrisk = 1 − quality · Critical → Rejected\n\n\n\nass-&gt;map\n\n\n\n\n\nmap-&gt;gate\n\n\n\n\n\nrank\n\nCandidateEvaluator\nJ = Σ wᵢ·normᵢ (min-max por set)\nselección = argmin J\n\n\n\ngate-&gt;rank\n\n\n\n\n\nout\n\nCandidateRanking\n+ SelectionReason derivado\n\n\n\nrank-&gt;out\n\n\n\n\n\n\n\n\nFigure 8.1: Pipeline de candidatos — generate → compile → analyze → assess → map → gate → rank",
+    "crumbs": [
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Alternativas de movimiento guiadas por evaluación</span>"
+    ]
+  },
+  {
+    "objectID": "motion-alternatives.html#pipeline-de-candidatos",
+    "href": "motion-alternatives.html#pipeline-de-candidatos",
+    "title": "8  Alternativas de movimiento guiadas por evaluación",
+    "section": "",
+    "text": "Etapa\nResponsabilidad\nComponente\n\n\n\n\nGenerar\nProduce geometrías alternativas; sin conocimiento de riesgo\nCandidateGenerator + estrategias acotadas\n\n\nCompilar\nResuelve IK y arma la trayectoria (convergencia, C0)\nPlanCompiler\n\n\nAnalizar\nObservaciones canónicas + métricas técnicas\nTrajectoryAnalyzer + DefaultAggregator\n\n\nEvaluar\nVerdicto de riesgo/calidad sobre el reporte\nAssessor::assess (frozen)\n\n\nMapear\nTraduce Assessment al contrato neutro de planning\nruntime (composition root)\n\n\nFiltrar\nInvariantes geométricas + política de riesgo\nAdmissibilityGate\n\n\nRankear\nNormaliza y pondera; elige argmin J\nCandidateEvaluator (SafetyFirst: 0.5/0.2/0.2/0.1)",
+    "crumbs": [
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Alternativas de movimiento guiadas por evaluación</span>"
+    ]
+  },
+  {
+    "objectID": "motion-alternatives.html#límite-de-contrato-adr-5",
+    "href": "motion-alternatives.html#límite-de-contrato-adr-5",
+    "title": "8  Alternativas de movimiento guiadas por evaluación",
+    "section": "8.2 Límite de contrato (ADR-5)",
+    "text": "8.2 Límite de contrato (ADR-5)\nthalos-planning/src/candidate/ no depende de thalos-intelligence. La generación y la evaluación operan sobre contratos neutros de planning (CandidateAssessment { risk, admissibility }); el runtime es el único componente que conoce ambos lados y adapta el Assessment congelado — incluida la regla Risk::Critical → RiskAdmissibility::Rejected (el umbral de “Critical” nunca se duplica en planning).\n$ rg \"thalos_intelligence|thalos-intelligence\" crates/thalos-planning/src/candidate/\n# → vacío (sin salida)\n\n\n\n\n\n\n\n\n\nComponente\nConoce riesgo\nConoce candidatos\nAdapta el contrato\n\n\n\n\ncandidate/ (generación)\nNo — produce geometrías\nSí\nNo\n\n\nAssessor (inteligencia)\nSí — autoridad única\nNo\nNo\n\n\nEvaluador (planning)\nSolo el CandidateAssessment neutro\nSí\nNo\n\n\nRuntime (composition root)\nSí\nSí\nSí (ADR-5)",
+    "crumbs": [
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Alternativas de movimiento guiadas por evaluación</span>"
+    ]
+  },
+  {
+    "objectID": "motion-alternatives.html#el-hallazgo-del-segmento-intermedio",
+    "href": "motion-alternatives.html#el-hallazgo-del-segmento-intermedio",
+    "title": "8  Alternativas de movimiento guiadas por evaluación",
+    "section": "8.3 El hallazgo del segmento intermedio",
+    "text": "8.3 El hallazgo del segmento intermedio\nAlternateElbow solo contribuye cuando el segmento transformado no es el joint goal del programa. La invariante de extremos (ADR-1) compara el último objetivo MoveJ con tolerancia ε = 1e-4 rad por junta; AlternateElbow re-resuelve el objetivo cartesiano del segmento a la postura de codo del mismo lado, lo que cambia el joint goal — y un candidato así se rechaza por EndpointDrift. Por eso el escenario demostrativo cruza por un segmento intermedio:\n[MoveJ home (0.0, -1.31, -0.1, 0.0) → MoveJ cross (0.5, 0.6, -0.15, 0.0)\n → MoveJ goal (0.5, -1.31, -0.15, 0.0)],  target_segment = 1\nEl segmento 1 cruza la extensión completa (q1 pasa por 0) → el seed se evalúa High (riesgo crisp 0.557). AlternateElbow re-resuelve ese segmento desde las juntas de inicio del segmento a la postura del mismo lado (misma posición cartesiana, q1 permanece negativo → sin cruce), preservando el MoveJ inicial y el joint goal. En un programa de un solo segmento, la única alternativa generada sería estructuralmente rechazada; la selección del segmento es una política del llamador, nunca de la estrategia.",
+    "crumbs": [
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Alternativas de movimiento guiadas por evaluación</span>"
+    ]
+  },
+  {
+    "objectID": "motion-alternatives.html#convenciones-documentadas",
+    "href": "motion-alternatives.html#convenciones-documentadas",
+    "title": "8  Alternativas de movimiento guiadas por evaluación",
+    "section": "8.4 Convenciones documentadas",
+    "text": "8.4 Convenciones documentadas\n\n8.4.1 L = longitud de trayectoria en espacio articular\nMotionMetrics.path_length es la longitud L2 en el espacio articular, L = Σ ||qᵢ₊₁ − qᵢ||₂ entre waypoints consecutivos — la misma convención del TraceAnalyzer del runtime. Es una propiedad directa de la articulación ejecutada, independiente del frame TCP, y para AlternateElbow vs Direct es exactamente el cambio geométrico que se quiere comparar. Una longitud TCP cartesiana (L_tcp) queda diferida a un futuro perfil PathEfficiency; no se mezclan geometrías dentro de J.\n\n\n8.4.2 ±π = fallback operacional, no un rango físico\nLas juntas sin límites declarados degradan a [−π, π] en el check defense-in-depth del gate (joint_bounds_from_chain) — la misma convención del handler de optimize de la API. Es un fallback operacional para el check de límites, no una afirmación sobre el rango físico real del robot. No debe interpretarse como un límite real.",
+    "crumbs": [
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Alternativas de movimiento guiadas por evaluación</span>"
+    ]
+  },
+  {
+    "objectID": "motion-alternatives.html#garantía-de-equivalencia-baseline",
+    "href": "motion-alternatives.html#garantía-de-equivalencia-baseline",
+    "title": "8  Alternativas de movimiento guiadas por evaluación",
+    "section": "8.5 Garantía de equivalencia baseline",
+    "text": "8.5 Garantía de equivalencia baseline\nEl camino de candidatos no cambia la evaluación del seed. Para el mismo programa semilla y el mismo contexto, el candidato Direct (el seed mismo, siempre candidato 0) recibe exactamente la misma evaluación que el camino normal analyze_plan: mismo risk, misma quality, mismo evidence (métricas del reporte) y misma trace (trayectoria ejecutada, waypoint por waypoint). La prueba estructural vive en plan_analysis.rs (candidates_flow_preserves_the_seed_assessment_and_report) y compara el Assessment completo y el AnalysisReport completo con igualdad estructural (PartialEq), no por muestreo. Esto se verifica también dentro de la demo: candidate_counterfactual.rs afirma que el assessment del candidato Direct coincide con el del seed evaluado por el camino llano.",
+    "crumbs": [
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Alternativas de movimiento guiadas por evaluación</span>"
+    ]
+  },
+  {
+    "objectID": "motion-alternatives.html#reproducción",
+    "href": "motion-alternatives.html#reproducción",
+    "title": "8  Alternativas de movimiento guiadas por evaluación",
+    "section": "8.6 Reproducción",
+    "text": "8.6 Reproducción\n# Demo del contrafactual (tabla rankeada + veredicto de equivalencia baseline)\ncargo test -p thalos-planning --test candidate_counterfactual -- --nocapture\n\n# Verificación de factibilidad (mismo escenario, invariantes de PR3)\ncargo test -p thalos-planning --test candidate_feasibility -- --nocapture\n\n# Equivalencia baseline a nivel runtime (ambos caminos sobre el mismo seed)\ncargo test -p thalos_runtime plan_analysis",
+    "crumbs": [
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Alternativas de movimiento guiadas por evaluación</span>"
+    ]
+  },
+  {
     "objectID": "maturity.html",
     "href": "maturity.html",
-    "title": "8  Estado de madurez",
+    "title": "9  Estado de madurez",
     "section": "",
-    "text": "8.1 Matriz de madurez\nEsta sección documenta qué partes de Thalos están estables, cuáles están en desarrollo, y qué esperar de cada área. Es información crítica para colaboradores y adoptantes tempranos.\nEstados:",
+    "text": "9.1 Matriz de madurez\nEsta sección documenta qué partes de Thalos están estables, cuáles están en desarrollo, y qué esperar de cada área. Es información crítica para colaboradores y adoptantes tempranos.\nEstados:",
     "crumbs": [
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Estado de madurez</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Estado de madurez</span>"
     ]
   },
   {
     "objectID": "maturity.html#matriz-de-madurez",
     "href": "maturity.html#matriz-de-madurez",
-    "title": "8  Estado de madurez",
+    "title": "9  Estado de madurez",
     "section": "",
     "text": "Área\nEstado\nNotas\n\n\n\n\nthalos-math\n\\(\\blacksquare\\) Estable\nVector3, Quaternion, Transform3D — API congelada\n\n\nrobot::joint\n\\(\\blacksquare\\) Estable\nJointType, RevoluteJoint, PrismaticJoint\n\n\nrobot::link\n\\(\\blacksquare\\) Estable\nLink simple\n\n\nrobot::segment\n\\(\\blacksquare\\) Estable\nSegment\n\n\nrobot::serial_chain\n\\(\\blacksquare\\) Estable\nEstructura central del dominio\n\n\nrobot::builder\n\\(\\blacksquare\\) Estable\nSerialChainBuilder con validación\n\n\nrobot::tool_frame\n\\(\\blacksquare\\) Estable\nToolFrame con offset, resolve_pose()\n\n\nkinematics::forward\n\\(\\blacksquare\\) Estable\nFK probado indirectamente vía snapshots\n\n\nkinematics::jacobian::GeometricJacobian\n\\(\\blacktriangle\\) Desarrollo\nSin tests dedicados\n\n\nkinematics::jacobian::NumericalJacobian\n\\(\\blacktriangle\\) Desarrollo\nSin tests dedicados\n\n\nkinematics::inverse::DLS\n\\(\\blacktriangle\\) Desarrollo\nDamped Least Squares — funcional, puede mejorar\n\n\nkinematics::inverse::JT\n\\(\\circ\\) Experimental\nJacobian Transpose — implementación inicial\n\n\nspatial::frame\n\\(\\blacksquare\\) Estable\nFrameId, Frame, FrameRegistry\n\n\nspatial::pose\n\\(\\blacksquare\\) Estable\nPose\n\n\nspatial::frame::graph\n\\(\\circ\\) Experimental\nSolo esqueleto declarado\n\n\nmodels::factory\n\\(\\blacksquare\\) Estable\nRobotRegistry, RobotModel (8 variantes), RobotSpec\n\n\nModelos concretos\n\\(\\blacksquare\\) Estable\nFactory + tests FK por modelo\n\n\nthalos-models\n\\(\\blacktriangle\\) Desarrollo\nURDF mirror, parser — estructura madura, parser en evolución\n\n\nthalos-collision\n\\(\\blacktriangle\\) Desarrollo\nNaiveCollisionChecker, SAT — funcional, sin benchmark\n\n\nthalos-planning\n\\(\\blacktriangle\\) Desarrollo\nMoveJPlanner, GoalResolver, Trajectory — MoveL es esqueleto\n\n\nthalos-visual::scene\n\\(\\blacksquare\\) Estable\nVisualScene, VisualFrame, primitives, FrameStyle\n\n\nthalos-visual::builder\n\\(\\blacktriangle\\) Desarrollo\nSceneBuilder, ScaraVisualBuilder, cylinder_between\n\n\nthalos-visual::validator\n\\(\\blacksquare\\) Estable\n8 invariantes, tests con insta\n\n\nthalos-visual::diff\n\\(\\blacksquare\\) Estable\nSceneDiff::between()\n\n\nthalos-visual::precision\n\\(\\blacksquare\\) Estable\nVisualPrecision\n\n\nthalos-runtime::scene\n\\(\\blacktriangle\\) Desarrollo\nSceneService, Command, RuntimeSnapshot\n\n\nthalos-runtime::commands\n\\(\\blacktriangle\\) Desarrollo\nSetJoints, LoadRobot, LoadUrdfRobot, Kinematics, Motion, SelectToolFrame\n\n\nthalos-runtime::plan\n\\(\\blacktriangle\\) Desarrollo\nActiveMotionPlan, ExecutionSession, PlanState\n\n\nthalos-runtime::backends\n\\(\\circ\\) Experimental\nRobotBackend trait — puede necesitar más métodos\n\n\nthalos-runtime::state\n\\(\\blacktriangle\\) Desarrollo\nSceneRuntime con TCP, plan, robot_source\n\n\nthalos-api::scene\n\\(\\blacktriangle\\) Desarrollo\nHandlers REST escena (~20 endpoints)\n\n\nthalos-api::robots\n\\(\\blacktriangle\\) Desarrollo\nCatálogo de robots\n\n\nthalos-api::motion\n\\(\\circ\\) Experimental\nEndpoints MoveJ/MoveL directos\n\n\nthalos-api::workspace\n\\(\\blacktriangle\\) Desarrollo\nSample, reachability, singularity, manipulability (~9 endpoints)\n\n\nthalos-api::dto\n\\(\\blacktriangle\\) Desarrollo\nRuntimeStateResponse, VisualSceneDto, mirrors completos\n\n\nFrontend: Scene feature\n\\(\\blacktriangle\\) Desarrollo\nZustand stores + R3F, stable pero en evolución\n\n\nFrontend: Robots feature\n\\(\\blacktriangle\\) Desarrollo\nCatálogo + selección\n\n\nFrontend: Planning feature\n\\(\\circ\\) Experimental\nPlanningPanel con segmentos\n\n\nFrontend: Execution feature\n\\(\\blacktriangle\\) Desarrollo\nExecutionPanel, estado, timeline\n\n\nFrontend: Workspace feature\n\\(\\circ\\) Experimental\nAnalysisWorkspace, PointCloud (R3F)\n\n\nFrontend: SceneCanvas (R3F)\n\\(\\blacksquare\\) Estable\nRobotModel, primitives, FrameStyle\n\n\nFrontend: RobotCatalog\n\\(\\blacktriangle\\) Desarrollo\nUI de selección de robots\n\n\n\n\n\n\\(\\blacksquare\\) Estable — API congelada, sin cambios breaking esperados\n\\(\\blacktriangle\\) Desarrollo — Implementado pero puede cambiar\n\\(\\circ\\) Experimental — Implementación inicial, sujeta a cambios significativos",
     "crumbs": [
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Estado de madurez</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Estado de madurez</span>"
     ]
   },
   {
     "objectID": "maturity.html#cobertura-de-tests",
     "href": "maturity.html#cobertura-de-tests",
-    "title": "8  Estado de madurez",
-    "section": "8.2 Cobertura de tests",
-    "text": "8.2 Cobertura de tests\n\n8.2.1 thalos-core\n\nmath::rotations::quaternion — Álgebra de cuaterniones: identidad, inverso, conjugado, norma, normalización, producto de Hamilton, asociatividad\nmath::rotations::unit_quaternion — Invariante de norma, Euler ↔︎ quaternion roundtrip, rotate_vector, composición, inverso, from_axis_angle\nkinematics::inverse — Tests DLS, JT, pose IK, benchmarks\nrobot::tool_frame — Tests de resolución de pose y posición\n\n\n\n8.2.2 thalos-visual\n\nvalidator_tests — Cada invariante del SceneValidator (world, duplicados, topología, conectividad, finitos, quaternions, links, twists)\nscene_snapshots — Snapshots con insta para validación visual de escenas FK\n\n\n\n8.2.3 thalos-api\n\nservice_tests — SceneService::build_scene con validación\napi_tests — Integración HTTP: endpoints responden correctamente\n\n\n\n8.2.4 thalos-runtime\n\nscene_tests — Tests de integración del orquestador\ntcp_integration_tests — Tests de TCP/Flange en runtime\n\n\n\n8.2.5 thalos-planning\n\ngoal — Tests de GoalResolver, validación de políticas\nmotion — Tests de MoveJPlanner\n\n\n\n8.2.6 thalos-collision\n\nnaive — Tests de NaiveCollisionChecker\nintersect — Tests SAT, esfera-caja\n\n\n\n8.2.7 thalos-math\n\nTests de Vector3, Quaternion, UnitQuaternion, Transform3D",
+    "title": "9  Estado de madurez",
+    "section": "9.2 Cobertura de tests",
+    "text": "9.2 Cobertura de tests\n\n9.2.1 thalos-core\n\nmath::rotations::quaternion — Álgebra de cuaterniones: identidad, inverso, conjugado, norma, normalización, producto de Hamilton, asociatividad\nmath::rotations::unit_quaternion — Invariante de norma, Euler ↔︎ quaternion roundtrip, rotate_vector, composición, inverso, from_axis_angle\nkinematics::inverse — Tests DLS, JT, pose IK, benchmarks\nrobot::tool_frame — Tests de resolución de pose y posición\n\n\n\n9.2.2 thalos-visual\n\nvalidator_tests — Cada invariante del SceneValidator (world, duplicados, topología, conectividad, finitos, quaternions, links, twists)\nscene_snapshots — Snapshots con insta para validación visual de escenas FK\n\n\n\n9.2.3 thalos-api\n\nservice_tests — SceneService::build_scene con validación\napi_tests — Integración HTTP: endpoints responden correctamente\n\n\n\n9.2.4 thalos-runtime\n\nscene_tests — Tests de integración del orquestador\ntcp_integration_tests — Tests de TCP/Flange en runtime\n\n\n\n9.2.5 thalos-planning\n\ngoal — Tests de GoalResolver, validación de políticas\nmotion — Tests de MoveJPlanner\n\n\n\n9.2.6 thalos-collision\n\nnaive — Tests de NaiveCollisionChecker\nintersect — Tests SAT, esfera-caja\n\n\n\n9.2.7 thalos-math\n\nTests de Vector3, Quaternion, UnitQuaternion, Transform3D",
     "crumbs": [
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Estado de madurez</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Estado de madurez</span>"
     ]
   },
   {
     "objectID": "maturity.html#cobertura-deseada",
     "href": "maturity.html#cobertura-deseada",
-    "title": "8  Estado de madurez",
-    "section": "8.3 Cobertura deseada",
-    "text": "8.3 Cobertura deseada\n\nTests directos para Transform3D::compose() y Transform3D::identity()\nTests para RevoluteJoint::motion() y PrismaticJoint::motion()\nTests para SerialChainBuilder (éxito y error)\nComparación GeometricJacobian vs NumericalJacobian (deberían coincidir dentro de tolerancia)\nSnapshots por modelo robótico (Manipulator3DOF, CylindricalRPP, etc.)\nTests de frontend con React Testing Library (vitest)",
+    "title": "9  Estado de madurez",
+    "section": "9.3 Cobertura deseada",
+    "text": "9.3 Cobertura deseada\n\nTests directos para Transform3D::compose() y Transform3D::identity()\nTests para RevoluteJoint::motion() y PrismaticJoint::motion()\nTests para SerialChainBuilder (éxito y error)\nComparación GeometricJacobian vs NumericalJacobian (deberían coincidir dentro de tolerancia)\nSnapshots por modelo robótico (Manipulator3DOF, CylindricalRPP, etc.)\nTests de frontend con React Testing Library (vitest)",
     "crumbs": [
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Estado de madurez</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Estado de madurez</span>"
     ]
   },
   {
     "objectID": "contributing.html",
     "href": "contributing.html",
-    "title": "9  Contribución a Thalos",
+    "title": "10  Contribución a Thalos",
     "section": "",
-    "text": "9.1 Convenciones generales\nEsta guía asume que ya leíste las secciones de arquitectura (Chapter 3) y dominio (Chapter 6). Este documento cubre cómo contribuir de forma efectiva y consistente.",
+    "text": "10.1 Convenciones generales\nEsta guía asume que ya leíste las secciones de arquitectura (Chapter 3) y dominio (Chapter 6). Este documento cubre cómo contribuir de forma efectiva y consistente.",
     "crumbs": [
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Contribución a Thalos</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Contribución a Thalos</span>"
     ]
   },
   {
     "objectID": "contributing.html#convenciones-generales",
     "href": "contributing.html#convenciones-generales",
-    "title": "9  Contribución a Thalos",
+    "title": "10  Contribución a Thalos",
     "section": "",
     "text": "Idioma del código: inglés (nombres de tipos, funciones, tests, mensajes de error)\nIdioma de la documentación: español (este libro)\nCommits: conventional commits (feat:, fix:, refactor:, docs:, test:)\nFormato: cargo fmt antes de cada commit\nLints: cargo clippy sin warnings",
     "crumbs": [
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Contribución a Thalos</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Contribución a Thalos</span>"
     ]
   },
   {
     "objectID": "contributing.html#estructura-esperada-por-crate",
     "href": "contributing.html#estructura-esperada-por-crate",
-    "title": "9  Contribución a Thalos",
-    "section": "9.2 Estructura esperada por crate",
-    "text": "9.2 Estructura esperada por crate\n\n9.2.1 thalos-core\ncrates/thalos-core/src/\n├── lib.rs            # Declaración de módulos públicos\n├── prelude.rs        # Re-exportaciones convenientes (opcional)\n├── &lt;mod&gt;/\n│   ├── mod.rs        # Declaración de submódulos + re-exportaciones\n│   ├── &lt;type&gt;.rs     # Un tipo por archivo (preferentemente)\n│   └── ...           # Archivos de soporte\nReglas:\n\nUn tipo principal por archivo. RevoluteJoint va en revolute.rs, no en joint.rs junto con PrismaticJoint.\nLos enums unificadores (como JointType) van en el archivo que lleva el nombre del concepto (joint.rs).\nLos tests unitarios van al final del archivo que testean, en un módulo #[cfg(test)] mod &lt;type&gt;_tests { ... }.\nLas fábricas de modelos concretos van en models/&lt;name&gt;/factory.rs.\n\n\n\n9.2.2 thalos-visual\ncrates/thalos-visual/src/\n├── lib.rs            # Re-exportaciones públicas\n├── scene/\n│   ├── mod.rs        # VisualScene, VisualFrame, VisualPrimitive, FrameStyle, etc.\n│   ├── precision.rs  # VisualPrecision (normalización numérica)\n│   └── diff.rs       # SceneDiff, ChangedFrame\n├── builder.rs        # SceneBuilder (FK → VisualScene) + helpers (cylinder_between, align_y_to)\n├── scara.rs          # ScaraVisualBuilder (builders específicos por robot)\n├── validator.rs      # SceneValidator (invariantes)\n└── utils.rs          # Utilidades pequeñas\n\nLos tipos visuales se declaran en scene/mod.rs con derive(Serialize, Deserialize).\nSceneBuilder importa del core pero no modifica estructuras del core.\nSceneValidator es autónomo: solo recibe un &VisualScene y devuelve Result&lt;(), SceneError&gt;.\nLos builders específicos (ej: ScaraVisualBuilder) van en archivos separados y extienden SceneBuilder para generar primitivas geométricas.\nLos helpers geométricos (cylinder_between, align_y_to) viven en builder.rs y se exportan para reuso.\n\n\n\n9.2.3 thalos-runtime\ncrates/thalos-runtime/src/\n├── lib.rs            # Re-exportaciones públicas\n├── error.rs          # RuntimeError\n├── commands/\n│   └── mod.rs        # Command enum (SetJoints, LoadRobot)\n├── state/\n│   ├── mod.rs\n│   └── robot.rs      # SceneRuntime, ActiveRobot\n├── services/\n│   ├── mod.rs\n│   └── scene.rs      # SceneService (orquestador principal)\n├── backends/\n│   ├── mod.rs        # RobotBackend trait\n│   └── internal.rs   # InternalBackend\n└── snapshots/\n    ├── mod.rs\n    └── scene.rs      # RuntimeSnapshot\nReglas:\n\nSceneService es el único punto de entrada para mutaciones del sistema.\nLos Command son tipados e inmutables — representan intenciones.\nLos RobotBackend siguen strategy pattern — el default es InternalBackend.\nEl runtime no sabe de HTTP — no importa nada de thalos-api.\nSceneService::execute() siempre devuelve un RuntimeSnapshot completo.\n\n\n\n9.2.4 thalos-api\ncrates/thalos-api/src/\n├── main.rs           # Entrypoint\n├── lib.rs            # Re-exportaciones\n├── app/\n│   ├── mod.rs        # AppState + Services\n│   ├── state.rs      # Estado global\n│   ├── prelude.rs    # Re-exportaciones del crate\n│   ├── error.rs      # ApiError (conversión a HTTP)\n│   ├── dto.rs        # DTOs de error compartidos\n│   └── types.rs      # ApiResult alias\n├── features/\n│   ├── scene/        # Feature de escena\n│   │   ├── mod.rs\n│   │   ├── handler.rs    # Handlers axum\n│   │   ├── dto/\n│   │   │   ├── mod.rs\n│   │   │   ├── requests.rs  # SetJointsRequest, LoadRobotRequest, etc.\n│   │   │   └── responses.rs # VisualSceneDto, RuntimeStateResponse, etc.\n│   │   └── error.rs\n│   └── robots/       # Feature de catálogo\n│       ├── mod.rs\n│       ├── handler.rs\n│       ├── service.rs    # RobotService\n│       ├── dto.rs        # RobotMetadataDto\n│       └── error.rs\n└── http/\n    ├── mod.rs        # app_router()\n    └── routes/\n        ├── mod.rs\n        ├── scene.rs  # Rutas de escena\n        └── robots.rs # Rutas de robots",
+    "title": "10  Contribución a Thalos",
+    "section": "10.2 Estructura esperada por crate",
+    "text": "10.2 Estructura esperada por crate\n\n10.2.1 thalos-core\ncrates/thalos-core/src/\n├── lib.rs            # Declaración de módulos públicos\n├── prelude.rs        # Re-exportaciones convenientes (opcional)\n├── &lt;mod&gt;/\n│   ├── mod.rs        # Declaración de submódulos + re-exportaciones\n│   ├── &lt;type&gt;.rs     # Un tipo por archivo (preferentemente)\n│   └── ...           # Archivos de soporte\nReglas:\n\nUn tipo principal por archivo. RevoluteJoint va en revolute.rs, no en joint.rs junto con PrismaticJoint.\nLos enums unificadores (como JointType) van en el archivo que lleva el nombre del concepto (joint.rs).\nLos tests unitarios van al final del archivo que testean, en un módulo #[cfg(test)] mod &lt;type&gt;_tests { ... }.\nLas fábricas de modelos concretos van en models/&lt;name&gt;/factory.rs.\n\n\n\n10.2.2 thalos-visual\ncrates/thalos-visual/src/\n├── lib.rs            # Re-exportaciones públicas\n├── scene/\n│   ├── mod.rs        # VisualScene, VisualFrame, VisualPrimitive, FrameStyle, etc.\n│   ├── precision.rs  # VisualPrecision (normalización numérica)\n│   └── diff.rs       # SceneDiff, ChangedFrame\n├── builder.rs        # SceneBuilder (FK → VisualScene) + helpers (cylinder_between, align_y_to)\n├── scara.rs          # ScaraVisualBuilder (builders específicos por robot)\n├── validator.rs      # SceneValidator (invariantes)\n└── utils.rs          # Utilidades pequeñas\n\nLos tipos visuales se declaran en scene/mod.rs con derive(Serialize, Deserialize).\nSceneBuilder importa del core pero no modifica estructuras del core.\nSceneValidator es autónomo: solo recibe un &VisualScene y devuelve Result&lt;(), SceneError&gt;.\nLos builders específicos (ej: ScaraVisualBuilder) van en archivos separados y extienden SceneBuilder para generar primitivas geométricas.\nLos helpers geométricos (cylinder_between, align_y_to) viven en builder.rs y se exportan para reuso.\n\n\n\n10.2.3 thalos-runtime\ncrates/thalos-runtime/src/\n├── lib.rs            # Re-exportaciones públicas\n├── error.rs          # RuntimeError\n├── commands/\n│   └── mod.rs        # Command enum (SetJoints, LoadRobot)\n├── state/\n│   ├── mod.rs\n│   └── robot.rs      # SceneRuntime, ActiveRobot\n├── services/\n│   ├── mod.rs\n│   └── scene.rs      # SceneService (orquestador principal)\n├── backends/\n│   ├── mod.rs        # RobotBackend trait\n│   └── internal.rs   # InternalBackend\n└── snapshots/\n    ├── mod.rs\n    └── scene.rs      # RuntimeSnapshot\nReglas:\n\nSceneService es el único punto de entrada para mutaciones del sistema.\nLos Command son tipados e inmutables — representan intenciones.\nLos RobotBackend siguen strategy pattern — el default es InternalBackend.\nEl runtime no sabe de HTTP — no importa nada de thalos-api.\nSceneService::execute() siempre devuelve un RuntimeSnapshot completo.\n\n\n\n10.2.4 thalos-api\ncrates/thalos-api/src/\n├── main.rs           # Entrypoint\n├── lib.rs            # Re-exportaciones\n├── app/\n│   ├── mod.rs        # AppState + Services\n│   ├── state.rs      # Estado global\n│   ├── prelude.rs    # Re-exportaciones del crate\n│   ├── error.rs      # ApiError (conversión a HTTP)\n│   ├── dto.rs        # DTOs de error compartidos\n│   └── types.rs      # ApiResult alias\n├── features/\n│   ├── scene/        # Feature de escena\n│   │   ├── mod.rs\n│   │   ├── handler.rs    # Handlers axum\n│   │   ├── dto/\n│   │   │   ├── mod.rs\n│   │   │   ├── requests.rs  # SetJointsRequest, LoadRobotRequest, etc.\n│   │   │   └── responses.rs # VisualSceneDto, RuntimeStateResponse, etc.\n│   │   └── error.rs\n│   └── robots/       # Feature de catálogo\n│       ├── mod.rs\n│       ├── handler.rs\n│       ├── service.rs    # RobotService\n│       ├── dto.rs        # RobotMetadataDto\n│       └── error.rs\n└── http/\n    ├── mod.rs        # app_router()\n    └── routes/\n        ├── mod.rs\n        ├── scene.rs  # Rutas de escena\n        └── robots.rs # Rutas de robots",
     "crumbs": [
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Contribución a Thalos</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Contribución a Thalos</span>"
     ]
   },
   {
     "objectID": "contributing.html#cómo-agregar-un-modelo-robótico-nuevo",
     "href": "contributing.html#cómo-agregar-un-modelo-robótico-nuevo",
-    "title": "9  Contribución a Thalos",
-    "section": "9.3 Cómo agregar un modelo robótico nuevo",
-    "text": "9.3 Cómo agregar un modelo robótico nuevo\nAgregar un robot concreto (ej: RRBot) requiere:\n1. Crear la estructura de directorios\nmake robot NAME=rrbot\n# Crea:\n#   src/models/rrbot/\n#   ├── mod.rs\n#   ├── factory.rs\n#   └── tests/\n#       ├── mod.rs\n#       └── fk.rs\n2. Implementar la fábrica en factory.rs\nuse thalos_core::prelude::*;\n\npub fn create_rrbot(l1: f64, l2: f64) -&gt; SerialChain {\n    let mut builder = SerialChainBuilder::new();\n\n    let base = builder.create_frame(\"base\");\n    let joint_1 = builder.create_frame(\"joint_1\");\n    let joint_2 = builder.create_frame(\"joint_2\");\n    let ee = builder.create_frame(\"ee\");\n\n    // ... configurar joints, links, segments ...\n\n    builder.set_end_effector(ee);\n    builder.build().expect(\"RRBot debe ser válido\")\n}\n3. Agregar variante a RobotModel y RobotSpec\nEn models/factory.rs, agregar:\npub enum RobotModel {\n    // ... existentes ...\n    Rrbot,\n}\n\npub enum RobotSpec {\n    // ... existentes ...\n    Rrbot { l1: f64, l2: f64 },\n}\nY el match correspondiente en RobotRegistry::create().\n4. Exportar la fábrica\nEn models/mod.rs:\npub mod factories {\n    // ... existentes ...\n    pub use crate::models::rrbot::factory::create_rrbot;\n}\n5. Escribir tests de FK\nEn tests/fk.rs:\n#[cfg(test)]\nmod rrbot_fk_tests {\n    use thalos_core::prelude::*;\n\n    #[test]\n    fn test_home_position() {\n        let robot = create_rrbot(1.0, 1.0);\n        let fk = ForwardKinematics::new(robot);\n        let result = fk.evaluate(&[0.0, 0.0]);\n\n        let ee_pose = result.pose(\n            &FrameId::Id(3) // ID del end-effector\n        ).expect(\"end effector pose\");\n\n        // assert! ...\n    }\n}",
+    "title": "10  Contribución a Thalos",
+    "section": "10.3 Cómo agregar un modelo robótico nuevo",
+    "text": "10.3 Cómo agregar un modelo robótico nuevo\nAgregar un robot concreto (ej: RRBot) requiere:\n1. Crear la estructura de directorios\nmake robot NAME=rrbot\n# Crea:\n#   src/models/rrbot/\n#   ├── mod.rs\n#   ├── factory.rs\n#   └── tests/\n#       ├── mod.rs\n#       └── fk.rs\n2. Implementar la fábrica en factory.rs\nuse thalos_core::prelude::*;\n\npub fn create_rrbot(l1: f64, l2: f64) -&gt; SerialChain {\n    let mut builder = SerialChainBuilder::new();\n\n    let base = builder.create_frame(\"base\");\n    let joint_1 = builder.create_frame(\"joint_1\");\n    let joint_2 = builder.create_frame(\"joint_2\");\n    let ee = builder.create_frame(\"ee\");\n\n    // ... configurar joints, links, segments ...\n\n    builder.set_end_effector(ee);\n    builder.build().expect(\"RRBot debe ser válido\")\n}\n3. Agregar variante a RobotModel y RobotSpec\nEn models/factory.rs, agregar:\npub enum RobotModel {\n    // ... existentes ...\n    Rrbot,\n}\n\npub enum RobotSpec {\n    // ... existentes ...\n    Rrbot { l1: f64, l2: f64 },\n}\nY el match correspondiente en RobotRegistry::create().\n4. Exportar la fábrica\nEn models/mod.rs:\npub mod factories {\n    // ... existentes ...\n    pub use crate::models::rrbot::factory::create_rrbot;\n}\n5. Escribir tests de FK\nEn tests/fk.rs:\n#[cfg(test)]\nmod rrbot_fk_tests {\n    use thalos_core::prelude::*;\n\n    #[test]\n    fn test_home_position() {\n        let robot = create_rrbot(1.0, 1.0);\n        let fk = ForwardKinematics::new(robot);\n        let result = fk.evaluate(&[0.0, 0.0]);\n\n        let ee_pose = result.pose(\n            &FrameId::Id(3) // ID del end-effector\n        ).expect(\"end effector pose\");\n\n        // assert! ...\n    }\n}",
     "crumbs": [
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Contribución a Thalos</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Contribución a Thalos</span>"
     ]
   },
   {
     "objectID": "contributing.html#cómo-agregar-tests",
     "href": "contributing.html#cómo-agregar-tests",
-    "title": "9  Contribución a Thalos",
-    "section": "9.4 Cómo agregar tests",
-    "text": "9.4 Cómo agregar tests\n\n9.4.1 Tests unitarios (en el mismo archivo)\n#[cfg(test)]\nmod vector3_tests {\n    use super::*;\n\n    #[test]\n    fn test_magnitude() {\n        let v = Vector3::new(3.0, 4.0, 0.0);\n        assert!((v.magnitude() - 5.0).abs() &lt; EPS);\n    }\n}\n\n\n9.4.2 Tests de integración (en tests/)\nUsar insta para snapshots cuando sea posible:\n#[test]\nfn test_planar_2r_scene() {\n    let robot = RobotRegistry::create_default(RobotModel::Planar2R);\n    let fk = ForwardKinematics::new(robot);\n    let result = fk.evaluate(&[0.5, 0.3]);\n    let scene = SceneBuilder::new(fk.robot()).from_fk(&result);\n    insta::assert_json_snapshot!(scene);\n}\nLos snapshots permiten detectar visualmente cambios no deseados en CI sin abrir un visor 3D.",
+    "title": "10  Contribución a Thalos",
+    "section": "10.4 Cómo agregar tests",
+    "text": "10.4 Cómo agregar tests\n\n10.4.1 Tests unitarios (en el mismo archivo)\n#[cfg(test)]\nmod vector3_tests {\n    use super::*;\n\n    #[test]\n    fn test_magnitude() {\n        let v = Vector3::new(3.0, 4.0, 0.0);\n        assert!((v.magnitude() - 5.0).abs() &lt; EPS);\n    }\n}\n\n\n10.4.2 Tests de integración (en tests/)\nUsar insta para snapshots cuando sea posible:\n#[test]\nfn test_planar_2r_scene() {\n    let robot = RobotRegistry::create_default(RobotModel::Planar2R);\n    let fk = ForwardKinematics::new(robot);\n    let result = fk.evaluate(&[0.5, 0.3]);\n    let scene = SceneBuilder::new(fk.robot()).from_fk(&result);\n    insta::assert_json_snapshot!(scene);\n}\nLos snapshots permiten detectar visualmente cambios no deseados en CI sin abrir un visor 3D.",
     "crumbs": [
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Contribución a Thalos</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Contribución a Thalos</span>"
     ]
   },
   {
     "objectID": "contributing.html#qué-evitar",
     "href": "contributing.html#qué-evitar",
-    "title": "9  Contribución a Thalos",
-    "section": "9.5 Qué evitar",
-    "text": "9.5 Qué evitar\n\n9.5.1 No hacer\n\nImportar thalos-visual, thalos-runtime o thalos-api desde thalos-core\nPoner lógica de negocios en handlers HTTP\nUsar unwrap() o expect() en código de producción (salvo en main.rs o tests)\nAgregar dependencias pesadas al core (thalos-core solo debe tener nalgebra y thiserror)\nNormalizaciones silenciosas — si una operación puede fallar, que retorne Result\nMezclar DTOs con tipos del dominio — los DTOs de API son independientes\n\n\n\n9.5.2 Sí hacer\n\nValidar invariantes en construcción (new() retorna Result)\nDocumentar el por qué de las decisiones (no solo el qué)\nMantener los tests al lado del código que testean\nUsar thiserror para errores del dominio\nSeguir la estructura de archivos establecida",
+    "title": "10  Contribución a Thalos",
+    "section": "10.5 Qué evitar",
+    "text": "10.5 Qué evitar\n\n10.5.1 No hacer\n\nImportar thalos-visual, thalos-runtime o thalos-api desde thalos-core\nPoner lógica de negocios en handlers HTTP\nUsar unwrap() o expect() en código de producción (salvo en main.rs o tests)\nAgregar dependencias pesadas al core (thalos-core solo debe tener nalgebra y thiserror)\nNormalizaciones silenciosas — si una operación puede fallar, que retorne Result\nMezclar DTOs con tipos del dominio — los DTOs de API son independientes\n\n\n\n10.5.2 Sí hacer\n\nValidar invariantes en construcción (new() retorna Result)\nDocumentar el por qué de las decisiones (no solo el qué)\nMantener los tests al lado del código que testean\nUsar thiserror para errores del dominio\nSeguir la estructura de archivos establecida",
     "crumbs": [
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Contribución a Thalos</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Contribución a Thalos</span>"
     ]
   },
   {
     "objectID": "contributing.html#flujo-de-trabajo-para-contribuciones",
     "href": "contributing.html#flujo-de-trabajo-para-contribuciones",
-    "title": "9  Contribución a Thalos",
-    "section": "9.6 Flujo de trabajo para contribuciones",
-    "text": "9.6 Flujo de trabajo para contribuciones\n\nLeer la documentación de dominio y arquitectura\nCrear un issue o discussion describiendo el cambio\nImplementar siguiendo las convenciones del crate correspondiente\nAgregar tests (unitarios + integración con snapshot si aplica)\nCorrer cargo test y cargo clippy\nEnviar PR con conventional commit",
+    "title": "10  Contribución a Thalos",
+    "section": "10.6 Flujo de trabajo para contribuciones",
+    "text": "10.6 Flujo de trabajo para contribuciones\n\nLeer la documentación de dominio y arquitectura\nCrear un issue o discussion describiendo el cambio\nImplementar siguiendo las convenciones del crate correspondiente\nAgregar tests (unitarios + integración con snapshot si aplica)\nCorrer cargo test y cargo clippy\nEnviar PR con conventional commit",
     "crumbs": [
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Contribución a Thalos</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Contribución a Thalos</span>"
     ]
   },
   {
     "objectID": "contributing.html#checklist-pre-pr",
     "href": "contributing.html#checklist-pre-pr",
-    "title": "9  Contribución a Thalos",
-    "section": "9.7 Checklist pre-PR",
-    "text": "9.7 Checklist pre-PR\n\ncargo fmt aplicado\ncargo clippy sin warnings\ncargo test pasa completo\nNo se violan las reglas arquitectónicas (Section 3.2)\nLos nuevos tipos tienen Debug, Clone, y Serialize si corresponde\nLas funciones que pueden fallar retornan Result\nLos invariantes se validan en construcción",
+    "title": "10  Contribución a Thalos",
+    "section": "10.7 Checklist pre-PR",
+    "text": "10.7 Checklist pre-PR\n\ncargo fmt aplicado\ncargo clippy sin warnings\ncargo test pasa completo\nNo se violan las reglas arquitectónicas (Section 3.2)\nLos nuevos tipos tienen Debug, Clone, y Serialize si corresponde\nLas funciones que pueden fallar retornan Result\nLos invariantes se validan en construcción",
     "crumbs": [
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Contribución a Thalos</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Contribución a Thalos</span>"
     ]
   },
   {

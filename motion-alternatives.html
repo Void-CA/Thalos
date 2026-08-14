@@ -6,10 +6,8 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="author" content="Thalos Team">
-<meta name="dcterms.date" content="2026-08-14">
 
-<title>Thalos — Documentación Técnica</title>
+<title>8&nbsp; Alternativas de movimiento guiadas por evaluación – Thalos — Documentación Técnica</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -73,7 +71,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="site_libs/quarto-search/fuse.min.js"></script>
 <script src="site_libs/quarto-search/quarto-search.js"></script>
 <meta name="quarto:offset" content="./">
-<link href="./vision.html" rel="next">
+<link href="./maturity.html" rel="next">
+<link href="./flow.html" rel="prev">
 <script src="site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
 <script src="site_libs/quarto-html/popper.min.js"></script>
@@ -124,7 +123,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./index.html"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Thalos</span></a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./motion-alternatives.html"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Alternativas de movimiento guiadas por evaluación</span></a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
       <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
@@ -154,7 +153,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <ul class="list-unstyled mt-1">
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./index.html" class="sidebar-item-text sidebar-link active">
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Thalos</span></span></a>
   </div>
 </li>
@@ -196,7 +195,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./motion-alternatives.html" class="sidebar-item-text sidebar-link">
+  <a href="./motion-alternatives.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Alternativas de movimiento guiadas por evaluación</span></span></a>
   </div>
 </li>
@@ -239,14 +238,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">Table of contents</h2>
    
   <ul>
-  <li><a href="#sec-intro" id="toc-sec-intro" class="nav-link active" data-scroll-target="#sec-intro"><span class="header-section-number">1</span> Thalos</a>
+  <li><a href="#pipeline-de-candidatos" id="toc-pipeline-de-candidatos" class="nav-link active" data-scroll-target="#pipeline-de-candidatos"><span class="header-section-number">8.1</span> Pipeline de candidatos</a></li>
+  <li><a href="#límite-de-contrato-adr-5" id="toc-límite-de-contrato-adr-5" class="nav-link" data-scroll-target="#límite-de-contrato-adr-5"><span class="header-section-number">8.2</span> Límite de contrato (ADR-5)</a></li>
+  <li><a href="#el-hallazgo-del-segmento-intermedio" id="toc-el-hallazgo-del-segmento-intermedio" class="nav-link" data-scroll-target="#el-hallazgo-del-segmento-intermedio"><span class="header-section-number">8.3</span> El hallazgo del segmento intermedio</a></li>
+  <li><a href="#convenciones-documentadas" id="toc-convenciones-documentadas" class="nav-link" data-scroll-target="#convenciones-documentadas"><span class="header-section-number">8.4</span> Convenciones documentadas</a>
   <ul class="collapse">
-  <li><a href="#por-qué-thalos" id="toc-por-qué-thalos" class="nav-link" data-scroll-target="#por-qué-thalos"><span class="header-section-number">1.1</span> ¿Por qué Thalos?</a></li>
-  <li><a href="#stack-tecnológico" id="toc-stack-tecnológico" class="nav-link" data-scroll-target="#stack-tecnológico"><span class="header-section-number">1.2</span> Stack tecnológico</a></li>
-  <li><a href="#convenciones-del-código" id="toc-convenciones-del-código" class="nav-link" data-scroll-target="#convenciones-del-código"><span class="header-section-number">1.3</span> Convenciones del código</a></li>
-  <li><a href="#prerequisitos" id="toc-prerequisitos" class="nav-link" data-scroll-target="#prerequisitos"><span class="header-section-number">1.4</span> Prerequisitos</a></li>
-  <li><a href="#quick-start" id="toc-quick-start" class="nav-link" data-scroll-target="#quick-start"><span class="header-section-number">1.5</span> Quick start</a></li>
+  <li><a href="#l-longitud-de-trayectoria-en-espacio-articular" id="toc-l-longitud-de-trayectoria-en-espacio-articular" class="nav-link" data-scroll-target="#l-longitud-de-trayectoria-en-espacio-articular"><span class="header-section-number">8.4.1</span> <code>L</code> = longitud de trayectoria en espacio articular</a></li>
+  <li><a href="#π-fallback-operacional-no-un-rango-físico" id="toc-π-fallback-operacional-no-un-rango-físico" class="nav-link" data-scroll-target="#π-fallback-operacional-no-un-rango-físico"><span class="header-section-number">8.4.2</span> <code>±π</code> = fallback operacional, no un rango físico</a></li>
   </ul></li>
+  <li><a href="#garantía-de-equivalencia-baseline" id="toc-garantía-de-equivalencia-baseline" class="nav-link" data-scroll-target="#garantía-de-equivalencia-baseline"><span class="header-section-number">8.5</span> Garantía de equivalencia baseline</a></li>
+  <li><a href="#reproducción" id="toc-reproducción" class="nav-link" data-scroll-target="#reproducción"><span class="header-section-number">8.6</span> Reproducción</a></li>
   </ul>
 </nav>
     </div>
@@ -255,27 +256,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Thalos — Documentación Técnica</h1>
-<p class="subtitle lead">Plataforma modular para modelado, análisis y visualización de sistemas robóticos</p>
+<h1 class="title"><span id="sec-motion-alternatives" class="quarto-section-identifier"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Alternativas de movimiento guiadas por evaluación</span></span></h1>
 </div>
 
 
 
 <div class="quarto-title-meta">
 
-    <div>
-    <div class="quarto-title-meta-heading">Author</div>
-    <div class="quarto-title-meta-contents">
-             <p>Thalos Team </p>
-          </div>
-  </div>
     
-    <div>
-    <div class="quarto-title-meta-heading">Published</div>
-    <div class="quarto-title-meta-contents">
-      <p class="date">August 14, 2026</p>
-    </div>
-  </div>
   
     
   </div>
@@ -285,97 +273,313 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<section id="sec-intro" class="level1" data-number="1">
-<h1 data-number="1"><span class="header-section-number">1</span> Thalos</h1>
-<p>Bienvenido a la documentación técnica de <strong>Thalos</strong>.</p>
-<p>Thalos es una <strong>plataforma modular</strong> para modelado, análisis y visualización de sistemas robóticos, escrita en Rust. Está diseñada desde cero con una filosofía de separación clara de responsabilidades: el dominio matemático, la representación robótica, la visualización y la exposición externa viven en capas independientes.</p>
-<section id="por-qué-thalos" class="level2" data-number="1.1">
-<h2 data-number="1.1" class="anchored" data-anchor-id="por-qué-thalos"><span class="header-section-number">1.1</span> ¿Por qué Thalos?</h2>
-<p>La mayoría de las herramientas robóticas existentes (ROS, Orocos, Drake) son sistemas monolíticos donde la matemática, la visualización y el control están fuertemente acoplados. Thalos nace con una premisa distinta:</p>
-<blockquote class="blockquote">
-<p><strong>Separar para evolucionar.</strong><br>
-El núcleo matemático no debe saber que existe una visualización.<br>
-La visualización no debe saber que existe una API HTTP.<br>
-Cada capa puede crecer, reemplazarse o eliminarse sin afectar a las demás.</p>
-</blockquote>
-</section>
-<section id="stack-tecnológico" class="level2" data-number="1.2">
-<h2 data-number="1.2" class="anchored" data-anchor-id="stack-tecnológico"><span class="header-section-number">1.2</span> Stack tecnológico</h2>
+<p>Thalos puede generar alternativas geométricas de un plan semilla, evaluarlas con el mismo <code>Assessor</code> congelado del análisis normal y seleccionar la mejor por una función objetivo ponderada (<code>J</code>). El mecanismo es <strong>aditivo</strong>: el camino normal de análisis no cambia, y la selección nunca altera los extremos ni la secuencia de tareas del plan.</p>
+<pre class="text"><code>semilla (Direct, siempre candidato 0)  →  generar  →  [compilar → analizar →
+evaluar] por candidato  →  mapear (runtime)  →  filtrar (gate)  →  rankear  →  seleccionar</code></pre>
+<section id="pipeline-de-candidatos" class="level2" data-number="8.1">
+<h2 data-number="8.1" class="anchored" data-anchor-id="pipeline-de-candidatos"><span class="header-section-number">8.1</span> Pipeline de candidatos</h2>
+<p>El flujo completo vive en <code>thalos-runtime</code> (<code>analyze_plan_with_candidates</code>) y compone módulos de <code>thalos-planning</code>:</p>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div id="fig-candidate-pipeline" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-candidate-pipeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div>
+<svg width="672" height="480" viewbox="0.00 0.00 416.35 770.00" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" style="; max-width: none; max-height: none">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 766)">
+<title>candidatos</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-766 412.35,-766 412.35,4 -4,4"></polygon>
+<!-- seed -->
+<g id="node1" class="node">
+<title>seed</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M263.81,-762C263.81,-762 175.5,-762 175.5,-762 169.5,-762 163.5,-756 163.5,-750 163.5,-750 163.5,-736 163.5,-736 163.5,-730 169.5,-724 175.5,-724 175.5,-724 263.81,-724 263.81,-724 269.81,-724 275.81,-730 275.81,-736 275.81,-736 275.81,-750 275.81,-750 275.81,-756 269.81,-762 263.81,-762"></path>
+<text text-anchor="middle" x="219.65" y="-746" font-family="sans-serif" font-size="10.00">Plan semilla</text>
+<text text-anchor="middle" x="219.65" y="-734" font-family="sans-serif" font-size="10.00">(PlanningProgram)</text>
+</g>
+<!-- gen -->
+<g id="node2" class="node">
+<title>gen</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M251.46,-693C251.46,-693 11.85,-693 11.85,-693 5.85,-693 -0.15,-687 -0.15,-681 -0.15,-681 -0.15,-667 -0.15,-667 -0.15,-661 5.85,-655 11.85,-655 11.85,-655 251.46,-655 251.46,-655 257.46,-655 263.46,-661 263.46,-667 263.46,-667 263.46,-681 263.46,-681 263.46,-687 257.46,-693 251.46,-693"></path>
+<text text-anchor="middle" x="131.65" y="-677" font-family="sans-serif" font-size="10.00">CandidateGenerator::generate</text>
+<text text-anchor="middle" x="131.65" y="-665" font-family="sans-serif" font-size="10.00">Direct (candidato 0) + InsertWaypoint + AlternateElbow</text>
+</g>
+<!-- seed&#45;&gt;gen -->
+<g id="edge1" class="edge">
+<title>seed-&gt;gen</title>
+<path fill="none" stroke="black" d="M213.32,-723.78C213.32,-723.78 213.32,-703.12 213.32,-703.12"></path>
+<polygon fill="black" stroke="black" points="216.82,-703.12 213.32,-693.12 209.82,-703.12 216.82,-703.12"></polygon>
+</g>
+<!-- gate -->
+<g id="node9" class="node">
+<title>gate</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M304.78,-200C304.78,-200 168.53,-200 168.53,-200 162.53,-200 156.53,-194 156.53,-188 156.53,-188 156.53,-162 156.53,-162 156.53,-156 162.53,-150 168.53,-150 168.53,-150 304.78,-150 304.78,-150 310.78,-150 316.78,-156 316.78,-162 316.78,-162 316.78,-188 316.78,-188 316.78,-194 310.78,-200 304.78,-200"></path>
+<text text-anchor="middle" x="236.65" y="-184" font-family="sans-serif" font-size="10.00">AdmissibilityGate</text>
+<text text-anchor="middle" x="236.65" y="-172" font-family="sans-serif" font-size="10.00">fase 1: invariantes geométricas</text>
+<text text-anchor="middle" x="236.65" y="-160" font-family="sans-serif" font-size="10.00">fase 2: política de riesgo</text>
+</g>
+<!-- seed&#45;&gt;gate -->
+<g id="edge11" class="edge">
+<title>seed-&gt;gate</title>
+<path fill="none" stroke="#2c3e50" stroke-dasharray="5,2" d="M269.91,-723.78C269.91,-723.78 269.91,-210.1 269.91,-210.1"></path>
+<polygon fill="#2c3e50" stroke="#2c3e50" points="273.41,-210.1 269.91,-200.1 266.41,-210.1 273.41,-210.1"></polygon>
+<text text-anchor="middle" x="358" y="-466.6" font-family="sans-serif" font-size="8.00">extremos ε + identidad de tarea</text>
+</g>
+<!-- cand -->
+<g id="node3" class="node">
+<title>cand</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M166.7,-624C166.7,-624 96.61,-624 96.61,-624 90.61,-624 84.61,-618 84.61,-612 84.61,-612 84.61,-600 84.61,-600 84.61,-594 90.61,-588 96.61,-588 96.61,-588 166.7,-588 166.7,-588 172.7,-588 178.7,-594 178.7,-600 178.7,-600 178.7,-612 178.7,-612 178.7,-618 172.7,-624 166.7,-624"></path>
+<text text-anchor="middle" x="131.65" y="-603" font-family="sans-serif" font-size="10.00">Por candidato:</text>
+</g>
+<!-- gen&#45;&gt;cand -->
+<g id="edge2" class="edge">
+<title>gen-&gt;cand</title>
+<path fill="none" stroke="black" d="M131.65,-654.7C131.65,-654.7 131.65,-634.18 131.65,-634.18"></path>
+<polygon fill="black" stroke="black" points="135.15,-634.18 131.65,-624.18 128.15,-634.18 135.15,-634.18"></polygon>
+</g>
+<!-- comp -->
+<g id="node4" class="node">
+<title>comp</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M166.21,-557C166.21,-557 99.1,-557 99.1,-557 93.1,-557 87.1,-551 87.1,-545 87.1,-545 87.1,-531 87.1,-531 87.1,-525 93.1,-519 99.1,-519 99.1,-519 166.21,-519 166.21,-519 172.21,-519 178.21,-525 178.21,-531 178.21,-531 178.21,-545 178.21,-545 178.21,-551 172.21,-557 166.21,-557"></path>
+<text text-anchor="middle" x="132.65" y="-541" font-family="sans-serif" font-size="10.00">PlanCompiler</text>
+<text text-anchor="middle" x="132.65" y="-529" font-family="sans-serif" font-size="10.00">compile()</text>
+</g>
+<!-- cand&#45;&gt;comp -->
+<g id="edge3" class="edge">
+<title>cand-&gt;comp</title>
+<path fill="none" stroke="black" d="M132.65,-587.78C132.65,-587.78 132.65,-567.22 132.65,-567.22"></path>
+<polygon fill="black" stroke="black" points="136.15,-567.22 132.65,-557.22 129.15,-567.22 136.15,-567.22"></polygon>
+</g>
+<!-- an -->
+<g id="node5" class="node">
+<title>an</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M199.17,-488C199.17,-488 72.14,-488 72.14,-488 66.14,-488 60.14,-482 60.14,-476 60.14,-476 60.14,-462 60.14,-462 60.14,-456 66.14,-450 72.14,-450 72.14,-450 199.17,-450 199.17,-450 205.17,-450 211.17,-456 211.17,-462 211.17,-462 211.17,-476 211.17,-476 211.17,-482 205.17,-488 199.17,-488"></path>
+<text text-anchor="middle" x="135.65" y="-472" font-family="sans-serif" font-size="10.00">TrajectoryAnalyzer</text>
+<text text-anchor="middle" x="135.65" y="-460" font-family="sans-serif" font-size="10.00">analyze_with_observations()</text>
+</g>
+<!-- comp&#45;&gt;an -->
+<g id="edge4" class="edge">
+<title>comp-&gt;an</title>
+<path fill="none" stroke="black" d="M132.65,-518.78C132.65,-518.78 132.65,-498.12 132.65,-498.12"></path>
+<polygon fill="black" stroke="black" points="136.15,-498.12 132.65,-488.12 129.15,-498.12 136.15,-498.12"></polygon>
+</g>
+<!-- agg -->
+<g id="node6" class="node">
+<title>agg</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M191.18,-419C191.18,-419 104.13,-419 104.13,-419 98.13,-419 92.13,-413 92.13,-407 92.13,-407 92.13,-393 92.13,-393 92.13,-387 98.13,-381 104.13,-381 104.13,-381 191.18,-381 191.18,-381 197.18,-381 203.18,-387 203.18,-393 203.18,-393 203.18,-407 203.18,-407 203.18,-413 197.18,-419 191.18,-419"></path>
+<text text-anchor="middle" x="147.65" y="-403" font-family="sans-serif" font-size="10.00">DefaultAggregator</text>
+<text text-anchor="middle" x="147.65" y="-391" font-family="sans-serif" font-size="10.00">AnalysisReport</text>
+</g>
+<!-- an&#45;&gt;agg -->
+<g id="edge5" class="edge">
+<title>an-&gt;agg</title>
+<path fill="none" stroke="black" d="M147.65,-449.78C147.65,-449.78 147.65,-429.12 147.65,-429.12"></path>
+<polygon fill="black" stroke="black" points="151.15,-429.12 147.65,-419.12 144.15,-429.12 151.15,-429.12"></polygon>
+</g>
+<!-- ass -->
+<g id="node7" class="node">
+<title>ass</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M251.2,-350C251.2,-350 78.1,-350 78.1,-350 72.1,-350 66.1,-344 66.1,-338 66.1,-338 66.1,-324 66.1,-324 66.1,-318 72.1,-312 78.1,-312 78.1,-312 251.2,-312 251.2,-312 257.2,-312 263.2,-318 263.2,-324 263.2,-324 263.2,-338 263.2,-338 263.2,-344 257.2,-350 251.2,-350"></path>
+<text text-anchor="middle" x="164.65" y="-334" font-family="sans-serif" font-size="10.00">Assessor::assess()</text>
+<text text-anchor="middle" x="164.65" y="-322" font-family="sans-serif" font-size="10.00">(congelado — autoridad única de riesgo)</text>
+</g>
+<!-- agg&#45;&gt;ass -->
+<g id="edge6" class="edge">
+<title>agg-&gt;ass</title>
+<path fill="none" stroke="black" d="M147.65,-380.78C147.65,-380.78 147.65,-360.12 147.65,-360.12"></path>
+<polygon fill="black" stroke="black" points="151.15,-360.12 147.65,-350.12 144.15,-360.12 151.15,-360.12"></polygon>
+</g>
+<!-- map -->
+<g id="node8" class="node">
+<title>map</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M252.04,-281C252.04,-281 81.27,-281 81.27,-281 75.27,-281 69.27,-275 69.27,-269 69.27,-269 69.27,-243 69.27,-243 69.27,-237 75.27,-231 81.27,-231 81.27,-231 252.04,-231 252.04,-231 258.04,-231 264.04,-237 264.04,-243 264.04,-243 264.04,-269 264.04,-269 264.04,-275 258.04,-281 252.04,-281"></path>
+<text text-anchor="middle" x="166.65" y="-265" font-family="sans-serif" font-size="10.00">Runtime adapter (ADR-5)</text>
+<text text-anchor="middle" x="166.65" y="-253" font-family="sans-serif" font-size="10.00">Assessment → CandidateAssessment</text>
+<text text-anchor="middle" x="166.65" y="-241" font-family="sans-serif" font-size="10.00">risk = 1 − quality · Critical → Rejected</text>
+</g>
+<!-- ass&#45;&gt;map -->
+<g id="edge7" class="edge">
+<title>ass-&gt;map</title>
+<path fill="none" stroke="black" d="M166.32,-311.69C166.32,-311.69 166.32,-291.19 166.32,-291.19"></path>
+<polygon fill="black" stroke="black" points="169.82,-291.19 166.32,-281.19 162.82,-291.19 169.82,-291.19"></polygon>
+</g>
+<!-- map&#45;&gt;gate -->
+<g id="edge8" class="edge">
+<title>map-&gt;gate</title>
+<path fill="none" stroke="black" d="M210.22,-230.82C210.22,-230.82 210.22,-210.17 210.22,-210.17"></path>
+<polygon fill="black" stroke="black" points="213.72,-210.17 210.22,-200.17 206.72,-210.17 213.72,-210.17"></polygon>
+</g>
+<!-- rank -->
+<g id="node10" class="node">
+<title>rank</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M315.22,-119C315.22,-119 158.09,-119 158.09,-119 152.09,-119 146.09,-113 146.09,-107 146.09,-107 146.09,-81 146.09,-81 146.09,-75 152.09,-69 158.09,-69 158.09,-69 315.22,-69 315.22,-69 321.22,-69 327.22,-75 327.22,-81 327.22,-81 327.22,-107 327.22,-107 327.22,-113 321.22,-119 315.22,-119"></path>
+<text text-anchor="middle" x="236.65" y="-103" font-family="sans-serif" font-size="10.00">CandidateEvaluator</text>
+<text text-anchor="middle" x="236.65" y="-91" font-family="sans-serif" font-size="10.00">J = Σ wᵢ·normᵢ (min-max por set)</text>
+<text text-anchor="middle" x="236.65" y="-79" font-family="sans-serif" font-size="10.00">selección = argmin J</text>
+</g>
+<!-- gate&#45;&gt;rank -->
+<g id="edge9" class="edge">
+<title>gate-&gt;rank</title>
+<path fill="none" stroke="black" d="M236.65,-149.82C236.65,-149.82 236.65,-129.17 236.65,-129.17"></path>
+<polygon fill="black" stroke="black" points="240.15,-129.17 236.65,-119.17 233.15,-129.17 240.15,-129.17"></polygon>
+</g>
+<!-- out -->
+<g id="node11" class="node">
+<title>out</title>
+<path fill="none" stroke="black" stroke-width="1.5" d="M298.93,-38C298.93,-38 174.38,-38 174.38,-38 168.38,-38 162.38,-32 162.38,-26 162.38,-26 162.38,-12 162.38,-12 162.38,-6 168.38,0 174.38,0 174.38,0 298.93,0 298.93,0 304.93,0 310.93,-6 310.93,-12 310.93,-12 310.93,-26 310.93,-26 310.93,-32 304.93,-38 298.93,-38"></path>
+<text text-anchor="middle" x="236.65" y="-22" font-family="sans-serif" font-size="10.00">CandidateRanking</text>
+<text text-anchor="middle" x="236.65" y="-10" font-family="sans-serif" font-size="10.00">+ SelectionReason derivado</text>
+</g>
+<!-- rank&#45;&gt;out -->
+<g id="edge10" class="edge">
+<title>rank-&gt;out</title>
+<path fill="none" stroke="black" d="M236.65,-68.61C236.65,-68.61 236.65,-48.44 236.65,-48.44"></path>
+<polygon fill="black" stroke="black" points="240.15,-48.44 236.65,-38.44 233.15,-48.44 240.15,-48.44"></polygon>
+</g>
+</g>
+</svg>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-candidate-pipeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;8.1: Pipeline de candidatos — generate → compile → analyze → assess → map → gate → rank
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
 <table class="caption-top table">
 <colgroup>
-<col style="width: 24%">
-<col style="width: 75%">
+<col style="width: 19%">
+<col style="width: 47%">
+<col style="width: 33%">
 </colgroup>
 <thead>
 <tr class="header">
-<th>Capa</th>
-<th>Tecnología</th>
+<th>Etapa</th>
+<th>Responsabilidad</th>
+<th>Componente</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td>Lenguaje</td>
-<td>Rust (edition 2024)</td>
+<td>Generar</td>
+<td>Produce geometrías alternativas; sin conocimiento de riesgo</td>
+<td><code>CandidateGenerator</code> + estrategias acotadas</td>
 </tr>
 <tr class="even">
-<td>Álgebra</td>
-<td><code>nalgebra</code> + tipos propios (<code>Vector3</code>, <code>UnitQuaternion</code>, <code>Transform3D</code>)</td>
+<td>Compilar</td>
+<td>Resuelve IK y arma la trayectoria (convergencia, C0)</td>
+<td><code>PlanCompiler</code></td>
 </tr>
 <tr class="odd">
-<td>Backend HTTP</td>
-<td><code>axum</code> 0.8</td>
+<td>Analizar</td>
+<td>Observaciones canónicas + métricas técnicas</td>
+<td><code>TrajectoryAnalyzer</code> + <code>DefaultAggregator</code></td>
 </tr>
 <tr class="even">
-<td>Frontend</td>
-<td>React 19 + TypeScript + Vite, Three.js (<span class="citation" data-cites="react-three/fiber">(<a href="#ref-react-three/fiber" role="doc-biblioref"><strong>react-three/fiber?</strong></a>)</span>)</td>
+<td>Evaluar</td>
+<td>Verdicto de riesgo/calidad sobre el reporte</td>
+<td><code>Assessor::assess</code> (frozen)</td>
 </tr>
 <tr class="odd">
-<td>Visualización</td>
-<td>Crate <code>thalos-visual</code> (scene graph desacoplado)</td>
+<td>Mapear</td>
+<td>Traduce <code>Assessment</code> al contrato neutro de planning</td>
+<td>runtime (composition root)</td>
+</tr>
+<tr class="even">
+<td>Filtrar</td>
+<td>Invariantes geométricas + política de riesgo</td>
+<td><code>AdmissibilityGate</code></td>
+</tr>
+<tr class="odd">
+<td>Rankear</td>
+<td>Normaliza y pondera; elige <code>argmin J</code></td>
+<td><code>CandidateEvaluator</code> (SafetyFirst: 0.5/0.2/0.2/0.1)</td>
 </tr>
 </tbody>
 </table>
 </section>
-<section id="convenciones-del-código" class="level2" data-number="1.3">
-<h2 data-number="1.3" class="anchored" data-anchor-id="convenciones-del-código"><span class="header-section-number">1.3</span> Convenciones del código</h2>
-<ul>
-<li><strong>Errores explícitos con <code>thiserror</code></strong>: no hay fallbacks silenciosos, <code>normalize()</code> e <code>inverse()</code> retornan <code>Result</code>.</li>
-<li><strong>Invariantes de construcción</strong>: <code>UnitQuaternion</code> valida norma ≈ 1 en <code>new()</code>; para bypass explícito existe <code>from_quaternion_unchecked()</code>.</li>
-<li><strong>Precisión controlada</strong>: <code>VisualPrecision</code> permite definir decimales y epsilon de zero para normalizar salidas visuales.</li>
-<li><strong>Validación por contrato</strong>: <code>SceneValidator</code> verifica que una escena visual cumpla todas las invariantes topológicas y numéricas antes de serializarse.</li>
-</ul>
+<section id="límite-de-contrato-adr-5" class="level2" data-number="8.2">
+<h2 data-number="8.2" class="anchored" data-anchor-id="límite-de-contrato-adr-5"><span class="header-section-number">8.2</span> Límite de contrato (ADR-5)</h2>
+<p><code>thalos-planning/src/candidate/</code> <strong>no depende de <code>thalos-intelligence</code></strong>. La generación y la evaluación operan sobre contratos neutros de planning (<code>CandidateAssessment { risk, admissibility }</code>); el runtime es el único componente que conoce ambos lados y adapta el <code>Assessment</code> congelado — incluida la regla <code>Risk::Critical → RiskAdmissibility::Rejected</code> (el umbral de “Critical” nunca se duplica en planning).</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">$</span> rg <span class="st">"thalos_intelligence|thalos-intelligence"</span> crates/thalos-planning/src/candidate/</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co"># → vacío (sin salida)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 18%">
+<col style="width: 22%">
+<col style="width: 28%">
+<col style="width: 30%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Componente</th>
+<th>Conoce riesgo</th>
+<th>Conoce candidatos</th>
+<th>Adapta el contrato</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>candidate/</code> (generación)</td>
+<td>No — produce geometrías</td>
+<td>Sí</td>
+<td>No</td>
+</tr>
+<tr class="even">
+<td><code>Assessor</code> (inteligencia)</td>
+<td>Sí — autoridad única</td>
+<td>No</td>
+<td>No</td>
+</tr>
+<tr class="odd">
+<td>Evaluador (planning)</td>
+<td>Solo el <code>CandidateAssessment</code> neutro</td>
+<td>Sí</td>
+<td>No</td>
+</tr>
+<tr class="even">
+<td>Runtime (composition root)</td>
+<td>Sí</td>
+<td>Sí</td>
+<td><strong>Sí</strong> (ADR-5)</td>
+</tr>
+</tbody>
+</table>
 </section>
-<section id="prerequisitos" class="level2" data-number="1.4">
-<h2 data-number="1.4" class="anchored" data-anchor-id="prerequisitos"><span class="header-section-number">1.4</span> Prerequisitos</h2>
-<ul>
-<li>Rust toolchain (edition 2024)</li>
-<li>Node.js 22+ y pnpm (para el frontend)</li>
-<li>Quarto CLI (para generar esta documentación)</li>
-</ul>
+<section id="el-hallazgo-del-segmento-intermedio" class="level2" data-number="8.3">
+<h2 data-number="8.3" class="anchored" data-anchor-id="el-hallazgo-del-segmento-intermedio"><span class="header-section-number">8.3</span> El hallazgo del segmento intermedio</h2>
+<p><code>AlternateElbow</code> solo contribuye cuando el segmento transformado <strong>no es el joint goal</strong> del programa. La invariante de extremos (ADR-1) compara el último objetivo <code>MoveJ</code> con tolerancia <code>ε = 1e-4</code> rad por junta; <code>AlternateElbow</code> re-resuelve el objetivo cartesiano del segmento a la postura de codo del mismo lado, lo que <strong>cambia el joint goal</strong> — y un candidato así se rechaza por <code>EndpointDrift</code>. Por eso el escenario demostrativo cruza por un segmento <strong>intermedio</strong>:</p>
+<pre class="text"><code>[MoveJ home (0.0, -1.31, -0.1, 0.0) → MoveJ cross (0.5, 0.6, -0.15, 0.0)
+ → MoveJ goal (0.5, -1.31, -0.15, 0.0)],  target_segment = 1</code></pre>
+<p>El segmento 1 cruza la extensión completa (q1 pasa por 0) → el seed se evalúa <code>High</code> (riesgo crisp 0.557). <code>AlternateElbow</code> re-resuelve ese segmento desde las juntas de inicio del segmento a la postura del mismo lado (misma posición cartesiana, q1 permanece negativo → sin cruce), preservando el <code>MoveJ</code> inicial y el joint goal. En un programa de un solo segmento, la única alternativa generada sería estructuralmente rechazada; la selección del segmento es una política del llamador, nunca de la estrategia.</p>
 </section>
-<section id="quick-start" class="level2" data-number="1.5">
-<h2 data-number="1.5" class="anchored" data-anchor-id="quick-start"><span class="header-section-number">1.5</span> Quick start</h2>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Compilar todo el workspace</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> backend</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="ex">cargo</span> build</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Correr tests</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="ex">cargo</span> test</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Iniciar servidor API</span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="ex">cargo</span> run <span class="at">-p</span> thalos_api</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Frontend</span></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> web</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="ex">pnpm</span> install</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="ex">pnpm</span> dev</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<!--
-  Navegá por los capítulos para entender la arquitectura,
-  el dominio, y cómo extender Thalos.
--->
+<section id="convenciones-documentadas" class="level2" data-number="8.4">
+<h2 data-number="8.4" class="anchored" data-anchor-id="convenciones-documentadas"><span class="header-section-number">8.4</span> Convenciones documentadas</h2>
+<section id="l-longitud-de-trayectoria-en-espacio-articular" class="level3" data-number="8.4.1">
+<h3 data-number="8.4.1" class="anchored" data-anchor-id="l-longitud-de-trayectoria-en-espacio-articular"><span class="header-section-number">8.4.1</span> <code>L</code> = longitud de trayectoria en espacio articular</h3>
+<p><code>MotionMetrics.path_length</code> es la longitud L2 en el espacio articular, <code>L = Σ ||qᵢ₊₁ − qᵢ||₂</code> entre waypoints consecutivos — la misma convención del <code>TraceAnalyzer</code> del runtime. Es una propiedad directa de la articulación ejecutada, independiente del frame TCP, y para <code>AlternateElbow vs Direct</code> es exactamente el cambio geométrico que se quiere comparar. Una longitud TCP cartesiana (<code>L_tcp</code>) queda diferida a un futuro perfil <code>PathEfficiency</code>; no se mezclan geometrías dentro de <code>J</code>.</p>
+</section>
+<section id="π-fallback-operacional-no-un-rango-físico" class="level3" data-number="8.4.2">
+<h3 data-number="8.4.2" class="anchored" data-anchor-id="π-fallback-operacional-no-un-rango-físico"><span class="header-section-number">8.4.2</span> <code>±π</code> = fallback operacional, no un rango físico</h3>
+<p>Las juntas sin límites declarados degradan a <code>[−π, π]</code> en el check defense-in-depth del gate (<code>joint_bounds_from_chain</code>) — la misma convención del handler de optimize de la API. Es un <strong>fallback operacional</strong> para el check de límites, no una afirmación sobre el rango físico real del robot. No debe interpretarse como un límite real.</p>
+</section>
+</section>
+<section id="garantía-de-equivalencia-baseline" class="level2" data-number="8.5">
+<h2 data-number="8.5" class="anchored" data-anchor-id="garantía-de-equivalencia-baseline"><span class="header-section-number">8.5</span> Garantía de equivalencia baseline</h2>
+<p>El camino de candidatos <strong>no cambia la evaluación del seed</strong>. Para el mismo programa semilla y el mismo contexto, el candidato <code>Direct</code> (el seed mismo, siempre candidato 0) recibe exactamente la misma evaluación que el camino normal <code>analyze_plan</code>: mismo <code>risk</code>, misma <code>quality</code>, mismo <code>evidence</code> (métricas del reporte) y misma <code>trace</code> (trayectoria ejecutada, waypoint por waypoint). La prueba estructural vive en <code>plan_analysis.rs</code> (<code>candidates_flow_preserves_the_seed_assessment_and_report</code>) y compara el <code>Assessment</code> completo y el <code>AnalysisReport</code> completo con igualdad estructural (<code>PartialEq</code>), no por muestreo. Esto se verifica también dentro de la demo: <code>candidate_counterfactual.rs</code> afirma que el assessment del candidato <code>Direct</code> coincide con el del seed evaluado por el camino llano.</p>
+</section>
+<section id="reproducción" class="level2" data-number="8.6">
+<h2 data-number="8.6" class="anchored" data-anchor-id="reproducción"><span class="header-section-number">8.6</span> Reproducción</h2>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Demo del contrafactual (tabla rankeada + veredicto de equivalencia baseline)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="ex">cargo</span> test <span class="at">-p</span> thalos-planning <span class="at">--test</span> candidate_counterfactual <span class="at">--</span> <span class="at">--nocapture</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Verificación de factibilidad (mismo escenario, invariantes de PR3)</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="ex">cargo</span> test <span class="at">-p</span> thalos-planning <span class="at">--test</span> candidate_feasibility <span class="at">--</span> <span class="at">--nocapture</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Equivalencia baseline a nivel runtime (ambos caminos sobre el mismo seed)</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="ex">cargo</span> test <span class="at">-p</span> thalos_runtime plan_analysis</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 
 
-</section>
 </section>
 
 </main> <!-- /main -->
@@ -781,10 +985,13 @@ Cada capa puede crecer, reemplazarse o eliminarse sin afectar a las demás.</p>
   </script>
 <nav class="page-navigation">
   <div class="nav-page nav-page-previous">
+      <a href="./flow.html" class="pagination-link" aria-label="Flujo interno del sistema">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Flujo interno del sistema</span></span>
+      </a>          
   </div>
   <div class="nav-page nav-page-next">
-      <a href="./vision.html" class="pagination-link" aria-label="Visión del proyecto">
-        <span class="nav-page-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Visión del proyecto</span></span> <i class="bi bi-arrow-right-short"></i>
+      <a href="./maturity.html" class="pagination-link" aria-label="Estado de madurez">
+        <span class="nav-page-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Estado de madurez</span></span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>
