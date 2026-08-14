@@ -19,6 +19,7 @@ book:
     - workspace-analysis.qmd
     - domain.qmd
     - flow.qmd
+    - motion-alternatives.qmd
     - maturity.qmd
     - contributing.qmd
 

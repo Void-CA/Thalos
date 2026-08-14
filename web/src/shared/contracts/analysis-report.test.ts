@@ -8,7 +8,18 @@ import {
   severityCounts,
   waypointAnalysisFromReport,
 } from './analysis-report'
-import type { AnalysisReportWire, AssessmentWire } from './analysis-report'
+import type {
+  AnalysisReportWire,
+  AssessmentWire,
+  CandidateRankingWire,
+  MetricComparisonWire,
+  MotionStrategyWire,
+  NoCandidateReasonWire,
+  RankedCandidateWire,
+  SelectionReasonWire,
+  StrategyOutcomeWire,
+  StrategyTraceWire,
+} from './analysis-report'
 
 /** Minimal canonical report WITHOUT the new `manipulability_series` field —
  *  the "old client" payload shape (spec I3: additive backward compatibility). */
@@ -210,5 +221,152 @@ describe('normalized_yoshikawa + manipulability_grade (additive delta, spec anal
     expect(legacy.manipulability_series?.[0]?.normalized_yoshikawa).toBeUndefined()
     expect(legacy.manipulability_series?.[0]?.manipulability_grade).toBeUndefined()
     expect(manipulabilitySeriesOf(legacy)).toHaveLength(1)
+  })
+})
+
+describe('candidate_ranking (additive delta, spec candidate-alternatives-demo)', () => {
+  /** The canonical CandidateRanking as the backend DTO projects it — mirrors
+   *  `CandidateRankingDto` field-for-field (ranked / selected? / reason /
+   *  strategy_trace). Values are shape-checking data, not the demo instance. */
+  const ranking: CandidateRankingWire = {
+    ranked: [
+      { strategy: 'Direct', risk: 0.5, duration: 7.8, manipulability: 0.45, length: 3.8, cost: 1 },
+      {
+        strategy: 'AlternateElbow',
+        risk: 0.16,
+        duration: 5.2,
+        manipulability: 0.63,
+        length: 2.1,
+        cost: 0,
+      },
+    ],
+    selected: 'AlternateElbow',
+    reason: {
+      kind: 'selected',
+      strategy: 'AlternateElbow',
+      metric_comparison: [
+        { component: 'risk', selected_value: 0.16, baseline_value: 0.5 },
+        { component: 'duration', selected_value: 5.2, baseline_value: 7.8 },
+        { component: 'manipulability', selected_value: 0.63, baseline_value: 0.45 },
+        { component: 'length', selected_value: 2.1, baseline_value: 3.8 },
+        { component: 'cost', selected_value: 0, baseline_value: 1 },
+      ],
+      endpoints: 'Endpoints: preserved',
+      task: 'Task: preserved',
+    },
+    strategy_trace: [
+      { strategy: 'Direct', outcome: { kind: 'generated' } },
+      {
+        strategy: 'InsertWaypoint',
+        outcome: { kind: 'skipped', reason: 'UnsupportedSegment' },
+      },
+      { strategy: 'AlternateElbow', outcome: { kind: 'generated' } },
+    ],
+  }
+
+  it('mirrors the Rust CandidateRankingDto field-for-field (ranked/selected?/reason/strategy_trace)', () => {
+    // The DTO shape is { ranked, selected (Option), reason, strategy_trace }
+    // — the wire MUST carry exactly these four keys.
+    const keys = Object.keys(ranking).sort()
+    expect(keys).toEqual(['ranked', 'reason', 'selected', 'strategy_trace'])
+    expect(ranking.ranked).toHaveLength(2)
+    expect(ranking.selected).toBe('AlternateElbow')
+    expect(ranking.strategy_trace).toHaveLength(3)
+  })
+
+  it('RankedCandidateWire carries exactly strategy/risk/duration/manipulability/length/cost', () => {
+    const row: RankedCandidateWire = ranking.ranked[0]
+    const keys = Object.keys(row).sort()
+    expect(keys).toEqual(['cost', 'duration', 'length', 'manipulability', 'risk', 'strategy'])
+    // Numeric fields are raw wire numbers — never normalized by the contract.
+    expect(row.risk).toBeCloseTo(0.5)
+    expect(row.duration).toBeCloseTo(7.8)
+    expect(row.manipulability).toBeCloseTo(0.45)
+    expect(row.length).toBeCloseTo(3.8)
+    expect(row.cost).toBeCloseTo(1)
+  })
+
+  it('SelectionReasonWire selected variant: metric_comparison vs Direct baseline + optional endpoints/task', () => {
+    const reason: SelectionReasonWire = ranking.reason
+    expect(reason.kind).toBe('selected')
+    if (reason.kind !== 'selected') throw new Error('expected selected reason')
+    expect(reason.strategy).toBe('AlternateElbow')
+    const components: MetricComparisonWire[] = reason.metric_comparison
+    expect(components).toHaveLength(5)
+    expect(components[0]).toEqual({ component: 'risk', selected_value: 0.16, baseline_value: 0.5 })
+    // The direction (< / >) is DERIVABLE from the values — never carried.
+    expect(components[1].selected_value).toBeLessThan(components[1].baseline_value)
+    // Faithful to the Rust Option<String>: endpoints/task are OPTIONAL and
+    // absent when the backend omits them.
+    expect(reason.endpoints).toBe('Endpoints: preserved')
+    expect(reason.task).toBe('Task: preserved')
+  })
+
+  it('SelectionReasonWire no_admissible_candidate variant carries the structural reason', () => {
+    const noSelection: SelectionReasonWire = {
+      kind: 'no_admissible_candidate',
+      reason: 'All candidates failed the admissibility gate',
+    }
+    expect(noSelection.kind).toBe('no_admissible_candidate')
+    if (noSelection.kind !== 'no_admissible_candidate') throw new Error('expected no-admissible')
+    expect(noSelection.reason).toContain('admissibility')
+    // A no-admissible reason NEVER carries a metric comparison.
+    expect('metric_comparison' in noSelection).toBe(false)
+  })
+
+  it('closed unions: MotionStrategyWire and MetricComponentWire accept only the DTO variants', () => {
+    const strategies: MotionStrategyWire[] = ['Direct', 'InsertWaypoint', 'AlternateElbow']
+    expect(strategies).toEqual(['Direct', 'InsertWaypoint', 'AlternateElbow'])
+    const components: MetricComparisonWire[] = [
+      { component: 'risk', selected_value: 1, baseline_value: 2 },
+      { component: 'duration', selected_value: 1, baseline_value: 2 },
+      { component: 'manipulability', selected_value: 1, baseline_value: 2 },
+      { component: 'length', selected_value: 1, baseline_value: 2 },
+      { component: 'cost', selected_value: 1, baseline_value: 2 },
+    ]
+    expect(components.map((c) => c.component)).toEqual([
+      'risk',
+      'duration',
+      'manipulability',
+      'length',
+      'cost',
+    ])
+  })
+
+  it('NoCandidateReasonWire mirrors the Rust enum: IkFailed | UnsupportedSegment | InvariantViolation{invariant}', () => {
+    const ik: NoCandidateReasonWire = 'IkFailed'
+    const unsupported: NoCandidateReasonWire = 'UnsupportedSegment'
+    const invariant: NoCandidateReasonWire = { InvariantViolation: { invariant: 'segment_out_of_range' } }
+    // Externally-tagged serde shape: the variant name is the key.
+    expect(JSON.parse(JSON.stringify(invariant))).toEqual({
+      InvariantViolation: { invariant: 'segment_out_of_range' },
+    })
+    expect(ik).toBe('IkFailed')
+    expect(unsupported).toBe('UnsupportedSegment')
+  })
+
+  it('StrategyTraceWire/StrategyOutcomeWire: generated rows carry no reason; skipped rows carry it', () => {
+    const trace: StrategyTraceWire[] = ranking.strategy_trace
+    const generated: StrategyOutcomeWire = trace[0].outcome
+    expect(generated.kind).toBe('generated')
+    expect(generated.reason).toBeUndefined()
+    const skipped: StrategyOutcomeWire = trace[1].outcome
+    expect(skipped.kind).toBe('skipped')
+    expect(skipped.reason).toBe('UnsupportedSegment')
+  })
+
+  it('candidate_ranking is optional on AnalysisReportWire — old payloads omit it (I3)', () => {
+    const oldReport: AnalysisReportWire = baseReport()
+    expect(oldReport.candidate_ranking).toBeUndefined()
+    expect(JSON.stringify(oldReport)).not.toContain('candidate_ranking')
+  })
+
+  it('the additive field round-trips on the wire without altering existing fields', () => {
+    const report: AnalysisReportWire = { ...baseReport(), candidate_ranking: ranking }
+    expect(report.candidate_ranking).toEqual(ranking)
+    // The rest of the canonical report is untouched by the additive field.
+    expect(report.artifact).toEqual({ kind: 'MotionPlan', id: 'mp-1' })
+    expect(report.summary.quality_index).toBeCloseTo(0.8)
+    expect(report.assessment).toBeUndefined()
   })
 })

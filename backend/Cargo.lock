@@ -1625,6 +1625,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thalos-collision",
+ "thalos-intelligence",
  "thalos-optimization",
  "thalos_core",
  "thalos_math",

@@ -216,7 +216,129 @@ export interface AnalysisReportWire {
    *  old payloads omit the field; the Evaluation workspace hides the
    *  "Intelligent Assessment" section when it is absent. */
   assessment?: AssessmentWire
+  /** Candidate alternatives ranking (additive, spec candidate-alternatives-demo).
+   *  OPTIONAL on the wire (`#[serde(default)]` on the Rust DTO): old payloads
+   *  omit the field and the Candidate Alternatives section stays hidden. */
+  candidate_ranking?: CandidateRankingWire
 }
+
+// ─── candidate_ranking (additive, spec candidate-alternatives-demo) ─────────
+// The web contract mirrors the Rust `CandidateRankingDto` family field-for-field
+// (backend/crates/thalos-api/src/features/plan_analysis/dto.rs). The strategy
+// kind travels as a closed string union (`"Direct" | "InsertWaypoint" |
+// "AlternateElbow"`) and the reason keeps its STRUCTURAL shape — component ids
+// + numeric values, never narrative text. Display-only: the UI never re-derives
+// risk, quality, cost or selection from these numbers.
+
+/** `"Direct" | "InsertWaypoint" | "AlternateElbow"` — the closed strategy set
+ *  (`StrategyKind` on the backend). */
+export type MotionStrategyWire = 'Direct' | 'InsertWaypoint' | 'AlternateElbow'
+
+/** The fixed metric components of the comparison — `"risk" | "duration" |
+ *  "manipulability" | "length" | "cost"` (the evaluator's objective axes). */
+export type MetricComponentWire = 'risk' | 'duration' | 'manipulability' | 'length' | 'cost'
+
+/** Projection of `CandidateRankingDto`: the admissible candidates ordered by
+ *  ascending objective cost J, the selection, the DERIVED reason and the full
+ *  strategy trace (which strategies generated a candidate and which skipped,
+ *  with the structural reason — ADR-3 observability). */
+export interface CandidateRankingWire {
+  /** Admissible candidates ordered by ascending cost J (argmin J wins). */
+  ranked: RankedCandidateWire[]
+  /** Strategy of the selected candidate (argmin J); absent when no candidate
+   *  was admissible. Always one of the closed `MotionStrategyWire` values. */
+  selected?: MotionStrategyWire
+  /** Reason derived from the metric comparison vs the Direct baseline —
+   *  structure, never hand-written narrative. */
+  reason: SelectionReasonWire
+  /** Full strategy trace: every strategy applied with its outcome
+   *  (`generated`/`skipped` + reason). Additive — absent rows default to [].
+   */
+  strategy_trace: StrategyTraceWire[]
+}
+
+/** One ranking row: strategy + RAW metrics + the objective cost J. The raw
+ *  risk is the crisp `1 − quality` of the frozen Assessor — verbatim. */
+export interface RankedCandidateWire {
+  /** `"Direct" | "InsertWaypoint" | "AlternateElbow"`. */
+  strategy: MotionStrategyWire
+  /** RAW risk — the crisp `1 − quality` of the Assessor (verbatim). */
+  risk: number
+  /** RAW duration in seconds — verbatim from the analyzed trajectory. */
+  duration: number
+  /** RAW average manipulability — verbatim. */
+  manipulability: number
+  /** RAW path length in metres — verbatim. */
+  length: number
+  /** The objective cost `J = Σ w_i · norm_i` (RELATIVE to the candidate set). */
+  cost: number
+}
+
+/** The selection reason — DERIVED from metric differences vs the Direct
+ *  baseline; never handwritten text. Discriminated on `kind`:
+ *  `"selected"` carries the metric comparison (+ optional fixed endpoints/task
+ *  invariants, faithful to the Rust `Option<String>`); `"no_admissible_candidate"`
+ *  carries only the structural reason. */
+export type SelectionReasonWire =
+  | {
+      kind: 'selected'
+      /** The selected strategy. */
+      strategy: MotionStrategyWire
+      /** Metric differences vs the Direct baseline (fixed components). */
+      metric_comparison: MetricComparisonWire[]
+      /** Fixed: `"Endpoints: preserved"` — every admissible candidate passed
+       *  the endpoint invariant ε of the gate. OPTIONAL (Rust `Option<String>`). */
+      endpoints?: string
+      /** Fixed: `"Task: preserved"` — every admissible candidate passed the
+       *  task-identity invariant of the gate. OPTIONAL (Rust `Option<String>`). */
+      task?: string
+    }
+  | {
+      kind: 'no_admissible_candidate'
+      /** Structural reason for the absence of selection. */
+      reason: string
+    }
+
+/** One row of the metric comparison: fixed component + selected vs baseline
+ *  values. The direction (`<` / `>`) is derivable from the values — the wire
+ *  never carries a sign. */
+export interface MetricComparisonWire {
+  /** `"risk" | "duration" | "manipulability" | "length" | "cost"`. */
+  component: MetricComponentWire
+  /** Value of the selected candidate. */
+  selected_value: number
+  /** Value of the Direct baseline. */
+  baseline_value: number
+}
+
+/** One strategy-trace row: the strategy applied + its outcome. The trace is
+ *  COMPLETE — it includes the strategies that produced no candidate, with
+ *  their structural reason (ADR-3 observability). */
+export interface StrategyTraceWire {
+  /** `"Direct" | "InsertWaypoint" | "AlternateElbow"`. */
+  strategy: MotionStrategyWire
+  /** Outcome: `generated` or `skipped` (with the structural reason). */
+  outcome: StrategyOutcomeWire
+}
+
+/** Outcome of a strategy in the trace — `generated` or `skipped` with the
+ *  structural reason. A UI renders `Direct → Generated` / `InsertWaypoint →
+ *  Skipped — UnsupportedSegment` without inventing anything. */
+export interface StrategyOutcomeWire {
+  /** `"generated" | "skipped"`. */
+  kind: 'generated' | 'skipped'
+  /** Structural reason of the skip (only when `kind === "skipped"`). */
+  reason?: NoCandidateReasonWire
+}
+
+/** Structural reason for not generating a candidate (design ADR-3):
+ *  `IkFailed` | `UnsupportedSegment` | `InvariantViolation { invariant }`.
+ *  Mirrors the Rust enum externally-tagged: `{"InvariantViolation":
+ *  {"invariant": "segment_out_of_range"}}`. */
+export type NoCandidateReasonWire =
+  | 'IkFailed'
+  | 'UnsupportedSegment'
+  | { InvariantViolation: { invariant: string } }
 
 // ─── Derived pure helpers (I3: interpretation derives from kind/severity) ───
 

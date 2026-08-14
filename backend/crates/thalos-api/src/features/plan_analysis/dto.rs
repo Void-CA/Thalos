@@ -39,6 +39,10 @@ use thalos_core::{
     operation::MotionProvenance,
 };
 use thalos_planning::analysis::PlanAnalysis;
+use thalos_planning::candidate::{
+    CandidateRanking, NoCandidateReason, SelectionReason, StrategyKind, StrategyOutcome,
+    StrategyTrace,
+};
 use thalos_planning::motion::program::PlannedSegment;
 use thalos_planning::program_edit::ProgramEdit;
 use thalos_planning::recommendation::{Recommendation, RecommendationStatus, UnavailabilityReason};
@@ -212,6 +216,14 @@ pub struct PlanAnalysisResponse {
     /// Backend Omits Assessment").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assessment: Option<AssessmentDto>,
+    /// Ranking de candidatos alternativos (PR3) — proyección del
+    /// `CandidateRanking` del runtime (composición completa
+    /// generate → compile → analyze → assess → gate → rank). ADITIVO:
+    /// `#[serde(default)]` + omitido cuando ausente — los clientes antiguos
+    /// (JSON sin el campo) deserializan a `None` sin error (back-compat wire,
+    /// task 5.1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub candidate_ranking: Option<CandidateRankingDto>,
 }
 
 impl PlanAnalysisResponse {
@@ -288,7 +300,16 @@ impl PlanAnalysisResponse {
                 .map(RecommendationDto::from)
                 .collect(),
             assessment: assessment.map(AssessmentDto::from),
+            candidate_ranking: None,
         }
+    }
+
+    /// ADITIVO (PR3): proyecta el `CandidateRanking` del runtime al wire.
+    /// Separado de `from_report` para no tocar los call-sites existentes —
+    /// el flujo con contexto de plan (programa + solver) lo invoca después.
+    pub fn with_candidate_ranking(mut self, ranking: Option<&CandidateRanking>) -> Self {
+        self.candidate_ranking = ranking.map(CandidateRankingDto::from);
+        self
     }
 }
 
@@ -468,6 +489,208 @@ impl From<&Recommendation> for RecommendationDto {
             edit: r.edit.clone(),
             status: r.status,
             reason: r.reason,
+        }
+    }
+}
+
+// ─── candidate_ranking (additive, PR3) ────────────────────────────────────
+//
+// The `candidate_ranking` wire field is a projection of the runtime
+// `CandidateRanking` (thalos-planning candidate module). Additive:
+// `#[serde(default)]` on `PlanAnalysisResponse.candidate_ranking` keeps old
+// clients deserializing to `None` (task 5.1 wire back-compat). The strategy
+// kind travels as a string (`"Direct" | "InsertWaypoint" | "AlternateElbow"`)
+// and the reason keeps its STRUCTURAL shape — component ids + numeric values,
+// never narrative text (spec "SelectionReason — Derived from Metric
+// Differences").
+
+/// Proyección del ranking de candidatos al wire: filas rankeadas, selección,
+/// razón derivada y el strategy trace completo (ADR-3 observability).
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct CandidateRankingDto {
+    /// Los candidatos admisibles ordenados por costo J ascendente.
+    pub ranked: Vec<RankedCandidateDto>,
+    /// Estrategia del candidato seleccionado (argmin J), ausente cuando no
+    /// hubo candidato admisible.
+    pub selected: Option<String>,
+    /// Razón derivada de la selección (estructura, no narrativa).
+    pub reason: SelectionReasonDto,
+    /// El strategy trace completo: cada estrategia aplicada con su resultado
+    /// (`generated`/`skipped` + razón). ADITIVO — `#[serde(default)]`: un
+    /// backend anterior sin este campo deserializa con trace vacío.
+    #[serde(default)]
+    pub strategy_trace: Vec<StrategyTraceDto>,
+}
+
+/// Una fila del ranking: estrategia + métricas raw + costo objetivo J.
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct RankedCandidateDto {
+    /// `"Direct" | "InsertWaypoint" | "AlternateElbow"`.
+    pub strategy: String,
+    /// RAW risk — el crisp `1 − quality` del Assessor (verbatim).
+    pub risk: f64,
+    /// RAW duration (s) — verbatim del trajectory analizado.
+    pub duration: f64,
+    /// RAW average manipulability — verbatim.
+    pub manipulability: f64,
+    /// RAW path length (m) — verbatim.
+    pub length: f64,
+    /// El costo objetivo `J = Σ w_i · norm_i` (RELATIVO al set de candidatos).
+    pub cost: f64,
+}
+
+/// La razón de selección — DERIVADA de diferencias métricas vs el baseline
+/// Direct; nunca texto manuscrito ni LLM.
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct SelectionReasonDto {
+    /// `"selected"` | `"no_admissible_candidate"`.
+    pub kind: String,
+    /// La estrategia seleccionada (solo cuando `kind == "selected"`).
+    pub strategy: Option<String>,
+    /// Diferencias estructurales vs el baseline `Direct` (componentes fijos:
+    /// risk, duration, manipulability, length, cost).
+    pub metric_comparison: Vec<MetricComparisonDto>,
+    /// Fijas: `"Endpoints: preserved"` — todo candidato admisible pasó la
+    /// invariante de endpoints ε del gate (fase 1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoints: Option<String>,
+    /// Fija: `"Task: preserved"` — todo candidato admisible pasó la
+    /// invariante de identidad de tarea del gate (fase 1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task: Option<String>,
+    /// Razón estructural de no-selección (solo cuando
+    /// `kind == "no_admissible_candidate"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+/// Una fila de la comparación métrica: componente fijo + valores seleccionado
+/// vs baseline. La dirección (`<` / `>`) es derivable de los valores.
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct MetricComparisonDto {
+    /// `"risk" | "duration" | "manipulability" | "length" | "cost"`.
+    pub component: String,
+    /// Valor del candidato seleccionado.
+    pub selected_value: f64,
+    /// Valor del baseline `Direct`.
+    pub baseline_value: f64,
+}
+
+/// Una fila del strategy trace: la estrategia aplicada + su resultado.
+/// El trace del generador es COMPLETO — incluye las estrategias que no
+/// produjeron candidato, con su razón estructural (design ADR-3).
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct StrategyTraceDto {
+    /// `"Direct" | "InsertWaypoint" | "AlternateElbow"`.
+    pub strategy: String,
+    /// Resultado de la estrategia: `generated` o `skipped` (con razón).
+    pub outcome: StrategyOutcomeDto,
+}
+
+/// Resultado de una estrategia en el trace — `generated` o `skipped` con
+/// razón estructural. Un UI puede renderizar `Direct → Generated`,
+/// `InsertWaypoint → Skipped — UnsupportedSegment` sin inventar nada.
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct StrategyOutcomeDto {
+    /// `"generated" | "skipped"`.
+    pub kind: String,
+    /// Razón estructural del skip (solo cuando `kind == "skipped"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<NoCandidateReasonDto>,
+}
+
+/// Razón estructural de no-generación (design ADR-3): `IkFailed` |
+/// `UnsupportedSegment` | `InvariantViolation { invariant }`.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum NoCandidateReasonDto {
+    /// La IK no convergió al materializar la edición.
+    IkFailed,
+    /// El tipo de segmento objetivo no es transformable por la estrategia.
+    UnsupportedSegment,
+    /// Una invariante dura fue violada (e.g. segmento fuera de rango).
+    InvariantViolation {
+        /// La invariante violada, legible.
+        invariant: String,
+    },
+}
+
+impl From<&CandidateRanking> for CandidateRankingDto {
+    fn from(ranking: &CandidateRanking) -> Self {
+        let reason = match &ranking.reason {
+            SelectionReason::Selected {
+                strategy,
+                metric_comparison,
+                endpoints,
+                task,
+            } => SelectionReasonDto {
+                kind: "selected".to_string(),
+                strategy: Some(format!("{strategy:?}")),
+                metric_comparison: metric_comparison
+                    .iter()
+                    .map(|m| MetricComparisonDto {
+                        component: m.component.clone(),
+                        selected_value: m.selected_value,
+                        baseline_value: m.baseline_value,
+                    })
+                    .collect(),
+                endpoints: Some((*endpoints).to_string()),
+                task: Some((*task).to_string()),
+                reason: None,
+            },
+            SelectionReason::NoAdmissibleCandidate { reason } => SelectionReasonDto {
+                kind: "no_admissible_candidate".to_string(),
+                strategy: None,
+                metric_comparison: Vec::new(),
+                endpoints: None,
+                task: None,
+                reason: Some((*reason).to_string()),
+            },
+        };
+        Self {
+            ranked: ranking
+                .ranked
+                .iter()
+                .map(|(candidate, score)| RankedCandidateDto {
+                    strategy: format!("{:?}", candidate.strategy),
+                    risk: score.risk,
+                    duration: score.duration,
+                    manipulability: score.manipulability,
+                    length: score.length,
+                    cost: score.cost,
+                })
+                .collect(),
+            selected: ranking
+                .selected
+                .as_ref()
+                .map(|c| format!("{:?}", c.strategy)),
+            reason,
+            strategy_trace: ranking
+                .strategy_trace
+                .iter()
+                .map(|row| StrategyTraceDto {
+                    strategy: format!("{:?}", row.strategy),
+                    outcome: match &row.outcome {
+                        StrategyOutcome::Generated(_) => StrategyOutcomeDto {
+                            kind: "generated".to_string(),
+                            reason: None,
+                        },
+                        StrategyOutcome::Skipped(reason) => StrategyOutcomeDto {
+                            kind: "skipped".to_string(),
+                            reason: Some(match reason {
+                                NoCandidateReason::IkFailed => NoCandidateReasonDto::IkFailed,
+                                NoCandidateReason::UnsupportedSegment => {
+                                    NoCandidateReasonDto::UnsupportedSegment
+                                }
+                                NoCandidateReason::InvariantViolation { invariant } => {
+                                    NoCandidateReasonDto::InvariantViolation {
+                                        invariant: invariant.clone(),
+                                    }
+                                }
+                            }),
+                        },
+                    },
+                })
+                .collect(),
         }
     }
 }
@@ -830,7 +1053,8 @@ mod tests {
         },
         operation::{MotionRole, OperationId},
     };
-    use thalos_planning::motion::program::PlannedSegment;
+    use thalos_planning::candidate::{Candidate, MetricComparison};
+    use thalos_planning::motion::program::{PlannedSegment, PlanningProgram};
 
     #[test]
     fn semantic_problem_dto_serializes_with_operation_context() {
@@ -1092,6 +1316,210 @@ mod tests {
             dtos[0].semantic.is_none(),
             "legacy segments (no operation_id) must not attach semantic context"
         );
+    }
+
+    #[test]
+    fn old_json_without_candidate_ranking_deserializes() {
+        // PR3 wire back-compat (task 5.1): a response JSON WITHOUT the new
+        // `candidate_ranking` field must deserialize to `None` — old clients
+        // and old backends keep working (additive `#[serde(default)]`).
+        let json = json!({
+            "artifact": {"kind": "MotionPlan", "id": "mp-1"},
+            "observations": [],
+            "actions": [],
+            "metrics": {},
+            "summary": {
+                "quality_index": 0.8,
+                "score": 80,
+                "grade": "Good",
+                "observation_count": 0,
+                "severity_distribution": {}
+            }
+        });
+
+        let response: PlanAnalysisResponse = serde_json::from_value(json)
+            .expect("old JSON must deserialize without candidate_ranking");
+        assert!(
+            response.candidate_ranking.is_none(),
+            "absent candidate_ranking must deserialize to None"
+        );
+    }
+
+    #[test]
+    fn new_json_with_candidate_ranking_deserializes() {
+        // The new field round-trips: a backend that EMITS candidate_ranking
+        // is consumable by new clients (values preserved verbatim).
+        let json = json!({
+            "artifact": {"kind": "MotionPlan", "id": "mp-1"},
+            "observations": [],
+            "actions": [],
+            "metrics": {},
+            "summary": {
+                "quality_index": 0.8,
+                "score": 80,
+                "grade": "Good",
+                "observation_count": 0,
+                "severity_distribution": {}
+            },
+            "candidate_ranking": {
+                "ranked": [
+                    {
+                        "strategy": "AlternateElbow",
+                        "risk": 0.1625,
+                        "duration": 5.2556,
+                        "manipulability": 0.6314,
+                        "length": 2.1398,
+                        "cost": 0.0
+                    },
+                    {
+                        "strategy": "Direct",
+                        "risk": 0.5571,
+                        "duration": 7.8179,
+                        "manipulability": 0.4585,
+                        "length": 3.885,
+                        "cost": 1.0
+                    }
+                ],
+                "selected": "AlternateElbow",
+                "reason": {
+                    "kind": "selected",
+                    "strategy": "AlternateElbow",
+                    "metric_comparison": [
+                        {"component": "risk", "selected_value": 0.1625, "baseline_value": 0.5571}
+                    ],
+                    "endpoints": "Endpoints: preserved",
+                    "task": "Task: preserved",
+                    "reason": null
+                }
+            }
+        });
+
+        let response: PlanAnalysisResponse =
+            serde_json::from_value(json).expect("new JSON with candidate_ranking must deserialize");
+        let ranking = response
+            .candidate_ranking
+            .expect("candidate_ranking must be Some");
+        assert_eq!(ranking.ranked.len(), 2);
+        assert_eq!(ranking.ranked[0].strategy, "AlternateElbow");
+        assert!((ranking.ranked[0].risk - 0.1625).abs() < 1e-12);
+        assert_eq!(ranking.selected.as_deref(), Some("AlternateElbow"));
+        assert_eq!(ranking.reason.kind, "selected");
+        assert_eq!(
+            ranking.reason.endpoints.as_deref(),
+            Some("Endpoints: preserved")
+        );
+        assert_eq!(ranking.reason.metric_comparison[0].component, "risk");
+    }
+
+    // ── REMEDIATION (verify Warning 1 FIX, ADR-3 observability) — the
+    //    strategy trace travels in the wire, additive and back-compatible ───
+
+    #[test]
+    fn candidate_ranking_without_strategy_trace_deserializes_as_empty() {
+        // Wire back-compat for the trace field: a backend that emits
+        // `candidate_ranking` WITHOUT the new `strategy_trace` key must still
+        // deserialize — the field defaults to the empty trace (additive).
+        let json = json!({
+            "artifact": {"kind": "MotionPlan", "id": "mp-1"},
+            "observations": [],
+            "actions": [],
+            "metrics": {},
+            "summary": {
+                "quality_index": 0.8,
+                "score": 80,
+                "grade": "Good",
+                "observation_count": 0,
+                "severity_distribution": {}
+            },
+            "candidate_ranking": {
+                "ranked": [],
+                "selected": null,
+                "reason": {
+                    "kind": "no_admissible_candidate",
+                    "strategy": null,
+                    "metric_comparison": [],
+                    "endpoints": null,
+                    "task": null,
+                    "reason": "no admissible candidates"
+                }
+            }
+        });
+
+        let response: PlanAnalysisResponse = serde_json::from_value(json)
+            .expect("candidate_ranking without strategy_trace must deserialize");
+        let ranking = response
+            .candidate_ranking
+            .expect("candidate_ranking must be Some");
+        assert!(
+            ranking.strategy_trace.is_empty(),
+            "absent strategy_trace must default to the empty trace"
+        );
+    }
+
+    #[test]
+    fn candidate_ranking_from_projects_the_strategy_trace_and_round_trips() {
+        // The From projection must carry the FULL trace (every strategy →
+        // Generated/Skipped(reason)) so a future UI can render
+        // `Direct → Generated`, `InsertWaypoint → Skipped — UnsupportedSegment`,
+        // `AlternateElbow → Generated` without inventing anything, and the
+        // serde shape must round-trip verbatim.
+        let direct = Candidate {
+            strategy: StrategyKind::Direct,
+            program: PlanningProgram::new(vec![]),
+        };
+        let alternate = Candidate {
+            strategy: StrategyKind::AlternateElbow,
+            program: PlanningProgram::new(vec![]),
+        };
+        let ranking = CandidateRanking {
+            ranked: vec![],
+            selected: Some(alternate.clone()),
+            reason: SelectionReason::Selected {
+                strategy: StrategyKind::AlternateElbow,
+                metric_comparison: vec![MetricComparison {
+                    component: "risk".to_string(),
+                    selected_value: 0.1625,
+                    baseline_value: 0.5571,
+                }],
+                endpoints: "Endpoints: preserved",
+                task: "Task: preserved",
+            },
+            strategy_trace: vec![
+                StrategyTrace {
+                    strategy: StrategyKind::Direct,
+                    outcome: StrategyOutcome::Generated(direct),
+                },
+                StrategyTrace {
+                    strategy: StrategyKind::InsertWaypoint,
+                    outcome: StrategyOutcome::Skipped(NoCandidateReason::UnsupportedSegment),
+                },
+                StrategyTrace {
+                    strategy: StrategyKind::AlternateElbow,
+                    outcome: StrategyOutcome::Generated(alternate),
+                },
+            ],
+        };
+
+        let dto = CandidateRankingDto::from(&ranking);
+
+        assert_eq!(dto.strategy_trace.len(), 3);
+        assert_eq!(dto.strategy_trace[0].strategy, "Direct");
+        assert_eq!(dto.strategy_trace[0].outcome.kind, "generated");
+        assert!(dto.strategy_trace[0].outcome.reason.is_none());
+        assert_eq!(dto.strategy_trace[1].strategy, "InsertWaypoint");
+        assert_eq!(dto.strategy_trace[1].outcome.kind, "skipped");
+        assert_eq!(
+            dto.strategy_trace[1].outcome.reason,
+            Some(NoCandidateReasonDto::UnsupportedSegment)
+        );
+        assert_eq!(dto.strategy_trace[2].strategy, "AlternateElbow");
+        assert_eq!(dto.strategy_trace[2].outcome.kind, "generated");
+
+        // Serde round-trip: the wire shape preserves the trace verbatim.
+        let json = serde_json::to_value(&dto).expect("the DTO must serialize");
+        let back: CandidateRankingDto =
+            serde_json::from_value(json).expect("the wire shape must deserialize");
+        assert_eq!(back, dto, "strategy_trace must round-trip verbatim");
     }
 
     // ─── S1: additive manipulability_series delta (P3, I3) ──────────────

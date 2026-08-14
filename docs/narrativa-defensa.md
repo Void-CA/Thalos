@@ -2,137 +2,164 @@
 
 ## Evaluación Inteligente de Trayectorias Robóticas (Thalos)
 
-**Objetivo:** demostrar que implementamos técnicas de **IA clásica** —lógica difusa y sistemas expertos— para convertir evidencia geométrica real en una evaluación explicable de riesgo. No vendemos "Thalos tiene IA": mostramos mecanismos concretos (representación del conocimiento, funciones de pertenencia, inferencia Mamdani, encadenamiento hacia adelante, combinación de evidencia, traza).
+**Objetivo:** demostrar que implementamos técnicas de **IA clásica** —lógica difusa y sistemas expertos— para convertir evidencia geométrica real en una evaluación explicable de riesgo, y que esa evaluación **no se queda en un veredicto**: el sistema sintetiza alternativas de movimiento, las compara y selecciona la mejor con una razón derivada. No vendemos "Thalos tiene IA": mostramos mecanismos concretos (representación del conocimiento, funciones de pertenencia, inferencia Mamdani, encadenamiento hacia adelante, generación acotada de candidatos, selección por costo objetivo y traza completa).
 
-**Regla de oro:** nunca mostrar solo `Risk: High, Quality: 44.3%`. Mostrar el **razonamiento**. Por eso existe el demo standalone: `cargo test -p thalos-planning --test assessment_demo -- --nocapture`.
-
----
-
-## 0:00 – 0:40 · Problema
-
-> "Thalos ya podía analizar una trayectoria y detectar singularidades, manipulabilidad y colisiones. El problema era que esas señales no producían una evaluación explicable de riesgo: el pipeline detectaba y clasificaba fenómenos, pero nada los integraba en un veredicto gradual."
-
-Una frase, sin tecnicismos. El problema es la falta de una capa de interpretación, no la falta de detección.
+**Regla de oro:** nunca mostrar solo `Risk: High, Quality: 44.3%`. Mostrar el **razonamiento** y la **comparación de alternativas**. Por eso el demo vive en el pipeline real: `cargo test -p thalos-planning --test candidate_counterfactual -- --nocapture` imprime la tabla rankeada, y el panel web (Intelligence tab → Candidate Alternatives) la presenta sobre el wire real.
 
 ---
 
-## 0:40 – 1:20 · Solución
+## 0:00 – 0:35 · Problema
 
-Mostrar el pipeline (una vez, sin repetir):
+> "Thalos ya analizaba una trayectoria y detectaba singularidades, manipulabilidad y colisiones. El problema era doble: esas señales no producían una evaluación explicable de riesgo, y aunque el plan fuera riesgoso, el sistema no proponía nada mejor — diagnosticaba, pero no exploraba alternativas."
+
+Una frase, sin tecnicismos. El problema es la falta de una capa de interpretación **y** de síntesis.
+
+---
+
+## 0:35 – 1:10 · Detect
+
+Mostrar el pipeline de detección (una vez, sin repetir):
 
 ```text
-Analyzer
+Motion Program
    ↓
-AnalysisReport        (métricas agregadas + observaciones canónicas)
+Analyzer (FK, Jacobiano, singularidad, manipulabilidad, colisiones)
    ↓
-Fuzzy Inputs          (global: avg manipulability · local: clearance, singularidad)
+AnalysisReport  (observaciones canónicas + métricas agregadas)
+```
+
+Explicar **una sola vez** cada capa:
+
+- **Analyzer**: evalúa cada waypoint (SVD del Jacobiano, distancia de colisión, Yoshikawa). Emite observaciones canónicas machine-readable (`NearSingularity`, `LowManipulability`…), ancladas a waypoints — no texto.
+- **Clave**: la evidencia distingue **global** (promedios) de **local** (fenómenos que el promedio diluiría).
+
+---
+
+## 1:10 – 1:50 · Explain
+
+Mostrar el pipeline de evaluación (la pantalla del Intelligence tab):
+
+```text
+Fuzzy Inputs (global: avg manipulability · local: clearance, singularidad)
    ↓
 Mamdani + Expert System
    ↓
 Risk / Quality / Trace
 ```
 
-Explicar **una sola vez** cada capa:
-
 - **Mamdani (difusa)**: las señales continuas se convierten en grados lingüísticos (p. ej. `manipulability medium = 0.21`), las reglas los combinan y un centroide produce el riesgo crisp en [0, 1].
-- **Sistema experto**: reglas con prioridad, encadenamiento hacia adelante y hechos derivados — no es una lista de umbrales; las reglas establecen hechos que otras reglas consumen.
-- **Clave**: la entrada distingue evidencia **global** (promedios) de **local** (fenómenos que el promedio diluiría).
+- **Sistema experto**: reglas con prioridad, encadenamiento hacia adelante y hechos derivados — no es una lista de umbrales.
 
----
-
-## 1:20 – 2:00 · Cómo razona
-
-Dos casos reales, mostrados en el demo.
-
-**Saludable** (razonamiento positivo — el sistema no solo detecta fallos):
+Caso real del demo (cruce de extensión — el analyzer detecta el evento):
 
 ```text
-manipulability = 0.77 (high)
-singularity    = low
-clearance      = safe
-
-R08 → safe_clearance
-R10 → good_manipulability
-R12 → RiskIs Low
-
-→ Low, quality 0.853
-```
-
-**Degradado** (cruce de extensión — el analyzer detecta el evento):
-
-```text
-singular_count     = 1
+singular_count     = 2 (de 26 waypoints)
 localized_singularity = 0.5
 R09 → RiskIs High
-→ High
+→ High · crisp risk 0.557 · quality 0.443
 ```
 
-Aquí el profesor ya entiende el mecanismo: las reglas disparan con evidencia real y la traza muestra por qué.
+> "Aquí el jurado ya ve el mecanismo: la traza explica por qué el veredicto es High."
+
+**El descubrimiento (momento de ingeniería):** la primera implementación diluía la singularidad local en un promedio (`13/392 waypoints → 0.033 → Low`). La evidencia local debe venir de las observaciones canónicas, no de una fracción. Una mala representación no se arregla calibrando el modelo.
 
 ---
 
-## 2:00 – 3:00 · El descubrimiento (MOMENTO CENTRAL)
+## 1:50 – 2:40 · Generate + Compare
 
-> "La primera implementación parecía funcionar. Pero al conectarla al pipeline real descubrimos algo: una singularidad presente en 13 de 392 waypoints se convertía en una fracción de 0.033 — y prácticamente desaparecía. El sistema veredictaba Low sobre una trayectoria que el analyzer había marcado con 13 observaciones de singularidad."
+> "El veredicto High dice que el plan directo es riesgoso. Pero un diagnóstico no es una solución. Thalos no se queda ahí: genera realizaciones alternativas del MISMO programa —misma tarea, mismos endpoints— y las evalúa con el mismo pipeline."
 
-Mostrar el antes/después de la MISMA trayectoria:
+Mostrar la **pantalla de arquitectura**:
 
 ```text
-v1:  singularity score = 0.033 (diluido por interpolación densa)  → Low
-v2:  singularity score = 0.500 (desde las observaciones del analyzer) → High
+Motion Program
+   ↓
+Candidate Generator (biblioteca acotada de estrategias)
+   ├── Direct          (el seed, baseline inmutable)
+   ├── InsertWaypoint  (skipped: UnsupportedSegment)
+   └── AlternateElbow  (re-solve del segmento al codo del mismo lado)
+   ↓
+Analyzer → Fuzzy + Expert Assessor   (mismo pipeline por candidato)
+   ↓
+Admissibility gate (invariantes: endpoints ε + identidad de tarea + política de riesgo)
+   ↓
+Objective ranking (costo J = Σ wᵢ·normᵢ)
 ```
 
-Frase de cierre de este bloque:
+Mostrar la tabla comparativa del demo real (el Intelligence tab → **Alternative Synthesis**):
 
-> "Las métricas agregadas no preservaban los eventos locales. Rediseñamos la representación de entrada para que la evidencia local viniera de las observaciones canónicas del analizador, no de una fracción."
+```text
+strategy         risk    quality  singular  dur(s)  manip   cost   status
+Direct          0.5571   0.4429      2      7.818  0.4585  1.0000 Generated
+AlternateElbow  0.1625   0.8375      0      5.256  0.6314  0.0000 Generated
+InsertWaypoint      —       —        —        —      —       —   Skipped (Unsupported segment)
+```
 
-**Este es el punto que demuestra trabajo de ingeniería, no solo implementación.**
+Puntos clave:
+
+- El **strategy trace** muestra qué generó cada estrategia y por qué se saltó (`UnsupportedSegment`, `IkFailed`, `InvariantViolation`).
+- La **calidad mostrada es `1 − riesgo`** (proyección de la misma evaluación), etiquetada "Assessed quality" — el wire no la transporta, la pantalla la proyecta.
+- La tabla es **wire-driven**: la UI nunca recalcula riesgo ni costo; el backend es la única autoridad.
 
 ---
 
-## 3:00 – 4:00 · Qué aprendimos
+## 2:40 – 3:15 · Select (MOMENTO CENTRAL)
 
-Mostrar brevemente otros defectos que la auditoría de escenarios controlados reveló — y la lección:
+> "La selección no es un número mágico: es el argmin del costo objetivo J sobre el conjunto admisible, y la razón se DERIVA de la comparación de métricas contra el baseline Direct — nunca texto escrito a mano, nunca un LLM."
+
+Mostrar la conclusión (**Selection** — una conclusión distinta, no solo una fila resaltada):
+
+```text
+SELECTED: AlternateElbow — risk 0.1625 vs 0.5571 (Direct)
+  risk: 0.1625 vs 0.5571 | duration: 5.2556 vs 7.8179
+  manipulability: 0.6314 vs 0.4585 | length: 2.1398 vs 3.8850
+  cost: 0.0000 vs 1.0000
+  Endpoints: preserved · Task: preserved
+```
+
+Frase de cierre del bloque:
+
+> "El mismo programa, misma tarea, mismos endpoints — pero el codo del mismo lado evita cruzar la extensión completa. El Assessor evalúa el cruce como High (0.557) y la realización alternativa como Low (0.1625). La selección es la consecuencia matemática de esa diferencia."
+
+---
+
+## 3:15 – 4:00 · Visualize / concluir
+
+Mostrar la **pantalla web completa** (Intelligence tab):
+
+1. **Intelligent Assessment** (veredicto + factores + traza — el jurado ya la conoce).
+2. **Alternative Synthesis** (tabla comparativa + strategy trace).
+3. **Selection** (conclusión derivada, con la comparación métrica y las invariantes).
+
+Cerrar con la tesis:
+
+> "El resultado no es un modelo que produce una etiqueta. Es un sistema de IA clásica que recibe evidencia geométrica real, la interpreta con conocimiento explícito e inferencia difusa, **sintetiza y evalúa realizaciones alternativas del mismo plan, y selecciona la mejor con una razón derivada y trazable** — del veredicto a la decisión."
+
+---
+
+## 4:00 – 5:00 · Qué aprendimos + preguntas
+
+Lecciones que la auditoría de escenarios controlados reveló:
 
 ```text
 low(0.29) > low(0.10)   ← la membresía "low" estaba invertida (pico en el umbral)
-complexity = 100+       ← dependía de la densidad de interpolación, no de la trayectoria
+0.033 vs 0.500          ← la evidencia local se diluía en el promedio
 marginal → Critical     ← una regla colapsaba "manipulabilidad baja" en riesgo máximo
 ```
 
-Y la conclusión:
+Y el cierre:
 
-> "No ajustamos umbrales hasta que quedara bonito. Revisamos la representación: funciones de membresía monótonas donde corresponde, conjuntos de salida que centroidean dentro de su bucket, y una feature —`trajectory_complexity`— que eliminamos porque no representaba una propiedad semántica estable. Una mala representación no se arregla calibrando el modelo."
-
----
-
-## 4:00 – 5:00 · Resultado
-
-Cerrar con la tesis y mostrar la traza real:
-
-> "El resultado no es un modelo que produce una etiqueta. Es un sistema de IA clásica que recibe evidencia geométrica real, combina conocimiento explícito con inferencia difusa, y puede explicar qué reglas llevaron a su decisión."
-
-Mostrar la traza del demo (escenario degradado):
-
-```text
-[R05_manipulability_medium]  → risk Medium   (Manipulability IS medium → 0.210)
-[R09_near_singularity]       → risk High     (SingularityProximity IS high → 1.000)
-derived: near_singularity
-→ crisp risk 0.557 · verdict High · quality 0.443
-```
-
-Cierre:
-
-> "13 observaciones reales → evidencia local preservada → una regla dispara → el riesgo cambia. Y la traza explica exactamente por qué. Eso es lo que convierte un análisis en una decisión explicable."
+> "No ajustamos umbrales hasta que quedara bonito. Revisamos la representación y probamos cada decisión con escenarios de aceptación explícitos. La selección de alternativas sigue el mismo estándar: invariantes demostradas (endpoints ε, identidad de tarea), razón derivada y un counterfactual reproducible en el pipeline real."
 
 ---
 
 ## Consejos de defensa
 
 1. **No digas "55.7 % de probabilidad de fallo".** El riesgo crisp es un grado de la inferencia difusa, no una probabilidad estadística.
-2. **Si preguntan "¿dónde está la inteligencia?"**: está en los mecanismos — representación del conocimiento, membresías, Mamdani, encadenamiento, hechos derivados, combinación de evidencia, decisión y trazabilidad. IA clásica, contemplada explícitamente por la asignatura.
-3. **Si preguntan por health 0.00 vs quality 0.443**: son métricas distintas por diseño — `health` es el score estricto del analizador (penalización por conteo de fallos), `quality` es la interpretación difusa gradual. No hay contradicción.
-4. **Corre el demo en vivo si se puede** (`cargo test -p thalos-planning --test assessment_demo -- --nocapture`): el output de 8 secciones habla solo.
+2. **Si preguntan "¿dónde está la inteligencia?"**: en los mecanismos — representación del conocimiento, membresías, Mamdani, encadenamiento, hechos derivados, síntesis acotada de candidatos, gate de admisibilidad y selección por objetivo con razón derivada.
+3. **Si preguntan por health vs quality**: son métricas distintas por diseño — `health` es el score estricto del analizador (penalización por conteo de fallos), `quality` es la interpretación difusa gradual. No hay contradicción.
+4. **Corre el demo en vivo si se puede**: `cargo test -p thalos-planning --test candidate_counterfactual -- --nocapture` (tabla rankeada) y el panel web con la escena demo `scara-pick-place-home` (Pick → Wait → Place → Home con cruce de segmento medio).
+5. **Si preguntan "¿por qué la UI no calcula la calidad/el riesgo?"**: la pantalla es display-only — el wire es autoritativo. La única proyección es `Assessed quality = 1 − riesgo`, etiquetada como tal.
 
 ---
 
@@ -142,6 +169,7 @@ Cierre:
 |---|---|
 | ¿Por qué no ML? | La asignatura contempla IA clásica; ML no era aconsejado. La técnica elegida (experto + difuso) da trazabilidad completa, que ML no garantiza con datos escasos. |
 | ¿Cómo se calibraron las membresías? | Con escenarios de aceptación explícitos (tabla de expectativas) + tests de vecinos en las fronteras; no por ajuste visual. |
-| ¿El `Assessor` y el `PlanAdvisor` no se pisan? | No: el Assessor evalúa riesgo global (no muta, no repara); el PlanAdvisor produce reparaciones sobre observaciones. Separación de roles explícita. |
-| ¿`min_manipulability` no debería alimentar Mamdani? | Se consideró y se excluyó deliberadamente: el analyzer ya emite `LowManipulability` observaciones para dips localizados; una segunda entrada duplicaría la señal sin un fallo demostrado. Extensión documentada. |
+| ¿El `Assessor` y el `PlanAdvisor` no se pisan? | No: el Assessor evalúa riesgo global (no muta, no repara); el PlanAdvisor produce reparaciones; el Candidate Generator sintetiza alternativas y el evaluador las rankea. Separación de roles explícita. |
+| ¿Cómo se elige el segmento objetivo? | Es una política SEPARADA de la estrategia: el MVP apunta al primer segmento; la selección por región problemática más severa es follow-up documentado (el counterfactual usa el segmento medio del cruce). |
+| ¿La selección es un LLM? | No: `argmin J` sobre el conjunto admisible + razón derivada de la comparación de métricas contra el baseline Direct. Estructura, nunca narrativa inventada. |
 | ¿Dónde está la base de conocimiento? | `backend/crates/thalos-intelligence/src/kb.rs` — 11 reglas, 3 variables lingüísticas, ancladas a los umbrales del analizador con tests de anclaje. |

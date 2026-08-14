@@ -1,5 +1,6 @@
 pub mod advisor;
 pub mod analysis;
+pub mod candidate;
 pub mod error;
 pub mod evaluation;
 pub mod execution_plan_builder;

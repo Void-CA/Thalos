@@ -4,6 +4,7 @@ import { buildNarrativeSummary, buildWhy } from '@/shared/analysis/narrative-sum
 import { VerdictHero } from './VerdictHero'
 import { FactorRows } from './FactorRows'
 import { TechnicalDetails } from './TechnicalDetails'
+import { CandidateAlternatives } from './CandidateAlternatives'
 
 /**
  * IntelligenceView — the pure INTELLIGENT ASSESSMENT view (the ADVISOR lives
@@ -65,6 +66,13 @@ export function IntelligenceView({
         evidence={assessment.evidence}
         trace={assessment.trace}
       />
+
+      {/* ALTERNATIVE SYNTHESIS → SELECTION (level 2 + 3, additive — spec
+          candidate-alternatives-demo): renders ONLY when the wire carries
+          `candidate_ranking`; the Assessor representation above is untouched.
+          The store already persists the full `AnalysisReportWire`, so the
+          ranking rides through with no store change. */}
+      {report?.candidate_ranking !== undefined && <CandidateAlternatives report={report} />}
     </section>
   )
 }

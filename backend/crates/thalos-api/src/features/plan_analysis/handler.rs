@@ -13,7 +13,8 @@ use axum::{Json, extract::State};
 
 use thalos_core::{
     analysis::observation::ArtifactRef, ids::MotionPlanId, kinematics::forward::ForwardKinematics,
-    kinematics::inverse::DampedLeastSquaresSolver, robot::state::RobotState,
+    kinematics::inverse::DampedLeastSquaresSolver, motion::segment::MotionSegment,
+    robot::state::RobotState,
 };
 use thalos_optimization::{
     PlanMetrics,
@@ -85,27 +86,55 @@ pub async fn analyze_plan(
     let solver =
         DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
 
-    let result = PlanAnalysisService::analyze_plan_with_recommendations(
-        &snapshot.chain,
-        trajectory,
-        snapshot.active_tcp.as_ref(),
-        None, // constraints opcionales
-        artifact,
-        &program,
-        &solver,
-        &snapshot.joints,
-    )?;
+    // PR3: cuando programa + solver están disponibles (la MISMA condición que
+    // el análisis con recomendaciones), el flujo también compone el pipeline
+    // de candidatos (generate → compile → analyze → assess → gate → rank).
+    // La selección del segmento objetivo es una POLÍTICA DEL CALLER (design:
+    // "segment selection is a SEPARATE policy from the strategy"). La política
+    // determinista elige el PRIMER segmento que una estrategia alternativa
+    // puede transformar mientras preserva los invariantes del contrato de
+    // candidatos (endpoints ADR-1 + secuencia de tareas) — ver
+    // `select_candidate_target_segment`. Cuando NO existe segmento elegible,
+    // el flujo de candidatos se omite honestamente: el ranking queda ausente
+    // (nunca filas falsas o degeneradas).
+    let result = match select_candidate_target_segment(&program) {
+        Some(target_segment) => PlanAnalysisService::analyze_plan_with_candidates(
+            &snapshot.chain,
+            trajectory,
+            snapshot.active_tcp.as_ref(),
+            None, // constraints opcionales
+            artifact,
+            &program,
+            &solver,
+            &snapshot.joints,
+            &thalos_planning::candidate::CandidateGenerationContext { target_segment },
+        )?,
+        None => PlanAnalysisService::analyze_plan_with_recommendations(
+            &snapshot.chain,
+            trajectory,
+            snapshot.active_tcp.as_ref(),
+            None,
+            artifact,
+            &program,
+            &solver,
+            &snapshot.joints,
+        )?,
+    };
 
     // El wire es una proyección del reporte canónico (I6): el handler no
     // construye modelos intermedios entre dominio y contrato. El `assessment`
-    // del runtime (aditivo) se proyecta tal cual.
-    Ok(Json(PlanAnalysisResponse::from_report(
-        &result.report,
-        &result.analysis,
-        segments,
-        &result.recommendations,
-        Some(&result.assessment),
-    )))
+    // del runtime (aditivo) se proyecta tal cual; `candidate_ranking` (PR3,
+    // también aditivo) se proyecta cuando el flujo lo pobló.
+    Ok(Json(
+        PlanAnalysisResponse::from_report(
+            &result.report,
+            &result.analysis,
+            segments,
+            &result.recommendations,
+            Some(&result.assessment),
+        )
+        .with_candidate_ranking(result.candidate_ranking.as_ref()),
+    ))
 }
 
 /// POST /api/v1/plan/commands/preview
@@ -962,4 +991,156 @@ pub async fn handle_optimize(State(state): State<Arc<AppState>>) -> ApiResult<Op
             max_segment_error_after: max_seg_err_after,
         },
     }))
+}
+
+/// Deterministic policy that selects the seed segment the candidate
+/// strategies transform (design: "segment selection is a SEPARATE policy from
+/// the strategy" — the caller decides WHICH segment, the strategies only HOW).
+///
+/// Returns the FIRST segment eligible for an alternative strategy:
+///
+/// - **Preceding commanded joint configuration**: a `MoveJ` target at an
+///   earlier index — `AlternateElbow` re-solves the segment from it. Segment 0
+///   (the initial direct move) is never eligible.
+/// - **Transformable**: the segment is a `MoveJ` — the only kind
+///   `AlternateElbow`'s materializer can transform (`InsertWaypoint` skips
+///   `MoveJ`; Cartesian segments carry no joint configuration to re-solve).
+/// - **Preserves the candidate contract invariants**: the segment is
+///   INTERIOR — neither the program's first nor last `MoveJ` — so re-solving
+///   it cannot drift the endpoint pair (first commanded joint configuration +
+///   joint goal) that the admissibility gate enforces (ADR-1), and the
+///   materializer's 1:1 `MoveJ` replacement (same origin) preserves the task
+///   sequence.
+///
+/// Returns `None` when no segment is eligible — the caller then skips the
+/// candidates flow honestly (ranking absent, no fake candidates).
+fn select_candidate_target_segment(program: &PlanningProgram) -> Option<usize> {
+    let is_movej = |s: &MotionSegment| matches!(s, MotionSegment::MoveJ { .. });
+    let first_movej = program.segments.iter().position(is_movej);
+    let last_movej = program.segments.iter().rposition(is_movej);
+
+    program.segments.iter().enumerate().position(|(index, segment)| {
+        // (a) Preceding commanded joint configuration: a MoveJ target at an
+        //     earlier index — `AlternateElbow`'s deterministic re-solve
+        //     context. Segment 0 (the initial direct move) never satisfies
+        //     this, so it is never eligible.
+        let has_preceding_joints = program.segments[..index].iter().any(is_movej);
+        // (b) Transformable while preserving the candidate contract: a MoveJ
+        //     that is INTERIOR (neither first nor last), so the endpoint pair
+        //     survives and the gate accepts the transformed candidate.
+        let interior = Some(index) != first_movej && Some(index) != last_movej;
+        has_preceding_joints && is_movej(segment) && interior
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::select_candidate_target_segment;
+    use thalos_core::{
+        ids::OperationId,
+        motion::segment::MotionSegment,
+        spatial::frame::FrameId,
+        spatial::pose::Pose,
+    };
+    use thalos_math::Transform3D;
+    use thalos_planning::motion::program::PlanningProgram;
+
+    fn movej(origin: &str, target: Vec<f64>) -> MotionSegment {
+        MotionSegment::MoveJ {
+            origin: OperationId(origin.to_string()),
+            target,
+            max_velocity: None,
+            max_acceleration: None,
+        }
+    }
+
+    fn movel(origin: &str) -> MotionSegment {
+        MotionSegment::MoveL {
+            origin: OperationId(origin.to_string()),
+            frame: FrameId::World,
+            target_pose: Pose::new(FrameId::World, FrameId::Id(1), Transform3D::identity()),
+            max_velocity: None,
+        }
+    }
+
+    /// The demo crossing program (validated in
+    /// `candidate_counterfactual.rs`): the FIRST eligible segment is index 1 —
+    /// the crossing MoveJ (preceding MoveJ target + interior, so AlternateElbow
+    /// can re-solve it without drifting the endpoint pair).
+    #[test]
+    fn crossing_program_selects_the_middle_movej() {
+        let program = PlanningProgram::new(vec![
+            movej("op-home", vec![0.0, -1.31, -0.1, 0.0]),
+            movej("op-cross", vec![0.5, 0.6, -0.15, 0.0]),
+            movej("op-goal", vec![0.5, -1.31, -0.15, 0.0]),
+        ]);
+        assert_eq!(select_candidate_target_segment(&program), Some(1));
+    }
+
+    /// Segment 0 is never eligible (the initial direct move): no preceding
+    /// commanded joint configuration, and re-solving it would drift the gate's
+    /// first-endpoint invariant (ADR-1).
+    #[test]
+    fn first_segment_is_never_eligible() {
+        let program = PlanningProgram::new(vec![
+            movej("op-a", vec![0.1, 0.2]),
+            movej("op-b", vec![0.3, 0.4]),
+        ]);
+        // Segment 1 is the LAST MoveJ — transforming it drifts the joint goal
+        // (endpoint invariant) → the gate structurally rejects the candidate,
+        // so the counterfactual cannot emerge. No eligible segment.
+        assert_eq!(select_candidate_target_segment(&program), None);
+    }
+
+    #[test]
+    fn empty_program_has_no_eligible_segment() {
+        let program = PlanningProgram::new(vec![]);
+        assert_eq!(select_candidate_target_segment(&program), None);
+    }
+
+    #[test]
+    fn single_movej_has_no_eligible_segment() {
+        let program = PlanningProgram::new(vec![movej("op-a", vec![0.1, 0.2])]);
+        assert_eq!(select_candidate_target_segment(&program), None);
+    }
+
+    /// The policy returns the FIRST interior MoveJ with a preceding MoveJ —
+    /// index 1 in a 4-MoveJ program (never the last, which would drift the
+    /// joint goal).
+    #[test]
+    fn selects_first_interior_movej_with_preceding_joints() {
+        let program = PlanningProgram::new(vec![
+            movej("op-a", vec![0.1, 0.2]),
+            movej("op-b", vec![0.3, 0.4]),
+            movej("op-c", vec![0.5, 0.6]),
+            movej("op-d", vec![0.7, 0.8]),
+        ]);
+        assert_eq!(select_candidate_target_segment(&program), Some(1));
+    }
+
+    /// A leading MoveL is not transformable by AlternateElbow; index 1 is the
+    /// FIRST MoveJ (no preceding joints); index 2 is the first eligible
+    /// interior MoveJ with a preceding commanded joint configuration.
+    #[test]
+    fn moves_past_leading_movel_to_the_first_interior_movej() {
+        let program = PlanningProgram::new(vec![
+            movel("op-l0"),
+            movej("op-a", vec![0.1, 0.2]),
+            movej("op-b", vec![0.3, 0.4]),
+            movej("op-c", vec![0.5, 0.6]),
+        ]);
+        assert_eq!(select_candidate_target_segment(&program), Some(2));
+    }
+
+    /// A MoveL in the eligible interior position is NOT transformable
+    /// (AlternateElbow's materializer is MoveJ-only) → no eligible segment.
+    #[test]
+    fn interior_movel_is_not_transformable() {
+        let program = PlanningProgram::new(vec![
+            movej("op-a", vec![0.1, 0.2]),
+            movel("op-l1"),
+            movej("op-b", vec![0.3, 0.4]),
+        ]);
+        assert_eq!(select_candidate_target_segment(&program), None);
+    }
 }

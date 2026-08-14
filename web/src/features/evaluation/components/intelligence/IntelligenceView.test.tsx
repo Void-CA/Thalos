@@ -4,7 +4,7 @@ import { render, screen, cleanup, within, act } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { IntelligenceView } from './IntelligenceView'
 import { useAnalysisStore } from '@/features/analysis/store'
-import type { AnalysisReportWire, AssessmentWire } from '@/shared/contracts/analysis-report'
+import type { AnalysisReportWire, AssessmentWire, CandidateRankingWire } from '@/shared/contracts/analysis-report'
 
 /**
  * IntelligenceView — composed Intelligence tab content. The AI verdict is the
@@ -195,5 +195,64 @@ describe('IntelligenceView — assessment references footer is GONE', () => {
     )
     expect(screen.queryByTestId('assessment-recommendation')).not.toBeInTheDocument()
     expect(screen.queryByTestId('assessment-recommendations')).not.toBeInTheDocument()
+  })
+})
+
+describe('IntelligenceView — Candidate Alternatives mount (spec evaluation-intelligence-tab)', () => {
+  /** A minimal candidate ranking — shape only; the section is wire-driven. */
+  const ranking: CandidateRankingWire = {
+    ranked: [
+      { strategy: 'Direct', risk: 0.4, duration: 10, manipulability: 0.3, length: 5, cost: 1 },
+      { strategy: 'AlternateElbow', risk: 0.2, duration: 6, manipulability: 0.6, length: 3, cost: 0 },
+    ],
+    selected: 'AlternateElbow',
+    reason: {
+      kind: 'selected',
+      strategy: 'AlternateElbow',
+      metric_comparison: [{ component: 'risk', selected_value: 0.2, baseline_value: 0.4 }],
+      endpoints: 'Endpoints: preserved',
+      task: 'Task: preserved',
+    },
+    strategy_trace: [
+      { strategy: 'Direct', outcome: { kind: 'generated' } },
+      { strategy: 'InsertWaypoint', outcome: { kind: 'skipped', reason: 'UnsupportedSegment' } },
+      { strategy: 'AlternateElbow', outcome: { kind: 'generated' } },
+    ],
+  }
+
+  function reportWithRanking(): AnalysisReportWire {
+    return {
+      ...report,
+      candidate_ranking: ranking,
+    }
+  }
+
+  it('mounts the Candidate Alternatives section below the existing content when candidate_ranking is present', () => {
+    act(() => {
+      useAnalysisStore.getState().setAnalysis(reportWithRanking())
+    })
+    render(<IntelligenceView assessment={assessment} regions={[]} />)
+    const section = screen.getByTestId('candidate-alternatives')
+    expect(section).toBeInTheDocument()
+    // Section order: the assessment content first (detail trace), the
+    // alternatives section AFTER it (layered below, never replacing).
+    const technical = screen.getByTestId('technical-details')
+    expect(technical.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // The existing Assessor representation is unchanged.
+    expect(screen.getByTestId('intelligent-assessment')).toBeInTheDocument()
+    expect(screen.getByTestId('intelligence-verdict-hero')).toBeInTheDocument()
+  })
+
+  it('does NOT mount the section when candidate_ranking is absent (sections 0–5 unchanged)', () => {
+    act(() => {
+      useAnalysisStore.getState().setAnalysis(report)
+    })
+    render(<IntelligenceView assessment={assessment} regions={[]} />)
+    expect(screen.queryByTestId('candidate-alternatives')).not.toBeInTheDocument()
+    // Sections 0–5 still render exactly as before.
+    expect(screen.getByTestId('intelligent-assessment')).toBeInTheDocument()
+    expect(screen.getByTestId('intelligence-verdict-hero')).toBeInTheDocument()
+    expect(screen.getByTestId('intelligence-factor-rows')).toBeInTheDocument()
+    expect(screen.getByTestId('technical-details')).toBeInTheDocument()
   })
 })
