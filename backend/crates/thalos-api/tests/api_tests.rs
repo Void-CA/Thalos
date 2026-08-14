@@ -1756,7 +1756,7 @@ async fn preview_setup(app: &Router) {
                 {
                     "type": "movel",
                     "target": {
-                        "translation": [1.5, 0.3, 0.5],
+                        "translation": [1.66, 0.60, 0.42],
                         "rotation": {"kind": "Quaternion", "value": {"w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0}}
                     }
                 }
@@ -1939,11 +1939,12 @@ async fn apply_command_writes_back_and_stores_inverse_without_preview() {
         "/api/v1/plan/commands/apply",
         // Recommendation 2 (Waypoint/InsertWaypoint) is AVAILABLE in this
         // scenario: it splits the MoveL at a reachable waypoint and
-        // recompiles. (M2 honesty: recommendation 1 — LiftTcp z-elevation —
-        // exceeds the Scara prismatic reach and is now Unavailable{ik_failed};
-        // recommendation 3 — RotateTool — is Unavailable because the rotated
-        // pose does not realize; both used to lie as `available` under the
-        // old D8 gate.)
+        // recompiles. (M2 honesty: recommendation 1 — Manipulability/
+        // RotateTool — does not realize from the segment start and is
+        // Unavailable{ik_failed}; recommendation 3 — Singularity (joint-space
+        // MoveJ replacement) — fails planning and is Unavailable
+        // {planning_failed}; both used to lie as `available` under the old D8
+        // gate.)
         Some(json!({"recommendation_id": 2})),
     )
     .await;

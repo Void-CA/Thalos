@@ -49,10 +49,11 @@ async fn get_json(
 }
 
 /// The Scara near-reach program used across the api_tests preview/apply
-/// fixtures: a MoveJ segment 0 then a MoveL segment 1 toward full reach. The
-/// analysis of its trajectory emits Singularity/NearSingularity observations
-/// on segment 1 (NOT segment 0), so the advisor recommends on a segment that
-/// does not start at the current joints.
+/// fixtures: a MoveJ segment 0 then a SHORT MoveL segment 1 near full reach.
+/// The trajectory keeps its average manipulability below the
+/// LowManipulability threshold (dense profile sampling of a far move would
+/// dilute it), so the advisor emits Manipulability/Waypoint recommendations
+/// on a segment that does not start at the current joints.
 async fn schedule_scara_near_reach(app: &Router) {
     let (status, _) = get_json(
         app.clone(),
@@ -73,7 +74,7 @@ async fn schedule_scara_near_reach(app: &Router) {
                 {
                     "type": "movel",
                     "target": {
-                        "translation": [1.5, 0.3, 0.5],
+                        "translation": [1.66, 0.60, 0.42],
                         "rotation": {"kind": "Quaternion", "value": {"w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0}}
                     }
                 }
