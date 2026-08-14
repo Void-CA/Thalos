@@ -109,6 +109,13 @@ fn pick_place_task(home: &[f64], box_pos: [f64; 3], tray_pos: [f64; 3]) -> Value
                 }],
                 "tools": [],
                 "home_pose": { "position": home, "orientation": [0.0, 0.0, 0.0, 1.0] },
+                // D6 (commit c642195) made the SceneContent approach_height
+                // serde-default 0.05 (scara-oriented web default). Icebot's
+                // reachable tool0 z-band is [-0.02, 0.04] (Slice 0 finding), so
+                // 0.05 pushes the approach/retreat transit frames out of reach
+                // → IK MaxIterations. Icebot demos MUST set approach_height
+                // explicitly; 0.02 is the physically-correct value for the band.
+                "approach_height": 0.02,
             },
             "program": {
                 "operations": [
