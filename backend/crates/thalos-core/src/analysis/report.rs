@@ -443,10 +443,7 @@ mod tests {
         r.robot_id = Some("icebot-42".to_string());
         let mut value: serde_json::Value =
             serde_json::from_str(&serde_json::to_string(&r).expect("serialize")).expect("json");
-        value
-            .as_object_mut()
-            .expect("object")
-            .remove("robot_id");
+        value.as_object_mut().expect("object").remove("robot_id");
         let legacy = serde_json::to_string(&value).expect("json");
 
         let back: AnalysisReport =

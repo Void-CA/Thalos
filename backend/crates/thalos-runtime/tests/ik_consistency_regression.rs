@@ -27,7 +27,7 @@
 use thalos_core::{
     kinematics::{
         forward::ForwardKinematics,
-        inverse::{DampedLeastSquaresSolver, IKConfig, IKGoal, IKStatus, IKSolver},
+        inverse::{DampedLeastSquaresSolver, IKConfig, IKGoal, IKSolver, IKStatus},
     },
     robot::{adapter, serial_chain::SerialChain},
     spatial::pose::Pose,
@@ -86,7 +86,11 @@ fn seed_pose(chain: &SerialChain, q0: &[f64]) -> Pose {
     let pose = fk_result
         .ee_pose()
         .expect("icebot EE frame must exist in FK result");
-    Pose::new(pose.reference_id(), pose.target_id(), pose.transform().clone())
+    Pose::new(
+        pose.reference_id(),
+        pose.target_id(),
+        pose.transform().clone(),
+    )
 }
 
 /// A pose the 4-DOF SCARA CANNOT reach: the seed pose perturbed by a small
@@ -210,7 +214,10 @@ fn divergent_site_configs_produce_divergent_verdicts() {
     // The config values are actually HONORED (not just carried):
     // - max_iterations: the analysis solve reports exactly its 500-iteration
     //   budget; the semantic solve converges before its 1000-iteration cap.
-    assert_eq!(analysis_res.iterations, 500, "max_iterations must be honored");
+    assert_eq!(
+        analysis_res.iterations, 500,
+        "max_iterations must be honored"
+    );
     assert!(semantic_res.iterations <= 1000);
     // - tolerance: the residual lands between the two tolerances.
     assert!(

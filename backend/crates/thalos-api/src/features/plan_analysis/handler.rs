@@ -94,7 +94,8 @@ pub async fn analyze_plan(
     // inexistente, documentado (campo aditivo en el wire).
     let program = PlanningProgram::new(segments.iter().map(|s| s.source.clone()).collect());
     let fk = ForwardKinematics::new(snapshot.chain.clone());
-    let solver = DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
+    let solver =
+        DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
 
     // PR3: cuando programa + solver están disponibles (la MISMA condición que
     // el análisis con recomendaciones), el flujo también compone el pipeline
@@ -212,7 +213,8 @@ pub async fn preview_command(
     )?;
 
     let fk = ForwardKinematics::new(snapshot.chain.clone());
-    let solver = DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
+    let solver =
+        DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
 
     // M2 (design ADR-3): compile the program to obtain the segment context
     // (waypoint_range + segment-start joints) and let the advisor verify
@@ -373,7 +375,8 @@ pub async fn apply_command(
     )?;
 
     let fk = ForwardKinematics::new(snapshot.chain.clone());
-    let solver = DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
+    let solver =
+        DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
 
     // M2 (design ADR-3): same compiled-plan context as the analyze service
     // (deterministic recommendation ids across analyze → preview → apply).
@@ -542,7 +545,8 @@ async fn apply_program_edit(
     // 2. Recompilar desde el mismo estado inicial que el plan activo (mismo
     //    start que preview/apply).
     let fk = ForwardKinematics::new(snapshot.chain.clone());
-    let solver = DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
+    let solver =
+        DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
     let start_joints = snapshot
         .active_plan
         .as_ref()
@@ -666,7 +670,8 @@ pub async fn undo_command(State(state): State<Arc<AppState>>) -> ApiResult<UndoR
     //    start que preview/apply — el programa restaurado es el previo al
     //    comando deshecho).
     let fk = ForwardKinematics::new(snapshot.chain.clone());
-    let solver = DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
+    let solver =
+        DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
     let start_joints = active_plan
         .trajectory
         .waypoints()

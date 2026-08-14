@@ -6,9 +6,7 @@ use thalos_core::{
     execution::runtime::RuntimeProgram,
     kinematics::{
         forward::{ForwardKinematics, result::FKResult},
-        inverse::{
-            DampedLeastSquaresSolver, IKConfig, IKGoal, IKSolver, result::IKResult,
-        },
+        inverse::{DampedLeastSquaresSolver, IKConfig, IKGoal, IKSolver, result::IKResult},
     },
     models::{RobotModel, RobotRegistry},
     robot::serial_chain::SerialChain,

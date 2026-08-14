@@ -12,11 +12,7 @@
 fn accel_distance(max_velocity: f64, max_acceleration: f64) -> f64 {
     let v = max_velocity.abs();
     let a = max_acceleration.abs();
-    if a > 1e-12 {
-        (v * v) / (2.0 * a)
-    } else {
-        0.0
-    }
+    if a > 1e-12 { (v * v) / (2.0 * a) } else { 0.0 }
 }
 
 /// Total duration of the profile over `distance` (spec
@@ -191,7 +187,11 @@ mod tests {
                 s >= prev_distance - 1e-12,
                 "distance must be monotonic at t={time}: {s} < {prev_distance}"
             );
-            let v = if i == 0 { 0.0 } else { (s - prev_distance) / dt };
+            let v = if i == 0 {
+                0.0
+            } else {
+                (s - prev_distance) / dt
+            };
             max_v = max_v.max(v);
             if i > 0 {
                 max_a = max_a.max((v - prev_velocity).abs() / dt);

@@ -567,7 +567,8 @@ mod tests {
         program: &PlanningProgram,
     ) -> thalos_core::trajectory::Trajectory {
         let fk = thalos_core::kinematics::forward::ForwardKinematics::new(chain.clone());
-        let solver = DampedLeastSquaresSolver::from_config(fk, *chain.end_effector(), IKConfig::default());
+        let solver =
+            DampedLeastSquaresSolver::from_config(fk, *chain.end_effector(), IKConfig::default());
         let state = RobotState::new(home.to_vec());
         let ctx = SegmentPlanningContext {
             robot: chain,
@@ -594,7 +595,8 @@ mod tests {
         let trajectory = compile_from(&chain, &home, &program);
 
         let fk = thalos_core::kinematics::forward::ForwardKinematics::new(chain.clone());
-        let solver = DampedLeastSquaresSolver::from_config(fk, *chain.end_effector(), IKConfig::default());
+        let solver =
+            DampedLeastSquaresSolver::from_config(fk, *chain.end_effector(), IKConfig::default());
 
         let result = PlanAnalysisService::analyze_plan_with_candidates(
             &chain,
@@ -717,7 +719,8 @@ mod tests {
         let program = crossing_program();
         let trajectory = compile_from(&chain, &home, &program);
         let fk = thalos_core::kinematics::forward::ForwardKinematics::new(chain.clone());
-        let solver = DampedLeastSquaresSolver::from_config(fk, *chain.end_effector(), IKConfig::default());
+        let solver =
+            DampedLeastSquaresSolver::from_config(fk, *chain.end_effector(), IKConfig::default());
         // The SAME artifact anchor for both calls — observation/action ids are
         // reassigned deterministically by the aggregator, so an equal anchor
         // makes the whole report structurally comparable.

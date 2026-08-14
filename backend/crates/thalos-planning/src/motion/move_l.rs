@@ -12,7 +12,10 @@ use crate::{
     error::PlanningError,
     goal::{ResolvedPoseGoal, ResolvedPositionGoal, ValidatedGoal},
     interpolate::cartesian,
-    motion::{planner::{PlanningContext, PlanningResult, SegmentPlanner}, profile},
+    motion::{
+        planner::{PlanningContext, PlanningResult, SegmentPlanner},
+        profile,
+    },
 };
 use thalos_math::Vector3;
 
@@ -132,8 +135,9 @@ impl SegmentPlanner for MoveLPlanner {
                     transform,
                 );
 
-                let ik_result =
-                    ctx.ik_solver.solve(&q_current, IKGoal::Pose(waypoint_pose.clone()))?;
+                let ik_result = ctx
+                    .ik_solver
+                    .solve(&q_current, IKGoal::Pose(waypoint_pose.clone()))?;
 
                 match ik_result.status {
                     IKStatus::Converged => {
@@ -166,9 +170,7 @@ impl SegmentPlanner for MoveLPlanner {
                                 q_current = position_result.q;
                             }
                             IKStatus::MaxIterations => {
-                                if travelled - last_emitted_travelled
-                                    < self.config.cartesian_step
-                                {
+                                if travelled - last_emitted_travelled < self.config.cartesian_step {
                                     continue;
                                 }
                                 return Err(PlanningError::IkFailed {
@@ -280,9 +282,7 @@ impl MoveLPlanner {
                         // error < cartesian_step) instead of failing the
                         // whole move. Targets ≥ cartesian_step away still fail
                         // as IkFailedPosition.
-                        if travelled - last_emitted_travelled
-                            < self.config.cartesian_step
-                        {
+                        if travelled - last_emitted_travelled < self.config.cartesian_step {
                             continue;
                         }
                         return Err(PlanningError::IkFailedPosition {
@@ -306,9 +306,7 @@ mod tests {
     use super::*;
     use crate::goal::{GoalMetadata, PlanningAssessment, ResolvedPoseGoal, ResolvedPositionGoal};
     use thalos_core::{
-        kinematics::inverse::{
-            DampedLeastSquaresSolver, IKResult, IKSolver, IkError,
-        },
+        kinematics::inverse::{DampedLeastSquaresSolver, IKResult, IKSolver, IkError},
         models::{RobotModel, RobotRegistry},
         robot::state::RobotState,
     };
@@ -371,13 +369,8 @@ mod tests {
         let target = Vector3::new(0.62, 0.5, 0.25);
 
         let fk = ForwardKinematics::new(robot.clone());
-        let solver = DampedLeastSquaresSolver::new(
-            fk,
-            robot.end_effector().clone(),
-            500,
-            1e-6,
-            0.1,
-        );
+        let solver =
+            DampedLeastSquaresSolver::new(fk, robot.end_effector().clone(), 500, 1e-6, 0.1);
         let q_start = solver
             .solve(&[0.0, 0.0, 0.0, 0.0], IKGoal::Position(start))
             .expect("position IK must converge on SCARA")
@@ -484,7 +477,11 @@ mod tests {
         // The last waypoint is the RESOLVED final state (never re-solved by
         // the planner); the intermediates rode the position fallback.
         let last = traj.waypoints().last().unwrap().joints().to_vec();
-        assert_eq!(last, vec![0.5, 0.3], "final waypoint must be the goal state");
+        assert_eq!(
+            last,
+            vec![0.5, 0.3],
+            "final waypoint must be the goal state"
+        );
     }
 
     #[test]
@@ -544,13 +541,8 @@ mod tests {
     ) {
         let robot = RobotRegistry::create_default(RobotModel::Scara);
         let fk = ForwardKinematics::new(robot.clone());
-        let solver = DampedLeastSquaresSolver::new(
-            fk,
-            robot.end_effector().clone(),
-            500,
-            1e-6,
-            0.1,
-        );
+        let solver =
+            DampedLeastSquaresSolver::new(fk, robot.end_effector().clone(), 500, 1e-6, 0.1);
         (robot, solver)
     }
 
@@ -617,9 +609,7 @@ mod tests {
         positions
             .windows(2)
             .zip(wps.windows(2))
-            .map(|(p, w)| {
-                (p[1] - p[0]).magnitude() / (w[1].timestamp() - w[0].timestamp())
-            })
+            .map(|(p, w)| (p[1] - p[0]).magnitude() / (w[1].timestamp() - w[0].timestamp()))
             .collect()
     }
 
