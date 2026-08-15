@@ -220,7 +220,7 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
     <div className="h-full overflow-hidden">
               {/* File I/O group — visually separated from Program/Execution (R10). */}
           
-        <div data-group="file-io" className="ml-10 flex items-center gap-5">
+        <div data-group="file-io" className="ml-18 flex items-center gap-5">
           <button onClick={() => programInputRef.current?.click()}
             data-weight="secondary"
             title="Load a .thalos program file (replaces the current program)"
