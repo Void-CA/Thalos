@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { act } from 'react'
 import { MemoryRouter } from 'react-router'
@@ -128,5 +128,60 @@ describe('ProgrammingWorkspace — unified tabs (Task | Motion | Code)', () => {
     // (feedback) from command buttons (actions).
     expect(feedback).not.toBe(navigation)
     expect(navigation).not.toBe(commands)
+  })
+})
+
+describe('ProgrammingWorkspace — tab-switch guard (task-code-sync-guards spec)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    cleanup()
+  })
+
+  it('warns "Uncommitted changes will be lost" when leaving Code with an uncommitted buffer; cancel keeps the tab', () => {
+    renderWorkspace()
+    fireEvent.click(screen.getByRole('tab', { name: 'Code' }))
+    fireEvent.change(screen.getByTestId('program-textarea'), {
+      target: { value: 'pick bolt-1\nwait 2s\nhome' },
+    })
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    fireEvent.click(screen.getByRole('tab', { name: 'Task' }))
+
+    // The warning is shown, and declining the discard keeps the Code editor
+    // mounted with the buffer untouched (spec "Cancel preserves buffer").
+    expect(confirmSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Uncommitted changes will be lost'),
+    )
+    expect(screen.getByTestId('program-textarea')).toBeInTheDocument()
+    expect((screen.getByTestId('program-textarea') as HTMLTextAreaElement).value).toBe(
+      'pick bolt-1\nwait 2s\nhome',
+    )
+  })
+
+  it('discards and switches after confirmation', () => {
+    renderWorkspace()
+    fireEvent.click(screen.getByRole('tab', { name: 'Code' }))
+    fireEvent.change(screen.getByTestId('program-textarea'), {
+      target: { value: 'pick bolt-1\nwait 2s\nhome' },
+    })
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    fireEvent.click(screen.getByRole('tab', { name: 'Motion' }))
+
+    expect(confirmSpy).toHaveBeenCalled()
+    // The switch completes: Motion panel renders, Code editor unmounts.
+    expect(screen.getByRole('heading', { name: 'Trajectory Color' })).toBeInTheDocument()
+    expect(screen.queryByTestId('program-textarea')).not.toBeInTheDocument()
+  })
+
+  it('switches without warning when the buffer is committed (or clean)', () => {
+    renderWorkspace()
+    fireEvent.click(screen.getByRole('tab', { name: 'Code' }))
+    const confirmSpy = vi.spyOn(window, 'confirm')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Motion' }))
+
+    expect(confirmSpy).not.toHaveBeenCalled()
+    expect(screen.getByRole('heading', { name: 'Trajectory Color' })).toBeInTheDocument()
   })
 })

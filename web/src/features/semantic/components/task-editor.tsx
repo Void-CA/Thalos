@@ -1,5 +1,5 @@
 import { Play, Plus, RotateCcw, Send, Upload, Download } from 'lucide-react'
-import { useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { useSemanticEditor } from '../store'
 import { previewTaskPlan } from '../run-flow'
@@ -130,8 +130,39 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
   const storeChangedExternally = mode === 'text' && storeText !== bufferBaseRef.current
   const showSyncWarning = storeChangedExternally && buffer !== storeText
 
-  /** S3.3: no Apply while the buffer has parse errors. */
-  const applyDisabled = scriptErrors.length > 0
+  /** Buffer divergence (task-code-sync-guards spec): uncommitted text-mode
+   *  edits. Lifted to the store `hasUncommittedBuffer` flag so the
+   *  workspace-level tab-switch guard can warn before the buffer is
+   *  discarded on unmount. */
+  const bufferDiverges = mode === 'text' && buffer !== storeText
+  useEffect(() => {
+    useSemanticEditor.setState((s) =>
+      s.hasUncommittedBuffer === bufferDiverges ? s : { hasUncommittedBuffer: bufferDiverges },
+    )
+  }, [bufferDiverges])
+
+  /** S3.3 + task-code-sync-guards: no Apply while the buffer has parse errors
+   *  OR while the store changed externally and the buffer diverges from it —
+   *  a stale buffer must never overwrite an external change (hard guard, not
+   *  warn-only). */
+  const applyDisabled = scriptErrors.length > 0 || showSyncWarning
+
+  /**
+   * Run advisory (task-code-sync-guards spec): Compile/Send with an
+   * uncommitted text buffer would execute the last COMPILED version, not the
+   * buffer — confirm before proceeding. Committed buffers (or visual mode,
+   * where the buffer can never diverge) proceed without a dialog.
+   */
+  const handleRunWithAdvisory = async (action: () => Promise<void>) => {
+    const divergent = mode === 'text' && buffer !== serialize(operations)
+    if (divergent) {
+      const confirmed = window.confirm(
+        'Uncommitted text changes. Run will use the last compiled version. Continue?',
+      )
+      if (!confirmed) return
+    }
+    await action()
+  }
 
   /**
    * The SAME task document for Compile and Send (program-dual-editor spec
@@ -240,7 +271,11 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
         <div data-group="program" className="flex items-center gap-3">
           {mode === 'text' && (
             <button onClick={handleApply} disabled={applyDisabled}
-              title={applyDisabled ? 'Fix the parse errors before applying' : 'Apply the script to the program'}
+              title={showSyncWarning
+                ? 'Buffer diverges from external changes; commit or discard'
+                : applyDisabled
+                  ? 'Fix the parse errors before applying'
+                  : 'Apply the script to the program'}
               className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-md bg-amber-600/20 text-amber-500 hover:bg-amber-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
               Apply
             </button>
@@ -263,7 +298,9 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
         <div role="separator" aria-orientation="vertical" className="h-4 w-px bg-border/50" />
 
         <div data-group="execution" className="flex items-center gap-1.5">
-          <button onClick={compiled ? handleSendToExecution : handleCompile} disabled={!canCompile}
+          <button
+            onClick={() => void handleRunWithAdvisory(compiled ? handleSendToExecution : handleCompile)}
+            disabled={!canCompile}
             data-weight="primary"
             title={compiled ? 'Load the compiled plan into Execution' : 'Compile the program'}
             className={`inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-md cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
