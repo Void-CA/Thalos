@@ -1,0 +1,5 @@
+[
+  {"id":"happy-path","title":"Happy Path","category":"basics","narrative":"Pick a box from a tray and place it on the table.","scene":"happy-path/scene.json","program":"happy-path/program.thalos"},
+  {"id":"alias-probe","title":"Alias Probe","category":"probe","scene":"shared/scene.json","program":"shared/program.thalos"},
+  {"id":"invalid-scene","title":"Invalid Scene","category":"probe","scene":"invalid/scene.json","program":"invalid/program.thalos"}
+]
