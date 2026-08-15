@@ -4,11 +4,37 @@ import { Rocket } from 'lucide-react'
 import { useSemanticEditor } from '@/features/semantic/store'
 import { isSceneFile, useDomainSceneStore } from '@/features/scene/store'
 import { useExecutionStore } from '@/features/execution/execution-store'
+import { useAnalysisStore } from '@/features/analysis/store'
+import { useSceneStore } from '@/features/viewport/store'
+import { sceneApi } from '@/features/viewport/api/scene-api'
 import { executeSemantic } from '@/features/semantic/api'
 import { previewTaskPlan } from '@/features/semantic/run-flow'
 import { describeError } from '@/shared/errors'
 import type { DemoCatalogEntry } from '@/shared/contracts'
 import { listDemos, getDemoScene, getDemoProgram } from './api'
+
+/**
+ * Closed-form bent start for icebot's 2-link arm (L1 = 0.125, L2 = 0.100,
+ * axis_1 limit [0, 2.0944]) derived from the scene's `home_pose` — mirrors
+ * the test harness `bent_start_joints` (demos_reproducibility.rs). The
+ * runtime's initial state is FK(0) = full extension, a singular DLS start
+ * (Slice 0 finding 1): [Load Demo] must park the runtime at a bent
+ * non-singular configuration BEFORE [Run], or the first IK solve fails with
+ * MaxIterations (422). q2 = −(q0+q1) matches the identity home orientation;
+ * q3 = clamp(0.04 − z) inverts the prismatic + fixed-TCP chain.
+ */
+function bentStartJoints(homePosition: [number, number, number]): number[] {
+  const L1 = 0.125
+  const L2 = 0.100
+  const [x, y, z] = homePosition
+  const r = Math.sqrt(x * x + y * y)
+  const q0 = Math.atan2(y, x)
+  const cosQ1 = Math.max(-1, Math.min(1, (r * r - L1 * L1 - L2 * L2) / (2 * L1 * L2)))
+  const q1 = Math.acos(cosQ1)
+  const q2 = -(q0 + q1)
+  const q3 = Math.max(0, Math.min(0.06, 0.04 - z))
+  return [q0, q1, q2, q3]
+}
 
 /**
  * DemosWorkspace — the /demos TOOL (demos-workspace spec; D5 kind:'tool', NOT
@@ -57,7 +83,13 @@ export function DemosWorkspace() {
   /** D13 — hydrate ONLY: fetch scene + program and load them into their
    *  stores. Never executes. Any fetch/parse failure shows the message and
    *  leaves the stores unchanged (invalid scene JSON throws BEFORE hydration;
-   *  a program parse failure writes nothing — R2 store atomicity). */
+   *  a program parse failure writes nothing — R2 store atomicity).
+   *
+   *  Stale-state order (design "Stale-state reset order"): validation FIRST
+   *  (invalid scene → no state change), reset AFTER validation, hydration
+   *  after the reset, homing LAST (home_pose comes from the hydrated scene).
+   *  Homing parks the runtime at the closed-form bent start so [Run] never
+   *  IK-solves from the singular full-extension configuration. */
   const handleLoadDemo = async (demo: DemoCatalogEntry) => {
     setLoadError(null)
     setLoadingDemoId(demo.id)
@@ -70,6 +102,16 @@ export function DemosWorkspace() {
         setLoadError(`Demo '${demo.id}' returned an invalid scene file — state unchanged`)
         return
       }
+      // Reset stale state AFTER validation, BEFORE hydration: a previous
+      // demo's execution/analysis/compile state must never leak into this
+      // load. NOT useSemanticEditor.reset() — it would clobber the program
+      // text that hydrates next; setResult(null) only clears the compile
+      // result (design "Stale-state reset order").
+      useExecutionStore.setState({ status: 'idle', activePlan: null })
+      useSceneStore.getState().reset()
+      useAnalysisStore.getState().clear()
+      useSemanticEditor.getState().setResult(null)
+      // Hydrate the domain stores.
       loadSceneFile(scene)
       const errors = loadProgramText(program)
       if (errors.length > 0) {
@@ -77,6 +119,9 @@ export function DemosWorkspace() {
           `Program parse failed: ${errors.map((e) => `line ${e.line}: ${e.message}`).join('; ')}`,
         )
       }
+      // Home AFTER hydration: park the runtime at the bent non-singular start
+      // derived from the hydrated scene's home_pose (demo-load-homing spec).
+      await sceneApi.setJoints(bentStartJoints(scene.home_pose.position))
     } catch (err) {
       setLoadError(describeError(err))
     } finally {
