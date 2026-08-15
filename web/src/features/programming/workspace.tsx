@@ -43,7 +43,7 @@ export function ProgrammingWorkspace() {
       <Tabs defaultValue="tasks" className="flex flex-col h-full overflow-hidden min-h-0">
         {/* Navigation layer (R6) — visually distinct from feedback and
             commands so the three toolbar categories never read as one bar. */}
-        <TabsList data-layer="navigation" className="mx-3 mt-3 shrink-0">
+        <TabsList data-layer="navigation" className="mr-3 mt-3 shrink-0 gap-2.5">
           <TabsTrigger value="tasks">Task</TabsTrigger>
           <TabsTrigger value="motion">Motion</TabsTrigger>
           <TabsTrigger value="code">Code</TabsTrigger>
