@@ -217,71 +217,56 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* Command toolbar (ui-workspace-density R6-R10): three visually
-          separated groups — Program (authoring) | File I/O (persistence) |
-          Execution (primary actions) — divided by vertical separators. The
-          weight hierarchy is encoded in `data-weight` (normal / secondary /
-          primary) so the hierarchy survives styling refactors; handlers,
-          disabled logic and the unified Compile/Send dual state are
-          byte-identical (R11). `data-layer="commands"` marks the commands
-          layer of the three-layer workspace (R6). */}
-      <div data-layer="commands" className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
-        {/* Program group */}
-        <div data-group="program" className="flex items-center gap-1.5">
-          {mode === 'text' && (
-            <button onClick={handleApply} disabled={applyDisabled}
-              title={applyDisabled ? 'Fix the parse errors before applying' : 'Apply the script to the program'}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-amber-600/20 text-amber-500 hover:bg-amber-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
-              Apply
-            </button>
-          )}
-          <button onClick={() => addOperation({ type: 'pick', object: '' })}
-            data-weight="normal"
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer">
-            <Plus className="size-3" /> Add
-          </button>
-          <button onClick={reset}
-            data-weight="secondary"
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-destructive hover:bg-accent cursor-pointer">
-            <RotateCcw className="size-3" /> Reset
-          </button>
-        </div>
-
-        {/* Group separator */}
-        <div role="separator" aria-orientation="vertical" className="h-4 w-px bg-border/50" />
-
-        {/* File I/O group — visually separated from Program/Execution (R10). */}
-        <div data-group="file-io" className="flex items-center gap-1.5">
+    <div className="h-full overflow-hidden">
+              {/* File I/O group — visually separated from Program/Execution (R10). */}
+          
+        <div data-group="file-io" className="ml-10 flex items-center gap-5">
           <button onClick={() => programInputRef.current?.click()}
             data-weight="secondary"
             title="Load a .thalos program file (replaces the current program)"
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer">
+            className="inline-flex items-center gap-1 px-4 py-2 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer">
             <Upload className="size-3" /> Load Program
           </button>
           <button onClick={handleSaveProgram}
             data-weight="secondary"
             title="Download the program as canonical .thalos text"
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer">
+            className="inline-flex items-center gap-1 px-4 py-2 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer">
             <Download className="size-3" /> Save Program
           </button>
         </div>
 
+      <div data-layer="commands" className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
+        {/* Program group */}
+        <div data-group="program" className="flex items-center gap-3">
+          {mode === 'text' && (
+            <button onClick={handleApply} disabled={applyDisabled}
+              title={applyDisabled ? 'Fix the parse errors before applying' : 'Apply the script to the program'}
+              className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-md bg-amber-600/20 text-amber-500 hover:bg-amber-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+              Apply
+            </button>
+          )}
+          <button onClick={() => addOperation({ type: 'pick', object: '' })}
+            data-weight="normal"
+            className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-md bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer">
+            <Plus className="size-3" /> Add
+          </button>
+          <button onClick={reset}
+            data-weight="secondary"
+            className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-md text-muted-foreground hover:text-destructive hover:bg-accent cursor-pointer">
+            <RotateCcw className="size-3" /> Reset
+          </button>
+        </div>
+
+
+
         {/* Group separator */}
         <div role="separator" aria-orientation="vertical" className="h-4 w-px bg-border/50" />
 
-        {/* Execution group — ONE primary action: the unified Compile/Send
-            button (its EXACT dual state: green "Compile" until compiled, then
-            purple "Send to Execution" with the same memoized payload). The
-            former standalone [Run] shortcut was removed — Compile already
-            previews the plan, and Send to Execution executes + navigates, so
-            the unified control covers the whole run flow without a duplicate
-            primary action. (The Demos workspace keeps its own Run.) */}
         <div data-group="execution" className="flex items-center gap-1.5">
           <button onClick={compiled ? handleSendToExecution : handleCompile} disabled={!canCompile}
             data-weight="primary"
             title={compiled ? 'Load the compiled plan into Execution' : 'Compile the program'}
-            className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-md cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+            className={`inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-md cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
               compiled
                 ? 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
                 : 'bg-green-600/20 text-green-500 hover:bg-green-600/30'
@@ -304,6 +289,8 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
           </p>
         )}
       </div>
+
+
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {mode === 'text' ? (
