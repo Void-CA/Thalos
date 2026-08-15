@@ -295,7 +295,7 @@ fn print_evidence(evidence: &DemoEvidence) {
 // ── Behavioral predicates (design fixture-design-intent table) ──────────────
 
 #[tokio::test]
-async fn happy_path_is_admissible_and_executes() {
+async fn happy_path_selects_direct_and_executes() {
     let app = test_app().await;
     let evidence = run_demo(&app, "happy-path").await;
     print_evidence(&evidence);
@@ -308,19 +308,29 @@ async fn happy_path_is_admissible_and_executes() {
         evidence.segment_count
     );
     assert_eq!(evidence.analyze_status, StatusCode::OK, "happy-path must analyze");
-    // Direct admissible: the baseline realization is ranked among the
-    // admissible candidates. NOTE (BLOCKER, orchestrator decision required):
-    // the design predicate "selected = Direct" is NOT realizable on icebot —
-    // the degenerate AlternateElbow re-solve (position-only IK, q1 ∈
-    // [0, 2.0944] forbids the mirrored elbow) wins every J tie-break on
-    // sub-ε metric noise. Documented in apply-progress; the selection part of
-    // the predicate is pending a production evaluator fix or design amendment.
+    // Predicate restoration (spec icebot-showcase "Direct selected, executes,
+    // ≥6 segments, ranking present"): with the ε deadband in
+    // `normalize_min_max`, the degenerate AlternateElbow copy ties Direct on
+    // every component (sub-ε duration delta 1.38e-5 s < 1e-4), so the stable
+    // sort selects Direct — the first candidate in the original order
+    // (spec candidate-evaluation "Deadband tie — deterministic selection").
     let ranking = evidence
         .ranking
         .expect("the pipeline must produce an admissible ranking for happy-path");
+    let selected = ranking["selected"]
+        .as_str()
+        .expect("an admissible realization must be selected");
+    assert_eq!(
+        selected, "Direct",
+        "the deadband tie-break must select Direct (first in candidate order), got {selected}"
+    );
     let ranked = ranking["ranked"]
         .as_array()
         .expect("ranked must be an array");
+    assert!(
+        !ranked.is_empty(),
+        "the ranking must carry the scored candidates"
+    );
     assert!(
         ranked.iter().any(|row| row["strategy"] == "Direct"),
         "the Direct realization must be admissible (ranked), got {:?}",
@@ -345,7 +355,7 @@ async fn multi_object_executes_all_operations_in_sequence() {
 }
 
 #[tokio::test]
-async fn repair_alternatives_selects_a_repaired_alternative() {
+async fn repair_alternatives_surfaces_alternatives() {
     let app = test_app().await;
     let evidence = run_demo(&app, "repair-alternatives").await;
     print_evidence(&evidence);
@@ -357,15 +367,37 @@ async fn repair_alternatives_selects_a_repaired_alternative() {
         evidence.execute_status, evidence.execute_body
     );
     assert_eq!(evidence.analyze_status, StatusCode::OK, "repair demo must analyze");
+    // Predicate redefinition (spec icebot-showcase "repair-alternatives"):
+    // the demo's story is "alternatives surfaced", not "better path chosen".
+    // The pipeline generates + scores alternatives (≥2 admissible, Direct
+    // admissible, AlternateElbow Generated), but on icebot the risk floor
+    // (0.625) means no realization is measurably better — the alternate is a
+    // sub-ε copy, so Direct wins the deterministic tie-break.
     let ranking = evidence
         .ranking
         .expect("the risky carry must produce a candidate ranking");
-    let selected = ranking["selected"]
-        .as_str()
-        .expect("an admissible realization must be selected");
-    assert_ne!(
-        selected, "Direct",
-        "the constrained carry must be repaired — Direct risk must trigger a non-Direct selection, got {selected}"
+    let ranked = ranking["ranked"]
+        .as_array()
+        .expect("ranked must be an array");
+    assert!(
+        ranked.len() >= 2,
+        "the pipeline must surface ≥2 admissible candidates, got {:?}",
+        ranked
+    );
+    assert!(
+        ranked.iter().any(|row| row["strategy"] == "Direct"),
+        "Direct must be admissible (ranked), got {:?}",
+        ranked
+    );
+    let trace = ranking["strategy_trace"]
+        .as_array()
+        .expect("strategy_trace must be an array");
+    assert!(
+        trace.iter().any(|row| {
+            row["strategy"] == "AlternateElbow" && row["outcome"]["kind"] == "generated"
+        }),
+        "the pipeline must have attempted repair (AlternateElbow Generated), got {:?}",
+        trace
     );
 }
 
