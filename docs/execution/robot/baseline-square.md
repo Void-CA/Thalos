@@ -25,7 +25,7 @@ pre-compensation reference the Phase 7 validation compares against.
 2. Draw the square twice (each lap ends back at c0):
 
    ```bash
-   python3 tools/calibration_driver.py square \
+   python3 firmware/esp32/tools/calibration_driver.py square \
        --port /dev/ttyUSB0 --size-m 0.08 --center-xy 0.30 0.10 \
        --joints "J0 J1 J2 J3|J0 J1 J2 J3|J0 J1 J2 J3|J0 J1 J2 J3" \
        --laps 2 --out measurements/baseline_square.csv
@@ -42,7 +42,7 @@ pre-compensation reference the Phase 7 validation compares against.
 4. Compute the baseline metrics:
 
    ```bash
-   python3 tools/calibration_analysis.py baseline \
+   python3 firmware/esp32/tools/calibration_analysis.py baseline \
        --csv measurements/baseline_square.csv
    ```
 

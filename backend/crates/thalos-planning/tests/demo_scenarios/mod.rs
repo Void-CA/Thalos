@@ -4,7 +4,7 @@
 //! real `PlanningProgram`, and an `ExpectedBehavior` of CATEGORICAL invariants
 //! — never exact numbers, never metrics (spec "MUST NOT contain f64 fields").
 //!
-//! Evidence numbers (e.g. crisp risk 0.5571) live in `docs/demo-scenarios.md`
+//! Evidence numbers (e.g. crisp risk 0.5571) live in `docs/execution/demos/demo-scenarios.md`
 //! as REFERENCE ONLY; the contract asserts categories and relative
 //! comparisons, so a recalibration that shifts numbers by epsilon cannot break
 //! the suite.
@@ -43,7 +43,7 @@ pub struct DemoScenario {
 }
 
 /// Categorical expected behavior — NO f64 fields (spec mandate).
-/// Evidence numbers documented in docs/demo-scenarios.md (reference only).
+/// Evidence numbers documented in docs/execution/demos/demo-scenarios.md (reference only).
 pub struct ExpectedBehavior {
     /// Direct risk category (Low/Med/High).
     pub direct_risk_category: DirectRiskCategory,

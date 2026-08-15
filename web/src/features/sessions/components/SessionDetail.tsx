@@ -60,7 +60,7 @@ export function SessionDetail({ session }: SessionDetailProps) {
       </header>
 
       <Tabs defaultValue="summary" className="w-full">
-        <TabsList>
+        <TabsList className="mx-3 mt-3 shrink-0">
           <TabsTrigger value="summary">Summary</TabsTrigger>
           <TabsTrigger value="comparison">Comparison</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>

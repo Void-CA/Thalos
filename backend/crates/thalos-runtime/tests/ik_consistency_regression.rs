@@ -36,7 +36,7 @@ use thalos_math::{UnitQuaternion, UnitVector3, Vector3};
 
 /// The icebot (SCARA: 3 z-axis revolutes + 1 z prismatic) loaded ONCE and
 /// shared by all three paths.
-const ICEBOT_URDF: &str = include_str!("../../../../docs/robot/icebot.urdf");
+const ICEBOT_URDF: &str = include_str!("../../../../docs/execution/robot/icebot.urdf");
 
 /// Preserved semantic-site config (1000/1e-4/0.1).
 fn semantic_config() -> IKConfig {

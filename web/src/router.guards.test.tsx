@@ -135,7 +135,9 @@ describe('GuardedRoute — behavior over real router routes', () => {
 
     expect(producerOf('robotLoaded')?.path).toBe('/')
     await waitFor(() => expect(router.state.location.pathname).toBe('/'))
-    expect(screen.getByRole('heading', { name: 'Robots' })).toBeInTheDocument()
+    // RobotShell renders — the Tools accordion proves the workspace is active
+    // (the redundant "Robots" header was removed; the Stepper names the stage).
+    expect(screen.getByRole('heading', { name: 'Tools' })).toBeInTheDocument()
   })
 
   it('blocks /task without a valid scene, redirecting to the producer of sceneValid', async () => {
@@ -207,7 +209,7 @@ describe('GuardedRoute — behavior over real router routes', () => {
 
     expect(producerOf('executable')).toBeUndefined()
     await waitFor(() => expect(router.state.location.pathname).toBe('/'))
-    expect(screen.getByRole('heading', { name: 'Robots' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Tools' })).toBeInTheDocument()
   })
 
   it('renders /execution when the plan is executable', async () => {
@@ -261,7 +263,9 @@ describe('GuardedRoute — behavior over real router routes', () => {
     const router = renderRouter(['/sessions'])
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/sessions'))
-    expect(screen.getByRole('heading', { name: 'Sessions' })).toBeInTheDocument()
+    // The browser mounted (filter/search strip anchors the panel top — the
+    // redundant "Sessions" header was removed; the Stepper names the stage).
+    expect(screen.getByRole('searchbox', { name: /search/i })).toBeInTheDocument()
   })
 
   it('renders /knowledge once the plan is analyzed', async () => {

@@ -123,16 +123,16 @@ export function DemosWorkspace() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-border/50">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-foreground">
-          Demos
-        </h2>
+      {/* Toolbar — the workspace label is redundant (the TopBar "Demos" tool
+          link already names it), so the action bar doubles as the panel top.
+          [Run] executes the loaded program through the existing pipeline. */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50 shrink-0">
+        {runError && (
+          <p role="alert" className="text-xs text-red-400 truncate" title={runError}>
+            {runError}
+          </p>
+        )}
         <div className="ml-auto flex items-center gap-2">
-          {runError && (
-            <p role="alert" className="text-xs text-red-400 truncate" title={runError}>
-              {runError}
-            </p>
-          )}
           <button
             onClick={handleRun}
             disabled={!canRun}

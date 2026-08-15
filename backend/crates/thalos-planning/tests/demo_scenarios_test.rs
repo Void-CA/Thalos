@@ -1,7 +1,7 @@
 //! Demo-scenarios integration suite (demo-scenarios change): each scenario
 //! runs the REAL candidate pipeline (generate → compile → analyze → assess →
 //! gate → rank) and asserts its INVARIANT CONTRACT — never exact numbers
-//! (evidence lives in docs/demo-scenarios.md, reference only).
+//! (evidence lives in docs/execution/demos/demo-scenarios.md, reference only).
 //!
 //! Pipeline-completion guard: every scenario unwraps `run_pipeline` — a stage
 //! failure FAILS the scenario with the stage error; it can never silently
@@ -199,7 +199,7 @@ fn single_segment_crossing_holds_the_three_row_contract() {
 
     // Row 2 — both generating strategies Skipped (CATEGORY only; the concrete
     // reasons — UnsupportedSegment / InvariantViolation — are diagnostic, in
-    // docs/demo-scenarios.md, never asserted here).
+    // docs/execution/demos/demo-scenarios.md, never asserted here).
     let generating: Vec<_> = outcome
         .traces
         .iter()

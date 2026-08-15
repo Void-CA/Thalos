@@ -208,7 +208,7 @@ mod tests {
         // (FK → workspace sampling → singularity analysis) does not panic.
         let src = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../../docs/robot/icebot.urdf"
+            "/../../../docs/execution/robot/icebot.urdf"
         ));
         let robot =
             thalos_models::urdf::parser::parse_robot(src).expect("icebot URDF should parse");

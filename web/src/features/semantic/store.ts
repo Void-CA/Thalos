@@ -4,6 +4,8 @@ import type { SemanticOp } from '@/shared/contracts'
 import type { CompileResponse } from './types'
 import type { ParseError } from './script/types'
 import { parse } from './script/parser'
+import { remapProgramToScene as remapOps } from '@/shared/workflow/derive'
+import type { SceneResourceRef } from '@/shared/workflow/derive'
 
 interface SemanticEditorState {
   /** Ordered list of operations in the editor */
@@ -44,6 +46,12 @@ interface SemanticEditorState {
    *  success) and NEVER mutates on a failed parse (R2 atomicity) or the
    *  domain scene store (Load Program ≠ Load Scene). */
   loadProgramText: (text: string) => ParseError[]
+  /** Scene-load sync: re-map operation references to a freshly loaded scene
+   *  (objects/locations by id+name). Pure `remapProgramToScene` — keeps the
+   *  program executable after [Load Scene] replaces the scene (a program
+   *  referencing the old scene's ids would fail at lowering with
+   *  `unknown object`). Bumps `dirty` ONLY when a reference actually changed. */
+  remapProgramToScene: (objects: SceneResourceRef[], locations: SceneResourceRef[]) => void
   setResult: (result: CompileResponse | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
@@ -108,6 +116,17 @@ export const useSemanticEditor = create<SemanticEditorState>()(
         get().replaceOperations(result.ops)
         return []
       },
+
+      remapProgramToScene: (objects, locations) =>
+        set((s) => {
+          const next = remapOps(s.operations, objects, locations)
+          // Reference-identical when nothing changed → skip the dirty bump so
+          // a scene load never invalidates a compiled program needlessly.
+          if (next === s.operations) return {}
+          // `next` is a fresh array from `.map()` — only readonly by the pure
+          // helper's signature; the store field is the mutable owner.
+          return { operations: next as SemanticOp[], dirty: s.dirty + 1 }
+        }),
 
       setResult: (result) =>
         set({ result, error: null, loading: false, dirty: 0 }),

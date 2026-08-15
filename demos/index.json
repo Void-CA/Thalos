@@ -1,0 +1,34 @@
+[
+  {
+    "id": "happy-path",
+    "title": "Happy Path",
+    "category": "basics",
+    "narrative": "A single pick-carry-place cycle in a well-conditioned region: the pipeline sees no risk and keeps the Direct realization.",
+    "scene": "happy-path/scene.json",
+    "program": "happy-path/program.thalos"
+  },
+  {
+    "id": "multi-object",
+    "title": "Multi-Object",
+    "category": "composition",
+    "narrative": "Two boxes, two trays: several operations composed in sequence, every one executed.",
+    "scene": "multi-object/scene.json",
+    "program": "multi-object/program.thalos"
+  },
+  {
+    "id": "repair-alternatives",
+    "title": "Repair Alternatives",
+    "category": "intelligence",
+    "narrative": "A constrained carry hugs the workspace limit; risk is detected and an admissible repaired realization is selected.",
+    "scene": "repair-alternatives/scene.json",
+    "program": "repair-alternatives/program.thalos"
+  },
+  {
+    "id": "safety-rejection",
+    "title": "Safety Rejection",
+    "category": "safety",
+    "narrative": "A target outside the workspace envelope: no admissible realization exists, so Thalos refuses to execute.",
+    "scene": "safety-rejection/scene.json",
+    "program": "safety-rejection/program.thalos"
+  }
+]

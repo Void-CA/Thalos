@@ -1,0 +1,7 @@
+# safety-rejection — the box sits outside the workspace envelope (radius
+# 0.26 m > icebot max 0.225 m). No admissible realization exists, so the
+# pipeline refuses to execute.
+home
+pick box-1
+place box-1 at tray-1
+home

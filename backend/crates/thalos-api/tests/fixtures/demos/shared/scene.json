@@ -1,4 +1,4 @@
-{"schema_version":"1","robot":{"name":"icebot","urdf":"docs/robot/icebot.urdf"},
+{"schema_version":"1","robot":{"name":"icebot","urdf":"docs/execution/robot/icebot.urdf"},
  "objects":[{"id":"probe-obj","kind":"bolt","pose":{"position":[0.15,-0.1,0.02],"orientation":[0.0,0.0,0.0,1.0]}}],
  "fixtures":[],"locations":[],
  "home_pose":{"position":[0.0,0.0,0.5],"orientation":[0.0,0.0,0.0,1.0]},"approach_height":0.05}

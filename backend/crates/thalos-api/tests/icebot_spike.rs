@@ -1,6 +1,6 @@
 //! Slice 0 — Icebot spike gate (design D7).
 //!
-//! Proves the full showcase path on icebot: `docs/robot/icebot.urdf` →
+//! Proves the full showcase path on icebot: `docs/execution/robot/icebot.urdf` →
 //! parse_robot + SerialChain → FK → IK(home) → semantic Pick/Place lowering
 //! producing a valid motion through the existing pipeline (POST /semantic/
 //! execute). GATE: a failing stage means the demos fall back to scara
@@ -24,7 +24,7 @@ use tower::ServiceExt;
 
 use thalos_api::{app_router, new_default_state};
 
-const ICEBOT_URDF: &str = include_str!("../../../../docs/robot/icebot.urdf");
+const ICEBOT_URDF: &str = include_str!("../../../../docs/execution/robot/icebot.urdf");
 
 /// Non-singular seed home for icebot (FK(0) is full extension — unusable).
 const ICEBOT_SEED: [f64; 4] = [0.5, 0.8, 0.5, 0.02];

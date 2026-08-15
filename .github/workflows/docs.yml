@@ -23,13 +23,13 @@ jobs:
         uses: quarto-dev/quarto-actions/setup@v2
 
       - name: Render Documentation
-        run: quarto render docs
+        run: quarto render book
 
       - name: Disable Jekyll
-        run: touch docs/_book/.nojekyll
+        run: touch book/_book/.nojekyll
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/_book
+          publish_dir: book/_book

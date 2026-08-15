@@ -784,7 +784,7 @@ async fn workspace_sample_active_targets_the_loaded_catalog_robot() {
 #[tokio::test]
 async fn workspace_sample_active_targets_the_loaded_urdf_robot() {
     let app = test_app().await;
-    let icebot_urdf = include_str!("../../../../docs/robot/icebot.urdf");
+    let icebot_urdf = include_str!("../../../../docs/execution/robot/icebot.urdf");
 
     // A URDF import also becomes the active chain for the /active endpoint.
     let (load_status, body) = get_json(
@@ -3287,7 +3287,7 @@ fn icebot_task_payload(operations: Value) -> Value {
 #[tokio::test]
 async fn urdf_load_then_plan_uses_real_chain() {
     let app = test_app().await;
-    let icebot_urdf = include_str!("../../../../docs/robot/icebot.urdf");
+    let icebot_urdf = include_str!("../../../../docs/execution/robot/icebot.urdf");
 
     // Load the 4-DOF icebot URDF.
     let (load_status, _) = get_json(
@@ -3356,7 +3356,7 @@ async fn urdf_load_then_plan_uses_real_chain() {
 #[tokio::test]
 async fn urdf_load_then_semantic_execute_uses_real_chain() {
     let app = test_app().await;
-    let icebot_urdf = include_str!("../../../../docs/robot/icebot.urdf");
+    let icebot_urdf = include_str!("../../../../docs/execution/robot/icebot.urdf");
 
     let (load_status, _) = get_json(
         app.clone(),
@@ -3407,7 +3407,7 @@ async fn urdf_load_then_semantic_execute_uses_real_chain() {
 #[tokio::test]
 async fn icebot_xy_ik_converges_from_non_singular_q0() {
     let app = test_app().await;
-    let icebot_urdf = include_str!("../../../../docs/robot/icebot.urdf");
+    let icebot_urdf = include_str!("../../../../docs/execution/robot/icebot.urdf");
 
     let (load_status, _) = get_json(
         app.clone(),
@@ -3490,7 +3490,7 @@ async fn icebot_xy_ik_converges_from_non_singular_q0() {
 #[tokio::test]
 async fn load_urdf_exposes_real_robot_dto() {
     let app = test_app().await;
-    let icebot_urdf = include_str!("../../../../docs/robot/icebot.urdf");
+    let icebot_urdf = include_str!("../../../../docs/execution/robot/icebot.urdf");
 
     let (load_status, _) = get_json(
         app.clone(),
@@ -3529,7 +3529,7 @@ async fn load_urdf_exposes_real_robot_dto() {
 #[tokio::test]
 async fn urdf_load_emits_stable_robot_id() {
     let app = test_app().await;
-    let icebot_urdf = include_str!("../../../../docs/robot/icebot.urdf");
+    let icebot_urdf = include_str!("../../../../docs/execution/robot/icebot.urdf");
 
     // First import — the id must match urdf:<12 lowercase hex>.
     let (load_status, body) = get_json(

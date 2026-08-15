@@ -12,14 +12,14 @@ import { useAnalysisStore } from '@/features/analysis/store'
 import type { SceneData } from '@/features/viewport/types'
 
 /**
- * TopBar navigation tests (auxiliary-tools-navigation spec, PR-D).
+ * TopBar navigation tests (auxiliary-tools-navigation spec, PR-D, revised).
  *
- * The top-bar groups registry entries by kind: pipeline stage links first
- * (kind default 'stage'), a decorative divider, then auxiliary tool links
- * (kind 'tool'). The Demos workspace (showcase-scenarios, D5) is the current
- * tool entry — it renders after the divider. Guard state comes from the same
- * registry + WorkflowState contract the GuardedRoute enforces: an unmet
- * requirement aria-disables the link and prevents its click.
+ * The TopBar renders ONLY brand + tool links: stage navigation lives in the
+ * Stepper. The Demos workspace (showcase-scenarios, D5) is the sole tool entry
+ * (kind 'tool') today, with no `requires` — so no tool link is guard-blocked
+ * with the current registry. WorkspaceNavLink keeps the guard contract
+ * (aria-disabled + click prevention) defensively for future tool entries;
+ * the stage guard behavior is pinned in the Stepper/router suites.
  */
 function seedFlags(opts: { robotLoaded?: boolean } = {}) {
   const { robotLoaded = true } = opts
@@ -47,45 +47,37 @@ beforeEach(() => {
 })
 afterEach(() => cleanup())
 
-describe('TopBar — pipeline stages, then a divider, then tool links (kind model)', () => {
-  it('renders stage links, the decorative divider, and the Demos tool link after it', () => {
+describe('TopBar — brand + tool links only (stage navigation lives in the Stepper)', () => {
+  it('renders only the Demos tool link (no stage links, no divider)', () => {
     seedFlags({ robotLoaded: true })
     renderTopBar('/')
 
     const labels = screen.getAllByRole('link').map((l) => l.textContent?.trim() ?? '')
-    expect(labels).toEqual([
-      'Robot',
-      'Scene',
-      'Programming',
-      'Evaluation',
-      'Execution',
-      'Sessions',
-      'Configuration',
-      'Demos',
-    ])
+    expect(labels).toEqual(['Demos'])
 
-    // The Demos workspace (kind 'tool', showcase-scenarios D5) renders in the
-    // auxiliary group AFTER the divider — the divider exists only when tool
-    // links exist, and Demos is the sole tool entry today (the labels array
-    // above pins Demos as the last link, i.e. after every stage link).
+    // No divider — nothing separates a tool group from stage links anymore.
+    expect(screen.queryByTestId('nav-divider')).not.toBeInTheDocument()
+    // No stage links: the Stepper owns stage navigation (and no hidden tool
+    // surfaced, e.g. the removed Workspace Analysis route).
+    for (const name of ['Robot', 'Scene', 'Programming', 'Evaluation', 'Execution', 'Sessions', 'Configuration']) {
+      expect(screen.queryByRole('link', { name })).not.toBeInTheDocument()
+    }
     expect(screen.queryByRole('link', { name: 'Workspace Analysis' })).not.toBeInTheDocument()
-    const divider = screen.getByTestId('nav-divider')
-    expect(divider).toBeInTheDocument()
+
     const demos = screen.getByRole('link', { name: 'Demos' })
-    // The divider is aria-hidden — the link carries the accessible name.
-    expect(divider).toHaveAttribute('aria-hidden')
+    // The tool link is unblocked — Demos requires no workflow flags.
     expect(demos).not.toHaveAttribute('aria-disabled')
   })
 
-  it('aria-disables stage links whose guards are unmet (guard state, no navigation)', async () => {
+  it('keeps tool links enabled regardless of stage guard state (Demos requires no flags)', () => {
+    // Stage guards unmet (robotLoaded=false) — tool links are unaffected.
     seedFlags({ robotLoaded: false })
     const router = renderTopBar('/')
 
-    // Scene requires robotLoaded — unmet → aria-disabled and click prevented.
-    const scene = screen.getByRole('link', { name: 'Scene' })
-    expect(scene).toHaveAttribute('aria-disabled', 'true')
-    fireEvent.click(scene)
-    expect(router.state.location.pathname).toBe('/')
+    const demos = screen.getByRole('link', { name: 'Demos' })
+    expect(demos).not.toHaveAttribute('aria-disabled')
+    fireEvent.click(demos)
+    expect(router.state.location.pathname).toBe('/demos')
   })
 })
 

@@ -1,4 +1,4 @@
-import { Play, Plus, RotateCcw, Send, Upload, Download, Rocket } from 'lucide-react'
+import { Play, Plus, RotateCcw, Send, Upload, Download } from 'lucide-react'
 import { useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { useSemanticEditor } from '../store'
@@ -216,65 +216,65 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
     downloadTextFile('program.thalos', serialize(operations), 'text/plain')
   }
 
-  /** D13 [Run]: the existing pipeline — POST /semantic/execute (compile +
-   *  schedule) → GET /scene (read back) → POST /plan/analyze (analysis) →
-   *  navigate to /execution. No new execution path; the preview read-back is
-   *  non-blocking (the Execution workspace re-fetches the scene on mount). */
-  const handleRun = async () => {
-    setLoading(true); setError(null)
-    try {
-      const res = await executeSemantic({ task: taskDocument })
-      if (res.status !== 'ok') { setError('Run failed'); return }
-      useExecutionStore.getState().receivePlan({
-        instructionCount: result?.metadata.instruction_count ?? res.segment_count,
-        durationSecs: res.duration_secs,
-        source: 'TaskDocument',
-      })
-      try {
-        await previewTaskPlan(taskDocument, res)
-      } catch {
-        // Preview (getScene/analyze) is advisory — the plan is already
-        // scheduled, so Run still navigates to Execution.
-      }
-      navigate('/execution')
-    } catch (err) {
-      setError(describeError(err))
-    } finally { setLoading(false) }
-  }
-
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
-        {mode === 'text' && (
-          <button onClick={handleApply} disabled={applyDisabled}
-            title={applyDisabled ? 'Fix the parse errors before applying' : 'Apply the script to the program'}
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-amber-600/20 text-amber-500 hover:bg-amber-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
-            Apply
+    <div className="h-full overflow-hidden">
+              {/* File I/O group — visually separated from Program/Execution (R10). */}
+          
+        <div data-group="file-io" className="ml-18 flex items-center gap-5">
+          <button onClick={() => programInputRef.current?.click()}
+            data-weight="secondary"
+            title="Load a .thalos program file (replaces the current program)"
+            className="inline-flex items-center gap-1 px-4 py-2 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer">
+            <Upload className="size-3" /> Load Program
           </button>
-        )}
-        <button onClick={() => addOperation({ type: 'pick', object: '' })}
-          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer">
-          <Plus className="size-3" /> Add
-        </button>
-        <button onClick={reset}
-          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer">
-          <RotateCcw className="size-3" /> Reset
-        </button>
-        <button onClick={() => programInputRef.current?.click()}
-          title="Load a .thalos program file (replaces the current program)"
-          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer">
-          <Upload className="size-3" /> Load Program
-        </button>
-        <button onClick={handleSaveProgram}
-          title="Download the program as canonical .thalos text"
-          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer">
-          <Download className="size-3" /> Save Program
-        </button>
-        <button onClick={handleRun} disabled={!canCompile}
-          title="Run the program through the existing pipeline"
-          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-sky-600/20 text-sky-400 hover:bg-sky-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
-          <Rocket className="size-3" /> Run
-        </button>
+          <button onClick={handleSaveProgram}
+            data-weight="secondary"
+            title="Download the program as canonical .thalos text"
+            className="inline-flex items-center gap-1 px-4 py-2 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer">
+            <Download className="size-3" /> Save Program
+          </button>
+        </div>
+
+      <div data-layer="commands" className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
+        {/* Program group */}
+        <div data-group="program" className="flex items-center gap-3">
+          {mode === 'text' && (
+            <button onClick={handleApply} disabled={applyDisabled}
+              title={applyDisabled ? 'Fix the parse errors before applying' : 'Apply the script to the program'}
+              className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-md bg-amber-600/20 text-amber-500 hover:bg-amber-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+              Apply
+            </button>
+          )}
+          <button onClick={() => addOperation({ type: 'pick', object: '' })}
+            data-weight="normal"
+            className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-md bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer">
+            <Plus className="size-3" /> Add
+          </button>
+          <button onClick={reset}
+            data-weight="secondary"
+            className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-md text-muted-foreground hover:text-destructive hover:bg-accent cursor-pointer">
+            <RotateCcw className="size-3" /> Reset
+          </button>
+        </div>
+
+
+
+        {/* Group separator */}
+        <div role="separator" aria-orientation="vertical" className="h-4 w-px bg-border/50" />
+
+        <div data-group="execution" className="flex items-center gap-1.5">
+          <button onClick={compiled ? handleSendToExecution : handleCompile} disabled={!canCompile}
+            data-weight="primary"
+            title={compiled ? 'Load the compiled plan into Execution' : 'Compile the program'}
+            className={`inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-md cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+              compiled
+                ? 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
+                : 'bg-green-600/20 text-green-500 hover:bg-green-600/30'
+            }`}>
+            {compiled ? <Send className="size-3" /> : <Play className="size-3" />}
+            {compiled ? 'Send to Execution' : 'Compile'}
+          </button>
+        </div>
         <input
           ref={programInputRef}
           type="file"
@@ -288,17 +288,9 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
             {loadError}
           </p>
         )}
-        <button onClick={compiled ? handleSendToExecution : handleCompile} disabled={!canCompile}
-          title={compiled ? 'Load the compiled plan into Execution' : 'Compile the program'}
-          className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-md cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
-            compiled
-              ? 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
-              : 'bg-green-600/20 text-green-500 hover:bg-green-600/30'
-          }`}>
-          {compiled ? <Send className="size-3" /> : <Play className="size-3" />}
-          {compiled ? 'Send to Execution' : 'Compile'}
-        </button>
       </div>
+
+
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {mode === 'text' ? (

@@ -17,7 +17,7 @@ vi.mock('@/shared/api-client', () => ({
 
 const sceneFixture: SceneFile = {
   schema_version: '1',
-  robot: { name: 'icebot', urdf: 'docs/robot/icebot.urdf' },
+  robot: { name: 'icebot', urdf: 'docs/execution/robot/icebot.urdf' },
   objects: [{ id: 'box-1', kind: 'box', pose: { position: [0.2, 0.1, 0], orientation: [1, 0, 0, 0] } }],
   fixtures: [],
   locations: [{ id: 'tray-1', kind: 'placement_target', pose: { position: [0.2, -0.1, 0], orientation: [1, 0, 0, 0] } }],
