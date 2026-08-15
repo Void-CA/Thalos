@@ -50,11 +50,12 @@ vi.mock('@/features/semantic/api', async (importOriginal) => {
 const previewMocks = vi.hoisted(() => ({
   getScene: vi.fn(),
   analyze: vi.fn(),
+  setJoints: vi.fn(),
 }))
 
 vi.mock('@/features/viewport/api/scene-api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/features/viewport/api/scene-api')>()
-  return { ...actual, sceneApi: { ...actual.sceneApi, getScene: previewMocks.getScene } }
+  return { ...actual, sceneApi: { ...actual.sceneApi, getScene: previewMocks.getScene, setJoints: previewMocks.setJoints } }
 })
 
 vi.mock('@/features/analysis/api/plan-analysis-api', async (importOriginal) => {
@@ -158,6 +159,8 @@ beforeEach(() => {
   apiMocks.executeSemantic.mockReset()
   previewMocks.getScene.mockReset()
   previewMocks.analyze.mockReset()
+  previewMocks.setJoints.mockReset()
+  previewMocks.setJoints.mockResolvedValue({ joints: [] } as never)
   demosApiMocks.listDemos.mockResolvedValue(catalog)
   demosApiMocks.getDemoScene.mockResolvedValue(demoScene)
   demosApiMocks.getDemoProgram.mockResolvedValue(demoProgram)
@@ -236,6 +239,7 @@ describe('DemosWorkspace — [Load Demo] hydrates WITHOUT executing (D13, load �
     expect(await screen.findByRole('alert')).toHaveTextContent(/demo not found: 'nope'/)
     expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
     expect(JSON.stringify(useDomainSceneStore.getState().objects)).toBe(sceneBefore)
+    expect(previewMocks.setJoints).not.toHaveBeenCalled()
     expect(apiMocks.executeSemantic).not.toHaveBeenCalled()
   })
 
@@ -261,6 +265,68 @@ describe('DemosWorkspace — [Load Demo] hydrates WITHOUT executing (D13, load �
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/unknown command 'jump'/)
     expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
+  })
+})
+
+describe('DemosWorkspace — homing + stale-state reset (demo-load-homing spec)', () => {
+  /** The design's closed-form bent start (design "Homing Joints Conversion"):
+   *  L1 = 0.125, L2 = 0.100, axis_1 [0, 2.0944]; q2 = −(q0+q1) preserves the
+   *  identity home orientation; q3 = clamp(0.04 − z) inverts the prismatic
+   *  chain. The runtime MUST be parked here before [Run] so IK never starts
+   *  from the singular full-extension configuration. */
+  function bentStartJoints(homePosition: [number, number, number]): number[] {
+    const L1 = 0.125
+    const L2 = 0.100
+    const [x, y, z] = homePosition
+    const r = Math.sqrt(x * x + y * y)
+    const q0 = Math.atan2(y, x)
+    const cosQ1 = Math.max(-1, Math.min(1, (r * r - L1 * L1 - L2 * L2) / (2 * L1 * L2)))
+    const q1 = Math.acos(cosQ1)
+    const q2 = -(q0 + q1)
+    const q3 = Math.max(0, Math.min(0.06, 0.04 - z))
+    return [q0, q1, q2, q3]
+  }
+
+  it('parks the runtime at the closed-form bent start after a successful load', async () => {
+    renderWorkspace()
+    fireEvent.click(await screen.findByRole('button', { name: 'Load demo Happy Path' }))
+
+    // Homing is a side-effect of successful scene load (spec "Load Demo Sets
+    // Runtime Joints to Home Pose"): setJoints fires with the bent joints
+    // derived from scene.home_pose.position — never the raw home_pose, never
+    // a computed-or-invented pose.
+    await waitFor(() => expect(previewMocks.setJoints).toHaveBeenCalled())
+    const [joints] = previewMocks.setJoints.mock.calls[0] as [number[]]
+    expect(joints).toEqual(bentStartJoints([0.2, 0, 0.1]))
+    expect(joints).toHaveLength(4)
+  })
+
+  it('does NOT home on an invalid scene (no setJoints, state unchanged)', async () => {
+    demosApiMocks.getDemoScene.mockResolvedValue({ schema_version: '1' } as unknown as SceneFile)
+    renderWorkspace()
+    fireEvent.click(await screen.findByRole('button', { name: 'Load demo Happy Path' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/invalid scene/i)
+    expect(previewMocks.setJoints).not.toHaveBeenCalled()
+  })
+
+  it('clears stale demo state on load (execution idle, analysis clear, semantic result null)', async () => {
+    // Simulate a previous demo run: a scheduled plan, an analysis report and
+    // a stale compile result must ALL be reset by the next load.
+    useExecutionStore.setState({
+      status: 'running',
+      activePlan: { instructionCount: 3, durationSecs: 8.5, source: 'TaskDocument' },
+    })
+    useAnalysisStore.setState({ report: analysisReport })
+    useSemanticEditor.setState({ result: { status: 'ok' } as never })
+
+    renderWorkspace()
+    fireEvent.click(await screen.findByRole('button', { name: 'Load demo Happy Path' }))
+
+    await waitFor(() => expect(useExecutionStore.getState().status).toBe('idle'))
+    expect(useExecutionStore.getState().activePlan).toBeNull()
+    expect(useAnalysisStore.getState().report).toBeNull()
+    expect(useSemanticEditor.getState().result).toBeNull()
   })
 })
 
