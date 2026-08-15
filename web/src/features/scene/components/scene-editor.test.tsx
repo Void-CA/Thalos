@@ -5,6 +5,7 @@ import { act } from 'react'
 import '@testing-library/jest-dom/vitest'
 import { SceneEditor } from './scene-editor'
 import { useDomainSceneStore, SEEDED_OBJECTS, SEEDED_LOCATIONS, DEFAULT_APPROACH_HEIGHT } from '../store'
+import { useSemanticEditor } from '@/features/semantic/store'
 import type { SceneFile } from '@/shared/contracts'
 
 /**
@@ -219,6 +220,7 @@ describe('SceneEditor — numeric panel + Load/Save Scene IO (D12/D14)', () => {
   })
 
   it('[Load Scene] local picker hydrates the store from a SceneFile (D12)', async () => {
+    useSemanticEditor.getState().reset()
     render(<SceneEditor />)
     const input = screen.getByLabelText('Load scene file') as HTMLInputElement
     fireEvent.change(input, {
@@ -228,6 +230,46 @@ describe('SceneEditor — numeric panel + Load/Save Scene IO (D12/D14)', () => {
     })
     await waitFor(() => expect(useDomainSceneStore.getState().objects[0].id).toBe('box-1'))
     expect(useDomainSceneStore.getState().robot).toEqual({ name: 'icebot', urdf: 'docs/execution/robot/icebot.urdf' })
+  })
+
+  it('[Load Scene] remaps the program to the loaded scene ids so it stays runnable', async () => {
+    useSemanticEditor.getState().reset() // seeded program references bolt-1/tray-1
+    render(<SceneEditor />)
+    const input = screen.getByLabelText('Load scene file') as HTMLInputElement
+    fireEvent.change(input, {
+      target: {
+        files: [new File([JSON.stringify(demoSceneFile)], 'scene.json', { type: 'application/json' })],
+      },
+    })
+    await waitFor(() => expect(useDomainSceneStore.getState().objects[0].id).toBe('box-1'))
+    const ops = useSemanticEditor.getState().operations
+    // bolt-1 → box-1 (single-object fallback); tray-1 already exists → unchanged.
+    expect(ops[0]).toMatchObject({ type: 'pick', object: 'box-1' })
+    expect(ops[2]).toMatchObject({ type: 'place', object: 'box-1', destination: 'tray-1' })
+    // No unresolved references → no amber notice.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('[Load Scene] shows an amber notice when references cannot be resolved', async () => {
+    useSemanticEditor.getState().reset()
+    // TWO locations make the tray-1 reference ambiguous (no name match) — the
+    // remap leaves it unchanged and the notice reports it.
+    const ghostFile: SceneFile = {
+      ...demoSceneFile,
+      locations: [
+        { id: 'other-tray', kind: 'placement_target', pose: { position: [0.3, -0.2, 0.0], orientation: [0.0, 0.0, 0.0, 1.0] } },
+        { id: 'station-a', kind: 'placement_target', pose: { position: [0.2, 0.2, 0.0], orientation: [0.0, 0.0, 0.0, 1.0] } },
+      ],
+    }
+    render(<SceneEditor />)
+    const input = screen.getByLabelText('Load scene file') as HTMLInputElement
+    fireEvent.change(input, {
+      target: {
+        files: [new File([JSON.stringify(ghostFile)], 'scene.json', { type: 'application/json' })],
+      },
+    })
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
+    expect(screen.getByRole('alert')).toHaveTextContent(/tray-1/)
   })
 
   it('[Load Scene] invalid JSON/shape shows an error and leaves the store unchanged', async () => {
@@ -260,6 +302,7 @@ describe('SceneEditor — numeric panel + Load/Save Scene IO (D12/D14)', () => {
   })
 
   it('[Load Scene] demo-API path (prop-ready): loadDemoScene hydrates the store', async () => {
+    useSemanticEditor.getState().reset()
     const loadDemoScene = vi.fn().mockResolvedValue(demoSceneFile)
     render(<SceneEditor loadDemoScene={loadDemoScene} />)
 
@@ -267,5 +310,7 @@ describe('SceneEditor — numeric panel + Load/Save Scene IO (D12/D14)', () => {
 
     await waitFor(() => expect(loadDemoScene).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(useDomainSceneStore.getState().objects[0].id).toBe('box-1'))
+    // Same program sync as the local picker path.
+    expect(useSemanticEditor.getState().operations[0]).toMatchObject({ object: 'box-1' })
   })
 })

@@ -426,15 +426,15 @@ describe('EvaluationWorkspace — problem region share of the plan (R5)', () => 
 })
 
 describe('EvaluationWorkspace — intelligence tab (evaluation-intelligence-tab)', () => {
-  it('shows Evaluation (default) and Intelligence triggers when the report carries an assessment', () => {
+  it('shows Overview (default) and Intelligence triggers when the report carries an assessment', () => {
     act(() => {
       useAnalysisStore.setState({ report: assessedReport })
       useSceneStore.setState({ activePlan })
     })
     renderWorkspace()
-    expect(screen.getByRole('tab', { name: 'Evaluation' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Intelligence' })).toBeInTheDocument()
-    // Default active tab is Evaluation: the evaluation content is mounted and
+    // Default active tab is Overview: the evaluation content is mounted and
     // the intelligence view is NOT (Base UI Tabs mounts only the active panel).
     expect(screen.getByTestId('evaluation-master')).toBeInTheDocument()
     expect(screen.queryByTestId('intelligent-assessment')).not.toBeInTheDocument()

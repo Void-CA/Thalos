@@ -696,14 +696,12 @@ describe('TaskEditor toolbar — grouped command bar (R7/R8/R10)', () => {
     expect(screen.getByRole('button', { name: 'Reset' }).closest('[data-group="program"]')).not.toBeNull()
     expect(screen.getByRole('button', { name: 'Load Program' }).closest('[data-group="file-io"]')).not.toBeNull()
     expect(screen.getByRole('button', { name: 'Save Program' }).closest('[data-group="file-io"]')).not.toBeNull()
-    expect(screen.getByRole('button', { name: 'Run' }).closest('[data-group="execution"]')).not.toBeNull()
     expect(screen.getByRole('button', { name: 'Compile' }).closest('[data-group="execution"]')).not.toBeNull()
   })
 
-  it('R8 — Run, Save Program and Compile carry visible text labels (never icon-only)', () => {
+  it('R8 — Save Program and Compile carry visible text labels (never icon-only)', () => {
     seedTask()
     renderEditor()
-    expect(screen.getByRole('button', { name: 'Run' })).toHaveTextContent('Run')
     expect(screen.getByRole('button', { name: 'Save Program' })).toHaveTextContent('Save Program')
     expect(screen.getByRole('button', { name: 'Compile' })).toHaveTextContent('Compile')
   })
@@ -720,14 +718,13 @@ describe('TaskEditor toolbar — grouped command bar (R7/R8/R10)', () => {
 })
 
 describe('TaskEditor toolbar — button weight hierarchy (R9)', () => {
-  it('R9 — Add normal, Reset secondary, Load/Save secondary, Run + Compile primary', () => {
+  it('R9 — Add normal, Reset secondary, Load/Save secondary, Compile primary', () => {
     seedTask()
     renderEditor()
     expect(screen.getByRole('button', { name: 'Add' })).toHaveAttribute('data-weight', 'normal')
     expect(screen.getByRole('button', { name: 'Reset' })).toHaveAttribute('data-weight', 'secondary')
     expect(screen.getByRole('button', { name: 'Load Program' })).toHaveAttribute('data-weight', 'secondary')
     expect(screen.getByRole('button', { name: 'Save Program' })).toHaveAttribute('data-weight', 'secondary')
-    expect(screen.getByRole('button', { name: 'Run' })).toHaveAttribute('data-weight', 'primary')
     expect(screen.getByRole('button', { name: 'Compile' })).toHaveAttribute('data-weight', 'primary')
   })
 })
@@ -738,7 +735,7 @@ describe('TaskEditor toolbar — keyboard reachability (R12)', () => {
     renderEditor()
     // Accessible names prove ARIA labels: every critical button resolves by
     // role + name (a missing/empty label would throw here).
-    const expected = ['Add', 'Reset', 'Load Program', 'Save Program', 'Run', 'Compile']
+    const expected = ['Add', 'Reset', 'Load Program', 'Save Program', 'Compile']
     const buttons = screen.getAllByRole('button')
     const order = buttons.map((b) => b.textContent?.trim() ?? '')
     const positions = expected.map((name) => order.indexOf(name))
@@ -749,7 +746,7 @@ describe('TaskEditor toolbar — keyboard reachability (R12)', () => {
   })
 })
 
-describe('TaskEditor — Load Program / Save Program / Run (D12/D13)', () => {
+describe('TaskEditor — Load Program / Save Program / unified execution action (D12/D13)', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     cleanup()
@@ -808,48 +805,14 @@ describe('TaskEditor — Load Program / Save Program / Run (D12/D13)', () => {
     expect(await captured!.text()).toBe('pick bolt-1\nwait 1s\nplace bolt-1 at tray-1\nhome')
   })
 
-  it('[Run] triggers the existing pipeline: execute → getScene → analyze → /execution', async () => {
-    apiMocks.executeSemantic.mockResolvedValue(executeResponse)
-    previewMocks.getScene.mockResolvedValue(sceneWithPlan)
-    previewMocks.analyze.mockResolvedValue(analysisReport)
+  it('the toolbar exposes NO standalone Run button — the unified Compile/Send is the only execution action', () => {
     seedTask()
-    const router = renderRouter(['/task'])
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Run' }))
-
-    await waitFor(() => expect(apiMocks.executeSemantic).toHaveBeenCalledTimes(1))
-    expect(apiMocks.executeSemantic).toHaveBeenCalledWith(
-      expect.objectContaining({
-        task: expect.objectContaining({
-          scene: expect.objectContaining({ objects: expect.any(Array) }),
-          program: expect.objectContaining({ operations: expect.any(Array) }),
-        }),
-      }),
-    )
-    // Read-back + analysis (demos-workspace spec "Run executes via existing pipeline").
-    // getScene is ALSO polled by the Execution workspace after navigation, so
-    // assert the Run flow's read-back fired, not an exact call count.
-    await waitFor(() => expect(previewMocks.getScene).toHaveBeenCalled())
-    expect(previewMocks.analyze).toHaveBeenCalled()
-    expect(useAnalysisStore.getState().report).toEqual(analysisReport)
-    // Plan handed to Execution + navigation upon success.
-    expect(useExecutionStore.getState().activePlan).toEqual({
-      instructionCount: 4,
-      durationSecs: 12.5,
-      source: 'TaskDocument',
-    })
-    await waitFor(() => expect(router.state.location.pathname).toBe('/execution'))
-  })
-
-  it('[Run] surfaces an execute failure without navigating', async () => {
-    apiMocks.executeSemantic.mockResolvedValue({ ...executeResponse, status: 'error' })
-    seedTask()
-    const router = renderRouter(['/task'])
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Run' }))
-
-    await waitFor(() => expect(screen.getByText(/Run failed/i)).toBeInTheDocument())
-    expect(router.state.location.pathname).toBe('/task')
-    expect(useExecutionStore.getState().status).toBe('idle')
+    renderEditor()
+    // Reorganization: the one-shot Run shortcut was removed from the Task
+    // toolbar. Compile already previews the plan and Send to Execution
+    // executes + navigates, so the unified action covers the run flow
+    // without a duplicate primary button (Demos keeps its own Run).
+    expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Compile' })).toBeInTheDocument()
   })
 })

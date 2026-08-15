@@ -5,6 +5,8 @@ import {
   deriveStatusMessage,
   hasMissingFields,
   isValidHomePose,
+  remapProgramToScene,
+  unresolvedProgramRefs,
   requirementReason,
   stepperStages,
 } from './derive'
@@ -360,6 +362,86 @@ describe('C1 property — exhaustive 2^9 impossible-state invariants (tasks.md S
     const state = deriveWorkflowState(noRobotButScene)
     expect(state.sceneValid).toBe(false)
     expect(state.programValid).toBe(false)
+  })
+})
+
+describe('remapProgramToScene — reconcile program references to a loaded scene', () => {
+  const objects = [{ id: 'box-1', name: 'Box 1' }]
+  const locations = [{ id: 'tray-1', name: 'tray-1' }]
+
+  it('keeps references that already exist in the loaded scene', () => {
+    const ops: SemanticOp[] = [
+      { type: 'pick', origin: 'op_1', object: 'box-1' },
+      { type: 'place', origin: 'op_2', object: 'box-1', destination: 'tray-1' },
+    ]
+    const next = remapProgramToScene(ops, objects, locations)
+    // Nothing changed → SAME array reference (callers skip dirty bumps).
+    expect(next).toBe(ops)
+  })
+
+  it('maps a missing id to a single-object scene (load demo scene → run works)', () => {
+    const ops: SemanticOp[] = [
+      { type: 'pick', origin: 'op_1', object: 'bolt-1' },
+      { type: 'place', origin: 'op_2', object: 'bolt-1', destination: 'tray-1' },
+      { type: 'home', origin: 'op_3' },
+    ]
+    const next = remapProgramToScene(ops, objects, locations)
+    expect(next).not.toBe(ops)
+    expect(next[0]).toMatchObject({ type: 'pick', object: 'box-1' })
+    expect(next[1]).toMatchObject({ type: 'place', object: 'box-1', destination: 'tray-1' })
+    // Unrelated ops stay untouched.
+    expect(next[2]).toBe(ops[2])
+  })
+
+  it('maps by NAME (case-insensitive) when multiple resources exist', () => {
+    const twoObjects = [
+      { id: 'a-1', name: 'Box 1' },
+      { id: 'b-1', name: 'Box 2' },
+    ]
+    const ops: SemanticOp[] = [{ type: 'pick', origin: 'op_1', object: 'box 1' }]
+    const next = remapProgramToScene(ops, twoObjects, [])
+    expect(next[0]).toMatchObject({ object: 'a-1' })
+  })
+
+  it('remaps move_to destinations against locations', () => {
+    const ops: SemanticOp[] = [{ type: 'move_to', origin: 'op_1', destination: 'station' }]
+    const next = remapProgramToScene(ops, [], [{ id: 'station-a', name: 'station-a' }])
+    expect(next[0]).toMatchObject({ destination: 'station-a' })
+  })
+
+  it('leaves ambiguous references unchanged (multiple resources, no name match)', () => {
+    const twoObjects = [
+      { id: 'a-1', name: 'Box 1' },
+      { id: 'b-1', name: 'Box 2' },
+    ]
+    const ops: SemanticOp[] = [{ type: 'pick', origin: 'op_1', object: 'ghost' }]
+    const next = remapProgramToScene(ops, twoObjects, [])
+    expect(next).toBe(ops)
+  })
+})
+
+describe('unresolvedProgramRefs — references still missing after remap', () => {
+  it('lists missing object/location references, deduped', () => {
+    const ops: SemanticOp[] = [
+      { type: 'pick', origin: 'op_1', object: 'ghost-1' },
+      { type: 'place', origin: 'op_2', object: 'ghost-1', destination: 'ghost-2' },
+      { type: 'move_to', origin: 'op_3', destination: 'ghost-2' },
+      { type: 'home', origin: 'op_4' },
+    ]
+    expect(unresolvedProgramRefs(ops, [{ id: 'box-1' }], [])).toEqual([
+      "object 'ghost-1'",
+      "location 'ghost-2'",
+    ])
+  })
+
+  it('returns [] when every reference resolves', () => {
+    const ops: SemanticOp[] = [
+      { type: 'pick', origin: 'op_1', object: 'box-1' },
+      { type: 'place', origin: 'op_2', object: 'box-1', destination: 'tray-1' },
+    ]
+    expect(
+      unresolvedProgramRefs(ops, [{ id: 'box-1' }], [{ id: 'tray-1' }]),
+    ).toEqual([])
   })
 })
 

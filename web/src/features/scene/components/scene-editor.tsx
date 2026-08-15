@@ -2,6 +2,8 @@ import { useRef, useState, type ChangeEvent } from 'react'
 import {
   useDomainSceneStore, isSceneFile,
 } from '../store'
+import { useSemanticEditor } from '@/features/semantic/store'
+import { unresolvedProgramRefs } from '@/shared/workflow/derive'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { SetupSection } from './sections/setup-section'
 import { ObjectsSection } from './sections/objects-section'
@@ -50,13 +52,38 @@ export function SceneEditor({ loadDemoScene }: SceneEditorProps = {}) {
    *  the store; [Save Scene] downloads the serialized SceneFile. */
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [fileError, setFileError] = useState<string | null>(null)
+  /** Post-load notice when the program still references ids missing from the
+   *  loaded scene (remap is best-effort; unresolvable refs surface here). */
+  const [programNotice, setProgramNotice] = useState<string | null>(null)
+
+  /** Scene-load sync: hydrate the scene, then reconcile the program to the
+   *  new scene so "load a scene → run" works. The domain scene store stays
+   *  scene-only (Load Scene ≠ Load Program); the PROGRAM is remapped to the
+   *  loaded scene's ids (by id, then name, then single-resource fallback).
+   *  References that cannot be resolved are left intact and reported. */
+  const loadSceneAndSyncProgram = (file: SceneFile) => {
+    loadSceneFile(file)
+    const objects = file.objects.map((o) => ({ id: o.id, name: o.name ?? o.id }))
+    const locations = file.locations.map((l) => ({ id: l.id, name: l.id }))
+    useSemanticEditor.getState().remapProgramToScene(objects, locations)
+    const missing = unresolvedProgramRefs(
+      useSemanticEditor.getState().operations,
+      objects,
+      locations,
+    )
+    setProgramNotice(
+      missing.length > 0
+        ? `Program references not in this scene: ${missing.join(', ')} — edit the operations or load a matching program.`
+        : null,
+    )
+  }
 
   const handleLoadClick = () => {
     if (loadDemoScene) {
       // Demo-API path (Slice 4 wires the real client): fetch → same action.
       loadDemoScene()
         .then((file) => {
-          loadSceneFile(file)
+          loadSceneAndSyncProgram(file)
           setFileError(null)
         })
         .catch((err) =>
@@ -77,7 +104,7 @@ export function SceneEditor({ loadDemoScene }: SceneEditorProps = {}) {
       if (!isSceneFile(parsed)) {
         throw new Error('Not a valid SceneFile v1 document')
       }
-      loadSceneFile(parsed)
+      loadSceneAndSyncProgram(parsed)
       setFileError(null)
     } catch (err) {
       setFileError(
@@ -121,6 +148,11 @@ export function SceneEditor({ loadDemoScene }: SceneEditorProps = {}) {
         {fileError && (
           <p role="alert" className="text-xs text-red-400 truncate">
             {fileError}
+          </p>
+        )}
+        {programNotice && (
+          <p role="alert" className="text-xs text-amber-400 truncate" title={programNotice}>
+            {programNotice}
           </p>
         )}
       </div>

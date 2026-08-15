@@ -112,18 +112,19 @@ export function EvaluationWorkspace() {
         </div>
       </div>
 
-      {/* Two tabs: "Evaluation" (default — the decision this view exists for)
-          and "Intelligence" (the AI/fuzzy verdict — ONLY when the report
+      {/* Two tabs: "Overview" (default — the decision this view exists for,
+          the workspace itself is named by the header above) and
+          "Intelligence" (the AI/fuzzy verdict — ONLY when the report
           carries an assessment, spec evaluation-intelligence-tab). */}
-      <Tabs defaultValue="evaluation" className="flex flex-col h-full overflow-hidden min-h-0">
+      <Tabs defaultValue="overview" className="flex flex-col h-full overflow-hidden min-h-0">
         <TabsList className="mx-3 mt-3 shrink-0">
-          <TabsTrigger value="evaluation">Evaluation</TabsTrigger>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
           {report.assessment && <TabsTrigger value="intelligence">Intelligence</TabsTrigger>}
           {recommendations.length > 0 && <TabsTrigger value="repairs">Repairs</TabsTrigger>}
         </TabsList>
 
-        {/* Evaluation tab — starts directly with the master-detail decision grid. */}
-        <TabsContent value="evaluation" className="flex-1 min-h-0 overflow-y-auto p-3">
+        {/* Overview tab — starts directly with the master-detail decision grid. */}
+        <TabsContent value="overview" className="flex-1 min-h-0 overflow-y-auto p-3">
           <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3 items-start">
             {/* ── MASTER (context, ~2/3): WHERE the problem is — trajectory +
                 temporal analysis, all cross-highlighting the selected region. */}

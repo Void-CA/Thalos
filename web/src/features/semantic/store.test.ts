@@ -156,6 +156,43 @@ describe('dirty counter wired into deriveWorkflowState (spec scenarios)', () => 
   })
 })
 
+describe('remapProgramToScene — scene-load sync keeps the program executable', () => {
+  it('remaps missing object/location ids to the loaded scene (single-resource fallback)', () => {
+    useSemanticEditor.getState().reset() // seeded: pick bolt-1 / wait / place bolt-1 at tray-1 / home
+    useSemanticEditor.getState().remapProgramToScene(
+      [{ id: 'box-1', name: 'Box 1' }],
+      [{ id: 'tray-1', name: 'tray-1' }],
+    )
+    const ops = useSemanticEditor.getState().operations
+    expect(ops[0]).toMatchObject({ type: 'pick', object: 'box-1' })
+    expect(ops[2]).toMatchObject({ type: 'place', object: 'box-1', destination: 'tray-1' })
+    expect(ops[1]).toMatchObject({ type: 'wait' })
+  })
+
+  it('bumps dirty ONLY when a reference actually changed (no-op returns same state)', () => {
+    useSemanticEditor.getState().reset()
+    useSemanticEditor.getState().setResult(compileResult) // compiled, dirty 0
+    // The program already matches the scene → no dirty bump, compiled survives.
+    useSemanticEditor.getState().remapProgramToScene(
+      [{ id: 'bolt-1', name: 'Bolt' }],
+      [{ id: 'tray-1', name: 'Tray' }],
+    )
+    expect(useSemanticEditor.getState().dirty).toBe(0)
+    expect(deriveWorkflowState(workflowSnapshot()).compiled).toBe(true)
+  })
+
+  it('invalidates a compiled program when a reference is remapped', () => {
+    useSemanticEditor.getState().reset()
+    useSemanticEditor.getState().setResult(compileResult)
+    useSemanticEditor.getState().remapProgramToScene(
+      [{ id: 'box-1', name: 'Box 1' }],
+      [{ id: 'tray-1', name: 'tray-1' }],
+    )
+    expect(useSemanticEditor.getState().dirty).toBe(1)
+    expect(deriveWorkflowState(workflowSnapshot()).compiled).toBe(false)
+  })
+})
+
 describe('loadProgramText — parse a .thalos file into the editor (task-program-artifact spec)', () => {
   it('parses valid text and replaces the ENTIRE operation set (no merge)', () => {
     useSemanticEditor.getState().addOperation(op)

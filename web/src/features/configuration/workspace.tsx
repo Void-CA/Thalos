@@ -18,7 +18,7 @@ const SETTINGS_GROUPS = [
 export function ConfigurationWorkspace() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-4 py-3 border-b border-border">
+      <div className="px-3 py-2 border-b border-border/50">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-foreground">
           Configuration
         </h2>

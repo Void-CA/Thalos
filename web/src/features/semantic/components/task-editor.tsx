@@ -1,4 +1,4 @@
-import { Play, Plus, RotateCcw, Send, Upload, Download, Rocket } from 'lucide-react'
+import { Play, Plus, RotateCcw, Send, Upload, Download } from 'lucide-react'
 import { useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { useSemanticEditor } from '../store'
@@ -216,32 +216,6 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
     downloadTextFile('program.thalos', serialize(operations), 'text/plain')
   }
 
-  /** D13 [Run]: the existing pipeline — POST /semantic/execute (compile +
-   *  schedule) → GET /scene (read back) → POST /plan/analyze (analysis) →
-   *  navigate to /execution. No new execution path; the preview read-back is
-   *  non-blocking (the Execution workspace re-fetches the scene on mount). */
-  const handleRun = async () => {
-    setLoading(true); setError(null)
-    try {
-      const res = await executeSemantic({ task: taskDocument })
-      if (res.status !== 'ok') { setError('Run failed'); return }
-      useExecutionStore.getState().receivePlan({
-        instructionCount: result?.metadata.instruction_count ?? res.segment_count,
-        durationSecs: res.duration_secs,
-        source: 'TaskDocument',
-      })
-      try {
-        await previewTaskPlan(taskDocument, res)
-      } catch {
-        // Preview (getScene/analyze) is advisory — the plan is already
-        // scheduled, so Run still navigates to Execution.
-      }
-      navigate('/execution')
-    } catch (err) {
-      setError(describeError(err))
-    } finally { setLoading(false) }
-  }
-
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Command toolbar (ui-workspace-density R6-R10): three visually
@@ -296,16 +270,14 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
         {/* Group separator */}
         <div role="separator" aria-orientation="vertical" className="h-4 w-px bg-border/50" />
 
-        {/* Execution group — both actions primary (R9); the unified button
-            keeps its EXACT dual state: green "Compile" until compiled, then
-            purple "Send to Execution" with the same memoized payload. */}
+        {/* Execution group — ONE primary action: the unified Compile/Send
+            button (its EXACT dual state: green "Compile" until compiled, then
+            purple "Send to Execution" with the same memoized payload). The
+            former standalone [Run] shortcut was removed — Compile already
+            previews the plan, and Send to Execution executes + navigates, so
+            the unified control covers the whole run flow without a duplicate
+            primary action. (The Demos workspace keeps its own Run.) */}
         <div data-group="execution" className="flex items-center gap-1.5">
-          <button onClick={handleRun} disabled={!canCompile}
-            data-weight="primary"
-            title="Run the program through the existing pipeline"
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-sky-600/20 text-sky-400 hover:bg-sky-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
-            <Rocket className="size-3" /> Run
-          </button>
           <button onClick={compiled ? handleSendToExecution : handleCompile} disabled={!canCompile}
             data-weight="primary"
             title={compiled ? 'Load the compiled plan into Execution' : 'Compile the program'}

@@ -107,8 +107,8 @@ export const WORKSPACE_REGISTRY: Area[] = [
   // and loads scene + program into the existing stores (D13 Load ≠ Run), then
   // runs them through the existing pipeline. It produces no workflow flag,
   // claims no capability, gates nothing and consumes/produces no artifact —
-  // stepperStages and the top-bar tool group (after the divider) derive
-  // exclusively from this kind field.
+  // the Stepper's stages come from the `stage` field (1-6) while this kind
+  // field selects the TopBar's auxiliary tool group.
   { path: '/demos', workspace: 'demos', label: 'Demos', requires: [], produces: null, capability: null, hidden: false, consumes: null, producesArtifact: null, stage: null, kind: 'tool' },
   // D5 (flow-reorganization) + P0-B (workspace-spatial-layout): /analysis was
   // the SAMPLING tool (reach / singularity / manipulability), kind:'tool' — NOT

@@ -4,3 +4,8 @@ openspec/
 .vscode/
 __pycache__/
 .pytest_cache/
+
+# Local environment (centralized config) — never commit real values
+/.env
+/.env.*
+!/.env.example
