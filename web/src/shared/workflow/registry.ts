@@ -102,6 +102,14 @@ export const WORKSPACE_REGISTRY: Area[] = [
   { path: '/sessions', workspace: 'sessions', label: 'Sessions', requires: [], produces: null, capability: 'replay', hidden: false, consumes: 'Runtime', producesArtifact: 'ExecutionSession', stage: 6, stepperIndex: 6, layout: 'full' },
   { path: '/knowledge', workspace: 'knowledge', label: 'Knowledge', requires: ['analyzed'], produces: null, capability: 'explain', hidden: true, consumes: null, producesArtifact: null, stage: null },
   { path: '/configuration', workspace: 'configuration', label: 'Configuration', requires: [], produces: null, capability: null, hidden: false, consumes: null, producesArtifact: null, stage: null },
+  // D5 (showcase-scenarios) + auxiliary-tools-navigation: the Demos workspace
+  // is a TOOL (kind: 'tool') — NOT a pipeline stage. It lists the demo catalog
+  // and loads scene + program into the existing stores (D13 Load ≠ Run), then
+  // runs them through the existing pipeline. It produces no workflow flag,
+  // claims no capability, gates nothing and consumes/produces no artifact —
+  // stepperStages and the top-bar tool group (after the divider) derive
+  // exclusively from this kind field.
+  { path: '/demos', workspace: 'demos', label: 'Demos', requires: [], produces: null, capability: null, hidden: false, consumes: null, producesArtifact: null, stage: null, kind: 'tool' },
   // D5 (flow-reorganization) + P0-B (workspace-spatial-layout): /analysis was
   // the SAMPLING tool (reach / singularity / manipulability), kind:'tool' — NOT
   // a pipeline stage. P0-B REORGANIZATION removed the standalone route: the

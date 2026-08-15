@@ -13,10 +13,9 @@ import { buttonVariants } from '@/components/ui/button'
  *
  * Links are grouped by `kind`: pipeline stage links first (kind default
  * 'stage'), a decorative divider, then auxiliary tool links (kind 'tool').
- * P0-B reorg: the last tool entry (/analysis) was removed — Workspace Analysis
- * now lives inside the Robot accordion, so no tool group renders today. The
- * divider is aria-hidden: it is purely visual, the links carry the accessible
- * names.
+ * The Demos workspace (showcase-scenarios D5) is the current tool entry — it
+ * renders after the divider. The divider is aria-hidden: it is purely visual,
+ * the links carry the accessible names.
  *
  * Links reflect guard state (slice 5): when a workspace's `requires` flags are
  * unmet the link is aria-disabled and its click is prevented — the same
