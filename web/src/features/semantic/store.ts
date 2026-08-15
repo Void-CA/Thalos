@@ -25,6 +25,12 @@ interface SemanticEditorState {
    *  derived from the store — the text buffer stays component-local (P4).
    *  `replaceOperations`/`addOperation` etc. leave it untouched. */
   scriptErrors: ParseError[]
+  /** Lifted buffer-divergence flag (task-code-sync-guards spec): true while
+   *  the Code tab's text buffer holds text that differs from
+   *  `serialize(operations)` (uncommitted edits). The TaskEditor keeps it in
+   *  sync (set on divergence, cleared on Apply/commit); the workspace-level
+   *  tab-switch guard reads it to warn before discarding the buffer. */
+  hasUncommittedBuffer: boolean
 
   // Actions
   addOperation: (op: SemanticOp) => void
@@ -75,6 +81,7 @@ export const useSemanticEditor = create<SemanticEditorState>()(
       error: null,
       dirty: 0,
       scriptErrors: [],
+      hasUncommittedBuffer: false,
 
       addOperation: (op) =>
         set((s) => ({ operations: [...s.operations, op], dirty: s.dirty + 1 })),
@@ -140,6 +147,7 @@ export const useSemanticEditor = create<SemanticEditorState>()(
           loading: false,
           dirty: 0,
           scriptErrors: [],
+          hasUncommittedBuffer: false,
         }),
     }),
     { name: 'semantic-editor' },

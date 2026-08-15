@@ -4,6 +4,7 @@ import { DiagnosticsPanel } from '@/features/semantic/components/diagnostics-pan
 import { PlanningPanel } from '@/features/planning/components/planning-panel'
 import { TrajectoryColorPicker } from '@/features/planning/components/trajectory-color-picker'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { useSemanticEditor } from '@/features/semantic/store'
 
 /**
  * ProgrammingWorkspace — the UNIFIED Programming area (/task, stage 3).
@@ -33,6 +34,11 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
  * to /evaluation and /execution.
  */
 export function ProgrammingWorkspace() {
+  /** Lifted buffer-divergence flag (task-code-sync-guards spec): the Code tab
+   *  sets it while its text buffer holds uncommitted edits. The guard lives
+   *  HERE — at the switch — because the editor cannot block its own unmount. */
+  const hasUncommittedBuffer = useSemanticEditor((s) => s.hasUncommittedBuffer)
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Programming header: workflow progress (feedback layer, R6) ── */}
@@ -40,7 +46,25 @@ export function ProgrammingWorkspace() {
         <PipelineStatus />
       </div>
 
-      <Tabs defaultValue="tasks" className="flex flex-col h-full overflow-hidden min-h-0">
+      <Tabs
+        defaultValue="tasks"
+        className="flex flex-col h-full overflow-hidden min-h-0"
+        onValueChange={(_, details) => {
+          // Tab-switch guard (task-code-sync-guards spec "Tab-Switch Warns
+          // Before Discarding Uncommitted Buffer"): switching tabs unmounts
+          // the Code editor, discarding its uncommitted text buffer — warn
+          // and let the user confirm or cancel before the data is lost.
+          if (hasUncommittedBuffer) {
+            const confirmed = window.confirm('Uncommitted changes will be lost. Continue?')
+            if (!confirmed) {
+              details.cancel()
+              return
+            }
+            // The buffer is discarded with the unmount — the flag is stale.
+            useSemanticEditor.setState({ hasUncommittedBuffer: false })
+          }
+        }}
+      >
         {/* Navigation layer (R6) — visually distinct from feedback and
             commands so the three toolbar categories never read as one bar. */}
         <TabsList data-layer="navigation" className="ml-3 mr-3 mt-3 shrink-0 gap-2.5">

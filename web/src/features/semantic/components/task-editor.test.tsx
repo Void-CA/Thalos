@@ -213,7 +213,10 @@ beforeEach(() => {
   useExecutionStore.setState({ status: 'idle', activePlan: null })
   useAnalysisStore.setState({ report: null })
 })
-afterEach(() => cleanup())
+afterEach(() => {
+  vi.restoreAllMocks()
+  cleanup()
+})
 
 describe('Task purity — zero execution controls in Task (frontend-task-workspace spec)', () => {
   it('renders no Simulate/Stop buttons and no execution progress footers', async () => {
@@ -560,9 +563,12 @@ describe('S3.1 — leaving Code with an uncommitted buffer never corrupts the st
       target: { value: 'pick bolt-1\nwait 2s\nhome' },
     })
 
-    // The buffer holds uncommitted text; leaving the Code tab must NEVER write
-    // it — no partial replace, no dirty bump, no silent commit.
+    // The tab-switch guard (task-code-sync-guards spec) warns first; the user
+    // confirms the discard — the uncommitted buffer is dropped and NEVER
+    // written: no partial replace, no dirty bump, no silent commit.
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     fireEvent.click(screen.getByRole('tab', { name: 'Task' }))
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('Uncommitted changes will be lost'))
     expect(screen.queryByTestId('program-textarea')).not.toBeInTheDocument()
     expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
     expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
@@ -576,6 +582,7 @@ describe('S3.1 — leaving Code with an uncommitted buffer never corrupts the st
     fireEvent.change(await screen.findByTestId('program-textarea'), {
       target: { value: 'pick bolt-1\nwait 2s\nhome' },
     })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
     fireEvent.click(screen.getByRole('tab', { name: 'Task' }))
 
     // Re-entry re-serializes serialize(operations): the discarded buffer is
@@ -595,9 +602,10 @@ describe('S3.1 — leaving Code with an uncommitted buffer never corrupts the st
 
     fireEvent.click(await screen.findByRole('tab', { name: 'Code' }))
     await screen.findByTestId('program-textarea')
+    const confirmSpy = vi.spyOn(window, 'confirm')
     fireEvent.click(screen.getByRole('tab', { name: 'Task' }))
 
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(confirmSpy).not.toHaveBeenCalled()
     expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
     expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
   })
@@ -654,6 +662,107 @@ describe('S3.3 — Apply disabled while parse errors are present', () => {
 
     expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
+describe('Sync guards — Apply disabled on external change + buffer divergence (program-dual-editor spec)', () => {
+  it('disables Apply when the store changed externally AND the buffer diverges', () => {
+    seedTask()
+    renderEditor('text')
+    // Buffer diverges from the store (user typed).
+    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
+    // External change (e.g. a visual-row edit / scene mutation elsewhere):
+    // the store program is replaced out-of-band.
+    act(() => {
+      useSemanticEditor.getState().replaceOperations([
+        { type: 'pick', origin: 'ext-1', object: 'bolt-1' },
+      ])
+    })
+
+    // Hard guard: a stale buffer must NOT overwrite the external change.
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
+    // The tooltip explains the resolution path (spec "commit or discard").
+    expect(screen.getByRole('button', { name: 'Apply' })).toHaveAttribute(
+      'title',
+      expect.stringMatching(/commit or discard/i) as unknown as string,
+    )
+  })
+
+  it('keeps Apply enabled when typing in text mode (no external change)', () => {
+    seedTask()
+    renderEditor('text')
+    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
+
+    // Buffer diverges but the store never moved externally — the user is
+    // actively editing, so Apply stays enabled (spec "Guards Do Not Block
+    // Valid Workflows").
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled()
+  })
+
+  it('re-enables Apply when the buffer matches the external change', () => {
+    seedTask()
+    renderEditor('text')
+    // External change first: the store program is replaced out-of-band.
+    act(() => {
+      useSemanticEditor.getState().replaceOperations([
+        { type: 'pick', origin: 'ext-1', object: 'bolt-1' },
+      ])
+    })
+    // The user syncs the buffer to the new store text — buffer now matches
+    // serialize(operations), so no divergence remains.
+    fireEvent.change(textarea(), { target: { value: 'pick bolt-1' } })
+
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled()
+  })
+})
+
+describe('Sync guards — Run advisory on uncommitted buffer (task-code-sync-guards spec)', () => {
+  it('Run with a divergent buffer confirms first; cancel blocks the action', async () => {
+    apiMocks.compileSemantic.mockResolvedValue(compileResult)
+    apiMocks.executeSemantic.mockResolvedValue(executeResponse)
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    seedTask()
+    renderEditor('text')
+    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compile' }))
+
+    // Advisory shown; declining means the compile never fires and the buffer
+    // stays untouched.
+    expect(confirmSpy).toHaveBeenCalledWith(
+      expect.stringContaining('last compiled version'),
+    )
+    expect(apiMocks.compileSemantic).not.toHaveBeenCalled()
+    expect(textarea().value).toBe('pick bolt-1\nwait 2s\nhome')
+  })
+
+  it('Run with a committed buffer proceeds without any dialog', async () => {
+    apiMocks.compileSemantic.mockResolvedValue(compileResult)
+    apiMocks.executeSemantic.mockResolvedValue(executeResponse)
+    const confirmSpy = vi.spyOn(window, 'confirm')
+    seedTask()
+    renderEditor('text')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compile' }))
+
+    expect(confirmSpy).not.toHaveBeenCalled()
+    await waitFor(() => expect(apiMocks.compileSemantic).toHaveBeenCalledTimes(1))
+  })
+})
+
+describe('Sync guards — hasUncommittedBuffer store flag (task-code-sync-guards spec)', () => {
+  it('lifts divergence to the store flag: set on typing, cleared on Apply', () => {
+    seedTask()
+    renderEditor('text')
+    expect(useSemanticEditor.getState().hasUncommittedBuffer).toBe(false)
+
+    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
+
+    expect(useSemanticEditor.getState().hasUncommittedBuffer).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    expect(useSemanticEditor.getState().hasUncommittedBuffer).toBe(false)
   })
 })
 
