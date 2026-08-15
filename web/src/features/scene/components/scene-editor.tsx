@@ -1,12 +1,25 @@
 import { Plus, Trash2 } from 'lucide-react'
-import { useDomainSceneStore, defaultObjectPose, defaultLocationPose } from '../store'
+import { useRef, useState, type ChangeEvent } from 'react'
+import {
+  useDomainSceneStore, defaultObjectPose, defaultLocationPose, isSceneFile,
+} from '../store'
 import { PoseInputs } from './pose-inputs'
+import { downloadTextFile } from '@/shared/download'
+import type { SceneFile } from '@/shared/contracts'
 
-export function SceneEditor() {
+export interface SceneEditorProps {
+  /** Demo-API scene loader (D12 "Load = local file picker OR demo API"),
+   *  injected by the Demos workspace (Slice 4). When provided, [Load Scene]
+   *  fetches via this loader; otherwise it opens the local file picker. */
+  loadDemoScene?: () => Promise<SceneFile>
+}
+
+export function SceneEditor({ loadDemoScene }: SceneEditorProps = {}) {
   const objects = useDomainSceneStore((s) => s.objects)
   const locations = useDomainSceneStore((s) => s.locations)
   const tools = useDomainSceneStore((s) => s.tools)
   const homePose = useDomainSceneStore((s) => s.homePose)
+  const robot = useDomainSceneStore((s) => s.robot)
   const addObject = useDomainSceneStore((s) => s.addObject)
   const removeObject = useDomainSceneStore((s) => s.removeObject)
   const updateObject = useDomainSceneStore((s) => s.updateObject)
@@ -18,6 +31,55 @@ export function SceneEditor() {
   const setHomePose = useDomainSceneStore((s) => s.setHomePose)
   const approachHeight = useDomainSceneStore((s) => s.approachHeight)
   const setApproachHeight = useDomainSceneStore((s) => s.setApproachHeight)
+  const loadSceneFile = useDomainSceneStore((s) => s.loadSceneFile)
+
+  /** D12 local file IO: [Load Scene] reads a SceneFile from disk and hydrates
+   *  the store; [Save Scene] downloads the serialized SceneFile. */
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [fileError, setFileError] = useState<string | null>(null)
+
+  const handleLoadClick = () => {
+    if (loadDemoScene) {
+      // Demo-API path (Slice 4 wires the real client): fetch → same action.
+      loadDemoScene()
+        .then((file) => {
+          loadSceneFile(file)
+          setFileError(null)
+        })
+        .catch((err) =>
+          setFileError(err instanceof Error ? err.message : 'Failed to load demo scene'),
+        )
+      return
+    }
+    fileInputRef.current?.click()
+  }
+
+  const handleSceneFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const parsed: unknown = JSON.parse(await file.text())
+      // Shallow structural guard — the backend does the authoritative
+      // tier (a)/(b) validation on the server side.
+      if (!isSceneFile(parsed)) {
+        throw new Error('Not a valid SceneFile v1 document')
+      }
+      loadSceneFile(parsed)
+      setFileError(null)
+    } catch (err) {
+      setFileError(
+        `Invalid scene file: ${err instanceof Error ? err.message : 'unknown error'}`,
+      )
+    } finally {
+      // Allow re-selecting the same file to re-trigger change.
+      e.target.value = ''
+    }
+  }
+
+  const handleSaveClick = () => {
+    const file = useDomainSceneStore.getState().serializeSceneFile()
+    downloadTextFile('scene.json', JSON.stringify(file, null, 2), 'application/json')
+  }
 
   const nextSeq = {
     obj: objects.length + 1,
@@ -27,6 +89,46 @@ export function SceneEditor() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {/* D12 IO toolbar */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
+        <button
+          onClick={handleLoadClick}
+          className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer"
+        >
+          Load Scene
+        </button>
+        <button
+          onClick={handleSaveClick}
+          className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer"
+        >
+          Save Scene
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json,application/json"
+          aria-label="Load scene file"
+          onChange={handleSceneFileChange}
+          className="hidden"
+        />
+        {fileError && (
+          <p role="alert" className="text-xs text-red-400 truncate">
+            {fileError}
+          </p>
+        )}
+      </div>
+
+      {/* Robot — read-only identity (D14: display only, no selection in the
+          numeric panel; the ref comes from the loaded SceneFile, D11 `name`). */}
+      <section className="px-3 py-2 border-b border-border/50">
+        <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider block mb-1.5">
+          Robot
+        </h3>
+        <p className="text-[11px] text-foreground font-mono truncate">
+          {robot?.name ?? '—'}
+        </p>
+      </section>
+
       {/* Objects */}
       <section className="px-3 py-2 border-b border-border/50">
         <div className="flex items-center justify-between mb-1.5">

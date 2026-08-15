@@ -155,3 +155,61 @@ describe('dirty counter wired into deriveWorkflowState (spec scenarios)', () => 
     expect(deriveWorkflowState(workflowSnapshot()).compiled).toBe(true)
   })
 })
+
+describe('loadProgramText — parse a .thalos file into the editor (task-program-artifact spec)', () => {
+  it('parses valid text and replaces the ENTIRE operation set (no merge)', () => {
+    useSemanticEditor.getState().addOperation(op)
+    useSemanticEditor.getState().addOperation(op)
+    const errors = useSemanticEditor.getState().loadProgramText(
+      'pick box-1\nplace box-1 at tray-1\nhome',
+    )
+    expect(errors).toEqual([])
+    expect(useSemanticEditor.getState().operations).toEqual([
+      { type: 'pick', origin: 'pick-1', object: 'box-1', tool: undefined },
+      { type: 'place', origin: 'place-2', object: 'box-1', destination: 'tray-1', tool: undefined },
+      { type: 'home', origin: 'home-3' },
+    ])
+    expect(useSemanticEditor.getState().dirty).toBeGreaterThan(0)
+  })
+
+  it('ignores comments and blank lines (spec "Comments and blank lines")', () => {
+    const errors = useSemanticEditor.getState().loadProgramText(
+      '# header comment\n\npick bolt-1\nhome\n',
+    )
+    expect(errors).toEqual([])
+    expect(useSemanticEditor.getState().operations).toEqual([
+      { type: 'pick', origin: 'pick-3', object: 'bolt-1', tool: undefined },
+      { type: 'home', origin: 'home-4' },
+    ])
+  })
+
+  it('preserves tool= syntax through parse (spec "Tool preserved")', () => {
+    useSemanticEditor.getState().loadProgramText('pick bolt-1 tool=gripper-1')
+    expect(useSemanticEditor.getState().operations[0]).toEqual({
+      type: 'pick',
+      origin: 'pick-1',
+      object: 'bolt-1',
+      tool: 'gripper-1',
+    })
+  })
+
+  it('parse failure returns errors and mutates NOTHING (R2 atomicity — no partial program)', () => {
+    useSemanticEditor.getState().reset()
+    const opsBefore = JSON.stringify(useSemanticEditor.getState().operations)
+    const dirtyBefore = useSemanticEditor.getState().dirty
+
+    const errors = useSemanticEditor.getState().loadProgramText('pick bolt-1\njump 10')
+
+    expect(errors).toHaveLength(1)
+    expect(errors[0].line).toBe(2)
+    expect(errors[0].message).toContain("unknown command 'jump'")
+    expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
+    expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
+  })
+
+  it('does not touch the domain scene store (demos-workspace "Load program only")', () => {
+    const sceneBefore = JSON.stringify(useDomainSceneStore.getState().objects)
+    useSemanticEditor.getState().loadProgramText('pick bolt-1\nhome')
+    expect(JSON.stringify(useDomainSceneStore.getState().objects)).toBe(sceneBefore)
+  })
+})

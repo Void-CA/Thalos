@@ -1,5 +1,5 @@
-import { Play, Plus, RotateCcw, Send } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { Play, Plus, RotateCcw, Send, Upload, Download, Rocket } from 'lucide-react'
+import { useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { useSemanticEditor } from '../store'
 import { useDomainSceneStore } from '@/features/scene/store'
@@ -16,7 +16,8 @@ import { hasMissingFields } from '@/shared/workflow/derive'
 import { OperationRow } from './operation-row'
 import { compileSemantic, executeSemantic } from '../api'
 import { describeError } from '@/shared/errors'
-import type { TaskDocument } from '@/shared/contracts'
+import { downloadTextFile } from '@/shared/download'
+import type { ExecuteSemanticResponse, TaskDocument } from '@/shared/contracts'
 import { serialize } from '../script/serializer'
 import { parse } from '../script/parser'
 
@@ -37,8 +38,11 @@ import { parse } from '../script/parser'
  * Rejections are NON-BLOCKING: callers treat a failure as "compile ok, preview
  * failed" — the plan never starts (the tick loop only runs from Execution).
  */
-async function previewTaskPlan(task: TaskDocument): Promise<void> {
-  const execute = await executeSemantic({ task })
+async function previewTaskPlan(
+  task: TaskDocument,
+  executed?: ExecuteSemanticResponse,
+): Promise<void> {
+  const execute = executed ?? (await executeSemantic({ task }))
   if (execute.status !== 'ok') throw new Error('Plan preview failed')
   const scene = await sceneApi.getScene()
   useSceneStore.getState().applyScene(
@@ -88,7 +92,7 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
   const {
     operations, result, loading, scriptErrors,
     addOperation, removeOperation, moveOperation, updateOperation,
-    replaceOperations, setScriptErrors,
+    replaceOperations, setScriptErrors, loadProgramText,
     setResult, setLoading, setError, reset,
   } = useSemanticEditor()
   const toTaskDocument = useDomainSceneStore((s) => s.toTaskDocument)
@@ -231,6 +235,56 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
   // (lifted in slice 2) — Task consumes it, it never keeps a copy.
   const canCompile = operations.length > 0 && !loading && !hasMissingFields(operations)
 
+  /** D12 file IO: [Load Program] reads a `.thalos` file and atomically replaces
+   *  the operation set (a failed parse writes NOTHING — R2). [Save Program]
+   *  downloads the canonical text (spec "Save persists text"). */
+  const programInputRef = useRef<HTMLInputElement>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  const handleProgramFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const text = await file.text()
+    const errors = loadProgramText(text)
+    setScriptErrors(errors)
+    setLoadError(
+      errors.length > 0
+        ? errors.map((er) => `line ${er.line}: ${er.message}`).join('; ')
+        : null,
+    )
+    e.target.value = ''
+  }
+
+  const handleSaveProgram = () => {
+    downloadTextFile('program.thalos', serialize(operations), 'text/plain')
+  }
+
+  /** D13 [Run]: the existing pipeline — POST /semantic/execute (compile +
+   *  schedule) → GET /scene (read back) → POST /plan/analyze (analysis) →
+   *  navigate to /execution. No new execution path; the preview read-back is
+   *  non-blocking (the Execution workspace re-fetches the scene on mount). */
+  const handleRun = async () => {
+    setLoading(true); setError(null)
+    try {
+      const res = await executeSemantic({ task: taskDocument })
+      if (res.status !== 'ok') { setError('Run failed'); return }
+      useExecutionStore.getState().receivePlan({
+        instructionCount: result?.metadata.instruction_count ?? res.segment_count,
+        durationSecs: res.duration_secs,
+        source: 'TaskDocument',
+      })
+      try {
+        await previewTaskPlan(taskDocument, res)
+      } catch {
+        // Preview (getScene/analyze) is advisory — the plan is already
+        // scheduled, so Run still navigates to Execution.
+      }
+      navigate('/execution')
+    } catch (err) {
+      setError(describeError(err))
+    } finally { setLoading(false) }
+  }
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
@@ -249,6 +303,34 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
           className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer">
           <RotateCcw className="size-3" /> Reset
         </button>
+        <button onClick={() => programInputRef.current?.click()}
+          title="Load a .thalos program file (replaces the current program)"
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer">
+          <Upload className="size-3" /> Load Program
+        </button>
+        <button onClick={handleSaveProgram}
+          title="Download the program as canonical .thalos text"
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer">
+          <Download className="size-3" /> Save Program
+        </button>
+        <button onClick={handleRun} disabled={!canCompile}
+          title="Run the program through the existing pipeline"
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-sky-600/20 text-sky-400 hover:bg-sky-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+          <Rocket className="size-3" /> Run
+        </button>
+        <input
+          ref={programInputRef}
+          type="file"
+          accept=".thalos,text/plain"
+          aria-label="Load program file"
+          onChange={handleProgramFileChange}
+          className="hidden"
+        />
+        {loadError && (
+          <p role="alert" className="text-xs text-red-400 truncate" title={loadError}>
+            {loadError}
+          </p>
+        )}
         <button onClick={compiled ? handleSendToExecution : handleCompile} disabled={!canCompile}
           title={compiled ? 'Load the compiled plan into Execution' : 'Compile the program'}
           className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-md cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${

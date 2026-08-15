@@ -3,6 +3,7 @@ import { devtools } from 'zustand/middleware'
 import type { SemanticOp } from '@/shared/contracts'
 import type { CompileResponse } from './types'
 import type { ParseError } from './script/types'
+import { parse } from './script/parser'
 
 interface SemanticEditorState {
   /** Ordered list of operations in the editor */
@@ -37,6 +38,12 @@ interface SemanticEditorState {
    *  touches no program state — the program is written exclusively through
    *  `replaceOperations`. */
   setScriptErrors: (errors: ParseError[]) => void
+  /** Load a `.thalos` program file (task-program-artifact spec "Load parses
+   *  text"): parse via the dual parser, then atomically replace the ENTIRE
+   *  operation set (dirty bump included). Returns the parse errors ([] on
+   *  success) and NEVER mutates on a failed parse (R2 atomicity) or the
+   *  domain scene store (Load Program ≠ Load Scene). */
+  loadProgramText: (text: string) => ParseError[]
   setResult: (result: CompileResponse | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
@@ -53,7 +60,7 @@ const sampleOperations: SemanticOp[] = [
 
 export const useSemanticEditor = create<SemanticEditorState>()(
   devtools(
-    (set) => ({
+    (set, get) => ({
       operations: sampleOperations.map((op) => ({ ...op })),
       result: null,
       loading: false,
@@ -93,6 +100,14 @@ export const useSemanticEditor = create<SemanticEditorState>()(
         })),
 
       setScriptErrors: (scriptErrors) => set({ scriptErrors }),
+
+      loadProgramText: (text) => {
+        const result = parse(text)
+        // R2 atomicity: a failed parse returns the errors and writes NOTHING.
+        if (result.ops === null) return result.errors
+        get().replaceOperations(result.ops)
+        return []
+      },
 
       setResult: (result) =>
         set({ result, error: null, loading: false, dirty: 0 }),

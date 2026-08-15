@@ -10,6 +10,7 @@ import { ServicesProvider } from '@/features/viewport/services/service-context'
 import { TaskEditor } from './task-editor'
 import { useSceneStore } from '@/features/viewport/store'
 import { useSemanticEditor } from '@/features/semantic/store'
+import { useDomainSceneStore } from '@/features/scene/store'
 import { useExecutionStore } from '@/features/execution/execution-store'
 import { useAnalysisStore } from '@/features/analysis/store'
 import type { SceneData } from '@/features/viewport/types'
@@ -680,5 +681,110 @@ describe('S3.5 — editor help in Text mode', () => {
     renderEditor()
 
     expect(screen.queryByText('pick <object> [tool=<name>]')).not.toBeInTheDocument()
+  })
+})
+
+describe('TaskEditor — Load Program / Save Program / Run (D12/D13)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    cleanup()
+  })
+
+  it('[Load Program] parses a .thalos file and replaces operations; scene untouched', async () => {
+    seedTask()
+    renderEditor()
+    const sceneBefore = JSON.stringify(useDomainSceneStore.getState().objects)
+
+    const input = screen.getByLabelText('Load program file') as HTMLInputElement
+    fireEvent.change(input, {
+      target: {
+        files: [new File(['pick box-1\nplace box-1 at tray-1\nhome'], 'program.thalos', { type: 'text/plain' })],
+      },
+    })
+
+    await waitFor(() => expect(useSemanticEditor.getState().operations).toHaveLength(3))
+    expect(useSemanticEditor.getState().operations.map((o) => o.type)).toEqual(['pick', 'place', 'home'])
+    expect(useSemanticEditor.getState().operations[1]).toMatchObject({ object: 'box-1', destination: 'tray-1' })
+    // Load Program ≠ Load Scene: the domain scene store never moved.
+    expect(JSON.stringify(useDomainSceneStore.getState().objects)).toBe(sceneBefore)
+  })
+
+  it('[Load Program] invalid text surfaces the parse error and mutates NOTHING (R2)', async () => {
+    seedTask()
+    renderEditor()
+    const opsBefore = JSON.stringify(useSemanticEditor.getState().operations)
+    const dirtyBefore = useSemanticEditor.getState().dirty
+
+    const input = screen.getByLabelText('Load program file') as HTMLInputElement
+    fireEvent.change(input, {
+      target: { files: [new File(['pick bolt-1\njump 10'], 'bad.thalos', { type: 'text/plain' })] },
+    })
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
+    expect(screen.getByRole('alert')).toHaveTextContent(/unknown command 'jump'/)
+    expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
+    expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
+  })
+
+  it('[Save Program] downloads canonical .thalos text — not JSON (spec "Save persists text")', async () => {
+    seedTask()
+    renderEditor()
+    let captured: Blob | null = null
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+      captured = blob as Blob
+      return 'blob:mock'
+    })
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Program' }))
+
+    expect(clickSpy).toHaveBeenCalledTimes(1)
+    expect(await captured!.text()).toBe('pick bolt-1\nwait 1s\nplace bolt-1 at tray-1\nhome')
+  })
+
+  it('[Run] triggers the existing pipeline: execute → getScene → analyze → /execution', async () => {
+    apiMocks.executeSemantic.mockResolvedValue(executeResponse)
+    previewMocks.getScene.mockResolvedValue(sceneWithPlan)
+    previewMocks.analyze.mockResolvedValue(analysisReport)
+    seedTask()
+    const router = renderRouter(['/task'])
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Run' }))
+
+    await waitFor(() => expect(apiMocks.executeSemantic).toHaveBeenCalledTimes(1))
+    expect(apiMocks.executeSemantic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        task: expect.objectContaining({
+          scene: expect.objectContaining({ objects: expect.any(Array) }),
+          program: expect.objectContaining({ operations: expect.any(Array) }),
+        }),
+      }),
+    )
+    // Read-back + analysis (demos-workspace spec "Run executes via existing pipeline").
+    // getScene is ALSO polled by the Execution workspace after navigation, so
+    // assert the Run flow's read-back fired, not an exact call count.
+    await waitFor(() => expect(previewMocks.getScene).toHaveBeenCalled())
+    expect(previewMocks.analyze).toHaveBeenCalled()
+    expect(useAnalysisStore.getState().report).toEqual(analysisReport)
+    // Plan handed to Execution + navigation upon success.
+    expect(useExecutionStore.getState().activePlan).toEqual({
+      instructionCount: 4,
+      durationSecs: 12.5,
+      source: 'TaskDocument',
+    })
+    await waitFor(() => expect(router.state.location.pathname).toBe('/execution'))
+  })
+
+  it('[Run] surfaces an execute failure without navigating', async () => {
+    apiMocks.executeSemantic.mockResolvedValue({ ...executeResponse, status: 'error' })
+    seedTask()
+    const router = renderRouter(['/task'])
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Run' }))
+
+    await waitFor(() => expect(screen.getByText(/Run failed/i)).toBeInTheDocument())
+    expect(router.state.location.pathname).toBe('/task')
+    expect(useExecutionStore.getState().status).toBe('idle')
   })
 })
