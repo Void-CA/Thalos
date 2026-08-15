@@ -45,12 +45,22 @@ impl ObjectiveProfile {
     }
 }
 
+/// Epsilon deadband for per-candidate-set normalization (spec
+/// candidate-evaluation "Normalization deadband", design ADR "ε placement").
+/// Sub-ε differences (e.g., the duration delta 1.38e-5 s between degenerate
+/// icebot copies) are treated as tied — all candidates receive 0.5 for that
+/// component. ε = 1e-4 is 3+ orders above the observed noise floor (1.38e-5 s)
+/// and 3+ orders below genuine deltas (real detours: duration ~3 s, length
+/// ~0.7 m). Pinned by `normalize_min_max_deadband_pinned`.
+const EPSILON: f64 = 1e-4;
+
 /// Per-candidate-set min-max normalization (design ADR-2).
 ///
 /// `norm(x) = (x − min) / (max − min)` over the given values; when
-/// `max == min` (all candidates identical on the component — including a
-/// single-candidate set) every value normalizes to `0.5` (neutral).
-/// An empty set normalizes to an empty set.
+/// `max − min < EPSILON` (all candidates identical on the component — or
+/// sub-ε copies indistinguishable from noise, including a single-candidate
+/// set) every value normalizes to `0.5` (neutral). An empty set normalizes
+/// to an empty set.
 ///
 /// The result is RELATIVE to the input set: values are only meaningful
 /// compared within the set that produced them.
@@ -64,8 +74,9 @@ pub fn normalize_min_max(values: &[f64]) -> Vec<f64> {
         .reduce(f64::max)
         .expect("non-empty set has a max");
     let range = max - min;
-    if range == 0.0 {
-        // Tie (ADR-2): identical values → neutral 0.5 contribution.
+    if range < EPSILON {
+        // Deadband (ADR-2 + demos-purpose-and-sync): identical or sub-ε
+        // values → neutral 0.5 contribution (never a noise-driven gap).
         return vec![0.5; values.len()];
     }
     values.iter().map(|x| (x - min) / range).collect::<Vec<_>>()
@@ -190,6 +201,38 @@ mod tests {
         assert!(
             norm.is_empty(),
             "no candidates → no norms (the evaluator guards emptiness before normalizing)"
+        );
+    }
+
+    // ── demos-purpose-and-sync — ε deadband (spec candidate-evaluation
+    //    "Epsilon pinned by test", design ADR "ε placement") ────────────────
+
+    #[test]
+    fn normalize_min_max_deadband_pinned() {
+        // Observed degeneracy: the icebot AlternateElbow re-solve is a sub-ε
+        // copy of Direct (duration delta 1.38e-5 s, manipulability 2.33e-9,
+        // length 1.177e-5 m — design "Data Flow (b)"). The deadband MUST tie
+        // such sub-ε differences at 0.5 (neutral) so floating-point noise can
+        // never produce an O(1) selection gap.
+        let sub_epsilon = normalize_min_max(&[18.893269, 18.893255]);
+        for v in &sub_epsilon {
+            assert!(
+                (v - 0.5).abs() < 1e-12,
+                "sub-ε duration copies must tie at 0.5 (deadband), got {v}"
+            );
+        }
+        // Genuine deltas stay above the deadband (duration 1e-2 s ≫ ε=1e-4):
+        // a real improvement MUST still separate the candidates.
+        let genuine = normalize_min_max(&[18.0, 18.01]);
+        assert!(
+            (genuine[0] - 0.0).abs() < 1e-12,
+            "min must map to 0 for a genuine delta, got {}",
+            genuine[0]
+        );
+        assert!(
+            (genuine[1] - 1.0).abs() < 1e-12,
+            "max must map to 1 for a genuine delta, got {}",
+            genuine[1]
         );
     }
 }
