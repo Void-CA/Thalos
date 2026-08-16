@@ -36,7 +36,15 @@ describe('toEChartsOption — ChartModel → EChartsOption mapping', () => {
         left: 0,
         textStyle: { color: '#888888', fontSize: 13, fontWeight: 600 },
       },
-      tooltip: { trigger: 'axis', confine: true },
+      tooltip: {
+        trigger: 'axis',
+        confine: true,
+        backgroundColor: 'rgba(59, 130, 246, 0.95)',
+        borderColor: 'rgba(136, 136, 136, 0.9)',
+        borderWidth: 1,
+        padding: [6, 10],
+        textStyle: { fontSize: 12 },
+      },
       legend: {
         show: true,
         bottom: 0,
@@ -207,6 +215,40 @@ describe('toEChartsOption — ChartModel → EChartsOption mapping', () => {
         },
       ],
     })
+  })
+})
+
+describe('tooltip styling — semantic tokens only (spec "Tooltip Legibility Styling")', () => {
+  it('styles the tooltip with a theme-derived background, visible border, padding and text ≥12px', () => {
+    const option = toEChartsOption(lineModel)
+    const tooltip = option.tooltip as {
+      trigger: string
+      confine: boolean
+      backgroundColor: string
+      borderColor: string
+      borderWidth: number
+      padding: number[]
+      textStyle: { fontSize: number }
+    }
+    expect(tooltip.trigger).toBe('axis')
+    // confine + formatter support are preserved (not overridden by styling).
+    expect(tooltip.confine).toBe(true)
+    expect(tooltip.backgroundColor).toMatch(/^rgba\(/)
+    expect(tooltip.borderColor).toMatch(/^rgba\(/)
+    expect(tooltip.borderWidth).toBeGreaterThanOrEqual(1)
+    expect(tooltip.padding).toEqual([6, 10])
+    expect(tooltip.textStyle.fontSize).toBeGreaterThanOrEqual(12)
+  })
+
+  it('keeps a custom tooltip formatter when the model provides one', () => {
+    const formatter = (params: unknown) => String(params)
+    const option = toEChartsOption({ ...lineModel, tooltip: { trigger: 'axis', formatter } })
+    expect((option.tooltip as { formatter?: typeof formatter }).formatter).toBe(formatter)
+  })
+
+  it('never emits hardcoded hex literals in tooltip styles', () => {
+    const option = toEChartsOption(lineModel)
+    expect(JSON.stringify(option.tooltip)).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
   })
 })
 

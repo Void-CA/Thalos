@@ -123,6 +123,16 @@ export function toEChartsOption(model: ChartModel): EChartsOption {
       trigger: model.tooltip.trigger,
       confine: true,
       ...(model.tooltip.formatter ? { formatter: model.tooltip.formatter } : {}),
+      // Legibility styling (spec "Tooltip Legibility Styling") — derived ONLY
+      // from semantic theme tokens. The brand panel (chart-1) contrasts on both
+      // light and dark themes and matches the app's primary-button treatment;
+      // the border reuses the neutral muted token. withAlpha keeps every
+      // produced color an rgba() string — no hex literals here (theme owns hex).
+      backgroundColor: withAlpha(resolveChartColor('chart-1'), 0.95),
+      borderColor: withAlpha(MUTED, 0.9),
+      borderWidth: 1,
+      padding: [6, 10],
+      textStyle: { fontSize: 12 },
     }
   }
 
