@@ -12,6 +12,8 @@
 
 Protocol::Protocol(Executor& executor, Validator& validator)
     : state_(IDLE)
+    , chunk_size_(1)
+    , samples_since_ack_(0)
     , executor_(executor)
     , validator_(validator)
     , pca9685_(nullptr)
@@ -77,6 +79,14 @@ void Protocol::handle_hello(const String& line) {
         return;
     }
 
+    // v2 (C): validate the version BEFORE any upload traffic — a stale v1
+    // host must fail the handshake cleanly, not discover the incompatibility
+    // mid-upload (after transmitting ~92KB).
+    if (version != THALOS_PROTOCOL_VERSION) {
+        set_error(F("VERSION_MISMATCH"));
+        return;
+    }
+
     // Echo the version back to confirm.
     char response[32];
     snprintf(response, sizeof(response), "HELLO %d OK", version);
@@ -91,14 +101,18 @@ void Protocol::handle_manifest(const String& line) {
 
     int dof = 0;
     int total = 0;
+    int chunk = 1;
     unsigned long dur = 0;
 
-    if (sscanf(line.c_str(), "MANIFEST %d %d %lu", &dof, &total, &dur) != 3) {
+    // v2 (C): optional 4th field = chunked-ACK batch size. v1 MANIFEST lines
+    // (3 fields) default to 1 → ACK per line (legacy wire behavior).
+    int parsed = sscanf(line.c_str(), "MANIFEST %d %d %lu %d", &dof, &total, &dur, &chunk);
+    if (parsed < 3) {
         set_error(F("MALFORMED_MANIFEST"));
         return;
     }
 
-    if (dof <= 0 || total <= 0 || dur == 0) {
+    if (dof <= 0 || total <= 0 || dur == 0 || chunk <= 0) {
         set_error(F("INVALID_MANIFEST"));
         return;
     }
@@ -109,6 +123,9 @@ void Protocol::handle_manifest(const String& line) {
     manifest_.segments.clear();
     manifest_.samples.clear();
     manifest_.samples.reserve(static_cast<size_t>(total));
+
+    chunk_size_       = static_cast<size_t>(chunk);
+    samples_since_ack_ = 0;
 
     state_ = RECEIVING;
     send_response(F("OK"));
@@ -227,7 +244,15 @@ void Protocol::handle_sample(const String& line) {
     }
 
     manifest_.samples.push_back(wp);
-    send_response(F("OK"));
+
+    // v2 (C): chunked ACK — respond once per `chunk_size_` samples instead of
+    // per line. Validation errors above still respond immediately; a chunk
+    // boundary responds OK (flow control for the host's next batch).
+    ++samples_since_ack_;
+    if (samples_since_ack_ >= chunk_size_) {
+        samples_since_ack_ = 0;
+        send_response(F("OK"));
+    }
 }
 
 void Protocol::handle_end_upload() {
@@ -423,4 +448,6 @@ void Protocol::reset_state() {
     // Free underlying memory (embedded — be frugal).
     std::vector<ManifestSegment>().swap(manifest_.segments);
     std::vector<TimedWaypoint>().swap(manifest_.samples);
+    chunk_size_ = 1;
+    samples_since_ack_ = 0;
 }

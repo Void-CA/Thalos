@@ -10,6 +10,16 @@ class Executor;
 class Validator;
 class PCA9685Driver;
 
+// ── Protocol version ─────────────────────────────────────────────────────
+//
+// v2 (C): chunked upload ACK — the host sends batches of SAMPLE lines and the
+// firmware answers ONE `OK` per chunk (declared in the MANIFEST line) instead
+// of one per line. `handle_hello` validates the version so a stale v1 host
+// fails the handshake BEFORE a 92KB upload starts (never mid-upload).
+// v1 hosts sent `MANIFEST <dof> <N> <dur_us>` (no chunk) → chunk defaults to 1
+// (ACK per line), preserving the v1 wire behavior against the v2 firmware.
+#define THALOS_PROTOCOL_VERSION 2
+
 // ── Instruction type ──────────────────────────────────────────────────────
 
 enum class InstructionType : uint8_t {
@@ -76,6 +86,12 @@ private:
     String error_reason_;
 
     Manifest manifest_;         // partially built during RECEIVING
+    /// Chunked-ACK batch size (v2, from the MANIFEST line; default 1 = ACK per
+    /// line). The host derives it from the DOF so a full chunk fits the RX
+    /// buffer with margin (chunk × max_line ≤ 3072 < RX_BUFFER 4096).
+    size_t chunk_size_;
+    /// Samples received since the last chunk ACK (v2).
+    size_t samples_since_ack_;
     Executor& executor_;
     Validator& validator_;
     /// Raw PWM driver for the calibration-only RAW_PULSE command. Bypasses

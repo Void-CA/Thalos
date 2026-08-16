@@ -25,7 +25,11 @@ ServoDriver servo_driver;
 // ── Arduino entry points ─────────────────────────────────────────────────
 
 void setup() {
-    Serial.begin(115200);
+    // v2 (C): larger RX buffer + 460800 baud. The chunked-ACK invariant
+    // (chunk × max_line ≤ 3072 < 4096) assumes this buffer absorbs transient
+    // bursts; setRxBufferSize MUST precede begin().
+    Serial.setRxBufferSize(4096);
+    Serial.begin(460800);
 
     // Wait for USB serial (ESP32 classic, CP210x USB-UART bridge).
     // On boards without native USB, remove this line.
