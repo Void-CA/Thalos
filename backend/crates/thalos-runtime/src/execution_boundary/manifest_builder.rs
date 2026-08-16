@@ -85,6 +85,7 @@ impl ExecutionManifestBuilder {
             dof_count: plan.waypoints.first().map(|w| w.joints.len()).unwrap_or(0),
             total_samples: samples.len(),
             duration_us: (plan.duration * 1_000_000.0).round() as u64,
+            repeat_count: plan.repeat_count,
         };
 
         let manifest = ExecutionManifest {
@@ -226,6 +227,7 @@ mod tests {
             waypoints,
             segments,
             duration,
+    repeat_count: 1,
         }
     }
 

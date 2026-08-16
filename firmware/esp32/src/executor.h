@@ -63,7 +63,9 @@ public:
     /// Whether execution is complete.
     bool is_complete() const;
 
-    /// Progress as fraction 0.0–1.0.
+    /// Progress as fraction 0.0–1.0. With firmware-side repeat (count in the
+    /// MANIFEST) this is the OVERALL fraction across ALL passes — the host's
+    /// completion gate fires only at the true end (fraction 1.0).
     float progress() const;
 
     /// Current commanded joint positions (the waypoint currently being
@@ -90,7 +92,7 @@ public:
 private:
     const Manifest* manifest_ptr_;
     size_t current_sample_index_;
-    unsigned long start_time_us_;       // micros() at start()
+    unsigned long start_time_us_;       // micros() at start() (or pass reset)
     unsigned long last_write_time_us_;  // micros() at last successful physical write
     unsigned long target_time_us_;      // cumulative time for current waypoint
     unsigned long recorded_sample_count_;
@@ -98,6 +100,19 @@ private:
     std::vector<ExecutionSample> recorded_samples_;
     ServoDriver* servo_driver_;
     State exec_state_;
+
+    // ── Firmware-side repeat (count in MANIFEST) ─────────────────────────
+    // The executor loops the trajectory `repeat_total_` times back-to-back —
+    // NO host re-upload between passes. Each pass boundary resets exactly like
+    // `start()` (index/target/start_time, current_position_ = samples[0]) so
+    // the physical per-pass motion is identical to the old host re-execute;
+    // the velocity bound keeps the return move safe. Sample timestamps stay
+    // MONOTONIC across passes via `sample_time_base_us_` so the single NF3
+    // trace is not corrupted.
+    unsigned long repeat_total_;
+    unsigned long passes_done_;          // completed passes (for progress())
+    unsigned long sample_time_base_us_;  // accumulated pass durations (monotonic samples)
+    unsigned long pass_duration_us_;     // total dt_us of ONE pass (computed at load)
 
     void step_to(unsigned long now_us);
     void record_sample(unsigned long timestamp_us, const std::vector<float>& joints);

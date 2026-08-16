@@ -273,13 +273,15 @@ impl Esp32Protocol {
     pub fn encode_manifest(manifest: &ExecutionManifest, chunk: usize) -> Vec<Vec<u8>> {
         let mut lines = Vec::new();
 
-        // MANIFEST <dof> <N> <dur_us> <chunk>
+        // MANIFEST <dof> <N> <dur_us> <chunk> <repeat> (v3: repeat = firmware
+        // side pass count, default 1).
         lines.push(Self::format_line(&[
             "MANIFEST",
             &manifest.metadata.dof_count.to_string(),
             &manifest.metadata.total_samples.to_string(),
             &manifest.metadata.duration_us.to_string(),
             &chunk.to_string(),
+            &manifest.metadata.repeat_count.to_string(),
         ]));
 
         // SEGMENT <idx> <instruction> <start> <count>
@@ -632,6 +634,7 @@ mod tests {
                 dof_count: 2,
                 total_samples: 3,
                 duration_us: 1_000_000,
+                repeat_count: 1,
             },
             segments: vec![ManifestSegment {
                 index: 0,
@@ -662,6 +665,7 @@ mod tests {
                 dof_count: 3,
                 total_samples: 5,
                 duration_us: 2_000_000,
+                repeat_count: 1,
             },
             segments: vec![
                 ManifestSegment {
@@ -715,7 +719,7 @@ mod tests {
         // MANIFEST <dof> <N> <dur_us> <chunk> (v2 chunked ACK, C)
         assert_eq!(
             String::from_utf8(lines[0].clone()).unwrap(),
-            "MANIFEST 2 3 1000000 64\n"
+            "MANIFEST 2 3 1000000 64 1\n"
         );
 
         // SEGMENT 0 movej 0 3
@@ -755,7 +759,7 @@ mod tests {
 
         assert_eq!(
             String::from_utf8(lines[0].clone()).unwrap(),
-            "MANIFEST 3 5 2000000 62\n"
+            "MANIFEST 3 5 2000000 62 1\n"
         );
 
         assert_eq!(
@@ -794,6 +798,7 @@ mod tests {
                 dof_count: 0,
                 total_samples: 0,
                 duration_us: 0,
+                repeat_count: 1,
             },
             segments: vec![],
             samples: vec![],
@@ -804,7 +809,7 @@ mod tests {
         assert_eq!(lines.len(), 2);
         assert_eq!(
             String::from_utf8(lines[0].clone()).unwrap(),
-            "MANIFEST 0 0 0 64\n"
+            "MANIFEST 0 0 0 64 1\n"
         );
         assert_eq!(String::from_utf8(lines[1].clone()).unwrap(), "END_UPLOAD\n");
     }

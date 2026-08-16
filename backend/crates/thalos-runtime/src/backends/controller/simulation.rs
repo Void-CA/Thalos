@@ -419,6 +419,7 @@ mod tests {
                 waypoint_range: 0..2,
             }],
             duration: 2.0,
+            repeat_count: 1,
         }
     }
 

@@ -59,6 +59,11 @@ struct RecordingState {
     /// re-execute holds the controller write lock for the whole upload, and
     /// `BackendManager::active_source` reads it (would deadlock).
     source: ExecutionSource,
+    /// v3: repeat is FIRMWARE-side (manifest repeat_count > 1, ESP32 loops
+    /// back-to-back) — the host NEVER re-executes between passes. Iteration is
+    /// derived from the overall progress on each tick; the completion gate
+    /// fires only at the true end.
+    firmware_repeat: bool,
     /// Repeat orchestration phase (B: async re-execute). `Uploading` while a
     /// background task re-executes the plan for the next iteration — ticks in
     /// that window return a synthetic delta instead of touching the controller
@@ -465,6 +470,7 @@ impl SceneService {
             waypoints,
             segments,
             duration: traj.duration(),
+    repeat_count: 1,
         })
     }
 
@@ -501,11 +507,30 @@ impl SceneService {
             .ok_or_else(|| RuntimeError::ControllerFailed {
                 source: crate::error::ControllerError::NotConnected,
             })?;
+        // v3 (firmware-side repeat): for backends that REPEAT INTERNALLY
+        // (ESP32 — `repeat_count` in the manifest, loops back-to-back with NO
+        // re-upload between passes), a `Repeat` mode is baked into the plan.
+        // Simulation/Replay keep repeat_count=1 and repeat via the host
+        // completion gate (B).
+        let supports_firmware_repeat = {
+            let c = ctrl.read().await;
+            c.capabilities().firmware_repeat
+        };
+        let firmware_repeat = supports_firmware_repeat
+            && matches!(mode, ExecutionMode::Repeat { count } if count > 1);
         {
-            let plan = {
+            let mut plan = {
                 let runtime = self.runtime.read().await;
                 Self::build_execution_plan(&runtime)
             };
+            if firmware_repeat {
+                if let Some(ref mut p) = plan {
+                    p.repeat_count = match mode {
+                        ExecutionMode::Repeat { count } => count,
+                        ExecutionMode::Once => 1,
+                    };
+                }
+            }
             let (waypoints, duration) = match &plan {
                 Some(p) => (
                     p.waypoints
@@ -595,6 +620,7 @@ impl SceneService {
                 repeat_phase: RepeatPhase::Idle,
                 pending_reexecute_error: None,
                 source: recording_source,
+                firmware_repeat,
             });
         }
 
@@ -923,10 +949,29 @@ impl SceneService {
                 let mut recording = self.recording.write().await;
                 if let Some(ref mut rec_state) = *recording {
                     completed_session_id = Some(rec_state.session_id);
+                    // v3 (firmware-side repeat): the ESP32 loops internally —
+                    // derive the CURRENT pass from the OVERALL progress (so the
+                    // badge advances and the gate sees iteration == total at the
+                    // true end) and scale the recorder clock by the total so the
+                    // trace stays monotonic across ALL passes.
+                    if rec_state.firmware_repeat {
+                        let total = rec_state.total_iterations.unwrap_or(1).max(1) as f64;
+                        let plan_d = plan_duration.max(1.0);
+                        let pass =
+                            (progress_in_seconds / plan_d * total).floor() as u32 + 1;
+                        rec_state.iteration = pass.min(total as u32).max(1);
+                        self.sessions
+                            .set_iteration(rec_state.session_id, rec_state.iteration)
+                            .await;
+                    }
                     repeat_meta = Some((rec_state.mode, rec_state.iteration));
                     let timestamp = {
+                        let mut secs = progress_in_seconds;
+                        if rec_state.firmware_repeat {
+                            secs *= rec_state.total_iterations.unwrap_or(1).max(1) as f64;
+                        }
                         let elapsed = rec_state.start_time
-                            + std::time::Duration::from_secs_f64(progress_in_seconds);
+                            + std::time::Duration::from_secs_f64(secs);
                         elapsed
                     };
                     rec_state.recorder.record(timestamp, &state);
@@ -975,7 +1020,7 @@ impl SceneService {
                                     .await;
                             }
                             *recording = None;
-                        } else if !is_final {
+                        } else if !is_final && !rec_state.firmware_repeat {
                             // Intermediate iteration: keep the recorders open,
                             // advance the base timestamp so samples stay
                             // monotonic, increment, then re-execute.

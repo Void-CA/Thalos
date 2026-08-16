@@ -28,6 +28,10 @@ Executor::Executor()
     , current_position_()
     , servo_driver_(nullptr)
     , exec_state_(IDLE)
+    , repeat_total_(1)
+    , passes_done_(0)
+    , sample_time_base_us_(0)
+    , pass_duration_us_(0)
 {
 }
 
@@ -38,6 +42,15 @@ void Executor::load(const Manifest& manifest) {
     current_sample_index_ = 0;
     exec_state_           = IDLE;
     recorded_samples_.clear();
+    // One-pass duration = sum of per-gap dt_us (sample 0 has dt 0 by
+    // protocol). Used to keep sample timestamps monotonic across passes.
+    pass_duration_us_ = 0;
+    for (size_t i = 1; i < manifest.samples.size(); ++i) {
+        pass_duration_us_ += manifest.samples[i].dt_us;
+    }
+    repeat_total_      = manifest.metadata.repeat_count;
+    passes_done_       = 0;
+    sample_time_base_us_ = 0;
 }
 
 void Executor::start() {
@@ -59,6 +72,8 @@ void Executor::start() {
         current_position_.assign(manifest_ptr_->samples[0].joints.begin(),
                                  manifest_ptr_->samples[0].joints.begin() + n);
     }
+    passes_done_ = 0;
+    sample_time_base_us_ = 0;
     exec_state_        = RUNNING;
 }
 
@@ -87,8 +102,18 @@ float Executor::progress() const {
     if (manifest_ptr_ == nullptr || manifest_ptr_->samples.empty()) {
         return 0.0f;
     }
-    return static_cast<float>(current_sample_index_)
-         / static_cast<float>(manifest_ptr_->samples.size());
+    const size_t n = manifest_ptr_->samples.size();
+    const float total = static_cast<float>(repeat_total_);
+    // Terminal/boundary instant: the current pass is COMPLETE — counting the
+    // fraction would double-count it ((passes_done_ + 1)/total, e.g. 1.5 for
+    // repeat 2 at the end). Report the completed passes only.
+    if (current_sample_index_ >= n) {
+        return static_cast<float>(passes_done_) / total;
+    }
+    // Overall fraction across ALL passes — the host's completion gate fires
+    // only at the true end (fraction 1.0) and derives the pass number from it.
+    const float pass_fraction = static_cast<float>(current_sample_index_) / static_cast<float>(n);
+    return (static_cast<float>(passes_done_) + pass_fraction) / total;
 }
 
 Executor::State Executor::current_state() const {
@@ -161,7 +186,8 @@ void Executor::step_to(unsigned long now_us) {
             break;
         }
         const TimedWaypoint& wp = manifest_ptr_->samples[current_sample_index_];
-        record_sample(target_time_us_, wp.joints);
+        // Monotonic sample clock across firmware-side repeat passes.
+        record_sample(sample_time_base_us_ + target_time_us_, wp.joints);
         last_stale_wp = &wp;
 
         current_sample_index_++;
@@ -198,9 +224,33 @@ void Executor::step_to(unsigned long now_us) {
         }
     }
 
-    // Check for completion.
+    // Check for completion / pass boundary (firmware-side repeat: `count` in
+    // the MANIFEST — the executor loops the trajectory back-to-back with NO
+    // host re-upload between passes).
     if (current_sample_index_ >= manifest_ptr_->samples.size()) {
-        exec_state_ = DONE;
+        ++passes_done_;
+        if (passes_done_ < repeat_total_) {
+            // Next pass — reset exactly like start(): index/target/timeline
+            // reset and current_position_ = samples[0] (model reset; the first
+            // physical write of the pass is a no-op move, never a jump). The
+            // velocity bound keeps any return move safe, and sample timestamps
+            // stay monotonic via sample_time_base_us_ (single NF3 trace).
+            current_sample_index_ = 0;
+            target_time_us_       = 0;
+            start_time_us_        = now_us;
+            last_write_time_us_   = now_us;
+            current_position_.clear();
+            if (!manifest_ptr_->samples.empty()) {
+                const size_t n = std::min(manifest_ptr_->samples[0].joints.size(),
+                                          static_cast<size_t>(NUM_SERVO_CHANNELS));
+                current_position_.assign(manifest_ptr_->samples[0].joints.begin(),
+                                         manifest_ptr_->samples[0].joints.begin() + n);
+            }
+            sample_time_base_us_ += pass_duration_us_;
+            // exec_state_ stays RUNNING.
+        } else {
+            exec_state_ = DONE;
+        }
     }
 }
 

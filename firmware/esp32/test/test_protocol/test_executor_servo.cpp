@@ -50,7 +50,7 @@ static TimedWaypoint make_wp(const float joints[4], uint32_t dt_us) {
 static Manifest make_4dof_manifest(size_t count, const float wps[][4],
                                    const uint32_t dt_us[], uint32_t duration_us) {
     Manifest m;
-    m.metadata = ManifestMetadata{4, count, duration_us};
+    m.metadata = ManifestMetadata{4, count, duration_us, 1};
     ManifestSegment seg;
     seg.index = 0;
     seg.instruction = InstructionType::MOVEJ;
@@ -60,6 +60,15 @@ static Manifest make_4dof_manifest(size_t count, const float wps[][4],
     for (size_t i = 0; i < count; ++i) {
         m.samples.push_back(make_wp(wps[i], dt_us[i]));
     }
+    return m;
+}
+
+/// Manifest with a firmware-side repeat count (v3: MANIFEST 5th field).
+static Manifest make_4dof_manifest_repeat(size_t count, const float wps[][4],
+                                          const uint32_t dt_us[], uint32_t duration_us,
+                                          unsigned long repeat) {
+    Manifest m = make_4dof_manifest(count, wps, dt_us, duration_us);
+    m.metadata.repeat_count = repeat;
     return m;
 }
 
@@ -283,6 +292,65 @@ void test_executor_multiple_stale_waypoints_writes_only_last() {
         TEST_ASSERT_EQUAL(expected_steps(i, last_written + delta),
                           off_steps_of(Wire.tx_log()[i]));
     }
+}
+
+// ── Firmware-side repeat (v3: `count` in MANIFEST) ────────────────────────
+
+/// The executor loops the trajectory `repeat_count` times back-to-back with NO
+/// host re-upload: completion only after the LAST pass, sample timestamps
+/// monotonic (single NF3 trace), overall progress 1.0 only at the true end.
+/// The pass boundary resets exactly like start() (model reset — the first
+/// write of the next pass is a no-op move, never a jump).
+void test_executor_repeat_loops_passes_back_to_back() {
+    Executor exec;
+    PCA9685Driver pca;
+    ServoDriver servo;
+    servo.init(pca);
+    servo.set_enabled(true);
+    exec.set_servo_driver(&servo);
+
+    // 3 waypoints over 300000 µs; repeat 2 → total 600000 µs.
+    const float wps[3][4] = {{0.0f, 0.0f, 0.0f, 0.03f},
+                             {0.5f, 0.3f, 0.2f, 0.03f},
+                             {1.0f, 0.6f, 0.4f, 0.03f}};
+    const uint32_t dt[3] = {0, 150000, 150000};
+    Manifest m = make_4dof_manifest_repeat(3, wps, dt, 300000, 2);
+
+    exec.load(m);
+    g_micros = 0;
+    exec.start();
+
+    // Mid-pass 1: running, overall progress ≈ (0 + 1/3)/2 = 1/6.
+    exec.update(100000);
+    TEST_ASSERT_FALSE(exec.is_complete());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f / 6.0f, exec.progress());
+
+    // End of pass 1 (t=300000): the executor LOOPS — not complete.
+    exec.update(300000);
+    TEST_ASSERT_FALSE(exec.is_complete());
+
+    // Mid-pass 2: overall progress ≈ (1 + 1/3)/2 = 2/3.
+    exec.update(400000);
+    TEST_ASSERT_FALSE(exec.is_complete());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 2.0f / 3.0f, exec.progress());
+
+    // End of pass 2 (t=600000): complete, overall progress 1.0.
+    exec.update(600000);
+    TEST_ASSERT_TRUE(exec.is_complete());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, exec.progress());
+
+    // Single monotonic trace: 3 samples × 2 passes; pass 2 timestamps are
+    // offset by the pass duration (300000 µs). The boundary instant is shared
+    // (pass 1 last commanded at t=300000, pass 2 first commanded at the same
+    // model-reset instant) — samples report commanded, not executed.
+    const auto& samples = exec.samples();
+    TEST_ASSERT_EQUAL(6, (int)samples.size());
+    TEST_ASSERT_EQUAL(0UL, samples[0].timestamp_us);
+    TEST_ASSERT_EQUAL(150000UL, samples[1].timestamp_us);
+    TEST_ASSERT_EQUAL(300000UL, samples[2].timestamp_us);
+    TEST_ASSERT_EQUAL(300000UL, samples[3].timestamp_us);
+    TEST_ASSERT_EQUAL(450000UL, samples[4].timestamp_us);
+    TEST_ASSERT_EQUAL(600000UL, samples[5].timestamp_us);
 }
 
 // NOTE: no main() here — PlatformIO links all test_*.cpp files of the

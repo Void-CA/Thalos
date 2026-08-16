@@ -118,7 +118,7 @@ static float expected_steps(uint8_t ch, float rad) {
 static Manifest make_4dof_manifest(size_t count, const float wps[][4],
                                    const uint32_t dt[], uint32_t duration_us) {
     Manifest m;
-    m.metadata = ManifestMetadata{4, static_cast<uint8_t>(count), duration_us};
+    m.metadata = ManifestMetadata{4, static_cast<uint8_t>(count), duration_us, 1};
     ManifestSegment seg;
     seg.index = 0;
     seg.instruction = InstructionType::MOVEJ;

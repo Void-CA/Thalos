@@ -102,17 +102,19 @@ void Protocol::handle_manifest(const String& line) {
     int dof = 0;
     int total = 0;
     int chunk = 1;
+    int repeat = 1;
     unsigned long dur = 0;
 
-    // v2 (C): optional 4th field = chunked-ACK batch size. v1 MANIFEST lines
-    // (3 fields) default to 1 → ACK per line (legacy wire behavior).
-    int parsed = sscanf(line.c_str(), "MANIFEST %d %d %lu %d", &dof, &total, &dur, &chunk);
+    // v2 (C): optional 4th field = chunked-ACK batch size; v3 (firmware-side
+    // repeat): optional 5th field = repeat count (default 1). v1 MANIFEST
+    // lines (3 fields) keep legacy behavior.
+    int parsed = sscanf(line.c_str(), "MANIFEST %d %d %lu %d %d", &dof, &total, &dur, &chunk, &repeat);
     if (parsed < 3) {
         set_error(F("MALFORMED_MANIFEST"));
         return;
     }
 
-    if (dof <= 0 || total <= 0 || dur == 0 || chunk <= 0) {
+    if (dof <= 0 || total <= 0 || dur == 0 || chunk <= 0 || repeat <= 0) {
         set_error(F("INVALID_MANIFEST"));
         return;
     }
@@ -120,6 +122,7 @@ void Protocol::handle_manifest(const String& line) {
     manifest_.metadata.dof_count     = static_cast<uint8_t>(dof);
     manifest_.metadata.total_samples = static_cast<size_t>(total);
     manifest_.metadata.duration_us   = static_cast<uint64_t>(dur);
+    manifest_.metadata.repeat_count  = static_cast<unsigned long>(repeat);
     manifest_.segments.clear();
     manifest_.samples.clear();
     manifest_.samples.reserve(static_cast<size_t>(total));
@@ -442,7 +445,7 @@ void Protocol::set_error(const String& reason) {
 void Protocol::reset_state() {
     state_ = IDLE;
     error_reason_ = String();
-    manifest_.metadata = ManifestMetadata{0, 0, 0};
+    manifest_.metadata = ManifestMetadata{0, 0, 0, 1};
     manifest_.segments.clear();
     manifest_.samples.clear();
     // Free underlying memory (embedded — be frugal).

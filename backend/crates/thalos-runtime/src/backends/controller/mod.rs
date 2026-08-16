@@ -22,6 +22,10 @@ pub struct BackendCapabilities {
     pub io: bool,
     pub gripper: bool,
     pub streaming: bool,
+    /// v3: the backend repeats the trajectory INTERNALLY (`repeat_count` in
+    /// the manifest) — the host never re-executes between passes and derives
+    /// the iteration from the overall progress. Only the ESP32 backend sets it.
+    pub firmware_repeat: bool,
 }
 
 impl BackendCapabilities {
@@ -33,6 +37,7 @@ impl BackendCapabilities {
             io: true,
             gripper: true,
             streaming: true,
+            firmware_repeat: false,
         }
     }
 
@@ -44,6 +49,7 @@ impl BackendCapabilities {
             io: false,
             gripper: false,
             streaming: false,
+            firmware_repeat: false,
         }
     }
 }
@@ -269,6 +275,7 @@ pub mod tests {
                 waypoint_range: 0..n,
             }],
             duration,
+            repeat_count: 1,
         }
     }
 

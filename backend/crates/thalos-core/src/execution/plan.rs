@@ -59,6 +59,12 @@ pub struct ExecutionPlan {
     pub segments: Vec<ExecutionSegment>,
     /// Total duration in seconds, copied from `CompiledPlan.duration`.
     pub duration: f64,
+    /// Firmware-side repeat count (v3): `1` = single pass (default). The
+    /// SceneService sets it to the `Repeat { count }` mode ONLY for hardware
+    /// backends — the ESP32 executor loops the trajectory back-to-back with NO
+    /// re-upload between passes. Simulation/Replay keep 1 and repeat via the
+    /// host completion gate.
+    pub repeat_count: u32,
 }
 
 /// Error produced by the pure builders of the execution chain
@@ -95,6 +101,7 @@ mod tests {
                 waypoint_range: 0..1,
             }],
             duration: 0.0,
+            repeat_count: 1,
         };
 
         assert_eq!(plan.waypoints.len(), 1);

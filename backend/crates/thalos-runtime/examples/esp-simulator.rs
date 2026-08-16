@@ -171,6 +171,9 @@ pub struct ManifestMeta {
     dof_count: usize,
     total_samples: usize,
     duration_us: u64,
+    /// Firmware-side repeat count (v3): the executor loops the trajectory
+    /// `repeat_count` times back-to-back (default 1).
+    repeat_count: usize,
 }
 
 impl Default for ManifestMeta {
@@ -179,6 +182,7 @@ impl Default for ManifestMeta {
             dof_count: 0,
             total_samples: 0,
             duration_us: 0,
+            repeat_count: 1,
         }
     }
 }
@@ -269,16 +273,22 @@ impl SimState {
             .get(4)
             .and_then(|s| s.parse::<usize>().ok())
             .unwrap_or(1);
+        // v3 (firmware-side repeat): optional 5th field = pass count (default 1).
+        let repeat = parts
+            .get(5)
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(1);
         let (Some(dof), Some(total), Some(dur)) = (dof, total, dur) else {
             return self.set_error("MALFORMED_MANIFEST");
         };
-        if dof == 0 || total == 0 || dur == 0 || chunk == 0 {
+        if dof == 0 || total == 0 || dur == 0 || chunk == 0 || repeat == 0 {
             return self.set_error("INVALID_MANIFEST");
         }
         self.meta = ManifestMeta {
             dof_count: dof,
             total_samples: total,
             duration_us: dur,
+            repeat_count: repeat,
         };
         self.chunk_size = chunk;
         self.samples_since_ack = 0;
@@ -418,16 +428,20 @@ impl SimState {
     fn status_while_executing(&mut self) -> String {
         match self.scenario {
             Scenario::Happy => {
-                // progress_steps polls of RUNNING (0.0 → 1.0), then COMPLETED.
+                // Overall progress across ALL passes (v3 firmware-side repeat):
+                // `repeat_count × progress_steps` polls from 0.0 → 1.0, then
+                // COMPLETED. The joints ramp per-pass (within-pass progress).
                 let steps = self.progress_steps();
-                if self.exec_step > steps {
+                let total_steps = steps * self.meta.repeat_count.max(1);
+                if self.exec_step > total_steps {
                     self.recorded = self.generate_recorded_samples();
                     self.state = State::Completed;
                     return format!("STATUS COMPLETED {}\n", self.recorded.len());
                 }
-                let progress = self.exec_step as f64 / steps as f64;
+                let within = (self.exec_step % steps.max(1)) as f64 / steps.max(1) as f64;
+                let progress = self.exec_step as f64 / total_steps as f64;
                 self.exec_step += 1;
-                self.format_running(progress)
+                self.format_running_with(progress, within)
             }
             Scenario::Error => match self.exec_step {
                 0 => {
@@ -448,8 +462,15 @@ impl SimState {
     }
 
     fn format_running(&self, progress: f64) -> String {
-        let joints = self.joints_at(progress);
-        format!("STATUS RUNNING {:.4} {joints}\n", progress)
+        self.format_running_with(progress, progress)
+    }
+
+    /// `STATUS RUNNING <overall> <joints>` — joints driven by the per-pass
+    /// progress (v3 repeat: the joints repeat each pass while the overall
+    /// progress spans all passes).
+    fn format_running_with(&self, overall: f64, within_pass: f64) -> String {
+        let joints = self.joints_at(within_pass);
+        format!("STATUS RUNNING {:.4} {joints}\n", overall)
     }
 
     /// Progress steps for the `happy` ramp: `RUNNING_STEPS_DIVISOR` steps
@@ -476,19 +497,24 @@ impl SimState {
     }
 
     /// Build the `--samples` recorded execution samples deterministically
-    /// from the manifest metadata (no kinematics, no timing simulation).
+    /// from the manifest metadata (no kinematics, no timing simulation). With
+    /// firmware-side repeat (v3), each pass's samples are offset by the pass
+    /// duration so the single trace is monotonic across ALL passes.
     fn generate_recorded_samples(&self) -> Vec<RecordedSample> {
         let n = self.samples_per_run;
         let step_us = self.meta.duration_us / n as u64;
-        (0..n)
-            .map(|i| {
+        let mut out = Vec::new();
+        for pass in 0..self.meta.repeat_count.max(1) {
+            let base = pass as u64 * self.meta.duration_us;
+            for i in 0..n {
                 let progress = if n > 1 { i as f64 / (n - 1) as f64 } else { 0.0 };
-                RecordedSample {
-                    timestamp_us: i as u64 * step_us,
+                out.push(RecordedSample {
+                    timestamp_us: base + i as u64 * step_us,
                     joints: self.joints(progress),
-                }
-            })
-            .collect()
+                });
+            }
+        }
+        out
     }
 
     // ── END_UPLOAD validation (mirrors validator.cpp check order) ───────

@@ -247,6 +247,7 @@ impl RobotController for Esp32Backend {
                     dof_count: plan.waypoints.first().map(|w| w.joints.len()).unwrap_or(0),
                     total_samples,
                     duration_us: 0,
+                    repeat_count: plan.repeat_count,
                 },
                 segments: vec![ManifestSegment {
                     index: 0,
@@ -455,7 +456,10 @@ impl RobotController for Esp32Backend {
     }
 
     fn capabilities(&self) -> BackendCapabilities {
-        BackendCapabilities::minimal()
+        BackendCapabilities {
+            firmware_repeat: true,
+            ..BackendCapabilities::minimal()
+        }
     }
 
     /// The ESP32 is a real hardware execution backend: report `Hardware` so the
@@ -555,6 +559,7 @@ mod tests {
                 waypoint_range: 0..n,
             }],
             duration,
+            repeat_count: 1,
         }
     }
 
@@ -616,6 +621,7 @@ mod tests {
         // Trapezoid on the base joint: 1.6 ms ramp samples, 10 ms cruise
         // samples. Cruise Δq = 1.0 rad/s × 10 ms = 0.01 rad per gap.
         let plan = ExecutionPlan {
+        repeat_count: 1,
             waypoints: vec![
                 ExecutionWaypoint { joints: vec![0.0, 0.0], timestamp: 0.0 },
                 ExecutionWaypoint { joints: vec![0.0008, 0.0], timestamp: 0.0016 },
@@ -669,6 +675,7 @@ mod tests {
 
         // Real timestamps: one 10 ms gap, Δq = 0.02 → 2.0 rad/s > 1.0.
         let plan = ExecutionPlan {
+        repeat_count: 1,
             waypoints: vec![
                 ExecutionWaypoint { joints: vec![0.0, 0.0], timestamp: 0.0 },
                 ExecutionWaypoint { joints: vec![0.02, 0.0], timestamp: 0.01 },
@@ -1256,6 +1263,52 @@ mod tests {
         assert!(!caps.io);
         assert!(!caps.gripper);
         assert!(!caps.streaming);
+        // v3: the ESP32 REPEATS INTERNALLY (manifest repeat_count, loops
+        // back-to-back) — the ONLY backend with firmware-side repeat.
+        assert!(caps.firmware_repeat);
+    }
+
+    /// v3: a firmware-side `Repeat { count }` plan uploads ONCE with the
+    /// `repeat_count` in the MANIFEST (5th field) — NO re-upload per pass.
+    #[tokio::test]
+    async fn execute_repeat_uploads_once_with_count_in_manifest() {
+        let transport = FakeTransport::new();
+        let mut backend = make_connected_backend(transport).await;
+
+        let mut plan = plan_of(
+            vec![vec![0.0, 0.0], vec![0.5, 0.3]],
+            1.0,
+        );
+        plan.repeat_count = 3;
+
+        // Inject: MANIFEST OK, SEGMENT OK, no chunk ACK (2 samples < chunk),
+        // READY, EXECUTE OK — the host uploads ONCE regardless of repeat.
+        let protocol = backend.protocol.lock().await;
+        let p = protocol.as_ref().unwrap();
+        p.test_inject_response(b"OK\n".to_vec());
+        p.test_inject_response(b"OK\n".to_vec());
+        p.test_inject_response(b"READY\n".to_vec());
+        p.test_inject_response(b"OK\n".to_vec());
+        drop(protocol);
+
+        backend
+            .execute(plan)
+            .await
+            .expect("single upload with repeat_count must succeed");
+        assert!(backend.is_connected());
+
+        // The MANIFEST line carries the repeat count in the 5th field.
+        let lines = sent_lines(&backend).await;
+        let manifest = lines
+            .iter()
+            .find(|l| l.starts_with("MANIFEST"))
+            .expect("MANIFEST sent");
+        let parts: Vec<&str> = manifest.trim().split_whitespace().collect();
+        assert_eq!(parts[4], "64", "chunk");
+        assert_eq!(parts[5], "3", "repeat_count in MANIFEST");
+        // EXACTLY the one upload — no second manifest for the next pass.
+        let manifests = lines.iter().filter(|l| l.starts_with("MANIFEST")).count();
+        assert_eq!(manifests, 1, "one upload for the whole Repeat");
     }
 
     #[test]

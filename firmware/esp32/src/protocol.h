@@ -34,6 +34,10 @@ struct ManifestMetadata {
     uint8_t dof_count;
     size_t total_samples;
     uint64_t duration_us;
+    /// Firmware-side repeat count (v3): the executor loops the trajectory
+    /// `repeat_count` times back-to-back with NO host re-upload between passes.
+    /// Default 1 = single pass (v2-compatible MANIFEST lines omit the field).
+    unsigned long repeat_count;
 };
 
 struct ManifestSegment {
