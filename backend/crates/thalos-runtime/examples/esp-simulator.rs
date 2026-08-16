@@ -497,24 +497,26 @@ impl SimState {
     }
 
     /// Build the `--samples` recorded execution samples deterministically
-    /// from the manifest metadata (no kinematics, no timing simulation). With
-    /// firmware-side repeat (v3), each pass's samples are offset by the pass
-    /// duration so the single trace is monotonic across ALL passes.
+    /// from the manifest metadata (no kinematics, no timing simulation).
+    /// Mirrors the REAL firmware's BOUNDED trace contract (bounded-reusable
+    /// buffer, trace_scope = last_iteration): all passes RUN, but only the
+    /// LAST pass is retained, with sample timestamps offset by the accumulated
+    /// pass durations so the trace is monotonic. sample_count is never
+    /// repeat_count × waypoints — it is exactly one pass.
     fn generate_recorded_samples(&self) -> Vec<RecordedSample> {
         let n = self.samples_per_run;
         let step_us = self.meta.duration_us / n as u64;
-        let mut out = Vec::new();
-        for pass in 0..self.meta.repeat_count.max(1) {
-            let base = pass as u64 * self.meta.duration_us;
-            for i in 0..n {
+        let last_pass = self.meta.repeat_count.max(1).saturating_sub(1) as u64;
+        let base = last_pass * self.meta.duration_us;
+        (0..n)
+            .map(|i| {
                 let progress = if n > 1 { i as f64 / (n - 1) as f64 } else { 0.0 };
-                out.push(RecordedSample {
+                RecordedSample {
                     timestamp_us: base + i as u64 * step_us,
                     joints: self.joints(progress),
-                });
-            }
-        }
-        out
+                }
+            })
+            .collect()
     }
 
     // ── END_UPLOAD validation (mirrors validator.cpp check order) ───────

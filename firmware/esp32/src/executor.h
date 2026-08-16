@@ -79,6 +79,10 @@ public:
     /// Get recorded samples since last clear.
     const std::vector<ExecutionSample>& samples() const;
 
+    /// Number of VALID recorded samples (== the retained last pass for
+    /// firmware-side repeat, <= capacity). Always <= samples().size().
+    size_t sample_count() const;
+
     /// Clear recorded samples after host has collected them.
     void clear_samples();
 
@@ -97,7 +101,14 @@ private:
     unsigned long target_time_us_;      // cumulative time for current waypoint
     unsigned long recorded_sample_count_;
     std::vector<float> current_position_;   // last physically-written joint positions
+    // Bounding the execution trace: the firmware is NOT the historical store of
+    // an arbitrarily large execution. recorded_samples_ has FIXED capacity (one
+    // pass, set at load()) and reuse the same storage across firmware-repeat
+    // passes — only the LAST pass is retained. Avoids the OOM/fragmentation of
+    // accumulating repeat_count × waypoints in memory (1228 × 5 = 6140).
     std::vector<ExecutionSample> recorded_samples_;
+    size_t recorded_capacity_;      // fixed slots, set at load()
+    size_t recorded_next_;          // next free slot / valid count (<= capacity)
     ServoDriver* servo_driver_;
     State exec_state_;
 

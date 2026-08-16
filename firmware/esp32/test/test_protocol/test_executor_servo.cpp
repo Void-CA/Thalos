@@ -339,18 +339,79 @@ void test_executor_repeat_loops_passes_back_to_back() {
     TEST_ASSERT_TRUE(exec.is_complete());
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, exec.progress());
 
-    // Single monotonic trace: 3 samples × 2 passes; pass 2 timestamps are
-    // offset by the pass duration (300000 µs). The boundary instant is shared
-    // (pass 1 last commanded at t=300000, pass 2 first commanded at the same
-    // model-reset instant) — samples report commanded, not executed.
+    // Single monotonic trace, BOUNDED to the LAST pass: the firmware retains
+    // only the final iteration (trace_scope = last_iteration) so the buffer
+    // never grows to repeat_count × waypoints (the 1228 × 5 = 6140 OOM).
+    // Pass 2 timestamps are offset by the accumulated pass durations: the
+    // retained samples are the LAST pass's, so slots [0,3) hold 300000,450000,
+    // 600000. `samples()` (full fixed storage) is larger; `sample_count()` is
+    // the authoritative valid length.
     const auto& samples = exec.samples();
-    TEST_ASSERT_EQUAL(6, (int)samples.size());
-    TEST_ASSERT_EQUAL(0UL, samples[0].timestamp_us);
-    TEST_ASSERT_EQUAL(150000UL, samples[1].timestamp_us);
-    TEST_ASSERT_EQUAL(300000UL, samples[2].timestamp_us);
-    TEST_ASSERT_EQUAL(300000UL, samples[3].timestamp_us);
-    TEST_ASSERT_EQUAL(450000UL, samples[4].timestamp_us);
-    TEST_ASSERT_EQUAL(600000UL, samples[5].timestamp_us);
+    TEST_ASSERT_EQUAL(3, (int)exec.sample_count());
+    TEST_ASSERT_EQUAL(300000UL, samples[0].timestamp_us);
+    TEST_ASSERT_EQUAL(450000UL, samples[1].timestamp_us);
+    TEST_ASSERT_EQUAL(600000UL, samples[2].timestamp_us);
+}
+
+// ── Regression: bounded trace across firmware-repeat (repeat × waypoints OOM) ─
+
+/// Repeat(count=5, waypoints=1228): the recorded trace must be BOUNDED to one
+/// pass (no count × waypoints accumulation in the ESP32 heap) while `count`
+/// itself is fully executed. Proves:
+///   - completion only after 5 passes,
+///   - sample_count == one pass (<= capacity),
+///   - no unbounded growth: the full storage stays at capacity (one pass),
+///     never grows to 5 × waypoints.
+void test_repeat_bounded_trace_no_heap_growth_across_passes() {
+    Executor exec;
+    PCA9685Driver pca;
+    ServoDriver servo;
+    servo.init(pca);
+    servo.set_enabled(true);
+    exec.set_servo_driver(&servo);
+
+    const size_t WPS = 1228;
+    // Build a 1228-waypoint manifest THE RIGHT WAY (sample i holds joints
+    // derived from i): the manifest builder itself is not part of this test.
+    Manifest m;
+    m.metadata = ManifestMetadata{4, WPS, 10000, 1};
+    m.metadata.repeat_count = 5;
+    ManifestSegment seg;
+    seg.index = 0;
+    seg.instruction = InstructionType::MOVEJ;
+    seg.sample_start = 0;
+    seg.sample_count = WPS;
+    m.segments.push_back(seg);
+    for (size_t i = 0; i < WPS; ++i) {
+        TimedWaypoint wp;
+        wp.joints = {0.0f, 0.0f, 0.0f, 0.03f};
+        wp.dt_us = (i == 0) ? 0 : 10;
+        m.samples.push_back(wp);
+    }
+
+    exec.load(m);
+    g_micros = 0;
+    exec.start();
+
+    // 1227 gaps × 10 µs = 12270 µs per pass. Advance a full pass duration per
+    // iteration so the executor reaches the pass boundary each step.
+    const uint32_t pass_us = (uint32_t)((WPS - 1) * 10u);
+    for (unsigned pass = 0; pass < 5; ++pass) {
+        exec.update((pass + 1) * pass_us);
+        // Passes 1..4 loop (never complete); only pass 5 reaches DONE.
+        // pass indexes 0..3 must report NOT complete; pass 4 must complete.
+        TEST_ASSERT_EQUAL(pass >= 4, exec.is_complete());
+    }
+    TEST_ASSERT_TRUE(exec.is_complete());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, exec.progress());
+
+    // Bounded retention: exactly ONE pass worth of samples (the last pass,
+    // all 1228 of them), never count × waypoints (5 × 1228 = 6140). The
+    // authoritative trace length is sample_count() and must be <= capacity.
+    TEST_ASSERT_EQUAL((int)WPS, (int)exec.sample_count());
+    // The full storage stays exactly at one pass — no growth across passes.
+    TEST_ASSERT_EQUAL((int)WPS, (int)exec.samples().size());
+    TEST_ASSERT_TRUE(exec.sample_count() <= exec.samples().size());
 }
 
 // NOTE: no main() here — PlatformIO links all test_*.cpp files of the

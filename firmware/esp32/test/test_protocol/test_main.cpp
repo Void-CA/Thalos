@@ -382,6 +382,7 @@ void test_servo_driver_negative_Infinity_rejected();
 // ── Tests from test_executor_servo.cpp (Executor+ServoDriver integration) ─
 void test_executor_RUNNING_writes_servo();
 void test_executor_repeat_loops_passes_back_to_back();
+void test_repeat_bounded_trace_no_heap_growth_across_passes();
 void test_executor_IDLE_no_write();
 void test_executor_STOP_no_new_writes();
 void test_executor_ERROR_no_new_writes();
@@ -469,6 +470,7 @@ int main() {
     RUN_TEST(test_servo_driver_negative_Infinity_rejected);
     RUN_TEST(test_executor_RUNNING_writes_servo);
     RUN_TEST(test_executor_repeat_loops_passes_back_to_back);
+    RUN_TEST(test_repeat_bounded_trace_no_heap_growth_across_passes);
     RUN_TEST(test_executor_IDLE_no_write);
     RUN_TEST(test_executor_STOP_no_new_writes);
     RUN_TEST(test_executor_ERROR_no_new_writes);

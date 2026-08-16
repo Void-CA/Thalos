@@ -355,18 +355,19 @@ async fn repeat_firmware_repeat_uploads_once_and_collects_single_trace() {
         .take_execution_trace()
         .await
         .expect("execution trace must be available after the whole Repeat");
-    // 3 passes × 10 samples = 30, all monotonic in one trace — the firmware
-    // offsets each pass by its elapsed time (no duplicate timestamps).
+    // BOUNDED, last-pass-only trace (trace_scope = last_iteration): all 3
+    // passes RAN, but the firmware retains only the last pass — exactly one
+    // pass's samples, monotonic, never 3 × 10.
     assert_eq!(
         trace.len(),
-        DEFAULT_SAMPLE_COUNT * 3,
-        "single trace with all 3 passes' samples"
+        DEFAULT_SAMPLE_COUNT,
+        "single bounded trace: the last pass only, never repeat_count × waypoints"
     );
-    // Monotonic timestamps across every pass boundary.
+    // Monotonic timestamps across the retained last pass.
     for w in trace.windows(2) {
         assert!(
             w[0].timestamp_us <= w[1].timestamp_us,
-            "trace stays monotonic across pass boundaries"
+            "trace stays monotonic"
         );
     }
     assert!(

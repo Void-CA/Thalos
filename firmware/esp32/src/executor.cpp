@@ -25,6 +25,8 @@ Executor::Executor()
     , last_write_time_us_(0)
     , target_time_us_(0)
     , recorded_sample_count_(0)
+    , recorded_capacity_(0)
+    , recorded_next_(0)
     , current_position_()
     , servo_driver_(nullptr)
     , exec_state_(IDLE)
@@ -41,7 +43,12 @@ void Executor::load(const Manifest& manifest) {
     manifest_ptr_         = &manifest;
     current_sample_index_ = 0;
     exec_state_           = IDLE;
-    recorded_samples_.clear();
+    // Bound the execution trace: pre-allocate EXACTLY enough slots for one
+    // pass (fixed capacity) and reuse them across firmware-repeat passes —
+    // the firmware never grows the buffer to repeat_count × waypoints.
+    recorded_samples_.resize(manifest.samples.size());
+    recorded_capacity_ = manifest.samples.size();
+    recorded_next_     = 0;
     // One-pass duration = sum of per-gap dt_us (sample 0 has dt 0 by
     // protocol). Used to keep sample timestamps monotonic across passes.
     pass_duration_us_ = 0;
@@ -63,6 +70,7 @@ void Executor::start() {
     target_time_us_    = 0;           // first waypoint is at t=0
     current_sample_index_ = 0;
     recorded_sample_count_ = 0;
+    recorded_next_ = 0;
     // current_position_ = the first waypoint's pose (the arm is commanded
     // there at t=0): the first physical write is a no-op move, never a jump.
     current_position_.clear();
@@ -132,9 +140,14 @@ const std::vector<ExecutionSample>& Executor::samples() const {
     return recorded_samples_;
 }
 
+size_t Executor::sample_count() const {
+    return recorded_next_;
+}
+
 void Executor::clear_samples() {
-    recorded_samples_.clear();
+    recorded_next_ = 0;
     std::vector<ExecutionSample>().swap(recorded_samples_);
+    recorded_capacity_ = 0;
 }
 
 // ── Internal stepping logic ──────────────────────────────────────────────
@@ -239,6 +252,11 @@ void Executor::step_to(unsigned long now_us) {
             target_time_us_       = 0;
             start_time_us_        = now_us;
             last_write_time_us_   = now_us;
+            // Bounded trace: discard the just-finished pass from the buffer
+            // (reuse the fixed slots — capacity is unchanged, no free/realloc)
+            // so only the LAST pass is retained at COMPLETED. Monotonic sample
+            // timestamps come from sample_time_base_us_, not from the slot.
+            recorded_next_ = 0;
             current_position_.clear();
             if (!manifest_ptr_->samples.empty()) {
                 const size_t n = std::min(manifest_ptr_->samples[0].joints.size(),
@@ -255,8 +273,10 @@ void Executor::step_to(unsigned long now_us) {
 }
 
 void Executor::record_sample(unsigned long timestamp_us, const std::vector<float>& joints) {
-    ExecutionSample sample;
+    if (recorded_next_ >= recorded_capacity_) {
+        return;   // bounded trace: never exceed the fixed per-pass capacity
+    }
+    ExecutionSample& sample = recorded_samples_[recorded_next_++];
     sample.timestamp_us = static_cast<uint64_t>(timestamp_us);
     sample.joints       = joints;
-    recorded_samples_.push_back(sample);
 }

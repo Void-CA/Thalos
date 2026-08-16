@@ -326,9 +326,11 @@ void Protocol::handle_status() {
         }
         case COMPLETED:
             // S3.1: `STATUS COMPLETED <count>` — lets the host know how many
-            // recorded samples to request via `SAMPLES <count>`.
+            // recorded samples to request via `SAMPLES <count>`. With
+            // firmware-side repeat this is the retained LAST pass (bounded
+            // trace) — never repeat_count × waypoints.
             response += F("COMPLETED ");
-            response += String(executor_.samples().size());
+            response += String(executor_.sample_count());
             break;
         case ERROR:
             response += F("ERROR ");
@@ -353,7 +355,7 @@ void Protocol::handle_samples(const String& line) {
     }
 
     const std::vector<ExecutionSample>& samples = executor_.samples();
-    size_t available = samples.size();
+    size_t available = executor_.sample_count();
     size_t to_send   = (static_cast<size_t>(count) < available)
                            ? static_cast<size_t>(count)
                            : available;
