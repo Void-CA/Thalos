@@ -160,6 +160,38 @@ impl SafetyEnvelope {
         }
         Ok(())
     }
+
+    /// Minimum `dt_us` for a joint-space gap so that EVERY channel's implied
+    /// velocity `Δq/Δt` stays at or under its ceiling (including
+    /// [`VELOCITY_TOLERANCE`]). The per-joint per-gap re-timer uses this to
+    /// stretch a violating gap's time by exactly the amount that bounds the
+    /// offending joint, preserving identical spatial motion.
+    ///
+    /// Returns `0` when no joint needs time (all-zero Δq, or every joint is
+    /// beyond channel 3 with no firmware envelope authority). Callers keep
+    /// ProTOCOL semantics: a `dt_us == 0` gap is NOT synthesized a finite
+    /// velocity from this value — firmware velocity-bounds advancement.
+    pub fn min_gap_dt_us(delta_q: &[f64]) -> u32 {
+        let mut min_us: u64 = 0;
+        for (i, &dq) in delta_q.iter().enumerate() {
+            let Some(env) = SAFETY_ENVELOPE.get(i) else {
+                continue; // no firmware envelope authority for this channel
+            };
+            if dq == 0.0 {
+                continue;
+            }
+            // `dt` such that |dq|/dt ≤ max_velocity·(1+tol). `ceil` guarantees
+            // dt_s ≥ |dq|/ceiling so the implied velocity lands under (never
+            // over) the ceiling after µs rounding.
+            let ceiling = env.max_velocity_rad_per_s * (1.0 + Self::VELOCITY_TOLERANCE);
+            let seconds = dq.abs() / ceiling;
+            let us = (seconds * 1_000_000.0).ceil() as u64;
+            if us > min_us {
+                min_us = us;
+            }
+        }
+        min_us.min(u32::MAX as u64) as u32
+    }
 }
 
 #[cfg(test)]

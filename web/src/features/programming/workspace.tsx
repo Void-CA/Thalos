@@ -2,7 +2,7 @@ import { PipelineStatus } from '@/features/semantic/components/pipeline-status'
 import { TaskEditor } from '@/features/semantic/components/task-editor'
 import { DiagnosticsPanel } from '@/features/semantic/components/diagnostics-panel'
 import { PlanningPanel } from '@/features/planning/components/planning-panel'
-import { TrajectoryColorPicker } from '@/features/planning/components/trajectory-color-picker'
+import { TrajectoryColorSection } from '@/features/planning/components/trajectory-color-section'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useSemanticEditor } from '@/features/semantic/store'
 
@@ -78,19 +78,14 @@ export function ProgrammingWorkspace() {
           <div className="flex-1 overflow-hidden min-h-0">
             <TaskEditor />
           </div>
+          <TrajectoryColorSection />
           <DiagnosticsPanel />
         </TabsContent>
 
         {/* Tab 2 — motion program by segments + trajectory color. */}
         <TabsContent value="motion" className="flex-1 overflow-y-auto p-3 space-y-4">
           <PlanningPanel />
-
-          <section>
-            <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">
-              Trajectory Color
-            </h2>
-            <TrajectoryColorPicker />
-          </section>
+          <TrajectoryColorSection />
         </TabsContent>
 
         {/* Tab 3 — the SAME semantic editor in TEXT mode (initialMode="text"):
@@ -103,6 +98,7 @@ export function ProgrammingWorkspace() {
           <div className="flex-1 overflow-hidden min-h-0">
             <TaskEditor initialMode="text" />
           </div>
+          <TrajectoryColorSection />
           <DiagnosticsPanel />
         </TabsContent>
       </Tabs>

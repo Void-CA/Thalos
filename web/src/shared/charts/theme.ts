@@ -83,11 +83,44 @@ export function paletteColor(index: number): string {
   return resolveChartColor(CHART_PALETTE[index % CHART_PALETTE.length])
 }
 
-/** `#rrggbb` → `rgba(r, g, b, alpha)` (derived — no hardcoded color). */
+/** `#rrggbb` → `[r, g, b]`; rgb()/rgba() strings parsed directly. */
+function parseRgb(color: string): [number, number, number] | null {
+  const hex = /^#([0-9a-f]{6})$/i.exec(color)
+  if (hex) {
+    const n = Number.parseInt(hex[1], 16)
+    return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff]
+  }
+  const rgb = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(color)
+  if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])]
+  return null
+}
+
+/** `oklch(L C H)` → sRGB `[r, g, b]` (OKLab → linear sRGB → sRGB, D65). */
+function parseOklch(color: string): [number, number, number] | null {
+  const match = /^oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)/.exec(color)
+  if (!match) return null
+  const L = Number(match[1])
+  const C = Number(match[2])
+  const H = (Number(match[3]) * Math.PI) / 180
+  const a = C * Math.cos(H)
+  const b = C * Math.sin(H)
+  const l_ = L + 0.3963377774 * a + 0.2158037573 * b
+  const m_ = L - 0.1055613458 * a - 0.0638541728 * b
+  const s_ = L - 0.0894841775 * a - 1.291485548 * b
+  const l = l_ ** 3
+  const m = m_ ** 3
+  const s = s_ ** 3
+  const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v * 255)))
+  return [
+    clamp(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+    clamp(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+    clamp(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s),
+  ]
+}
+
+/** Any CSS color → `rgba(r, g, b, alpha)` (derived — no hardcoded color). */
 export function withAlpha(color: string, alpha: number): string {
-  const hex = color.replace('#', '')
-  const r = Number.parseInt(hex.slice(0, 2), 16)
-  const g = Number.parseInt(hex.slice(2, 4), 16)
-  const b = Number.parseInt(hex.slice(4, 6), 16)
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+  const rgb = parseRgb(color) ?? parseOklch(color)
+  if (rgb === null) return color
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`
 }

@@ -16,15 +16,32 @@ import type { CompileResponse } from '@/features/semantic/types'
 import type { ActivePlan } from '@/features/viewport/types'
 import type { SceneData } from '@/features/viewport/types'
 
-// The trajectory view mounts ECharts GL, which needs a WebGL context jsdom
-// cannot provide. This suite only asserts the trajectory DOM surface, so the
-// whole GL frontier is stubbed (no echarts-gl transform under full-parallel
-// load); the real option mapping is covered by trajectory-view.test.tsx.
-vi.mock('@/shared/charts/gl-adapter', () => ({
-  buildTrajectoryOption: vi.fn(() => ({})),
-  mountGLChart: vi.fn(() => ({ on: vi.fn(), off: vi.fn() })),
-  resizeGLChart: vi.fn(),
-  disposeGLChart: vi.fn(),
+// The trajectory view renders a react-three-fiber <Canvas>, which needs a
+// WebGL context jsdom cannot provide. This suite only asserts the trajectory
+// DOM surface, so the fiber <Canvas> is stubbed as a pass-through and drei's
+// rendering elements are stubbed (same pattern as trajectory-view.test.tsx).
+vi.mock('@react-three/fiber', () => ({
+  Canvas: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="r3f-canvas">{children}</div>
+  ),
+  useThree: () => ({
+    camera: {
+      position: { set: () => {} },
+      up: { set: () => {} },
+      near: 0,
+      far: 0,
+      lookAt: () => {},
+      updateProjectionMatrix: () => {},
+    },
+  }),
+}))
+
+vi.mock('@react-three/drei', () => ({
+  Line: (props: { ['data-testid']?: string; color?: string }) => (
+    <div data-testid={props['data-testid']} data-color={props.color} />
+  ),
+  Html: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  OrbitControls: () => null,
 }))
 
 /**

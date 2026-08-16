@@ -26,6 +26,7 @@ use crate::backends::manager::BackendManager;
 use crate::commands::Command;
 use crate::commands::handler::ExecutableCommand;
 use crate::error::RuntimeError;
+use crate::execution_boundary::velocity_retimer::VelocityRetimer;
 use crate::execution_boundary::ExecutionSample as ProtocolSample;
 use crate::motion_recorder::MotionRecorder;
 use crate::plan::{ExecutionMode, PlanState, SessionStatus};
@@ -427,7 +428,12 @@ impl SceneService {
                     waypoint_range: 0..n,
                 });
             }
-            return Some(plan);
+            // Per-joint velocity re-timer (planning bugfix): MoveL IK can emit
+            // per-joint velocities above the firmware channel ceiling. Re-time
+            // before the manifest is generated so the scheduler's VELOCITY_EXCEEDED
+            // rejection never fires on spatial-trapezoidal MoveL. Spatial joints
+            // are preserved; only violating dt gaps are stretched.
+            return Some(VelocityRetimer::retime(&plan));
         }
         let active = runtime.active_plan.as_ref()?;
         let traj = &active.trajectory;
@@ -466,12 +472,12 @@ impl SceneService {
                 waypoint_range: 0..n,
             }],
         };
-        Some(ExecutionPlan {
+        Some(VelocityRetimer::retime(&ExecutionPlan {
             waypoints,
             segments,
             duration: traj.duration(),
     repeat_count: 1,
-        })
+        }))
     }
 
     pub async fn start_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {

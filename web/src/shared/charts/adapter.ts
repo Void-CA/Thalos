@@ -1,222 +1,147 @@
 /**
- * ECharts adapter — the ONLY module that imports ECharts (design P1, O3).
+ * Chart system adapter — the ONLY module that bridges ChartModel to a chart
+ * library (design P1, O3).
  *
  * Everything else (builders, features, stores) speaks exclusively in
- * ChartModel. Swapping the chart library touches exactly this file. The React
- * wrapper also goes through this module for mount/resize/dispose, so even the
- * wrapper never imports ECharts directly.
+ * ChartModel. This module is the single point where the intermediate contract
+ * is projected onto a renderer. It is renderer-agnostic in spirit: the React
+ * wrapper (`EChartInner.tsx`) composes the Recharts components declaratively,
+ * and this adapter supplies the pure data-shaping helpers (dataset rows,
+ * series config, axis/legend/tooltip/markLine configuration) that make each
+ * ChartModel render correctly.
  *
- * Import strategy (tree-shaking): `echarts/core` + explicit `use([...])` with
- * only the chart types and components the ChartModel contract can express.
- * This module lands in a lazy-loaded chunk (see EChart.tsx) and is never part
- * of the initial bundle.
+ * Recharts composes in React (XAxis/Line/Bar/Scatter/Tooltip/ReferenceLine as
+ * JSX), so instead of producing a monolithic option object it produces: the
+ * per-row dataset, the ordered list of visual series, and the scalar
+ * configuration Recharts needs. It never touches the DOM and never renders.
  */
 
-import * as echarts from 'echarts/core'
-import { BarChart, LineChart, ScatterChart } from 'echarts/charts'
-import {
-  DataZoomComponent,
-  GridComponent,
-  LegendComponent,
-  MarkLineComponent,
-  TitleComponent,
-  TooltipComponent,
-} from 'echarts/components'
-import { CanvasRenderer } from 'echarts/renderers'
-import type { EChartsOption } from 'echarts'
 import { paletteColor, resolveChartColor, withAlpha } from './theme'
-import type { AxisConfig, ChartModel, DataZoomConfig } from './types'
-
-echarts.use([
-  LineChart,
-  BarChart,
-  ScatterChart,
-  GridComponent,
-  TooltipComponent,
-  LegendComponent,
-  DataZoomComponent,
-  MarkLineComponent,
-  TitleComponent,
-  CanvasRenderer,
-])
+import type {
+  AxisConfig,
+  ChartModel,
+  ChartSeries,
+  DataZoomConfig,
+  LegendConfig,
+  MarkLineConfig,
+  TooltipConfig,
+} from './types'
 
 const MUTED = resolveChartColor('severity.nodata')
-const GRID_SPLIT = withAlpha(resolveChartColor('severity.nodata'), 0.25)
+
+/** A single Recharts dataset row, keyed per modeled series. */
+export type ChartRow = Record<string, number | string | null>
+
+/** A series ready for a Recharts chart: dataKey into the row + presentation. */
+export interface PreparedSeries {
+  name: string
+  type: ChartSeries['type']
+  dataKey: string
+  color: string
+  hideSymbol: boolean
+  areaStyle: boolean
+}
+
+export interface PreparedChart {
+  rows: ChartRow[]
+  series: PreparedSeries[]
+  xAxis: AxisConfig
+  yAxis: AxisConfig[]
+  legend?: LegendConfig
+  dataZoom?: DataZoomConfig[]
+  tooltip?: TooltipConfig
+  markLine?: MarkLineConfig[]
+}
+
+/**
+ * Each series is projected onto its own column so line/bar/scatter series can
+ * share one Cartesian grid (Recharts datum per row, one dataKey per series).
+ * Category labels land on `__xLabel`; value/time x data land on `__x`.
+ */
+export function prepareChart(model: ChartModel): PreparedChart {
+  const xAxis = model.xAxis[0] ?? { type: 'category' }
+  const categories = xAxis.type === 'category' ? xAxis.categories ?? [] : undefined
+
+  const rows: ChartRow[] = []
+  const series: PreparedSeries[] = model.series.map((s, index) => {
+    const dataKey = `__s${index}`
+    const color = s.color === undefined ? undefined : resolveChartColor(s.color)
+    // Per-point colors (dataColors) are applied at the cell level below.
+    const fallbackColor = color ?? mutedFor(index)
+    return {
+      name: s.name,
+      type: s.type,
+      dataKey,
+      color: fallbackColor,
+      hideSymbol: s.hideSymbol ?? false,
+      areaStyle: s.areaStyle ?? false,
+    }
+  })
+
+  const rowCount = maxDataLength(model.series)
+  for (let i = 0; i < rowCount; i++) {
+    const row: ChartRow = {}
+    if (categories !== undefined) {
+      row.__xLabel = categories[i] ?? ''
+    } else {
+      // Numeric x from the first series that carries [x, y] pairs or numeric
+      // index. Prefer explicit x (time series) over array index.
+      const xValue = numericXAt(model.series, i)
+      row.__x = xValue
+    }
+    model.series.forEach((s, index) => {
+      row[`__s${index}`] = cellValue(s, i)
+    })
+    rows.push(row)
+  }
+
+  const dataZoom = toDataZoomArray(model.dataZoom)
+
+  return {
+    rows,
+    series,
+    xAxis,
+    yAxis: model.yAxis ?? [{ type: 'value' }],
+    ...(model.legend !== undefined ? { legend: model.legend } : {}),
+    ...(dataZoom.length > 0 ? { dataZoom } : {}),
+    ...(model.tooltip !== undefined ? { tooltip: model.tooltip } : {}),
+    ...(model.markLine !== undefined ? { markLine: model.markLine } : {}),
+  }
+}
+
+export const TOOLTIP_PANEL = {
+  backgroundColor: withAlpha(resolveChartColor('chart-1'), 0.95),
+  borderColor: withAlpha(MUTED, 0.9),
+} as const
+
+/** Palette token fallback for series without an explicit color token. */
+function mutedFor(index: number): string {
+  return paletteColor(index)
+}
 
 function toDataZoomArray(dataZoom: ChartModel['dataZoom']): DataZoomConfig[] {
   if (dataZoom === undefined) return []
   return Array.isArray(dataZoom) ? dataZoom : [dataZoom]
 }
 
-function mapAxis(axis: AxisConfig, isX: boolean): Record<string, unknown> {
-  const type = axis.type ?? 'category'
-  const base: Record<string, unknown> = {
-    type,
-    ...(axis.name !== undefined ? { name: axis.name } : {}),
-    ...(axis.min !== undefined ? { min: axis.min } : {}),
-    ...(axis.max !== undefined ? { max: axis.max } : {}),
-    ...(axis.minInterval !== undefined ? { minInterval: axis.minInterval } : {}),
-    ...(axis.scale !== undefined ? { scale: axis.scale } : {}),
-    axisLabel: { color: MUTED, fontSize: 11 },
-  }
-  if (isX) {
-    base.axisTick = { show: false }
-    base.axisLine = { lineStyle: { color: MUTED } }
-    if (type === 'category') base.data = axis.categories ?? []
-  } else {
-    base.axisTick = { show: false }
-    base.axisLine = { show: false }
-    base.splitLine = { lineStyle: { color: GRID_SPLIT } }
-  }
-  return base
+function maxDataLength(series: ChartSeries[]): number {
+  return series.reduce((max, s) => Math.max(max, s.data.length), 0)
 }
 
-function mapSeriesData(series: ChartModel['series'][number]): unknown[] {
-  if (series.dataColors === undefined) return series.data
-  return series.data.map((value, index) => ({
-    value,
-    itemStyle: { color: resolveChartColor(series.dataColors![index]) },
-  }))
+/** Y value (or [x, y] pair) → the numeric cell for a row. */
+function cellValue(series: ChartSeries, index: number): number | string | null {
+  const point = series.data[index]
+  if (point === undefined) return null
+  if (typeof point === 'number') return point
+  return point[1]
 }
 
-function mapSeries(series: ChartModel['series'][number], index: number): Record<string, unknown> {
-  const color = series.color === undefined ? paletteColor(index) : resolveChartColor(series.color)
-  const base: Record<string, unknown> = {
-    name: series.name,
-    type: series.type,
-    data: mapSeriesData(series),
-    ...(series.stack !== undefined ? { stack: series.stack } : {}),
+/** The numeric x for a row: explicit [x, y] x, else array index of the longest
+ *  series (x projects onto the array index per the contract). */
+function numericXAt(series: ChartSeries[], index: number): number {
+  for (const s of series) {
+    const point = s.data[index]
+    if (Array.isArray(point)) return point[0]
   }
-  if (series.type === 'line') {
-    base.smooth = series.smooth ?? false
-    base.symbol = series.hideSymbol ? 'none' : 'circle'
-    base.symbolSize = 5
-    base.lineStyle = { color, width: 2 }
-    base.itemStyle = { color }
-    if (series.areaStyle) base.areaStyle = { opacity: 0.12 }
-  } else if (series.type === 'bar') {
-    base.itemStyle = { color, borderRadius: [2, 2, 0, 0] }
-  } else {
-    base.symbolSize = 8
-    base.itemStyle = { color }
-  }
-  return base
-}
-
-/** Single point of conversion: ChartModel → EChartsOption (design P7/P1). */
-export function toEChartsOption(model: ChartModel): EChartsOption {
-  const dataZoom = toDataZoomArray(model.dataZoom)
-  const hasSlider = dataZoom.some((zoom) => zoom.type === 'slider')
-
-  const option: EChartsOption = {}
-
-  if (model.title !== undefined) {
-    option.title = {
-      text: model.title,
-      left: 0,
-      textStyle: { color: MUTED, fontSize: 13, fontWeight: 600 },
-    }
-  }
-
-  if (model.tooltip !== undefined) {
-    option.tooltip = {
-      trigger: model.tooltip.trigger,
-      confine: true,
-      ...(model.tooltip.formatter ? { formatter: model.tooltip.formatter } : {}),
-      // Legibility styling (spec "Tooltip Legibility Styling") — derived ONLY
-      // from semantic theme tokens. The brand panel (chart-1) contrasts on both
-      // light and dark themes and matches the app's primary-button treatment;
-      // the border reuses the neutral muted token. withAlpha keeps every
-      // produced color an rgba() string — no hex literals here (theme owns hex).
-      backgroundColor: withAlpha(resolveChartColor('chart-1'), 0.95),
-      borderColor: withAlpha(MUTED, 0.9),
-      borderWidth: 1,
-      padding: [6, 10],
-      textStyle: { fontSize: 12 },
-    }
-  }
-
-  if (model.legend !== undefined) {
-    const position: Record<string, unknown> =
-      model.legend.position === 'top'
-        ? { top: 0 }
-        : model.legend.position === 'left'
-          ? { left: 0 }
-          : model.legend.position === 'right'
-            ? { right: 0 }
-            : { bottom: 0 }
-    option.legend = {
-      show: model.legend.show,
-      ...position,
-      textStyle: { color: MUTED, fontSize: 11 },
-      itemWidth: 10,
-      itemHeight: 10,
-    }
-  }
-
-  option.grid = {
-    top: model.title !== undefined ? 40 : 24,
-    right: 16,
-    bottom: hasSlider ? 56 : 24,
-    left: 16,
-    containLabel: true,
-  }
-
-  option.xAxis = model.xAxis.map((axis) => mapAxis(axis, true))
-  option.yAxis = (model.yAxis ?? [{ type: 'value' }]).map((axis) => mapAxis(axis, false))
-
-  if (dataZoom.length > 0) {
-    option.dataZoom = dataZoom.map((zoom) =>
-      zoom.type === 'slider'
-        ? { type: 'slider', start: zoom.start ?? 0, end: zoom.end ?? 100, bottom: 8, height: 16 }
-        : { type: 'inside', start: zoom.start ?? 0, end: zoom.end ?? 100 },
-    )
-  }
-
-  const series = model.series.map(mapSeries)
-  option.series = series as EChartsOption['series']
-
-  if (model.markLine !== undefined && model.markLine.length > 0 && series.length > 0) {
-    const color =
-      model.markLine[0].color === undefined
-        ? resolveChartColor('severity.warning')
-        : resolveChartColor(model.markLine[0].color)
-    const first = series[0] as unknown as Record<string, unknown>
-    if (first !== undefined) {
-      first.markLine = {
-        silent: true,
-        symbol: 'none',
-        lineStyle: { type: 'dashed', color },
-        data: model.markLine.map((line) => ({
-          yAxis: line.yAxis,
-          lineStyle: {
-            color: line.color === undefined ? color : resolveChartColor(line.color),
-          },
-          label: { formatter: line.label, color: MUTED, fontSize: 10 },
-        })),
-      }
-    }
-  }
-
-  return option
-}
-
-/** Initializes (or reuses) the instance on `el` and applies the model. */
-export function mountChart(el: HTMLElement, model: ChartModel): void {
-  let chart = echarts.getInstanceByDom(el)
-  if (chart === undefined) chart = echarts.init(el)
-  chart.setOption(toEChartsOption(model), { notMerge: true })
-}
-
-/** Resizes the chart on `el` when its container changes size. */
-export function resizeChart(el: HTMLElement): void {
-  echarts.getInstanceByDom(el)?.resize()
-}
-
-/** Disposes the instance on `el`. Returns whether one existed. */
-export function disposeChart(el: HTMLElement): boolean {
-  const chart = echarts.getInstanceByDom(el)
-  if (chart === undefined) return false
-  echarts.dispose(el)
-  return true
+  return index
 }

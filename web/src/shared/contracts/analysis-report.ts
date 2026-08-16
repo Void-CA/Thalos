@@ -110,6 +110,28 @@ export interface ManipulabilityPointWire {
   manipulability_grade?: 'low' | 'medium' | 'high'
 }
 
+/** One singularity point per analyzed waypoint (dense series). Projection of
+ *  `PlanAnalysis.waypoints[].singularity` computed by the backend. Unlike
+ *  `observations` (which only emit anomalies), this series is DENSE — it covers
+ *  the whole trajectory, so the viewport can color every waypoint. The
+ *  `singularity_state` is the backend's runtime classification projected onto
+ *  the wire (`"normal" | "near" | "singular"`, same logic that fires the
+ *  Singularity/NearSingularity observations). */
+export interface SingularityPointWire {
+  /** 0-based waypoint index in the analyzed plan. */
+  waypoint: number
+  /** Trajectory time of the waypoint in seconds (additive — optional for
+   *  backward compatibility: older backends omit it, consumers fall back to
+   *  the waypoint index on the x axis). */
+  timestamp?: number
+  /** Jacobian determinant det(J·Jᵀ) at that waypoint. */
+  det_jtj?: number
+  /** Condition number κ(J) at that waypoint. */
+  condition_number?: number
+  /** Backend classification: "normal" | "near" | "singular". */
+  singularity_state: 'normal' | 'near' | 'singular'
+}
+
 /** A remediation recommendation (spec recommendation-model "Wire Contract").
  *  Projection of `Recommendation { id, action, edit, status, reason }` — the
  *  typed `edit` is a semantic plan command (design D1) that the
@@ -208,6 +230,12 @@ export interface AnalysisReportWire {
    *  annotates it `#[serde(default, skip_serializing_if = "Vec::is_empty")]`,
    *  so old payloads and trivial plans omit it (I3 — additive delta). */
   manipulability_series?: ManipulabilityPointWire[]
+  /** Dense per-waypoint singularity series. OPTIONAL on the wire: the backend
+   *  annotates it `#[serde(default, skip_serializing_if = "Vec::is_empty")]`,
+   *  so old payloads and trivial plans omit it (I3 — additive delta). Unlike
+   *  `observations` this is DENSE (one entry per analyzed waypoint), which lets
+   *  trajectory coloring cover the whole plan. */
+  singularity_series?: SingularityPointWire[]
   /** Remediation recommendations (PR2). OPTIONAL on the wire (additive, I3):
    *  old payloads omit the field; the advisor only produces recommendations
    *  when the analysis flow carries program + solver context. */
@@ -384,6 +412,15 @@ export function manipulabilitySeriesOf(
   return report.manipulability_series ?? []
 }
 
+/** The per-waypoint singularity series, defaulting to `[]` when absent
+ *  (I3: old payloads and trivial plans omit the field — dense coloring must not
+ *  break on old payloads that only have observations). */
+export function singularitySeriesOf(
+  report: AnalysisReportWire,
+): SingularityPointWire[] {
+  return report.singularity_series ?? []
+}
+
 // ─── R1/R4/R5 metrics accessors (evaluation hotfix) ────────────────────────
 //
 // The wire projects `AnalysisMetrics.to_btree_map()` as a flat
@@ -463,36 +500,129 @@ export interface WaypointAnalysisView {
   clearance: number | null
 }
 
+/**
+ * Build the per-waypoint analysis view from DENSE series, overlaying the
+ * authoritative sparse `observations`.
+ *
+ * Why DENSE: `observations` only emit anomalies, so a healthy/average plan has
+ * almost no waypoints colored (everything fell back to grey `nodata`). The
+ * backend already computes a per-waypoint `manipulability_series` and
+ * `singularity_series` (one entry per analyzed waypoint); this view consumes
+ * them so trajectory coloring covers the WHOLE plan.
+ *
+ * - `manipulability` ← `manipulability_series.waypoints[].yoshikawa`
+ * - `singularity_state` ← `singularity_series.waypoints[].singularity_state`
+ * - `severity` is DERIVED from the dense signals for COLORING ONLY (a
+ *   visualization-level warning/critical indicator), never the Assessor's
+ *   rule-engine verdict. Any observation's own severity OVERRIDES it on that
+ *   waypoint (authoritative when present).
+ * - `clearance` stays observation-derived (`min_collision_distance` is not
+ *   part of a series).
+ *
+ * Old payloads with neither series nor observations still return `[]`.
+ */
 export function waypointAnalysisFromReport(report: AnalysisReportWire): WaypointAnalysisView[] {
   const entries: WaypointAnalysisView[] = []
+  const seen = new Set<number>()
+
+  // Dense pass: seed every series-covered waypoint.
+  for (const p of manipulabilitySeriesOf(report)) {
+    seen.add(p.waypoint)
+    entries.push({
+      index: p.waypoint,
+      severity: deriveSeverity(p.yoshikawa, null),
+      manipulability: p.yoshikawa,
+      singularity_state: null,
+      clearance: null,
+    })
+  }
+  for (const s of singularitySeriesOf(report)) {
+    const existing = entries.find(e => e.index === s.waypoint)
+    if (existing) {
+      existing.singularity_state = s.singularity_state
+      existing.severity = derivedSeverityOf(existing)
+    } else {
+      seen.add(s.waypoint)
+      entries.push({
+        index: s.waypoint,
+        severity: deriveSeverity(null, s.singularity_state),
+        manipulability: null,
+        singularity_state: s.singularity_state,
+        clearance: null,
+      })
+    }
+  }
+
+  // Observation pass: authoritative override for anomaly waypoints.
   for (const observation of report.observations) {
     const waypoint = waypointOf(observation)
     if (waypoint === null) continue
-    entries.push({
-      index: waypoint,
-      severity:
-        observation.severity === 'Error'
-          ? 'critical'
-          : observation.severity === 'Warning'
-            ? 'warning'
-            : 'good',
-      manipulability:
-        observation.kind === 'LowManipulability'
-          ? numericAttribute(observation.attributes, 'value')
-          : null,
-      singularity_state:
-        observation.kind === 'Singularity'
-          ? 'singular'
-          : observation.kind === 'NearSingularity'
-            ? 'near'
+    const entry = entries.find(e => e.index === waypoint)
+    const severity: WaypointAnalysisView['severity'] =
+      observation.severity === 'Error'
+        ? 'critical'
+        : observation.severity === 'Warning'
+          ? 'warning'
+          : 'good'
+    if (entry) {
+      entry.severity = severity
+      if (observation.kind === 'LowManipulability') {
+        entry.manipulability = numericAttribute(observation.attributes, 'value')
+      } else if (observation.kind === 'Singularity') {
+        entry.singularity_state = 'singular'
+      } else if (observation.kind === 'NearSingularity') {
+        entry.singularity_state = 'near'
+      }
+      if (observation.kind === 'CollisionRisk' || observation.kind === 'CollisionNear') {
+        entry.clearance = numericAttribute(observation.attributes, 'value')
+      }
+    } else {
+      seen.add(waypoint)
+      entries.push({
+        index: waypoint,
+        severity,
+        manipulability:
+          observation.kind === 'LowManipulability'
+            ? numericAttribute(observation.attributes, 'value')
             : null,
-      clearance:
-        observation.kind === 'CollisionRisk' || observation.kind === 'CollisionNear'
-          ? numericAttribute(observation.attributes, 'value')
-          : null,
-    })
+        singularity_state:
+          observation.kind === 'Singularity'
+            ? 'singular'
+            : observation.kind === 'NearSingularity'
+              ? 'near'
+              : null,
+        clearance:
+          observation.kind === 'CollisionRisk' || observation.kind === 'CollisionNear'
+            ? numericAttribute(observation.attributes, 'value')
+            : null,
+      })
+    }
   }
+
+  void seen
   return entries.sort((a, b) => a.index - b.index)
+}
+
+/** Visualization-level severity from dense signals (see the dense doc above).
+ *  `singular` is critical; low manipulability drops to warning (harder floor
+ *  → critical); otherwise good. An observation's severity overrides this. */
+function deriveSeverity(
+  yoshikawa: number | null,
+  singularity_state: WaypointAnalysisView['singularity_state'],
+): WaypointAnalysisView['severity'] {
+  if (singularity_state === 'singular') return 'critical'
+  if (singularity_state === 'near') return 'warning'
+  if (yoshikawa != null) {
+    if (yoshikawa < 0.1) return 'critical'
+    if (yoshikawa < 0.3) return 'warning'
+  }
+  return 'good'
+}
+
+/** Recompute severity for a partially-populated entry after a dense signal was
+ *  attached (merged manipulability + singularity). */
+function derivedSeverityOf(entry: { manipulability: number | null; singularity_state: WaypointAnalysisView['singularity_state'] }): WaypointAnalysisView['severity'] {
+  return deriveSeverity(entry.manipulability, entry.singularity_state)
 }
 
 /** Stable dedup key for a recommendation row: action kind + edit variant

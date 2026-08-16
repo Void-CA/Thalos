@@ -33,6 +33,7 @@ use thalos_core::{
         observation::{ArtifactRef, Observation},
         region::{ProblemRegion, SemanticProblem, project_semantic_problem},
         report::AnalysisReport,
+        singularity::{SingularityAnalysis, SingularityConfig, SingularityState},
         summary::AnalysisSummary,
     },
     ids::{ExecutionSessionId, MotionPlanId, RobotId, SceneId, SemanticProgramId, TaskDocumentId},
@@ -203,6 +204,19 @@ pub struct PlanAnalysisResponse {
     /// existentes que no leen el campo siguen funcionando sin cambios (I3).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub manipulability_series: Vec<ManipulabilityPointDto>,
+    /// Serie de singularidad por waypoint (spec analysis-report-contract
+    /// "Dense Singularity Series"): un punto
+    /// `{waypoint, timestamp, det_jtj, condition_number, singularity_state}`
+    /// por waypoint con reporte de singularidad — clasificación
+    /// `"normal"|"near"|"singular"` EXACTAMENTE la del runtime
+    /// (`SingularityAnalysis::classify_report`, misma lógica que emite las
+    /// observaciones, ver singularity/report.rs). La serie es DENSE: cubre
+    /// toda la trayectoria (a diferencia de `observations`, que solo emite
+    /// anomalías) y permite al viewport colorear el plan completo. ADITIVO —
+    /// `#[serde(default)]` + omitido cuando vacío: los clientes antiguos
+    /// deserializan a `[]` sin error (I3).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub singularity_series: Vec<SingularityPointDto>,
     /// Recomendaciones de remediación (spec recommendation-model "Wire
     /// Contract"): cada una lleva `action` + `edit` (comando semántico de
     /// plan). ADITIVO — `#[serde(default)]` + omitido cuando vacío: los
@@ -291,6 +305,27 @@ impl PlanAnalysisResponse {
                 })
             })
             .collect();
+        let singularity_series = analysis
+            .waypoints
+            .iter()
+            .filter_map(|w| {
+                w.singularity.as_ref().map(|s| SingularityPointDto {
+                    waypoint: w.index as u32,
+                    timestamp: w.timestamp,
+                    det_jtj: s.det_jtj,
+                    condition_number: s.condition_number,
+                    // Clasificación del runtime, proyectada al wire: usa la
+                    // MISMA lógica que emite las observaciones (threshold
+                    // default) para que el color del viewport coincida con el
+                    // diagnóstico del Assessor.
+                    singularity_state: state_as_str(SingularityAnalysis::classify_report(
+                        s,
+                        &SingularityConfig::default(),
+                    ))
+                    .to_string(),
+                })
+            })
+            .collect();
         Self {
             artifact: ArtifactDto::from(&report.artifact),
             observations: report
@@ -303,6 +338,7 @@ impl PlanAnalysisResponse {
             summary: SummaryDto::from(&report.summary),
             problem_regions: ProblemRegionsDtoAdapter::from_regions(&regions, segments),
             manipulability_series,
+            singularity_series,
             recommendations: recommendations
                 .iter()
                 .map(RecommendationDto::from)
@@ -357,6 +393,45 @@ pub struct ManipulabilityPointDto {
     /// exponente `n_sv` NUNCA viaja en el contrato (decisión de diseño).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub manipulability_grade: Option<String>,
+}
+
+/// Punto de la serie de singularidad por waypoint (dense).
+///
+/// Proyecta UN WAYPOINT del `analysis.waypoints` al wire (a diferencia de
+/// `observations`, que solo emite anomalías). `singularity_state` es la
+/// clasificación del runtime (`"normal" | "near" | "singular"`) re-derivada
+/// con la MISMA lógica de `SingularityAnalysis::classify_report` (ver
+/// singularity/report.rs) — jamás recomputada, se proyecta el estado al wire.
+/// Los waypoints sin reporte de singularidad se omiten (filter_map), espejando
+/// cómo `manipulability_series` trata los waypoints sin manipulabilidad.
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct SingularityPointDto {
+    /// Índice del waypoint en el plan (0-based).
+    pub waypoint: u32,
+    /// Tiempo del waypoint en segundos dentro de la trayectoria (eje X temporal
+    /// del gráfico). ADITIVO (`#[serde(default)]`): un backend viejo sin el
+    /// campo no rompe a los clientes (I3) — los builders caen al índice.
+    #[serde(default)]
+    pub timestamp: f64,
+    /// Determinante de J·Jᵀ (producto de los valores singulares al cuadrado),
+    /// proyectado del `SingularityReport` del runtime.
+    #[serde(default)]
+    pub det_jtj: f64,
+    /// Número de condición κ(J) en ese waypoint (del `SingularityReport`).
+    #[serde(default)]
+    pub condition_number: f64,
+    /// Clasificación del runtime: `"normal" | "near" | "singular"`.
+    pub singularity_state: String,
+}
+
+/// Convierte el [`SingularityState`] del runtime a su forma wire
+/// `"normal" | "near" | "singular"` (contrato estable del viewport).
+fn state_as_str(state: SingularityState) -> &'static str {
+    match state {
+        SingularityState::Normal => "normal",
+        SingularityState::NearSingular => "near",
+        SingularityState::Singular => "singular",
+    }
 }
 
 /// Ancla de artefacto en el wire — kind + id real (O3).
@@ -1942,10 +2017,202 @@ mod tests {
             serde_json::from_value(value).expect("legacy point must deserialize");
         assert_eq!(back.manipulability_series[0].normalized_yoshikawa, None);
         assert_eq!(back.manipulability_series[0].manipulability_grade, None);
-        assert!(
+assert!(
             (back.manipulability_series[0].yoshikawa - 0.1).abs() < 1e-12,
-            "pre-existing fields keep their values"
+            "pre-existing series fields keep their values"
         );
+    }
+
+    // ─── Dense singularity_series (spec analysis-report-contract) ──────────
+    //
+    // A diferencia de `observations` (que solo emite anomalías), la serie de
+    // singularidad es DENSE: cubre cada waypoint con reporte de singularidad y
+    // permite al viewport colorear el plan completo. La clasificación
+    // `singularity_state` es del runtime (`SingularityAnalysis::classify_report`).
+
+    #[test]
+    fn singularity_series_projects_one_entry_per_waypoint() {
+        // A 20-waypoint plan with a singularity report at every waypoint →
+        // 20 entries, each carrying waypoint, timestamp, det_jtj and the
+        // runtime classification (condition 1.0/rank 2 → "normal").
+        let report = sample_report();
+        let analysis = sample_analysis(20);
+        let segments: Vec<PlannedSegment> = Vec::new();
+
+        let value = serde_json::to_value(PlanAnalysisResponse::from_report(
+            &report,
+            &analysis,
+            &segments,
+            &[],
+            None,
+        ))
+        .expect("serialize");
+        let series = value["singularity_series"]
+            .as_array()
+            .expect("singularity_series must be an array");
+        assert_eq!(series.len(), 20, "20 waypoints → 20 series entries");
+        assert_eq!(series[0]["waypoint"], 0);
+        assert_eq!(series[0]["singularity_state"], "normal");
+        assert_eq!(
+            series[0]["timestamp"].as_f64().expect("f64"),
+            0.0,
+            "each point must carry its trajectory time in seconds"
+        );
+        assert!(
+            (series[0]["det_jtj"].as_f64().expect("f64") - 0.01).abs() < 1e-12,
+            "det_jtj = yoshikawa² (0.1²) must be projected"
+        );
+        assert_eq!(series[19]["waypoint"], 19);
+        assert_eq!(
+            series[19]["timestamp"].as_f64().expect("f64"),
+            19.0 * 0.5,
+            "the last point carries the end-of-trajectory timestamp"
+        );
+    }
+
+    #[test]
+    fn singularity_series_classifies_into_normal_near_singular() {
+        // The wire state must EXACTLY match the runtime classification used by
+        // the Assessor: healthy → "normal", condition > 100 → "near",
+        // rank-deficient/infinite → "singular".
+        fn wp(i: usize, condition: f64, rank: usize) -> WaypointAnalysis {
+            WaypointAnalysis {
+                index: i,
+                timestamp: i as f64,
+                joints: vec![0.0, 0.0],
+                singularity: Some(SingularityReport {
+                    det_jtj: 1.0,
+                    condition_number: condition,
+                    rank,
+                    singular_values: vec![1.0, 1.0],
+                }),
+                manipulability: None,
+                min_collision_distance: None,
+            }
+        }
+        let analysis = PlanAnalysis {
+            waypoints: vec![wp(0, 2.0, 2), wp(1, 150.0, 2), wp(2, f64::INFINITY, 1)],
+            metrics: AnalysisMetrics {
+                waypoint_count: 3,
+                trajectory_duration: 0.0,
+                avg_manipulability: None,
+                min_manipulability: None,
+                near_singular_count: 1,
+                singular_count: 1,
+                min_collision_distance: None,
+                min_collision_waypoint: None,
+                has_collisions: false,
+                first_collision_waypoint: None,
+            },
+            constraint_violations: Vec::new(),
+        };
+        let report = sample_report();
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let value = serde_json::to_value(PlanAnalysisResponse::from_report(
+            &report,
+            &analysis,
+            &segments,
+            &[],
+            None,
+        ))
+        .expect("serialize");
+        let series = value["singularity_series"]
+            .as_array()
+            .expect("singularity_series must be an array");
+        assert_eq!(series.len(), 3);
+        assert_eq!(series[0]["singularity_state"], "normal");
+        assert_eq!(series[1]["singularity_state"], "near");
+        assert_eq!(series[2]["singularity_state"], "singular");
+    }
+
+    #[test]
+    fn singularity_series_round_trips_preserving_values() {
+        // Serde round-trip: entries survive serialize → deserialize with exact
+        // waypoint/det_jtj/state values.
+        let report = sample_report();
+        let analysis = sample_analysis(20);
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[], None);
+
+        let json = serde_json::to_string(&response).expect("serialize");
+        let back: PlanAnalysisResponse = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.singularity_series.len(), 20);
+        assert_eq!(back.singularity_series[3].waypoint, 3);
+        assert_eq!(back.singularity_series[3].singularity_state, "normal");
+        assert!(
+            (back.singularity_series[3].condition_number - 1.0).abs() < 1e-12,
+            "round-trip must preserve condition_number"
+        );
+    }
+
+    #[test]
+    fn singularity_series_empty_for_trivial_plan() {
+        // 0 waypoints → the field is omitted on the wire (skip_serializing_if,
+        // additive for old clients) and deserializes back to an empty array.
+        let report = sample_report();
+        let analysis = sample_analysis(0);
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[], None);
+
+        let value = serde_json::to_value(response).expect("serialize");
+        assert!(
+            value.get("singularity_series").is_none(),
+            "empty series must be skipped on the wire (additive for old clients)"
+        );
+
+        let json = serde_json::to_string(&value).expect("serialize");
+        let back: PlanAnalysisResponse = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(
+            back.singularity_series,
+            Vec::new(),
+            "absent field must default to an empty array"
+        );
+    }
+
+    #[test]
+    fn singularity_series_skips_waypoints_without_report() {
+        // filter_map: a waypoint without a singularity report is omitted from
+        // the series (mirroring how manipulability_series drops None) rather
+        // than fabricated.
+        let report = sample_report();
+        let mut analysis = sample_analysis(3);
+        analysis.waypoints[1].singularity = None;
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let value = serde_json::to_value(PlanAnalysisResponse::from_report(
+            &report,
+            &analysis,
+            &segments,
+            &[],
+            None,
+        ))
+        .expect("serialize");
+        let series = value["singularity_series"]
+            .as_array()
+            .expect("singularity_series must be an array");
+        assert_eq!(series.len(), 2, "waypoint[1] without singularity is dropped");
+        assert_eq!(series[0]["waypoint"], 0);
+        assert_eq!(series[1]["waypoint"], 2);
+    }
+
+    #[test]
+    fn old_payload_without_singularity_series_deserializes() {
+        // Spec I3 "Old client unaffected": a payload without
+        // `singularity_series` deserializes fine — the field defaults to empty.
+        let report = sample_report();
+        let analysis = sample_analysis(2);
+        let segments: Vec<PlannedSegment> = Vec::new();
+        let response = PlanAnalysisResponse::from_report(&report, &analysis, &segments, &[], None);
+
+        let mut value = serde_json::to_value(response).expect("serialize");
+        value
+            .as_object_mut()
+            .expect("object")
+            .remove("singularity_series");
+
+        let back: PlanAnalysisResponse =
+            serde_json::from_value(value).expect("old payload must deserialize");
+        assert!(back.singularity_series.is_empty());
+        assert_eq!(back.summary.score, 40, "pre-existing fields keep their shape");
     }
 
     #[test]

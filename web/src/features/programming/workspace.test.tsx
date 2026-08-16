@@ -92,8 +92,23 @@ describe('ProgrammingWorkspace — unified tabs (Task | Motion | Code)', () => {
   it('switches to the Motion tab (PlanningPanel + TrajectoryColorPicker)', () => {
     renderWorkspace()
     fireEvent.click(screen.getByRole('tab', { name: 'Motion' }))
-    expect(screen.getByRole('heading', { name: 'Trajectory Color' })).toBeInTheDocument()
+    // Trajectory Color lives in a collapsed Accordion section on this tab.
+    expect(screen.getByRole('button', { name: /Trajectory Color/ })).toBeInTheDocument()
+    // Expand it to reveal the picker modes.
+    fireEvent.click(screen.getByRole('button', { name: /Trajectory Color/ }))
+    expect(screen.getByRole('button', { name: 'Segment' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Quality' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Manipulability' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Singularity' })).toBeInTheDocument()
     expect(screen.getByText(/No segments\. Add a motion command/)).toBeInTheDocument()
+  })
+
+  it('exposes the Trajectory Color section (collapsed) on Task and Code tabs too', () => {
+    renderWorkspace()
+    fireEvent.click(screen.getByRole('tab', { name: 'Task' }))
+    expect(screen.getByRole('button', { name: /Trajectory Color/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Code' }))
+    expect(screen.getByRole('button', { name: /Trajectory Color/ })).toBeInTheDocument()
   })
 
   it('renders NO analysis content inside the programming workspace anymore', () => {
@@ -170,7 +185,7 @@ describe('ProgrammingWorkspace — tab-switch guard (task-code-sync-guards spec)
 
     expect(confirmSpy).toHaveBeenCalled()
     // The switch completes: Motion panel renders, Code editor unmounts.
-    expect(screen.getByRole('heading', { name: 'Trajectory Color' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Trajectory Color/ })).toBeInTheDocument()
     expect(screen.queryByTestId('program-textarea')).not.toBeInTheDocument()
   })
 
@@ -182,6 +197,6 @@ describe('ProgrammingWorkspace — tab-switch guard (task-code-sync-guards spec)
     fireEvent.click(screen.getByRole('tab', { name: 'Motion' }))
 
     expect(confirmSpy).not.toHaveBeenCalled()
-    expect(screen.getByRole('heading', { name: 'Trajectory Color' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Trajectory Color/ })).toBeInTheDocument()
   })
 })

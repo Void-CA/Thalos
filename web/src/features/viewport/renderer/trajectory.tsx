@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useSceneStore } from '../store'
 import { useAnalysisStore } from '@/features/analysis/store'
-import { waypointAnalysisFromReport } from '@/shared/contracts/analysis-report'
+import { waypointAnalysisFromReport, type WaypointAnalysisView } from '@/shared/contracts/analysis-report'
 import { scaleFromRefDim } from './scale'
 import type { VisualWaypointDto } from '../api/scene-api.types'
 import {
@@ -46,8 +46,6 @@ export function Trajectory() {
     [analysisReport],
   )
 
-  const hasAnalysis = analysisWp.length > 0 && analysisWp.length === (vis?.waypoints.length ?? 0)
-
   // Active waypoint: highlighted while execution ticks drive the robot, index
   // derived from the same execution progress that positions the model.
   const activeWaypointIndex = useMemo(() => {
@@ -59,28 +57,28 @@ export function Trajectory() {
   }, [transformSnapshot.kind, execution, vis])
 
   const perWaypointColor = useMemo(() => {
-    if (!vis || !hasAnalysis || !analysisWp.length || colorMode === 'segment') return null
-    return analysisWp.map(wp => {
-      switch (colorMode) {
-        case 'trajectory-quality':
-          return SEVERITY[wp.severity] ?? SEVERITY.nodata
-        case 'manipulability':
-          if (wp.manipulability == null) return SEVERITY.nodata
-          if (wp.manipulability >= 0.5) return MANIP_HIGH
-          if (wp.manipulability >= 0.3) return MANIP_MED
-          return MANIP_LOW
-        case 'singularity':
-          switch (wp.singularity_state) {
-            case 'singular': return SINGULAR_SINGULAR
-            case 'near': return SINGULAR_NEAR
-            case 'normal': return SINGULAR_NORMAL
-            default: return SEVERITY.nodata
-          }
-        default:
-          return SEVERITY.nodata
+    // 'segment' mode colors by the plan's own segments (handled by
+    // TrajectoryLines) — never through per-waypoint analysis colors.
+    if (!vis || colorMode === 'segment') return null
+    // Index-keyed colors sized to the WAYPOINT count. The old exact-length
+    // gate (analysisWp.length === waypoints.length) disabled every non-segment
+    // mode whenever analysis coverage was sparse (healthy plans have few
+    // observations), so Quality/Manipulability/Singularity all fell back to
+    // one flat color. Sparse coverage now degrades per-waypoint to grey
+    // `nodata` (matching the contract's graceful fallback) instead of
+    // disabling the whole mode.
+    const colors: number[] = new Array<number>(vis.waypoints.length).fill(SEVERITY.nodata)
+    let covered = 0
+    for (const wp of analysisWp) {
+      if (wp.index < 0 || wp.index >= vis.waypoints.length) continue
+      const color = colorForWaypoint(wp, colorMode)
+      if (color !== null) {
+        colors[wp.index] = color
+        covered++
       }
-    })
-  }, [colorMode, analysisWp, hasAnalysis, vis])
+    }
+    return covered > 0 ? colors : null
+  }, [colorMode, analysisWp, vis])
 
   const fallbackLine = useMemo(() => {
     if (!vis || vis.waypoints.length < 2) return null
@@ -274,4 +272,31 @@ function getSegmentColor(i: number, segments: { segmentIndex: number; waypointSt
     }
   }
   return SEVERITY.nodata
+}
+
+/** Per-waypoint color for a non-segment color mode. `null` when the waypoint
+ *  has no analysable data for that mode (caller falls back to grey nodata).
+ *  Pure — extracted so the color-mapping rules are unit-testable. */
+export function colorForWaypoint(
+  wp: { severity: WaypointAnalysisView['severity']; manipulability: number | null; singularity_state: WaypointAnalysisView['singularity_state'] },
+  colorMode: string,
+): number | null {
+  switch (colorMode) {
+    case 'trajectory-quality':
+      return SEVERITY[wp.severity] ?? SEVERITY.nodata
+    case 'manipulability':
+      if (wp.manipulability == null) return null
+      if (wp.manipulability >= 0.5) return MANIP_HIGH
+      if (wp.manipulability >= 0.3) return MANIP_MED
+      return MANIP_LOW
+    case 'singularity':
+      switch (wp.singularity_state) {
+        case 'singular': return SINGULAR_SINGULAR
+        case 'near': return SINGULAR_NEAR
+        case 'normal': return SINGULAR_NORMAL
+        default: return null
+      }
+    default:
+      return null
+  }
 }
