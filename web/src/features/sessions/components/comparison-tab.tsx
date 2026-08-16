@@ -48,7 +48,7 @@ export function ComparisonTab({ sessionId }: ComparisonTabProps) {
 
   return (
     <div className="space-y-3">
-      <div className="h-64 w-full">
+      <div className="h-80 w-full">
         <EChart model={model} />
       </div>
 

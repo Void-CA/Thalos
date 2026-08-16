@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import '@testing-library/jest-dom/vitest'
 import { SessionDetail } from './SessionDetail'
@@ -95,6 +95,28 @@ describe('SessionDetail — summary preview from /summary (spec "Preview without
     expect(await screen.findByText('38.4 Hz')).toBeInTheDocument()
     expect(screen.getByText('7')).toBeInTheDocument() // event_count
     expect(screen.getByText('0.012')).toBeInTheDocument() // max_tracking_error
+  })
+
+  it('renders all canonical metrics verbatim in the stat card layout (spec "Responsive Stat Cards Grid")', async () => {
+    renderDetail()
+    await screen.findByText('480 samples')
+
+    const preview = screen.getByLabelText('Session preview')
+    // From /summary — values identical to the payload, never recalculated.
+    expect(within(preview).getByText('480 samples')).toBeInTheDocument() // sample_count
+    expect(within(preview).getByText('12.5s')).toBeInTheDocument() // duration
+    expect(within(preview).getByText('4 joints')).toBeInTheDocument() // joint_count
+    expect(within(preview).getByText('3.4')).toBeInTheDocument() // path_length
+    expect(within(preview).getByText('live')).toBeInTheDocument() // recording_source
+    expect(within(preview).getByText('Completed')).toBeInTheDocument() // status
+
+    const statistics = screen.getByLabelText('Execution statistics')
+    // From /statistics — canonical, verbatim.
+    expect(within(statistics).getByText('38.4 Hz')).toBeInTheDocument() // sample_rate
+    expect(within(statistics).getByText('7')).toBeInTheDocument() // event_count
+    expect(within(statistics).getByText('5')).toBeInTheDocument() // waypoints_completed
+    expect(within(statistics).getByText('0.012')).toBeInTheDocument() // max_tracking_error
+    expect(within(statistics).getByText('0.004')).toBeInTheDocument() // avg_tracking_error
   })
 
   it('shows a loading state while the summary query is pending', () => {
