@@ -7,6 +7,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use thalos_core::execution::plan::{
+    ExecutionInstruction, ExecutionPlan, ExecutionSegment, ExecutionWaypoint,
+};
 use thalos_runtime::{
     ExecutionSession, RobotController, SessionStatus,
     backends::{esp32::Esp32Backend, transport::FakeTransport},
@@ -24,6 +27,30 @@ async fn make_connected_backend() -> Esp32Backend {
     backend
 }
 
+/// The 2-waypoint, 2-DOF plan the fixture executes — a single MoveJ segment
+/// over 2.0 s.
+fn two_dof_plan() -> ExecutionPlan {
+    ExecutionPlan {
+        waypoints: vec![
+            ExecutionWaypoint {
+                joints: vec![0.0, 0.0],
+                timestamp: 0.0,
+            },
+            ExecutionWaypoint {
+                joints: vec![1.0, 1.0],
+                timestamp: 2.0,
+            },
+        ],
+        segments: vec![ExecutionSegment {
+            index: 0,
+            planned_segment_index: 0,
+            instruction: ExecutionInstruction::MoveJ,
+            waypoint_range: 0..2,
+        }],
+        duration: 2.0,
+    }
+}
+
 /// Connect + execute a 2-waypoint, 2-DOF plan over 2.0s, so `plan_duration`
 /// is stored on the backend (required for RUNNING → seconds progress).
 async fn make_executing_backend() -> Esp32Backend {
@@ -36,7 +63,7 @@ async fn make_executing_backend() -> Esp32Backend {
     // EXECUTE OK
     backend.test_inject_response(b"OK\n".to_vec()).await;
     backend
-        .execute(vec![vec![0.0, 0.0], vec![1.0, 1.0]], 2.0)
+        .execute(two_dof_plan())
         .await
         .expect("execute should succeed");
     backend

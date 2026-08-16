@@ -223,11 +223,14 @@ def test_limit_finder_write_joint_limits_updates_toml():
         shutil.rmtree(t.parent, ignore_errors=True)
 
 
-def test_calibrate_pulse_to_rad_uses_toml_mapping():
-    # approval: pulse_to_rad now maps via the canonical TOML (was servo_config.h)
-    assert calibrate.pulse_to_rad(0, 350) == -1.5708   # min pulse -> min joint
-    assert calibrate.pulse_to_rad(0, 1650) == 1.5708   # max pulse -> max joint
-    assert abs(calibrate.pulse_to_rad(0, 1000) - 0.0) < 1e-9  # mid pulse -> mid joint
+def test_calibrate_exposes_servo_channels_from_toml():
+    # The calibration tool commands the PCA9685 DIRECTLY via RAW_PULSE, using
+    # the joint→channel map from the canonical TOML [hardware] section (was:
+    # pulse_to_rad round-trip, removed — it extrapolated a stale map and the
+    # firmware rejected/saturated beyond the envelope).
+    assert len(calibrate.CFG["servo_channels"]) == 4
+    # joint 0 (base) -> PCA9685 channel 15 (servo_hw_config.h)
+    assert calibrate.CFG["servo_channels"][0] == 15
 
 
 # --- T15: regen + parity stay green after a write --------------------------

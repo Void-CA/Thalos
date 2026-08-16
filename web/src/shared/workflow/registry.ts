@@ -132,6 +132,12 @@ export const WORKSPACE_REGISTRY: Area[] = [
  */
 const DERIVED_FLAG_ORIGIN: Partial<Record<WorkflowFlag, WorkflowFlag>> = {
   planReady: 'compiled',
+  // executionViewable is derived from the execution status; no workspace
+  // produces it. Mapping it to the plan origin means a transient
+  // non-executable state (e.g. a mid-retry reset) redirects to Programming
+  // (the plan producer) — never the Robot root ('/'), which previously made a
+  // failed retry look like a full pipeline restart.
+  executionViewable: 'compiled',
 }
 
 /**

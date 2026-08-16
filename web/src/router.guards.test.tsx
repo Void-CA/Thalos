@@ -202,14 +202,16 @@ describe('GuardedRoute — behavior over real router routes', () => {
     expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
   })
 
-  it('blocks /execution without an executable plan, redirecting to the producer', async () => {
-    // executable=false (compiled but no status ready/running/paused) → no producer → root.
+  it('blocks /execution without an executable plan, redirecting to the plan producer (Programming)', async () => {
+    // executionViewable=false (no ready/running/paused status) → derived flag
+    // with no direct producer → the guard lands on its origin producer (/task,
+    // Programming) — NEVER the Robot root ('/'), which previously made a
+    // failed retry look like a full pipeline restart.
     seedWorkflowState({ robotLoaded: true, compiled: true })
     const router = renderRouter(['/execution'])
 
     expect(producerOf('executable')).toBeUndefined()
-    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
-    expect(screen.getByRole('heading', { name: 'Tools' })).toBeInTheDocument()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/task'))
   })
 
   it('renders /execution when the plan is executable', async () => {

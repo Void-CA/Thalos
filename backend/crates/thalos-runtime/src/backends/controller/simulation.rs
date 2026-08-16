@@ -6,6 +6,7 @@ use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
+use thalos_core::execution::plan::ExecutionPlan;
 use thalos_core::execution::runtime::{RuntimeAction, RuntimeEvent, RuntimeProgram};
 
 use crate::backends::controller::{BackendCapabilities, RobotController};
@@ -264,12 +265,17 @@ impl RobotController for SimulationController {
 
     async fn execute(
         &mut self,
-        waypoints: Vec<Vec<f64>>,
-        duration: f64,
+        plan: ExecutionPlan,
     ) -> Result<(), ControllerError> {
         if !self.connected.load(Ordering::SeqCst) {
             return Err(ControllerError::NotConnected);
         }
+        let waypoints: Vec<Vec<f64>> = plan
+            .waypoints
+            .iter()
+            .map(|wp| wp.joints.clone())
+            .collect();
+        let duration = plan.duration;
         if waypoints.is_empty() || duration <= 0.0 {
             return Ok(());
         }
@@ -384,13 +390,39 @@ mod tests {
     use super::*;
     use std::time::Duration;
     use thalos_core::{
-        execution::runtime::{RuntimeAction, RuntimeEvent, RuntimeProgram},
+        execution::{
+            plan::{ExecutionInstruction, ExecutionSegment, ExecutionWaypoint},
+            runtime::{RuntimeAction, RuntimeEvent, RuntimeProgram},
+        },
         ids::OperationId,
         motion::target::{OutputChannel, OutputValue},
     };
 
-    /// Connect, load a program, and start a 2-DOF trajectory
-    /// `[0,0] → [1,1]` over `duration` seconds.
+    /// The 2-DOF trajectory `[0,0] → [1,1]` over `duration` seconds as an
+    /// `ExecutionPlan` — the fixture every simulation test executes.
+    fn test_plan() -> ExecutionPlan {
+        ExecutionPlan {
+            waypoints: vec![
+                ExecutionWaypoint {
+                    joints: vec![0.0, 0.0],
+                    timestamp: 0.0,
+                },
+                ExecutionWaypoint {
+                    joints: vec![1.0, 1.0],
+                    timestamp: 2.0,
+                },
+            ],
+            segments: vec![ExecutionSegment {
+                index: 0,
+                planned_segment_index: 0,
+                instruction: ExecutionInstruction::MoveJ,
+                waypoint_range: 0..2,
+            }],
+            duration: 2.0,
+        }
+    }
+
+    /// Connect, load a program, and start the 2-DOF test trajectory.
     async fn controller_with_program(program: RuntimeProgram) -> SimulationController {
         let mut ctrl = SimulationController::new(2);
         // `connect`/`execute` disambiguate via the RobotController trait.
@@ -400,13 +432,9 @@ mod tests {
         ctrl.load_runtime_program(program)
             .await
             .expect("load program");
-        <SimulationController as RobotController>::execute(
-            &mut ctrl,
-            vec![vec![0.0, 0.0], vec![1.0, 1.0]],
-            2.0,
-        )
-        .await
-        .expect("execute");
+        <SimulationController as RobotController>::execute(&mut ctrl, test_plan())
+            .await
+            .expect("execute");
         ctrl
     }
 
@@ -557,13 +585,9 @@ mod tests {
         <SimulationController as RobotController>::connect(&mut ctrl)
             .await
             .expect("connect");
-        <SimulationController as RobotController>::execute(
-            &mut ctrl,
-            vec![vec![0.0, 0.0], vec![1.0, 1.0]],
-            2.0,
-        )
-        .await
-        .expect("execute");
+        <SimulationController as RobotController>::execute(&mut ctrl, test_plan())
+            .await
+            .expect("execute");
 
         ctrl.advance(0.5).await.expect("advance");
         assert_eq!(ctrl.robot_state().await.joints.positions, vec![0.25, 0.25]);

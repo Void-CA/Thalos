@@ -359,6 +359,13 @@ impl Esp32Protocol {
     ) -> Result<(), ProtocolError> {
         self.firmware_state = FirmwareState::Receiving;
 
+        // Protocol desync defense: drain stale lines left in the buffer from
+        // a prior STATUS poll (or a cancelled read). Without this, the first
+        // upload response read could return a leftover fragment ("unexpected
+        // response: 0.000000 0.000000" real repro) instead of the firmware's
+        // `OK`. Real transports drain; fakes are a no-op.
+        self.transport.drain().await?;
+
         let lines = Self::encode_manifest(manifest);
         // The last line is END_UPLOAD — handled separately
         let upload_lines = &lines[..lines.len() - 1];

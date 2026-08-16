@@ -7,7 +7,7 @@ pub const SAFETY_ENVELOPE: [ChannelEnvelope; 4] = [
     // base (0)
     ChannelEnvelope {
         position_min_rad: -1.5708, position_max_rad: 1.5708,
-        pulse_min_us: 350, pulse_max_us: 1650,
+        pulse_min_us: 350, pulse_max_us: 2150,
         max_velocity_rad_per_s: 1.0,
         position_source: LimitSource::Urdf,
         pulse_source: LimitSource::Configured,

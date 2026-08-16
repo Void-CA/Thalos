@@ -282,6 +282,13 @@ describe('producerOf (registry helper)', () => {
     expect(producerOf('completed')?.path).toBe('/execution')
   })
 
+  it('maps derived executionViewable to the plan origin (Programming, never Robot root)', () => {
+    // executionViewable has no direct producer; its origin maps to the plan
+    // producer so a transient non-executable state redirects to /task — not
+    // the '/' Robot root (which made a failed retry look like a full restart).
+    expect(producerOf('executionViewable')?.path).toBe('/task')
+  })
+
   it('returns undefined for flags no workspace produces', () => {
     expect(producerOf('programValid')).toBeUndefined()
     expect(producerOf('executable')).toBeUndefined()

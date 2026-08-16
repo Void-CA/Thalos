@@ -3,15 +3,20 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use thalos_core::{
-    execution::runtime::RuntimeProgram,
+    execution::{
+        plan::{ExecutionInstruction, ExecutionPlan, ExecutionSegment, ExecutionWaypoint},
+        runtime::RuntimeProgram,
+    },
     kinematics::{
         forward::{ForwardKinematics, result::FKResult},
         inverse::{DampedLeastSquaresSolver, IKConfig, IKGoal, IKSolver, result::IKResult},
     },
     models::{RobotModel, RobotRegistry},
+    motion::segment::MotionSegment,
     robot::serial_chain::SerialChain,
     spatial::frame::FrameId,
 };
+use thalos_planning::execution_plan_builder::ExecutionPlanBuilder;
 use thalos_planning::motion::program::{CompiledPlan, PlanningProgram};
 use thalos_planning::program_edit::ProgramEdit;
 
@@ -348,27 +353,82 @@ impl SceneService {
         Ok((popped, Self::build_snapshot(&runtime, None)))
     }
 
-    /// Extract waypoints from the active plan's trajectory.
-    fn trajectory_to_waypoints(runtime: &SceneRuntime) -> (Vec<Vec<f64>>, f64) {
-        if let Some(ref plan) = runtime.scheduled_plan {
-            let traj = &plan.merged_trajectory;
-            let wps: Vec<Vec<f64>> = traj
-                .waypoints()
-                .iter()
-                .map(|w| w.joints().to_vec())
-                .collect();
-            return (wps, traj.duration());
+    /// Build the `ExecutionPlan` for the current runtime state — the REAL
+    /// timestamp-carrying execution IR handed to `RobotController::execute`.
+    ///
+    /// Prefers `scheduled_plan` (multi-segment compiled programs): the pure
+    /// [`ExecutionPlanBuilder`] maps every `TrajectoryPoint` → waypoint with
+    /// its absolute timestamp and every `PlannedSegment` → `ExecutionSegment`
+    /// 1:1 (MoveJ/MoveL/MoveLPosition per `PlannedSegment.source`). Falls
+    /// back to `active_plan` (single-shot moves like PlanAndMoveJ, and the
+    /// compiled-plan mirror) with an inline trajectory → waypoint mapping
+    /// that ALSO preserves `tp.timestamp()`; segments map 1:1 when present,
+    /// else a single MoveJ segment covers every waypoint.
+    ///
+    /// Returns `None` when no plan is loaded, the trajectory is empty, or
+    /// the scheduled-plan builder fails — the caller's `has_wps` guard then
+    /// skips the controller call (Once-without-plan behavior preserved).
+    fn build_execution_plan(runtime: &SceneRuntime) -> Option<ExecutionPlan> {
+        if let Some(ref compiled) = runtime.scheduled_plan {
+            let mut plan = ExecutionPlanBuilder::build(compiled).ok()?;
+            // The pure chain maps segments 1:1 from the compiled plan. A
+            // compiled plan WITHOUT segment metadata (legacy single-shot
+            // fixtures) would hand the ESP32 a manifest with ZERO segments
+            // → SEGMENT_COVERAGE rejection. The legacy shim always emitted
+            // a single MoveJ segment; preserve that for segment-less plans.
+            if plan.segments.is_empty() && !plan.waypoints.is_empty() {
+                let n = plan.waypoints.len();
+                plan.segments.push(ExecutionSegment {
+                    index: 0,
+                    planned_segment_index: 0,
+                    instruction: ExecutionInstruction::MoveJ,
+                    waypoint_range: 0..n,
+                });
+            }
+            return Some(plan);
         }
-        if let Some(ref plan) = runtime.active_plan {
-            let traj = &plan.trajectory;
-            let wps: Vec<Vec<f64>> = traj
-                .waypoints()
-                .iter()
-                .map(|w| w.joints().to_vec())
-                .collect();
-            return (wps, traj.duration());
+        let active = runtime.active_plan.as_ref()?;
+        let traj = &active.trajectory;
+        if traj.is_empty() {
+            return None;
         }
-        (Vec::new(), 0.0)
+        let waypoints: Vec<ExecutionWaypoint> = traj
+            .waypoints()
+            .iter()
+            .map(|tp| ExecutionWaypoint {
+                joints: tp.joints().to_vec(),
+                timestamp: tp.timestamp(),
+            })
+            .collect();
+        let n = waypoints.len();
+        let segments: Vec<ExecutionSegment> = match &active.segments {
+            Some(segments) if !segments.is_empty() => segments
+                .iter()
+                .enumerate()
+                .map(|(idx, seg)| ExecutionSegment {
+                    index: idx,
+                    planned_segment_index: idx,
+                    instruction: match &seg.source {
+                        MotionSegment::MoveJ { .. } => ExecutionInstruction::MoveJ,
+                        MotionSegment::MoveL { .. } => ExecutionInstruction::MoveL,
+                        MotionSegment::MoveLPosition { .. } => ExecutionInstruction::MoveL,
+                    },
+                    waypoint_range: seg.waypoint_range.clone(),
+                })
+                .collect(),
+            // No segment metadata → one MoveJ segment over every waypoint.
+            _ => vec![ExecutionSegment {
+                index: 0,
+                planned_segment_index: 0,
+                instruction: ExecutionInstruction::MoveJ,
+                waypoint_range: 0..n,
+            }],
+        };
+        Some(ExecutionPlan {
+            waypoints,
+            segments,
+            duration: traj.duration(),
+        })
     }
 
     pub async fn start_execution(&self) -> Result<RuntimeSnapshot, RuntimeError> {
@@ -405,9 +465,19 @@ impl SceneService {
                 source: crate::error::ControllerError::NotConnected,
             })?;
         {
-            let (waypoints, duration) = {
+            let plan = {
                 let runtime = self.runtime.read().await;
-                Self::trajectory_to_waypoints(&runtime)
+                Self::build_execution_plan(&runtime)
+            };
+            let (waypoints, duration) = match &plan {
+                Some(p) => (
+                    p.waypoints
+                        .iter()
+                        .map(|wp| wp.joints.clone())
+                        .collect::<Vec<Vec<f64>>>(),
+                    p.duration,
+                ),
+                None => (Vec::new(), 0.0),
             };
 
             // Execute on controller FIRST (before creating session).
@@ -428,9 +498,9 @@ impl SceneService {
                 );
             }
             if has_wps {
-                let wps_exec = waypoints.clone();
+                let plan = plan.expect("has_wps implies an ExecutionPlan");
                 let mut c = ctrl.write().await;
-                c.execute(wps_exec, duration).await?;
+                c.execute(plan).await?;
             }
 
             // Only now register the session — execution already started.
@@ -689,11 +759,11 @@ impl SceneService {
                 .unwrap_or(0.0);
 
             // Re-execution payload for intermediate repeat iterations — the
-            // same (waypoints, duration) the session started with. Captured
-            // HERE while the runtime write guard is held: the tokio RwLock is
-            // NOT reentrant, so reading the runtime again inside the recording
-            // block below would deadlock this task.
-            let re_execute_payload = Self::trajectory_to_waypoints(&runtime);
+            // same ExecutionPlan the session started with. Captured HERE
+            // while the runtime write guard is held: the tokio RwLock is
+            // NOT reentrant, so reading the runtime again inside the
+            // recording block below would deadlock this task.
+            let re_execute_payload = Self::build_execution_plan(&runtime);
 
             // Active source determines progress UNITS (S3.6 / RISK-1):
             // hardware backends populate `execution.progress` in SECONDS
@@ -821,11 +891,14 @@ impl SceneService {
                                 .set_iteration(rec_state.session_id, rec_state.iteration)
                                 .await;
 
-                            let (waypoints, duration) = re_execute_payload;
                             let re_execute = match self.manager.get_controller().await {
-                                Some(ctrl) => {
-                                    ctrl.write().await.execute(waypoints, duration).await
-                                }
+                                Some(ctrl) => match re_execute_payload {
+                                    Some(plan) => ctrl.write().await.execute(plan).await,
+                                    // Unreachable: Repeat start is gated on a
+                                    // loaded plan (S8). Fail loud rather than
+                                    // silently dropping the iteration.
+                                    None => Err(crate::error::ControllerError::NotConnected),
+                                },
                                 None => Err(crate::error::ControllerError::NotConnected),
                             };
                             if let Err(e) = re_execute {

@@ -48,6 +48,9 @@ void setup() {
         pca9685.begin();                    // configure device (MODE1, MODE2, PRESCALE)
         servo_driver.init(pca9685);
         servo_driver.set_enabled(true);     // explicit per design (init also enables)
+        // RAW_PULSE (calibration-only) needs the raw driver — only inject it
+        // when the probe succeeded, otherwise the command answers NO_DRIVER.
+        protocol.set_pca9685(&pca9685);
     } else {
         // Graceful degradation: no PCA9685 → servo writes are no-ops and the
         // rest of the firmware (execution, protocol, samples) keeps working.

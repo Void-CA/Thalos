@@ -1052,6 +1052,175 @@ async fn scheduled_delay_freezes_execution_through_tick() {
     );
 }
 
+// ═════════════════════════════════════════════════════════════════════
+// esp32-execute-real-timestamps — build_execution_plan (2.1/2.2)
+// ═════════════════════════════════════════════════════════════════════
+//
+// The scene MUST hand the controller an `ExecutionPlan` carrying the REAL
+// trajectory timestamps (via ExecutionPlanBuilder for scheduled_plan, inline
+// for active_plan) — never the even-spacing reconstruction the legacy
+// `trajectory_to_waypoints` shim produced. And `start_execution_with_mode`
+// MUST skip `execute` for empty/zero-duration plans while still registering
+// the session (Once-without-plan preserved).
+
+use std::sync::atomic::Ordering;
+
+/// 2.1 RED: `build_execution_plan` keeps the scheduled_plan's real
+/// timestamps — a non-uniform trajectory (0.0, 0.5, 2.0) must reach the
+/// controller as-is, NOT re-spaced even (0.0, 1.0, 2.0) by the legacy shim.
+#[tokio::test]
+async fn start_execution_preserves_scheduled_plan_timestamps() {
+    let mut mock = MockController::new();
+    let concrete = Arc::new(RwLock::new(mock));
+    let controller = concrete.clone() as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let manager = Arc::new(BackendManager::new());
+    manager.set_active(controller).await.unwrap();
+    let svc = SceneService::new(manager.clone(), RobotModel::Scara);
+
+    // NON-UNIFORM timestamps: 0.0 → 0.5 → 2.0. Even-spacing would yield
+    // 0.0 → 1.0 → 2.0 (2.0s / 2 gaps) — the false-positive bug source.
+    let plan = CompiledPlan::new(
+        thalos_core::trajectory::Trajectory::new(vec![
+            TrajectoryPoint::new(vec![0.0, 0.0, 0.0, 0.0], 0.0),
+            TrajectoryPoint::new(vec![0.5, -0.3, 0.1, 0.0], 0.5),
+            TrajectoryPoint::new(vec![1.0, -0.6, 0.2, 0.0], 2.0),
+        ]),
+        vec![],
+    );
+    svc.schedule_program(plan, Default::default()).await.unwrap();
+    svc.start_execution().await.unwrap();
+
+    let received = concrete
+        .read()
+        .await
+        .last_plan
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("execute must have received an ExecutionPlan");
+    let ts: Vec<f64> = received.waypoints.iter().map(|w| w.timestamp).collect();
+    assert_eq!(
+        ts,
+        vec![0.0, 0.5, 2.0],
+        "the controller must receive the REAL (non-uniform) timestamps"
+    );
+    assert_eq!(received.duration, 2.0);
+    // The waypoints themselves flow through untouched.
+    assert_eq!(received.waypoints[1].joints, vec![0.5, -0.3, 0.1, 0.0]);
+}
+
+/// 2.1 RED: `build_execution_plan` maps the active_plan INLINE — single-shot
+/// PlanAndMoveJ sets only `active_plan` (no scheduled_plan), so the scene
+/// must build the plan from the active trajectory, preserving timestamps and
+/// emitting a single MoveJ segment covering every waypoint.
+#[tokio::test]
+async fn start_execution_maps_active_plan_inline_with_segments() {
+    let mut mock = MockController::new();
+    let concrete = Arc::new(RwLock::new(mock));
+    let controller = concrete.clone() as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let manager = Arc::new(BackendManager::new());
+    manager.set_active(controller).await.unwrap();
+    let svc = SceneService::new(manager.clone(), RobotModel::Planar2R);
+
+    // Single-shot move: only `active_plan` is set (segments = None).
+    let snap = svc
+        .execute(Command::Motion(MotionCommands::PlanAndMoveJ {
+            target: vec![1.0, 0.5],
+            max_velocity: None,
+            max_acceleration: None,
+            time_step: None,
+        }))
+        .await
+        .unwrap();
+    let active = snap
+        .active_plan
+        .as_ref()
+        .expect("PlanAndMoveJ must set the active plan");
+    assert!(
+        active.segments.is_none(),
+        "single-shot move has no segment metadata"
+    );
+    let traj = &active.trajectory;
+
+    svc.start_execution().await.unwrap();
+
+    let received = concrete
+        .read()
+        .await
+        .last_plan
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("execute must have received an ExecutionPlan");
+    // Inline mapping preserves the active trajectory's real timestamps.
+    let n = traj.len();
+    assert_eq!(received.waypoints.len(), n);
+    for (wp, tp) in received.waypoints.iter().zip(traj.waypoints()) {
+        assert_eq!(wp.joints, tp.joints().to_vec());
+        assert_eq!(wp.timestamp, tp.timestamp());
+    }
+    // No segment metadata → a single MoveJ segment over all waypoints.
+    assert_eq!(received.segments.len(), 1, "fallback single segment");
+    assert_eq!(
+        received.segments[0].instruction,
+        thalos_core::execution::plan::ExecutionInstruction::MoveJ
+    );
+    assert_eq!(received.segments[0].waypoint_range, 0..n);
+    assert_eq!(received.duration, traj.duration());
+}
+
+/// 2.2 RED: an EMPTY plan (zero waypoints, zero duration) MUST NOT reach
+/// the controller's `execute` — no wire traffic — but the session is still
+/// registered (Once-without-plan behavior preserved).
+#[tokio::test]
+async fn start_execution_skips_execute_for_empty_plan_but_registers_session() {
+    let mut mock = MockController::new();
+    let concrete = Arc::new(RwLock::new(mock));
+    let controller = concrete.clone() as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let manager = Arc::new(BackendManager::new());
+    manager.set_active(controller).await.unwrap();
+    let svc = SceneService::new(manager.clone(), RobotModel::Scara);
+
+    // Zero waypoints, zero duration — the has_wps guard must skip execute.
+    let plan = CompiledPlan::new(thalos_core::trajectory::Trajectory::new(vec![]), vec![]);
+    svc.schedule_program(plan, Default::default()).await.unwrap();
+
+    let snap = svc.start_execution().await.unwrap();
+    assert_eq!(
+        concrete.read().await.execute_count.load(Ordering::SeqCst),
+        0,
+        "empty plan must NOT call controller execute"
+    );
+    assert!(
+        snap.execution.is_some(),
+        "session must still be registered for an empty plan"
+    );
+}
+
+/// 2.2 RED: `Once` without ANY plan still succeeds (legacy behavior) and
+/// never calls `execute` — the session registers with zero motion.
+#[tokio::test]
+async fn start_execution_once_without_plan_still_succeeds() {
+    let mut mock = MockController::new();
+    let concrete = Arc::new(RwLock::new(mock));
+    let controller = concrete.clone() as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    let manager = Arc::new(BackendManager::new());
+    manager.set_active(controller).await.unwrap();
+    let svc = SceneService::new(manager.clone(), RobotModel::Scara);
+
+    // No plan at all.
+    let snap = svc.start_execution().await.unwrap();
+    assert!(
+        snap.execution.is_some(),
+        "Once-without-plan must still register a session"
+    );
+    assert_eq!(
+        concrete.read().await.execute_count.load(Ordering::SeqCst),
+        0,
+        "no plan → no execute call"
+    );
+}
+
 /// R4-001: the execution source must reflect the ACTIVE controller — a
 /// non-simulation controller (Hardware) reports Hardware on the snapshot's
 /// execution session, not the hardcoded Simulation.

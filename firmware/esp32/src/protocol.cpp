@@ -1,6 +1,8 @@
 #include "protocol.h"
 #include "executor.h"
 #include "validator.h"
+#include "pca9685_driver.h"
+#include "servo_hw_config.h"
 
 #include <cstdlib>
 #include <cerrno>
@@ -12,7 +14,12 @@ Protocol::Protocol(Executor& executor, Validator& validator)
     : state_(IDLE)
     , executor_(executor)
     , validator_(validator)
+    , pca9685_(nullptr)
 {
+}
+
+void Protocol::set_pca9685(PCA9685Driver* driver) {
+    pca9685_ = driver;
 }
 
 // ── Poll (main dispatch) ─────────────────────────────────────────────────
@@ -54,6 +61,8 @@ void Protocol::poll() {
         handle_status();
     } else if (line.startsWith(F("SAMPLES "))) {
         handle_samples(line);
+    } else if (line.startsWith(F("RAW_PULSE "))) {
+        handle_raw_pulse(line);
     } else {
         set_error(F("UNKNOWN_COMMAND"));
     }
@@ -337,6 +346,49 @@ void Protocol::handle_samples(const String& line) {
 
     // Clear samples after successful collection to free RAM.
     executor_.clear_samples();
+}
+
+// ── RAW_PULSE (calibration-only) ────────────────────────────────────────
+//
+// Commands the PCA9685 DIRECTLY with a raw pulse width (µs), bypassing the
+// rad↔pulse map AND the envelope. Purpose: the calibration tool measures the
+// servo's REAL pulse range — the mapped path cannot reach beyond the
+// configured envelope, so a map-driven calibration can never discover the
+// true endpoints (it extrapolates a stale map and hits the envelope wall).
+//
+// SAFETY: this command deliberately bypasses the envelope. It is intended
+// for bench calibration ONLY (decoupled servo, per tools/calibrate.py). The
+// calibration tool drives it; normal execution never uses it.
+void Protocol::handle_raw_pulse(const String& line) {
+    if (pca9685_ == nullptr) {
+        set_error(F("NO_DRIVER"));
+        return;
+    }
+
+    int channel = -1;
+    long pulse_us = 0;
+    if (sscanf(line.c_str(), "RAW_PULSE %d %ld", &channel, &pulse_us) != 2) {
+        set_error(F("MALFORMED_RAW_PULSE"));
+        return;
+    }
+    if (channel < 0 || channel > 15) {
+        set_error(F("BAD_CHANNEL"));
+        return;
+    }
+    // Sane pulse bounds: 0..20ms period. Negative/absurd values are a caller
+    // error — refuse instead of saturating blindly.
+    if (pulse_us < 0 || pulse_us > 20000) {
+        set_error(F("BAD_PULSE"));
+        return;
+    }
+
+    float steps_f = pulse_us * PCA9685_STEPS_PER_US;
+    uint16_t steps = static_cast<uint16_t>(steps_f);
+    if (steps > PCA9685_MAX_STEPS) {
+        steps = PCA9685_MAX_STEPS;
+    }
+    pca9685_->setPWM(static_cast<uint8_t>(channel), 0, steps);
+    send_response(F("OK"));
 }
 
 // ── Internal helpers ────────────────────────────────────────────────────

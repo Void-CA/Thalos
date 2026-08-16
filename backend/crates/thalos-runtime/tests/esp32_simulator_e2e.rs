@@ -21,6 +21,9 @@ mod esp_simulator;
 
 use std::time::Duration;
 
+use thalos_core::execution::plan::{
+    ExecutionInstruction, ExecutionPlan, ExecutionSegment, ExecutionWaypoint,
+};
 use thalos_runtime::{
     ControllerError, RobotController,
     backends::{
@@ -67,6 +70,34 @@ fn six_dof_waypoints() -> Vec<Vec<f64>> {
         vec![0.2, 0.15, 0.4, 0.03, 0.1, 0.2],
         vec![0.5, 0.3, 0.1, 0.05, 0.6, 0.0],
     ]
+}
+
+/// The `ExecutionPlan` every e2e scenario executes: the 6-DOF waypoints as a
+/// single MoveJ segment over `PLAN_DURATION` (even spacing — the fixture has
+/// no planner timestamps; the e2e assertions exercise the upload/collect
+/// flow, not the dt derivation, which unit regressions cover).
+fn six_dof_plan() -> ExecutionPlan {
+    let waypoints = six_dof_waypoints();
+    let n = waypoints.len();
+    let duration_us = (PLAN_DURATION * 1_000_000.0) as u64;
+    let dt_per_sample = duration_us / (n - 1) as u64;
+    ExecutionPlan {
+        waypoints: waypoints
+            .iter()
+            .enumerate()
+            .map(|(i, joints)| ExecutionWaypoint {
+                joints: joints.clone(),
+                timestamp: i as f64 * dt_per_sample as f64 / 1_000_000.0,
+            })
+            .collect(),
+        segments: vec![ExecutionSegment {
+            index: 0,
+            planned_segment_index: 0,
+            instruction: ExecutionInstruction::MoveJ,
+            waypoint_range: 0..n,
+        }],
+        duration: PLAN_DURATION,
+    }
 }
 
 /// Start an in-process simulator for the given scenario on an ephemeral port
@@ -122,7 +153,7 @@ async fn happy_cycle_completes_and_collects_six_dof_trace() {
     let mut backend = connect_backend(&addr).await;
 
     backend
-        .execute(six_dof_waypoints(), PLAN_DURATION)
+        .execute(six_dof_plan())
         .await
         .expect("execute must succeed on the happy device");
 
@@ -176,7 +207,7 @@ async fn error_scenario_ends_in_estop() {
     let mut backend = connect_backend(&addr).await;
 
     backend
-        .execute(six_dof_waypoints(), PLAN_DURATION)
+        .execute(six_dof_plan())
         .await
         .expect("execute must succeed before the device faults");
 
@@ -208,7 +239,7 @@ async fn silence_drops_connection_and_subsequent_ops_fail() {
     let mut backend = connect_backend(&addr).await;
 
     backend
-        .execute(six_dof_waypoints(), PLAN_DURATION)
+        .execute(six_dof_plan())
         .await
         .expect("execute must be ACKed before the device goes deaf");
 
@@ -235,7 +266,7 @@ async fn silence_drops_connection_and_subsequent_ops_fail() {
 
     // Subsequent operations must fail fast with NotConnected.
     let err = backend
-        .execute(six_dof_waypoints(), PLAN_DURATION)
+        .execute(six_dof_plan())
         .await
         .unwrap_err();
     assert!(
@@ -297,7 +328,7 @@ async fn repeat_three_uploads_thrice_and_collects_single_trace() {
 
     for _i in 0..3 {
         backend
-            .execute(six_dof_waypoints(), PLAN_DURATION)
+            .execute(six_dof_plan())
             .await
             .expect("each iteration uploads and starts execution");
         // Sleep past the 75ms STATUS-poll TTL BEFORE the first poll: the
