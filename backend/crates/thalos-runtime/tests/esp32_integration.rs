@@ -21,7 +21,7 @@ use thalos_runtime::{
 async fn make_connected_backend() -> Esp32Backend {
     let transport = FakeTransport::new();
     let mut backend = Esp32Backend::new(Box::new(transport));
-    backend.test_inject_response(b"HELLO 1 OK\n".to_vec()).await;
+    backend.test_inject_response(b"HELLO 2 OK\n".to_vec()).await;
     backend.connect().await.expect("connect should succeed");
     assert!(backend.is_connected());
     backend
@@ -55,8 +55,10 @@ fn two_dof_plan() -> ExecutionPlan {
 /// is stored on the backend (required for RUNNING → seconds progress).
 async fn make_executing_backend() -> Esp32Backend {
     let mut backend = make_connected_backend().await;
-    // Upload: MANIFEST OK, SEGMENT OK, SAMPLE OK, SAMPLE OK, END_UPLOAD READY
-    for _ in 0..4 {
+    // Upload (v2 chunked, C): MANIFEST OK, SEGMENT OK — the 2 samples (dof=2
+    // → chunk 64) form a trailing partial chunk → NO per-sample ACK; END_UPLOAD
+    // READY; then EXECUTE OK.
+    for _ in 0..2 {
         backend.test_inject_response(b"OK\n".to_vec()).await;
     }
     backend.test_inject_response(b"READY\n".to_vec()).await;

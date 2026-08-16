@@ -1,8 +1,15 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
+use std::sync::atomic::{AtomicBool, AtomicU32};
+
 use tokio::sync::RwLock;
 
 use crate::backends::controller::tests::MockController;
+use crate::backends::controller::BackendCapabilities;
+use crate::error::{ControllerError, RuntimeError};
+use crate::execution_boundary::ExecutionSample;
+use crate::services::scene::RepeatPhase;
 use crate::session::{ExecutionSource, SessionManager};
 use crate::state::robot_state::{MotionMode, RobotState};
 use crate::{
@@ -14,6 +21,7 @@ use crate::{
     commands::motion::MotionCommands,
 };
 use thalos_core::{
+    execution::plan::ExecutionPlan,
     models::RobotModel,
     prelude::IKGoal,
     spatial::{frame::FrameId, pose::Pose},
@@ -1622,6 +1630,135 @@ fn rand_suffix() -> u64 {
         .unwrap_or(0)
 }
 
+/// Wait until the async repeat re-execute (B) has landed — i.e. the recording
+/// phase returned to `Idle`. Without this, tests that drive the controller
+/// state tick-by-tick would race the background upload task.
+async fn wait_for_phase(svc: &SceneService, phase: RepeatPhase) {
+    for _ in 0..200 {
+        if svc.recording_repeat_phase().await == Some(phase) {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+    }
+    panic!("repeat phase did not reach {phase:?} within timeout");
+}
+
+/// RobotController wrapper that parks the 2nd+ `execute` until released —
+/// makes the repeat upload window (B) deterministically observable.
+struct BlockingExecuteController {
+    inner: MockController,
+    /// Test-driven state, like `MockController.state`.
+    state: Option<RobotState>,
+    /// While true, `execute` parks until `release` fires.
+    blocking: AtomicBool,
+    /// Notified while a parking execute is in flight (upload window active).
+    blocked: std::sync::Arc<tokio::sync::Notify>,
+    /// `notify_one` releases a parking execute.
+    release: std::sync::Arc<tokio::sync::Notify>,
+}
+
+/// RobotController wrapper that fails the Nth `execute` call deterministically.
+struct FailOnExecuteN {
+    inner: MockController,
+    /// Test-driven state, like `MockController.state`.
+    state: Option<RobotState>,
+    fail_on: u32,
+    calls: AtomicU32,
+}
+
+macro_rules! delegate_controller {
+    ($t:ty) => {
+        #[async_trait]
+        impl RobotController for $t {
+            async fn connect(&mut self) -> Result<(), ControllerError> {
+                self.inner.connect().await
+            }
+            async fn disconnect(&mut self) -> Result<(), ControllerError> {
+                self.inner.disconnect().await
+            }
+            fn is_connected(&self) -> bool {
+                self.inner.is_connected()
+            }
+            async fn execute(&mut self, plan: ExecutionPlan) -> Result<(), ControllerError> {
+                self.custom_execute(plan).await
+            }
+            async fn stop(&mut self) -> Result<(), ControllerError> {
+                self.inner.stop().await
+            }
+            async fn pause(&mut self) -> Result<(), ControllerError> {
+                self.inner.pause().await
+            }
+            async fn resume(&mut self) -> Result<(), ControllerError> {
+                self.inner.resume().await
+            }
+            async fn advance(&self, dt: f64) -> Result<(), ControllerError> {
+                self.inner.advance(dt).await
+            }
+            async fn robot_state(&self) -> Arc<RobotState> {
+                Arc::new(self.state.clone().unwrap_or_default())
+            }
+            async fn take_execution_trace(&self) -> Option<Vec<ExecutionSample>> {
+                self.inner.take_execution_trace().await
+            }
+            fn capabilities(&self) -> BackendCapabilities {
+                self.inner.capabilities()
+            }
+            fn execution_source(&self) -> ExecutionSource {
+                self.inner.execution_source()
+            }
+        }
+    };
+}
+
+delegate_controller!(BlockingExecuteController);
+
+impl BlockingExecuteController {
+    /// Inherent hook the trait impl delegates to (the macro cannot split a
+    /// trait impl across blocks).
+    async fn custom_execute(&mut self, plan: ExecutionPlan) -> Result<(), ControllerError> {
+        if self.blocking.load(std::sync::atomic::Ordering::SeqCst) {
+            self.blocked.notify_one();
+            self.release.notified().await;
+        }
+        self.inner.execute(plan).await
+    }
+}
+
+delegate_controller!(FailOnExecuteN);
+
+impl FailOnExecuteN {
+    async fn custom_execute(&mut self, plan: ExecutionPlan) -> Result<(), ControllerError> {
+        let n = self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+        if n == self.fail_on {
+            return Err(ControllerError::Protocol(
+                "simulated re-upload failure".into(),
+            ));
+        }
+        self.inner.execute(plan).await
+    }
+}
+
+/// Build a SceneService + temp-dir SessionManager around a custom controller
+/// (used by the B race/failure tests — `repeat_service` stays for the plain
+/// MockController suites).
+async fn repeat_service_custom<T: RobotController + Send + Sync + 'static>(
+    controller: Arc<RwLock<T>>,
+) -> (SceneService, Arc<SessionManager>, std::path::PathBuf) {
+    let manager = Arc::new(BackendManager::new());
+    let trait_obj = controller as Arc<RwLock<dyn RobotController + Send + Sync>>;
+    manager.set_active(trait_obj).await.unwrap();
+
+    let dir = std::env::temp_dir().join(format!(
+        "thalos-scene-custom-{}-{}",
+        std::process::id(),
+        rand_suffix()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    let sessions = Arc::new(SessionManager::with_path(dir.clone()));
+    let svc = SceneService::with_session_manager(manager, RobotModel::Scara, sessions.clone());
+    (svc, sessions, dir)
+}
+
 /// S1 (R4, R6, NF3): `Repeat { count: 5 }` completes 5 iterations — the gate
 /// re-executes the plan after each intermediate completion and finalizes ONLY
 /// at iteration == total, writing exactly one MotionTrace and draining the
@@ -1651,6 +1788,9 @@ async fn repeat_five_completes_five_iterations_with_single_trace() {
         concrete.write().await.state = Some(repeat_done_state());
         svc.tick_execution_delta(0.1).await.unwrap();
         if iteration < 5 {
+            // B: the re-execute is now a BACKGROUND task — wait for its upload
+            // to land (phase back to Idle) before driving the next iteration.
+            wait_for_phase(&svc, RepeatPhase::Idle).await;
             // The gate re-executes the plan for the next iteration; the
             // controller reports a fresh run until the next completion.
             concrete.write().await.state = Some(repeat_running_state());
@@ -1725,6 +1865,8 @@ async fn repeat_three_estop_at_third_iteration_fails_with_iteration_and_no_trace
     for _ in 0..2 {
         concrete.write().await.state = Some(repeat_done_state());
         svc.tick_execution_delta(0.1).await.unwrap();
+        // B: wait for the background re-execute to land before the next tick.
+        wait_for_phase(&svc, RepeatPhase::Idle).await;
         concrete.write().await.state = Some(repeat_running_state());
         svc.tick_execution_delta(0.1).await.unwrap();
     }
@@ -1776,6 +1918,8 @@ async fn reset_execution_clears_repeat_state_and_next_start_begins_at_iteration_
     // Run two iterations to a Completed session.
     concrete.write().await.state = Some(repeat_done_state());
     svc.tick_execution_delta(0.1).await.unwrap();
+    // B: wait for the background re-execute to land before the next tick.
+    wait_for_phase(&svc, RepeatPhase::Idle).await;
     concrete.write().await.state = Some(repeat_running_state());
     svc.tick_execution_delta(0.1).await.unwrap();
     concrete.write().await.state = Some(repeat_done_state());
@@ -1846,6 +1990,200 @@ async fn repeat_boundary_tick_reports_running_for_next_iteration() {
     assert_eq!(exe.iteration, 2, "boundary tick reports the NEXT iteration");
     assert_eq!(exe.total_iterations, Some(3));
     assert_eq!(exe.progress(2.0), 0.0, "fresh iteration starts at progress 0");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// B (race guard): while a background re-execute is in flight (the repeat
+/// upload window), ticks return a synthetic Running(k+1) delta and MUST NOT
+/// trigger another re-execute. The stale Completed state of the previous pass
+/// would otherwise re-fire the completion gate and queue a second upload — the
+/// original synchronous path blocked the tick request for the whole upload and
+/// the frontend timed out at 10s, killing its loop (observed: Repeat 5 did 2).
+#[tokio::test]
+async fn repeat_ticks_during_upload_window_are_synthetic_and_never_reexecute() {
+    use std::sync::atomic::Ordering;
+
+    let mut mock = MockController::new();
+    mock.source = ExecutionSource::Hardware;
+    let blocked = std::sync::Arc::new(tokio::sync::Notify::new());
+    let release = std::sync::Arc::new(tokio::sync::Notify::new());
+    let wrapper = BlockingExecuteController {
+        inner: mock,
+        state: None,
+        blocking: AtomicBool::new(false),
+        blocked: blocked.clone(),
+        release: release.clone(),
+    };
+
+    let concrete = Arc::new(RwLock::new(wrapper));
+    let (svc, sessions, dir) = repeat_service_custom(concrete.clone()).await;
+    svc.schedule_program(repeat_plan(), Default::default())
+        .await
+        .unwrap();
+    svc.start_execution_with_mode(crate::plan::ExecutionMode::Repeat { count: 3 })
+        .await
+        .unwrap();
+    assert_eq!(
+        concrete.read().await.inner.execute_count.load(Ordering::SeqCst),
+        1,
+        "setup: initial execute"
+    );
+
+    // Park the next re-execute: iteration 1 completes → the boundary tick
+    // spawns the upload for iteration 2, which blocks inside the controller.
+    concrete.write().await.blocking.store(true, Ordering::SeqCst);
+    concrete.write().await.state = Some(repeat_done_state());
+    let boundary = svc.tick_execution_delta(0.1).await.unwrap();
+    let exe = boundary.execution.expect("boundary delta carries a session");
+    assert_eq!(exe.status, crate::plan::SessionStatus::Running);
+    assert_eq!(exe.iteration, 2, "boundary tick reports the NEXT iteration");
+
+    // Wait until the re-execute is parked (upload window active).
+    tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        blocked.notified(),
+    )
+    .await
+    .expect("re-execute must park on the blocking controller");
+
+    // Ticks during the upload window: synthetic Running(2) — and the phase
+    // stays Uploading (the gate must NOT re-fire on the stale Completed state).
+    let synth = svc.tick_execution_delta(0.1).await.unwrap();
+    let exe = synth.execution.expect("upload-window delta carries a session");
+    assert_eq!(
+        exe.status,
+        crate::plan::SessionStatus::Running,
+        "upload-window ticks must never report Completed (R8)"
+    );
+    assert_eq!(exe.iteration, 2);
+    assert_eq!(exe.progress(2.0), 0.0, "synthetic delta starts the iteration at 0");
+    assert_eq!(
+        svc.recording_repeat_phase().await,
+        Some(RepeatPhase::Uploading),
+        "the upload window persists — no second re-execute was queued"
+    );
+    // NOTE: we must NOT read the controller here — the parked re-execute holds
+    // its write lock, so any `concrete.read()` would deadlock the test. The
+    // gate-re-fire proof is the final `execute_count == 3`: a spurious second
+    // re-execute would push it to 4+.
+
+    // Release the upload → the task completes → the next tick drives normally.
+    release.notify_one();
+    wait_for_phase(&svc, RepeatPhase::Idle).await;
+    assert_eq!(
+        concrete.read().await.inner.execute_count.load(Ordering::SeqCst),
+        2,
+        "the parked re-execute landed after release"
+    );
+
+    concrete.write().await.state = Some(repeat_running_state());
+    let mid = svc.tick_execution_delta(0.1).await.unwrap();
+    assert_eq!(
+        mid.execution.expect("mid-run delta").iteration,
+        2,
+        "iteration 2 runs normally after the upload landed"
+    );
+
+    // Iteration 2 completes → spawn for iteration 3 (unparked).
+    concrete.write().await.blocking.store(false, Ordering::SeqCst);
+    concrete.write().await.state = Some(repeat_done_state());
+    svc.tick_execution_delta(0.1).await.unwrap();
+    wait_for_phase(&svc, RepeatPhase::Idle).await;
+    concrete.write().await.state = Some(repeat_running_state());
+    svc.tick_execution_delta(0.1).await.unwrap();
+
+    // Iteration 3 completes → final Completed.
+    concrete.write().await.state = Some(repeat_done_state());
+    svc.tick_execution_delta(0.1).await.unwrap();
+    let session = sessions.get(1).await.expect("session registered");
+    assert_eq!(
+        session.status,
+        crate::plan::SessionStatus::Completed,
+        "B: Repeat 3 completes all 3 iterations even with a parked upload window"
+    );
+    assert_eq!(session.iteration, 3);
+    assert_eq!(
+        concrete.read().await.inner.execute_count.load(Ordering::SeqCst),
+        3,
+        "exactly 3 executions: 1 initial + 2 re-executes — the stale Completed state never re-fired the gate"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// B/R5: an async re-execute failure (upload fails mid-repeat) does NOT
+/// propagate through the boundary tick — it lands in the pending-error slot and
+/// the NEXT tick drains it, failing the session with the real controller code.
+#[tokio::test]
+async fn repeat_async_reexecute_failure_fails_session_on_next_tick() {
+    use std::sync::atomic::Ordering;
+
+    let mut mock = MockController::new();
+    mock.source = ExecutionSource::Hardware;
+    let wrapper = FailOnExecuteN {
+        inner: mock,
+        state: None,
+        fail_on: 2, // the FIRST re-execute fails (iteration 2's upload)
+        calls: AtomicU32::new(0),
+    };
+
+    let concrete = Arc::new(RwLock::new(wrapper));
+    let (svc, sessions, dir) = repeat_service_custom(concrete.clone()).await;
+    svc.schedule_program(repeat_plan(), Default::default())
+        .await
+        .unwrap();
+    svc.start_execution_with_mode(crate::plan::ExecutionMode::Repeat { count: 3 })
+        .await
+        .unwrap();
+    assert_eq!(
+        concrete.read().await.inner.execute_count.load(Ordering::SeqCst),
+        1,
+        "setup: initial execute"
+    );
+
+    // Iteration 1 completes → the boundary tick spawns the failing re-execute
+    // and responds immediately with Running(2) (no synchronous error).
+    concrete.write().await.state = Some(repeat_done_state());
+    let boundary = svc.tick_execution_delta(0.1).await.unwrap();
+    let exe = boundary.execution.expect("boundary delta carries a session");
+    assert_eq!(exe.status, crate::plan::SessionStatus::Running);
+    assert_eq!(exe.iteration, 2, "boundary tick reports the NEXT iteration");
+
+    // The async failure surfaces on the NEXT tick (poll until the task lands).
+    let mut surfaced: Option<RuntimeError> = None;
+    for _ in 0..200 {
+        match svc.tick_execution_delta(0.1).await {
+            Ok(_) => tokio::time::sleep(std::time::Duration::from_millis(2)).await,
+            Err(e) => {
+                surfaced = Some(e);
+                break;
+            }
+        }
+    }
+    let err = surfaced.expect("the async re-execute failure must surface on a tick");
+    match err {
+        RuntimeError::ControllerFailed { source } => {
+            assert!(
+                matches!(source, ControllerError::Protocol(_)),
+                "the real controller code must reach the frontend: {source:?}"
+            );
+        }
+        other => panic!("expected ControllerFailed, got {other:?}"),
+    }
+
+    let session = sessions.get(1).await.expect("session registered");
+    assert_eq!(session.status, crate::plan::SessionStatus::Failed);
+    assert_eq!(
+        session.iteration, 1,
+        "the failure is attributed to the COMPLETED iteration whose follow-up failed to start (parity with the old synchronous path)"
+    );
+    assert_eq!(session.total_iterations, Some(3));
+    assert_eq!(
+        concrete.read().await.inner.execute_count.load(Ordering::SeqCst),
+        1,
+        "the failed re-execute never started a real execution"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }

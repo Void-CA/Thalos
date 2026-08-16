@@ -63,7 +63,9 @@ impl Esp32Backend {
     /// until `connect()` is called.
     pub fn new(transport: Box<dyn Transport>) -> Self {
         Self {
-            protocol: tokio::sync::Mutex::new(Some(Esp32Protocol::new(transport, 1))),
+            // Protocol v2 (C): chunked upload ACK + 460800 baud. A stale v1
+            // firmware fails the handshake (VERSION_MISMATCH) before upload.
+            protocol: tokio::sync::Mutex::new(Some(Esp32Protocol::new(transport, 2))),
             connected: std::sync::atomic::AtomicBool::new(false),
             consecutive_poll_failures: std::sync::atomic::AtomicU32::new(0),
             plan_duration: 0.0,
@@ -510,7 +512,7 @@ mod tests {
     };
 
     /// Helper: create a connected Esp32Backend with a FakeTransport that
-    /// will respond with HELLO 1 OK on the first handshake.
+    /// will respond with HELLO 2 OK on the first handshake (protocol v2, C).
     async fn make_connected_backend(transport: FakeTransport) -> Esp32Backend {
         let mut backend = Esp32Backend::new(Box::new(transport));
         // Inject the HELLO response BEFORE connect
@@ -520,7 +522,7 @@ mod tests {
             .await
             .as_ref()
             .unwrap()
-            .test_inject_response(b"HELLO 1 OK\n".to_vec());
+            .test_inject_response(b"HELLO 2 OK\n".to_vec());
         backend.connect().await.expect("connect should succeed");
         assert!(backend.is_connected());
         backend
@@ -557,16 +559,47 @@ mod tests {
     }
 
     /// Inject the response sequence for a full upload→execute against a plan
-    /// with `sample_count` samples: N+2 OKs (MANIFEST, SEGMENT, each SAMPLE),
-    /// READY (END_UPLOAD), OK (EXECUTE).
-    async fn inject_full_upload(backend: &Esp32Backend, sample_count: usize) {
+    /// (protocol v2, C): OK (MANIFEST), OK (SEGMENT), ONE OK per COMPLETE
+    /// SAMPLE chunk (`n / chunk` — the trailing partial chunk gets no ACK),
+    /// READY (END_UPLOAD), OK (EXECUTE). The chunk is derived exactly like
+    /// `upload_manifest` (same 3072-byte RX-buffer invariant).
+    async fn inject_full_upload(backend: &Esp32Backend, plan: &ExecutionPlan) {
+        let dof = plan.waypoints.first().map(|w| w.joints.len()).unwrap_or(2);
+        let max_line = 19 + 10 * dof;
+        let chunk = (3072usize / max_line.max(1)).clamp(1, 64);
+        let full_chunks = plan.waypoints.len() / chunk;
         let protocol = backend.protocol.lock().await;
         let p = protocol.as_ref().unwrap();
-        for _ in 0..sample_count + 2 {
+        // MANIFEST + SEGMENT(s) — one OK each.
+        p.test_inject_response(b"OK\n".to_vec());
+        p.test_inject_response(b"OK\n".to_vec());
+        // One OK per COMPLETE SAMPLE chunk.
+        for _ in 0..full_chunks {
             p.test_inject_response(b"OK\n".to_vec());
         }
         p.test_inject_response(b"READY\n".to_vec());
         p.test_inject_response(b"OK\n".to_vec());
+    }
+
+    /// Flatten the recorded `send()` buffers into individual wire LINES.
+    /// Protocol v2 batching (C) merges many SAMPLE lines into one `send()`, so
+    /// per-send buffers no longer map 1:1 to protocol lines.
+    async fn sent_lines(backend: &Esp32Backend) -> Vec<String> {
+        let sent = backend
+            .protocol
+            .lock()
+            .await
+            .as_ref()
+            .unwrap()
+            .test_sent_commands();
+        sent.iter()
+            .flat_map(|c| {
+                String::from_utf8_lossy(c)
+                    .lines()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+            })
+            .collect()
     }
 
     /// Regression (a) — limit-to-limit at the velocity ceiling MUST PASS
@@ -617,7 +650,7 @@ mod tests {
         // and uploads it — a connected backend with a valid trapezoid.
         let transport = FakeTransport::new();
         let mut backend = make_connected_backend(transport).await;
-        inject_full_upload(&backend, plan.waypoints.len()).await;
+        inject_full_upload(&backend, &plan).await;
         backend
             .execute(plan)
             .await
@@ -671,7 +704,7 @@ mod tests {
             .unwrap()
             .test_sent_commands();
         assert_eq!(sent.len(), 1, "only HELLO from connect — no upload traffic");
-        assert_eq!(String::from_utf8(sent[0].clone()).unwrap(), "HELLO 1\n");
+        assert_eq!(String::from_utf8(sent[0].clone()).unwrap(), "HELLO 2\n");
     }
 
     /// Regression (c) — the degenerate TRUNCATION guard: N > 1 waypoints and
@@ -693,7 +726,7 @@ mod tests {
             vec![1.0, 1.0, 1.0, 0.03],
         ];
         let plan = plan_of(waypoints.clone(), 1.5e-6);
-        inject_full_upload(&backend, 3).await;
+        inject_full_upload(&backend, &plan).await;
 
         backend
             .execute(plan)
@@ -702,19 +735,12 @@ mod tests {
 
         // The wire manifest is the all-zero-dt output: MANIFEST ... 0 and
         // every SAMPLE line ends with dt_us = 0 (no timing claim).
-        let sent = backend
-            .protocol
-            .lock()
-            .await
-            .as_ref()
-            .unwrap()
-            .test_sent_commands();
-        let manifest_line = sent
+        let lines = sent_lines(&backend).await;
+        let manifest_line = lines
             .iter()
-            .find(|c| c.starts_with(b"MANIFEST"))
+            .find(|l| l.starts_with("MANIFEST"))
             .expect("MANIFEST must have been sent");
-        let manifest_text = String::from_utf8_lossy(manifest_line).to_string();
-        let parts: Vec<&str> = manifest_text.trim().split_whitespace().collect();
+        let parts: Vec<&str> = manifest_line.trim().split_whitespace().collect();
         assert_eq!(parts[0], "MANIFEST");
         assert_eq!(parts[1], "4", "DOF preserved");
         assert_eq!(parts[2], "3", "all 3 samples preserved");
@@ -723,11 +749,7 @@ mod tests {
             "degenerate manifest declares NO duration (duration_us = 0)"
         );
 
-        let sample_lines: Vec<String> = sent
-            .iter()
-            .filter(|c| c.starts_with(b"SAMPLE"))
-            .map(|c| String::from_utf8_lossy(c).to_string())
-            .collect();
+        let sample_lines: Vec<&String> = lines.iter().filter(|l| l.starts_with("SAMPLE")).collect();
         assert_eq!(sample_lines.len(), 3);
         for (i, line) in sample_lines.iter().enumerate() {
             let tokens: Vec<&str> = line.trim().split_whitespace().collect();
@@ -771,7 +793,7 @@ mod tests {
                 .handshaken
                 .swap(true, std::sync::atomic::Ordering::SeqCst)
             {
-                Ok(b"HELLO 1 OK\n".to_vec())
+                Ok(b"HELLO 2 OK\n".to_vec())
             } else {
                 Err(TransportError::Disconnected)
             }
@@ -849,7 +871,10 @@ mod tests {
         let transport = FakeTransport::new();
         let mut backend = make_connected_backend(transport).await;
 
-        // Inject responses for the full upload→execute flow
+        // Inject responses for the full upload→execute flow (protocol v2, C):
+        // MANIFEST OK, SEGMENT OK, NO chunk ACK (2 samples < chunk 64 → the
+        // trailing partial chunk gets no ACK; END_UPLOAD confirms it), READY,
+        // EXECUTE OK.
         backend
             .protocol
             .lock()
@@ -864,20 +889,6 @@ mod tests {
             .as_ref()
             .unwrap()
             .test_inject_response(b"OK\n".to_vec()); // SEGMENT
-        backend
-            .protocol
-            .lock()
-            .await
-            .as_ref()
-            .unwrap()
-            .test_inject_response(b"OK\n".to_vec()); // SAMPLE 0
-        backend
-            .protocol
-            .lock()
-            .await
-            .as_ref()
-            .unwrap()
-            .test_inject_response(b"OK\n".to_vec()); // SAMPLE 1
         backend
             .protocol
             .lock()
@@ -912,7 +923,7 @@ mod tests {
         assert!(!sent.is_empty(), "commands should have been sent");
 
         // HELLO was first (from connect)
-        assert_eq!(String::from_utf8(sent[0].clone()).unwrap(), "HELLO 1\n");
+        assert_eq!(String::from_utf8(sent[0].clone()).unwrap(), "HELLO 2\n");
 
         // Check MANIFEST was sent
         let has_manifest = sent.iter().any(|c| c.starts_with(b"MANIFEST"));
@@ -921,6 +932,59 @@ mod tests {
         // Check EXECUTE was sent
         let has_execute = sent.iter().any(|c| c.starts_with(b"EXECUTE"));
         assert!(has_execute, "EXECUTE should have been sent");
+    }
+
+    /// v2 (C): a multi-chunk upload consumes exactly ONE ACK per SAMPLE chunk
+    /// — not one per line. DOF=6 → chunk = 3072/(19+60) = 38; 150 samples →
+    /// ceil(150/38) = 4 chunk ACKs. The MANIFEST line declares the chunk so
+    /// the firmware counts the batch boundaries.
+    #[tokio::test]
+    async fn execute_consumes_one_ack_per_sample_chunk() {
+        use std::sync::atomic::Ordering;
+
+        let transport = FakeTransport::new();
+        let mut backend = make_connected_backend(transport).await;
+
+        let dof = 6usize;
+        let n = 150usize;
+        let waypoints: Vec<Vec<f64>> = (0..n)
+            .map(|i| {
+                let t = i as f64 * 0.0001; // tiny amplitude — inside the envelope
+                vec![t; dof]
+            })
+            .collect();
+        let plan = plan_of(waypoints, 1.0);
+
+        // Inject: OK (MANIFEST), OK (SEGMENT), 3 chunk ACKs (150/38 = 3 FULL
+        // chunks — the trailing 36 samples get no ACK), READY, OK.
+        let protocol = backend.protocol.lock().await;
+        let p = protocol.as_ref().unwrap();
+        p.test_inject_response(b"OK\n".to_vec());
+        p.test_inject_response(b"OK\n".to_vec());
+        for _ in 0..3 {
+            p.test_inject_response(b"OK\n".to_vec());
+        }
+        p.test_inject_response(b"READY\n".to_vec());
+        p.test_inject_response(b"OK\n".to_vec());
+        drop(protocol);
+
+        backend
+            .execute(plan)
+            .await
+            .expect("multi-chunk upload must succeed");
+        assert!(backend.is_connected());
+
+        // The MANIFEST line declares the derived chunk (3072 / max_line(6)).
+        let lines = sent_lines(&backend).await;
+        let manifest = lines
+            .iter()
+            .find(|l| l.starts_with("MANIFEST"))
+            .expect("MANIFEST sent");
+        let parts: Vec<&str> = manifest.trim().split_whitespace().collect();
+        assert_eq!(parts[4], "38", "chunk derived from DOF=6: 3072/79 = 38");
+        let sample_lines = lines.iter().filter(|l| l.starts_with("SAMPLE")).count();
+        assert_eq!(sample_lines, n, "all SAMPLE lines hit the wire (batched)");
+        assert!(backend.is_connected());
     }
 
     #[tokio::test]
@@ -933,7 +997,7 @@ mod tests {
             .await
             .as_ref()
             .unwrap()
-            .test_inject_response(b"HELLO 1 OK\n".to_vec());
+            .test_inject_response(b"HELLO 2 OK\n".to_vec());
         backend.connect().await.expect("first connect");
 
         let err = backend.connect().await.unwrap_err();
@@ -965,7 +1029,7 @@ mod tests {
             .await
             .as_ref()
             .unwrap()
-            .test_inject_response(b"HELLO 1 OK\n".to_vec());
+            .test_inject_response(b"HELLO 2 OK\n".to_vec());
         backend.connect().await.expect("connect");
 
         let result = backend.execute(plan_of(vec![], 1.0)).await;
@@ -988,7 +1052,7 @@ mod tests {
             .unwrap()
             .test_sent_commands();
         assert_eq!(sent.len(), 1, "only HELLO should have been sent");
-        assert_eq!(String::from_utf8(sent[0].clone()).unwrap(), "HELLO 1\n");
+        assert_eq!(String::from_utf8(sent[0].clone()).unwrap(), "HELLO 2\n");
     }
 
     /// A zero-duration plan is the degenerate case the truncation guard owns
@@ -1002,7 +1066,7 @@ mod tests {
         let mut backend = make_connected_backend(transport).await;
         // 2 waypoints, duration 0 → trunc(0) = 0 < (2-1) → degenerate branch.
         let plan = plan_of(vec![vec![0.0, 0.0], vec![1.0, 0.0]], 0.0);
-        inject_full_upload(&backend, 2).await;
+        inject_full_upload(&backend, &plan).await;
 
         backend
             .execute(plan)
@@ -1041,7 +1105,7 @@ mod tests {
             .await
             .as_ref()
             .unwrap()
-            .test_inject_response(b"HELLO 1 OK\n".to_vec());
+            .test_inject_response(b"HELLO 2 OK\n".to_vec());
         backend.connect().await.expect("connect");
 
         let result = backend
@@ -1117,7 +1181,7 @@ mod tests {
             .unwrap()
             .test_sent_commands();
         assert_eq!(sent.len(), 1, "only HELLO from connect — no upload traffic");
-        assert_eq!(String::from_utf8(sent[0].clone()).unwrap(), "HELLO 1\n");
+        assert_eq!(String::from_utf8(sent[0].clone()).unwrap(), "HELLO 2\n");
     }
 
     /// R1-1 (CRITICAL): an out-of-envelope POSITION plan (base at 4.0 rad —
@@ -1170,7 +1234,7 @@ mod tests {
             .await
             .as_ref()
             .unwrap()
-            .test_inject_response(b"HELLO 1 OK\n".to_vec());
+            .test_inject_response(b"HELLO 2 OK\n".to_vec());
         backend.connect().await.expect("connect");
         assert!(backend.is_connected());
 
@@ -1225,7 +1289,7 @@ mod tests {
             .await
             .as_ref()
             .unwrap()
-            .test_inject_response(b"HELLO 1 OK\n".to_vec());
+            .test_inject_response(b"HELLO 2 OK\n".to_vec());
 
         backend
             .connect()
@@ -1249,9 +1313,9 @@ mod tests {
             p.test_inject_response(b"ERROR NOT_IDLE\n".to_vec());
             // Recovery STOP response (consumed by protocol.stop()).
             p.test_inject_response(b"OK\n".to_vec());
-            // Retry upload: MANIFEST, SEGMENT, SAMPLE 0, SAMPLE 1, END_UPLOAD.
-            p.test_inject_response(b"OK\n".to_vec());
-            p.test_inject_response(b"OK\n".to_vec());
+            // Retry upload (v2): MANIFEST → OK, SEGMENT → OK, then the 2
+            // samples (chunk 64) form a trailing partial chunk → NO chunk ACK;
+            // END_UPLOAD → READY.
             p.test_inject_response(b"OK\n".to_vec());
             p.test_inject_response(b"OK\n".to_vec());
             p.test_inject_response(b"READY\n".to_vec());

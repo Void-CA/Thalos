@@ -3816,7 +3816,7 @@ async fn start_execution_with_lost_connection_returns_409_connection_lost() {
     // FakeTransport answers HELLO, then reports the device disconnected on the
     // next receive (mid-upload) — the ConnectionLost seam.
     let transport = thalos_runtime::backends::transport::FakeTransport::new();
-    transport.inject_response(b"HELLO 1 OK\n".to_vec());
+    transport.inject_response(b"HELLO 2 OK\n".to_vec());
     transport.disconnect_on_empty_queue();
     state
         .services

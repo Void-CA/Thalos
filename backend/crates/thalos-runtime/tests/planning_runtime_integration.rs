@@ -29,6 +29,7 @@
 //! - Hardware real (usa `FakeTransport`).
 
 use thalos_core::{
+    execution::plan::ExecutionPlan,
     ids::OperationId,
     kinematics::inverse::{IKGoal, IKResult, IKSolver, IkError},
     models::{RobotModel, RobotRegistry},
@@ -109,16 +110,32 @@ fn compile_movej_program(
 
 /// Crea un FakeTransport con respuestas pre-cargadas para:
 ///   1. HELLO handshake (1 respuesta)
-///   2. Upload: MANIFEST + SEGMENT + N×SAMPLE + END_UPLOAD (N+2 respuestas OK + 1 READY)
+///   2. Upload v2 (C): OK para MANIFEST y cada SEGMENT + UN OK por chunk
+///      completo de SAMPLEs (chunk derivado del DOF; la cola parcial no lleva
+///      ACK) + READY
 ///   3. EXECUTE (1 respuesta OK)
-fn transport_with_responses(sample_count: usize) -> FakeTransport {
+///
+/// Los counts se derivan del MANIFIESTO REAL (post-dedup — el builder puede
+/// colapsar waypoints duplicados), no de los waypoints crudos del plan.
+fn transport_with_responses(exec_plan: &ExecutionPlan) -> FakeTransport {
     let t = FakeTransport::new();
 
     // 1. HELLO handshake
-    t.inject_response(b"HELLO 1 OK\n".to_vec());
+    t.inject_response(b"HELLO 2 OK\n".to_vec());
 
-    // 2. Upload: OK for MANIFEST, SEGMENT, each SAMPLE
-    for _ in 0..sample_count + 2 {
+    // 2. Upload responses, derived from the manifest the host will upload.
+    if let Ok(manifest) = ExecutionManifestBuilder::build(exec_plan) {
+        let dof = manifest.metadata.dof_count as usize;
+        let max_line = 19 + 10 * dof;
+        let chunk = (3072usize / max_line.max(1)).clamp(1, 64);
+        let full_chunks = manifest.metadata.total_samples / chunk;
+        // MANIFEST + one per SEGMENT + one per COMPLETE chunk.
+        for _ in 0..1 + manifest.segments.len() + full_chunks {
+            t.inject_response(b"OK\n".to_vec());
+        }
+    } else {
+        // The manifest builder rejects the plan (no wire traffic) — the
+        // responses below are never consumed by the failing execute().
         t.inject_response(b"OK\n".to_vec());
     }
     // END_UPLOAD → READY
@@ -182,7 +199,11 @@ async fn plan_compile_then_esp32_execute() {
     );
 
     // ── 3. Execute ──────────────────────────────────────────────────────
-    let transport = transport_with_responses(waypoints.len());
+    // The REAL-timestamp ExecutionPlan — built by the pure chain from the
+    // compiled plan — flows into execute(). The manifest must carry the
+    // planner's true per-gap dt (ramps ≠ cruise), NOT an even re-spacing.
+    let exec_plan = ExecutionPlanBuilder::build(&plan).expect("plan builds");
+    let transport = transport_with_responses(&exec_plan);
     let mut backend = Esp32Backend::new(Box::new(transport));
 
     backend
@@ -194,10 +215,6 @@ async fn plan_compile_then_esp32_execute() {
         "should be connected after handshake"
     );
 
-    // The REAL-timestamp ExecutionPlan — built by the pure chain from the
-    // compiled plan — flows into execute(). The manifest must carry the
-    // planner's true per-gap dt (ramps ≠ cruise), NOT an even re-spacing.
-    let exec_plan = ExecutionPlanBuilder::build(&plan).expect("plan builds");
     // Reference manifest from the SAME plan — what the pure chain produces.
     let reference = ExecutionManifestBuilder::build(&exec_plan).expect("reference manifest");
     backend
@@ -213,9 +230,15 @@ async fn plan_compile_then_esp32_execute() {
     let sent = backend.test_sent_commands().await;
     assert!(!sent.is_empty(), "commands should have been sent");
 
+    // Flatten the batched send() buffers (protocol v2, C) into wire lines.
     let as_text: Vec<String> = sent
         .iter()
-        .map(|b| String::from_utf8_lossy(b).to_string())
+        .flat_map(|b| {
+            String::from_utf8_lossy(b)
+                .lines()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+        })
         .collect();
 
     // 4.0 — REGRESSION (d): the wire manifest MUST be byte-equivalent in
@@ -245,7 +268,7 @@ async fn plan_compile_then_esp32_execute() {
     let hello_line: &String = &as_text[0];
     assert_eq!(
         hello_line.trim(),
-        "HELLO 1",
+        "HELLO 2",
         "first command should be HELLO"
     );
 
@@ -326,14 +349,14 @@ async fn fast_movej_compiles_but_execute_rejects_gracefully() {
         "fast movej should produce a multi-waypoint trajectory"
     );
 
-    let transport = transport_with_responses(waypoints.len());
+    let exec_plan = ExecutionPlanBuilder::build(&plan).expect("plan builds");
+    let transport = transport_with_responses(&exec_plan);
     let mut backend = Esp32Backend::new(Box::new(transport));
     backend.connect().await.expect("connect should succeed");
 
     // Pre-fix this PANICKED (shim `.expect()` on VELOCITY_EXCEEDED).
     // The real-timestamp plan: the planner's true cruise dt still implies
     // 5.0 rad/s → the firmware-parity validator must reject it.
-    let exec_plan = ExecutionPlanBuilder::build(&plan).expect("plan builds");
     let result = backend.execute(exec_plan).await;
     match result {
         Ok(()) => panic!("fast movej must be rejected, not executed"),
@@ -363,11 +386,11 @@ async fn empty_plan_compile_ok_but_execute_fails() {
 
     // Execute with no waypoints — Esp32Backend rejection (the empty plan
     // fails the pure builder's EMPTY_MANIFEST rule, no wire traffic).
-    let transport = transport_with_responses(0);
+    let exec_plan = ExecutionPlanBuilder::build(&plan).expect("empty plan builds");
+    let transport = transport_with_responses(&exec_plan);
     let mut backend = Esp32Backend::new(Box::new(transport));
     backend.connect().await.expect("connect should succeed");
 
-    let exec_plan = ExecutionPlanBuilder::build(&plan).expect("empty plan builds");
     let result: Result<(), _> = backend.execute(exec_plan).await;
     assert!(
         result.is_err(),
@@ -447,11 +470,11 @@ async fn dof_consistency_across_pipeline() {
 
     // Verificar que el ExecutionPlan (real timestamps) acepta estos waypoints
     // sin error (lo ejecutamos via execute — el manifest builder valida).
-    let transport = transport_with_responses(waypoints.len());
+    let exec_plan = ExecutionPlanBuilder::build(&plan).expect("plan builds");
+    let transport = transport_with_responses(&exec_plan);
     let mut backend = Esp32Backend::new(Box::new(transport));
     backend.connect().await.expect("connect should succeed");
 
-    let exec_plan = ExecutionPlanBuilder::build(&plan).expect("plan builds");
     backend
         .execute(exec_plan)
         .await
@@ -495,11 +518,11 @@ async fn non_uniform_timestamps_reach_the_manifest() {
     };
     let plan = CompiledPlan::new(Trajectory::new(points), vec![segment]);
 
-    let transport = transport_with_responses(plan.waypoint_count);
+    let exec_plan = ExecutionPlanBuilder::build(&plan).expect("plan builds");
+    let transport = transport_with_responses(&exec_plan);
     let mut backend = Esp32Backend::new(Box::new(transport));
     backend.connect().await.expect("connect should succeed");
 
-    let exec_plan = ExecutionPlanBuilder::build(&plan).expect("plan builds");
     backend
         .execute(exec_plan)
         .await
@@ -507,14 +530,23 @@ async fn non_uniform_timestamps_reach_the_manifest() {
 
     // The wire manifest must carry the REAL per-gap dt: 1600 µs ramps and
     // 10000 µs cruise — NOT the even-spaced reconstruction (36400/7 = 5200).
+    // Flatten the batched send() buffers (protocol v2, C) into wire lines.
     let sent = backend.test_sent_commands().await;
-    let wire_dt: Vec<u64> = sent
+    let wire_lines: Vec<String> = sent
         .iter()
-        .filter(|c| c.starts_with(b"SAMPLE"))
-        .skip(1) // leading sample has dt_us = 0 by protocol
-        .map(|c| {
+        .flat_map(|c| {
             String::from_utf8_lossy(c)
-                .trim()
+                .lines()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    let wire_dt: Vec<u64> = wire_lines
+        .iter()
+        .filter(|l| l.starts_with("SAMPLE"))
+        .skip(1) // leading sample has dt_us = 0 by protocol
+        .map(|l| {
+            l.trim()
                 .split_whitespace()
                 .last()
                 .unwrap()

@@ -291,7 +291,7 @@ async fn execute_without_manifest_is_rejected_not_ready() {
     let (mut server, addr) = start_sim(Scenario::Happy);
     let mut transport = TcpTransport::new(&addr);
     transport.connect().await.expect("TCP connect to simulator");
-    let mut protocol = Esp32Protocol::new(Box::new(transport), 1);
+    let mut protocol = Esp32Protocol::new(Box::new(transport), 2); // protocol v2 (C)
     protocol
         .handshake()
         .await

@@ -468,10 +468,10 @@ mod tests {
         // Write from the OTHER end of the virtual pair; the transport reads it.
         use tokio::io::AsyncWriteExt;
         let mut slave = slave;
-        slave.write_all(b"HELLO 1 OK\r\n").await.unwrap();
+        slave.write_all(b"HELLO 2 OK\r\n").await.unwrap();
         slave.flush().await.unwrap();
         let resp = transport.receive().await.unwrap();
-        assert_eq!(String::from_utf8(resp).unwrap(), "HELLO 1 OK\n");
+        assert_eq!(String::from_utf8(resp).unwrap(), "HELLO 2 OK\n");
     }
 
     /// REL-04 / RES-05 (RED): a partial line buffered by `read_line` when the

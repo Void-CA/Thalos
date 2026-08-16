@@ -112,7 +112,8 @@ fn evenly_spaced_movej_plan() -> CompiledPlan {
 fn wire_lines(plan: &CompiledPlan) -> Vec<String> {
     let execution = ExecutionPlanBuilder::build(plan).expect("plan must build");
     let manifest = ExecutionManifestBuilder::build(&execution).expect("manifest must build");
-    Esp32Protocol::encode_manifest(&manifest)
+    // These fixtures are DOF=2 → derived chunk = 64 (3072 / (19+20)).
+    Esp32Protocol::encode_manifest(&manifest, 64)
         .iter()
         .map(|b| String::from_utf8_lossy(b).into_owned())
         .collect()
@@ -138,7 +139,7 @@ fn integration_compiled_plan_to_wire_output() {
     assert_eq!(lines.len(), 7);
 
     // MANIFEST <dof> <N> <duration_us> — duration 1.5 s → 1_500_000 µs.
-    assert_eq!(lines[0], "MANIFEST 2 3 1500000\n");
+    assert_eq!(lines[0], "MANIFEST 2 3 1500000 64\n");
 
     // Segment provenance 1:1, MoveJ then MoveL.
     assert_eq!(lines[1], "SEGMENT 0 movej 0 2\n");
@@ -165,7 +166,7 @@ fn integration_evenly_spaced_movej_wire_matches_legacy_format() {
 
     // MANIFEST + 1 SEGMENT + 4 SAMPLE + END_UPLOAD = 7 lines.
     assert_eq!(lines.len(), 7);
-    assert_eq!(lines[0], "MANIFEST 2 4 1500000\n");
+    assert_eq!(lines[0], "MANIFEST 2 4 1500000 64\n");
     assert_eq!(lines[1], "SEGMENT 0 movej 0 4\n");
 
     // dt evenly spaced: 1_500_000 / 3 = 500_000 per sample gap, first = 0.

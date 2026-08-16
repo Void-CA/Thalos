@@ -54,6 +54,41 @@ struct RecordingState {
     iteration: u32,
     /// Total iterations from the mode (`None` for Once, R4).
     total_iterations: Option<u32>,
+    /// Execution source captured at start (B). The synthetic upload-window
+    /// delta needs it WITHOUT touching the controller — the background
+    /// re-execute holds the controller write lock for the whole upload, and
+    /// `BackendManager::active_source` reads it (would deadlock).
+    source: ExecutionSource,
+    /// Repeat orchestration phase (B: async re-execute). `Uploading` while a
+    /// background task re-executes the plan for the next iteration — ticks in
+    /// that window return a synthetic delta instead of touching the controller
+    /// or firing the completion gate again.
+    repeat_phase: RepeatPhase,
+    /// Async re-execute failure slot (B): set by the background task when the
+    /// re-upload fails; the next tick drains it and fails the session with the
+    /// real controller code (R5 parity with the old synchronous path).
+    pending_reexecute_error: Option<PendingReexecuteError>,
+}
+
+/// Repeat orchestration phase (B). Gates completion detection so the stale
+/// "Completed" state of the previous pass cannot re-trigger an upload while
+/// the next iteration is already being uploaded by the background task.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RepeatPhase {
+    /// No background re-execute in flight — the controller runs the current
+    /// iteration (or the session is `Once`).
+    Idle,
+    /// A background task is uploading/starting the NEXT iteration. Completion
+    /// detection is suppressed until the task resolves (`Idle` or failure).
+    Uploading,
+}
+
+/// Async re-execute failure payload (B): the iteration to report on failure
+/// (the COMPLETED iteration whose follow-up failed to start — parity with the
+/// old synchronous path) plus the real `ControllerError`.
+struct PendingReexecuteError {
+    iteration: u32,
+    source: crate::error::ControllerError,
 }
 
 /// Runtime IK solver configuration (spec `ik-config`): the runtime service
@@ -85,7 +120,9 @@ pub struct SceneService {
     runtime: RwLock<SceneRuntime>,
     manager: Arc<BackendManager>,
     sessions: Arc<SessionManager>,
-    recording: RwLock<Option<RecordingState>>,
+    /// `Arc` so a background repeat re-execute (B) can update the phase/error
+    /// slot without owning the whole service.
+    recording: Arc<RwLock<Option<RecordingState>>>,
 }
 
 impl SceneService {
@@ -108,7 +145,7 @@ impl SceneService {
             runtime: RwLock::new(runtime),
             manager,
             sessions,
-            recording: RwLock::new(None),
+            recording: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -512,6 +549,7 @@ impl SceneService {
             // Hardware/Esp32), not a hardcoded value — the badge must be able to
             // say Hardware when the ESP32 backend is connected.
             let source = self.manager.active_source().await;
+            let recording_source = source.clone();
             let wps_for_recorder = waypoints.clone();
             let joint_count = wps_for_recorder.first().map(|w| w.len()).unwrap_or(0);
             let robot_name_for_session = robot_name.clone();
@@ -554,6 +592,9 @@ impl SceneService {
                 mode,
                 iteration: 1,
                 total_iterations: mode.total_iterations(),
+                repeat_phase: RepeatPhase::Idle,
+                pending_reexecute_error: None,
+                source: recording_source,
             });
         }
 
@@ -730,6 +771,61 @@ impl SceneService {
     /// Also records the state into the active MotionRecorder if recording
     /// is in progress, and finalizes the session when execution completes.
     pub async fn tick_execution_delta(&self, dt: f64) -> Result<TickDelta, RuntimeError> {
+        // 0. Async re-execute (repeat) coordination (B) — runs BEFORE any
+        // controller access: a background re-execute holds the controller
+        // write lock for the WHOLE serial upload (10-17s on large plans).
+        // Ticks in that window must NOT block on the controller read (would
+        // blow the HTTP timeout), must NOT fire the completion gate again (the
+        // stale Completed state of the previous pass would re-execute twice),
+        // and must NOT record idle samples into the open iteration trace.
+        let uploading_repeat: Option<(ExecutionMode, u32, ExecutionSource)> = {
+            let mut recording = self.recording.write().await;
+            if let Some(ref mut rec_state) = *recording {
+                // An async re-execute failure surfaces on the NEXT tick with
+                // the real controller code (R5 parity with the old synchronous
+                // path — the failure is attributed to the COMPLETED iteration
+                // whose follow-up failed to start).
+                if let Some(err) = rec_state.pending_reexecute_error.take() {
+                    let trace = rec_state.recorder.stop();
+                    rec_state
+                        .execution_recorder
+                        .on_execution_finished(Duration::ZERO);
+                    let exec_trace = rec_state.execution_recorder.trace();
+                    self.sessions
+                        .complete_with_status(
+                            rec_state.session_id,
+                            trace,
+                            SessionStatus::Failed,
+                        )
+                        .await;
+                    self.sessions
+                        .set_iteration(rec_state.session_id, err.iteration)
+                        .await;
+                    if let Some(et) = exec_trace {
+                        self.sessions
+                            .save_execution_trace(rec_state.session_id, et)
+                            .await;
+                    }
+                    *recording = None;
+                    return Err(RuntimeError::ControllerFailed { source: err.source });
+                }
+                if matches!(rec_state.repeat_phase, RepeatPhase::Uploading) {
+                    Some((
+                        rec_state.mode,
+                        rec_state.iteration,
+                        rec_state.source.clone(),
+                    ))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+        if let Some((mode, iteration, source)) = uploading_repeat {
+            return self.synthetic_uploading_delta(mode, iteration, source).await;
+        }
+
         // 1. Advance simulation time via the controller trait.
         // R4-001: a real failure (e.g. `ConnectionLost`) from `advance` must
         // PROPAGATE as an execution failure — not be swallowed — so the code
@@ -891,19 +987,54 @@ impl SceneService {
                                 .set_iteration(rec_state.session_id, rec_state.iteration)
                                 .await;
 
-                            let re_execute = match self.manager.get_controller().await {
-                                Some(ctrl) => match re_execute_payload {
-                                    Some(plan) => ctrl.write().await.execute(plan).await,
-                                    // Unreachable: Repeat start is gated on a
-                                    // loaded plan (S8). Fail loud rather than
-                                    // silently dropping the iteration.
-                                    None => Err(crate::error::ControllerError::NotConnected),
-                                },
-                                None => Err(crate::error::ControllerError::NotConnected),
+                            // B: the re-execute (full serial upload for the
+                            // next iteration) runs in a BACKGROUND task — it
+                            // must never block the tick request. While it is
+                            // in flight the phase is `Uploading`: the stale
+                            // Completed state of the previous pass cannot
+                            // re-fire this gate, and ticks return a synthetic
+                            // Running(k+1) delta without touching the
+                            // controller (which the task holds).
+                            let fail_iteration = iteration;
+                            rec_state.repeat_phase = RepeatPhase::Uploading;
+                            let re_execute = match (
+                                self.manager.get_controller().await,
+                                re_execute_payload,
+                            ) {
+                                (Some(ctrl), Some(plan)) => {
+                                    let recording = self.recording.clone();
+                                    tokio::spawn(async move {
+                                        let result = {
+                                            let mut c = ctrl.write().await;
+                                            c.execute(plan).await
+                                        };
+                                        let mut rec = recording.write().await;
+                                        if let Some(ref mut rs) = *rec {
+                                            match result {
+                                                Ok(()) => {
+                                                    rs.repeat_phase = RepeatPhase::Idle
+                                                }
+                                                Err(source) => {
+                                                    rs.pending_reexecute_error =
+                                                        Some(PendingReexecuteError {
+                                                            iteration: fail_iteration,
+                                                            source,
+                                                        })
+                                                }
+                                            }
+                                        }
+                                    });
+                                    Ok(())
+                                }
+                                // Unreachable: Repeat start is gated on a
+                                // loaded plan (S8). Fail loud rather than
+                                // silently dropping the iteration.
+                                _ => Err(crate::error::ControllerError::NotConnected),
                             };
                             if let Err(e) = re_execute {
-                                // Re-execution failed → the session fails at
-                                // the CURRENT iteration; the error propagates
+                                // Re-execution failed synchronously (no
+                                // controller / no plan) → the session fails at
+                                // the current iteration; the error propagates
                                 // so the frontend sees the real code (R5).
                                 let trace = rec_state.recorder.stop();
                                 rec_state
@@ -922,7 +1053,8 @@ impl SceneService {
                                 *recording = None;
                                 return Err(RuntimeError::ControllerFailed { source: e });
                             }
-                            // The controller is running iteration k+1 now.
+                            // The controller will be running iteration k+1
+                            // once the upload lands.
                             intermediate_restart = true;
                         } else {
                             // Final iteration → Completed.
@@ -1049,6 +1181,52 @@ impl SceneService {
             plan_duration: 0.0,
             active_tcp: runtime.active_tcp.clone(),
         })
+    }
+
+    /// Build a tick delta for the repeat upload window (B): the robot is
+    /// stationary while the firmware receives the next manifest, so the delta
+    /// replays the last known joints with a synthetic `Running(next_iteration)`
+    /// session — the frontend keeps polling instead of treating the session as
+    /// finished (R8). No wire traffic, no recording, no completion gate.
+    async fn synthetic_uploading_delta(
+        &self,
+        mode: ExecutionMode,
+        iteration: u32,
+        source: ExecutionSource,
+    ) -> Result<TickDelta, RuntimeError> {
+        let runtime = self.runtime.read().await;
+        let plan_duration = runtime
+            .active_plan
+            .as_ref()
+            .map(|p| p.trajectory.duration())
+            .unwrap_or(0.0);
+        let fk_result = Self::compute_fk(&runtime.active_robot.chain, &runtime.active_robot.joints);
+        let mut state = crate::state::robot_state::RobotState::default();
+        state.joints.positions = runtime.active_robot.joints.clone();
+        let state = Arc::new(state);
+        let mut delta = TickDelta::from_robot_state(
+            &state,
+            runtime.active_robot.chain.clone(),
+            fk_result,
+            plan_duration,
+            runtime.active_tcp.clone(),
+        );
+        delta.execution = Some(
+            crate::plan::ExecutionSession::derived_with_source(
+                SessionStatus::Running,
+                0.0,
+                source,
+            )
+            .with_repeat_state(mode, iteration),
+        );
+        Ok(delta)
+    }
+
+    /// Test-only (B): the current repeat orchestration phase — lets tests wait
+    /// for the async re-execute to land before driving the next iteration.
+    #[cfg(test)]
+    pub(crate) async fn recording_repeat_phase(&self) -> Option<RepeatPhase> {
+        self.recording.read().await.as_ref().map(|r| r.repeat_phase)
     }
 }
 

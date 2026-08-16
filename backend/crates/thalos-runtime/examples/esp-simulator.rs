@@ -221,6 +221,10 @@ pub struct SimState {
     exec_step: usize,
     /// `silence` scenario: after `EXECUTE` the device stops responding.
     silent: bool,
+    /// Chunked-ACK batch size (v2, C) — ACK one `OK` per N samples.
+    chunk_size: usize,
+    /// Samples received since the last chunk ACK.
+    samples_since_ack: usize,
 }
 
 impl SimState {
@@ -236,6 +240,8 @@ impl SimState {
             recorded: Vec::new(),
             exec_step: 0,
             silent: false,
+            chunk_size: 1,
+            samples_since_ack: 0,
         }
     }
 
@@ -243,7 +249,10 @@ impl SimState {
 
     pub fn handle_hello(&mut self, parts: &[&str]) -> String {
         match parts.get(1).and_then(|s| s.parse::<u32>().ok()) {
-            Some(version) => format!("HELLO {version} OK\n"),
+            // v2 (C): validate the version — a stale v1 host fails the
+            // handshake BEFORE upload traffic (mirrors protocol.cpp).
+            Some(version) if version == 2 => format!("HELLO {version} OK\n"),
+            Some(_) => self.set_error("VERSION_MISMATCH"),
             None => self.set_error("MALFORMED_HELLO"),
         }
     }
@@ -255,10 +264,15 @@ impl SimState {
         let dof = parts.get(1).and_then(|s| s.parse::<usize>().ok());
         let total = parts.get(2).and_then(|s| s.parse::<usize>().ok());
         let dur = parts.get(3).and_then(|s| s.parse::<u64>().ok());
+        // v2 (C): optional 4th field = chunked-ACK batch size (default 1).
+        let chunk = parts
+            .get(4)
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(1);
         let (Some(dof), Some(total), Some(dur)) = (dof, total, dur) else {
             return self.set_error("MALFORMED_MANIFEST");
         };
-        if dof == 0 || total == 0 || dur == 0 {
+        if dof == 0 || total == 0 || dur == 0 || chunk == 0 {
             return self.set_error("INVALID_MANIFEST");
         }
         self.meta = ManifestMeta {
@@ -266,6 +280,8 @@ impl SimState {
             total_samples: total,
             duration_us: dur,
         };
+        self.chunk_size = chunk;
+        self.samples_since_ack = 0;
         self.segments.clear();
         self.uploaded.clear();
         self.state = State::Receiving;
@@ -317,7 +333,14 @@ impl SimState {
             Err(_) => return self.set_error("MALFORMED_SAMPLE"),
         };
         self.uploaded.push(Waypoint { joints, dt_us });
-        "OK\n".to_string()
+        // v2 (C): chunked ACK — one OK per chunk (mirror protocol.cpp).
+        self.samples_since_ack += 1;
+        if self.samples_since_ack >= self.chunk_size {
+            self.samples_since_ack = 0;
+            "OK\n".to_string()
+        } else {
+            String::new()
+        }
     }
 
     pub fn handle_end_upload(&mut self) -> String {
@@ -543,6 +566,8 @@ impl SimState {
         self.recorded.clear();
         self.exec_step = 0;
         self.silent = false;
+        self.chunk_size = 1;
+        self.samples_since_ack = 0;
     }
 }
 
