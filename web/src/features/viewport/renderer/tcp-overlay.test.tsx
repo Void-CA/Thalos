@@ -47,6 +47,7 @@ describe('resolveTcpPosition — resolved pose wins, local derivation fallback (
     const execution: TransformSnapshot = {
       kind: 'execution',
       transforms: [{ id: '2', translation: [0.7, 0.7, 0.7], rotation: [1, 0, 0, 0], scale: [1, 1, 1] }],
+      receivedAt: 0,
     }
     const [x, y, z] = resolveTcpPosition(tcpNoPose, execution, sceneData) ?? []
     expect(x).toBeCloseTo(0.7, 6)
@@ -69,6 +70,7 @@ describe('resolveFramePosition — shared frame position resolution (R6)', () =>
     const execution: TransformSnapshot = {
       kind: 'execution',
       transforms: [{ id: '2', translation: [0.7, 0.8, 0.5], rotation: [1, 0, 0, 0], scale: [1, 1, 1] }],
+      receivedAt: 0,
     }
     expect(resolveFramePosition('2', execution, sceneData)).toEqual([0.7, 0.8, 0.5])
   })
@@ -87,6 +89,7 @@ describe('resolveFramePosition — shared frame position resolution (R6)', () =>
     const execution: TransformSnapshot = {
       kind: 'execution',
       transforms: [{ id: '1', translation: [9, 9, 9], rotation: [1, 0, 0, 0], scale: [1, 1, 1] }],
+      receivedAt: 0,
     }
     expect(resolveFramePosition('1', execution, sceneData)).toEqual([9, 9, 9])
   })
