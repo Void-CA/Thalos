@@ -1,0 +1,66 @@
+\documentclass[border=10pt]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{shapes, arrows.meta, positioning, fit, backgrounds}
+
+\definecolor{espsoft}{HTML}{4A904A}
+\definecolor{actred}{HTML}{D94A4A}
+\definecolor{warn}{HTML}{D4A017}
+
+\tikzset{
+    state/.style={rectangle, draw, fill=white, minimum width=1.6cm, minimum height=0.7cm, align=center, font=\small, rounded corners=2pt},
+    staterun/.style={state, fill=green!15, draw=espsoft},
+    stateerr/.style={state, fill=red!15, draw=actred},
+    stateidle/.style={state, fill=gray!10, draw=gray},
+    arr/.style={-{Stealth[length=2mm]}, thick},
+    arrlab/.style={font=\scriptsize, fill=white, inner sep=1pt},
+    arrrev/.style={{Stealth[length=2mm]}-, thick},
+}
+
+\begin{document}
+\begin{tikzpicture}[node distance=1.2cm and 1.5cm]
+
+\node[font=\bfseries] at (3, 0.3) {Firmware State Machine};
+
+% ── States (linear flow) ──
+\node[stateidle] (idle) at (0, 0) {Idle};
+\node[state, right=of idle] (hs) {Handshake};
+\node[state, right=of hs] (recv) {Receiving};
+\node[state, right=of recv] (ready) {Ready};
+\node[staterun, right=of ready] (exec) {Executing};
+
+% ── ERROR state (below) ──
+\node[stateerr, below=1.5cm of recv] (err) {ERROR};
+
+% ── Start arrow ──
+\draw[arrev, gray] (-0.8, 0) -- (idle);
+
+% ── Main flow ──
+\draw[arr] (idle) -- node[arrlab, above] {HELLO OK} (hs);
+\draw[arr] (hs) -- node[arrlab, above] {MANIFEST} (recv);
+\draw[arr] (recv) -- node[arrlab, above] {END\_UPLOAD} (ready);
+\draw[arr] (ready) -- node[arrlab, above] {EXECUTE} (exec);
+
+% ── Loop on Executing ──
+\draw[arr] (exec) to[loop above] node[arrlab] {SAMPLE} (exec);
+
+% ── STOP back to Idle ──
+\draw[arr, gray] (exec) to[bend left=25] node[arrlab, right, pos=0.6] {STOP} (idle);
+
+% ── ERROR path ──
+\draw[arr, actred] (exec) -- ++(0,-0.8) -| node[arrlab, pos=0.25, right] {error} (err);
+\draw[arr, actred] (err) -- ++(-1.5,0) |- node[arrlab, pos=0.25, below] {STOP} (idle);
+
+% ── Legend ──
+\node[draw, dashed, gray, inner sep=5pt, align=left, font=\scriptsize, below=2.5cm of exec] {
+    \textbf{Flow:}\\
+    Idle $\to$ Handshake: version check\\
+    Handshake $\to$ Receiving: manifest\\
+    Receiving $\to$ Ready: upload done\\
+    Ready $\to$ Executing: execute\\
+    Executing $\to$ Idle: STOP / done\\
+    Executing $\to$ ERROR: invalid cmd\\
+    ERROR $\to$ Idle: STOP (reset)
+};
+
+\end{tikzpicture}
+\end{document}

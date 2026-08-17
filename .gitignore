@@ -9,3 +9,7 @@ __pycache__/
 /.env
 /.env.*
 !/.env.example
+
+# Generated evidence artifacts — produced by scripts/generate-evidence.sh
+/evidence/
+/output/

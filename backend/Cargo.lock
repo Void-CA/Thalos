@@ -1643,6 +1643,7 @@ dependencies = [
 name = "thalos_api"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "axum",
  "chrono",
  "dotenvy",
@@ -1688,6 +1689,7 @@ name = "thalos_math"
 version = "0.1.0"
 dependencies = [
  "nalgebra",
+ "rand 0.9.5",
  "serde",
  "thiserror",
 ]

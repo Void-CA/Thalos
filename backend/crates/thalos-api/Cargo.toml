@@ -26,9 +26,14 @@ tower-http = { version = "0.6", features = ["cors"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dotenvy = "0.15"
+anyhow = "1"
+tower = { version = "0.5", features = ["util"] }
+
+[[bin]]
+name = "evidence_export"
+path = "src/bin/evidence_export.rs"
 
 [dev-dependencies]
-tower = { version = "0.5", features = ["util"] }
 # R4-002: the no_firmware-over-real-serial integration test opens a virtual
 # serial pair (SerialStream::pair) whose slave path is a real /dev/pts/N.
 tokio-serial = "5"

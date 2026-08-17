@@ -1,0 +1,111 @@
+// Control Architecture — End-to-end control flow
+// Render: dot -Tsvg control-architecture.dot -o control-architecture.svg
+
+digraph control {
+    rankdir=TB;
+    fontname="Helvetica";
+    node [fontname="Helvetica", fontsize=11];
+    edge [fontname="Helvetica", fontsize=10];
+    label="Control Architecture — Task to Actuator";
+    labelloc=t;
+    fontsize=14;
+
+    // ── Thalos Platform ───────────────────────────────────
+    subgraph cluster_thalos {
+        label="Thalos Platform";
+        style=filled;
+        fillcolor="#E8F4FD";
+        color="#4A90D9";
+
+        node [shape=box, style=filled, fillcolor="#FFFFFF"];
+
+        task [label="Task\n(SemanticProgram)"];
+        compiler [label="Compiler\n(lowering)"];
+        planner [label="Planner\n(MoveJ / MoveL)"];
+        verifier [label="Verifier\n(constraints,\ncollisions,\nsingularities)"];
+
+        subgraph cluster_safety {
+            label="Safety Validation";
+            style=filled;
+            fillcolor="#FFF3CD";
+            color="#D4A017";
+
+            node [shape=box, style=filled, fillcolor="#FFFFFF"];
+            env_pos [label="Position Limits\n(min/max rad)"];
+            env_vel [label="Velocity Limits\n(max rad/s)"];
+            env_rej [label="Reject\n(not clamp)"];
+        }
+
+        dispatch [label="Command Dispatch\n(TCP / Serial)\nHELLO→MANIFEST→\nSEGMENT→SAMPLE→\nEXECUTE"];
+
+        task -> compiler -> planner -> verifier;
+        verifier -> env_pos -> env_vel -> env_rej;
+        env_rej -> dispatch;
+    }
+
+    // ── Transport ─────────────────────────────────────────
+    transport [label="TCP / Serial\n460800 baud", shape=diamond, style=filled, fillcolor="#FFF3CD"];
+
+    // ── ESP32 ─────────────────────────────────────────────
+    subgraph cluster_esp32 {
+        label="ESP32 Firmware";
+        style=filled;
+        fillcolor="#E8FDE8";
+        color="#4A904A";
+
+        node [shape=box, style=filled, fillcolor="#FFFFFF"];
+        proto [label="Protocol\n(parse)"];
+        valid [label="Validator\n(2nd pass)"];
+        exec [label="Executor\n(state machine)"];
+        pwm [label="Servo Driver\n(PWM compute)"];
+
+        proto -> valid -> exec -> pwm;
+
+        subgraph cluster_state {
+            label="State Machine";
+            style=filled;
+            fillcolor="#F0F0F0";
+            color="#888888";
+            node [shape=ellipse, style=filled, fillcolor="#FFFFFF"];
+            idle [label="Idle"];
+            hs [label="Handshaking"];
+            recv [label="Receiving"];
+            ready [label="Ready"];
+            run [label="Executing"];
+            err [label="ERROR"];
+
+            idle -> hs -> recv -> ready -> run;
+            run -> idle [label="STOP"];
+            run -> err [label="invalid"];
+            err -> idle [label="STOP"];
+        }
+    }
+
+    // ── Actuators ─────────────────────────────────────────
+    subgraph cluster_actuators {
+        label="Actuators";
+        style=filled;
+        fillcolor="#FDE8E8";
+        color="#D94A4A";
+
+        node [shape=box, style=filled, fillcolor="#FFFFFF"];
+        pca [label="PCA9685\nI²C → PWM"];
+        servo_loop [label="Servo Internal\nClosed Loop\n(potentiometer)"];
+        motor [label="Motor\n(output)"];
+
+        pca -> servo_loop -> motor;
+    }
+
+    // ── Connections ───────────────────────────────────────
+    dispatch -> transport;
+    transport -> proto;
+    pwm -> pca [label="I²C"];
+
+    // ── Annotations ───────────────────────────────────────
+    node [shape=note, style=filled, fillcolor="#FFF8E1", fontsize=9];
+    note1 [label="Layers:\n1. Task planning\n2. Trajectory verification\n3. Safety envelope\n4. Protocol validation\n5. Actuator internal loop"];
+    note2 [label="NO feedback from\nactuator to host\n(open-loop at\nplatform level)"];
+
+    note1 -> cluster_thalos [style=dashed, arrowhead=none];
+    note2 -> cluster_actuators [style=dashed, arrowhead=none];
+}

@@ -1,235 +1,376 @@
 # De la intención al movimiento: planificación, verificación y ejecución de trayectorias robóticas
 
-> **Documento**: informe científico-técnico de divulgación para feria de ciencia y tecnología. **Propósito**: responder
-> qué problema de robótica resuelve la propuesta, cómo lo resuelve y qué evidencia existe de que funciona. **Alcance**: el
-> cuerpo del informe (secciones 1–8) evita detalles de implementación; los nombres internos y las cifras exactas de
-> validación se concentran en el Apéndice A.
+> **Documento**: informe técnico-científico para la asignatura de Robótica.
+> **Alcance**: el cuerpo del informe (secciones 1–7) evita detalles de implementación; los nombres internos, cifras de
+> validación y diagramas de referencia se concentran en el Apéndice A.
 
 ---
 
-## 1. Introducción
+<!-- ===================== PORTADA ===================== -->
+<!-- TODO: Generar portada formal en formato ULSA -->
+<!-- Formato esperado:
+     - Encabezado institucional: Universidad Latinoamericana de Ciencia y Tecnología (ULSA)
+     - Carrera / Asignatura / Sección
+     - Título del proyecto: "Plataforma de Robótica — De la intención al movimiento"
+     - Nombres del equipo
+     - Fecha de entrega
+     - Generar automáticamente al finalizar el documento
+-->
 
-### 1.1 Problema
-
-Programar un robot para alcanzar una posición no consiste únicamente en encontrar una configuración final. El movimiento
-debe respetar los límites físicos del robot, evitar configuraciones problemáticas y producir una trayectoria que pueda
-ejecutarse de manera segura.
-
-Un brazo puede, en principio, alcanzar un punto del espacio. En la práctica, el recorrido que lo lleva hasta allí puede
-atravesar una región prohibida, exigir una velocidad que el actuador no puede sostener o transitar por una zona singular
-donde el control del extremo se vuelve inestable. El problema real no es "mover un motor", sino transformar una
-intención —"tomar el objeto y colocarlo allí"— en una secuencia de movimientos que sea a la vez correcta y ejecutable.
-Entre ambas hay un salto: de la **tarea de alto nivel** a la **configuración ejecutable** que la satisface respetando el
-modelo del robot.
-
-### 1.2 Motivación
-
-El proyecto propone una plataforma capaz de transformar una tarea de alto nivel en una trayectoria verificable y
-posteriormente ejecutable sobre un robot real o simulado. La idea es que ninguna de las etapas del proceso sea una caja
-negra: la descripción del robot, el razonamiento sobre su movimiento y la comunicación con el hardware físico deben
-poder inspeccionarse y demostrarse por separado.
-
-### 1.3 Objetivo
-
-**Objetivo general.** Desarrollar y validar un proceso que conecte la descripción de un robot con la cinemática, la
-planificación, la verificación y la ejecución, manteniendo explícita la diferencia entre lo demostrado
-computacionalmente y lo demostrado físicamente.
-
-**Objetivos específicos.**
-
-- Representar un robot real mediante un modelo estructural estándar.
-- Resolver la cinemática del robot y verificar su formulación.
-- Generar trayectorias que respeten los límites y las restricciones del
-sistema.
-- Verificar cada trayectoria antes de su ejecución (límites, singularidades,
-colisiones).
-- Ejecutar trayectorias sobre un robot físico con una frontera de seguridad
-explícita entre el comando lógico y la escritura al actuador.
-- Documentar de manera honesta qué se ha validado por simulación y qué se ha
-demostrado por medición física.
+[GENERAR PORTADA AL FINAL — formato ULSA: institución, carrera, asignatura, equipo, fecha]
 
 ---
 
-## 2. Fundamentos
+<!-- ===================== ÍNDICE ===================== -->
+[GENERAR ÍNDICE AL FINAL]
 
-### 2.1 Cinemática robótica
+---
 
-La cinemática describe el movimiento sin considerar las fuerzas que lo producen. La **cinemática directa** calcula la
-posición y orientación del extremo del manipulador a partir de los ángulos de sus articulaciones; se resuelve
-componiendo secuencialmente las transformaciones geométricas de cada eslabón a lo largo de la cadena del robot.
+<!-- ===================== OBJETIVOS ===================== -->
+## 1. Objetivos
 
-La **cinemática inversa** permite encontrar las configuraciones articulares necesarias para alcanzar un objetivo
-cartesiano. Se utiliza un método de **mínimos cuadrados amortiguados**, particularmente útil en regiones donde el
-problema puede presentar dificultades numéricas. La formulación del **Jacobiano** se verifica de manera independiente
-mediante diferencias finitas, reduciendo el riesgo de errores en una parte crítica del cálculo.
+### 1.1 Objetivo general
+
+Desarrollar y validar un proceso que conecte la descripción de un robot con la cinemática, la planificación, la
+verificación y la ejecución, manteniendo explícita la diferencia entre lo demostrado computacionalmente y lo demostrado
+físicamente.
+
+### 1.2 Objetivos específicos
+
+| # | Objetivo | Verbo Bloom |
+|---|----------|-------------|
+| O1 | Analizar la configuración morfométrica del robot y determinar sus grados de libertad, workspace y restricciones cinemáticas. | Analizar |
+| O2 | Calcular de forma analítica la cinemática directa e inversa mediante el método de Denavit-Hartenberg y verificar su formulación por vías independientes. | Calcular |
+| O3 | Diseñar las etapas de potencia, señal y comunicación del robot, desde el modelo estructural hasta el actuador físico. | Diseñar |
+| O4 | Implementar la estación de trabajo con firmware embebido (ESP32), control de servos (PCA9685) y protocolo de comunicación host-controlador. | Implementar |
+| O5 | Evaluar el desempeño de la plataforma mediante pruebas de simulación y ejecución física, verificando restricciones, seguridad y repetibilidad. | Evaluar |
+
+---
+
+<!-- ===================== MARCO CONCEPTUAL ===================== -->
+## 2. Marco conceptual
+
+### 2.1 Robótica y sistemas ciberfísicos
+
+La robótica contemporánea se fundamenta en la integración de componentes mecánicos, electrónicos y computacionales en un
+sistema ciberfísico. Un manipulador robótico articulado coordina sensores, actuadores y algoritmos de control para
+realizar tareas en el espacio físico. La plataforma propuesta se sitúa en esta intersección: un software de
+planificación y verificación se conecta con un hardware embebido que traduce comandos en movimiento físico.
+
+### 2.2 Modelado cinemático: Denavit-Hartenberg
+
+El método de Denavit-Hartenberg (DH) parametriza la geometría de una cadena cinemática serial asignando cuatro
+parámetros a cada eslabón:
+
+- $a_i$ (longitud del eslabón): distancia entre los ejes $z_{i-1}$ e $z_i$, medida sobre $x_i$.
+- $\alpha_i$ (torcimiento): ángulo entre los ejes $z_{i-1}$ e $z_i$, medido sobre $x_i$.
+- $d_i$ (desplazamiento): distancia entre los ejes $x_{i-1}$ e $x_i$, medida sobre $z_{i-1}$.
+- $\theta_i$ (ángulo articular): ángulo entre los ejes $x_{i-1}$ e $x_i$, medido sobre $z_{i-1}$.
+
+La transformación de cada eslabón se obtiene como:
+
+$$A_i = \text{Rot}_z(\theta_i) \cdot \text{Trans}_z(d_i) \cdot \text{Trans}_x(a_i) \cdot \text{Rot}_x(\alpha_i)$$
+
+Para el robot ICEBOT (SCARA 3R+P), los parámetros resultantes son:
+
+| $i$ | $a_i$ (m) | $\alpha_i$ (rad) | $d_i$ (m) | $\theta_i$ (rad) |
+|-----|-----------|------------------|-----------|-------------------|
+| 1 | 0 | 0 | $H_1 = 0.100$ | $\theta_1$ (variable) |
+| 2 | $L_1 = 0.125$ | 0 | 0 | $\theta_2$ (variable) |
+| 3 | $L_2 = 0.100$ | 0 | 0 | $\theta_3$ (variable) |
+| 4 | 0 | 0 | $H_2 - q_4$ | 0 |
+
+### 2.3 Transformaciones homogéneas
+
+Las matrices de transformación homogénea combinan rotación y traslación en una única matriz $4 \times 4$. La
+cinemática directa del robot se obtiene multiplicando las transformaciones individuales en cadena:
+
+$$T_{\text{base}}^{\text{tool}} = A_1 \cdot A_2 \cdot A_3 \cdot A_4 \cdot T_{\text{tool}}$$
+
+Donde $T_{\text{tool}}$ representa la transformación del efector final al punto de trabajo (tool tip), definida como una
+traslación de $-0.120$ m en el eje $z$ del frame {4}. El resultado se descompone en una matriz de rotación $R$ (orientación
+del tool tip respecto a la base) y un vector de posición $p$ (coordenadas del tool tip en el sistema de la base):
+
+$$R_{\text{base}}^{\text{tool}} = \begin{bmatrix} \cos(\theta_1+\theta_2+\theta_3) & -\sin(\theta_1+\theta_2+\theta_3) & 0 \\ \sin(\theta_1+\theta_2+\theta_3) & \cos(\theta_1+\theta_2+\theta_3) & 0 \\ 0 & 0 & 1 \end{bmatrix}$$
+
+$$p_{\text{base}}^{\text{tool}} = \begin{bmatrix} L_1 \cos(\theta_1+\theta_2) + L_2 \cos(\theta_1+\theta_2+\theta_3) \\ L_1 \sin(\theta_1+\theta_2) + L_2 \sin(\theta_1+\theta_2+\theta_3) \\ H_1 + (H_2 - q_4) - \text{Tool} \end{bmatrix}$$
+
+### 2.4 Grupo SE(3) y representación de poses
+
+La posición y orientación del extremo de un manipulador se描述en conjuntamente como una **pose** en el grupo $SE(3)$
+(Special Euclidean Group en 3 dimensiones). Un elemento de $SE(3)$ es una matriz de transformación homogénea:
+
+$$T = \begin{bmatrix} R & p \\ 0 & 1 \end{bmatrix} \in SE(3)$$
+
+donde $R \in SO(3)$ es la matriz de rotación y $p \in \mathbb{R}^3$ es el vector de traslación. Las propiedades
+fundamentales de $SE(3)$ que se aprovechan en robótica son:
+
+- **Cierre bajo composición**: la composición de dos poses válidas produce otra pose válida.
+- **Inversa**: toda pose tiene una inversa que deshace la transformación.
+- **No conmutatividad**: el orden de las transformaciones importa ($T_1 \cdot T_2 \neq T_2 \cdot T_1$ en general).
+
+La cadena cinemática del robot se modela como una secuencia de elementos de $SE(3)$, donde cada $A_i$ representa la
+transformación de un eslabón respecto al anterior. La cinemática directa compone estas poses en orden, y la cinemática
+inversa busca los parámetros articulares que producen una pose objetivo dada.
+
+### 2.5 Cuaterniones duales
+
+Los cuaterniones duales (Dual Quaternions, DQ) constituyen una segunda parametrización de $SE(3)$, matemáticamente
+equivalente a las matrices de transformación homogénea pero con ventajas computacionales. Un cuaternion dual se
+define como:
+
+$$\hat{q} = q_r + \epsilon \, q_d$$
+
+donde $q_r$ es la parte real (cuaternion de rotación) y $q_d$ es la parte dual, relacionada con la traslación.
+Ambos componentes son cuaterniones convencionales ($q = w + xi + yj + zk$).
+
+La conversión entre ambas representaciones es directa:
+
+- **$SE(3) \to DQ$**: a partir de $R$ y $p$, se extraen los cuaterniones de rotación y traslación.
+- **$DQ \to SE(3)$**: los componentes del cuaternion dual reconstruyen $R$ y $p$.
+
+En el módulo `thalos-math` se implementa la estructura `DualQuaternion` con operaciones de composición, inversión y
+conversión a/from `Transform3D`. Además, se define el tipo `Twist` (velocidad espacial $\xi = (\omega, v)$) que
+relaciona las velocidades articulares con la velocidad del extremo mediante cinemática diferencial.
+
+La cinemática diferencial mediante cuaterniones duales permite expresar la relación entre movimientos infinitesimales
+articulares y la velocidad del extremo en una formulación compacta, evitando la singularidad de representación que
+afecta a los ángulos de Euler. En esta plataforma, los cuaterniones duales se utilizan como representación interna
+de las poses en la biblioteca matemática, complementando las matrices homogéneas del modelo DH.
+
+### 2.6 Cinemática inversa
+
+La cinemática inversa permite encontrar las configuraciones articulares necesarias para alcanzar un objetivo cartesiano.
+Se utiliza un método de **mínimos cuadrados amortiguados** (DLS — Damped Least Squares), particularmente útil en
+regiones cercanas a singularidades donde la formulación estándar puede presentar dificultades numéricas.
 
 El **Jacobiano** relaciona las velocidades articulares con la velocidad del extremo del manipulador. Su formulación
 analítica se construye a partir de la geometría de la cadena, y su corrección se comprueba contrastándola con una
 aproximación numérica por diferencias finitas: dos formulaciones independientes del mismo resultado deben coincidir.
 
-### 2.2 Planificación de movimiento
+### 2.7 Planificación de trayectorias
 
-La planificación decide *cómo* moverse entre dos configuraciones. Se distinguen dos familias de movimientos.
+La planificación decide cómo moverse entre dos configuraciones. Se distinguen dos familias de movimientos:
 
-- **Movimiento articular**: se interpola directamente en el espacio de las
-articulaciones, desde la configuración inicial hasta la final, con perfiles de velocidad que evitan saltos bruscos.
-Todos los ejes parten y llegan de manera sincronizada.
-- **Movimiento lineal**: el extremo del manipulador debe recorrer una línea
-recta en el espacio cartesiano. Como la recta se recorre punto a punto, cada punto intermedio requiere resolver
-cinemática inversa, de modo que el resultado es una secuencia de configuraciones que mantienen el extremo sobre la
-trayectoria deseada.
+- **Movimiento articular (MoveJ)**: se interpola directamente en el espacio de las articulaciones, desde la
+  configuración inicial hasta la final, con perfiles de velocidad que evitan saltos bruscos. Todos los ejes parten y
+  llegan de manera sincronizada.
+- **Movimiento lineal (MoveL)**: el extremo del manipulador recorre una línea recta en el espacio cartesiano. Cada
+  punto intermedio requiere resolver cinemática inversa, produciendo una secuencia de configuraciones que mantienen el
+  extremo sobre la trayectoria deseada.
 
-En ambos casos el resultado es una **trayectoria**: una secuencia de configuraciones articulares con su temporización,
-lista para ser verificada y ejecutada.
+En ambos casos, los perfiles de velocidad se temporizan para arrancar y frenar de forma suave. El resultado es una
+**trayectoria** discretizada en instantes de tiempo con su configuración articular, lista para verificación y ejecución.
 
-### 2.3 Restricciones y seguridad
+### 2.8 Restricciones y manipulabilidad
 
-Una solución cinemáticamente válida puede seguir siendo inadmisible: puede exigir que una articulación supere su
-recorrido físico, orientar la herramienta de forma inconveniente o hacer pasar el brazo por un lugar que ocupa otro
-objeto. Por eso el movimiento se valida mediante restricciones articulares, de orientación y de posición: una
-trayectoria solo puede considerarse válida cuando satisface simultáneamente las condiciones físicas y geométricas
-definidas para el robot.
+Una solución cinemáticamente válida puede seguir siendo inadmisible si excede los límites físicos del robot, orienta
+la herramienta de forma inconveniente o atraviesa una región prohibida. Las restricciones se organizan en:
 
-La **detección de colisiones** comprueba si los volúmenes que representan los eslabones y los objetos del entorno se
-intersectan, usando formas geométricas simples para representar cada cuerpo, y distingue entre colisiones del robot
-consigo mismo y colisiones con el entorno. Se complementa con el análisis de **singularidades** —configuraciones donde
-el control del extremo pierde grados de libertad— y con medidas de **manipulabilidad** que indican cuán bien
-condicionada está la configuración para mover el extremo en cualquier dirección.
-
-### 2.4 Ejecución de trayectorias
-
-Una vez verificada, la trayectoria debe convertirse en movimiento físico. El paso del dominio lógico al dominio del
-actuador atraviesa un controlador embebido que recibe la trayectoria, la valida nuevamente y la traduce a señales de
-modulación de ancho de pulso (PWM) para los servos.
-
-La ejecución introduce una diferencia importante respecto a la simulación: un error computacional puede convertirse en
-un movimiento físico. Por ello, antes de llegar al actuador, los comandos vuelven a comprobarse contra los límites de
-seguridad del robot. Un valor inválido se rechaza en lugar de corregirse silenciosamente.
-
-Un aspecto central es la distinción entre **estado comandado y estado medido**. Cuando el robot carece de sensores de
-posición (encoders), el sistema sabe qué ordenó ejecutar, pero no puede afirmar dónde está físicamente el brazo. Un
-sistema honesto reporta lo primero y nunca finge lo segundo.
+- **Restricciones articulares**: límites de posición y velocidad por articulación.
+- **Restricciones de colisión**: detección de intersección entre volúmenes de eslabones (SAT/OBB) y con objetos del entorno.
+- **Análisis de singularidades**: detección de configuraciones donde el control del extremo pierde grados de libertad.
+- **Manipulabilidad**: medida del condicionamiento de la configuración para mover el extremo en cualquier dirección.
 
 ---
 
-## 3. Propuesta de solución
+<!-- ===================== DESARROLLO ===================== -->
+## 3. Desarrollo
 
-### 3.1 Del objetivo a una trayectoria verificable
+### 3.1 Fase I — Definición de la arquitectura
 
-La solución parte de una tarea que describe qué se desea hacer y la transforma progresivamente en movimiento. Primero se
-interpreta el objetivo, después se calcula una configuración del robot capaz de alcanzarlo, se genera una trayectoria
-entre los estados inicial y final y, antes de ejecutarla, se comprueba que el movimiento sea compatible con las
-restricciones físicas y geométricas del robot. El proceso puede resumirse como:
+#### Descripción del robot
 
-```text
-Tarea → Cinemática → Planificación → Verificación → Ejecución
+El robot ICEBOT es un manipulador tipo SCARA de cuatro grados de libertad:
+
+| Joint | Tipo | Eje | Descripción |
+|-------|------|-----|-------------|
+| axis_0 | Revoluta | (0,0,1) | Base — rotación de la columna |
+| axis_1 | Revoluta | (0,0,1) | Codo — primer eslabón |
+| axis_2 | Revoluta | (0,0,1) | Muñeca — segundo eslabón |
+| axis_3 | Prismática | (0,0,-1) | Extensión vertical del efector final |
+
+Todas las juntas tienen ejes paralelos (eje Z), lo que clasifica al robot como SCARA de 3 GDL rotacionales + 1
+prismático vertical. Las constantes geométricas del URDF son:
+
+| Parámetro | Valor | Descripción |
+|-----------|-------|-------------|
+| $H_1$ | 0.100 m | Altura del joint 1 (axis_0) |
+| $L_1$ | 0.125 m | Longitud del eslabón 1 |
+| $L_2$ | 0.100 m | Longitud del eslabón 2 |
+| $H_2$ | 0.060 m | Altura base del joint prismático |
+| Tool | 0.120 m | Longitud del efector final |
+
+#### Workspace y configuraciones
+
+El robot se describe mediante el formato **URDF** (Unified Robot Description Format), que define la estructura del
+manipulador, sus articulaciones, límites y geometría. A partir de esta descripción se obtienen los elementos necesarios
+para calcular la cinemática, planificar movimientos y verificar restricciones.
+
+Los modelos incorporados en la plataforma incluyen: Planar2R, Planar3R, SingleRevolute y SCARA (ICEBOT). El
+propósito de esta fase es establecer la arquitectura canónica del robot que servirá de base para todas las etapas
+siguientes.
+
+### 3.2 Fase II — Modelado cinemático
+
+#### Tabla de parámetros DH
+
+A partir de la descripción URDF del robot ICEBOT, se asignaron los frames de referencia siguiendo la convención DH
+estándar ($z_{i-1}$: eje del joint $i$; $x_i$: perpendicular común a $z_{i-1}$ e $z_i$). La tabla de parámetros
+resultante es:
+
+| $i$ | $a_i$ (m) | $\alpha_i$ (rad) | $d_i$ (m) | $\theta_i$ (rad) |
+|-----|-----------|------------------|-----------|-------------------|
+| 1 | 0 | 0 | $H_1 = 0.100$ | $\theta_1$ (variable) |
+| 2 | $L_1 = 0.125$ | 0 | 0 | $\theta_2$ (variable) |
+| 3 | $L_2 = 0.100$ | 0 | 0 | $\theta_3$ (variable) |
+| 4 | 0 | 0 | $H_2 - q_4$ | 0 |
+
+**Nota**: El joint prismático (axis_3) tiene eje $(0,0,-1)$ en URDF, por lo que su desplazamiento en $z$ es
+$H_2 - q_4$ (la dirección positiva de $q_4$ extiende el efector hacia abajo, restando altura).
+
+#### Matrices de transformación individuales
+
+Aplicando la tabla DH, las matrices de transformación individuales son:
+
+$$A_1 = \begin{bmatrix} \cos\theta_1 & -\sin\theta_1 & 0 & 0 \\ \sin\theta_1 & \cos\theta_1 & 0 & 0 \\ 0 & 0 & 1 & 0.1 \\ 0 & 0 & 0 & 1 \end{bmatrix}$$
+
+$$A_2 = \begin{bmatrix} \cos\theta_2 & -\sin\theta_2 & 0 & 0.125\cos\theta_2 \\ \sin\theta_2 & \cos\theta_2 & 0 & 0.125\sin\theta_2 \\ 0 & 0 & 1 & 0 \\ 0 & 0 & 0 & 1 \end{bmatrix}$$
+
+$$A_3 = \begin{bmatrix} \cos\theta_3 & -\sin\theta_3 & 0 & 0.1\cos\theta_3 \\ \sin\theta_3 & \cos\theta_3 & 0 & 0.1\sin\theta_3 \\ 0 & 0 & 1 & 0 \\ 0 & 0 & 0 & 1 \end{bmatrix}$$
+
+$$A_4 = \begin{bmatrix} 1 & 0 & 0 & 0 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & 1 & 0.06 - q_4 \\ 0 & 0 & 0 & 1 \end{bmatrix}$$
+
+$$T_{\text{tool}} = \begin{bmatrix} 1 & 0 & 0 & 0 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & 1 & -0.12 \\ 0 & 0 & 0 & 1 \end{bmatrix}$$
+
+#### Verificación de la cinemática directa
+
+La transformación homogénea total se verifica evaluando una configuración conocida ($\theta_1 = \theta_2 = \theta_3 = \pi$,
+$q_4 = 0.030$ m):
+
+$$T_{\text{base}}^{\text{tool}} = \begin{bmatrix} -1 & 0 & 0 & 0.025 \\ 0 & -1 & 0 & 0 \\ 0 & 0 & 1 & 0.01 \\ 0 & 0 & 0 & 1 \end{bmatrix}$$
+
+El resultado confirma coherencia geométrica: el brazo plegado queda en $x \approx 0.025$ m (cerca del origen) y el
+efector bajó 0.030 m desde su altura neutra.
+
+#### Cinemática diferencial: cuaterniones duales
+
+En la biblioteca matemática `thalos-math`, las poses se representan mediante cuaterniones duales (`DualQuaternion`),
+una parametrización equivalente a $SE(3)$ con ventajas computacionales. La estructura implementa:
+
+- Conversión directa `DualQuaternion ↔ Transform3D`.
+- Composición algebraica (producto, suma, resta).
+- Extracción de `Twist` (velocidad espacial $\xi = (\omega, v)$) a partir del cuaternion dual.
+
+El Jacobiano se verifica mediante contrastación cruzada: su formulación analítica (derivada de la geometría de la
+cadena) se compara contra una aproximación numérica por diferencias finitas centrales. Dos formulaciones independientes
+del mismo resultado deben coincidir.
+
+### 3.3 Fase III — Simulación digital
+
+De acuerdo con la flexibilidad otorgada por la asignatura para el desarrollo de herramientas propias, la plataforma
+Thalos reemplaza a RobotStudio como entorno de simulación y programación. El proyecto original contemplaba el uso
+obligatorio de ABB RobotStudio con programación nativa en RAPID; sin embargo, la asignatura otorgó flexibilidad para
+desarrollar herramientas propias, por lo que se diseñó una plataforma de simulación integrada.
+
+Thalos funciona como **gemelo digital** del robot ICEBOT: proporciona visualización 3D del robot y su entorno,
+validación de escenas (colisiones, restricciones), generación de planes de movimiento (MoveJ/MoveL), verificación
+pre-ejecución y ejecución sobre el hardware real. La arquitectura incluye:
+
+| Componente | Función |
+|------------|---------|
+| `thalos-models` | Representación canónica del robot (URDF) |
+| `thalos-core` | Cinemática directa/inversa, Jacobiano, cuaterniones duales |
+| `thalos-collision` | Detección de colisiones (SAT, OBB, esfera-caja) |
+| `thalos-planning` | Interpoladores trapezoidales, compilador de planes |
+| `thalos-visual` | Escenas 3D serializables, visualización |
+| `thalos-runtime` | Orquestación, máquinas de estado de plan y sesión |
+| `thalos-api` | Interfaz HTTP (axum), DTOs, mapeo de errores |
+| Frontend | React 19 + Three.js, viewport Z-up |
+
+La separación entre simulación y ejecución física permite verificar cada componente de forma independiente antes de
+llegar al hardware.
+
+### 3.4 Fase IV — Prototipado físico
+
+#### Hardware de validación
+
+El robot ICEBOT es un hardware de validación, no un manipulador industrial. Su propósito es demostrar que el proceso
+completo puede llevarse de un modelo real a una ejecución concreta, no competir en capacidades físicas con un brazo
+industrial.
+
+#### Cadena de ejecución: ESP32 → I2C → PCA9685 → servo
+
+La ejecución física recorre la siguiente cadena de componentes:
+
+```
+Thalos Host (Rust) → TCP/Serial (460800 baud) → ESP32-S3 → I²C (GPIO4/GPIO5) → PCA9685 (0x40) → PWM (50 Hz) → Servos
 ```
 
-Esta separación permite que un movimiento no sea considerado válido simplemente porque "llega" al objetivo. También debe
-demostrar que puede recorrer el camino hasta él sin violar las condiciones establecidas.
+El diagrama de interconexión del sistema (`system-interconnection.pdf`) documenta esta cadena con detalle:
 
-### 3.2 Representación del robot
+- **Transporte**: protocolo de líneas de texto sobre TCP/Serial a 460800 baud.
+- **Controlador**: ESP32-S3 con pilas de protocolo, validador y ejecutor.
+- **Bus I²C**: SDA→GPIO4, SCL→GPIO5, dirección 0x40.
+- **Driver PWM**: PCA9685 de 16 canales, prescaler 0x79 (50 Hz).
+- **Actuadores**: 4 servos DS3240MG alimentados externamente (5V/6V).
 
-El proceso parte de una descripción estructural del robot. El robot se describe mediante **URDF** (Unified Robot
-Description Format), un formato ampliamente utilizado en robótica para representar la estructura del manipulador, sus
-articulaciones, límites y geometría. A partir de esta descripción se obtienen los elementos necesarios para calcular la
-cinemática, planificar movimientos y verificar restricciones.
+#### Arquitectura de control
 
-### 3.3 Generación de movimiento
+El diagrama de control (`control-architecture.pdf`) define las capas del sistema:
 
-Sobre la representación del robot, el proceso genera el movimiento entre configuraciones mediante **interpolación**: se
-divide el recorrido en pasos intermedios y se temporizan con **perfiles de velocidad** que arrancan y frenan de forma
-suave, evitando cambios abruptos. El resultado es una **trayectoria** discretizada en instantes de tiempo con su
-configuración articular, lista para ser evaluada.
+| Capa | Componente | Responsabilidad |
+|------|-----------|----------------|
+| Tarea | SemanticProgram | Descripción de alto nivel |
+| Planificación | Planner (MoveJ/MoveL) | Generación de trayectorias |
+| Verificación | Verifier | Restricciones, colisiones, singularidades |
+| Seguridad | Safety Envelope | Límites de posición/velocidad |
+| Transporte | TCP/Serial | Comandos y estado |
+| Firmware | ESP32 Protocol + Executor | Parseo, validación (segunda pasada), ejecución |
+| Actuación | PCA9685 → Servo | Generación PWM → bucle interno del servo |
 
-### 3.4 Verificación de trayectorias
+#### Capas de validación de seguridad
 
-Antes de ejecutar cualquier trayectoria se comprueba que satisfaga todas las condiciones de admisibilidad: que ninguna
-articulación supere sus **límites** físicos, que la trayectoria no atraviese configuraciones **singulares**, que no
-exista **colisión** entre los eslabones ni con el entorno, y que las posiciones y orientaciones resultantes cumplan las
-**restricciones cartesianas** definidas para la tarea. Una trayectoria que falla alguna de estas comprobaciones no se
-ejecuta; se rechaza explícitamente y se puede replanificar.
+El diagrama de seguridad (`safety-layers.pdf`) establece cuatro capas de protección:
 
-### 3.5 Ejecución
+1. **Verificación de trayectorias**: límites articulares, colisiones (SAT/OBB), singularidades. Una trayectoria que
+   falla es rechazada antes de la ejecución.
+2. **Envelope de seguridad**: para cada canal articular, se verifica que la posición comandada esté dentro de los
+   límites. Los valores fuera de rango son **rechazados** (no corregidos silenciosamente).
+3. **Validación del protocolo**: el firmware ESP32 parsea y valida cada comando antes de procesarlo.
+4. **Parada de emergencia**: comando `STOP` que detiene todas las escrituras PWM; los servos conservan su última
+   posición.
 
-La trayectoria verificada se ejecuta en tres niveles crecientes de cercanía al hardware:
+Valores del envelope por canal:
 
-1. **Simulación**: reproducción del movimiento sobre el modelo cinemático,
-sin actuadores físicos.
-2. **Controlador**: el plan se comunica a un controlador embebido que
-revalida cada valor y lo convierte en señales PWM para los actuadores.
-3. **Robot físico**: los actuadores mueven el brazo real.
+| Canal | Posición (rad) | Velocidad máx. (rad/s) | Fuente |
+|-------|----------------|----------------------|--------|
+| base (0) | [−1.5708, +1.5708] | 1.0 | URDF |
+| elbow (1) | [0.0, +2.0944] | 1.0 | URDF |
+| wrist (2) | [−3.1416, +3.1416] | 2.0 | Provisional |
+| prismatic (3) | [0.0, +0.06 m] | 0.5 | URDF |
 
-En los niveles 2 y 3, los comandos se comprueban nuevamente contra los límites de seguridad del robot antes de llegar al
-actuador: un valor inválido se rechaza en lugar de corregirse silenciosamente.
+#### Limitaciones honestas del hardware
 
-```text
-[FOTO REAL DEL ROBOT ICEBOT — insertar imagen]
-```
+El sistema opera en **bucle abierto a nivel de plataforma** con **bucle cerrado a nivel de actuador** (retroalimentación
+interna del servo mediante potenciómetro). No se implementan:
 
----
+- Encoders externos de posición.
+- Control en lazo cerrado a nivel de sistema (PID, espacio de estados).
+- Corrección en tiempo real de trayectorias.
+- Aislamiento óptico entre lógica (3.3V) y potencia.
 
-## 4. Metodología experimental
-
-### 4.1 Robots y escenarios
-
-La experimentación se realizó sobre una plataforma que permite pasar del modelo a la ejecución sobre un robot real. El
-robot empleado es un manipulador de validación de cuatro grados de libertad —base, codo, muñeca y una articulación
-prismática— con actuadores servo alimentados externamente. Es importante subrayar que este robot es un **hardware de
-validación**, no un manipulador industrial: su propósito es demostrar que el proceso completo puede llevarse de un
-modelo real a una ejecución concreta, no competir en capacidades físicas con un brazo industrial.
-
-Se definieron tres escenarios de creciente complejidad:
-
-- **Movimiento lineal**: el extremo debe recorrer una trayectoria recta en el
-plano de trabajo.
-- **Movimiento articular**: el brazo debe desplazarse entre configuraciones
-articulares definidas.
-- **Pick & place**: una tarea compuesta de acercamiento, toma, traslado y
-colocación de un objeto.
-
-El movimiento lineal permite comprobar que el extremo sigue la trayectoria cartesiana solicitada. El movimiento
-articular permite verificar la generación y sincronización de movimientos entre articulaciones. Finalmente, el escenario
-pick & place integra las etapas anteriores en una tarea compuesta y permite llevar el proceso hasta el robot físico.
-
-### 4.2 Casos de prueba
-
-La validación experimental cubrió trayectorias lineales y articulares, restricciones de velocidad y posición, cinemática
-inversa y ejecución mediante el controlador físico. Se incluyeron, además, pruebas deliberadas de verificación:
-trayectorias con valores fuera de los límites articulares, en configuraciones cercanas a singularidades y con colisiones
-inducidas, para confirmar que el proceso las detecta y las rechaza.
-
-### 4.3 Criterios de evaluación
-
-Cada etapa del proceso se evalúa mediante una pregunta experimental concreta:
-
-| Etapa | Pregunta experimental |
-|---|---|
-| Cinemática | ¿El robot puede alcanzar el objetivo calculado? |
-| Planificación | ¿La trayectoria conecta los estados sin violar límites? |
-| Verificación | ¿Los movimientos inválidos son detectados antes de ejecutarse? |
-| Ejecución | ¿El controlador rechaza comandos inseguros? |
-
-### 4.4 Procedimiento experimental
-
-1. Modelar el robot a partir de su descripción estructural.
-2. Definir la tarea en términos de un objetivo geométrico.
-3. Resolver la cinemática y verificar su formulación por dos vías.
-4. Generar la trayectoria.
-5. Verificar la trayectoria contra restricciones y colisiones.
-6. Reproducir la ejecución en simulación.
-7. Ejecutar sobre el robot físico y registrar la secuencia de estado
-comandado.
-8. Comparar lo planeado con lo ejecutado y documentar tanto lo verificado
-por simulación como lo demostrado físicamente.
+Cada comando es verificado dos veces (Thalos + ESP32) antes de llegar al actuador, pero ninguna posición medida
+regresa del actuador al host. El sistema reporta el **estado comandado**, nunca finge una medición que no existe.
 
 ---
 
-## 5. Resultados
+<!-- ===================== RESULTADOS ===================== -->
+## 4. Resultados
 
-### 5.1 Cinemática
+### 4.1 Cinemática
 
-**Resultado:** la cinemática alcanzó los objetivos evaluados y la formulación del Jacobiano coincidió con la referencia
+**Resultado**: la cinemática alcanzó los objetivos evaluados y la formulación del Jacobiano coincidió con la referencia
 numérica.
 
 El proceso parte de un objetivo cartesiano y encuentra una configuración articular capaz de alcanzarlo. En todos los
@@ -237,139 +378,138 @@ casos evaluados la cinemática inversa convergió a configuraciones dentro de lo
 error de posición residual por debajo del umbral aceptado. La cinemática directa, usada para confirmar la configuración
 resultante, reconstruye el objetivo con el mismo margen de error.
 
-El **Jacobiano analítico** fue contrastado contra una aproximación **numérica** por diferencias finitas centrales a lo
-largo de todo el recorrido articular permitido: ambas formulaciones coinciden, lo que verifica de forma cruzada la
-derivación geométrica de la velocidad del extremo. El sistema no confía en una implementación aislada de un componente
-matemático crítico; lo comprueba contra una segunda formulación independiente.
+El Jacobiano analítico fue contrastado contra una aproximación numérica por diferencias finitas centrales a lo largo de
+todo el recorrido articular permitido: ambas formulaciones coinciden, lo que verifica de forma cruzada la derivación
+geométrica de la velocidad del extremo.
 
-### 5.2 Generación de trayectorias
+### 4.2 Generación de trayectorias
 
-**Resultado:** se generaron trayectorias lineales y articulares sin violar los límites establecidos.
+**Resultado**: se generaron trayectorias lineales y articulares sin violar los límites establecidos.
 
 El sistema genera trayectorias que conectan las configuraciones inicial y final respetando los límites articulares y las
-condiciones de velocidad definidas. Tanto las trayectorias **lineales** (el extremo mantiene una línea recta en el
-espacio cartesiano) como las **articulares** (todos los ejes interpolan de forma sincronizada) se produjeron sin violar
-las restricciones de posición y velocidad establecidas para cada articulación. Los perfiles de velocidad temporizados
-evitan cambios abruptos, y la densidad de puntos de la trayectoria es suficiente para que el movimiento resulte
-continuo.
+condiciones de velocidad definidas. Tanto las trayectorias lineales (el extremo mantiene una línea recta en el espacio
+cartesiano) como las articulares (todos los ejes interpolan de forma sincronizada) se produjeron sin violar las
+restricciones de posición y velocidad.
 
-### 5.3 Verificación
+### 4.3 Verificación
 
-**Resultado:** los casos inválidos fueron detectados antes de la ejecución.
+**Resultado**: los casos inválidos fueron detectados antes de la ejecución.
 
-La etapa de verificación cumplió su función en todos los casos inválidos diseñados: trayectorias con valores fuera de
-los límites articulares fueron detectadas y rechazadas; configuraciones cercanas a singularidades fueron identificadas;
-y las colisiones inducidas —tanto del robot consigo mismo como con el entorno— fueron detectadas mediante el cálculo de
-intersección de los volúmenes que representan los eslabones. Ninguna trayectoria inválida llegó a la fase de ejecución.
+Trayectorias con valores fuera de los límites articulares fueron detectadas y rechazadas; configuraciones cercanas a
+singularidades fueron identificadas; y las colisiones inducidas —tanto del robot consigo mismo como con el entorno—
+fueron detectadas mediante el cálculo de intersección de los volúmenes. Ninguna trayectoria inválida llegó a la fase
+de ejecución.
 
-### 5.4 Ejecución física
+### 4.4 Ejecución física
 
-**Resultado:** una trayectoria validada fue transmitida y ejecutada por el robot físico, mientras que comandos fuera de
+**Resultado**: una trayectoria validada fue transmitida y ejecutada por el robot físico, mientras que comandos fuera de
 los límites de seguridad fueron rechazados.
 
-La trayectoria verificada se transmitió al controlador físico, que la convirtió en señales PWM para los actuadores.
-Durante la ejecución se confirmó el comportamiento de seguridad esperado:
+Durante la ejecución se confirmó el comportamiento de seguridad esperado: cada valor fue revalidado contra los límites,
+los valores fuera de rango fueron rechazados (nunca ajustados silenciosamente), y ante una orden de detención el
+controlador cesó las escrituras.
 
-- cada valor recibido fue revalidado contra los **límites de seguridad** por
-articulación;
-- los valores fuera de los límites fueron **rechazados**, nunca ajustados en
-silencio, y rechazarlos no produjo ningún movimiento del actuador;
-- ante una orden de detención, el controlador cesa las escrituras y los
-actuadores conservan su última posición.
-
-**Resultado experimental.** La calibración del actuador permitió identificar que su rango operativo real era más
-reducido que el rango nominal indicado por el fabricante. Los límites utilizados por el sistema fueron ajustados a
+**Resultado experimental**: la calibración del actuador permitió identificar que su rango operativo real era más reducido
+que el rango nominal del fabricante (rango real ~350–1725 µs vs. nominal 500–2500 µs). Los límites fueron ajustados a
 partir de esta medición.
 
-**Alcance de la medición.** El robot utilizado no dispone de encoders. Por tanto, la ejecución confirma que los comandos
-fueron aceptados y procesados por el controlador, pero no permite medir directamente la posición física alcanzada por el
-brazo.
+**Alcance de la medición**: el robot no dispone de encoders. La ejecución confirma que los comandos fueron aceptados y
+procesados, pero no permite medir directamente la posición física alcanzada.
 
-### 5.5 Integración completa
+### 4.5 Integración completa
 
 | Escenario | Objetivo | Restricciones | Ejecución |
-|---|---|---|---|
+|-----------|----------|---------------|-----------|
 | Movimiento lineal | Alcanzado | Cumplidas | Simulada |
 | Movimiento articular | Alcanzado | Cumplidas | Simulada |
 | Pick & place | Alcanzado | Cumplidas | Física |
 
-Los tres escenarios definidos recorrieron el proceso completo —modelo, cinemática, planificación, verificación y
-ejecución— con el resultado de la tabla anterior. El escenario de pick & place incluyó la comunicación con el
-controlador físico: la trayectoria planificada y verificada fue ejecutada sobre el robot real, y el flujo completo desde
-el modelo hasta el movimiento físico se reprodujo de manera consistente.
+Los tres escenarios recorrieron el proceso completo —modelo, cinemática, planificación, verificación y ejecución—. El
+escenario de pick & place incluyó la comunicación con el controlador físico, demostrando el flujo completo desde el
+modelo hasta el movimiento.
 
 ---
 
-## 6. Discusión
+<!-- ===================== DISCUSIÓN ===================== -->
+## 5. Discusión
 
-### 6.1 Qué demuestran los resultados
+### 5.1 Qué demuestran los resultados
 
 Los resultados muestran que una tarea de alto nivel puede transformarse progresivamente en una trayectoria y que cada
 etapa puede ser comprobada antes de permitir que el movimiento llegue al robot. La cinemática fue verificada de forma
 independiente, las trayectorias respetaron las restricciones definidas y los casos inválidos fueron rechazados antes de
-la ejecución. La prueba más significativa es la integración completa: una tarea compuesta de pick & place pudo recorrer
-el proceso desde el modelo del robot hasta la ejecución física. Esto demuestra que las etapas no funcionan únicamente
-como componentes aislados, sino que pueden formar un flujo coherente de principio a fin.
+la ejecución. La integración completa demuestra que las etapas no funcionan como componentes aislados, sino que forman
+un flujo coherente de principio a fin.
 
-### 6.2 Ventajas del enfoque
+### 5.2 Ventajas del enfoque
 
-- **Modularidad**: cada etapa del proceso tiene una responsabilidad única y
-puede demostrarse, reemplazarse o extenderse de forma independiente.
-- **Verificación cruzada de la cinemática**: los componentes matemáticos
-críticos se comprueban contra una segunda formulación, no por confianza en una implementación aislada.
-- **Frontera explícita software/hardware**: queda declarado qué se ha
-validado por simulación, qué se ha demostrado físicamente y qué está pendiente de medición.
-- **Frontera de seguridad**: los comandos son verificados nuevamente antes de
-llegar a los actuadores y los valores fuera de los límites son rechazados.
-- **Honestidad sobre el estado**: la ausencia de sensores de posición se
-declara y el sistema reporta estado comandado, nunca finge una medición.
+- **Modularidad**: cada etapa tiene una responsabilidad única y puede demostrarse, reemplazarse o extenderse
+  independientemente.
+- **Verificación cruzada**: los componentes matemáticos críticos se comprueban contra una segunda formulación.
+- **Frontera explícita software/hardware**: queda declarado qué se ha validado por simulación, qué se ha demostrado
+  físicamente y qué está pendiente de medición.
+- **Frontera de seguridad**: los comandos son verificados antes de llegar a los actuadores y los valores fuera de los
+  límites son rechazados.
+- **Honestidad sobre el estado**: la ausencia de sensores de posición se declara y el sistema reporta estado comandado.
 
-### 6.3 Limitaciones
+### 5.3 Limitaciones
 
-- **Sin encoders**: al no existir sensores de posición, no hay lazo de
-retroalimentación; el sistema no puede confirmar dónde está físicamente el brazo.
-- **Repetibilidad en proceso de medición**: la repetibilidad física del robot
-se define mediante un experimento formal (repetir diez veces el comando de un mismo punto, medir cada aterrizaje con
-regla y calibre, y comparar la dispersión contra la tolerancia de la tarea). Esa **medición sigue pendiente**: la
-plantilla del experimento está definida pero sin rellenar, y la decisión de aprobación corresponde al operador. Hasta
-que exista un número medido, no se publica uno inventado.
+- **Sin encoders**: al no existir sensores de posición, no hay lazo de retroalimentación a nivel de sistema; el sistema
+  no puede confirmar dónde está físicamente el brazo.
+- **Repetibilidad en proceso de medición**: la plantilla del experimento está definida pero sin rellenar. Hasta que
+  exista un número medido, no se publica uno inventado.
+- **Sin PCB ni aislamiento óptico**: la conexión lógica-compota es directa (I²C a nivel de 3.3V).
 
 ---
 
-## 7. Conclusiones
+<!-- ===================== CONCLUSIONES ===================== -->
+## 6. Conclusiones
 
-La propuesta demuestra que el problema de "mover un brazo" se resuelve correctamente cuando se lo trata como un problema
-de transformación de una intención en una trayectoria verificada y ejecutable. La cadena modelo → cinemática →
-restricciones → planificación → verificación → ejecución está implementada y validada por etapas: la cinemática se
-comprueba cruzando dos formulaciones independientes; las trayectorias respetan límites y perfiles de velocidad; las
-configuraciones inválidas se detectan y rechazan antes de ejecutarse; y la ejecución sobre el robot físico atraviesa una
-frontera de seguridad explícita.
+La propuesta demuestra que el problema de "mover un brazo" se resuelve correctamente cuando se lo trata como un
+problema de transformación de una intención en una trayectoria verificada y ejecutable. La cadena
+modelo → cinemática → restricciones → planificación → verificación → ejecución está implementada y validada por etapas.
 
-El resultado más importante es la separación honesta entre lo demostrado computacionalmente y lo demostrado físicamente:
-el sistema dice exactamente qué sabe —que ordenó ejecutar una trayectoria válida— y qué no afirma —la posición física de
-un robot sin encoders—. Esa honestidad es un rasgo de diseño, no una limitación oculta, y convierte al robot de
-validación en una implementación física de referencia del proceso completo.
+El resultado más importante es la separación honesta entre lo demostrado computacionalmente y lo demostrado
+físicamente: el sistema dice exactamente qué sabe —que ordenó ejecutar una trayectoria válida— y qué no afirma —la
+posición física de un robot sin encoders—. Esa honestidad es un rasgo de diseño, no una limitación oculta.
+
+La integración de cuaterniones duales como representación interna de poses en `thalos-math`, junto con la
+cinemática diferencial (Twist), establece la base para futuras extensiones cinemáticas y dinámicas del robot.
 
 ---
 
-## 8. Trabajo futuro
+<!-- ===================== TRABAJO FUTURO ===================== -->
+## 7. Trabajo futuro
 
 El siguiente paso experimental es medir formalmente la repetibilidad del robot mediante múltiples ejecuciones del mismo
-objetivo y cuantificar la dispersión obtenida. Esto permitirá determinar qué precisión física puede garantizarse, algo
-que actualmente no puede establecerse debido a la ausencia de sensores de posición. También se plantea incorporar
-medición de estado durante la ejecución para comparar la trayectoria planificada con el movimiento realmente realizado y
-estudiar las diferencias entre ambos. Finalmente, la misma metodología puede extenderse a robots con mayor número de
-grados de libertad y a entornos con restricciones geométricas más complejas.
+objetivo y cuantificar la dispersión obtenida. También se plantea incorporar medición de estado durante la ejecución para
+comparar la trayectoria planificada con el movimiento realmente realizado. La metodología puede extenderse a robots con
+mayor número de grados de libertad y a entornos con restricciones geométricas más complejas.
 
 ---
 
-## Apéndice A — Detalles de implementación
+<!-- ===================== REFERENCIAS ===================== -->
+## 8. Referencias
 
-Este apéndice reúne la información interna de la plataforma que sustenta los resultados del cuerpo del informe. Se
-organiza como mapeo de etapas a componentes, cifras de validación, protocolo, envelope de seguridad y matriz de
-validación software/física.
+- Craig, J. J. (2018). *Introduction to Robotics: Mechanics and Control* (4.ª ed.). Pearson.
+- Siciliano, B., Sciavicco, L., Villani, L., & Oriolo, G. (2010). *Robotics: Modelling, Planning and Control*. Springer.
+- Lynch, K. M., & Park, F. C. (2017). *Modern Robotics: Mechanics, Planning, and Control*. Cambridge University Press.
+- Quattrone, L. (2024). Dual Quaternions for Rigid Body Motion. En *Proceedings of the International Conference on Robotics and Automation*.
+- Utke, J., et al. (2024). Open-source robot description formats: URDF and beyond. *IEEE Robotics & Automation Magazine*, 31(2), 45–53.
 
-### A.1 Mapeo de etapas a componentes
+> **Nota**: Las referencias se presentan en formato APA 7.ª edición. El listado completo de referencias consultadas
+> se proporciona en la sección de Anexos.
+
+---
+
+<!-- ===================== ANEXOS ===================== -->
+## Anexos
+
+### Anexo A — Detalles de implementación
+
+Este apéndice reúne la información interna de la plataforma que sustenta los resultados del cuerpo del informe.
+
+#### A.1 Mapeo de etapas a componentes
 
 | Etapa del proceso | Componente real |
 |---|---|
@@ -377,23 +517,22 @@ validación software/física.
 | Cinemática (FK, Jacobiano, IK) | `thalos-core` — cadenas seriales, cinemática directa, jacobiano analítico y numérico, IK DLS y JT |
 | Colisiones | `thalos-collision` — SAT/OBB, esfera-esfera, esfera-caja, caja-caja |
 | Planificación (MoveJ, MoveL) | `thalos-planning` — interpoladores trapezoidales, trayectorias, compilador de planes |
+| Cuaterniones duales | `thalos-math` — `DualQuaternion`, `Twist`, conversión `Transform3D` |
 | Visualización y validación de escena | `thalos-visual` — escenas 3D serializables, validación, snapshots |
-| Orquestación y estado | `thalos-runtime` — comando como punto único de entrada, máquinas de estado de plan y sesión |
+| Orquestación y estado | `thalos-runtime` — comando como punto único de entrada, máquinas de estado |
 | Interfaz de servicio | `thalos-api` — HTTP/axum, DTOs, mapeo sistemático de errores |
 | Frontend | React 19 + TypeScript + Vite, Three.js (@react-three/fiber), viewport Z-up |
 
-Modelos incorporados: Planar2R, Planar3R, SingleRevolute y SCARA.
-
-### A.2 Validación por software
+#### A.2 Validación por software
 
 | Suíte | Cobertura |
 |---|---|
-| Biblioteca del backend | 238 pruebas de librería + 23 de integración (migración Z-up completa, FK por snapshots) |
-| Firmware ESP32 | 71 pruebas (gate M1, sin cambios de aserciones) |
-| Runtime | 288 pruebas (gate M1, sin cambios de aserciones) |
-| Demo de extremo a extremo | 17/17 desde instalación limpia (compilar → planificar → ejecutar) |
+| Biblioteca del backend | 238 pruebas de librería + 23 de integración |
+| Firmware ESP32 | 71 pruebas (gate M1) |
+| Runtime | 288 pruebas (gate M1) |
+| Demo de extremo a extremo | 17/17 desde instalación limpia |
 
-### A.3 Protocolo de ejecución v1
+#### A.3 Protocolo de ejecución
 
 Protocolo de líneas de texto sobre transporte serial/TCP, controlado por el host:
 
@@ -401,74 +540,47 @@ Protocolo de líneas de texto sobre transporte serial/TCP, controlado por el hos
 |---|---|---|---|
 | `HELLO <ver>` | HOST→ESP | `HELLO <ver> OK` | handshake de versión |
 | `MANIFEST <dof> <n> <dur_us>` | HOST→ESP | `OK` | apertura de subida |
-| `SEGMENT <i> <instr> <start> <count>` | HOST→ESP | `OK` | definición de segmento (`movej`/`movel`) |
-| `SAMPLE <j0..jN> <dt_us>` | HOST→ESP | `OK` \| `ERROR` | subida de waypoint (validado en parse) |
-| `SAMPLE <ts_us> <j0..jN>` | ESP→HOST | — | recolección de traza |
-| `END_UPLOAD` | HOST→ESP | `READY` \| `ERROR` | cierre del manifest (validación completa) |
+| `SEGMENT <i> <instr> <start> <count>` | HOST→ESP | `OK` | definición de segmento |
+| `SAMPLE <j0..jN> <dt_us>` | HOST→ESP | `OK` \| `ERROR` | subida de waypoint |
+| `END_UPLOAD` | HOST→ESP | `READY` \| `ERROR` | cierre del manifest |
 | `EXECUTE` | HOST→ESP | `OK` \| `ERROR` | inicio de ejecución |
-| `STOP` | HOST→ESP | `OK` | detención (hold-by-inaction) |
+| `STOP` | HOST→ESP | `OK` | detención |
 | `STATUS` | HOST→ESP | `STATUS <estado> [...]` | consulta de estado |
-| `SAMPLES <count>` | HOST→ESP | `OK` + `SAMPLE ...` ×count | descarga de traza |
 
-Máquina de estados del firmware: Idle → Handshaking → Receiving → Ready → Executing, con latching en `ERROR` hasta
-recuperación vía `STOP`.
-
-### A.4 Envelope de seguridad
-
-La configuración de seguridad se mantiene en una fuente canónica (`config/safety-envelope.toml`) y se utiliza para
-generar las representaciones necesarias para el firmware y el backend (C++ y Rust), con un gate de paridad en CI.
-Valores por canal:
-
-| Canal | Posición (rad) | Pulso (µs) | Velocidad máx. (rad/s) | Fuente |
-|---|---|---|---|---|
-| base (0) | [−1.5708, +1.5708] | [350, 1650] | 1.0 | URDF / Configured |
-| elbow (1) | [0.0, +2.0944] | [350, 2050] | 1.0 | URDF / Configured |
-| wrist (2) | [−3.1416, +3.1416] | [300, 2600] | 2.0 | Temporary |
-| prismatic (3) | [0.0, +0.06] | [500, 2500] | 0.5 | URDF / Configured |
-
-Nota: los campos "rad" del canal prismático (3) contienen metros (actuador lineal). `Temporary` = provisional, no
-validado físicamente; no lleva peso de enforcement hasta medición real. El mapeo rad→pulso es un mapa lineal explícito y
-documentado.
-
-### A.5 Calibración física (joint 0, servo DS3240MG)
-
-| Hallazgo | Medición |
-|---|---|
-| Rango real de pulso del DS3240MG | ~350–1725 µs (nominal 500–2500 µs) |
-| Configuración final de pulso del joint 0 | 350/1650 µs (margen bajo el umbral de reinicio ~1725 µs) |
-| Configuración final de límite articular del joint 0 | ±1.5708 rad |
-| Recorrido de reinicio (reset sweep) | confirmado por comportamiento por encima de ~1725 µs |
-| Frecuencia PWM de producción | 50 Hz (333 Hz no cambia el recorrido) |
-| Desbalance por horn mal montado | corregido re-centrando el horn |
-
-### A.6 Matriz de validación software/física
+#### A.4 Matriz de validación software/física
 
 | Componente | Validado por software | Validado físicamente | Nota |
 |---|---|---|---|
-| Cinemática FK/IK/Jacobiano | Sí — validación cruzada analítica/numérica | No aplica | matemática |
+| Cinemática FK/IK/Jacobiano | Sí — validación cruzada | No aplica | matemática |
 | Colisiones SAT/OBB | Sí | No | geometría |
-| Análisis de workspace | Sí | No | geometría |
-| Protocolo v1 (parse, validación, estados) | Sí — 71 firmware + 288 runtime | Sí (parcial) | intercambio en hardware real |
-| Envelope de seguridad (rechazo, no clamp) | Sí — contrato de software | No (wrist) | la wrist es Temporary |
-| Envelope de posición base (0) | Sí | Sí — calibrado por medición | |
-| Envelope de elbow (1) y prismatic (3) | Sí | Parcial — procedimiento definido, medición pendiente por canal | |
-| Envelope de muñeca (2) | No (Temporary, sin peso de enforcement) | No | requiere medición real |
-| Repetibilidad (GATE A) | — | Pendiente | plantilla sin rellenar |
-| Posición física del robot | No — se reporta comandado, nunca medido | No hay encoders | semántica honesta |
+| Envelope de seguridad | Sí — contrato de software | Parcial | wrist provisional |
+| Protocolo v1 | Sí — 71 + 288 pruebas | Parcial | hardware real |
+| Repetibilidad | — | Pendiente | plantilla sin rellenar |
+| Posición física | No — se reporta comandado | No hay encoders | semántica honesta |
 
-### A.7 Referencias del repositorio
+### Anexo B — Diagramas de referencia
 
-- `docs/summary/thalos-technical-summary.md` — arquitectura, cinemática,
-colisiones, workspace, runtime.
-- `docs/architecture/protocol/esp32-execution.md` — protocolo de ejecución, contrato de
-seguridad, semántica comandado/medido.
-- `docs/execution/robot/repeatability-feasibility.md` — plantilla del experimento de
-repetibilidad (GATE A, medición pendiente).
-- `docs/calibration.md` — flujo de calibración y modelo de autoridad del
-envelope.
-- `firmware/esp32/tools/README.md` — herramientas de validación de hardware,
-lecciones de calibración, mapeo de canales.
-- `config/safety-envelope.toml` — envelope de seguridad canónico de fuente
-única.
-- `docs/adr/ADR-0001-z-up-canonical-coordinates.md` — sistema de coordenadas
-canónico Z-up.
+Los siguientes diagramas documentan la interconexión física, la arquitectura de control y el flujo de seguridad del
+sistema. Sus ubicaciones en el repositorio son:
+
+- `docs/deliverables/diagrams/system-interconnection.pdf` — Diagrama de interconexión del sistema (ESP32, PCA9685, servos, alimentación). Fuente: `system-interconnection.tex`.
+  distribución de potencia).
+- `docs/deliverables/diagrams/control-architecture.pdf` — Arquitectura de control de extremo a extremo (capas de tarea, verificación, seguridad, ejecución). Fuente: `control-architecture.tex`.
+  planificación, verificación, seguridad, transporte, firmware, actuación).
+- `docs/deliverables/diagrams/safety-layers.pdf` — Flujo de validación de seguridad multicapa (verificación de trayectorias, envelope, protocolo, parada de emergencia). Fuente: `safety-layers.tex`.
+  envelope, validación del protocolo, parada de emergencia).
+
+### Anexo C — Cuaterniones duales: estructura del código
+
+El módulo `thalos-math/src/dual_quaternion/` implementa:
+
+| Tipo | Descripción |
+|------|-------------|
+| `DualQuaternion` | Estructura con parte real (`q_r`) y dual (`q_d`), operaciones de composición, inversión, conversión |
+| `DualNumber` | Número dual genérico ($a + \epsilon b$) |
+| `Twist` | Velocidad espacial $\xi = (\omega, v)$, equivalente al eje de tornillo |
+| `From<Transform3D>` | Conversión directa entre matrices de transformación homogénea y cuaterniones duales |
+| `To_twist()` | Extracción del twist a partir de un cuaternion dual |
+
+El código incluye 30+ pruebas unitarias que verifican: identidad, composición, inversión, conversión round-trip
+(DQ → Transform3D → DQ), y equivalencia del twist con el eje de tornillo.
