@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.27">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Equipo de Investigación Thalos">
+<meta name="dcterms.date" content="2026-08-17">
+
+<title>Thalos Intelligence</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="intelligence-report_files/libs/clipboard/clipboard.min.js"></script>
+<script src="intelligence-report_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="intelligence-report_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="intelligence-report_files/libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="intelligence-report_files/libs/quarto-html/popper.min.js"></script>
+<script src="intelligence-report_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="intelligence-report_files/libs/quarto-html/anchor.min.js"></script>
+<link href="intelligence-report_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="intelligence-report_files/libs/quarto-html/quarto-syntax-highlighting-ed96de9b727972fe78a7b5d16c58bf87.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="intelligence-report_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="intelligence-report_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="intelligence-report_files/libs/bootstrap/bootstrap-4d7f0bce1131f3e5f9547cd857cfbfc8.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#qué-fue-probado" id="toc-qué-fue-probado" class="nav-link active" data-scroll-target="#qué-fue-probado"><span class="header-section-number">1</span> Qué fue probado</a>
+  <ul class="collapse">
+  <li><a href="#hipótesis" id="toc-hipótesis" class="nav-link" data-scroll-target="#hipótesis"><span class="header-section-number">1.1</span> Hipótesis</a></li>
+  <li><a href="#notas-metodológicas" id="toc-notas-metodológicas" class="nav-link" data-scroll-target="#notas-metodológicas"><span class="header-section-number">1.2</span> Notas Metodológicas</a></li>
+  </ul></li>
+  <li><a href="#arquitectura-de-decisión" id="toc-arquitectura-de-decisión" class="nav-link" data-scroll-target="#arquitectura-de-decisión"><span class="header-section-number">2</span> Arquitectura de Decisión</a>
+  <ul class="collapse">
+  <li><a href="#filtro-de-admisibilidad-y-scoring" id="toc-filtro-de-admisibilidad-y-scoring" class="nav-link" data-scroll-target="#filtro-de-admisibilidad-y-scoring"><span class="header-section-number">2.1</span> Filtro de Admisibilidad y Scoring</a></li>
+  <li><a href="#decision-funnel" id="toc-decision-funnel" class="nav-link" data-scroll-target="#decision-funnel"><span class="header-section-number">2.2</span> Decision Funnel</a></li>
+  </ul></li>
+  <li><a href="#experimento-1-6dof-near-singular" id="toc-experimento-1-6dof-near-singular" class="nav-link" data-scroll-target="#experimento-1-6dof-near-singular"><span class="header-section-number">3</span> Experimento 1: 6dof-near-singular</a>
+  <ul class="collapse">
+  <li><a href="#detección" id="toc-detección" class="nav-link" data-scroll-target="#detección"><span class="header-section-number">3.1</span> Detección</a></li>
+  <li><a href="#manipulabilidad" id="toc-manipulabilidad" class="nav-link" data-scroll-target="#manipulabilidad"><span class="header-section-number">3.2</span> Manipulabilidad</a></li>
+  <li><a href="#evaluación-completa" id="toc-evaluación-completa" class="nav-link" data-scroll-target="#evaluación-completa"><span class="header-section-number">3.3</span> Evaluación Completa</a></li>
+  <li><a href="#composición-de-j" id="toc-composición-de-j" class="nav-link" data-scroll-target="#composición-de-j"><span class="header-section-number">3.4</span> Composición de J</a></li>
+  <li><a href="#trayectoria" id="toc-trayectoria" class="nav-link" data-scroll-target="#trayectoria"><span class="header-section-number">3.5</span> Trayectoria</a></li>
+  </ul></li>
+  <li><a href="#experimento-2-6dof-elbow-swap" id="toc-experimento-2-6dof-elbow-swap" class="nav-link" data-scroll-target="#experimento-2-6dof-elbow-swap"><span class="header-section-number">4</span> Experimento 2: 6dof-elbow-swap</a>
+  <ul class="collapse">
+  <li><a href="#detección-1" id="toc-detección-1" class="nav-link" data-scroll-target="#detección-1"><span class="header-section-number">4.1</span> Detección</a></li>
+  <li><a href="#evaluación-completa-1" id="toc-evaluación-completa-1" class="nav-link" data-scroll-target="#evaluación-completa-1"><span class="header-section-number">4.2</span> Evaluación Completa</a></li>
+  <li><a href="#trayectoria-1" id="toc-trayectoria-1" class="nav-link" data-scroll-target="#trayectoria-1"><span class="header-section-number">4.3</span> Trayectoria</a></li>
+  </ul></li>
+  <li><a href="#experimento-h6-three-candidate-ranking-replannedalternate" id="toc-experimento-h6-three-candidate-ranking-replannedalternate" class="nav-link" data-scroll-target="#experimento-h6-three-candidate-ranking-replannedalternate"><span class="header-section-number">5</span> Experimento H6: Three-Candidate Ranking (ReplannedAlternate)</a>
+  <ul class="collapse">
+  <li><a href="#contexto" id="toc-contexto" class="nav-link" data-scroll-target="#contexto"><span class="header-section-number">5.1</span> Contexto</a></li>
+  <li><a href="#strategy-trace" id="toc-strategy-trace" class="nav-link" data-scroll-target="#strategy-trace"><span class="header-section-number">5.2</span> Strategy Trace</a></li>
+  <li><a href="#candidate-ranking" id="toc-candidate-ranking" class="nav-link" data-scroll-target="#candidate-ranking"><span class="header-section-number">5.3</span> Candidate Ranking</a></li>
+  <li><a href="#diagrama-de-la-ruta-arquitectónica-h6" id="toc-diagrama-de-la-ruta-arquitectónica-h6" class="nav-link" data-scroll-target="#diagrama-de-la-ruta-arquitectónica-h6"><span class="header-section-number">5.4</span> Diagrama de la Ruta Arquitectónica H6</a></li>
+  <li><a href="#key-finding" id="toc-key-finding" class="nav-link" data-scroll-target="#key-finding"><span class="header-section-number">5.5</span> Key Finding</a></li>
+  </ul></li>
+  <li><a href="#resultado-cross-escenario" id="toc-resultado-cross-escenario" class="nav-link" data-scroll-target="#resultado-cross-escenario"><span class="header-section-number">6</span> Resultado Cross-Escenario</a></li>
+  <li><a href="#verificación-de-hipótesis" id="toc-verificación-de-hipótesis" class="nav-link" data-scroll-target="#verificación-de-hipótesis"><span class="header-section-number">7</span> Verificación de Hipótesis</a></li>
+  <li><a href="#alcance" id="toc-alcance" class="nav-link" data-scroll-target="#alcance"><span class="header-section-number">8</span> Alcance</a></li>
+  <li><a href="#conclusión" id="toc-conclusión" class="nav-link" data-scroll-target="#conclusión"><span class="header-section-number">9</span> Conclusión</a></li>
+  <li><a href="#reproducibilidad" id="toc-reproducibilidad" class="nav-link" data-scroll-target="#reproducibilidad"><span class="header-section-number">10</span> Reproducibilidad</a></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Thalos Intelligence</h1>
+<p class="subtitle lead">Evidencia Experimental de Toma de Decisiones</p>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Equipo de Investigación Thalos </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">August 17, 2026</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<style>
+.hero { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: white; padding: 40px; border-radius: 12px; text-align: center; margin-bottom: 30px; }
+.hero h1 { font-size: 2.5em; margin: 0; }
+.hero .subtitle { font-size: 1.2em; color: #a0a0a0; margin-top: 10px; }
+.kpi-strip { display: flex; justify-content: space-around; margin: 20px 0; flex-wrap: wrap; }
+.kpi { text-align: center; padding: 15px 20px; background: #f8f9fa; border-radius: 8px; min-width: 140px; }
+.kpi .number { font-size: 2em; font-weight: bold; }
+.kpi .label { font-size: 0.75em; color: #666; text-transform: uppercase; }
+.kpi-green .number { color: #27AE60; }
+.kpi-blue .number { color: #4C72B0; }
+.kpi-orange .number { color: #DD8452; }
+.scope-box { display: flex; gap: 20px; margin: 20px 0; }
+.scope-item { flex: 1; padding: 20px; border-radius: 8px; }
+.scope-yes { background: #E8F5E9; border-left: 4px solid #27AE60; }
+.scope-no { background: #FFF3E0; border-left: 4px solid #FF9800; }
+.boundary-box { background: #f0f7ff; border: 2px solid #4C72B0; border-radius: 8px; padding: 20px; margin: 20px 0; }
+.result-box { background: #E8F5E9; border: 3px solid #27AE60; border-radius: 12px; padding: 30px; margin: 30px 0; text-align: center; }
+.result-box h2 { color: #27AE60; margin-top: 0; }
+.decision-pipeline { display: flex; align-items: stretch; justify-content: center; gap: 12px; margin: 30px 0; }
+.decision-stage { flex: 1; max-width: 300px; padding: 22px; border-radius: 10px; text-align: center; border: 2px solid; }
+.decision-stage.gate { background: #fff3e0; border-color: #dd8452; }
+.decision-stage.score { background: #eef3fb; border-color: #4c72b0; }
+.decision-stage.decision { background: #e8f5e9; border-color: #27ae60; }
+.stage-title { font-size: 0.75em; font-weight: bold; letter-spacing: 0.08em; margin-bottom: 10px; }
+.stage-main { font-size: 1.15em; font-weight: bold; margin-bottom: 10px; }
+.stage-detail { font-size: 0.85em; color: #666; }
+.decision-arrow { align-self: center; font-size: 2em; color: #888; }
+</style>
+<div class="hero">
+<h1>
+Thalos Intelligence
+</h1>
+<div class="subtitle">
+Evidencia Experimental de Toma de Decisiones
+</div>
+<br>
+<div style="font-size: 1.3em; line-height: 1.8;">
+<p><strong style="color: #DD8452;">LOW MANIPULABILITY DETECTED</strong><br> ↓<br> <strong style="color: #8172B3;">ALTERNATIVE GENERATED</strong><br> ↓<br> <strong style="color: #4C72B0;">CANDIDATE BATTLE</strong></p>
+</div>
+<br>
+<div style="display: flex; justify-content: center; gap: 40px; font-size: 1.2em;">
+<div style="background: #FFEBEE; padding: 20px; border-radius: 8px; border: 2px solid #C44E52;">
+<p><strong style="color: #C44E52;">DIRECT</strong><br> J = 1.00<br> <span style="color: #C44E52; font-weight: bold;">REJECTED</span></p>
+</div>
+<div style="background: #FFF3E0; padding: 20px; border-radius: 8px; border: 2px solid #DD8452;">
+<p><strong style="color: #DD8452;">ALTERNATE</strong><br> J = 0.10<br> <span style="color: #DD8452; font-weight: bold;">SUPERSEDED</span></p>
+</div>
+<div style="background: #E8F5E9; padding: 20px; border-radius: 8px; border: 2px solid #27AE60;">
+<p><strong style="color: #27AE60;">REPLANNED</strong><br> J ≈ 0<br> <span style="color: #27AE60; font-weight: bold;">SELECTED</span></p>
+</div>
+</div>
+<br>
+<div style="font-size: 1.1em; color: #666;">
+<p>ΔJ = −1.00 &nbsp;&nbsp;|&nbsp;&nbsp; ReplannedAlternate wins 3-candidate ranking</p>
+</div>
+</div>
+<div class="kpi-strip">
+<div class="kpi kpi-blue">
+<div class="number">
+3
+</div>
+<div class="label">
+Candidatos (H6)
+</div>
+</div>
+<div class="kpi kpi-green">
+<div class="number">
+27/27
+</div>
+<div class="label">
+Checks PASS
+</div>
+</div>
+<div class="kpi kpi-green">
+<div class="number">
+5/5 + H6
+</div>
+<div class="label">
+Hipótesis base + H6 scoped
+</div>
+</div>
+<div class="kpi kpi-orange">
+<div class="number">
+3
+</div>
+<div class="label">
+Decisiones consistentes
+</div>
+</div>
+<div class="kpi kpi-blue">
+<div class="number">
+H6 PASS
+</div>
+<div class="label">
+3-candidate pipeline
+</div>
+</div>
+</div>
+<div class="boundary-box">
+<p><strong>Alcance experimental:</strong> Esta validación cubre la rama de <strong>rechazo de reparación</strong> (Direct &gt; AlternateElbow) y la rama de <strong>aceptación de reparación</strong> demostrada por H6 (ReplannedAlternate selected, J ≈ 0). Los resultados corresponden a los escenarios <code>6dof-near-singular</code> y <code>6dof-elbow-swap</code>; no constituyen una prueba de optimalidad general.</p>
+</div>
+<hr>
+<section id="qué-fue-probado" class="level2" data-number="1">
+<h2 data-number="1" class="anchored" data-anchor-id="qué-fue-probado"><span class="header-section-number">1</span> Qué fue probado</h2>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Escenario</th>
+<th>Tarea</th>
+<th>Robot</th>
+<th>Waypoints</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>6dof-near-singular</td>
+<td>Alcanzar borde del workspace</td>
+<td>6DOF</td>
+<td>1647</td>
+</tr>
+<tr class="even">
+<td>6dof-elbow-swap</td>
+<td>Carry cruzando el cuerpo</td>
+<td>6DOF</td>
+<td>1430</td>
+</tr>
+</tbody>
+</table>
+<section id="hipótesis" class="level3" data-number="1.1">
+<h3 data-number="1.1" class="anchored" data-anchor-id="hipótesis"><span class="header-section-number">1.1</span> Hipótesis</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>ID</th>
+<th>Hipótesis</th>
+<th>Resultado</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>H1</td>
+<td>Intelligence detectará la condición de baja manipulabilidad</td>
+<td><strong>PASS</strong></td>
+</tr>
+<tr class="even">
+<td>H2</td>
+<td>Intelligence generará una alternativa candidata que supere los filtros de admisibilidad</td>
+<td><strong>PASS</strong></td>
+</tr>
+<tr class="odd">
+<td>H3</td>
+<td>Las alternativas serán evaluadas mediante <code>J</code></td>
+<td><strong>PASS</strong></td>
+</tr>
+<tr class="even">
+<td>H4</td>
+<td>El candidato seleccionado corresponderá al menor <code>J</code></td>
+<td><strong>PASS</strong></td>
+</tr>
+<tr class="odd">
+<td>H5</td>
+<td>La ejecución corresponderá al candidato seleccionado</td>
+<td><strong>PASS</strong></td>
+</tr>
+<tr class="even">
+<td>H6</td>
+<td>ReplannedAlternate preserva semantic targets y es evaluable en el mismo pipeline de 3 candidatos</td>
+<td><strong>PASS</strong></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="notas-metodológicas" class="level3" data-number="1.2">
+<h3 data-number="1.2" class="anchored" data-anchor-id="notas-metodológicas"><span class="header-section-number">1.2</span> Notas Metodológicas</h3>
+<p><strong>Normalización de <code>J</code>.</strong> El costo <code>J</code> se computa mediante normalización min-max relativa al conjunto de candidatos evaluados en cada ejecución. <code>J ≈ 0</code> corresponde al valor más bajo del conjunto, no a una perfección física absoluta. Un <code>J</code> bajo no implica que la trayectoria sea óptima en términos absolutos, sino que presenta el costo normalizado más bajo entre los candidatos competidores evaluados bajo los mismos criterios de scoring.</p>
+<p><strong>Invariante experimental.</strong> Todos los escenarios comparten: solver IK, planner, restricciones cinemáticas, puerta de admisibilidad, análisis de trayectoria, método de scoring y objetivo cartesiano final. La única variable que cambia entre candidatos es la semilla articular y, en el caso de H6, la resolución del sufijo del plan desde esa nueva semilla.</p>
+<p><strong>Variación de <code>J</code> entre conjuntos.</strong> Cuando el conjunto de candidatos pasa de 2 a 3, los valores de <code>J</code> de los candidatos originales pueden cambiar. Esto ocurre porque la normalización min-max depende del rango del conjunto completo: al añadir un tercer candidato, los mínimos y máximos de cada componente se reevalúan, reasignando los valores normalizados. Por eso <code>Direct</code> puede pasar de <code>J = 0.25</code> con 2 candidatos a <code>J ≈ 1.0</code> con 3 candidatos sin que su trayectoria haya cambiado.</p>
+<hr>
+</section>
+</section>
+<section id="arquitectura-de-decisión" class="level2" data-number="2">
+<h2 data-number="2" class="anchored" data-anchor-id="arquitectura-de-decisión"><span class="header-section-number">2</span> Arquitectura de Decisión</h2>
+<section id="filtro-de-admisibilidad-y-scoring" class="level3" data-number="2.1">
+<h3 data-number="2.1" class="anchored" data-anchor-id="filtro-de-admisibilidad-y-scoring"><span class="header-section-number">2.1</span> Filtro de Admisibilidad y Scoring</h3>
+<p>La decisión ocurre en <strong>dos fases</strong>. Primero se verifica que cada candidato sea físicamente admisible. Solo los candidatos que superan este filtro participan en el scoring multiobjetivo.</p>
+<div class="decision-pipeline">
+<div class="decision-stage gate">
+<div class="stage-title">
+01 · ADMISIBILIDAD
+</div>
+<div class="stage-main">
+¿Puede ejecutarse?
+</div>
+<div class="stage-detail">
+Colisiones · Singularidades · Joint limits · Restricciones físicas
+</div>
+</div>
+<div class="decision-arrow">
+→
+</div>
+<div class="decision-stage score">
+<div class="stage-title">
+02 · SCORING
+</div>
+<div class="stage-main">
+¿Cuál conviene más?
+</div>
+<div class="stage-detail">
+Riesgo · Duración · Manipulabilidad · Longitud
+</div>
+</div>
+<div class="decision-arrow">
+→
+</div>
+<div class="decision-stage decision">
+<div class="stage-title">
+03 · DECISIÓN
+</div>
+<div class="stage-main">
+argmin(J)
+</div>
+<div class="stage-detail">
+Direct → seleccionado
+</div>
+</div>
+</div>
+<p><strong>El filtro de admisibilidad determina qué puede ejecutarse. El scoring determina qué conviene ejecutar.</strong></p>
+</section>
+<section id="decision-funnel" class="level3" data-number="2.2">
+<h3 data-number="2.2" class="anchored" data-anchor-id="decision-funnel"><span class="header-section-number">2.2</span> Decision Funnel</h3>
+<div id="60e1a86a" class="cell" data-execution_count="3">
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="intelligence-report_files/figure-html/cell-4-output-1.png" width="950" height="950" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<hr>
+</section>
+</section>
+<section id="experimento-1-6dof-near-singular" class="level2" data-number="3">
+<h2 data-number="3" class="anchored" data-anchor-id="experimento-1-6dof-near-singular"><span class="header-section-number">3</span> Experimento 1: 6dof-near-singular</h2>
+<section id="detección" class="level3" data-number="3.1">
+<h3 data-number="3.1" class="anchored" data-anchor-id="detección"><span class="header-section-number">3.1</span> Detección</h3>
+<div id="7d7f9164" class="cell" data-execution_count="4">
+<div class="cell-output cell-output-stdout">
+<pre><code>LowManipulability detectado en WP 0
+Valor: 0.0275 | Umbral: 0.300 | 90.8% bajo umbral</code></pre>
+</div>
+</div>
+</section>
+<section id="manipulabilidad" class="level3" data-number="3.2">
+<h3 data-number="3.2" class="anchored" data-anchor-id="manipulabilidad"><span class="header-section-number">3.2</span> Manipulabilidad</h3>
+<div id="a460b2af" class="cell" data-execution_count="5">
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="intelligence-report_files/figure-html/cell-6-output-1.png" width="950" height="374" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="evaluación-completa" class="level3" data-number="3.3">
+<h3 data-number="3.3" class="anchored" data-anchor-id="evaluación-completa"><span class="header-section-number">3.3</span> Evaluación Completa</h3>
+<p><strong>Fase 1: Admisibilidad</strong></p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Criterio</th>
+<th style="text-align: center;">Resultado</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Colisiones</td>
+<td style="text-align: center;"><code>int(metrics1.get('has_collisions', 0))</code></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Singularidades</td>
+<td style="text-align: center;"><code>int(metrics1.get('singular_count', 0))</code></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Near-singularidades</td>
+<td style="text-align: center;"><code>int(metrics1.get('near_singular_count', 0))</code></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Estado</td>
+<td style="text-align: center;"><strong>PASS</strong> — ambos candidatos admisibles</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Fase 2: Scoring</strong></p>
+<div id="1496f3bc" class="cell" data-execution_count="7">
+<div class="cell-output cell-output-stdout">
+<pre><code>| Componente | Peso | Direct | AlternateElbow | $\Delta$ |
+|:---|---:|---:|---:|---:|
+| Riesgo | 0.5 | 0.6250 | 0.6250 | +0.0000 |
+| Duración (s) | 0.2 | 16.3562 | 20.9793 | +4.6231 |
+| Manipulabilidad | 0.2 | 0.0382 | 0.0348 | -0.0034 |
+| Longitud (m) | 0.1 | 13.9347 | 19.9636 | +6.0289 |
+|:---|---:|---:|---:|---:|
+| **J** | **1.0** | **0.2500** | **0.7500** | **+0.5000** |</code></pre>
+</div>
+</div>
+<p><strong>Decisión:</strong> Direct seleccionado (menor <span class="math inline">\(J\)</span>). AlternateElbow rechazado — todos los componentes diferenciales del scoring favorecen a Direct.</p>
+</section>
+<section id="composición-de-j" class="level3" data-number="3.4">
+<h3 data-number="3.4" class="anchored" data-anchor-id="composición-de-j"><span class="header-section-number">3.4</span> Composición de J</h3>
+<div id="700734ca" class="cell" data-execution_count="8">
+<div class="cell-output cell-output-stdout">
+<pre><code>Cómo se computa J:
+
+J(c) = 0.5·r̂ + 0.2·d̂ + 0.2·(1-m̂) + 0.1·l̂
+donde r̂, d̂, m̂, l̂ son valores normalizados [0,1] con deadband (ε=10⁻⁴)
+
+Con 2 candidatos, la normalización min-max hace que:
+  • El mejor valor de cada componente reciba 0
+  • El peor reciba 1
+  • Si ambos son idénticos (range &lt; ε), ambos reciben 0.5
+
+Risk: ambos = 0.625 → range=0 &lt; ε → deadband → ambos = 0.5
+  → contribución = 0.5 × 0.5 = 0.25 para ambos
+
+Duration: Direct=16.4 (min→0), Alternate=21.0 (max→1)
+  → Direct: 0.2 × 0.0 = 0.00 | Alternate: 0.2 × 1.0 = 0.20
+
+Manipulability: Direct=0.038 (max→1), Alternate=0.035 (min→0)
+  → Direct: 0.2 × (1-1) = 0.00 | Alternate: 0.2 × (1-0) = 0.20
+
+Length: Direct=13.9 (min→0), Alternate=20.0 (max→1)
+  → Direct: 0.1 × 0.0 = 0.00 | Alternate: 0.1 × 1.0 = 0.10
+
+J_Direct = 0.25 + 0.00 + 0.00 + 0.00 = 0.25
+J_Alternate = 0.25 + 0.20 + 0.20 + 0.10 = 0.75</code></pre>
+</div>
+</div>
+</section>
+<section id="trayectoria" class="level3" data-number="3.5">
+<h3 data-number="3.5" class="anchored" data-anchor-id="trayectoria"><span class="header-section-number">3.5</span> Trayectoria</h3>
+<div id="d80ba8de" class="cell" data-execution_count="9">
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="intelligence-report_files/figure-html/cell-10-output-1.png" width="1142" height="757" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<hr>
+</section>
+</section>
+<section id="experimento-2-6dof-elbow-swap" class="level2" data-number="4">
+<h2 data-number="4" class="anchored" data-anchor-id="experimento-2-6dof-elbow-swap"><span class="header-section-number">4</span> Experimento 2: 6dof-elbow-swap</h2>
+<section id="detección-1" class="level3" data-number="4.1">
+<h3 data-number="4.1" class="anchored" data-anchor-id="detección-1"><span class="header-section-number">4.1</span> Detección</h3>
+<div id="72ff77c5" class="cell" data-execution_count="10">
+<div class="cell-output cell-output-stdout">
+<pre><code>LowManipulability detectado en WP 0
+Valor: 0.0275 | Umbral: 0.300 | 90.8% bajo umbral</code></pre>
+</div>
+</div>
+</section>
+<section id="evaluación-completa-1" class="level3" data-number="4.2">
+<h3 data-number="4.2" class="anchored" data-anchor-id="evaluación-completa-1"><span class="header-section-number">4.2</span> Evaluación Completa</h3>
+<p><strong>Fase 1: Admisibilidad</strong></p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Criterio</th>
+<th style="text-align: center;">Resultado</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Colisiones</td>
+<td style="text-align: center;"><code>int(metrics2.get('has_collisions', 0))</code></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Singularidades</td>
+<td style="text-align: center;"><code>int(metrics2.get('singular_count', 0))</code></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Near-singularidades</td>
+<td style="text-align: center;"><code>int(metrics2.get('near_singular_count', 0))</code></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Estado</td>
+<td style="text-align: center;"><strong>PASS</strong> — ambos candidatos admisibles</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Fase 2: Scoring</strong></p>
+<div id="50f4baf0" class="cell" data-execution_count="12">
+<div class="cell-output cell-output-stdout">
+<pre><code>| Componente | Peso | Direct | AlternateElbow | $\Delta$ |
+|:---|---:|---:|---:|---:|
+| Riesgo | 0.5 | 0.6250 | 0.6250 | -0.0000 |
+| Duración (s) | 0.2 | 14.1967 | 17.8365 | +3.6398 |
+| Manipulabilidad | 0.2 | 0.0381 | 0.0356 | -0.0026 |
+| Longitud (m) | 0.1 | 7.5147 | 13.1597 | +5.6450 |
+|:---|---:|---:|---:|---:|
+| **J** | **1.0** | **0.2500** | **0.7500** | **+0.5000** |</code></pre>
+</div>
+</div>
+<p><strong>Decisión:</strong> Direct seleccionado (mismo patrón que Escenario 1).</p>
+</section>
+<section id="trayectoria-1" class="level3" data-number="4.3">
+<h3 data-number="4.3" class="anchored" data-anchor-id="trayectoria-1"><span class="header-section-number">4.3</span> Trayectoria</h3>
+<div id="c97c8379" class="cell" data-execution_count="13">
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="intelligence-report_files/figure-html/cell-14-output-1.png" width="1142" height="757" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<hr>
+</section>
+</section>
+<section id="experimento-h6-three-candidate-ranking-replannedalternate" class="level2" data-number="5">
+<h2 data-number="5" class="anchored" data-anchor-id="experimento-h6-three-candidate-ranking-replannedalternate"><span class="header-section-number">5</span> Experimento H6: Three-Candidate Ranking (ReplannedAlternate)</h2>
+<section id="contexto" class="level3" data-number="5.1">
+<h3 data-number="5.1" class="anchored" data-anchor-id="contexto"><span class="header-section-number">5.1</span> Contexto</h3>
+<p>H6 valida el comportamiento de la estrategia ReplannedAlternate en la pipeline de tres candidatos. Esta estrategia preserva el estado articular del codo de AlternateElbow y resuelve el sufijo semántico del plan desde esa nueva condición, generando un tercer candidato. La pipeline procesa los tres candidatos mediante la misma secuencia: compilación, análisis de trayectoria, evaluación, filtro de admisibilidad y scoring con <span class="math inline">\(J\)</span>.</p>
+</section>
+<section id="strategy-trace" class="level3" data-number="5.2">
+<h3 data-number="5.2" class="anchored" data-anchor-id="strategy-trace"><span class="header-section-number">5.2</span> Strategy Trace</h3>
+<table class="caption-top">
+<thead>
+<tr class="header">
+<th>#</th>
+<th>Strategy</th>
+<th>Outcome</th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+<div id="66152683" class="cell" data-execution_count="15">
+<div class="cell-output cell-output-stdout">
+<pre><code>| 0 | Direct | Generated |
+| 1 | InsertWaypoint | Skipped — UnsupportedSegment |
+| 2 | AlternateElbow | Generated |
+| 3 | ReplannedAlternate | Generated |</code></pre>
+</div>
+</div>
+</section>
+<section id="candidate-ranking" class="level3" data-number="5.3">
+<h3 data-number="5.3" class="anchored" data-anchor-id="candidate-ranking"><span class="header-section-number">5.3</span> Candidate Ranking</h3>
+<div id="19a73697" class="cell" data-execution_count="16">
+<div class="cell-output cell-output-stdout">
+<pre><code>| # | Estrategia | Riesgo | Duración (s) | Manipulabilidad | Longitud (m) | J |
+|:---:|:---|---:|---:|---:|---:|---:|
+| 0 | ReplannedAlternate ← | 0.1625 | 2.9256 | 0.631488 | 2.1398 | 0.00000001 |
+| 1 | AlternateElbow | 0.1625 | 5.2556 | 0.631396 | 2.1398 | 0.09538557 |
+| 2 | Direct | 0.5571 | 7.8179 | 0.458454 | 3.8850 | 1.00000000 |
+|:---:|:---|---:|---:|---:|---:|---:|
+**Seleccionado:** ReplannedAlternate
+
+J_selected = 0.00000001 &amp;nbsp;&amp;nbsp; J_Direct = 1.0000
+
+&amp;Delta;J = +1.0000 — diferencia normalizada entre ReplannedAlternate y Direct en el conjunto evaluado.</code></pre>
+</div>
+</div>
+</section>
+<section id="diagrama-de-la-ruta-arquitectónica-h6" class="level3" data-number="5.4">
+<h3 data-number="5.4" class="anchored" data-anchor-id="diagrama-de-la-ruta-arquitectónica-h6"><span class="header-section-number">5.4</span> Diagrama de la Ruta Arquitectónica H6</h3>
+<div id="6dce4a28" class="cell" data-execution_count="17">
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="intelligence-report_files/figure-html/cell-18-output-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="key-finding" class="level3" data-number="5.5">
+<h3 data-number="5.5" class="anchored" data-anchor-id="key-finding"><span class="header-section-number">5.5</span> Key Finding</h3>
+<p>En el escenario <code>6dof-elbow-swap</code>, ReplannedAlternate <strong>obtiene el menor <code>J</code> del conjunto de 3 candidatos</strong> (<span class="math inline">\(J \approx 0\)</span>). Preserva los semantic targets Cartesianos del programa original y replanifica el sufijo desde el estado del AlternateElbow, produciendo una trayectoria de duración y riesgo menores que Direct y AlternateElbow, con mayor manipulabilidad y longitud equivalente a AlternateElbow. Esto confirma H6 en este escenario: el tercer candidato es real y evaluable mediante la misma pipeline; en este caso, resultó seleccionado por obtener el menor costo normalizado.</p>
+<hr>
+</section>
+</section>
+<section id="resultado-cross-escenario" class="level2" data-number="6">
+<h2 data-number="6" class="anchored" data-anchor-id="resultado-cross-escenario"><span class="header-section-number">6</span> Resultado Cross-Escenario</h2>
+<div id="9c751b36" class="cell" data-execution_count="18">
+<div class="cell-output cell-output-stdout">
+<pre><code>| Métrica | near-singular | elbow-swap |
+|:---|---:|---:|
+| Waypoints | 1647 | 1430 |
+| Risk | high | high |
+| J_Direct | 0.2500 | 0.2500 |
+| J_Alternate | 0.7500 | 0.7500 |
+| &amp;Delta;J | +0.50 | +0.50 |
+| Seleccionado | Direct | Direct |</code></pre>
+</div>
+</div>
+<blockquote class="blockquote">
+<p><strong>Nota de alcance:</strong> Los resultados anteriores corresponden a los escenarios evaluados (<code>6dof-near-singular</code> y <code>6dof-elbow-swap</code>). No constituyen una demostración de optimalidad general de la estrategia Direct sobre AlternateElbow; reflejan el comportamiento observado bajo las condiciones específicas de cada experimento.</p>
+</blockquote>
+<hr>
+</section>
+<section id="verificación-de-hipótesis" class="level2" data-number="7">
+<h2 data-number="7" class="anchored" data-anchor-id="verificación-de-hipótesis"><span class="header-section-number">7</span> Verificación de Hipótesis</h2>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Hipótesis</th>
+<th>Escenario 1</th>
+<th>Escenario 2</th>
+<th>H6</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>H1: Detección</td>
+<td>PASS</td>
+<td>PASS</td>
+<td>—</td>
+</tr>
+<tr class="even">
+<td>H2: Generación admisible</td>
+<td>PASS</td>
+<td>PASS</td>
+<td>—</td>
+</tr>
+<tr class="odd">
+<td>H3: Evaluación</td>
+<td>PASS</td>
+<td>PASS</td>
+<td>PASS</td>
+</tr>
+<tr class="even">
+<td>H4: Selección</td>
+<td>PASS</td>
+<td>PASS</td>
+<td>PASS</td>
+</tr>
+<tr class="odd">
+<td>H5: Ejecución</td>
+<td>PASS</td>
+<td>PASS</td>
+<td>—</td>
+</tr>
+<tr class="even">
+<td>H6: Tres candidatos evaluable</td>
+<td>—</td>
+<td>—</td>
+<td><strong>PASS</strong></td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="alcance" class="level2" data-number="8">
+<h2 data-number="8" class="anchored" data-anchor-id="alcance"><span class="header-section-number">8</span> Alcance</h2>
+<div class="scope-box">
+<div class="scope-item scope-yes">
+<p><strong>Demostrado</strong></p>
+<p>✓ Detectar condición de riesgo ✓ Inferir necesidad de evaluación ✓ Generar candidato alternativo ✓ Validar candidato según filtros disponibles ✓ Calcular costo multiobjetivo ✓ Seleccionar menor costo ✓ Rechazar reparación peor ✓ <strong>H6: Evaluar 3 candidatos en pipeline unificado</strong> ✓ <strong>H6: ReplannedAlternate preserva semantic targets</strong> ✓ <strong>H6: Observación de reparación favorable en <code>6dof-elbow-swap</code></strong></p>
+</div>
+<div class="scope-item scope-no">
+<p><strong>Pendiente</strong></p>
+<p>○ Medir Δq directamente ○ Verificar error cartesiano mediante FK independiente ○ Generalizar a más robots</p>
+</div>
+</div>
+<hr>
+</section>
+<section id="conclusión" class="level2" data-number="9">
+<h2 data-number="9" class="anchored" data-anchor-id="conclusión"><span class="header-section-number">9</span> Conclusión</h2>
+<div class="result-box">
+<h2 class="anchored">
+RESULTADO EXPERIMENTAL
+</h2>
+<br>
+<div style="font-size: 1.5em; margin: 20px 0;">
+<p><strong>27/27 PASS</strong> &nbsp;&nbsp;|&nbsp;&nbsp; <strong>5/5 BASE + H6 SCOPED</strong></p>
+</div>
+<div style="font-size: 1.3em;">
+<p>H1–H5: <code>Direct</code> seleccionado sobre 2 candidatos &nbsp;|&nbsp; H6: <code>ReplannedAlternate</code> seleccionado sobre 3 candidatos en <code>6dof-elbow-swap</code></p>
+</div>
+<div style="font-size: 1.1em; margin-top: 15px; color: #27AE60; font-weight: bold;">
+<p>REPARACIÓN RECHAZADA (H1–H5) → REPARACIÓN FAVORABLE OBSERVADA EN H6</p>
+</div>
+</div>
+<p>Un candidato debe superar primero las <strong>restricciones de admisibilidad</strong> para entrar en la competencia. Entre los candidatos admisibles, la selección se realiza mediante el <strong>costo multiobjetivo <code>J</code></strong>.</p>
+<p>En los escenarios H1–H5 (2 candidatos), <code>AlternateElbow</code> fue rechazado porque su <code>J</code> superaba al de <code>Direct</code>. En el experimento H6 sobre <code>6dof-elbow-swap</code> (3 candidatos), <code>ReplannedAlternate</code> fue seleccionado porque preserva los semantic targets y replanifica el sufijo desde el estado del AlternateElbow, produciendo una trayectoria de duración y riesgo menores que <code>Direct</code> y <code>AlternateElbow</code>, con mayor manipulabilidad y longitud equivalente a <code>AlternateElbow</code>, bajo el mismo mecanismo de scoring.</p>
+<p><strong>El filtro de admisibilidad determina qué puede ejecutarse. El scoring determina qué conviene ejecutar.</strong> En <code>6dof-elbow-swap</code>, H6 confirma que la pipeline puede evaluar 3 candidatos de forma unificada y seleccionar una reparación favorable cuando existe.</p>
+<hr>
+</section>
+<section id="reproducibilidad" class="level2" data-number="10">
+<h2 data-number="10" class="anchored" data-anchor-id="reproducibilidad"><span class="header-section-number">10</span> Reproducibilidad</h2>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Generate H6 experiment artifact (env-gated, normal runs unaffected)</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="va">THALOS_H6_EXPERIMENT</span><span class="op">=</span>1 <span class="ex">cargo</span> test <span class="at">-p</span> thalos_runtime <span class="at">--lib</span> <span class="at">--</span> analyze_plan_with_candidates_populates_candidate_ranking</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Run validation and render report</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> validation/run-validation.sh</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="ex">quarto</span> render validation/intelligence-report.qmd <span class="at">--to</span> html</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

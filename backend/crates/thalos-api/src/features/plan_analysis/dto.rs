@@ -246,6 +246,12 @@ pub struct PlanAnalysisResponse {
     /// frontend ignores it (contract note only).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub robot_id: Option<String>,
+    /// Trayectoria baseline del plan activo — waypoints joint-space + timestamps.
+    /// ADITIVO: `#[serde(default)]` + omitido cuando `None`: clientes antiguos
+    /// deserializan a `None` sin error. Consumido por el evidence export para
+    /// la cadena causal baseline → intelligence → selected.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trajectory: Option<TrajectoryDto>,
 }
 
 impl PlanAnalysisResponse {
@@ -346,6 +352,7 @@ impl PlanAnalysisResponse {
             assessment: assessment.map(AssessmentDto::from),
             candidate_ranking: None,
             robot_id: report.robot_id.clone(),
+            trajectory: None,
         }
     }
 
@@ -354,6 +361,14 @@ impl PlanAnalysisResponse {
     /// el flujo con contexto de plan (programa + solver) lo invoca después.
     pub fn with_candidate_ranking(mut self, ranking: Option<&CandidateRanking>) -> Self {
         self.candidate_ranking = ranking.map(CandidateRankingDto::from);
+        self
+    }
+
+    /// ADITIVO: proyecta la trayectoria baseline del plan activo al wire.
+    /// Consumido por el evidence export para la cadena causal
+    /// baseline → intelligence → selected.
+    pub fn with_trajectory(mut self, trajectory: &thalos_core::trajectory::Trajectory) -> Self {
+        self.trajectory = Some(TrajectoryDto::from_trajectory(trajectory));
         self
     }
 }
@@ -913,6 +928,39 @@ impl From<&AnalysisSummary> for SummaryDto {
             grade: format!("{:?}", summary.grade),
             observation_count: summary.observation_count,
             severity_distribution,
+        }
+    }
+}
+
+/// Trayectoria baseline proyectada al wire — joint-space waypoints + timestamps.
+/// Consumida por el evidence export para la cadena causal
+/// baseline → intelligence → selected. ADITIVO: `#[serde(default)]` en
+/// `PlanAnalysisResponse.trajectory` mantiene back-compat con clientes
+/// antiguos.
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct TrajectoryDto {
+    /// Posiciones de joints por waypoint: `waypoints[i] = [j0, j1, j2, j3]`.
+    pub waypoints: Vec<Vec<f64>>,
+    /// Timestamps en segundos por waypoint.
+    pub timestamps: Vec<f64>,
+}
+
+impl TrajectoryDto {
+    /// Proyecta una `Trajectory` del dominio al DTO wire.
+    pub fn from_trajectory(trajectory: &thalos_core::trajectory::Trajectory) -> Self {
+        let waypoints = trajectory
+            .waypoints()
+            .iter()
+            .map(|wp| wp.joints().to_vec())
+            .collect();
+        let timestamps = trajectory
+            .waypoints()
+            .iter()
+            .map(|wp| wp.timestamp())
+            .collect();
+        Self {
+            waypoints,
+            timestamps,
         }
     }
 }

@@ -45,6 +45,8 @@ pub enum StrategyKind {
     /// Re-solve the target segment to the same-side elbow posture
     /// (wraps `SingularityResolveMaterializer`).
     AlternateElbow,
+    /// Preserve the alternate elbow state and re-resolve the semantic suffix.
+    ReplannedAlternate,
 }
 
 #[cfg(test)]

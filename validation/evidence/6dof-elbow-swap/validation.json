@@ -1,0 +1,147 @@
+{
+  "run_id": "6dof-elbow-swap-dd81793b",
+  "scenario": "6dof-elbow-swap",
+  "commit": "dd81793b",
+  "checks": [
+    {
+      "name": "OBS_DETECTED",
+      "status": "PASS",
+      "category": "UNIVERSAL",
+      "data": {
+        "kind": "LowManipulability",
+        "value": 0.0274704577938798,
+        "threshold": 0.3,
+        "count": 1
+      },
+      "message": "LowManipulability (0.0274704577938798 < 0.3)"
+    },
+    {
+      "name": "INFERENCE_OK",
+      "status": "PASS",
+      "category": "UNIVERSAL",
+      "data": {
+        "risk": "high",
+        "rules": [
+          "R07_low_manipulability",
+          "R08_safe_clearance"
+        ],
+        "rule_count": 2
+      },
+      "message": "high risk, 2 rules: R07_low_manipulability, R08_safe_clearance"
+    },
+    {
+      "name": "CANDIDATES_GENERATED",
+      "status": "PASS",
+      "category": "UNIVERSAL",
+      "data": {
+        "generated": 2,
+        "skipped": 1,
+        "ranked": 2
+      },
+      "message": "2 generated, 1 skipped"
+    },
+    {
+      "name": "IK_SOLUTIONS_VALID",
+      "status": "PASS",
+      "category": "UNIVERSAL",
+      "data": {
+        "candidate_count": 2,
+        "all_valid": true
+      },
+      "message": "2 candidates, all valid"
+    },
+    {
+      "name": "CONFIGURATION_VARIATION",
+      "status": "PASS",
+      "category": "STRATEGY-SPECIFIC",
+      "data": {
+        "delta_duration": 3.6398232534702704,
+        "threshold": 0.5,
+        "proxy_for": "\u0394q"
+      },
+      "message": "\u0394duration = 3.64s (proxy for \u0394q)"
+    },
+    {
+      "name": "CONVERGENCE_VALID",
+      "status": "PASS",
+      "category": "UNIVERSAL",
+      "data": {
+        "all_converged": true,
+        "candidate_count": 2
+      },
+      "message": "All 2 candidates converged"
+    },
+    {
+      "name": "JOINT_LIMITS",
+      "status": "PASS",
+      "category": "UNIVERSAL",
+      "data": {
+        "candidates_passed_gate": 2
+      },
+      "message": "2 candidates passed admissibility gate"
+    },
+    {
+      "name": "METRICS_VALID",
+      "status": "PASS",
+      "category": "UNIVERSAL",
+      "data": {
+        "candidate_count": 2,
+        "all_valid": true
+      },
+      "message": "All metrics valid"
+    },
+    {
+      "name": "J_SCORES_VALID",
+      "status": "PASS",
+      "category": "UNIVERSAL",
+      "data": {
+        "details": [
+          {
+            "strategy": "Direct",
+            "reported_j": 0.25,
+            "raw_recomputed": 4.09567875098276,
+            "j_valid": true
+          },
+          {
+            "strategy": "AlternateElbow",
+            "reported_j": 0.75,
+            "raw_recomputed": 5.3886650258673905,
+            "j_valid": true
+          }
+        ],
+        "all_valid": true
+      },
+      "message": "All J scores valid"
+    },
+    {
+      "name": "SELECTION_CONSISTENT",
+      "status": "PASS",
+      "category": "UNIVERSAL",
+      "data": {
+        "selected": "Direct",
+        "selected_j": 0.25,
+        "min_j": 0.25,
+        "min_strategy": "Direct"
+      },
+      "message": "Direct (J=0.2500) == argmin"
+    },
+    {
+      "name": "EXECUTION_CONSISTENT",
+      "status": "PASS",
+      "category": "UNIVERSAL",
+      "data": {
+        "selected": "Direct",
+        "executed": "Direct"
+      },
+      "message": "selected=Direct, executed=Direct"
+    }
+  ],
+  "summary": {
+    "total": 11,
+    "passed": 11,
+    "failed": 0,
+    "skipped": 0,
+    "overall": "PASS"
+  },
+  "evidence_file": "/home/void/projects/robotics/thalos/validation/evidence/6dof-elbow-swap/evidence.json"
+}

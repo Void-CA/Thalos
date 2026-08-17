@@ -92,7 +92,13 @@ pub async fn analyze_plan(
     // (mismas observaciones + mismo programa → mismas recomendaciones). Un plan
     // sin programa (single-shot legacy) no produce recomendaciones — contexto
     // inexistente, documentado (campo aditivo en el wire).
-    let program = PlanningProgram::new(segments.iter().map(|s| s.source.clone()).collect());
+    let program = match active_plan.semantic_targets.clone() {
+        Some(semantic_targets) => PlanningProgram::with_semantic_targets(
+            segments.iter().map(|s| s.source.clone()).collect(),
+            semantic_targets,
+        ),
+        None => PlanningProgram::new(segments.iter().map(|s| s.source.clone()).collect()),
+    };
     let fk = ForwardKinematics::new(snapshot.chain.clone());
     let solver =
         DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
@@ -150,7 +156,8 @@ pub async fn analyze_plan(
             &result.recommendations,
             Some(&result.assessment),
         )
-        .with_candidate_ranking(result.candidate_ranking.as_ref()),
+        .with_candidate_ranking(result.candidate_ranking.as_ref())
+        .with_trajectory(trajectory),
     ))
 }
 
@@ -512,9 +519,13 @@ fn active_program(snapshot: &RuntimeSnapshot) -> Result<PlanningProgram, ApiErro
             code: "no_program_segments".to_string(),
         });
     }
-    Ok(PlanningProgram::new(
-        segments.iter().map(|s| s.source.clone()).collect(),
-    ))
+    Ok(match active_plan.semantic_targets.clone() {
+        Some(semantic_targets) => PlanningProgram::with_semantic_targets(
+            segments.iter().map(|s| s.source.clone()).collect(),
+            semantic_targets,
+        ),
+        None => PlanningProgram::new(segments.iter().map(|s| s.source.clone()).collect()),
+    })
 }
 
 /// Ciclo compartido de write-back (CDD step 3): `edit.apply(program)` →

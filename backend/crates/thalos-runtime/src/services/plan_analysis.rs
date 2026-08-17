@@ -279,7 +279,33 @@ impl PlanAnalysisService {
         //    (every strategy → Generated/Skipped) is carried into the ranking
         //    (design ADR-3 observability — verify Warning 1 FIX), never dropped.
         let generator = CandidateGenerator::default();
-        let (candidates, traces) = generator.generate(program, generation_ctx, ik_solver);
+        let (mut candidates, mut traces) = generator.generate(program, generation_ctx, ik_solver);
+
+        // H6 is available only when the resolver retained the original
+        // semantic motion targets. A resolved-only program cannot honestly
+        // reconstruct a Cartesian suffix, so it remains a two-candidate flow.
+        if let Some(semantic_targets) = &program.semantic_targets {
+            if let Some(alternate) = candidates.iter().find(|candidate| {
+                candidate.strategy == thalos_planning::candidate::StrategyKind::AlternateElbow
+            }) {
+                if let Some(replanned) = replan_alternate_candidate(
+                    alternate,
+                    generation_ctx.target_segment,
+                    semantic_targets,
+                    chain,
+                    ik_solver,
+                    tcp,
+                ) {
+                    traces.push(thalos_planning::candidate::StrategyTrace {
+                        strategy: thalos_planning::candidate::StrategyKind::ReplannedAlternate,
+                        outcome: thalos_planning::candidate::StrategyOutcome::Generated(
+                            replanned.clone(),
+                        ),
+                    });
+                    candidates.push(replanned);
+                }
+            }
+        }
 
         let checker = NaiveCollisionChecker;
         let matrix = CollisionMatrix::new();
@@ -357,6 +383,49 @@ impl PlanAnalysisService {
     }
 }
 
+fn replan_alternate_candidate(
+    alternate: &thalos_planning::candidate::Candidate,
+    target_segment: usize,
+    semantic_targets: &[thalos_planning::motion::program::SemanticTarget],
+    chain: &SerialChain,
+    ik_solver: &dyn thalos_core::kinematics::inverse::IKSolver,
+    tcp: Option<&ToolFrame>,
+) -> Option<thalos_planning::candidate::Candidate> {
+    use thalos_core::motion::segment::MotionSegment;
+    use thalos_planning::resolver::replan_suffix;
+
+    let MotionSegment::MoveJ { target, .. } = alternate.program.segments.get(target_segment)?
+    else {
+        return None;
+    };
+    if semantic_targets.len() != alternate.program.segments.len()
+        || target_segment + 1 >= semantic_targets.len()
+    {
+        return None;
+    }
+
+    let alternate_state = RobotState::new(target.clone());
+    let context = SegmentPlanningContext {
+        robot: chain,
+        current_state: &alternate_state,
+        ik_solver,
+        tcp,
+    };
+    let suffix = replan_suffix(
+        &alternate_state,
+        &semantic_targets[target_segment + 1..],
+        &context,
+    )
+    .ok()?;
+
+    let mut segments = alternate.program.segments[..=target_segment].to_vec();
+    segments.extend(suffix.planning.segments);
+    Some(thalos_planning::candidate::Candidate {
+        strategy: thalos_planning::candidate::StrategyKind::ReplannedAlternate,
+        program: PlanningProgram::with_semantic_targets(segments, semantic_targets.to_vec()),
+    })
+}
+
 /// The runtime's [`MotionMetrics`] extraction (design ADR-5): duration and
 /// path length from the analyzed trajectory, avg manipulability from the
 /// technical analysis — the evaluator NEVER computes a metric from the
@@ -414,10 +483,12 @@ fn joint_bounds_from_chain(chain: &SerialChain) -> Vec<JointBounds> {
 mod tests {
     use super::*;
     use thalos_core::{
+        execution::program::ExecutionInstruction,
         ids::{MotionPlanId, OperationId},
         kinematics::inverse::{DampedLeastSquaresSolver, IKConfig},
         models::{RobotModel, RobotRegistry},
         motion::segment::MotionSegment,
+        motion::target::{MotionPosition, MotionProfile, MotionTarget},
         trajectory::{Trajectory, TrajectoryPoint},
     };
     use thalos_planning::candidate::{
@@ -536,27 +607,56 @@ mod tests {
     /// singularity event) → same-side goal. The crossing is a MIDDLE segment
     /// so the strategy can transform it without touching the joint goal (the
     /// gate's endpoint invariant compares the LAST MoveJ target).
-    fn crossing_program() -> PlanningProgram {
-        PlanningProgram::new(vec![
-            MotionSegment::MoveJ {
-                origin: OperationId("op-home".to_string()),
-                target: vec![0.0, -1.31, -0.1, 0.0],
-                max_velocity: None,
-                max_acceleration: None,
-            },
-            MotionSegment::MoveJ {
-                origin: OperationId("op-cross".to_string()),
-                target: vec![0.5, 0.6, -0.15, 0.0],
-                max_velocity: None,
-                max_acceleration: None,
-            },
-            MotionSegment::MoveJ {
-                origin: OperationId("op-goal".to_string()),
-                target: vec![0.5, -1.31, -0.15, 0.0],
-                max_velocity: None,
-                max_acceleration: None,
-            },
-        ])
+    fn crossing_program(chain: &SerialChain) -> PlanningProgram {
+        let targets = [
+            vec![0.0, -1.31, -0.1, 0.0],
+            vec![0.5, 0.6, -0.15, 0.0],
+            vec![0.5, -1.31, -0.15, 0.0],
+        ];
+        let fk = thalos_core::kinematics::forward::ForwardKinematics::new(chain.clone());
+        let semantic_targets = targets
+            .iter()
+            .enumerate()
+            .map(|(index, joints)| ExecutionInstruction::MoveJ {
+                origin: OperationId(["op-home", "op-cross", "op-goal"][index].to_string()),
+                target: MotionTarget::Position(MotionPosition {
+                    position: {
+                        let p = fk.evaluate(joints).ee_position().expect("target FK");
+                        [p.x, p.y, p.z]
+                    },
+                    frame: "world".into(),
+                }),
+                profile: MotionProfile {
+                    max_velocity: 500.0,
+                    max_acceleration: 1000.0,
+                    max_jerk: None,
+                },
+            })
+            .collect();
+
+        PlanningProgram::with_semantic_targets(
+            vec![
+                MotionSegment::MoveJ {
+                    origin: OperationId("op-home".to_string()),
+                    target: vec![0.0, -1.31, -0.1, 0.0],
+                    max_velocity: None,
+                    max_acceleration: None,
+                },
+                MotionSegment::MoveJ {
+                    origin: OperationId("op-cross".to_string()),
+                    target: vec![0.5, 0.6, -0.15, 0.0],
+                    max_velocity: None,
+                    max_acceleration: None,
+                },
+                MotionSegment::MoveJ {
+                    origin: OperationId("op-goal".to_string()),
+                    target: vec![0.5, -1.31, -0.15, 0.0],
+                    max_velocity: None,
+                    max_acceleration: None,
+                },
+            ],
+            semantic_targets,
+        )
     }
 
     /// Compile a program from `home` with the real Scara chain + solver —
@@ -591,7 +691,7 @@ mod tests {
         // Direct candidate's neutral risk equals the seed's crisp risk.
         let chain = RobotRegistry::create_default(RobotModel::Scara);
         let home = vec![0.0, -1.31, -0.1, 0.0];
-        let program = crossing_program();
+        let program = crossing_program(&chain);
         let trajectory = compile_from(&chain, &home, &program);
 
         let fk = thalos_core::kinematics::forward::ForwardKinematics::new(chain.clone());
@@ -631,6 +731,41 @@ mod tests {
         );
         // The ranking is complete: a selected candidate or a structural
         // no-selection reason (never a panic).
+        // H6 experiment table — same pipeline / same J for all three candidates.
+        println!("\n{:=^96}", " 6dof-elbow-swap (ReplannedAlternate) experiment ");
+        println!(
+            "{:<22} {:>10} {:>10} {:>10} {:>10} {:>10}",
+            "strategy", "risk", "duration", "manip", "length", "J"
+        );
+        for (candidate, score) in &ranking.ranked {
+            println!(
+                "{:<22} {:>10.6} {:>10.4} {:>10.6} {:>10.4} {:>10.6}",
+                format!("{:?}", candidate.strategy),
+                score.risk,
+                score.duration,
+                score.manipulability,
+                score.length,
+                score.cost
+            );
+        }
+        match &ranking.reason {
+            SelectionReason::Selected { strategy, metric_comparison, .. } => {
+                println!(
+                    "SELECTED: {:?} | {}",
+                    strategy,
+                    metric_comparison
+                        .iter()
+                        .map(|m| format!("{}: {:.6} vs {:.6}", m.component, m.selected_value, m.baseline_value))
+                        .collect::<Vec<_>>()
+                        .join(" | ")
+                );
+            }
+            SelectionReason::NoAdmissibleCandidate { reason } => {
+                println!("SELECTED: none — {reason}");
+            }
+        }
+        println!("{:=^96}\n", "");
+
         match &ranking.reason {
             SelectionReason::Selected { .. } => {
                 assert!(
@@ -654,8 +789,8 @@ mod tests {
         // segment to the same-side elbow posture (`Generated`).
         assert_eq!(
             ranking.strategy_trace.len(),
-            3,
-            "the trace must cover Direct + the two generating strategies"
+            4,
+            "the trace must cover Direct + the two generating strategies + H6"
         );
         assert_eq!(
             ranking.strategy_trace[0].strategy,
@@ -682,6 +817,147 @@ mod tests {
             ranking.strategy_trace[2].outcome,
             StrategyOutcome::Generated(_)
         ));
+        assert_eq!(
+            ranking.strategy_trace[3].strategy,
+            StrategyKind::ReplannedAlternate
+        );
+        assert!(matches!(
+            ranking.strategy_trace[3].outcome,
+            StrategyOutcome::Generated(_)
+        ));
+
+        let StrategyOutcome::Generated(replanned) = &ranking.strategy_trace[3].outcome else {
+            unreachable!("the H6 trace row was asserted as generated above");
+        };
+        assert_eq!(
+            replanned.program.semantic_targets.as_ref(),
+            program.semantic_targets.as_ref(),
+            "replanning must preserve the original semantic target sequence"
+        );
+        let MotionSegment::MoveJ { target: final_joints, .. } =
+            replanned.program.segments.last().expect("replanned goal")
+        else {
+            panic!("replanned goal must remain a MoveJ");
+        };
+        let final_position =
+            thalos_core::kinematics::forward::ForwardKinematics::new(chain.clone())
+                .evaluate(final_joints)
+                .ee_position()
+                .expect("replanned goal FK");
+        let ExecutionInstruction::MoveJ {
+            target: MotionTarget::Position(goal),
+            ..
+        } = &program.semantic_targets.as_ref().unwrap()[2]
+        else {
+            panic!("crossing scenario goal must be Cartesian");
+        };
+        assert!((final_position.x - goal.position[0]).abs() < 0.02);
+        assert!((final_position.y - goal.position[1]).abs() < 0.02);
+        assert!((final_position.z - goal.position[2]).abs() < 0.02);
+
+        // ── H6 experiment artifact (env-gated) ──────────────────────────
+        // When THALOS_H6_EXPERIMENT=1, emit a deterministic JSON artifact
+        // for the Quarto intelligence report. Normal test runs are unchanged.
+        if std::env::var("THALOS_H6_EXPERIMENT").unwrap_or_default() == "1" {
+            use std::io::Write;
+            let experiment_dir =
+                std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../../validation/experiments/replanned-alternate");
+            std::fs::create_dir_all(&experiment_dir).expect("create experiment dir");
+
+            let strategy_name = |k: &StrategyKind| -> &'static str {
+                match k {
+                    StrategyKind::Direct => "Direct",
+                    StrategyKind::InsertWaypoint => "InsertWaypoint",
+                    StrategyKind::AlternateElbow => "AlternateElbow",
+                    StrategyKind::ReplannedAlternate => "ReplannedAlternate",
+                }
+            };
+            let ranked_json: Vec<serde_json::Value> = ranking
+                .ranked
+                .iter()
+                .map(|(cand, score)| {
+                    serde_json::json!({
+                        "strategy": strategy_name(&cand.strategy),
+                        "risk": score.risk,
+                        "duration": score.duration,
+                        "manipulability": score.manipulability,
+                        "length": score.length,
+                        "cost": score.cost,
+                    })
+                })
+                .collect();
+            let (reason_kind, metric_comparison_json, selected_strategy_json) = match &ranking.reason {
+                SelectionReason::Selected { strategy, metric_comparison, .. } => {
+                    let mc: Vec<serde_json::Value> = metric_comparison
+                        .iter()
+                        .map(|m| serde_json::json!({
+                            "component": m.component,
+                            "selected_value": m.selected_value,
+                            "baseline_value": m.baseline_value,
+                        }))
+                        .collect();
+                    ("selected", mc, Some(strategy_name(strategy)))
+                }
+                SelectionReason::NoAdmissibleCandidate { .. } => {
+                    ("no_admissible_candidate", vec![], None)
+                }
+            };
+            let trace_json: Vec<serde_json::Value> = ranking
+                .strategy_trace
+                .iter()
+                .map(|t| {
+                    let (outcome_kind, skip_reason) = match &t.outcome {
+                        StrategyOutcome::Generated(_) => ("generated", None),
+                        StrategyOutcome::Skipped(r) => {
+                            let reason_str = match r {
+                                NoCandidateReason::UnsupportedSegment => "UnsupportedSegment",
+                                NoCandidateReason::IkFailed => "IkFailed",
+                                NoCandidateReason::InvariantViolation { invariant } => {
+                                    return serde_json::json!({
+                                        "strategy": strategy_name(&t.strategy),
+                                        "outcome": {
+                                            "kind": "skipped",
+                                            "reason": "InvariantViolation",
+                                            "invariant": invariant,
+                                        },
+                                    });
+                                }
+                            };
+                            ("skipped", Some(reason_str))
+                        }
+                    };
+                    let mut entry = serde_json::json!({
+                        "strategy": strategy_name(&t.strategy),
+                        "outcome": { "kind": outcome_kind },
+                    });
+                    if let Some(reason) = skip_reason {
+                        entry["outcome"]["reason"] = serde_json::Value::String(reason.to_string());
+                    }
+                    entry
+                })
+                .collect();
+            let h6 = serde_json::json!({
+                "experiment": "h6-replanned-alternate-three-candidate",
+                "scenario": "6dof-elbow-swap",
+                "candidate_ranking": {
+                    "ranked": ranked_json,
+                    "selected": selected_strategy_json.map(|s| serde_json::Value::String(s.to_string())),
+                    "reason": {
+                        "kind": reason_kind,
+                        "metric_comparison": metric_comparison_json,
+                        "endpoints": "Endpoints: preserved",
+                        "task": "Task: preserved",
+                    },
+                    "strategy_trace": trace_json,
+                },
+            });
+            let path = experiment_dir.join("h6-candidate-ranking.json");
+            let mut f = std::fs::File::create(&path).expect("create h6 JSON");
+            f.write_all(serde_json::to_string_pretty(&h6).unwrap().as_bytes())
+                .expect("write h6 JSON");
+            eprintln!("H6 experiment artifact written to {}", path.display());
+        }
     }
 
     #[test]
@@ -716,7 +992,7 @@ mod tests {
     fn candidates_flow_preserves_the_seed_assessment_and_report() {
         let chain = RobotRegistry::create_default(RobotModel::Scara);
         let home = vec![0.0, -1.31, -0.1, 0.0];
-        let program = crossing_program();
+        let program = crossing_program(&chain);
         let trajectory = compile_from(&chain, &home, &program);
         let fk = thalos_core::kinematics::forward::ForwardKinematics::new(chain.clone());
         let solver =

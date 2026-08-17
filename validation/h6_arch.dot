@@ -1,0 +1,31 @@
+digraph H6ArchPath {
+    rankdir=TB;
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11];
+    edge [fontname="Helvetica", fontsize=9];
+
+    start [label="LowManipulability\ndetectado", fillcolor="#DD8452", fontcolor="white"];
+    infer [label="Riesgo alto\ninferido (R07, R08)", fillcolor="#8172B3", fontcolor="white"];
+
+    subgraph cluster_strategies {
+        label="Estrategias candidatas";
+        style=dashed;
+        color="#4C72B0";
+        direct [label="Direct", fillcolor="#C44E52", fontcolor="white"];
+        insert [label="InsertWaypoint\n(Skipped: UnsupportedSegment)", fillcolor="#EEEEEE"];
+        alt [label="AlternateElbow", fillcolor="#4C72B0", fontcolor="white"];
+        replan [label="ReplannedAlternate\n(AlternateElbow + replan suffix)", fillcolor="#27AE60", fontcolor="white"];
+    }
+
+    gate [label="Filtro de\nadmisibilidad", fillcolor="#FFF3E0"];
+    score [label="Scoring J\n(risk, duration, manip, length)", fillcolor="#E3F2FD"];
+    decide [label="argmin(J)\n→ ReplannedAlternate", fillcolor="#E8F5E9"];
+
+    start -> infer -> direct;
+    infer -> insert;
+    infer -> alt;
+    alt -> replan [label="preserva\nestado codo"];
+    direct -> gate;
+    alt -> gate;
+    replan -> gate;
+    gate -> score -> decide;
+}

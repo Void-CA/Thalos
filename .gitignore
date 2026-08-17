@@ -10,6 +10,7 @@ __pycache__/
 /.env.*
 !/.env.example
 
-# Generated evidence artifacts — produced by scripts/generate-evidence.sh
+# Generated evidence artifacts — produced by evidence-tool/generate.sh
 /evidence/
 /output/
+/artifacts/

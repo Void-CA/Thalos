@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 
 use thalos_core::prelude::Trajectory;
-use thalos_planning::motion::program::{CompiledPlan, PlannedSegment};
+use thalos_planning::motion::program::{CompiledPlan, PlannedSegment, SemanticTarget};
 
 use super::motion_type::MotionType;
 use super::state::PlanState;
@@ -14,6 +14,8 @@ pub struct ActiveMotionPlan {
     pub motion_type: MotionType,
     /// Per-segment metadata when this plan came from a multi-segment program.
     pub segments: Option<Vec<PlannedSegment>>,
+    /// Original semantic motion targets retained for live re-planning.
+    pub semantic_targets: Option<Vec<SemanticTarget>>,
     pub created_at: DateTime<Utc>,
     pub started_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
@@ -32,6 +34,7 @@ impl ActiveMotionPlan {
             trajectory,
             motion_type,
             segments: None,
+            semantic_targets: None,
             created_at: now,
             started_at: Some(now),
             completed_at: Some(now),
@@ -40,12 +43,14 @@ impl ActiveMotionPlan {
 
     pub fn from_compiled_plan(plan_id: impl Into<String>, compiled: CompiledPlan) -> Self {
         let segments = Some(compiled.segments.clone());
+        let semantic_targets = compiled.semantic_targets.clone();
         Self {
             plan_id: plan_id.into(),
             state: PlanState::Created,
             trajectory: compiled.merged_trajectory,
             motion_type: MotionType::Program,
             segments,
+            semantic_targets,
             created_at: Utc::now(),
             started_at: None,
             completed_at: None,
@@ -63,6 +68,7 @@ impl ActiveMotionPlan {
             trajectory,
             motion_type,
             segments: None,
+            semantic_targets: None,
             created_at: Utc::now(),
             started_at: None,
             completed_at: None,
