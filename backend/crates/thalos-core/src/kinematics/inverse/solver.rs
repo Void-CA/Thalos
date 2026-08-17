@@ -12,6 +12,7 @@ use super::result::IKResult;
 ///
 /// - [`Position`](IKGoal::Position): solo posición del end-effector.
 /// - [`Pose`](IKGoal::Pose): posición **y** orientación completas.
+#[derive(Debug, Clone)]
 pub enum IKGoal {
     Position(Vector3),
     Pose(Pose),

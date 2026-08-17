@@ -18,6 +18,8 @@ use thalos_semantic::script;
 
 const ICEBOT_URDF: &str =
     include_str!("../../../../docs/execution/robot/icebot.urdf");
+const SIXDOF_URDF: &str =
+    include_str!("../../../../docs/execution/robot/6dof.urdf");
 
 /// Repo `demos/` root — the default `THALOS_DEMOS_ROOT` (`./demos`).
 pub const DEMOS_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../demos");
@@ -52,6 +54,13 @@ pub fn bent_start_joints(home: &thalos_document::pose::Pose) -> [f64; 4] {
     [q0, q1, q2, q3]
 }
 
+/// Starting joint configuration for a 6-DOF robot.
+/// Uses a fixed valid configuration: arm extended forward with wrist neutral.
+pub fn sixdof_start_joints() -> [f64; 6] {
+    // Valid configuration: arm extended forward, elbow slightly bent
+    [0.0, 0.5, -0.3, 0.0, 0.0, 0.0]
+}
+
 async fn get_json(
     router: Router,
     method: http::Method,
@@ -68,7 +77,7 @@ async fn get_json(
     };
     let resp = router.oneshot(req).await.unwrap();
     let status = resp.status();
-    let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+    let bytes = axum::body::to_bytes(resp.into_body(), 4 * 1024 * 1024)
         .await
         .unwrap();
     (status, serde_json::from_slice(&bytes).ok())
@@ -82,7 +91,7 @@ async fn get_text(router: Router, path: &str) -> (StatusCode, String) {
         .unwrap();
     let resp = router.oneshot(req).await.unwrap();
     let status = resp.status();
-    let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+    let bytes = axum::body::to_bytes(resp.into_body(), 4 * 1024 * 1024)
         .await
         .unwrap();
     (status, String::from_utf8_lossy(&bytes).to_string())
@@ -95,16 +104,6 @@ pub async fn run_demo(app: &Router, demo_id: &'static str) -> DemoEvidence {
     // SAFETY: serialized by DEMOS_ROOT_LOCK — only holders of the lock
     // mutate THALOS_DEMOS_ROOT.
     unsafe { std::env::set_var("THALOS_DEMOS_ROOT", DEMOS_ROOT) };
-
-    // 1. Load icebot — the demo robot (D11: stable name "icebot").
-    let (status, _) = get_json(
-        app.clone(),
-        http::Method::POST,
-        "/api/v1/scene/robot/from-urdf",
-        Some(json!({ "urdf_source": ICEBOT_URDF })),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK, "icebot must load");
 
     // 2. Fetch the demo artifacts via the CATALOG authority (D10).
     let (status, body) = get_json(app.clone(), http::Method::GET, "/api/v1/demos", None).await;
@@ -148,13 +147,36 @@ pub async fn run_demo(app: &Router, demo_id: &'static str) -> DemoEvidence {
     let program = script::parse(&program_text)
         .unwrap_or_else(|e| panic!("program.thalos must parse for {demo_id}: {e:?}"));
 
-    // 4. Derive the demo home joints from scene.json's `home_pose`.
+    // 4. Load the robot from the scene — use embedded URDF constants.
+    let robot_name = &scene_file.robot.name;
+    let urdf_content = if robot_name.contains("6dof") {
+        SIXDOF_URDF
+    } else {
+        ICEBOT_URDF
+    };
+    let (status, _) = get_json(
+        app.clone(),
+        http::Method::POST,
+        "/api/v1/scene/robot/from-urdf",
+        Some(json!({ "urdf_source": urdf_content })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "robot must load: {robot_name}");
+
+    // 5. Derive the demo home joints — use 6DOF config for 6+ joint robots.
     let hp = &scene.home_pose;
+    let is_6dof = scene_file.robot.name.contains("6dof")
+        || scene_file.robot.urdf.contains("6dof");
+    let home_joints: Vec<f64> = if is_6dof {
+        sixdof_start_joints().to_vec()
+    } else {
+        bent_start_joints(hp).to_vec()
+    };
     let (status, _) = get_json(
         app.clone(),
         http::Method::POST,
         "/api/v1/scene/joints",
-        Some(json!({ "joint_angles": bent_start_joints(hp) })),
+        Some(json!({ "joint_angles": home_joints })),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "runtime must park at a bent start");

@@ -1,0 +1,8 @@
+# 6dof-repair — long carry from upper-right to lower-left.
+# The straight-line path passes through a near-singular configuration.
+# InsertWaypoint should split the segment to avoid the problematic region.
+home
+pick box-1
+move_to far-point
+place box-1 at tray-1
+home

@@ -1,0 +1,9 @@
+# 6dof-elbow-swap — pick from right, place on left.
+# The carry crosses the body, forcing the elbow through different postures.
+# AlternateElbow should select a different elbow configuration that avoids
+# the awkward crossover posture.
+home
+pick box-1
+move_to place-left
+place box-1 at tray-1
+home
