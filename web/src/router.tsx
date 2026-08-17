@@ -1,6 +1,7 @@
 import { createElement, type ComponentType } from 'react'
 import { createBrowserRouter, type RouteObject } from 'react-router'
 import { ConfigurationWorkspace } from '@/features/configuration/workspace'
+import { DemosWorkspace } from '@/features/demos/workspace'
 import { EvaluationWorkspace } from '@/features/evaluation/workspace'
 import { ExecutionWorkspace } from '@/features/execution/execution-workspace'
 import { KnowledgeWorkspace } from '@/features/knowledge/workspace'
@@ -36,6 +37,7 @@ export const VIEW_REGISTRY: Record<WorkspaceName, ComponentType> = {
   sessions: SessionsWorkspace,
   knowledge: KnowledgeWorkspace,
   configuration: ConfigurationWorkspace,
+  demos: DemosWorkspace,
 }
 
 /**

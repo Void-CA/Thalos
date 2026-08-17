@@ -83,7 +83,9 @@ export function PoseInputs({ pose, onChange, idPrefix }: PoseInputsProps) {
 
   return (
     <div className="flex flex-col gap-0.5" role="group" aria-label={`${prefix} pose`}>
-      <div className="flex items-center gap-1">
+      {/* R5: 3-per-row grid within the 420px panel — no fixed w-10/w-11 widths
+          (R4); `min-w-0 w-full` lets the grid cell size the input. */}
+      <div className="grid grid-cols-3 gap-1.5" role="group" aria-label={`${prefix} position`}>
         {(['X', 'Y', 'Z'] as const).map((axis, i) => (
           <div key={axis} className="flex items-center gap-0.5">
             <span className="text-[9px] text-muted-foreground font-mono">{axis}</span>
@@ -93,13 +95,13 @@ export function PoseInputs({ pose, onChange, idPrefix }: PoseInputsProps) {
               value={pose.position[i]}
               onChange={(e) => setPosition(i as 0 | 1 | 2, parseFloat(e.target.value) || 0)}
               step={0.1}
-              className="w-10 px-1 py-0.5 text-[10px] rounded border border-border bg-background
+              className="min-w-0 w-full px-1 py-0.5 text-[11px] rounded border border-border bg-background
                          text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
         ))}
       </div>
-      <div className="flex items-center gap-1">
+      <div className="grid grid-cols-3 gap-1.5" role="group" aria-label={`${prefix} orientation`}>
         {(
           [
             ['Yaw', 'yaw'],
@@ -115,7 +117,7 @@ export function PoseInputs({ pose, onChange, idPrefix }: PoseInputsProps) {
               value={Number(euler[key].toFixed(2))}
               onChange={(e) => setAngle(key, parseFloat(e.target.value) || 0)}
               step={1}
-              className="w-11 px-1 py-0.5 text-[10px] rounded border border-border bg-background
+              className="min-w-0 w-full px-1 py-0.5 text-[11px] rounded border border-border bg-background
                          text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>

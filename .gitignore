@@ -1,7 +1,16 @@
 .atl/
 openspec/
-roadmap*
-architecture*
 .opencode
 .vscode/
 __pycache__/
+.pytest_cache/
+
+# Local environment (centralized config) — never commit real values
+/.env
+/.env.*
+!/.env.example
+
+# Generated evidence artifacts — produced by evidence-tool/generate.sh
+/evidence/
+/output/
+/artifacts/

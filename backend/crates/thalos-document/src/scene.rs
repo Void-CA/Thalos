@@ -8,6 +8,13 @@ use thalos_semantic::knowledge::{GraspPlan, KnowledgeProvider, LoweringError, Pl
 // Scene content — the logical world model for a task document
 // ---------------------------------------------------------------------------
 
+/// Default SCARA approach/retreat transit height (metres) when the field is
+/// omitted from serialized scene data — matches the documented frontend
+/// default and the historical 5 cm behaviour.
+fn default_approach_height() -> f64 {
+    0.05
+}
+
 /// The logical scene model: objects, locations, tools, and the home pose.
 ///
 /// SceneContent owns the data. Call `scene.knowledge()` to obtain a
@@ -22,6 +29,11 @@ pub struct SceneContent {
     pub tools: Vec<Tool>,
     /// The robot's home pose (return target for Home operations).
     pub home_pose: Pose,
+    /// SCARA approach/retreat transit height (metres) above each object or
+    /// location. Serde default for backward compat: scenes from versions that
+    /// never emitted this field receive `default_approach_height()` (0.05).
+    #[serde(default = "default_approach_height")]
+    pub approach_height: f64,
 }
 
 impl SceneContent {
@@ -38,7 +50,8 @@ impl SceneContent {
 /// A `KnowledgeProvider` that resolves object/location IDs from a `SceneContent`
 /// reference, deriving GraspPlan / PlacementPlan from the pose field.
 ///
-/// Approach/retreat frames use a 5 cm Z offset from the object or location pose.
+/// Approach/retreat frames use `scene.approach_height` metres of Z offset above
+/// the object or location pose (serde-default 0.05 m when omitted).
 /// This is a lightweight adapter — no HashMap construction, no data copying.
 pub struct SceneKnowledge<'a> {
     scene: &'a SceneContent,
@@ -73,8 +86,8 @@ impl KnowledgeProvider for SceneKnowledge<'_> {
                 LoweringError::KnowledgeProvider(format!("unknown object '{}'", object.0))
             })?;
         let grasp_frame = pose_to_motion(&obj.pose);
-        let approach_frame = offset_pose(&grasp_frame, 0.02);
-        let retreat_frame = offset_pose(&grasp_frame, 0.02);
+        let approach_frame = offset_pose(&grasp_frame, self.scene.approach_height);
+        let retreat_frame = offset_pose(&grasp_frame, self.scene.approach_height);
         Ok(GraspPlan {
             grasp_frame,
             approach_frame,
@@ -94,14 +107,11 @@ impl KnowledgeProvider for SceneKnowledge<'_> {
             .iter()
             .find(|l| l.id == *location)
             .ok_or_else(|| {
-                LoweringError::KnowledgeProvider(format!(
-                    "unknown location '{}'",
-                    location.0
-                ))
+                LoweringError::KnowledgeProvider(format!("unknown location '{}'", location.0))
             })?;
         let drop_frame = pose_to_motion(&loc.pose);
-        let approach_frame = offset_pose(&drop_frame, 0.02);
-        let retreat_frame = offset_pose(&drop_frame, 0.02);
+        let approach_frame = offset_pose(&drop_frame, self.scene.approach_height);
+        let retreat_frame = offset_pose(&drop_frame, self.scene.approach_height);
         Ok(PlacementPlan {
             drop_frame,
             approach_frame,
@@ -116,10 +126,7 @@ impl KnowledgeProvider for SceneKnowledge<'_> {
             .iter()
             .find(|l| l.id == *location)
             .ok_or_else(|| {
-                LoweringError::KnowledgeProvider(format!(
-                    "unknown location '{}'",
-                    location.0
-                ))
+                LoweringError::KnowledgeProvider(format!("unknown location '{}'", location.0))
             })?;
         Ok(pose_to_motion(&loc.pose))
     }
@@ -135,8 +142,8 @@ mod tests {
     use crate::id::ObjectId;
     use thalos_core::ids::OperationId;
     use thalos_core::motion::MotionProfile;
-    use thalos_semantic::lowering::context::LoweringContext;
     use thalos_semantic::lowering::SemanticLowering;
+    use thalos_semantic::lowering::context::LoweringContext;
     use thalos_semantic::operation::{HomeOp, SemanticOperation};
     use thalos_semantic::program::SemanticProgram;
 
@@ -180,6 +187,7 @@ mod tests {
                 position: [0.0, 0.0, 0.5],
                 orientation: [0.0, 0.0, 0.0, 1.0],
             },
+            approach_height: 0.05,
         }
     }
 
@@ -201,6 +209,7 @@ mod tests {
             locations: vec![],
             tools: vec![],
             home_pose: default_pose(),
+            approach_height: 0.05,
         };
         let knowledge = scene.knowledge();
         let plan = knowledge
@@ -272,6 +281,7 @@ mod tests {
             locations: vec![],
             tools: vec![],
             home_pose: default_pose(),
+            approach_height: 0.05,
         };
         let knowledge = scene.knowledge();
 
@@ -292,13 +302,11 @@ mod tests {
             locations: vec![],
             tools: vec![],
             home_pose: default_pose(),
+            approach_height: 0.05,
         };
         let knowledge = scene.knowledge();
 
-        let result = knowledge.place_plan(
-            &ObjectId("bolt".into()),
-            &LocationId("unknown".into()),
-        );
+        let result = knowledge.place_plan(&ObjectId("bolt".into()), &LocationId("unknown".into()));
         assert!(result.is_err());
     }
 
@@ -309,6 +317,7 @@ mod tests {
             locations: vec![],
             tools: vec![],
             home_pose: default_pose(),
+            approach_height: 0.05,
         };
         let knowledge = scene.knowledge();
 
@@ -339,6 +348,7 @@ mod tests {
                 locations: vec![tray_location()],
                 tools: vec![],
                 home_pose: default_pose(),
+                approach_height: 0.05,
             },
             program: SemanticProgram::new(vec![SemanticOperation::Home(HomeOp {
                 origin: OperationId("op-1".into()),
@@ -364,6 +374,9 @@ mod tests {
                 max_acceleration: 0.5,
                 max_jerk: None,
             },
+            // Legacy callers only set the joint profile: cartesian
+            // instructions fall back to it (backward compatible).
+            default_cartesian_profile: None,
         };
 
         let program = SemanticProgram::new(vec![SemanticOperation::Home(HomeOp {
@@ -371,6 +384,89 @@ mod tests {
         })]);
 
         let result = SemanticLowering::lower(&program, &ctx);
-        assert!(result.is_ok(), "lowering should succeed with SceneKnowledge");
+        assert!(
+            result.is_ok(),
+            "lowering should succeed with SceneKnowledge"
+        );
+    }
+
+    // ── 3.6: SceneContent.approach_height parameterizes approach/retreat
+    //       frames and serde-round-trips with a default ────────────────
+
+    fn scene_with_approach_height(height: f64) -> SceneContent {
+        SceneContent {
+            approach_height: height,
+            ..sample_scene()
+        }
+    }
+
+    #[test]
+    fn approach_height_sets_approach_and_retreat_z() {
+        let low = scene_with_approach_height(0.02);
+        let high = scene_with_approach_height(0.05);
+        let low_plan = low
+            .knowledge()
+            .grasp_plan(&ObjectId("bolt".into()))
+            .expect("should resolve");
+        let high_plan = high
+            .knowledge()
+            .grasp_plan(&ObjectId("bolt".into()))
+            .expect("should resolve");
+
+        let grasp_z = low_plan.grasp_frame.position[2];
+        assert!(
+            (low_plan.approach_frame.position[2] - (grasp_z + 0.02)).abs() < 1e-9,
+            "approach Z should be grasp Z + 0.02"
+        );
+        assert!(
+            (low_plan.retreat_frame.position[2] - (grasp_z + 0.02)).abs() < 1e-9,
+            "retreat Z should be grasp Z + 0.02"
+        );
+        assert!(
+            (high_plan.approach_frame.position[2] - (grasp_z + 0.05)).abs() < 1e-9,
+            "approach Z should be grasp Z + 0.05"
+        );
+        assert!(
+            (high_plan.approach_frame.position[2] - low_plan.approach_frame.position[2] - 0.03)
+                .abs()
+                < 1e-9,
+            "the two approach frames should differ by exactly 0.03"
+        );
+    }
+
+    #[test]
+    fn grasp_and_place_consume_same_approach_height() {
+        let scene = scene_with_approach_height(0.05);
+        let knowledge = scene.knowledge();
+        let grasp = knowledge
+            .grasp_plan(&ObjectId("bolt".into()))
+            .expect("should resolve");
+        let place = knowledge
+            .place_plan(&ObjectId("bolt".into()), &LocationId("tray".into()))
+            .expect("should resolve");
+
+        let grasp_offset = grasp.approach_frame.position[2] - grasp.grasp_frame.position[2];
+        let place_offset = place.approach_frame.position[2] - place.drop_frame.position[2];
+        assert!((grasp_offset - 0.05).abs() < 1e-9);
+        assert!((place_offset - 0.05).abs() < 1e-9);
+        assert!(
+            (grasp_offset - place_offset).abs() < 1e-9,
+            "grasp and place must consume the same approach_height"
+        );
+    }
+
+    #[test]
+    fn scene_content_approach_height_serde_default() {
+        let with_default: SceneContent = serde_json::from_str(
+            r#"{"objects":[],"locations":[],"tools":[],"home_pose":{"position":[0.0,0.0,0.5],"orientation":[0.0,0.0,0.0,1.0]}}"#,
+        )
+        .expect("scene without approach_height should deserialize");
+        assert_eq!(with_default.approach_height, 0.05);
+
+        let with_value: SceneContent = serde_json::from_str(
+            r#"{"objects":[],"locations":[],"tools":[],"home_pose":{"position":[0.0,0.0,0.5],"orientation":[0.0,0.0,0.0,1.0]},"approach_height":0.1}"#,
+        )
+        .expect("scene with explicit approach_height should deserialize");
+        assert_eq!(with_value.approach_height, 0.1);
     }
 }

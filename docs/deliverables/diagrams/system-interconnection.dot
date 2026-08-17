@@ -1,0 +1,81 @@
+// System Interconnection — ICEBOT physical architecture
+// Render: dot -Tsvg system-interconnection.dot -o system-interconnection.svg
+
+digraph system {
+    rankdir=TB;
+    fontname="Helvetica";
+    node [fontname="Helvetica", fontsize=11];
+    edge [fontname="Helvetica", fontsize=10];
+    label="System Interconnection Diagram — ICEBOT";
+    labelloc=t;
+    fontsize=14;
+
+    // ── Host ──────────────────────────────────────────────
+    subgraph cluster_host {
+        label="Thalos Host (Rust Backend)";
+        style=filled;
+        fillcolor="#E8F4FD";
+        color="#4A90D9";
+
+        node [shape=box, style=filled, fillcolor="#FFFFFF"];
+        planning [label="Planner\n(MoveJ / MoveL)"];
+        verify   [label="Verifier\n(constraints,\ncollisions,\nsingularities)"];
+        safety_h [label="Safety Envelope\n(safety-envelope.toml)"];
+    }
+
+    // ── Transport ─────────────────────────────────────────
+    transport [label="TCP / Serial\n460800 baud", shape=diamond, style=filled, fillcolor="#FFF3CD"];
+
+    // ── ESP32 ─────────────────────────────────────────────
+    subgraph cluster_esp32 {
+        label="ESP32-S3 Controller";
+        style=filled;
+        fillcolor="#E8FDE8";
+        color="#4A904A";
+
+        node [shape=box, style=filled, fillcolor="#FFFFFF"];
+        protocol [label="Protocol\n(poll)"];
+        validator [label="Validator\n(2nd pass)"];
+        executor [label="Executor\n(state machine)"];
+        servo_drv [label="Servo Driver\n(PWM compute)"];
+
+        protocol -> validator -> executor -> servo_drv;
+    }
+
+    // ── I2C Bus ───────────────────────────────────────────
+    i2c [label="I²C Bus\nSDA→GPIO4, SCL→GPIO5\nAddr: 0x40", shape=diamond, style=filled, fillcolor="#FFF3CD"];
+
+    // ── PCA9685 ───────────────────────────────────────────
+    pca [label="PCA9685\n16-ch PWM Driver\n50 Hz (prescale 0x79)", shape=box3d, style=filled, fillcolor="#FDE8D0"];
+
+    // ── Servos ────────────────────────────────────────────
+    subgraph cluster_actuators {
+        label="Actuators (4 DOF)";
+        style=filled;
+        fillcolor="#FDE8E8";
+        color="#D94A4A";
+
+        node [shape=box, style=filled, fillcolor="#FFFFFF"];
+        s0 [label="Base\nCh15\n±1.5708 rad\n350–2150 µs"];
+        s1 [label="Elbow\nCh14\n0–2.0944 rad\n350–2050 µs"];
+        s2 [label="Wrist\nCh13\n±3.1416 rad\n300–2600 µs"];
+        s3 [label="Prismatic\nCh12\n0–0.06 m\n500–2500 µs"];
+    }
+
+    // ── Power ─────────────────────────────────────────────
+    psu [label="5V/6V PSU\n(dedicated\nservo power)", shape=cylinder, style=filled, fillcolor="#F0E8FD"];
+
+    // ── Connections ───────────────────────────────────────
+    planning -> verify -> safety_h;
+    safety_h -> transport [label="approved\ncommands"];
+    transport -> protocol [label="TCP/Serial"];
+    servo_drv -> i2c [label="I²C"];
+    i2c -> pca;
+    pca -> s0 [label="Ch15"];
+    pca -> s1 [label="Ch14"];
+    pca -> s2 [label="Ch13"];
+    pca -> s3 [label="Ch12"];
+
+    psu -> pca [label="V+ (servo rail)"];
+    psu -> servo_drv [label="5V logic\n(if shared)"];
+}

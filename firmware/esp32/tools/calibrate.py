@@ -8,10 +8,15 @@ MOVING. When the horn stops moving although the pulse keeps growing, you
 reached the mechanical end stop -> that pulse is the real maximum. Then it
 walks downward from centre to find the real minimum.
 
-The pulse is expressed as the equivalent joint angle (radians) using the
-current mapping in the canonical ``config/safety-envelope.toml`` (single
-source of truth — spec safety-envelope-canonical-source), so no firmware
-changes are needed.
+The pulse is commanded DIRECTLY to the PCA9685 through the firmware's
+calibration-only ``RAW_PULSE <channel> <us>`` command — NO radian round-trip
+and NO envelope wall. (The old radian-based walk converted pulse -> rad via
+the current map and sent the radian; the firmware converted back and
+rejected/saturated beyond the configured envelope, so the walk could never
+measure the true endpoints and even extrapolated a corrupt negative pulse.)
+
+Requires firmware built from the current source (RAW_PULSE support):
+    cd firmware/esp32 && pio run -t upload
 
 After measuring, the tool writes the measured pulse range BACK to the TOML
 via ``safety_config`` (one field at a time, old/new shown first — the 7-step
@@ -48,19 +53,22 @@ def _load_config():
         "pulse_max": [ch["pulse"]["max_us"] for ch in channels],
         "joint_min": [ch["calibration"]["joint_min_rad"] for ch in channels],
         "joint_max": [ch["calibration"]["joint_max_rad"] for ch in channels],
+        # joint index -> PCA9685 channel (firmware/esp32/src/servo_hw_config.h)
+        "servo_channels": data["hardware"]["servo_channels"],
     }
 
 
 CFG = _load_config()
 
-
-def pulse_to_rad(joint, pulse_us):
-    jmin = CFG["joint_min"][joint]
-    jmax = CFG["joint_max"][joint]
-    pmin = CFG["pulse_min"][joint]
-    pmax = CFG["pulse_max"][joint]
-    frac = (pulse_us - pmin) / (pmax - pmin)
-    return jmin + frac * (jmax - jmin)
+# ── Pulse bounds (physical) ──────────────────────────────────────────────
+# Standard RC-servo pulse widths. The calibration walk must NEVER extrapolate
+# outside these: a pulse below/above is physically meaningless and was once
+# written as a corrupt value (PULSE_MIN_US = -275 — the downward sweep ran
+# past the map minimum because nothing bounded it). The walk stops at the
+# bound with a warning, and write_pulse_range refuses to persist an invalid
+# range.
+PULSE_FLOOR_US = 300
+PULSE_CEIL_US = 2600
 
 
 def write_pulse_range(channel_index, min_us, max_us, toml_path=None):
@@ -70,7 +78,18 @@ def write_pulse_range(channel_index, min_us, max_us, toml_path=None):
     can exercise the write-back without a robot. Shows old/new for each field
     (flow step 3), writes ONLY the two pulse fields of that channel (flow
     step 4), then prints the regeneration + parity commands (steps 6-7).
+
+    Physical sanity gate: a servo pulse width must be positive and within the
+    RC-servo envelope. A measured range that violates this (e.g. a negative
+    min from an unbounded sweep) is a measurement error — refuse to write it
+    instead of corrupting the canonical config.
     """
+    if not (PULSE_FLOOR_US <= min_us < max_us <= PULSE_CEIL_US):
+        raise ValueError(
+            f"invalid measured pulse range [{min_us}, {max_us}] us — "
+            f"must satisfy {PULSE_FLOOR_US} <= min < max <= {PULSE_CEIL_US}; "
+            f"redo the sweep (a servo pulse cannot be negative or unbounded)"
+        )
     path = toml_path or safety_config.DEFAULT_TOML
     old_min = safety_config.get_field(channel_index, "pulse", "min_us", path)
     old_max = safety_config.get_field(channel_index, "pulse", "max_us", path)
@@ -112,27 +131,25 @@ def main():
     def read_line():
         return ser.readline().decode("utf-8", "replace").strip()
 
-    def cmd(line, expect):
-        ser.write((line + "\n").encode())
-        resp = read_line()
-        if expect not in resp:
-            print(f"[ERR] {resp!r}")
-            sys.exit(1)
-
     def go_to(pulse_us, label):
-        """Mueve el servo a un pulso dado via un manifest de 1 waypoint."""
-        rad = pulse_to_rad(args.joint, pulse_us)
-        vals = [0.0, 0.0, 0.0, 0.0]
-        vals[args.joint] = round(rad, 6)
-        cmd("HELLO 1", "OK")
-        cmd(f"MANIFEST 4 1 1", "OK")
-        cmd("SEGMENT 0 movej 0 1", "OK")
-        ser.write(f"SAMPLE {vals[0]:.6f} {vals[1]:.6f} {vals[2]:.6f} {vals[3]:.6f} 0\n".encode())
-        read_line()
-        cmd("END_UPLOAD", "READY")
-        cmd("EXECUTE", "OK")
+        """Mueve el servo DIRECTAMENTE al pulso dado (RAW_PULSE, sin mapa).
+
+        Commands the PCA9685 raw through the firmware's calibration-only
+        RAW_PULSE command — NO radian round-trip, NO envelope wall. The pulse
+        shown is the pulse the servo actually receives (this is what fixes the
+        old scale error: the mapped path extrapolated a stale map and the
+        firmware rejected/saturated beyond the envelope).
+        """
+        ch = CFG["servo_channels"][args.joint]
+        ser.write(f"RAW_PULSE {ch} {pulse_us}\n".encode())
+        resp = read_line()
+        if "OK" not in resp:
+            print(f"[ERR] RAW_PULSE fallo: {resp!r}")
+            print("  El firmware flasheado no soporta RAW_PULSE — reflashealo:")
+            print("    cd firmware/esp32 && pio run -t upload")
+            sys.exit(1)
         time.sleep(0.8)
-        print(f"  {label}: {pulse_us} us (rad {rad:.4f})")
+        print(f"  {label}: {pulse_us} us (canal {ch})")
 
     ser.setDTR(False)
     ser.setRTS(True)
@@ -146,6 +163,11 @@ def main():
     max_us = 1500
     while True:
         pulse = max_us + args.step_us
+        if pulse > PULSE_CEIL_US:
+            print(f"  [WARN] tope del sweep alcanzado ({PULSE_CEIL_US} us) — el servo "
+                  f"sigue respondiendo por encima del limite fisico; revisar el servo.")
+            max_us = PULSE_CEIL_US
+            break
         go_to(pulse, "subiendo")
         ans = input("    - se sigue moviendo? [y/n/q] ").strip().lower()
         if ans == "q":
@@ -160,6 +182,11 @@ def main():
     min_us = 1500
     while True:
         pulse = min_us - args.step_us
+        if pulse < PULSE_FLOOR_US:
+            print(f"  [WARN] tope del sweep alcanzado ({PULSE_FLOOR_US} us) — el servo "
+                  f"sigue respondiendo por debajo del limite fisico; revisar el servo.")
+            min_us = PULSE_FLOOR_US
+            break
         go_to(pulse, "bajando")
         ans = input("    - se sigue moviendo? [y/n/q] ").strip().lower()
         if ans == "q":

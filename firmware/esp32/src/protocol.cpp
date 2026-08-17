@@ -1,6 +1,8 @@
 #include "protocol.h"
 #include "executor.h"
 #include "validator.h"
+#include "pca9685_driver.h"
+#include "servo_hw_config.h"
 
 #include <cstdlib>
 #include <cerrno>
@@ -10,9 +12,16 @@
 
 Protocol::Protocol(Executor& executor, Validator& validator)
     : state_(IDLE)
+    , chunk_size_(1)
+    , samples_since_ack_(0)
     , executor_(executor)
     , validator_(validator)
+    , pca9685_(nullptr)
 {
+}
+
+void Protocol::set_pca9685(PCA9685Driver* driver) {
+    pca9685_ = driver;
 }
 
 // ── Poll (main dispatch) ─────────────────────────────────────────────────
@@ -54,6 +63,8 @@ void Protocol::poll() {
         handle_status();
     } else if (line.startsWith(F("SAMPLES "))) {
         handle_samples(line);
+    } else if (line.startsWith(F("RAW_PULSE "))) {
+        handle_raw_pulse(line);
     } else {
         set_error(F("UNKNOWN_COMMAND"));
     }
@@ -65,6 +76,14 @@ void Protocol::handle_hello(const String& line) {
     int version;
     if (sscanf(line.c_str(), "HELLO %d", &version) != 1) {
         set_error(F("MALFORMED_HELLO"));
+        return;
+    }
+
+    // v2 (C): validate the version BEFORE any upload traffic — a stale v1
+    // host must fail the handshake cleanly, not discover the incompatibility
+    // mid-upload (after transmitting ~92KB).
+    if (version != THALOS_PROTOCOL_VERSION) {
+        set_error(F("VERSION_MISMATCH"));
         return;
     }
 
@@ -82,14 +101,20 @@ void Protocol::handle_manifest(const String& line) {
 
     int dof = 0;
     int total = 0;
+    int chunk = 1;
+    int repeat = 1;
     unsigned long dur = 0;
 
-    if (sscanf(line.c_str(), "MANIFEST %d %d %lu", &dof, &total, &dur) != 3) {
+    // v2 (C): optional 4th field = chunked-ACK batch size; v3 (firmware-side
+    // repeat): optional 5th field = repeat count (default 1). v1 MANIFEST
+    // lines (3 fields) keep legacy behavior.
+    int parsed = sscanf(line.c_str(), "MANIFEST %d %d %lu %d %d", &dof, &total, &dur, &chunk, &repeat);
+    if (parsed < 3) {
         set_error(F("MALFORMED_MANIFEST"));
         return;
     }
 
-    if (dof <= 0 || total <= 0 || dur == 0) {
+    if (dof <= 0 || total <= 0 || dur == 0 || chunk <= 0 || repeat <= 0) {
         set_error(F("INVALID_MANIFEST"));
         return;
     }
@@ -97,9 +122,13 @@ void Protocol::handle_manifest(const String& line) {
     manifest_.metadata.dof_count     = static_cast<uint8_t>(dof);
     manifest_.metadata.total_samples = static_cast<size_t>(total);
     manifest_.metadata.duration_us   = static_cast<uint64_t>(dur);
+    manifest_.metadata.repeat_count  = static_cast<unsigned long>(repeat);
     manifest_.segments.clear();
     manifest_.samples.clear();
     manifest_.samples.reserve(static_cast<size_t>(total));
+
+    chunk_size_       = static_cast<size_t>(chunk);
+    samples_since_ack_ = 0;
 
     state_ = RECEIVING;
     send_response(F("OK"));
@@ -218,7 +247,15 @@ void Protocol::handle_sample(const String& line) {
     }
 
     manifest_.samples.push_back(wp);
-    send_response(F("OK"));
+
+    // v2 (C): chunked ACK — respond once per `chunk_size_` samples instead of
+    // per line. Validation errors above still respond immediately; a chunk
+    // boundary responds OK (flow control for the host's next batch).
+    ++samples_since_ack_;
+    if (samples_since_ack_ >= chunk_size_) {
+        samples_since_ack_ = 0;
+        send_response(F("OK"));
+    }
 }
 
 void Protocol::handle_end_upload() {
@@ -289,9 +326,11 @@ void Protocol::handle_status() {
         }
         case COMPLETED:
             // S3.1: `STATUS COMPLETED <count>` — lets the host know how many
-            // recorded samples to request via `SAMPLES <count>`.
+            // recorded samples to request via `SAMPLES <count>`. With
+            // firmware-side repeat this is the retained LAST pass (bounded
+            // trace) — never repeat_count × waypoints.
             response += F("COMPLETED ");
-            response += String(executor_.samples().size());
+            response += String(executor_.sample_count());
             break;
         case ERROR:
             response += F("ERROR ");
@@ -316,7 +355,7 @@ void Protocol::handle_samples(const String& line) {
     }
 
     const std::vector<ExecutionSample>& samples = executor_.samples();
-    size_t available = samples.size();
+    size_t available = executor_.sample_count();
     size_t to_send   = (static_cast<size_t>(count) < available)
                            ? static_cast<size_t>(count)
                            : available;
@@ -337,6 +376,49 @@ void Protocol::handle_samples(const String& line) {
 
     // Clear samples after successful collection to free RAM.
     executor_.clear_samples();
+}
+
+// ── RAW_PULSE (calibration-only) ────────────────────────────────────────
+//
+// Commands the PCA9685 DIRECTLY with a raw pulse width (µs), bypassing the
+// rad↔pulse map AND the envelope. Purpose: the calibration tool measures the
+// servo's REAL pulse range — the mapped path cannot reach beyond the
+// configured envelope, so a map-driven calibration can never discover the
+// true endpoints (it extrapolates a stale map and hits the envelope wall).
+//
+// SAFETY: this command deliberately bypasses the envelope. It is intended
+// for bench calibration ONLY (decoupled servo, per tools/calibrate.py). The
+// calibration tool drives it; normal execution never uses it.
+void Protocol::handle_raw_pulse(const String& line) {
+    if (pca9685_ == nullptr) {
+        set_error(F("NO_DRIVER"));
+        return;
+    }
+
+    int channel = -1;
+    long pulse_us = 0;
+    if (sscanf(line.c_str(), "RAW_PULSE %d %ld", &channel, &pulse_us) != 2) {
+        set_error(F("MALFORMED_RAW_PULSE"));
+        return;
+    }
+    if (channel < 0 || channel > 15) {
+        set_error(F("BAD_CHANNEL"));
+        return;
+    }
+    // Sane pulse bounds: 0..20ms period. Negative/absurd values are a caller
+    // error — refuse instead of saturating blindly.
+    if (pulse_us < 0 || pulse_us > 20000) {
+        set_error(F("BAD_PULSE"));
+        return;
+    }
+
+    float steps_f = pulse_us * PCA9685_STEPS_PER_US;
+    uint16_t steps = static_cast<uint16_t>(steps_f);
+    if (steps > PCA9685_MAX_STEPS) {
+        steps = PCA9685_MAX_STEPS;
+    }
+    pca9685_->setPWM(static_cast<uint8_t>(channel), 0, steps);
+    send_response(F("OK"));
 }
 
 // ── Internal helpers ────────────────────────────────────────────────────
@@ -365,10 +447,12 @@ void Protocol::set_error(const String& reason) {
 void Protocol::reset_state() {
     state_ = IDLE;
     error_reason_ = String();
-    manifest_.metadata = ManifestMetadata{0, 0, 0};
+    manifest_.metadata = ManifestMetadata{0, 0, 0, 1};
     manifest_.segments.clear();
     manifest_.samples.clear();
     // Free underlying memory (embedded — be frugal).
     std::vector<ManifestSegment>().swap(manifest_.segments);
     std::vector<TimedWaypoint>().swap(manifest_.samples);
+    chunk_size_ = 1;
+    samples_since_ack_ = 0;
 }

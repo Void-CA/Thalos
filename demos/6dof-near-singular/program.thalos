@@ -1,0 +1,9 @@
+# 6dof-near-singular — reach to a far target near workspace edge.
+# The arm extends nearly fully, triggering singularity detection.
+# AlternateElbow should find an alternative configuration that avoids
+# the near-singular posture.
+home
+pick box-1
+move_to target-reach
+place box-1 at tray-1
+home

@@ -5,7 +5,11 @@ use thalos_core::ids::OperationId;
 use thalos_core::operation::MotionRole;
 use thalos_core::prelude::Trajectory;
 
+use thalos_core::execution::program::ExecutionInstruction;
 use thalos_core::motion::segment::MotionSegment;
+
+/// Semantic motion instruction retained alongside resolved segments.
+pub type SemanticTarget = ExecutionInstruction;
 
 /// A planning program: an ordered sequence of movement commands.
 ///
@@ -16,11 +20,25 @@ use thalos_core::motion::segment::MotionSegment;
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlanningProgram {
     pub segments: Vec<MotionSegment>,
+    pub semantic_targets: Option<Vec<SemanticTarget>>,
 }
 
 impl PlanningProgram {
     pub fn new(segments: Vec<MotionSegment>) -> Self {
-        Self { segments }
+        Self {
+            segments,
+            semantic_targets: None,
+        }
+    }
+
+    pub fn with_semantic_targets(
+        segments: Vec<MotionSegment>,
+        semantic_targets: Vec<SemanticTarget>,
+    ) -> Self {
+        Self {
+            segments,
+            semantic_targets: Some(semantic_targets),
+        }
     }
 }
 
@@ -69,6 +87,10 @@ pub struct PlannedSegment {
 pub struct CompiledPlan {
     pub merged_trajectory: Trajectory,
     pub segments: Vec<PlannedSegment>,
+    /// Original semantic motion targets, when compilation started from a
+    /// semantic `PlanningProgram` that retained them.
+    #[serde(default)]
+    pub semantic_targets: Option<Vec<SemanticTarget>>,
     /// Total duration of the merged trajectory.
     pub duration: f64,
     /// Total number of waypoints.
@@ -77,11 +99,20 @@ pub struct CompiledPlan {
 
 impl CompiledPlan {
     pub fn new(merged_trajectory: Trajectory, segments: Vec<PlannedSegment>) -> Self {
+        Self::new_with_semantic_targets(merged_trajectory, segments, None)
+    }
+
+    pub fn new_with_semantic_targets(
+        merged_trajectory: Trajectory,
+        segments: Vec<PlannedSegment>,
+        semantic_targets: Option<Vec<SemanticTarget>>,
+    ) -> Self {
         let duration = merged_trajectory.duration();
         let waypoint_count = merged_trajectory.len();
         Self {
             merged_trajectory,
             segments,
+            semantic_targets,
             duration,
             waypoint_count,
         }

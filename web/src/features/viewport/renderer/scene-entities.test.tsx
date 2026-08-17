@@ -192,3 +192,53 @@ describe('SceneEntities — updates when an entity pose is edited (R1.3)', () =>
     expect(mesh.getAttribute('position')).toBe('2,0.5,0.1')
   })
 })
+
+describe('SceneEntities — approach/retreat markers follow approachHeight (phantom-parameter fix)', () => {
+  it('renders approach + retreat markers at entity Z + approachHeight for an object', () => {
+    act(() => {
+      useDomainSceneStore.setState({ objects: [boltAt], approachHeight: 0.05 })
+    })
+    render(<SceneEntities />)
+    const approach = screen.getByTestId('approach-marker-bolt-1')
+    const retreat = screen.getByTestId('retreat-marker-bolt-1')
+    expect(approach).toBeInTheDocument()
+    expect(retreat).toBeInTheDocument()
+    // bolt z=0.5 (object, no z-nudge) + approachHeight 0.05
+    expect(approach.getAttribute('position')).toBe('1.5,0.3,0.55')
+    expect(retreat.getAttribute('position')).toBe('1.5,0.3,0.55')
+  })
+
+  it('aligns location markers with the z-nudged mesh (z=0 → ENTITY_SIZE/2 + approachHeight)', () => {
+    act(() => {
+      useDomainSceneStore.setState({ locations: [trayAt], approachHeight: 0.05 })
+    })
+    render(<SceneEntities />)
+    const approach = screen.getByTestId('approach-marker-tray-1')
+    // tray z=0 is nudged to ENTITY_SIZE/2 like the mesh, marker sits above it
+    expect(approach.getAttribute('position')).toBe(`0.8,-0.3,${ENTITY_SIZE / 2 + 0.05}`)
+  })
+
+  it('re-renders markers at the new Z after setApproachHeight', () => {
+    act(() => {
+      useDomainSceneStore.setState({ objects: [boltAt], approachHeight: 0.05 })
+    })
+    render(<SceneEntities />)
+    const approach = screen.getByTestId('approach-marker-bolt-1')
+    expect(approach.getAttribute('position')).toBe('1.5,0.3,0.55')
+
+    act(() => {
+      useDomainSceneStore.getState().setApproachHeight(0.1)
+    })
+
+    expect(approach.getAttribute('position')).toBe('1.5,0.3,0.6')
+  })
+
+  it('renders no markers when approachHeight is 0', () => {
+    act(() => {
+      useDomainSceneStore.setState({ objects: [boltAt], approachHeight: 0 })
+    })
+    render(<SceneEntities />)
+    expect(screen.queryByTestId('approach-marker-bolt-1')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('retreat-marker-bolt-1')).not.toBeInTheDocument()
+  })
+})

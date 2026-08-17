@@ -39,6 +39,9 @@ pub enum ResolutionError {
         /// DOF observed from the `initial_state` joint vector length.
         actual: usize,
     },
+    /// A non-identity TCP offset cannot be represented by the current IK
+    /// solver contract, which accepts only an end-effector frame and goal.
+    UnsupportedToolOffset,
 }
 
 impl std::fmt::Display for ResolutionError {
@@ -63,6 +66,10 @@ impl std::fmt::Display for ResolutionError {
                     "DOF mismatch: robot has {expected} DOF but initial_state has {actual} joints"
                 )
             }
+            ResolutionError::UnsupportedToolOffset => write!(
+                f,
+                "suffix replanning does not support non-identity TCP offsets"
+            ),
         }
     }
 }

@@ -8,6 +8,17 @@
 // Forward declarations
 class Executor;
 class Validator;
+class PCA9685Driver;
+
+// ── Protocol version ─────────────────────────────────────────────────────
+//
+// v2 (C): chunked upload ACK — the host sends batches of SAMPLE lines and the
+// firmware answers ONE `OK` per chunk (declared in the MANIFEST line) instead
+// of one per line. `handle_hello` validates the version so a stale v1 host
+// fails the handshake BEFORE a 92KB upload starts (never mid-upload).
+// v1 hosts sent `MANIFEST <dof> <N> <dur_us>` (no chunk) → chunk defaults to 1
+// (ACK per line), preserving the v1 wire behavior against the v2 firmware.
+#define THALOS_PROTOCOL_VERSION 2
 
 // ── Instruction type ──────────────────────────────────────────────────────
 
@@ -23,6 +34,10 @@ struct ManifestMetadata {
     uint8_t dof_count;
     size_t total_samples;
     uint64_t duration_us;
+    /// Firmware-side repeat count (v3): the executor loops the trajectory
+    /// `repeat_count` times back-to-back with NO host re-upload between passes.
+    /// Default 1 = single pass (v2-compatible MANIFEST lines omit the field).
+    unsigned long repeat_count;
 };
 
 struct ManifestSegment {
@@ -56,6 +71,11 @@ public:
     /// process it, write response.
     void poll();
 
+    /// Inject the raw PWM driver (calibration-only, RAW_PULSE command).
+    /// Called by main.cpp after the boot-time I2C probe — null (probe failed
+    /// or not injected) makes RAW_PULSE answer `ERROR NO_DRIVER`.
+    void set_pca9685(PCA9685Driver* driver);
+
 private:
     enum State : uint8_t {
         IDLE,
@@ -70,8 +90,19 @@ private:
     String error_reason_;
 
     Manifest manifest_;         // partially built during RECEIVING
+    /// Chunked-ACK batch size (v2, from the MANIFEST line; default 1 = ACK per
+    /// line). The host derives it from the DOF so a full chunk fits the RX
+    /// buffer with margin (chunk × max_line ≤ 3072 < RX_BUFFER 4096).
+    size_t chunk_size_;
+    /// Samples received since the last chunk ACK (v2).
+    size_t samples_since_ack_;
     Executor& executor_;
     Validator& validator_;
+    /// Raw PWM driver for the calibration-only RAW_PULSE command. Bypasses
+    /// the rad↔pulse map AND the envelope on purpose: calibration measures the
+    /// servo's REAL pulse range, which the mapped path cannot reach beyond
+    /// the configured envelope. Calibration tool requires a decoupled servo.
+    PCA9685Driver* pca9685_;
 
     // ── Command handlers ──────────────────────────────────────────────
 
@@ -84,6 +115,7 @@ private:
     void handle_stop();
     void handle_status();
     void handle_samples(const String& line);
+    void handle_raw_pulse(const String& line);
 
     // ── Helpers ───────────────────────────────────────────────────────
 

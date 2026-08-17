@@ -9,6 +9,10 @@ use crate::app::dto::ErrorResponse;
 pub enum ApiError {
     NotFound { message: String },
 
+    /// 404 with a feature-specific machine-readable code (e.g.
+    /// `DEMO_NOT_FOUND` for the demos catalog, design D10 error table).
+    NotFoundWithCode { message: String, code: String },
+
     /// 400 — backend-management failures carrying a machine-readable code
     /// (resilience-presentation PR2a: `no_firmware`, `port_in_use`,
     /// `not_connected`, `connection_lost`).
@@ -34,6 +38,11 @@ impl IntoResponse for ApiError {
                     error: message,
                     code: "not_found".into(),
                 }),
+            ),
+
+            ApiError::NotFoundWithCode { message, code } => (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse { error: message, code }),
             ),
 
             ApiError::BadRequest { message, code } => (

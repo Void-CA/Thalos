@@ -1,57 +1,18 @@
-import { Play, Plus, RotateCcw, Send } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { Play, Plus, RotateCcw, Send, Upload, Download } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { useSemanticEditor } from '../store'
+import { previewTaskPlan } from '../run-flow'
 import { useDomainSceneStore } from '@/features/scene/store'
 import { useExecutionStore } from '@/features/execution/execution-store'
-import { useSceneStore } from '@/features/viewport/store'
-import { sceneApi } from '@/features/viewport/api/scene-api'
-import {
-  toSceneData, toRuntimeInfo, toIkResult, toActivePlan, toToolFrame, toExecutionInfo,
-} from '@/features/viewport/adapter'
-import { planAnalysisApi } from '@/features/analysis/api/plan-analysis-api'
-import { useAnalysisStore } from '@/features/analysis/store'
 import { useWorkflowState } from '@/shared/workflow/use-workflow-state'
 import { hasMissingFields } from '@/shared/workflow/derive'
 import { OperationRow } from './operation-row'
 import { compileSemantic, executeSemantic } from '../api'
 import { describeError } from '@/shared/errors'
-import type { TaskDocument } from '@/shared/contracts'
+import { downloadTextFile } from '@/shared/download'
 import { serialize } from '../script/serializer'
 import { parse } from '../script/parser'
-
-/**
- * Hotfix (unify-programming): preview a compiled Task program like the Motion
- * tab does — load it into the scene runtime WITHOUT starting it, so the
- * always-mounted viewport draws the trajectory and the Analysis tab populates.
- *
- * The vehicle is `executeSemantic` (`POST /semantic/execute`): the canonical
- * compile + plan path that SCHEDULES the plan into the scene runtime
- * (`schedule_program`), which is what `/plan/analyze` reads the active plan
- * from. `POST /motion/plan` was NOT used: it returns only `compiled_plan` +
- * `runtime_program`, never schedules, so neither `applyScene` (no scene state)
- * nor the analysis endpoint (no active plan) could work. After the plan is
- * scheduled, `getScene()` returns the full state with `active_plan`, and the
- * standard planning-panel adapters project it onto the scene store.
- *
- * Rejections are NON-BLOCKING: callers treat a failure as "compile ok, preview
- * failed" — the plan never starts (the tick loop only runs from Execution).
- */
-async function previewTaskPlan(task: TaskDocument): Promise<void> {
-  const execute = await executeSemantic({ task })
-  if (execute.status !== 'ok') throw new Error('Plan preview failed')
-  const scene = await sceneApi.getScene()
-  useSceneStore.getState().applyScene(
-    toSceneData(scene.scene),
-    toRuntimeInfo(scene),
-    toIkResult(scene.ik_result),
-    toActivePlan(scene.active_plan),
-    toToolFrame(scene.active_tcp),
-    toExecutionInfo(scene.execution),
-  )
-  const analysis = await planAnalysisApi.analyze()
-  useAnalysisStore.getState().setAnalysis(analysis)
-}
 
 /**
  * TaskEditor — the Program panel of the Task workspace (frontend-task-workspace
@@ -88,7 +49,7 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
   const {
     operations, result, loading, scriptErrors,
     addOperation, removeOperation, moveOperation, updateOperation,
-    replaceOperations, setScriptErrors,
+    replaceOperations, setScriptErrors, loadProgramText,
     setResult, setLoading, setError, reset,
   } = useSemanticEditor()
   const toTaskDocument = useDomainSceneStore((s) => s.toTaskDocument)
@@ -169,8 +130,39 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
   const storeChangedExternally = mode === 'text' && storeText !== bufferBaseRef.current
   const showSyncWarning = storeChangedExternally && buffer !== storeText
 
-  /** S3.3: no Apply while the buffer has parse errors. */
-  const applyDisabled = scriptErrors.length > 0
+  /** Buffer divergence (task-code-sync-guards spec): uncommitted text-mode
+   *  edits. Lifted to the store `hasUncommittedBuffer` flag so the
+   *  workspace-level tab-switch guard can warn before the buffer is
+   *  discarded on unmount. */
+  const bufferDiverges = mode === 'text' && buffer !== storeText
+  useEffect(() => {
+    useSemanticEditor.setState((s) =>
+      s.hasUncommittedBuffer === bufferDiverges ? s : { hasUncommittedBuffer: bufferDiverges },
+    )
+  }, [bufferDiverges])
+
+  /** S3.3 + task-code-sync-guards: no Apply while the buffer has parse errors
+   *  OR while the store changed externally and the buffer diverges from it —
+   *  a stale buffer must never overwrite an external change (hard guard, not
+   *  warn-only). */
+  const applyDisabled = scriptErrors.length > 0 || showSyncWarning
+
+  /**
+   * Run advisory (task-code-sync-guards spec): Compile/Send with an
+   * uncommitted text buffer would execute the last COMPILED version, not the
+   * buffer — confirm before proceeding. Committed buffers (or visual mode,
+   * where the buffer can never diverge) proceed without a dialog.
+   */
+  const handleRunWithAdvisory = async (action: () => Promise<void>) => {
+    const divergent = mode === 'text' && buffer !== serialize(operations)
+    if (divergent) {
+      const confirmed = window.confirm(
+        'Uncommitted text changes. Run will use the last compiled version. Continue?',
+      )
+      if (!confirmed) return
+    }
+    await action()
+  }
 
   /**
    * The SAME task document for Compile and Send (program-dual-editor spec
@@ -231,35 +223,111 @@ export function TaskEditor({ initialMode = 'visual' }: TaskEditorProps) {
   // (lifted in slice 2) — Task consumes it, it never keeps a copy.
   const canCompile = operations.length > 0 && !loading && !hasMissingFields(operations)
 
+  /** D12 file IO: [Load Program] reads a `.thalos` file and atomically replaces
+   *  the operation set (a failed parse writes NOTHING — R2). [Save Program]
+   *  downloads the canonical text (spec "Save persists text"). */
+  const programInputRef = useRef<HTMLInputElement>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  const handleProgramFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const text = await file.text()
+    const errors = loadProgramText(text)
+    setScriptErrors(errors)
+    setLoadError(
+      errors.length > 0
+        ? errors.map((er) => `line ${er.line}: ${er.message}`).join('; ')
+        : null,
+    )
+    e.target.value = ''
+  }
+
+  const handleSaveProgram = () => {
+    downloadTextFile('program.thalos', serialize(operations), 'text/plain')
+  }
+
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
-        {mode === 'text' && (
-          <button onClick={handleApply} disabled={applyDisabled}
-            title={applyDisabled ? 'Fix the parse errors before applying' : 'Apply the script to the program'}
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-amber-600/20 text-amber-500 hover:bg-amber-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
-            Apply
+    <div className="h-full overflow-hidden">
+              {/* File I/O group — visually separated from Program/Execution (R10). */}
+          
+        <div data-group="file-io" className="ml-18 flex items-center gap-5">
+          <button onClick={() => programInputRef.current?.click()}
+            data-weight="secondary"
+            title="Load a .thalos program file (replaces the current program)"
+            className="inline-flex items-center gap-1 px-4 py-2 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer">
+            <Upload className="size-3" /> Load Program
           </button>
+          <button onClick={handleSaveProgram}
+            data-weight="secondary"
+            title="Download the program as canonical .thalos text"
+            className="inline-flex items-center gap-1 px-4 py-2 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer">
+            <Download className="size-3" /> Save Program
+          </button>
+        </div>
+
+      <div data-layer="commands" className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
+        {/* Program group */}
+        <div data-group="program" className="flex items-center gap-3">
+          {mode === 'text' && (
+            <button onClick={handleApply} disabled={applyDisabled}
+              title={showSyncWarning
+                ? 'Buffer diverges from external changes; commit or discard'
+                : applyDisabled
+                  ? 'Fix the parse errors before applying'
+                  : 'Apply the script to the program'}
+              className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-md bg-amber-600/20 text-amber-500 hover:bg-amber-600/30 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+              Apply
+            </button>
+          )}
+          <button onClick={() => addOperation({ type: 'pick', object: '' })}
+            data-weight="normal"
+            className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-md bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer">
+            <Plus className="size-3" /> Add
+          </button>
+          <button onClick={reset}
+            data-weight="secondary"
+            className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-md text-muted-foreground hover:text-destructive hover:bg-accent cursor-pointer">
+            <RotateCcw className="size-3" /> Reset
+          </button>
+        </div>
+
+
+
+        {/* Group separator */}
+        <div role="separator" aria-orientation="vertical" className="h-4 w-px bg-border/50" />
+
+        <div data-group="execution" className="flex items-center gap-1.5">
+          <button
+            onClick={() => void handleRunWithAdvisory(compiled ? handleSendToExecution : handleCompile)}
+            disabled={!canCompile}
+            data-weight="primary"
+            title={compiled ? 'Load the compiled plan into Execution' : 'Compile the program'}
+            className={`inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-md cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+              compiled
+                ? 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
+                : 'bg-green-600/20 text-green-500 hover:bg-green-600/30'
+            }`}>
+            {compiled ? <Send className="size-3" /> : <Play className="size-3" />}
+            {compiled ? 'Send to Execution' : 'Compile'}
+          </button>
+        </div>
+        <input
+          ref={programInputRef}
+          type="file"
+          accept=".thalos,text/plain"
+          aria-label="Load program file"
+          onChange={handleProgramFileChange}
+          className="hidden"
+        />
+        {loadError && (
+          <p role="alert" className="text-xs text-red-400 truncate" title={loadError}>
+            {loadError}
+          </p>
         )}
-        <button onClick={() => addOperation({ type: 'pick', object: '' })}
-          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer">
-          <Plus className="size-3" /> Add
-        </button>
-        <button onClick={reset}
-          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer">
-          <RotateCcw className="size-3" /> Reset
-        </button>
-        <button onClick={compiled ? handleSendToExecution : handleCompile} disabled={!canCompile}
-          title={compiled ? 'Load the compiled plan into Execution' : 'Compile the program'}
-          className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-md cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
-            compiled
-              ? 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
-              : 'bg-green-600/20 text-green-500 hover:bg-green-600/30'
-          }`}>
-          {compiled ? <Send className="size-3" /> : <Play className="size-3" />}
-          {compiled ? 'Send to Execution' : 'Compile'}
-        </button>
       </div>
+
+
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {mode === 'text' ? (

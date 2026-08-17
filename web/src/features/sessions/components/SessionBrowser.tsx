@@ -61,12 +61,8 @@ export function SessionBrowser() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-4 py-3 border-b border-border">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-foreground">
-          Sessions
-        </h2>
-      </div>
-
+      {/* No header bar: "Sessions" already labels this stage in the Stepper.
+          The master column's filter strip anchors the top of the browser. */}
       <div className="flex flex-1 overflow-hidden">
         {/* Master — filter controls + session list */}
         <div className="w-72 shrink-0 border-r border-border flex flex-col">

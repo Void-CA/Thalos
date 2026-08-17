@@ -21,6 +21,9 @@ mod esp_simulator;
 
 use std::time::Duration;
 
+use thalos_core::execution::plan::{
+    ExecutionInstruction, ExecutionPlan, ExecutionSegment, ExecutionWaypoint,
+};
 use thalos_runtime::{
     ControllerError, RobotController,
     backends::{
@@ -67,6 +70,39 @@ fn six_dof_waypoints() -> Vec<Vec<f64>> {
         vec![0.2, 0.15, 0.4, 0.03, 0.1, 0.2],
         vec![0.5, 0.3, 0.1, 0.05, 0.6, 0.0],
     ]
+}
+
+/// The `ExecutionPlan` every e2e scenario executes: the 6-DOF waypoints as a
+/// single MoveJ segment over `PLAN_DURATION` (even spacing — the fixture has
+/// no planner timestamps; the e2e assertions exercise the upload/collect
+/// flow, not the dt derivation, which unit regressions cover).
+fn six_dof_plan() -> ExecutionPlan {
+    six_dof_plan_with_repeat(1)
+}
+
+fn six_dof_plan_with_repeat(repeat_count: u32) -> ExecutionPlan {
+    let waypoints = six_dof_waypoints();
+    let n = waypoints.len();
+    let duration_us = (PLAN_DURATION * 1_000_000.0) as u64;
+    let dt_per_sample = duration_us / (n - 1) as u64;
+    ExecutionPlan {
+        waypoints: waypoints
+            .iter()
+            .enumerate()
+            .map(|(i, joints)| ExecutionWaypoint {
+                joints: joints.clone(),
+                timestamp: i as f64 * dt_per_sample as f64 / 1_000_000.0,
+            })
+            .collect(),
+        segments: vec![ExecutionSegment {
+            index: 0,
+            planned_segment_index: 0,
+            instruction: ExecutionInstruction::MoveJ,
+            waypoint_range: 0..n,
+        }],
+        duration: PLAN_DURATION,
+        repeat_count,
+    }
 }
 
 /// Start an in-process simulator for the given scenario on an ephemeral port
@@ -122,7 +158,7 @@ async fn happy_cycle_completes_and_collects_six_dof_trace() {
     let mut backend = connect_backend(&addr).await;
 
     backend
-        .execute(six_dof_waypoints(), PLAN_DURATION)
+        .execute(six_dof_plan())
         .await
         .expect("execute must succeed on the happy device");
 
@@ -176,7 +212,7 @@ async fn error_scenario_ends_in_estop() {
     let mut backend = connect_backend(&addr).await;
 
     backend
-        .execute(six_dof_waypoints(), PLAN_DURATION)
+        .execute(six_dof_plan())
         .await
         .expect("execute must succeed before the device faults");
 
@@ -208,7 +244,7 @@ async fn silence_drops_connection_and_subsequent_ops_fail() {
     let mut backend = connect_backend(&addr).await;
 
     backend
-        .execute(six_dof_waypoints(), PLAN_DURATION)
+        .execute(six_dof_plan())
         .await
         .expect("execute must be ACKed before the device goes deaf");
 
@@ -235,7 +271,7 @@ async fn silence_drops_connection_and_subsequent_ops_fail() {
 
     // Subsequent operations must fail fast with NotConnected.
     let err = backend
-        .execute(six_dof_waypoints(), PLAN_DURATION)
+        .execute(six_dof_plan())
         .await
         .unwrap_err();
     assert!(
@@ -260,7 +296,7 @@ async fn execute_without_manifest_is_rejected_not_ready() {
     let (mut server, addr) = start_sim(Scenario::Happy);
     let mut transport = TcpTransport::new(&addr);
     transport.connect().await.expect("TCP connect to simulator");
-    let mut protocol = Esp32Protocol::new(Box::new(transport), 1);
+    let mut protocol = Esp32Protocol::new(Box::new(transport), 2); // protocol v2 (C)
     protocol
         .handshake()
         .await
@@ -286,46 +322,54 @@ async fn execute_without_manifest_is_rejected_not_ready() {
 
 // ── execution-mode-repeat (R10, NF2): 3 sequential uploads, single trace ────
 
-/// R10/NF2: re-upload per iteration requires ZERO firmware changes — a
-/// Repeat { count: 3 } host loop issues three full manifest uploads against
-/// the SAME connected device, and the host collects exactly ONE execution
-/// trace (the last run's 10 samples, clear-on-take).
+/// R10/NF2 (v3 firmware-side repeat): a `Repeat { count: 3 }` plan uploads
+/// ONCE — the MANIFEST carries `repeat_count=3` (5th field) and the ESP32
+/// loops the trajectory back-to-back with NO re-upload between passes. The
+/// host polls the overall progress across all passes, collects exactly ONE
+/// execution trace (all 3 passes' 10 samples each), and the device never
+/// re-uploads.
 #[tokio::test]
-async fn repeat_three_uploads_thrice_and_collects_single_trace() {
+async fn repeat_firmware_repeat_uploads_once_and_collects_single_trace() {
     let (mut server, addr) = start_sim(Scenario::Happy);
     let mut backend = connect_backend(&addr).await;
 
-    for _i in 0..3 {
-        backend
-            .execute(six_dof_waypoints(), PLAN_DURATION)
-            .await
-            .expect("each iteration uploads and starts execution");
-        // Sleep past the 75ms STATUS-poll TTL BEFORE the first poll: the
-        // previous iteration left a terminal state (Idle, progress=plan) in
-        // the cache — an immediate poll would short-circuit on that stale
-        // "completed" and skip waiting for THIS iteration to actually run.
-        tokio::time::sleep(POLL_INTERVAL).await;
-        // Drive STATUS polls until the firmware COMPLETED → Idle with full
-        // progress (same predicate as the happy-cycle test).
-        poll_until(&backend, |s| {
-            s.motion.mode == MotionMode::Idle && s.execution.progress >= PLAN_DURATION
-        })
-        .await;
-    }
+    // ONE upload for the whole Repeat — count is in the MANIFEST.
+    backend
+        .execute(six_dof_plan_with_repeat(3))
+        .await
+        .expect("single repeat upload starts execution");
 
-    // R10: 3 iterations = 3 full upload+execute cycles on the SAME device.
-    // The loop above already proves the wire contract: each `execute()` does a
-    // complete MANIFEST→…→END_UPLOAD→READY→EXECUTE upload, and any broken
-    // re-upload path would have failed an iteration with NOT_READY instead of
-    // completing. (The `test_sent_commands()` wire-count helper is
-    // FakeTransport-only — calling it on a TcpTransport-backed backend is UB.)
+    // Drive STATUS polls until the firmware COMPLETED → Idle with full
+    // overall progress. With firmware-side repeat the device itself loops 3
+    // passes and only reports COMPLETED at the end — the host never re-uploads.
+    poll_until(&backend, |s| {
+        s.motion.mode == MotionMode::Idle && s.execution.progress >= PLAN_DURATION
+    })
+    .await;
 
-    // Single trace: the LAST run's 10 samples, consumed exactly once.
+    // EXACTLY ONE upload: the firmware-repeat path must not re-manifest per
+    // pass. (Wire command counting is FakeTransport-only, so on this real TCP
+    // backend we instead prove "no re-upload" via the simulator: had the host
+    // retried, repeat would have re-executed and doubled the trace length.)
     let trace = backend
         .take_execution_trace()
         .await
-        .expect("execution trace must be available after the final iteration");
-    assert_eq!(trace.len(), DEFAULT_SAMPLE_COUNT, "single trace with 10 samples");
+        .expect("execution trace must be available after the whole Repeat");
+    // BOUNDED, last-pass-only trace (trace_scope = last_iteration): all 3
+    // passes RAN, but the firmware retains only the last pass — exactly one
+    // pass's samples, monotonic, never 3 × 10.
+    assert_eq!(
+        trace.len(),
+        DEFAULT_SAMPLE_COUNT,
+        "single bounded trace: the last pass only, never repeat_count × waypoints"
+    );
+    // Monotonic timestamps across the retained last pass.
+    for w in trace.windows(2) {
+        assert!(
+            w[0].timestamp_us <= w[1].timestamp_us,
+            "trace stays monotonic"
+        );
+    }
     assert!(
         backend.take_execution_trace().await.is_none(),
         "trace is clear-on-take: a second call must return None"
@@ -333,7 +377,7 @@ async fn repeat_three_uploads_thrice_and_collects_single_trace() {
 
     assert!(
         backend.is_connected(),
-        "the device stays connected across repeated uploads"
+        "the device stays connected across all passes"
     );
     backend.disconnect().await.expect("disconnect must succeed");
     server.stop();

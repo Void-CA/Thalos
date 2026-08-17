@@ -69,6 +69,87 @@ describe('manipulability_series (S1 additive delta, spec motion-plan-endpoint)',
   })
 })
 
+describe('waypointAnalysisFromReport — dense series (viewport coloring)', () => {
+  it('colors manipulability from the DENSE series when there are no observations', () => {
+    const report: AnalysisReportWire = {
+      ...baseReport(),
+      manipulability_series: [
+        { waypoint: 0, yoshikawa: 0.7 },
+        { waypoint: 1, yoshikawa: 0.2 },
+        { waypoint: 2, yoshikawa: 0.05 },
+      ],
+    }
+
+    const view = waypointAnalysisFromReport(report)
+    expect(view).toHaveLength(3)
+    // Healthy plan, zero observations: no longer falls back to [].
+    expect(view[0]).toMatchObject({ index: 0, manipulability: 0.7, severity: 'good' })
+    expect(view[1]).toMatchObject({ index: 1, manipulability: 0.2, severity: 'warning' })
+    expect(view[2]).toMatchObject({ index: 2, manipulability: 0.05, severity: 'critical' })
+  })
+
+  it('colors singularity from the DENSE singularity_series', () => {
+    const report: AnalysisReportWire = {
+      ...baseReport(),
+      singularity_series: [
+        { waypoint: 0, singularity_state: 'normal' },
+        { waypoint: 1, singularity_state: 'near' },
+        { waypoint: 2, singularity_state: 'singular' },
+      ],
+    }
+
+    const view = waypointAnalysisFromReport(report)
+    expect(view).toHaveLength(3)
+    expect(view[0]).toMatchObject({ index: 0, singularity_state: 'normal', severity: 'good' })
+    expect(view[1]).toMatchObject({ index: 1, singularity_state: 'near', severity: 'warning' })
+    expect(view[2]).toMatchObject({ index: 2, singularity_state: 'singular', severity: 'critical' })
+  })
+
+  it('merges both dense series into one entry per waypoint', () => {
+    const report: AnalysisReportWire = {
+      ...baseReport(),
+      manipulability_series: [
+        { waypoint: 0, yoshikawa: 0.9 },
+        { waypoint: 1, yoshikawa: 0.2 },
+      ],
+      singularity_series: [
+        { waypoint: 0, singularity_state: 'near' }, // manipulability good but near-singular
+        { waypoint: 1, singularity_state: 'normal' }, // manipulability already warning (0.2)
+      ],
+    }
+
+    const view = waypointAnalysisFromReport(report)
+    expect(view).toHaveLength(2)
+    expect(view[0]).toMatchObject({ index: 0, manipulability: 0.9, singularity_state: 'near', severity: 'warning' })
+    expect(view[1]).toMatchObject({ index: 1, manipulability: 0.2, singularity_state: 'normal', severity: 'warning' })
+  })
+
+  it('a report observation severity overrides the derived severity on that waypoint', () => {
+    const report: AnalysisReportWire = {
+      ...baseReport(),
+      manipulability_series: [
+        { waypoint: 0, yoshikawa: 0.9 }, // derived good
+        { waypoint: 1, yoshikawa: 0.8 },
+      ],
+      observations: [
+        {
+          id: 1,
+          kind: 'Singularity',
+          severity: 'Error',
+          artifact: { kind: 'MotionPlan', id: 'mp-1' },
+          location: { Waypoint: 0 },
+          attributes: {},
+          causes: [],
+          related: [],
+        },
+      ],
+    }
+
+    const view = waypointAnalysisFromReport(report)
+    expect(view.find(v => v.index === 0)).toMatchObject({ index: 0, severity: 'critical' })
+  })
+})
+
 describe('analysis metrics accessors (R1/R4 — min clearance + waypoint)', () => {
   it('reads min_collision_distance / min_collision_waypoint from the wire metrics', () => {
     const metrics = {

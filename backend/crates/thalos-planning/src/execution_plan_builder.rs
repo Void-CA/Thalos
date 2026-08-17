@@ -44,6 +44,7 @@ impl ExecutionPlanBuilder {
             waypoints,
             segments,
             duration: plan.duration,
+    repeat_count: 1,
         })
     }
 }

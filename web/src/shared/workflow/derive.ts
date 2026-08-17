@@ -19,6 +19,107 @@ export function hasMissingFields(operations: readonly SemanticOp[]): boolean {
   )
 }
 
+// ── Scene/program reference reconciliation (scene-load sync) ────────────────
+//
+// Load Scene replaces ONLY the scene store (invariant "Load Scene ≠ Load
+// Program"), so a program written for the previous scene can keep referencing
+// ids that no longer exist — Run then fails at backend lowering with
+// `unknown object '…'`. These helpers reconcile the program to a freshly
+// loaded scene so the "load a scene → run it" flow works end-to-end.
+
+/** Minimal scene resource shape the remap needs (id + optional label). */
+export interface SceneResourceRef {
+  id: string
+  name?: string | null
+}
+
+/** Resolve one program reference against a scene resource list:
+ *  1. the id still exists → unchanged;
+ *  2. a resource whose NAME matches (case-insensitive) → that id;
+ *  3. exactly one resource exists → that id (unambiguous);
+ *  4. otherwise → the original reference (the backend reports it clearly).
+ *  Ordering is deliberate: exact-id and name matches are precise; the
+ *  single-resource fallback only fires when the choice is unambiguous. */
+function remapRef(ref: string, resources: readonly SceneResourceRef[]): string {
+  if (resources.some((r) => r.id === ref)) return ref
+  const byName = resources.find(
+    (r) => r.name != null && r.name.toLowerCase() === ref.toLowerCase(),
+  )
+  if (byName) return byName.id
+  if (resources.length === 1) return resources[0].id
+  return ref
+}
+
+/** Re-map program operation references to a freshly loaded scene (objects +
+ *  locations). Pure: returns the SAME array reference when nothing changed,
+ *  so callers can detect a no-op by reference equality and skip dirty bumps. */
+export function remapProgramToScene(
+  operations: readonly SemanticOp[],
+  objects: readonly SceneResourceRef[],
+  locations: readonly SceneResourceRef[],
+): readonly SemanticOp[] {
+  let changed = false
+  const next = operations.map((op) => {
+    if (op.type === 'pick') {
+      const object = remapRef(op.object ?? '', objects)
+      if (object !== op.object) {
+        changed = true
+        return { ...op, object }
+      }
+      return op
+    }
+    if (op.type === 'place') {
+      let out = op
+      const object = remapRef(op.object ?? '', objects)
+      if (object !== op.object) {
+        changed = true
+        out = { ...out, object }
+      }
+      const destination = remapRef(op.destination ?? '', locations)
+      if (destination !== op.destination) {
+        changed = true
+        out = { ...out, destination }
+      }
+      return out
+    }
+    if (op.type === 'move_to') {
+      const destination = remapRef(op.destination ?? '', locations)
+      if (destination !== op.destination) {
+        changed = true
+        return { ...op, destination }
+      }
+      return op
+    }
+    return op
+  })
+  return changed ? next : operations
+}
+
+/** References still missing from the scene after remapping (deduped,
+ *  `"object 'x'"` / `"location 'y'"` fragments for a human message). */
+export function unresolvedProgramRefs(
+  operations: readonly SemanticOp[],
+  objects: readonly SceneResourceRef[],
+  locations: readonly SceneResourceRef[],
+): string[] {
+  const objectIds = new Set(objects.map((o) => o.id))
+  const locationIds = new Set(locations.map((l) => l.id))
+  const missing: string[] = []
+  for (const op of operations) {
+    if (op.type === 'pick' && op.object && !objectIds.has(op.object)) {
+      missing.push(`object '${op.object}'`)
+    } else if (op.type === 'place') {
+      if (op.object && !objectIds.has(op.object)) missing.push(`object '${op.object}'`)
+      if (op.destination && !locationIds.has(op.destination)) {
+        missing.push(`location '${op.destination}'`)
+      }
+    } else if (op.type === 'move_to' && op.destination && !locationIds.has(op.destination)) {
+      missing.push(`location '${op.destination}'`)
+    }
+  }
+  return [...new Set(missing)]
+}
+
 /** execStatus values that count as "a plan is loaded and runnable". */
 const EXECUTABLE_STATUSES: readonly ExecutionStatus[] = ['ready', 'running', 'paused']
 /** execStatus values that count as "execution is in progress". */

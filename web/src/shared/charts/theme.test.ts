@@ -39,4 +39,23 @@ describe('withAlpha', () => {
   it('turns a #rrggbb color into an rgba() string', () => {
     expect(withAlpha('#44cc44', 0.25)).toBe('rgba(68, 204, 68, 0.25)')
   })
+
+  it('parses rgb() and rgba() input without NaN', () => {
+    expect(withAlpha('rgb(59, 130, 246)', 0.95)).toBe('rgba(59, 130, 246, 0.95)')
+    expect(withAlpha('rgba(59, 130, 246, 0.5)', 0.95)).toBe('rgba(59, 130, 246, 0.95)')
+  })
+
+  it('converts oklch() (the computed value of --chart-1) into a valid rgba string', () => {
+    // Regression (spec "Tooltip Legibility Styling"): cssVarComputed reads
+    // --chart-1 which is defined as oklch() in index.css; withAlpha used to
+    // parse it as hex and produce rgba(NaN, NaN, NaN, 0.95) — an invalid color
+    // that left the tooltip panel invisible in real browsers.
+    const result = withAlpha('oklch(0.54 0.15 280)', 0.95)
+    expect(result).toMatch(/^rgba\(\d{1,3}, \d{1,3}, \d{1,3}, 0\.95\)$/)
+    expect(result).not.toContain('NaN')
+  })
+
+  it('returns the input unchanged when the color cannot be parsed', () => {
+    expect(withAlpha('transparent', 0.5)).toBe('transparent')
+  })
 })

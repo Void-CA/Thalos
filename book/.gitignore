@@ -1,0 +1,24 @@
+# Quarto output
+_book/
+
+# Quarto cache
+.quarto/
+
+# Generated figure folders
+*_files/
+
+# LaTeX temp files
+*.aux
+*.log
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
+# OS / Editor
+.vscode/
+.DS_Store
+
+/.quarto/
+**/*.quarto_ipynb

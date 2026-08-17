@@ -10,6 +10,7 @@ import { ServicesProvider } from '@/features/viewport/services/service-context'
 import { TaskEditor } from './task-editor'
 import { useSceneStore } from '@/features/viewport/store'
 import { useSemanticEditor } from '@/features/semantic/store'
+import { useDomainSceneStore } from '@/features/scene/store'
 import { useExecutionStore } from '@/features/execution/execution-store'
 import { useAnalysisStore } from '@/features/analysis/store'
 import type { SceneData } from '@/features/viewport/types'
@@ -212,7 +213,10 @@ beforeEach(() => {
   useExecutionStore.setState({ status: 'idle', activePlan: null })
   useAnalysisStore.setState({ report: null })
 })
-afterEach(() => cleanup())
+afterEach(() => {
+  vi.restoreAllMocks()
+  cleanup()
+})
 
 describe('Task purity — zero execution controls in Task (frontend-task-workspace spec)', () => {
   it('renders no Simulate/Stop buttons and no execution progress footers', async () => {
@@ -559,9 +563,12 @@ describe('S3.1 — leaving Code with an uncommitted buffer never corrupts the st
       target: { value: 'pick bolt-1\nwait 2s\nhome' },
     })
 
-    // The buffer holds uncommitted text; leaving the Code tab must NEVER write
-    // it — no partial replace, no dirty bump, no silent commit.
+    // The tab-switch guard (task-code-sync-guards spec) warns first; the user
+    // confirms the discard — the uncommitted buffer is dropped and NEVER
+    // written: no partial replace, no dirty bump, no silent commit.
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     fireEvent.click(screen.getByRole('tab', { name: 'Task' }))
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('Uncommitted changes will be lost'))
     expect(screen.queryByTestId('program-textarea')).not.toBeInTheDocument()
     expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
     expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
@@ -575,6 +582,7 @@ describe('S3.1 — leaving Code with an uncommitted buffer never corrupts the st
     fireEvent.change(await screen.findByTestId('program-textarea'), {
       target: { value: 'pick bolt-1\nwait 2s\nhome' },
     })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
     fireEvent.click(screen.getByRole('tab', { name: 'Task' }))
 
     // Re-entry re-serializes serialize(operations): the discarded buffer is
@@ -594,9 +602,10 @@ describe('S3.1 — leaving Code with an uncommitted buffer never corrupts the st
 
     fireEvent.click(await screen.findByRole('tab', { name: 'Code' }))
     await screen.findByTestId('program-textarea')
+    const confirmSpy = vi.spyOn(window, 'confirm')
     fireEvent.click(screen.getByRole('tab', { name: 'Task' }))
 
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(confirmSpy).not.toHaveBeenCalled()
     expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
     expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
   })
@@ -656,6 +665,107 @@ describe('S3.3 — Apply disabled while parse errors are present', () => {
   })
 })
 
+describe('Sync guards — Apply disabled on external change + buffer divergence (program-dual-editor spec)', () => {
+  it('disables Apply when the store changed externally AND the buffer diverges', () => {
+    seedTask()
+    renderEditor('text')
+    // Buffer diverges from the store (user typed).
+    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
+    // External change (e.g. a visual-row edit / scene mutation elsewhere):
+    // the store program is replaced out-of-band.
+    act(() => {
+      useSemanticEditor.getState().replaceOperations([
+        { type: 'pick', origin: 'ext-1', object: 'bolt-1' },
+      ])
+    })
+
+    // Hard guard: a stale buffer must NOT overwrite the external change.
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
+    // The tooltip explains the resolution path (spec "commit or discard").
+    expect(screen.getByRole('button', { name: 'Apply' })).toHaveAttribute(
+      'title',
+      expect.stringMatching(/commit or discard/i) as unknown as string,
+    )
+  })
+
+  it('keeps Apply enabled when typing in text mode (no external change)', () => {
+    seedTask()
+    renderEditor('text')
+    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
+
+    // Buffer diverges but the store never moved externally — the user is
+    // actively editing, so Apply stays enabled (spec "Guards Do Not Block
+    // Valid Workflows").
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled()
+  })
+
+  it('re-enables Apply when the buffer matches the external change', () => {
+    seedTask()
+    renderEditor('text')
+    // External change first: the store program is replaced out-of-band.
+    act(() => {
+      useSemanticEditor.getState().replaceOperations([
+        { type: 'pick', origin: 'ext-1', object: 'bolt-1' },
+      ])
+    })
+    // The user syncs the buffer to the new store text — buffer now matches
+    // serialize(operations), so no divergence remains.
+    fireEvent.change(textarea(), { target: { value: 'pick bolt-1' } })
+
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled()
+  })
+})
+
+describe('Sync guards — Run advisory on uncommitted buffer (task-code-sync-guards spec)', () => {
+  it('Run with a divergent buffer confirms first; cancel blocks the action', async () => {
+    apiMocks.compileSemantic.mockResolvedValue(compileResult)
+    apiMocks.executeSemantic.mockResolvedValue(executeResponse)
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    seedTask()
+    renderEditor('text')
+    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compile' }))
+
+    // Advisory shown; declining means the compile never fires and the buffer
+    // stays untouched.
+    expect(confirmSpy).toHaveBeenCalledWith(
+      expect.stringContaining('last compiled version'),
+    )
+    expect(apiMocks.compileSemantic).not.toHaveBeenCalled()
+    expect(textarea().value).toBe('pick bolt-1\nwait 2s\nhome')
+  })
+
+  it('Run with a committed buffer proceeds without any dialog', async () => {
+    apiMocks.compileSemantic.mockResolvedValue(compileResult)
+    apiMocks.executeSemantic.mockResolvedValue(executeResponse)
+    const confirmSpy = vi.spyOn(window, 'confirm')
+    seedTask()
+    renderEditor('text')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compile' }))
+
+    expect(confirmSpy).not.toHaveBeenCalled()
+    await waitFor(() => expect(apiMocks.compileSemantic).toHaveBeenCalledTimes(1))
+  })
+})
+
+describe('Sync guards — hasUncommittedBuffer store flag (task-code-sync-guards spec)', () => {
+  it('lifts divergence to the store flag: set on typing, cleared on Apply', () => {
+    seedTask()
+    renderEditor('text')
+    expect(useSemanticEditor.getState().hasUncommittedBuffer).toBe(false)
+
+    fireEvent.change(textarea(), { target: { value: 'pick bolt-1\nwait 2s\nhome' } })
+
+    expect(useSemanticEditor.getState().hasUncommittedBuffer).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    expect(useSemanticEditor.getState().hasUncommittedBuffer).toBe(false)
+  })
+})
+
 describe('S3.5 — editor help in Text mode', () => {
   it('renders the canonical grammar, an example and the canonical-text note in Text mode', () => {
     seedTask()
@@ -680,5 +790,138 @@ describe('S3.5 — editor help in Text mode', () => {
     renderEditor()
 
     expect(screen.queryByText('pick <object> [tool=<name>]')).not.toBeInTheDocument()
+  })
+})
+
+describe('TaskEditor toolbar — grouped command bar (R7/R8/R10)', () => {
+  it('R7/R10 — buttons live in three separated groups (Program | File I/O | Execution)', () => {
+    seedTask()
+    renderEditor()
+    // Two visible separators divide the three command groups.
+    const separators = screen.getAllByRole('separator')
+    expect(separators).toHaveLength(2)
+    // Every button belongs to its group container.
+    expect(screen.getByRole('button', { name: 'Add' }).closest('[data-group="program"]')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Reset' }).closest('[data-group="program"]')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Load Program' }).closest('[data-group="file-io"]')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Save Program' }).closest('[data-group="file-io"]')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Compile' }).closest('[data-group="execution"]')).not.toBeNull()
+  })
+
+  it('R8 — Save Program and Compile carry visible text labels (never icon-only)', () => {
+    seedTask()
+    renderEditor()
+    expect(screen.getByRole('button', { name: 'Save Program' })).toHaveTextContent('Save Program')
+    expect(screen.getByRole('button', { name: 'Compile' })).toHaveTextContent('Compile')
+  })
+
+  it('R8 — the compiled state keeps a visible text label on the unified action ("Send to Execution")', async () => {
+    apiMocks.compileSemantic.mockResolvedValue(compileResult)
+    seedTask()
+    renderRouter(['/task'])
+    fireEvent.click(await screen.findByRole('button', { name: 'Compile' }))
+    const send = await screen.findByRole('button', { name: /Send to Execution/ })
+    expect(send).toHaveTextContent('Send to Execution')
+    expect(send).toHaveAttribute('data-weight', 'primary')
+  })
+})
+
+describe('TaskEditor toolbar — button weight hierarchy (R9)', () => {
+  it('R9 — Add normal, Reset secondary, Load/Save secondary, Compile primary', () => {
+    seedTask()
+    renderEditor()
+    expect(screen.getByRole('button', { name: 'Add' })).toHaveAttribute('data-weight', 'normal')
+    expect(screen.getByRole('button', { name: 'Reset' })).toHaveAttribute('data-weight', 'secondary')
+    expect(screen.getByRole('button', { name: 'Load Program' })).toHaveAttribute('data-weight', 'secondary')
+    expect(screen.getByRole('button', { name: 'Save Program' })).toHaveAttribute('data-weight', 'secondary')
+    expect(screen.getByRole('button', { name: 'Compile' })).toHaveAttribute('data-weight', 'primary')
+  })
+})
+
+describe('TaskEditor toolbar — keyboard reachability (R12)', () => {
+  it('R12 — toolbar buttons are tab-reachable in logical group order, each with an accessible name', () => {
+    seedTask()
+    renderEditor()
+    // Accessible names prove ARIA labels: every critical button resolves by
+    // role + name (a missing/empty label would throw here).
+    const expected = ['Add', 'Reset', 'Load Program', 'Save Program', 'Compile']
+    const buttons = screen.getAllByRole('button')
+    const order = buttons.map((b) => b.textContent?.trim() ?? '')
+    const positions = expected.map((name) => order.indexOf(name))
+    // All buttons exist…
+    expect(positions.every((p) => p >= 0)).toBe(true)
+    // …and appear in the logical Program → File I/O → Execution order.
+    expect(positions).toEqual([...positions].sort((a, b) => a - b))
+  })
+})
+
+describe('TaskEditor — Load Program / Save Program / unified execution action (D12/D13)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    cleanup()
+  })
+
+  it('[Load Program] parses a .thalos file and replaces operations; scene untouched', async () => {
+    seedTask()
+    renderEditor()
+    const sceneBefore = JSON.stringify(useDomainSceneStore.getState().objects)
+
+    const input = screen.getByLabelText('Load program file') as HTMLInputElement
+    fireEvent.change(input, {
+      target: {
+        files: [new File(['pick box-1\nplace box-1 at tray-1\nhome'], 'program.thalos', { type: 'text/plain' })],
+      },
+    })
+
+    await waitFor(() => expect(useSemanticEditor.getState().operations).toHaveLength(3))
+    expect(useSemanticEditor.getState().operations.map((o) => o.type)).toEqual(['pick', 'place', 'home'])
+    expect(useSemanticEditor.getState().operations[1]).toMatchObject({ object: 'box-1', destination: 'tray-1' })
+    // Load Program ≠ Load Scene: the domain scene store never moved.
+    expect(JSON.stringify(useDomainSceneStore.getState().objects)).toBe(sceneBefore)
+  })
+
+  it('[Load Program] invalid text surfaces the parse error and mutates NOTHING (R2)', async () => {
+    seedTask()
+    renderEditor()
+    const opsBefore = JSON.stringify(useSemanticEditor.getState().operations)
+    const dirtyBefore = useSemanticEditor.getState().dirty
+
+    const input = screen.getByLabelText('Load program file') as HTMLInputElement
+    fireEvent.change(input, {
+      target: { files: [new File(['pick bolt-1\njump 10'], 'bad.thalos', { type: 'text/plain' })] },
+    })
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
+    expect(screen.getByRole('alert')).toHaveTextContent(/unknown command 'jump'/)
+    expect(JSON.stringify(useSemanticEditor.getState().operations)).toBe(opsBefore)
+    expect(useSemanticEditor.getState().dirty).toBe(dirtyBefore)
+  })
+
+  it('[Save Program] downloads canonical .thalos text — not JSON (spec "Save persists text")', async () => {
+    seedTask()
+    renderEditor()
+    let captured: Blob | null = null
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+      captured = blob as Blob
+      return 'blob:mock'
+    })
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Program' }))
+
+    expect(clickSpy).toHaveBeenCalledTimes(1)
+    expect(await captured!.text()).toBe('pick bolt-1\nwait 1s\nplace bolt-1 at tray-1\nhome')
+  })
+
+  it('the toolbar exposes NO standalone Run button — the unified Compile/Send is the only execution action', () => {
+    seedTask()
+    renderEditor()
+    // Reorganization: the one-shot Run shortcut was removed from the Task
+    // toolbar. Compile already previews the plan and Send to Execution
+    // executes + navigates, so the unified action covers the run flow
+    // without a duplicate primary button (Demos keeps its own Run).
+    expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Compile' })).toBeInTheDocument()
   })
 })

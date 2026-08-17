@@ -105,7 +105,10 @@ export const useSceneStore = create<SceneState & SceneActions>((set) => ({
 
   applyRuntimeDelta: (joints, transforms, execution) => set((state) => ({
     runtime: state.runtime ? { ...state.runtime, joints } : state.runtime,
-    transformSnapshot: { kind: 'execution', transforms }, execution,
+    // Stamp the render clock HERE, at the moment the delta arrives — never in
+    // useFrame/render — so `receivedAt` is jitter-free and the renderer can
+    // interpolate deterministically between ticks.
+    transformSnapshot: { kind: 'execution', transforms, receivedAt: performance.now() }, execution,
   })),
 
   setIkTarget: (target) => set({ ikTarget: target }),

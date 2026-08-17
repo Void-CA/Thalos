@@ -16,7 +16,9 @@ use thalos_core::{
 use thalos_math::{Quaternion, Transform3D, UnitQuaternion, Vector3};
 
 use super::types::{MotionResolution, ResolutionError};
-use crate::motion::program::PlanningProgram;
+use crate::motion::planner::PlanningContext;
+use crate::motion::program::{PlanningProgram, SemanticTarget};
+use thalos_core::robot::state::RobotState;
 
 /// Resolves an `ExecutionProgram` into separate planning and runtime streams.
 ///
@@ -178,13 +180,73 @@ impl<'a> MotionResolver<'a> {
             }
         }
 
+        let semantic_targets = program
+            .instructions
+            .iter()
+            .filter(|instruction| {
+                matches!(
+                    instruction,
+                    ExecutionInstruction::MoveJ { .. } | ExecutionInstruction::MoveL { .. }
+                )
+            })
+            .cloned()
+            .collect();
+
         Ok(MotionResolution {
-            planning: PlanningProgram::new(planning_segments),
+            planning: PlanningProgram::with_semantic_targets(planning_segments, semantic_targets),
             runtime: RuntimeProgram {
                 events: runtime_events,
             },
         })
     }
+}
+
+/// The resolved result of re-planning a semantic suffix from a new joint seed.
+#[derive(Debug, Clone)]
+pub struct PlannedSuffix {
+    pub planning: PlanningProgram,
+    pub runtime: RuntimeProgram,
+    pub final_state: RobotState,
+}
+
+/// Re-resolve semantic targets from `current_state` with the existing resolver
+/// and IK solver. The caller supplies semantic instructions, never resolved
+/// joint segments, so Cartesian targets and profiles remain intact.
+pub fn replan_suffix(
+    current_state: &RobotState,
+    suffix: &[SemanticTarget],
+    context: &PlanningContext,
+) -> Result<PlannedSuffix, ResolutionError> {
+    if context.tcp.as_ref().is_some_and(|tcp| tcp.has_offset()) {
+        return Err(ResolutionError::UnsupportedToolOffset);
+    }
+
+    let program = ExecutionProgram {
+        instructions: suffix.to_vec(),
+        metadata: thalos_core::execution::program::ExecutionMetadata {
+            schema_version: 1,
+            source_project: "h6-replanned-alternate".into(),
+        },
+    };
+    let resolver = MotionResolver::new(
+        context.ik_solver,
+        &context.robot.frames,
+        current_state.as_slice(),
+        context.robot.dof_count(),
+    )?;
+    let resolution = resolver.resolve(&program)?;
+    let mut final_state = current_state.clone();
+    for segment in &resolution.planning.segments {
+        if let MotionSegment::MoveJ { target, .. } = segment {
+            final_state = RobotState::new(target.clone());
+        }
+    }
+
+    Ok(PlannedSuffix {
+        planning: resolution.planning,
+        runtime: resolution.runtime,
+        final_state,
+    })
 }
 
 // ─── Helper functions ───────────────────────────────────────────────────────
@@ -232,6 +294,9 @@ fn resolve_frame(
 }
 
 fn resolve_frame_by_name(name: &str, registry: &FrameRegistry) -> Result<FrameId, ResolutionError> {
+    if name == "world" {
+        return Ok(FrameId::World);
+    }
     registry
         .resolve_by_name(name)
         .ok_or_else(|| ResolutionError::UnknownFrame(name.to_string()))
@@ -248,7 +313,10 @@ mod tests {
         execution::program::ExecutionMetadata,
         ids::OperationId,
         kinematics::inverse::{IKResult, IKSolver, IkError},
+        kinematics::{forward::ForwardKinematics, inverse::DampedLeastSquaresSolver},
+        models::{RobotModel, RobotRegistry},
         motion::target::{MotionPose, MotionProfile, OutputChannel, OutputValue},
+        robot::state::RobotState,
     };
 
     // ── Mock IK solver ───────────────────────────────────────────────────
@@ -530,6 +598,88 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn replan_suffix_preserves_semantic_target_and_uses_new_seed() {
+        let robot = RobotRegistry::create_default(RobotModel::Scara);
+        let fk = ForwardKinematics::new(robot.clone());
+        let solver =
+            DampedLeastSquaresSolver::new(fk.clone(), *robot.end_effector(), 500, 1e-6, 0.1);
+        let current = RobotState::new(vec![0.0, -1.31, -0.1, 0.0]);
+        let alternate = RobotState::new(vec![0.2, -0.9, -0.1, 0.0]);
+        let target = [0.5, 0.5, 0.25];
+        let context = PlanningContext {
+            robot: &robot,
+            current_state: &alternate,
+            ik_solver: &solver,
+            tcp: None,
+        };
+        let suffix = vec![ExecutionInstruction::MoveJ {
+            origin: OperationId("op-goal".into()),
+            target: MotionTarget::Position(thalos_core::motion::target::MotionPosition {
+                position: target,
+                frame: "world".into(),
+            }),
+            profile: default_profile(),
+        }];
+
+        let original_context = PlanningContext {
+            robot: &robot,
+            current_state: &current,
+            ik_solver: &solver,
+            tcp: None,
+        };
+        let original = replan_suffix(&current, &suffix, &original_context)
+            .expect("original suffix resolves");
+        let planned = replan_suffix(&alternate, &suffix, &context).expect("suffix replans");
+        assert_eq!(planned.planning.semantic_targets.as_ref(), Some(&suffix));
+        let MotionSegment::MoveJ {
+            target: original_joints,
+            ..
+        } = &original.planning.segments[0]
+        else {
+            panic!("expected the original resolved MoveJ suffix");
+        };
+        let MotionSegment::MoveJ { target: joints, .. } = &planned.planning.segments[0] else {
+            panic!("expected a resolved MoveJ suffix");
+        };
+        assert_ne!(
+            joints, original_joints,
+            "the alternate seed must be observable in suffix resolution"
+        );
+        let resolved = fk.evaluate(joints).ee_position().expect("resolved FK");
+        assert!((resolved.x - target[0]).abs() < 0.02);
+        assert!((resolved.y - target[1]).abs() < 0.02);
+        assert!((resolved.z - target[2]).abs() < 0.02);
+        assert_ne!(planned.final_state.as_slice(), current.as_slice());
+    }
+
+    #[test]
+    fn replan_suffix_rejects_unrepresentable_tcp_offset() {
+        use thalos_core::robot::tool_frame::ToolFrame;
+
+        let robot = RobotRegistry::create_default(RobotModel::Scara);
+        let fk = ForwardKinematics::new(robot.clone());
+        let solver = DampedLeastSquaresSolver::new(
+            fk,
+            *robot.end_effector(),
+            500,
+            1e-6,
+            0.1,
+        );
+        let state = RobotState::zero(robot.dof_count());
+        let offset = Transform3D::from_translation(Vector3::new(0.0, 0.0, 0.1));
+        let tcp = ToolFrame::with_offset(*robot.end_effector(), offset);
+        let context = PlanningContext {
+            robot: &robot,
+            current_state: &state,
+            ik_solver: &solver,
+            tcp: Some(&tcp),
+        };
+
+        let error = replan_suffix(&state, &[], &context).expect_err("TCP offset is unsupported");
+        assert_eq!(error, ResolutionError::UnsupportedToolOffset);
+    }
+
     // ── Test: atomic IK failure ───────────────────────────────────────────
 
     #[test]
@@ -761,7 +911,7 @@ mod tests {
     /// `expected_dof` is `chain.dof_count()`, never metadata-derived DOF.
     #[test]
     fn resolver_accepts_real_urdf_chain_dof() {
-        let urdf = include_str!("../../../../../docs/robot/icebot.urdf");
+        let urdf = include_str!("../../../../../docs/execution/robot/icebot.urdf");
         let chain =
             thalos_core::robot::adapter::from_urdf(urdf).expect("icebot URDF must build a chain");
         assert_eq!(chain.dof_count(), 4, "icebot has 4 actuated DOF");

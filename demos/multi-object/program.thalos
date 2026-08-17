@@ -1,0 +1,8 @@
+# multi-object — two boxes, two trays: a composed sequence of operations.
+# Every pick/place pair executes in order, completing the whole task.
+home
+pick box-1
+place box-1 at tray-1
+pick box-2
+place box-2 at tray-2
+home

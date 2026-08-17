@@ -338,6 +338,55 @@ describe('Retry — reset+start retry on execution failure (resilience-matrix sp
   })
 })
 
+describe('Protocol error — reconnect + start retry without reset (protocol_error)', () => {
+  it('shows a Retry button for protocol_error', () => {
+    setStatus('failed', {
+      error: { message: 'protocol error: upload failed', code: 'protocol_error' },
+    } as never)
+    renderWorkspace()
+    expect(screen.getByText(/Protocol error with the hardware backend/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+  })
+
+  it('clicking Retry reconnects the hardware backend and starts WITHOUT resetting the plan', async () => {
+    backendApiMocks.connect.mockResolvedValue({ status: 'ok' })
+    backendApiMocks.list.mockResolvedValue([
+      { ...SIM_BACKEND, status: 'inactive' },
+      { ...ESP_BACKEND, status: 'active', connected: true },
+    ])
+    execClientMocks.start.mockResolvedValue(undefined)
+    execClientMocks.tick.mockResolvedValue(completedDelta)
+    act(() => {
+      useBackendStore.setState({
+        backends: [
+          { ...SIM_BACKEND, status: 'inactive' },
+          { ...ESP_BACKEND, status: 'active', connected: true },
+        ],
+        activeId: 'esp32',
+      })
+    })
+    setStatus('failed', {
+      error: { message: 'protocol error: upload failed', code: 'protocol_error' },
+      activePlan: plan,
+    } as never)
+    renderWorkspace()
+
+    await waitFor(() => expect(useBackendStore.getState().activeId).toBe('esp32'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+    // Protocol retry: reconnect the active hardware backend with its port,
+    // then start — the plan state is intact so reset() must NOT run (a reset
+    // would drop executionViewable and eject the user from /execution).
+    await waitFor(() =>
+      expect(backendApiMocks.connect).toHaveBeenCalledWith('esp32', '/dev/ttyUSB0'),
+    )
+    await waitFor(() => expect(execClientMocks.start).toHaveBeenCalledTimes(1))
+    expect(execClientMocks.reset).not.toHaveBeenCalled()
+    await waitFor(() => expect(useExecutionStore.getState().status).toBe('completed'))
+  })
+})
+
 describe('Connect — connect+retry when start fails with not_connected (R3-001)', () => {
   it('a start failure with not_connected surfaces the error and a Connect CTA (not a silent 200)', async () => {
     execClientMocks.start.mockRejectedValue(

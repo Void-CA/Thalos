@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { PoseInputs, yprToQuaternion, quaternionToYpr } from './pose-inputs'
 import type { PoseDef } from '@/shared/contracts'
@@ -99,5 +99,27 @@ describe('PoseInputs component (spec R1)', () => {
     expect(screen.getByLabelText('obj-1 Yaw')).toHaveValue(45)
     expect(screen.getByLabelText('obj-1 Pitch')).toHaveValue(0)
     expect(screen.getByLabelText('obj-1 Roll')).toHaveValue(0)
+  })
+})
+
+describe('PoseInputs — dense grid layout (R4, R5)', () => {
+  it('R4 — no user-edited numeric input uses the cramped w-10/w-11 width classes', () => {
+    render(<PoseInputs pose={identity} onChange={() => {}} idPrefix="obj-1" />)
+    const inputs = screen.getAllByRole('spinbutton')
+    // Prove the collection is non-empty before the negative assertion loop.
+    expect(inputs.length).toBeGreaterThan(0)
+    for (const input of inputs) {
+      expect(input.className).not.toMatch(/w-1[01]/)
+    }
+  })
+
+  it('R5 — position and orientation fields render 3-per-row grid groups within the panel', () => {
+    render(<PoseInputs pose={identity} onChange={() => {}} idPrefix="obj-1" />)
+    const position = screen.getByRole('group', { name: 'obj-1 position' })
+    expect(position.className).toMatch(/grid/)
+    expect(within(position).getAllByRole('spinbutton')).toHaveLength(3)
+    const orientation = screen.getByRole('group', { name: 'obj-1 orientation' })
+    expect(orientation.className).toMatch(/grid/)
+    expect(within(orientation).getAllByRole('spinbutton')).toHaveLength(3)
   })
 })

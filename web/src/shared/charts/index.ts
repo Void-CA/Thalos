@@ -12,6 +12,7 @@
 
 export * from './types'
 export * from './theme'
+export * from './trajectory3d'
 export { manipulabilityBuilder } from './builders/manipulability'
 export { determinantBuilder } from './builders/determinant'
 export { metricsDashboardBuilder, scoreBreakdownBuilder } from './builders/metrics-dashboard'

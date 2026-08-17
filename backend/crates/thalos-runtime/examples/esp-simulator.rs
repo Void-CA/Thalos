@@ -3,7 +3,7 @@
 //!
 //! This is NOT a second firmware and NOT a kinematics simulation. It is a
 //! fake ESP32 that speaks EXACTLY the current wire protocol (see
-//! `docs/protocol/esp32-execution.md`, `backends/esp32/protocol.rs` for the
+//! `docs/architecture/protocol/esp32-execution.md`, `backends/esp32/protocol.rs` for the
 //! host side, `firmware/esp32/src/protocol.cpp` for the reference firmware)
 //! and produces deterministic states, responses, and execution samples so
 //! the host backend (`Esp32Backend` over `TcpTransport`) can be exercised
@@ -171,6 +171,9 @@ pub struct ManifestMeta {
     dof_count: usize,
     total_samples: usize,
     duration_us: u64,
+    /// Firmware-side repeat count (v3): the executor loops the trajectory
+    /// `repeat_count` times back-to-back (default 1).
+    repeat_count: usize,
 }
 
 impl Default for ManifestMeta {
@@ -179,6 +182,7 @@ impl Default for ManifestMeta {
             dof_count: 0,
             total_samples: 0,
             duration_us: 0,
+            repeat_count: 1,
         }
     }
 }
@@ -221,6 +225,10 @@ pub struct SimState {
     exec_step: usize,
     /// `silence` scenario: after `EXECUTE` the device stops responding.
     silent: bool,
+    /// Chunked-ACK batch size (v2, C) — ACK one `OK` per N samples.
+    chunk_size: usize,
+    /// Samples received since the last chunk ACK.
+    samples_since_ack: usize,
 }
 
 impl SimState {
@@ -236,6 +244,8 @@ impl SimState {
             recorded: Vec::new(),
             exec_step: 0,
             silent: false,
+            chunk_size: 1,
+            samples_since_ack: 0,
         }
     }
 
@@ -243,7 +253,10 @@ impl SimState {
 
     pub fn handle_hello(&mut self, parts: &[&str]) -> String {
         match parts.get(1).and_then(|s| s.parse::<u32>().ok()) {
-            Some(version) => format!("HELLO {version} OK\n"),
+            // v2 (C): validate the version — a stale v1 host fails the
+            // handshake BEFORE upload traffic (mirrors protocol.cpp).
+            Some(version) if version == 2 => format!("HELLO {version} OK\n"),
+            Some(_) => self.set_error("VERSION_MISMATCH"),
             None => self.set_error("MALFORMED_HELLO"),
         }
     }
@@ -255,17 +268,30 @@ impl SimState {
         let dof = parts.get(1).and_then(|s| s.parse::<usize>().ok());
         let total = parts.get(2).and_then(|s| s.parse::<usize>().ok());
         let dur = parts.get(3).and_then(|s| s.parse::<u64>().ok());
+        // v2 (C): optional 4th field = chunked-ACK batch size (default 1).
+        let chunk = parts
+            .get(4)
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(1);
+        // v3 (firmware-side repeat): optional 5th field = pass count (default 1).
+        let repeat = parts
+            .get(5)
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(1);
         let (Some(dof), Some(total), Some(dur)) = (dof, total, dur) else {
             return self.set_error("MALFORMED_MANIFEST");
         };
-        if dof == 0 || total == 0 || dur == 0 {
+        if dof == 0 || total == 0 || dur == 0 || chunk == 0 || repeat == 0 {
             return self.set_error("INVALID_MANIFEST");
         }
         self.meta = ManifestMeta {
             dof_count: dof,
             total_samples: total,
             duration_us: dur,
+            repeat_count: repeat,
         };
+        self.chunk_size = chunk;
+        self.samples_since_ack = 0;
         self.segments.clear();
         self.uploaded.clear();
         self.state = State::Receiving;
@@ -317,7 +343,14 @@ impl SimState {
             Err(_) => return self.set_error("MALFORMED_SAMPLE"),
         };
         self.uploaded.push(Waypoint { joints, dt_us });
-        "OK\n".to_string()
+        // v2 (C): chunked ACK — one OK per chunk (mirror protocol.cpp).
+        self.samples_since_ack += 1;
+        if self.samples_since_ack >= self.chunk_size {
+            self.samples_since_ack = 0;
+            "OK\n".to_string()
+        } else {
+            String::new()
+        }
     }
 
     pub fn handle_end_upload(&mut self) -> String {
@@ -395,16 +428,20 @@ impl SimState {
     fn status_while_executing(&mut self) -> String {
         match self.scenario {
             Scenario::Happy => {
-                // progress_steps polls of RUNNING (0.0 → 1.0), then COMPLETED.
+                // Overall progress across ALL passes (v3 firmware-side repeat):
+                // `repeat_count × progress_steps` polls from 0.0 → 1.0, then
+                // COMPLETED. The joints ramp per-pass (within-pass progress).
                 let steps = self.progress_steps();
-                if self.exec_step > steps {
+                let total_steps = steps * self.meta.repeat_count.max(1);
+                if self.exec_step > total_steps {
                     self.recorded = self.generate_recorded_samples();
                     self.state = State::Completed;
                     return format!("STATUS COMPLETED {}\n", self.recorded.len());
                 }
-                let progress = self.exec_step as f64 / steps as f64;
+                let within = (self.exec_step % steps.max(1)) as f64 / steps.max(1) as f64;
+                let progress = self.exec_step as f64 / total_steps as f64;
                 self.exec_step += 1;
-                self.format_running(progress)
+                self.format_running_with(progress, within)
             }
             Scenario::Error => match self.exec_step {
                 0 => {
@@ -425,8 +462,15 @@ impl SimState {
     }
 
     fn format_running(&self, progress: f64) -> String {
-        let joints = self.joints_at(progress);
-        format!("STATUS RUNNING {:.4} {joints}\n", progress)
+        self.format_running_with(progress, progress)
+    }
+
+    /// `STATUS RUNNING <overall> <joints>` — joints driven by the per-pass
+    /// progress (v3 repeat: the joints repeat each pass while the overall
+    /// progress spans all passes).
+    fn format_running_with(&self, overall: f64, within_pass: f64) -> String {
+        let joints = self.joints_at(within_pass);
+        format!("STATUS RUNNING {:.4} {joints}\n", overall)
     }
 
     /// Progress steps for the `happy` ramp: `RUNNING_STEPS_DIVISOR` steps
@@ -454,14 +498,21 @@ impl SimState {
 
     /// Build the `--samples` recorded execution samples deterministically
     /// from the manifest metadata (no kinematics, no timing simulation).
+    /// Mirrors the REAL firmware's BOUNDED trace contract (bounded-reusable
+    /// buffer, trace_scope = last_iteration): all passes RUN, but only the
+    /// LAST pass is retained, with sample timestamps offset by the accumulated
+    /// pass durations so the trace is monotonic. sample_count is never
+    /// repeat_count × waypoints — it is exactly one pass.
     fn generate_recorded_samples(&self) -> Vec<RecordedSample> {
         let n = self.samples_per_run;
         let step_us = self.meta.duration_us / n as u64;
+        let last_pass = self.meta.repeat_count.max(1).saturating_sub(1) as u64;
+        let base = last_pass * self.meta.duration_us;
         (0..n)
             .map(|i| {
                 let progress = if n > 1 { i as f64 / (n - 1) as f64 } else { 0.0 };
                 RecordedSample {
-                    timestamp_us: i as u64 * step_us,
+                    timestamp_us: base + i as u64 * step_us,
                     joints: self.joints(progress),
                 }
             })
@@ -543,6 +594,8 @@ impl SimState {
         self.recorded.clear();
         self.exec_step = 0;
         self.silent = false;
+        self.chunk_size = 1;
+        self.samples_since_ack = 0;
     }
 }
 

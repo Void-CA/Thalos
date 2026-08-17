@@ -41,6 +41,7 @@ fn report(metrics: BTreeMap<String, f64>) -> AnalysisReport {
             severity_distribution: BTreeMap::new(),
             grade: Grade::Good,
         },
+        robot_id: None,
     }
 }
 

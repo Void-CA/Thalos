@@ -3,6 +3,9 @@ import { devtools } from 'zustand/middleware'
 import type { SemanticOp } from '@/shared/contracts'
 import type { CompileResponse } from './types'
 import type { ParseError } from './script/types'
+import { parse } from './script/parser'
+import { remapProgramToScene as remapOps } from '@/shared/workflow/derive'
+import type { SceneResourceRef } from '@/shared/workflow/derive'
 
 interface SemanticEditorState {
   /** Ordered list of operations in the editor */
@@ -22,6 +25,12 @@ interface SemanticEditorState {
    *  derived from the store — the text buffer stays component-local (P4).
    *  `replaceOperations`/`addOperation` etc. leave it untouched. */
   scriptErrors: ParseError[]
+  /** Lifted buffer-divergence flag (task-code-sync-guards spec): true while
+   *  the Code tab's text buffer holds text that differs from
+   *  `serialize(operations)` (uncommitted edits). The TaskEditor keeps it in
+   *  sync (set on divergence, cleared on Apply/commit); the workspace-level
+   *  tab-switch guard reads it to warn before discarding the buffer. */
+  hasUncommittedBuffer: boolean
 
   // Actions
   addOperation: (op: SemanticOp) => void
@@ -37,6 +46,18 @@ interface SemanticEditorState {
    *  touches no program state — the program is written exclusively through
    *  `replaceOperations`. */
   setScriptErrors: (errors: ParseError[]) => void
+  /** Load a `.thalos` program file (task-program-artifact spec "Load parses
+   *  text"): parse via the dual parser, then atomically replace the ENTIRE
+   *  operation set (dirty bump included). Returns the parse errors ([] on
+   *  success) and NEVER mutates on a failed parse (R2 atomicity) or the
+   *  domain scene store (Load Program ≠ Load Scene). */
+  loadProgramText: (text: string) => ParseError[]
+  /** Scene-load sync: re-map operation references to a freshly loaded scene
+   *  (objects/locations by id+name). Pure `remapProgramToScene` — keeps the
+   *  program executable after [Load Scene] replaces the scene (a program
+   *  referencing the old scene's ids would fail at lowering with
+   *  `unknown object`). Bumps `dirty` ONLY when a reference actually changed. */
+  remapProgramToScene: (objects: SceneResourceRef[], locations: SceneResourceRef[]) => void
   setResult: (result: CompileResponse | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
@@ -53,13 +74,14 @@ const sampleOperations: SemanticOp[] = [
 
 export const useSemanticEditor = create<SemanticEditorState>()(
   devtools(
-    (set) => ({
+    (set, get) => ({
       operations: sampleOperations.map((op) => ({ ...op })),
       result: null,
       loading: false,
       error: null,
       dirty: 0,
       scriptErrors: [],
+      hasUncommittedBuffer: false,
 
       addOperation: (op) =>
         set((s) => ({ operations: [...s.operations, op], dirty: s.dirty + 1 })),
@@ -94,6 +116,25 @@ export const useSemanticEditor = create<SemanticEditorState>()(
 
       setScriptErrors: (scriptErrors) => set({ scriptErrors }),
 
+      loadProgramText: (text) => {
+        const result = parse(text)
+        // R2 atomicity: a failed parse returns the errors and writes NOTHING.
+        if (result.ops === null) return result.errors
+        get().replaceOperations(result.ops)
+        return []
+      },
+
+      remapProgramToScene: (objects, locations) =>
+        set((s) => {
+          const next = remapOps(s.operations, objects, locations)
+          // Reference-identical when nothing changed → skip the dirty bump so
+          // a scene load never invalidates a compiled program needlessly.
+          if (next === s.operations) return {}
+          // `next` is a fresh array from `.map()` — only readonly by the pure
+          // helper's signature; the store field is the mutable owner.
+          return { operations: next as SemanticOp[], dirty: s.dirty + 1 }
+        }),
+
       setResult: (result) =>
         set({ result, error: null, loading: false, dirty: 0 }),
       setLoading: (loading) => set({ loading }),
@@ -106,6 +147,7 @@ export const useSemanticEditor = create<SemanticEditorState>()(
           loading: false,
           dirty: 0,
           scriptErrors: [],
+          hasUncommittedBuffer: false,
         }),
     }),
     { name: 'semantic-editor' },

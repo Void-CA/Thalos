@@ -8,6 +8,18 @@ use super::transport::{SerialTransport, Transport};
 use crate::error::ControllerError;
 use crate::session::execution_source::ExecutionSource;
 
+/// ESP32 serial baud (protocol v2, C): the firmware is flashed with
+/// `Serial.begin(460800)` — the throughput lever that takes a 92KB upload from
+/// ~8s to ~2s. Overridable via `THALOS_ESP32_BAUD` for diagnosis; the override
+/// changes only the SPEED, never the protocol version (v1/v2 compatibility
+/// still requires the matching firmware flash).
+pub(crate) fn esp32_baud() -> u32 {
+    std::env::var("THALOS_ESP32_BAUD")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(460_800)
+}
+
 /// An available execution backend (resilience-presentation PR2a).
 ///
 /// `controller` is `None` until the hardware backend connects for the FIRST
@@ -135,7 +147,7 @@ impl BackendManager {
     /// becomes the runtime controller when that backend is active.
     pub async fn connect_with_port(&self, id: &str, port: &str) -> Result<(), ControllerError> {
         tracing::info!(backend = %id, %port, "connect_with_port — opening serial transport");
-        let transport = SerialTransport::new(port, 115200);
+        let transport = SerialTransport::new(port, esp32_baud());
         self.connect_with_transport(id, port, Box::new(transport))
             .await
     }
@@ -353,7 +365,7 @@ mod tests {
                     if let Some(pos) = pending.iter().position(|&b| b == b'\n') {
                         let line: Vec<u8> = pending.drain(..=pos).collect();
                         if line.windows(5).any(|w| w == b"HELLO") {
-                            master.write_all(b"HELLO 1 OK\r\n").await.unwrap();
+                            master.write_all(b"HELLO 2 OK\r\n").await.unwrap();
                             master.flush().await.unwrap();
                             return;
                         }
@@ -565,7 +577,7 @@ mod tests {
         let manager = BackendManager::new();
         manager.register_esp32("/dev/ttyUSB0").await;
         let transport = FakeTransport::new();
-        transport.inject_response(b"HELLO 1 OK\n".to_vec());
+        transport.inject_response(b"HELLO 2 OK\n".to_vec());
         manager
             .connect_with_transport("esp32", "/dev/ttyUSB0", Box::new(transport))
             .await
@@ -592,7 +604,7 @@ mod tests {
         assert!(manager.get_controller().await.is_none());
 
         let transport = FakeTransport::new();
-        transport.inject_response(b"HELLO 1 OK\n".to_vec());
+        transport.inject_response(b"HELLO 2 OK\n".to_vec());
         manager
             .connect_with_transport("esp32", "/dev/ttyUSB0", Box::new(transport))
             .await

@@ -4,7 +4,6 @@ import { act } from 'react'
 import { cleanup, render, screen, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import '@testing-library/jest-dom/vitest'
-import * as echarts from 'echarts/core'
 import { SessionDetail } from './SessionDetail'
 import { triggerCsvDownload } from '@/features/sessions/export/session-csv'
 import type { SessionSummary } from '../api/session-api'
@@ -27,6 +26,12 @@ import { installCanvasMock } from '@/test/canvas-mock'
  *    marker per canonical event.
  *  - Export: GET /sessions/{id}/export → the canonical CSV string is passed
  *    VERBATIM into the download (mocked trigger — no client-side enrichment).
+ *
+ * Charts render via Recharts (declarative, data-driven): these tests assert the
+ * rendered chart DOM (`data-testid="chart"`, the category tick labels on the
+ * axis, the legend series names, the markLine reference label). The exact
+ * per-point data values are verified at the builder level (builders/*.test.ts)
+ * and adapter level (adapter.test.ts) — here we pin the rendered surface.
  */
 
 const apiMocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }))
@@ -125,35 +130,29 @@ const motionTraceFixture = {
 
 const csvFixture = 'timestamp_s,joint_0,progress\n0.000000,0.100000,0.0000\n'
 
+/** Axis tick labels render through Recharts' SVG Text, which splits on spaces
+ *  into tspans and DROPS them from textContent ('Joint 1' → 'Joint1'). Legend
+ *  and label elements keep spaces. This matcher compares whitespace-agnostic so
+ *  builder labels ('Started · 0:00') stay the assertion source of truth. */
+function chartText(text: string): (content: string, element: Element | null) => boolean {
+  const normalized = text.replace(/\s+/g, '')
+  return (_content: string, element: Element | null) => {
+    if (!element?.textContent) return false
+    if (element.textContent.replace(/\s+/g, '') !== normalized) return false
+    // Recharts renders each tick in an SVG <g> wrapper AND its inner <text>;
+    // both expose the same textContent. Match only the innermost element.
+    return !Array.from(element.children).some(
+      (child) => child.textContent?.replace(/\s+/g, '') === normalized,
+    )
+  }
+}
+
 function renderDetail() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={queryClient}>
       <SessionDetail session={session} />
     </QueryClientProvider>,
-  )
-}
-
-interface RenderedSeries {
-  type?: string
-  data: Array<number | { value: number; itemStyle?: { color?: string } }>
-}
-interface RenderedOption {
-  series: RenderedSeries[]
-  // The adapter projects ChartModel.xAxis[].categories onto the ECharts axis
-  // `data` field (mapAxis) — assert the real rendered labels here.
-  xAxis?: Array<{ data?: string[] }>
-}
-
-function optionOf(el: HTMLElement): RenderedOption {
-  const chart = echarts.getInstanceByDom(el)
-  if (chart === undefined) throw new Error('no echarts instance on element')
-  return chart.getOption() as unknown as RenderedOption
-}
-
-function valuesOf(option: RenderedOption, seriesIndex = 0): number[] {
-  return option.series[seriesIndex].data.map((point) =>
-    typeof point === 'object' ? point.value : point,
   )
 }
 
@@ -164,8 +163,8 @@ async function flushEffects(): Promise<void> {
 }
 
 // NOTE: every findByTestId('chart') below passes an explicit 5s timeout — the
-// lazy ECharts chunk (React.lazy + dynamic import) can exceed testing-library's
-// 1000ms default while echarts transforms cold under full-parallel vitest load.
+// lazy chart chunk (React.lazy + dynamic import) can exceed testing-library's
+// 1000ms default under full-parallel vitest load.
 
 beforeEach(() => {
   installCanvasMock()
@@ -200,18 +199,22 @@ describe('SessionDetail tabs — purely compositional (P4)', () => {
     expect(screen.getByRole('tab', { name: 'Export' })).toBeInTheDocument()
   })
 
-  it('Comparison tab: fetches /comparison, renders the per-joint RMSE chart verbatim + readout + observations', async () => {
+  it('Comparison tab: fetches /comparison, renders the per-joint RMSE chart + readout + observations', async () => {
     renderDetail()
     await screen.findByText('480 samples')
     fireEvent.click(screen.getByRole('tab', { name: 'Comparison' }))
 
     const chart = await screen.findByTestId('chart', {}, { timeout: 5000 })
     await flushEffects()
+    expect(chart).toBeInTheDocument()
 
     expect(apiMocks.get).toHaveBeenCalledWith('/sessions/1/comparison')
-    // Per-joint RMSE bars — the canonical values, not recomputed (I5).
-    expect(valuesOf(optionOf(chart))).toEqual([0.01, 0.02, 0.015])
-    expect(optionOf(chart).xAxis?.[0]?.data).toEqual(['Joint 1', 'Joint 2', 'Joint 3'])
+    // Category axis ticks — the labeled joints, not recomputed (I5).
+    expect(await screen.findByText(chartText('Joint 1'))).toBeInTheDocument()
+    expect(screen.getByText(chartText('Joint 2'))).toBeInTheDocument()
+    expect(screen.getByText(chartText('Joint 3'))).toBeInTheDocument()
+    // The Global RMSE reference line renders its label.
+    expect(screen.getByText(/Global RMSE 0\.0150/)).toBeInTheDocument()
     // Readout from metrics verbatim.
     expect(screen.getByText('0.015')).toBeInTheDocument() // global_rmse
     expect(screen.getByText('0.042')).toBeInTheDocument() // global_max_error
@@ -222,40 +225,38 @@ describe('SessionDetail tabs — purely compositional (P4)', () => {
     expect(screen.getByText('wp3')).toBeInTheDocument()
   })
 
-  it('Timeline tab: fetches /execution-trace and renders one marker per canonical event', async () => {
+  it('Timeline tab: fetches /execution-trace and renders one marker label per canonical event', async () => {
     renderDetail()
     await screen.findByText('480 samples')
     fireEvent.click(screen.getByRole('tab', { name: 'Timeline' }))
 
-    const chart = await screen.findByTestId('chart', {}, { timeout: 5000 })
+    await screen.findByTestId('chart', {}, { timeout: 5000 })
     await flushEffects()
 
     expect(apiMocks.get).toHaveBeenCalledWith('/sessions/1/execution-trace')
-    expect(optionOf(chart).series[0].data).toHaveLength(3)
-    expect(optionOf(chart).xAxis?.[0]?.data).toEqual([
-      'Started · 0:00',
-      'Waypoint Reached · 0:03',
-      'Completed · 0:10',
-    ])
+    // The three canonical events render as category tick labels.
+    expect(screen.getByText(chartText('Started · 0:00'))).toBeInTheDocument()
+    expect(screen.getByText(chartText('Waypoint Reached · 0:03'))).toBeInTheDocument()
+    expect(screen.getByText(chartText('Completed · 0:10'))).toBeInTheDocument()
   })
 
-  it('Trace tab: fetches /trace and renders one line series per joint with mm:ss time axis', async () => {
+  it('Trace tab: fetches /trace and renders one legend entry per joint with mm:ss time axis', async () => {
     renderDetail()
     await screen.findByText('480 samples')
     fireEvent.click(screen.getByRole('tab', { name: 'Trace' }))
 
-    const chart = await screen.findByTestId('chart', {}, { timeout: 5000 })
+    await screen.findByTestId('chart', {}, { timeout: 5000 })
     await flushEffects()
 
     // Canonical source (spec trace-chart): data comes from GET /sessions/{id}/trace.
     expect(apiMocks.get).toHaveBeenCalledWith('/sessions/1/trace')
-    const option = optionOf(chart)
-    // One line series per joint (2 joints in the fixture), positions verbatim.
-    expect(option.series).toHaveLength(2)
-    expect(option.series.map((series) => series.type)).toEqual(['line', 'line'])
-    expect(valuesOf(option, 0)).toEqual([0.1, 0.3, 0.5])
-    // X axis = time, formatted mm:ss.
-    expect(option.xAxis?.[0]?.data).toEqual(['0:00', '0:05', '0:10'])
+    // Legend renders one series per joint.
+    expect(await screen.findByText('Joint 1')).toBeInTheDocument()
+    expect(screen.getByText('Joint 2')).toBeInTheDocument()
+    // X axis = time, formatted mm:ss, on the category ticks.
+    expect(screen.getByText('0:00')).toBeInTheDocument()
+    expect(screen.getByText('0:05')).toBeInTheDocument()
+    expect(screen.getByText('0:10')).toBeInTheDocument()
   })
 
   it('Export tab: fetches /export and downloads the canonical CSV verbatim', async () => {

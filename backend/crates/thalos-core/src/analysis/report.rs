@@ -100,6 +100,14 @@ pub struct AnalysisReport {
     pub metrics: BTreeMap<String, f64>,
     /// Derived quality summary (I7).
     pub summary: AnalysisSummary,
+    /// Stable identity of the robot the report analyzes (spec
+    /// `analysis-report-contract`, `robot-identity`): the scene's existing
+    /// identity (`metadata.id` for catalog robots, `urdf:<hash>` for URDF
+    /// imports) — set by the caller from the scene snapshot, never synthesized
+    /// from the chain. ADITIVO: `#[serde(default)]` — reports produced before
+    /// this field deserialize to `None` without error.
+    #[serde(default)]
+    pub robot_id: Option<String>,
 }
 
 /// DFS node state for cycle detection (design C4: classic 3-color DFS).
@@ -273,6 +281,7 @@ mod tests {
             actions,
             metrics: BTreeMap::new(),
             summary: summary(),
+            robot_id: None,
         }
     }
 
@@ -421,6 +430,59 @@ mod tests {
         }
         assert_eq!(obj["observations"].as_array().map(|a| a.len()), Some(1));
         assert_eq!(obj["actions"].as_array().map(|a| a.len()), Some(1));
+    }
+
+    // ── Spec analysis-report-contract "Legacy report without robot_id" ──────
+
+    /// Old JSON (produced before this change) carries no `robot_id` — the new
+    /// backend must deserialize it to `None` via `#[serde(default)]`, never
+    /// fail.
+    #[test]
+    fn legacy_json_without_robot_id_deserializes_to_none() {
+        let mut r = report(vec![], vec![]);
+        r.robot_id = Some("icebot-42".to_string());
+        let mut value: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&r).expect("serialize")).expect("json");
+        value.as_object_mut().expect("object").remove("robot_id");
+        let legacy = serde_json::to_string(&value).expect("json");
+
+        let back: AnalysisReport =
+            serde_json::from_str(&legacy).expect("legacy JSON must deserialize");
+        assert_eq!(
+            back.robot_id, None,
+            "a report without robot_id must deserialize to None"
+        );
+    }
+
+    /// Round-trip: `robot_id` set on the domain model survives the wire and
+    /// comes back identical.
+    #[test]
+    fn robot_id_survives_serialization_round_trip() {
+        let mut r = report(vec![], vec![]);
+        r.robot_id = Some("icebot-42".to_string());
+        let json = serde_json::to_string(&r).expect("serialize");
+        let back: AnalysisReport = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(
+            back.robot_id.as_deref(),
+            Some("icebot-42"),
+            "robot_id must survive the round trip"
+        );
+    }
+
+    /// Spec robot-identity "Different robots → distinguishable reports": two
+    /// reports from different robots differ in their `robot_id` wire value.
+    #[test]
+    fn different_robot_ids_produce_distinguishable_reports() {
+        let mut a = report(vec![], vec![]);
+        a.robot_id = Some("robot-a".to_string());
+        let mut b = report(vec![], vec![]);
+        b.robot_id = Some("robot-b".to_string());
+
+        let ja = serde_json::to_value(&a).expect("serialize");
+        let jb = serde_json::to_value(&b).expect("serialize");
+        assert_eq!(ja["robot_id"], "robot-a");
+        assert_eq!(jb["robot_id"], "robot-b");
+        assert_ne!(ja, jb, "reports from different robots must differ");
     }
 
     #[test]

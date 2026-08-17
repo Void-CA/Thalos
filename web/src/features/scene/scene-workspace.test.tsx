@@ -14,10 +14,18 @@ import type { PoseDef } from '@/shared/contracts'
  *   Full-Height").
  * - The scene store is renamed to `useDomainSceneStore` ("Scene Store
  *   Renamed" — no collision with the viewport's `useSceneStore`).
+ *
+ * ui-workspace-density (R1): the editor is now an accordion — Setup is open
+ * by default, entity lists (Objects/Locations) are collapsed until expanded.
+ * Tests that interact with entity content expand the section first.
  */
 function renderWorkspace() {
   return render(<SceneWorkspace />)
 }
+
+/** R1: entity sections are collapsed by default — expand before interacting. */
+const expandObjects = () => fireEvent.click(screen.getByRole('button', { name: 'Objects' }))
+const expandLocations = () => fireEvent.click(screen.getByRole('button', { name: 'Locations' }))
 
 const seededObject: SceneObject = {
   id: 'bolt-1',
@@ -60,6 +68,7 @@ describe('Scene area — full-height SceneWorkspace (area-scene spec)', () => {
 
   it('edits flow through useDomainSceneStore (addObject appears in the editor)', () => {
     renderWorkspace()
+    expandObjects()
     act(() => {
       useDomainSceneStore.getState().addObject({
         id: 'obj-2',
@@ -72,6 +81,7 @@ describe('Scene area — full-height SceneWorkspace (area-scene spec)', () => {
 
   it('reads the seeded scene from useDomainSceneStore (Bolt visible)', () => {
     renderWorkspace()
+    expandObjects()
     expect(screen.getByDisplayValue('Bolt')).toBeInTheDocument()
   })
 
@@ -84,6 +94,7 @@ describe('Scene area — full-height SceneWorkspace (area-scene spec)', () => {
 describe('Scene editor poses (scene-editor-poses spec)', () => {
   it('edits an object pose through PoseInputs → updateObject stores it', () => {
     renderWorkspace()
+    expandObjects()
     fireEvent.change(screen.getByLabelText('bolt-1 X'), { target: { value: '2.5' } })
     const obj = useDomainSceneStore.getState().objects.find((o) => o.id === 'bolt-1')
     expect(obj?.pose.position[0]).toBe(2.5)
@@ -91,6 +102,7 @@ describe('Scene editor poses (scene-editor-poses spec)', () => {
 
   it('converts Yaw to a unit quaternion when the object orientation is edited (R1)', () => {
     renderWorkspace()
+    expandObjects()
     fireEvent.change(screen.getByLabelText('bolt-1 Yaw'), { target: { value: '45' } })
     const obj = useDomainSceneStore.getState().objects.find((o) => o.id === 'bolt-1')
     expect(obj?.pose.orientation[0]).toBeCloseTo(0.924, 3)
@@ -101,6 +113,7 @@ describe('Scene editor poses (scene-editor-poses spec)', () => {
 
   it('adds an object with a user-defined pose (R2: X=2.0,Y=0.5,Z=0.3,Yaw=90° → [0.707,0,0.707,0])', () => {
     renderWorkspace()
+    expandObjects()
     fireEvent.click(screen.getByRole('button', { name: 'Add object' }))
     fireEvent.change(screen.getByLabelText('obj-2 X'), { target: { value: '2.0' } })
     fireEvent.change(screen.getByLabelText('obj-2 Y'), { target: { value: '0.5' } })
@@ -116,6 +129,7 @@ describe('Scene editor poses (scene-editor-poses spec)', () => {
 
   it('adds an object defaulting to the bolt seed pose (R3 — no inline literals)', () => {
     renderWorkspace()
+    expandObjects()
     fireEvent.click(screen.getByRole('button', { name: 'Add object' }))
     const added = useDomainSceneStore.getState().objects.find((o) => o.id === 'obj-2')
     expect(added?.pose).toEqual({ position: [1.8, 0, 0.4], orientation: [1, 0, 0, 0] })
@@ -123,6 +137,7 @@ describe('Scene editor poses (scene-editor-poses spec)', () => {
 
   it('adds a location with a user-defined pose, not the hardcoded tray values (R2)', () => {
     renderWorkspace()
+    expandLocations()
     fireEvent.click(screen.getByRole('button', { name: 'Add location' }))
     fireEvent.change(screen.getByLabelText('loc-1 X'), { target: { value: '1.0' } })
     fireEvent.change(screen.getByLabelText('loc-1 Y'), { target: { value: '2.0' } })

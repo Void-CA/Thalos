@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 
+use thalos_core::execution::plan::ExecutionPlan;
 use thalos_core::execution::runtime::RuntimeProgram;
 
 use crate::error::ControllerError;
@@ -21,6 +22,10 @@ pub struct BackendCapabilities {
     pub io: bool,
     pub gripper: bool,
     pub streaming: bool,
+    /// v3: the backend repeats the trajectory INTERNALLY (`repeat_count` in
+    /// the manifest) — the host never re-executes between passes and derives
+    /// the iteration from the overall progress. Only the ESP32 backend sets it.
+    pub firmware_repeat: bool,
 }
 
 impl BackendCapabilities {
@@ -32,6 +37,7 @@ impl BackendCapabilities {
             io: true,
             gripper: true,
             streaming: true,
+            firmware_repeat: false,
         }
     }
 
@@ -43,6 +49,7 @@ impl BackendCapabilities {
             io: false,
             gripper: false,
             streaming: false,
+            firmware_repeat: false,
         }
     }
 }
@@ -72,17 +79,13 @@ pub trait RobotController: Send + Sync {
     /// Whether the controller is currently connected.
     fn is_connected(&self) -> bool;
 
-    /// Accept a trajectory and begin execution. Returns immediately —
+    /// Accept an execution plan and begin execution. Returns immediately —
     /// does NOT block until the trajectory completes. Progress is
     /// observable via `robot_state()`.
     ///
-    /// `waypoints`: sequence of joint-angle vectors.
-    /// `duration`: total trajectory time in seconds.
-    async fn execute(
-        &mut self,
-        waypoints: Vec<Vec<f64>>,
-        duration: f64,
-    ) -> Result<(), ControllerError>;
+    /// `plan`: the execution IR — ordered waypoints with absolute
+    /// timestamps (seconds), 1:1 segments, and the total duration.
+    async fn execute(&mut self, plan: ExecutionPlan) -> Result<(), ControllerError>;
 
     /// Stop the current execution immediately. Always supported.
     async fn stop(&mut self) -> Result<(), ControllerError> {
@@ -184,6 +187,7 @@ pub mod tests {
     use super::*;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use thalos_core::execution::plan::{ExecutionInstruction, ExecutionSegment, ExecutionWaypoint};
 
     pub struct MockController {
         pub connected: AtomicBool,
@@ -218,6 +222,10 @@ pub mod tests {
         /// the hardware samples EXACTLY once (final iteration, NF3) and never
         /// on intermediate iterations or failures (S2).
         pub take_trace_calls: AtomicUsize,
+        /// Last `ExecutionPlan` passed to `execute` — captured so tests can
+        /// assert the real timestamps/segments that reached the controller
+        /// (esp32-execute-real-timestamps migration).
+        pub last_plan: std::sync::Mutex<Option<ExecutionPlan>>,
     }
 
     impl MockController {
@@ -236,7 +244,38 @@ pub mod tests {
                 state: None,
                 execute_count: AtomicUsize::new(0),
                 take_trace_calls: AtomicUsize::new(0),
+                last_plan: std::sync::Mutex::new(None),
             }
+        }
+    }
+
+    /// Build an even-spaced single-segment `ExecutionPlan` — the trait-test
+    /// fixture for the `execute(plan)` contract.
+    fn test_plan(waypoints: Vec<Vec<f64>>, duration: f64) -> ExecutionPlan {
+        let n = waypoints.len();
+        let duration_us = (duration * 1_000_000.0) as u64;
+        let dt_per_sample = if n > 1 {
+            duration_us / (n - 1) as u64
+        } else {
+            0
+        };
+        ExecutionPlan {
+            waypoints: waypoints
+                .iter()
+                .enumerate()
+                .map(|(i, joints)| ExecutionWaypoint {
+                    joints: joints.clone(),
+                    timestamp: i as f64 * dt_per_sample as f64 / 1_000_000.0,
+                })
+                .collect(),
+            segments: vec![ExecutionSegment {
+                index: 0,
+                planned_segment_index: 0,
+                instruction: ExecutionInstruction::MoveJ,
+                waypoint_range: 0..n,
+            }],
+            duration,
+            repeat_count: 1,
         }
     }
 
@@ -263,8 +302,7 @@ pub mod tests {
 
         async fn execute(
             &mut self,
-            _waypoints: Vec<Vec<f64>>,
-            _duration: f64,
+            plan: ExecutionPlan,
         ) -> Result<(), ControllerError> {
             if !self.connected.load(Ordering::SeqCst) {
                 return Err(ControllerError::NotConnected);
@@ -272,6 +310,7 @@ pub mod tests {
             if let Some(ref err) = self.execute_error {
                 return Err(err.clone());
             }
+            *self.last_plan.lock().unwrap() = Some(plan);
             self.executed.store(true, Ordering::SeqCst);
             self.execute_count.fetch_add(1, Ordering::SeqCst);
             Ok(())
@@ -346,7 +385,7 @@ pub mod tests {
     #[tokio::test]
     async fn test_execute_requires_connection() {
         let mut ctrl = MockController::new();
-        let err = ctrl.execute(vec![], 0.0).await.unwrap_err();
+        let err = ctrl.execute(test_plan(vec![], 0.0)).await.unwrap_err();
         assert_eq!(err, ControllerError::NotConnected);
     }
 
@@ -355,7 +394,7 @@ pub mod tests {
         let mut ctrl = MockController::new();
         ctrl.connect().await.unwrap();
 
-        ctrl.execute(vec![vec![0.0]], 1.0).await.unwrap();
+        ctrl.execute(test_plan(vec![vec![0.0]], 1.0)).await.unwrap();
         assert!(ctrl.executed.load(Ordering::SeqCst));
 
         ctrl.pause().await.unwrap();
@@ -366,6 +405,32 @@ pub mod tests {
 
         ctrl.stop().await.unwrap();
         assert!(!ctrl.executed.load(Ordering::SeqCst));
+    }
+
+    /// The `execute(plan)` contract: the controller receives the full
+    /// `ExecutionPlan` — waypoints with absolute timestamps, 1:1 segments,
+    /// and the total duration — not a bare `(waypoints, duration)` pair.
+    #[tokio::test]
+    async fn test_execute_consumes_execution_plan() {
+        let mut ctrl = MockController::new();
+        ctrl.connect().await.unwrap();
+
+        let plan = test_plan(vec![vec![0.0, 0.0], vec![0.5, 0.3], vec![1.0, 0.5]], 2.0);
+        ctrl.execute(plan.clone()).await.unwrap();
+
+        let captured = ctrl
+            .last_plan
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("execute must capture the plan");
+        assert_eq!(captured, plan, "the exact plan must reach the controller");
+        assert_eq!(captured.waypoints[0].timestamp, 0.0);
+        assert_eq!(captured.waypoints[1].timestamp, 1.0);
+        assert_eq!(captured.waypoints[2].timestamp, 2.0);
+        assert_eq!(captured.duration, 2.0);
+        assert_eq!(captured.segments.len(), 1);
+        assert_eq!(captured.segments[0].waypoint_range, 0..3);
     }
 
     #[tokio::test]

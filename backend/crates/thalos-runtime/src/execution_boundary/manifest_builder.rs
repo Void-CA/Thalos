@@ -85,6 +85,7 @@ impl ExecutionManifestBuilder {
             dof_count: plan.waypoints.first().map(|w| w.joints.len()).unwrap_or(0),
             total_samples: samples.len(),
             duration_us: (plan.duration * 1_000_000.0).round() as u64,
+            repeat_count: plan.repeat_count,
         };
 
         let manifest = ExecutionManifest {
@@ -169,7 +170,10 @@ impl ExecutionManifestBuilder {
         //    skipped and the FIRMWARE executor velocity-bounds advancement
         //    (ADR-3 — dt_us==0 is PROTOCOL SEMANTICS, firmware-authoritative
         //    for velocity-bounding; the backend does NOT infer host velocity).
-        for pair in manifest.samples.windows(2) {
+        //    Production plans are pre-emptively re-timed by `VelocityRetimer`
+        //    (planned ExecutionPlans always pass here); this remains the hard
+        //    rejection backstop for hand-built / un-re-timed manifests.
+        for (i, pair) in manifest.samples.windows(2).enumerate() {
             let dt = pair[1].dt_us;
             if dt == 0 {
                 continue;
@@ -180,9 +184,11 @@ impl ExecutionManifestBuilder {
                 .zip(&pair[0].joints)
                 .map(|(a, b)| a - b)
                 .collect();
-            SafetyEnvelope::check_gap_velocity(&delta_q, dt).map_err(|_| {
-                BuilderError::Validation("VELOCITY_EXCEEDED".to_string())
-            })?;
+            if let Err(v) = SafetyEnvelope::check_gap_velocity(&delta_q, dt) {
+                let _ = i;
+                let _ = v;
+                return Err(BuilderError::Validation("VELOCITY_EXCEEDED".to_string()));
+            }
         }
 
         Ok(())
@@ -226,6 +232,7 @@ mod tests {
             waypoints,
             segments,
             duration,
+    repeat_count: 1,
         }
     }
 

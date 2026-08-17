@@ -6,24 +6,16 @@ import { scaleFromRefDim } from './scale'
 import type { SceneData, ToolFrame, TransformSnapshot } from '../types'
 
 /**
- * Resolve the world-space position of the TCP marker.
- *
- * - When the backend FK result is present (`resolvedPose`), it wins — the
- *   marker goes exactly where the resolved pose says (tcp-resolved-pose R5.1).
- * - Otherwise fall back to the local derivation: base frame position from the
- *   same transform source that drives the robot model (execution ticks, FK
- *   frames, then the static scene) plus the TCP offset (R5.2).
- * - `null` when the frame cannot be resolved at all.
+ * Resolve the world-space position of a frame from the same transform source
+ * that drives the robot model: execution ticks win, then FK frames, then the
+ * static scene fallback (shared logic, R6). Raw frame position — no TCP offset
+ * applied. `null` when the frame cannot be resolved at all.
  */
-export function resolveTcpPosition(
-  activeTcp: ToolFrame,
+export function resolveFramePosition(
+  frameId: string,
   transformSnapshot: TransformSnapshot,
   data: SceneData | null,
 ): [number, number, number] | null {
-  if (activeTcp.resolvedPose) return activeTcp.resolvedPose.position
-
-  const frameId = String(activeTcp.baseFrameId)
-
   let framePosition: [number, number, number] | null = null
   if (transformSnapshot.kind === 'execution') {
     const tx = transformSnapshot.transforms.find(t => t.id === frameId)
@@ -36,6 +28,28 @@ export function resolveTcpPosition(
     const staticFrame = data.frames.find(f => f.id === frameId)
     if (staticFrame) framePosition = staticFrame.translation
   }
+  return framePosition
+}
+
+/**
+ * Resolve the world-space position of the TCP marker.
+ *
+ * - When the backend FK result is present (`resolvedPose`), it wins — the
+ *   marker goes exactly where the resolved pose says (tcp-resolved-pose R5.1).
+ * - Otherwise delegate to `resolveFramePosition` for the base frame position
+ *   (execution ticks, FK frames, then the static scene) plus the TCP offset
+ *   (R5.2 / R6).
+ * - `null` when the frame cannot be resolved at all.
+ */
+export function resolveTcpPosition(
+  activeTcp: ToolFrame,
+  transformSnapshot: TransformSnapshot,
+  data: SceneData | null,
+): [number, number, number] | null {
+  if (activeTcp.resolvedPose) return activeTcp.resolvedPose.position
+
+  const frameId = String(activeTcp.baseFrameId)
+  const framePosition = resolveFramePosition(frameId, transformSnapshot, data)
   if (!framePosition) return null
 
   const [fx, fy, fz] = framePosition

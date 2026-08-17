@@ -178,3 +178,76 @@ export interface TaskDocument {
   scene: SceneContent
   program: { operations: SemanticOp[] }
 }
+
+// ── SceneFile v1 artifact (D2/D4) ────────────────────────────────────────────
+// The persistent, versioned, file-level scene artifact. SEPARATE from
+// `SceneContent` (the in-memory TaskDocument projection) — never collapse the
+// two (scene-file-artifact spec "Separation from SceneContent"). Mirrors the
+// serde shape of `thalos_document::scene_file::SceneFile` 1:1 so files saved
+// by the web are accepted by the backend and vice versa.
+
+/** Robot reference — `name` is the STABLE identity (D11); the runtime ID
+ *  (`urdf:<sha256-6hex>`) is derived and never persisted in demos. */
+export interface RobotRef {
+  name: string
+  urdf: string
+}
+
+/** Visualization-only geometry descriptor (D4: dropped by the mapping). */
+export interface GeometryDef {
+  /** `"box" | "cylinder" | "sphere"` (unsupported types rejected at tier (b)). */
+  type: string
+  /** Dimensions in metres (box: [w,h,d]; cylinder: [r,h]; sphere: [r]). */
+  size: number[]
+}
+
+/** A physical object — semantic `kind`, optional label, optional placement
+ *  target reference, optional VISUALIZATION-ONLY geometry. */
+export interface SceneObjectDef {
+  id: string
+  kind: string
+  /** Human-readable label (optional; falls back to `id` in the mapping). */
+  name?: string
+  /** Optional placement target — MUST reference an id in `locations[]`. */
+  location_ref?: string
+  geometry?: GeometryDef
+  pose: PoseDef
+}
+
+/** A presentational workspace fixture (fence, table, …) — geometry optional. */
+export interface SceneFixtureDef {
+  id: string
+  geometry?: GeometryDef
+  pose: PoseDef
+}
+
+/** A logical placement target — v1 supports `kind: "placement_target"`. */
+export interface SceneLocationDef {
+  id: string
+  kind: string
+  pose: PoseDef
+}
+
+/** SceneFile v1 — standalone JSON artifact describing a robot and its
+ *  workspace. The web's Load/Save Scene IO path (D12) reads/writes exactly
+ *  this shape; `useDomainSceneStore.loadSceneFile`/`serializeSceneFile`
+ *  hydrate/export it via the domain store. */
+export interface SceneFile {
+  schema_version: string
+  robot: RobotRef
+  objects: SceneObjectDef[]
+  fixtures: SceneFixtureDef[]
+  locations: SceneLocationDef[]
+  home_pose: PoseDef
+  /** Approach/retreat transit height in metres (D6: 1:1 with SceneContent). */
+  approach_height: number
+}
+
+/** One entry of the demo catalog (`GET /api/v1/demos`). Metadata only — the
+ *  scene/program payloads are fetched separately by id (D10 catalog authority). */
+export interface DemoCatalogEntry {
+  id: string
+  title: string
+  category: string
+  narrative?: string
+}

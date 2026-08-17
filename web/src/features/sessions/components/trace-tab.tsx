@@ -39,7 +39,7 @@ export function TraceTab({ sessionId }: TraceTabProps) {
   if (!data) return null
 
   return (
-    <div className="h-64 w-full">
+    <div className="h-80 w-full">
       <EChart model={traceBuilder(data)} />
     </div>
   )

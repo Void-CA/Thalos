@@ -49,10 +49,10 @@ pnpm dev
 
 ## Documentación
 
-La documentación técnica completa está en [`docs/`](docs/) generada con Quarto.
+El libro técnico completo está en [`book/`](book/) generado con Quarto.
 
 ```
-docs/
+book/
 ├── index.qmd          # Intro + stack + quick start
 ├── vision.qmd         # Propósito, alcance y dirección futura
 ├── architecture.qmd   # Filosofía arquitectónica y reglas
@@ -64,4 +64,8 @@ docs/
 └── glossary.qmd       # Glosario de términos
 ```
 
-Decisiones arquitectónicas registradas (ADR) en [`docs/adr/`](docs/adr/).
+La documentación en [`docs/`](docs/) está organizada por función:
+`architecture/`, `execution/`, `intelligence/`, `deliverables/`, `project/`,
+`summary/` y `archive/`.
+
+Decisiones arquitectónicas registradas (ADR) en [`docs/architecture/adr/`](docs/architecture/adr/).

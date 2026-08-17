@@ -4,8 +4,10 @@ import { readFileSync } from 'node:fs'
 
 /**
  * Purity boundary tests (O2/O3): builders, types and theme must be free of any
- * ECharts or React dependency; the adapter is the single module allowed to
- * import ECharts. Enforced statically so a stray import fails the suite.
+ * chart-library or React dependency and speak only in ChartModel token
+ * references. The adapter is a pure, declarative data-shaping layer (no React,
+ * no renderer library) — rendering is composed in `EChartInner.tsx` with
+ * Recharts. Enforced statically so a stray import fails the suite.
  */
 
 const PURE_MODULES = [
@@ -22,7 +24,8 @@ const PURE_MODULES = [
 /** Every builder module — the pure-projection frontier of the chart system. */
 const BUILDER_MODULES = PURE_MODULES.filter((url) => url.pathname.includes('/builders/'))
 
-const BOUNDARY_MODULES = [new URL('./adapter.ts', import.meta.url), new URL('./gl-adapter.ts', import.meta.url)]
+/** The declarative data layer — pure (no react, no renderer lib). */
+const ADAPTER_MODULE = new URL('./adapter.ts', import.meta.url)
 
 /** Source without comments — the purity contract is about code, not docs. */
 function codeOf(url: URL): string {
@@ -32,32 +35,37 @@ function codeOf(url: URL): string {
 }
 
 describe('builder purity (O2: AnalysisReport → Builder → ChartModel)', () => {
-  it.each(PURE_MODULES)('module %s imports neither echarts nor react', (url) => {
+  it.each(PURE_MODULES)('module %s imports neither echarts, recharts nor react', (url) => {
     const source = codeOf(url)
     expect(source).not.toMatch(/from\s+['"]echarts/)
+    expect(source).not.toMatch(/from\s+['"]recharts/)
     expect(source).not.toMatch(/from\s+['"]react/)
     expect(source).not.toMatch(/\bEChartsOption\b/)
   })
 
-  it('builders never mention the ECharts API surface', () => {
+  it('builders never mention any chart-library API surface', () => {
     for (const url of BUILDER_MODULES) {
       const source = codeOf(url)
       expect(source).not.toMatch(/echarts/i)
+      expect(source).not.toMatch(/recharts/i)
       expect(source).not.toMatch(/\boption\b/i)
     }
   })
 })
 
-describe('adapter boundary (O3: single ECharts frontier)', () => {
-  it.each(BOUNDARY_MODULES)('adapter imports echarts and never react', (url) => {
-    const source = codeOf(url)
-    expect(source).toMatch(/from\s+['"]echarts/)
+describe('adapter — pure declarative data layer (O3)', () => {
+  it('imports neither echarts, recharts nor react (data shaping only)', () => {
+    const source = codeOf(ADAPTER_MODULE)
+    expect(source).not.toMatch(/from\s+['"]echarts/)
+    expect(source).not.toMatch(/from\s+['"]recharts/)
     expect(source).not.toMatch(/from\s+['"]react/)
   })
 
-  it('the charts barrel never re-exports the adapter (C2: ECharts stays out of eager imports)', () => {
+  it('the charts barrel never re-exports the adapter or any library frontier', () => {
     const source = codeOf(new URL('./index.ts', import.meta.url))
     expect(source).not.toMatch(/from\s+['"]\.\/adapter/)
-    expect(source).not.toMatch(/\b(toEChartsOption|mountChart|resizeChart|disposeChart)\b/)
+    expect(source).not.toMatch(/\b(prepareChart|TOOLTIP_PANEL)\b/)
+    // The barrel stays pure: builders, types, theme and the 3D model only.
+    expect(source).not.toMatch(/echarts|recharts|react/)
   })
 })

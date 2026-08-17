@@ -53,6 +53,12 @@ vi.mock('@/features/sessions/api/session-api', async (importOriginal) => {
   return { ...actual, sessionApi: sessionsApiMocks }
 })
 
+// The /demos workspace fetches the catalog on mount — stub it so the router
+// renders the empty state without real HTTP (per-workspace behavior is covered
+// in features/demos/workspace.test.tsx).
+const demosApiMocks = vi.hoisted(() => ({ listDemos: vi.fn() }))
+vi.mock('@/features/demos/api', () => demosApiMocks)
+
 const compileResult: CompileResponse = {
   status: 'ok',
   validation: { errors: [], warnings: [] },
@@ -114,6 +120,8 @@ beforeEach(() => {
   viewportMetrics.mounts = 0
   viewportMetrics.unmounts = 0
   sessionsApiMocks.list.mockReset()
+  demosApiMocks.listDemos.mockReset()
+  demosApiMocks.listDemos.mockResolvedValue([])
   // Fresh workflow state per test (guards read these stores).
   useSceneStore.getState().reset()
   useSemanticEditor.getState().reset()
@@ -130,15 +138,17 @@ describe('layout route: persistent viewport (invariant #1)', () => {
     // Full shell resolves at /task; viewport mounted exactly once.
     expect(screen.getByTestId('viewport-stub')).toBeInTheDocument()
     expect(viewportMetrics.mounts).toBe(1)
-    expect(screen.getByRole('link', { name: 'Programming' })).toHaveAttribute('aria-current', 'page')
+    // Stage navigation lives in the Stepper (the TopBar owns tool links only).
+    const workflow = screen.getByRole('navigation', { name: 'Workflow' })
+    expect(within(workflow).getByRole('button', { name: 'Programming' })).toHaveAttribute('aria-current', 'step')
 
-    // URL-driven navigation via the TopBar nav link.
-    fireEvent.click(screen.getByRole('link', { name: 'Execution' }))
+    // URL-driven navigation via the Stepper stage.
+    fireEvent.click(within(workflow).getByRole('button', { name: 'Execution' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/execution'))
 
     // Only the Outlet content changed; the viewport was never unmounted/remounted.
     expect(screen.getByRole('heading', { name: 'Execution' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Execution' })).toHaveAttribute('aria-current', 'page')
+    expect(within(workflow).getByRole('button', { name: 'Execution' })).toHaveAttribute('aria-current', 'step')
     expect(viewportMetrics.mounts).toBe(1)
     expect(viewportMetrics.unmounts).toBe(0)
   })
@@ -153,7 +163,8 @@ describe('layout route: persistent viewport (invariant #1)', () => {
       router.navigate(-1)
     })
     await waitFor(() => expect(router.state.location.pathname).toBe('/task'))
-    expect(screen.getByRole('link', { name: 'Programming' })).toHaveAttribute('aria-current', 'page')
+    const workflow = screen.getByRole('navigation', { name: 'Workflow' })
+    expect(within(workflow).getByRole('button', { name: 'Programming' })).toHaveAttribute('aria-current', 'step')
     expect(viewportMetrics.unmounts).toBe(0)
 
     act(() => {
@@ -173,7 +184,7 @@ describe('direct URL entry renders the full shell', () => {
     expect(screen.getByRole('heading', { name: 'Execution' })).toBeInTheDocument()
     expect(screen.getByTestId('viewport-stub')).toBeInTheDocument()
     expect(screen.getByText('Thalos Robotics')).toBeInTheDocument() // StatusBar
-    expect(screen.getByRole('link', { name: 'Programming' })).toBeInTheDocument() // TopBar nav
+    expect(screen.getByRole('link', { name: 'Demos' })).toBeInTheDocument() // TopBar tool link
   })
 })
 
@@ -190,26 +201,32 @@ describe('hidden routes render placeholders (no 404)', () => {
     seedPrerequisites({ completed: true })
     sessionsApiMocks.list.mockResolvedValue([])
     renderRouter(['/sessions'])
-    expect(screen.getByRole('heading', { name: 'Sessions' })).toBeInTheDocument()
+    // The browser's filter/search strip anchors the panel top (the redundant
+    // "Sessions" heading was removed — the Stepper labels the stage).
+    expect(screen.getByRole('searchbox', { name: /search/i })).toBeInTheDocument()
     expect(await screen.findByText('No sessions yet')).toBeInTheDocument()
     // P0-A: /sessions is layout 'full' — the viewport is dropped so the data
     // table takes the whole body.
     expect(screen.queryByTestId('viewport-stub')).not.toBeInTheDocument()
   })
 
-  it('shows nav links for visible workspaces only (Sessions visible, Knowledge hidden)', () => {
+  it('shows stage navigation in the Stepper (visible workspaces only — Knowledge hidden)', () => {
     renderRouter(['/'])
-    expect(screen.getByRole('link', { name: 'Programming' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Execution' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Sessions' })).toBeInTheDocument()
+    const workflow = screen.getByRole('navigation', { name: 'Workflow' })
+    expect(within(workflow).getByRole('button', { name: 'Programming' })).toBeInTheDocument()
+    expect(within(workflow).getByRole('button', { name: 'Execution' })).toBeInTheDocument()
+    expect(within(workflow).getByRole('button', { name: 'Sessions' })).toBeInTheDocument()
+    expect(within(workflow).queryByRole('button', { name: 'Knowledge' })).not.toBeInTheDocument()
+    // The TopBar carries only tool links (Demos), never stages.
+    expect(screen.getByRole('link', { name: 'Demos' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Knowledge' })).not.toBeInTheDocument()
   })
 })
 
-describe('top-bar — nav links reflect guard state (slice 5, task 5.2)', () => {
-  it('disables links whose requirements are unmet (aria-disabled, no navigation)', async () => {
+describe('stepper — stages reflect guard state (the Stepper owns stage navigation)', () => {
+  it('disables stages whose requirements are unmet (no navigation)', async () => {
     // Robot loaded (sceneValid=true) but NOT compiled → Execution (requires
-    // executable) must not navigate; Sessions (guard relaxed) must.
+    // executable) must be disabled; Sessions (guard relaxed) must not.
     act(() => {
       useSceneStore.setState({ data: {} as SceneData })
       useSemanticEditor.setState({ result: null, dirty: 0 })
@@ -217,19 +234,20 @@ describe('top-bar — nav links reflect guard state (slice 5, task 5.2)', () => 
       useAnalysisStore.setState({ report: null })
     })
     const { router } = renderRouter(['/task'])
-    const executionLink = screen.getByRole('link', { name: 'Execution' })
-    expect(executionLink).toHaveAttribute('aria-disabled', 'true')
-    fireEvent.click(executionLink)
+    const workflow = screen.getByRole('navigation', { name: 'Workflow' })
+    const execution = within(workflow).getByRole('button', { name: 'Execution' })
+    expect(execution).toBeDisabled()
+    fireEvent.click(execution)
     expect(router.state.location.pathname).toBe('/task')
-    const sessionsLink = screen.getByRole('link', { name: 'Sessions' })
-    expect(sessionsLink).not.toHaveAttribute('aria-disabled')
+    expect(within(workflow).getByRole('button', { name: 'Sessions' })).toBeEnabled()
   })
 
-  it('keeps links enabled when their requirements are met', () => {
+  it('keeps stages enabled when their requirements are met', () => {
     seedPrerequisites({ executable: true })
     renderRouter(['/task'])
-    expect(screen.getByRole('link', { name: 'Execution' })).not.toHaveAttribute('aria-disabled')
-    expect(screen.getByRole('link', { name: 'Sessions' })).not.toHaveAttribute('aria-disabled')
+    const workflow = screen.getByRole('navigation', { name: 'Workflow' })
+    expect(within(workflow).getByRole('button', { name: 'Execution' })).toBeEnabled()
+    expect(within(workflow).getByRole('button', { name: 'Sessions' })).toBeEnabled()
   })
 })
 
@@ -269,14 +287,20 @@ describe('the analysis check left the programming workspace (evaluation-workspac
 })
 
 describe('the /evaluation route renders the pre-execution EVALUATION', () => {
-  it('shows an Evaluation link in the top-bar between Programming and Execution', () => {
+  it('shows an Evaluation stage in the Stepper between Programming and Execution', () => {
     seedPrerequisites()
     renderRouter(['/task'])
-    const links = screen.getAllByRole('link').map((l) => l.textContent?.trim() ?? '')
-    const idx = (name: string) => links.indexOf(name)
-    expect(idx('Programming')).toBeGreaterThanOrEqual(0)
-    expect(idx('Evaluation')).toBe(idx('Programming') + 1)
-    expect(idx('Execution')).toBe(idx('Evaluation') + 1)
+    const workflow = screen.getByRole('navigation', { name: 'Workflow' })
+    const programming = within(workflow).getByRole('button', { name: 'Programming' })
+    const evaluation = within(workflow).getByRole('button', { name: 'Evaluation' })
+    const execution = within(workflow).getByRole('button', { name: 'Execution' })
+    // DOM order: Programming → Evaluation → Execution (contiguous stage order).
+    expect(
+      programming.compareDocumentPosition(evaluation) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      evaluation.compareDocumentPosition(execution) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
   })
 
   it('renders /evaluation full-width WITHOUT the viewport (the decision is the focus)', () => {
@@ -308,7 +332,8 @@ describe('the /evaluation route renders the pre-execution EVALUATION', () => {
     const { router } = renderRouter(['/task'])
     expect(viewportMetrics.mounts).toBe(1)
 
-    fireEvent.click(screen.getByRole('link', { name: 'Evaluation' }))
+    const workflow = screen.getByRole('navigation', { name: 'Workflow' })
+    fireEvent.click(within(workflow).getByRole('button', { name: 'Evaluation' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/evaluation'))
     expect(screen.queryByTestId('viewport-stub')).not.toBeInTheDocument()
     expect(viewportMetrics.unmounts).toBe(1)
@@ -360,8 +385,16 @@ describe('router covers every registered workspace', () => {
     }
   })
 
+  it('renders the Demos tool workspace at /demos (demos-workspace spec, kind tool route)', async () => {
+    seedPrerequisites()
+    renderRouter(['/demos'])
+    expect(await screen.findByText(/No demos/i)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Demos' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByTestId('viewport-stub')).toBeInTheDocument()
+  })
+
   it.each(WORKSPACE_REGISTRY.filter((e) => !e.hidden))(
-    'renders $path ($workspace) with the shell and an active nav link',
+    'renders $path ($workspace) with the shell and its active nav surface',
     (entry) => {
       // Sessions requires `completed` (status 'completed' — which makes
       // `executable` false), every other visible area needs `executable`.
@@ -374,7 +407,17 @@ describe('router covers every registered workspace', () => {
       } else {
         expect(screen.getByTestId('viewport-stub')).toBeInTheDocument()
       }
-      expect(screen.getByRole('link', { name: entry.label })).toHaveAttribute('aria-current', 'page')
+      // Stages mark the current step in the Stepper; tools mark the TopBar
+      // link; a non-stage/non-tool area (Configuration) has no nav surface —
+      // its own header is the identifier.
+      if (entry.stage !== null) {
+        const workflow = screen.getByRole('navigation', { name: 'Workflow' })
+        expect(within(workflow).getByRole('button', { name: entry.label })).toHaveAttribute('aria-current', 'step')
+      } else if (entry.kind === 'tool') {
+        expect(screen.getByRole('link', { name: entry.label })).toHaveAttribute('aria-current', 'page')
+      } else {
+        expect(screen.getByRole('heading', { name: entry.label })).toBeInTheDocument()
+      }
     },
   )
 })

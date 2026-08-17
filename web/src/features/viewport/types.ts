@@ -155,12 +155,15 @@ export type FkFrameMap = Map<string, FkFrame>
 /**
  * Single source of truth for robot transforms. The renderer NEVER recomputes
  * FK — it applies whatever snapshot it receives.
- * - `execution`: object transforms from a runtime tick (`RuntimeDelta`)
+ * - `execution`: object transforms from a runtime tick (`RuntimeDelta`).
+ *   `receivedAt` is the render clock timestamp (`performance.now()`) stamped
+ *   WHEN the delta arrives in the store — it identifies the snapshot
+ *   explicitly and drives renderer-side interpolation between ticks.
  * - `fk`: frame transforms from backend `scene.frames` (`POST /scene/joints`)
  * - `idle`: no live transform (static scene state)
  */
 export type TransformSnapshot =
-  | { kind: 'execution'; transforms: ObjectTransform[] }
+  | { kind: 'execution'; transforms: ObjectTransform[]; receivedAt: number }
   | { kind: 'fk'; frames: FkFrameMap }
   | { kind: 'idle' }
 

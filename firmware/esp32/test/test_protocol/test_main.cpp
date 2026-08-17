@@ -57,6 +57,15 @@ static void send_and_expect(Fixture& f, const char* line, const char* expected) 
     TEST_ASSERT_EQUAL_STRING(expected, rtrim(Serial.output()).c_str());
 }
 
+// Feed one line, poll once, assert NO response (v2 chunked ACK: non-boundary
+// SAMPLE lines stay silent).
+static void send_no_response(Fixture& f, const char* line) {
+    Serial.clearOutput();
+    Serial.feedLine(line);
+    f.protocol.poll();
+    TEST_ASSERT_TRUE(rtrim(Serial.output()).empty());
+}
+
 static TimedWaypoint make_waypoint(const float joints[6], uint32_t dt_us) {
     TimedWaypoint w;
     w.joints.assign(joints, joints + 6);
@@ -66,7 +75,7 @@ static TimedWaypoint make_waypoint(const float joints[6], uint32_t dt_us) {
 
 static Manifest make_valid_manifest() {
     Manifest m;
-    m.metadata = ManifestMetadata{6, 3, 200000};
+    m.metadata = ManifestMetadata{6, 3, 200000, 1};
     ManifestSegment seg;
     seg.index = 0;
     seg.instruction = InstructionType::MOVEJ;
@@ -97,8 +106,35 @@ static void reach_executing(Fixture& f) {
 
 void test_hello_echoes_version_ok() {
     Fixture f;
+    // v2 (C): the version is VALIDATED — only THALOS_PROTOCOL_VERSION (2)
+    // handshakes; a stale v1 host fails BEFORE any upload traffic.
     send_and_expect(f, "HELLO 2", "HELLO 2 OK");
-    send_and_expect(f, "HELLO 42", "HELLO 42 OK");
+    send_and_expect(f, "HELLO 42", "ERROR VERSION_MISMATCH");
+}
+
+/// v2 (C): chunked-ACK upload — with `MANIFEST ... 2`, a chunk boundary
+/// ACKs once per 2 SAMPLEs (not per line); with 5 samples the 5th is a
+/// trailing PARTIAL chunk → no ACK, END_UPLOAD confirms with READY. Joints
+/// stay inside the envelope (base < 1.5708, elbow < 2.0944, prismatic ≤ 0.06).
+void test_manifest_chunked_ack_responds_once_per_chunk() {
+    Fixture f;
+    send_and_expect(f, "MANIFEST 6 5 200000 2", "OK");
+    send_and_expect(f, "SEGMENT 0 movej 0 5", "OK");
+    // Chunk boundaries after samples 2 and 4 → two OKs; 1, 3, 5 stay silent.
+    send_no_response(f, "SAMPLE 0 0 0 0 0 0 0");
+    send_and_expect(f, "SAMPLE 1.0 1.0 1.0 0.03 0.0 0.0 50000", "OK");
+    send_no_response(f, "SAMPLE 1.2 1.5 1.5 0.05 0.0 0.0 50000");
+    send_and_expect(f, "SAMPLE 1.4 2.0 2.0 0.05 0.0 0.0 50000", "OK");
+    send_no_response(f, "SAMPLE 1.5 2.0 2.0 0.05 0.0 0.0 50000");
+    send_and_expect(f, "END_UPLOAD", "READY");
+    send_and_expect(f, "EXECUTE", "OK");
+}
+
+/// v2 (C): a MANIFEST declaring chunk 0 must be rejected — the chunked-ACK
+/// batch size is part of the upload contract.
+void test_manifest_zero_chunk_rejected() {
+    Fixture f;
+    send_and_expect(f, "MANIFEST 6 3 200000 0", "ERROR INVALID_MANIFEST");
 }
 
 void test_hello_malformed_rejected() {
@@ -345,6 +381,8 @@ void test_servo_driver_negative_Infinity_rejected();
 
 // ── Tests from test_executor_servo.cpp (Executor+ServoDriver integration) ─
 void test_executor_RUNNING_writes_servo();
+void test_executor_repeat_loops_passes_back_to_back();
+void test_repeat_bounded_trace_no_heap_growth_across_passes();
 void test_executor_IDLE_no_write();
 void test_executor_STOP_no_new_writes();
 void test_executor_ERROR_no_new_writes();
@@ -383,6 +421,8 @@ int main() {
     UNITY_BEGIN();
     RUN_TEST(test_hello_echoes_version_ok);
     RUN_TEST(test_hello_malformed_rejected);
+    RUN_TEST(test_manifest_chunked_ack_responds_once_per_chunk);
+    RUN_TEST(test_manifest_zero_chunk_rejected);
     RUN_TEST(test_unknown_command_rejected);
     RUN_TEST(test_empty_line_ignored);
     RUN_TEST(test_manifest_valid_transitions_to_receiving);
@@ -429,6 +469,8 @@ int main() {
     RUN_TEST(test_servo_driver_positive_Infinity_rejected);
     RUN_TEST(test_servo_driver_negative_Infinity_rejected);
     RUN_TEST(test_executor_RUNNING_writes_servo);
+    RUN_TEST(test_executor_repeat_loops_passes_back_to_back);
+    RUN_TEST(test_repeat_bounded_trace_no_heap_growth_across_passes);
     RUN_TEST(test_executor_IDLE_no_write);
     RUN_TEST(test_executor_STOP_no_new_writes);
     RUN_TEST(test_executor_ERROR_no_new_writes);

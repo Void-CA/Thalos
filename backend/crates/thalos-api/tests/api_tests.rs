@@ -784,7 +784,7 @@ async fn workspace_sample_active_targets_the_loaded_catalog_robot() {
 #[tokio::test]
 async fn workspace_sample_active_targets_the_loaded_urdf_robot() {
     let app = test_app().await;
-    let icebot_urdf = include_str!("../../../../docs/robot/icebot.urdf");
+    let icebot_urdf = include_str!("../../../../docs/execution/robot/icebot.urdf");
 
     // A URDF import also becomes the active chain for the /active endpoint.
     let (load_status, body) = get_json(
@@ -1756,7 +1756,7 @@ async fn preview_setup(app: &Router) {
                 {
                     "type": "movel",
                     "target": {
-                        "translation": [1.5, 0.3, 0.5],
+                        "translation": [1.66, 0.60, 0.42],
                         "rotation": {"kind": "Quaternion", "value": {"w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0}}
                     }
                 }
@@ -1939,11 +1939,12 @@ async fn apply_command_writes_back_and_stores_inverse_without_preview() {
         "/api/v1/plan/commands/apply",
         // Recommendation 2 (Waypoint/InsertWaypoint) is AVAILABLE in this
         // scenario: it splits the MoveL at a reachable waypoint and
-        // recompiles. (M2 honesty: recommendation 1 — LiftTcp z-elevation —
-        // exceeds the Scara prismatic reach and is now Unavailable{ik_failed};
-        // recommendation 3 — RotateTool — is Unavailable because the rotated
-        // pose does not realize; both used to lie as `available` under the
-        // old D8 gate.)
+        // recompiles. (M2 honesty: recommendation 1 — Manipulability/
+        // RotateTool — does not realize from the segment start and is
+        // Unavailable{ik_failed}; recommendation 3 — Singularity (joint-space
+        // MoveJ replacement) — fails planning and is Unavailable
+        // {planning_failed}; both used to lie as `available` under the old D8
+        // gate.)
         Some(json!({"recommendation_id": 2})),
     )
     .await;
@@ -3004,8 +3005,10 @@ async fn semantic_compile_with_task_document_and_scene() {
 
 /// The ExecutionProgram the semantic lowering produces for the
 /// planar2r_task_payload(home + wait) TaskDocument used below: `home` lowers
-/// to MoveJ toward the scene home pose with the default profile, `wait`
-/// lowers to Delay (see thalos-semantic lowering).
+/// to MoveJ toward the scene home pose with the JOINT default profile (1.0
+/// rad/s — MoveJ plans in radians), `wait` lowers to Delay (see
+/// thalos-semantic lowering). The direct-path payload must match the
+/// lowering's emitted profile for the parity assertion.
 fn home_wait_execution_program() -> Value {
     json!({
         "instructions": [
@@ -3284,7 +3287,7 @@ fn icebot_task_payload(operations: Value) -> Value {
 #[tokio::test]
 async fn urdf_load_then_plan_uses_real_chain() {
     let app = test_app().await;
-    let icebot_urdf = include_str!("../../../../docs/robot/icebot.urdf");
+    let icebot_urdf = include_str!("../../../../docs/execution/robot/icebot.urdf");
 
     // Load the 4-DOF icebot URDF.
     let (load_status, _) = get_json(
@@ -3353,7 +3356,7 @@ async fn urdf_load_then_plan_uses_real_chain() {
 #[tokio::test]
 async fn urdf_load_then_semantic_execute_uses_real_chain() {
     let app = test_app().await;
-    let icebot_urdf = include_str!("../../../../docs/robot/icebot.urdf");
+    let icebot_urdf = include_str!("../../../../docs/execution/robot/icebot.urdf");
 
     let (load_status, _) = get_json(
         app.clone(),
@@ -3404,7 +3407,7 @@ async fn urdf_load_then_semantic_execute_uses_real_chain() {
 #[tokio::test]
 async fn icebot_xy_ik_converges_from_non_singular_q0() {
     let app = test_app().await;
-    let icebot_urdf = include_str!("../../../../docs/robot/icebot.urdf");
+    let icebot_urdf = include_str!("../../../../docs/execution/robot/icebot.urdf");
 
     let (load_status, _) = get_json(
         app.clone(),
@@ -3487,7 +3490,7 @@ async fn icebot_xy_ik_converges_from_non_singular_q0() {
 #[tokio::test]
 async fn load_urdf_exposes_real_robot_dto() {
     let app = test_app().await;
-    let icebot_urdf = include_str!("../../../../docs/robot/icebot.urdf");
+    let icebot_urdf = include_str!("../../../../docs/execution/robot/icebot.urdf");
 
     let (load_status, _) = get_json(
         app.clone(),
@@ -3526,7 +3529,7 @@ async fn load_urdf_exposes_real_robot_dto() {
 #[tokio::test]
 async fn urdf_load_emits_stable_robot_id() {
     let app = test_app().await;
-    let icebot_urdf = include_str!("../../../../docs/robot/icebot.urdf");
+    let icebot_urdf = include_str!("../../../../docs/execution/robot/icebot.urdf");
 
     // First import — the id must match urdf:<12 lowercase hex>.
     let (load_status, body) = get_json(
@@ -3813,7 +3816,7 @@ async fn start_execution_with_lost_connection_returns_409_connection_lost() {
     // FakeTransport answers HELLO, then reports the device disconnected on the
     // next receive (mid-upload) — the ConnectionLost seam.
     let transport = thalos_runtime::backends::transport::FakeTransport::new();
-    transport.inject_response(b"HELLO 1 OK\n".to_vec());
+    transport.inject_response(b"HELLO 2 OK\n".to_vec());
     transport.disconnect_on_empty_queue();
     state
         .services
@@ -4084,4 +4087,143 @@ async fn analyze_live_pipeline_returns_candidate_ranking_with_alternate_elbow() 
             row["cost"]
         );
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Demo catalog API (showcase-scenarios Slice 2 — design D9/D10/D12)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Fixture demos roots (tests/fixtures/demos{,-empty}). THALOS_DEMOS_ROOT is
+/// process-global, so demos tests serialize on a mutex: each test sets the
+/// root, builds the router, and requests while holding the lock.
+const DEMOS_FIXTURE_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/demos");
+const DEMOS_EMPTY_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/demos-empty");
+
+static DEMOS_ROOT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+async fn demos_get(root: &str, path: &str) -> (StatusCode, Option<Value>, String) {
+    let _guard = DEMOS_ROOT_LOCK.lock().unwrap();
+    // SAFETY: serialized by DEMOS_ROOT_LOCK — only demos tests mutate
+    // THALOS_DEMOS_ROOT, and each holds the lock across set_var + request.
+    unsafe { std::env::set_var("THALOS_DEMOS_ROOT", root) };
+    let app = test_app().await;
+    let req = Request::builder()
+        .method(http::Method::GET)
+        .uri(path)
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    let status = resp.status();
+    let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let json: Option<Value> = serde_json::from_slice(&bytes).ok();
+    (status, json, String::from_utf8_lossy(&bytes).into_owned())
+}
+
+async fn demos_request(root: &str, path: &str) -> (StatusCode, Option<Value>) {
+    let (status, json, _) = demos_get(root, path).await;
+    (status, json)
+}
+
+#[tokio::test]
+async fn demos_catalog_lists_all_demos() {
+    let (status, body) = demos_request(DEMOS_FIXTURE_ROOT, "/api/v1/demos").await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("catalog must be JSON");
+    let demos = body.as_array().unwrap();
+    assert_eq!(demos.len(), 3, "fixture catalog has 3 demos");
+    for entry in demos {
+        assert!(entry.get("id").is_some(), "entry must have id");
+        assert!(entry.get("title").is_some(), "entry must have title");
+        assert!(entry.get("category").is_some(), "entry must have category");
+    }
+    let happy = demos.iter().find(|d| d["id"] == "happy-path").unwrap();
+    assert_eq!(happy["title"], "Happy Path");
+    assert_eq!(happy["category"], "basics");
+    assert_eq!(
+        happy["narrative"],
+        "Pick a box from a tray and place it on the table."
+    );
+}
+
+#[tokio::test]
+async fn demos_catalog_empty_root_returns_empty_array() {
+    let (status, body) = demos_request(DEMOS_EMPTY_ROOT, "/api/v1/demos").await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.expect("catalog must be JSON");
+    let demos = body.as_array().unwrap();
+    assert!(
+        demos.is_empty(),
+        "a root with an empty index.json must list no demos"
+    );
+}
+
+#[tokio::test]
+async fn demos_scene_returns_parseable_scene_file() {
+    let (status, body) = demos_request(DEMOS_FIXTURE_ROOT, "/api/v1/demos/happy-path/scene").await;
+    assert_eq!(status, StatusCode::OK);
+    let scene = body.expect("scene must be JSON");
+    assert_eq!(scene["schema_version"], "1");
+    assert_eq!(scene["robot"]["name"], "icebot");
+    let objects = scene["objects"].as_array().unwrap();
+    assert_eq!(objects.len(), 1);
+    assert_eq!(objects[0]["id"], "box-1");
+}
+
+#[tokio::test]
+async fn demos_scene_unknown_id_returns_404_demo_not_found() {
+    let (status, body) = demos_request(DEMOS_FIXTURE_ROOT, "/api/v1/demos/nope/scene").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let body = body.expect("error body must be JSON");
+    assert_eq!(body["code"], "DEMO_NOT_FOUND");
+    assert!(body["error"].as_str().unwrap().contains("not found"));
+}
+
+#[tokio::test]
+async fn demos_program_returns_thalos_text() {
+    let (status, _, text) =
+        demos_get(DEMOS_FIXTURE_ROOT, "/api/v1/demos/happy-path/program").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        text.contains("pick box-1"),
+        "program must be the .thalos text, got: {text}"
+    );
+}
+
+#[tokio::test]
+async fn demos_program_unknown_id_returns_404_demo_not_found() {
+    let (status, body) = demos_request(DEMOS_FIXTURE_ROOT, "/api/v1/demos/nope/program").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let body = body.expect("error body must be JSON");
+    assert_eq!(body["code"], "DEMO_NOT_FOUND");
+}
+
+#[tokio::test]
+async fn demos_scene_invalid_file_returns_validation_error() {
+    let (status, body) =
+        demos_request(DEMOS_FIXTURE_ROOT, "/api/v1/demos/invalid-scene/scene").await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let body = body.expect("error body must be JSON");
+    assert_eq!(body["code"], "DEMO_SCENE_INVALID");
+    assert!(
+        body["error"].as_str().unwrap().contains("DuplicateId"),
+        "validation message must name the failing check: {}",
+        body["error"]
+    );
+}
+
+#[tokio::test]
+async fn demos_scene_resolves_via_catalog_not_filesystem_convention() {
+    // Catalog-authority proof (D10): demo "alias-probe" declares scene
+    // "shared/scene.json" — the file is NOT at filesystem/alias-probe/scene.json.
+    // Only catalog.lookup(id) can resolve it; an id-convention lookup 404s.
+    let (status, body) = demos_request(DEMOS_FIXTURE_ROOT, "/api/v1/demos/alias-probe/scene").await;
+    assert_eq!(status, StatusCode::OK);
+    let scene = body.expect("scene must be JSON");
+    let objects = scene["objects"].as_array().unwrap();
+    assert_eq!(
+        objects[0]["id"], "probe-obj",
+        "must serve the catalog-referenced scene file"
+    );
 }

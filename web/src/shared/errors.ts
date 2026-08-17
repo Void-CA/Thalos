@@ -57,6 +57,10 @@ export const CTA_BY_CODE: Record<string, string> = {
   no_firmware: 'No firmware detected — switch to Simulation or check the port',
   port_in_use: 'Port is in use — choose another port or disconnect the other process',
   connection_lost: 'Connection lost — reconnect to resume',
+  // Wire-level failure (serial desync / firmware rejection): the plan is
+  // intact — the retry reconnects the backend and re-attempts without
+  // resetting the plan state.
+  protocol_error: 'Protocol error with the hardware backend — retry reconnects and re-attempts',
   // R3-001: start without a connected hardware backend (esp32 active but never
   // connected, or disconnected while active) — the CTA connects the backend.
   not_connected: 'Hardware backend is not connected — connect it to start',

@@ -14,6 +14,10 @@ use thalos_runtime::DEFAULT_HISTORY_CAP;
 
 #[tokio::main]
 async fn main() {
+    // Load root .env (centralized configuration) before reading any env var.
+    // Existing process env wins over the file; a missing .env is a no-op.
+    dotenvy::dotenv().ok();
+
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .init();

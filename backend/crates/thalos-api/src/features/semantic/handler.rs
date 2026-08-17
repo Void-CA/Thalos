@@ -5,7 +5,9 @@ use axum::{Json, extract::State, http::StatusCode};
 use thalos_core::analysis::location::Location;
 use thalos_core::analysis::observation::{Observation, Severity};
 use thalos_core::{
-    kinematics::{forward::ForwardKinematics, inverse::DampedLeastSquaresSolver},
+    kinematics::{
+        forward::ForwardKinematics, inverse::DampedLeastSquaresSolver, inverse::IKConfig,
+    },
     motion::MotionProfile,
     robot::state::RobotState,
     spatial::frame::FrameRegistry,
@@ -42,6 +44,41 @@ fn validation_message(o: &Observation) -> String {
     format!("[{:?}] {:?} (op: {op})", o.severity, o.kind)
 }
 
+/// IK solver configuration for semantic compilation (spec `ik-config`).
+///
+/// Preserved site values (1000/1e-4/0.1) — unifying the TYPE across sites,
+/// not the values. Value convergence is a separate follow-up decision.
+const IK_CONFIG: IKConfig = IKConfig {
+    max_iterations: 1000,
+    tolerance: 1e-4,
+    lambda: 0.1,
+};
+
+/// Default JOINT-space motion profile for the semantic planner (spec
+/// `move-l-velocity-profile`): 1.0 rad/s, 0.5 rad/s² — the pre-change
+/// default, consistent with the icebot URDF rotational velocity limits
+/// (1.0/2.0 rad/s). MoveJ plans in RADIANS, so this is deliberately NOT the
+/// cartesian default. Planner behavior defaults, NOT physical robot
+/// properties — the URDF joint velocity/effort limits remain separate
+/// actuator constraints enforced at the execution boundary.
+const JOINT_PROFILE: MotionProfile = MotionProfile {
+    max_velocity: 1.0,
+    max_acceleration: 0.5,
+    max_jerk: None,
+};
+
+/// Default CARTESIAN-space motion profile for the semantic planner (spec
+/// `move-l-velocity-profile`): 0.1 m/s, 0.5 m/s² — the visible ~0.4s demo
+/// descent for short MoveL moves. Used ONLY for MoveL instructions (MoveJ
+/// uses [`JOINT_PROFILE`]). Planner behavior default, NOT a physical robot
+/// property — the URDF joint velocity/effort limits remain separate actuator
+/// constraints.
+const CARTESIAN_PROFILE: MotionProfile = MotionProfile {
+    max_velocity: 0.1,
+    max_acceleration: 0.5,
+    max_jerk: None,
+};
+
 /// Compile semantic task → ExecutionProgram.
 pub async fn compile_semantic(
     State(_state): State<Arc<AppState>>,
@@ -76,11 +113,8 @@ pub async fn compile_semantic(
     let ctx = LoweringContext {
         provider: &provider,
         default_tool: None,
-        default_profile: MotionProfile {
-            max_velocity: 1.0,
-            max_acceleration: 0.5,
-            max_jerk: None,
-        },
+        default_profile: JOINT_PROFILE,
+        default_cartesian_profile: Some(CARTESIAN_PROFILE),
     };
     let mp = SemanticLowering::lower(&task.program, &ctx).map_err(|e| {
         (
@@ -177,11 +211,8 @@ pub async fn run_semantic(
         let ctx = LoweringContext {
             provider: &provider,
             default_tool: None,
-            default_profile: MotionProfile {
-                max_velocity: 1.0,
-                max_acceleration: 0.5,
-                max_jerk: None,
-            },
+            default_profile: JOINT_PROFILE,
+            default_cartesian_profile: Some(CARTESIAN_PROFILE),
         };
         let mp = SemanticLowering::lower(&task.program, &ctx).map_err(|e| {
             (
@@ -195,7 +226,7 @@ pub async fn run_semantic(
         // `ForwardKinematics` → `DampedLeastSquaresSolver`).
         let dof = chain.dof_count();
         let fk = ForwardKinematics::new(chain.clone());
-        let ik_solver = DampedLeastSquaresSolver::new(fk, *chain.end_effector(), 1000, 1e-4, 0.1);
+        let ik_solver = DampedLeastSquaresSolver::from_config(fk, *chain.end_effector(), IK_CONFIG);
 
         // Frame registry for the frame names the semantic layer emits.
         let mut registry = FrameRegistry::new();

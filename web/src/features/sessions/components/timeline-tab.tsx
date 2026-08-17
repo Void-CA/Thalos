@@ -37,7 +37,7 @@ export function TimelineTab({ sessionId }: TimelineTabProps) {
   if (!data) return null
 
   return (
-    <div className="h-64 w-full">
+    <div className="h-80 w-full">
       <EChart model={timelineBuilder(data)} />
     </div>
   )

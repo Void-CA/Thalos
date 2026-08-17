@@ -206,7 +206,7 @@ impl PlanCompiler {
             };
             program.segments.len()
         ];
-        self.compile_segments(&program.segments, &metadata, ctx)
+        self.compile_segments(&program.segments, &metadata, ctx, program.semantic_targets.clone())
     }
 
     /// Shared compilation core.
@@ -221,6 +221,7 @@ impl PlanCompiler {
         segments: &[MotionSegment],
         metadata: &[NodeMetadata],
         ctx: &SegmentPlanningContext,
+        semantic_targets: Option<Vec<crate::motion::program::SemanticTarget>>,
     ) -> Result<CompiledPlan, CompileError> {
         let mut planned = Vec::with_capacity(segments.len());
         let mut all_waypoints: Vec<TrajectoryPoint> = Vec::new();
@@ -283,7 +284,11 @@ impl PlanCompiler {
         }
 
         let merged = Trajectory::new(all_waypoints);
-        Ok(CompiledPlan::new(merged, planned))
+        Ok(CompiledPlan::new_with_semantic_targets(
+            merged,
+            planned,
+            semantic_targets,
+        ))
     }
 
     /// Compile a sequence of Operations into a plan with a built-in ConstraintQuery.
@@ -323,7 +328,7 @@ impl PlanCompiler {
                 role: Some(n.role),
             })
             .collect();
-        let plan = self.compile_segments(&segments, &metadata, ctx)?;
+        let plan = self.compile_segments(&segments, &metadata, ctx, None)?;
 
         // 3. Build waypoint-level ranges from the per-operation node ranges.
         let mut waypoint_ranges: Vec<(Range<usize>, OperationConstraints)> = Vec::new();

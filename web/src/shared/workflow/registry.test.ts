@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { WORKSPACE_REGISTRY, producerOf } from './registry'
+import { stepperStages } from './derive'
 import type { ArtifactKind, Capability, WorkflowFlag } from './types'
 
 describe('WORKSPACE_REGISTRY (slice 1 — navigation contract)', () => {
-  it('registers the 8 sitemap paths in order (/planning absorbed into /task, /evaluation added, /analysis removed)', () => {
+  it('registers the 9 sitemap paths in order (/planning absorbed into /task, /evaluation added, /analysis removed, /demos appended as tool)', () => {
     expect(WORKSPACE_REGISTRY.map((e) => e.path)).toEqual([
       '/',
       '/scene',
@@ -13,6 +14,7 @@ describe('WORKSPACE_REGISTRY (slice 1 — navigation contract)', () => {
       '/sessions',
       '/knowledge',
       '/configuration',
+      '/demos',
     ])
   })
 
@@ -156,6 +158,7 @@ describe('WORKSPACE_REGISTRY (slice S1.7 — scene entry, Robot stage marker, la
       ['sessions', 6],
       ['knowledge', null],
       ['configuration', null],
+      ['demos', null],
     ])
   })
 
@@ -178,6 +181,8 @@ describe('WORKSPACE_REGISTRY (slice S1.7 — scene entry, Robot stage marker, la
       ['sessions', 'Runtime', 'ExecutionSession'],
       ['knowledge', null, null],
       ['configuration', null, null],
+      // Demos is an auxiliary TOOL — consumes/produces no artifact (D5/D13).
+      ['demos', null, null],
     ]
     for (const [workspace, consumes, producesArtifact] of chain) {
       expect(byWorkspace[workspace].consumes).toBe(consumes)
@@ -195,6 +200,7 @@ describe('WORKSPACE_REGISTRY (slice S1.7 — scene entry, Robot stage marker, la
       'Sessions',
       'Knowledge',
       'Configuration',
+      'Demos',
     ])
     const legacy = ['Task', 'Planning', 'Escena', 'Programación', 'Evaluación', 'Ejecución', 'Sesiones', 'Configuración', 'Planificación', 'Workspace Analysis']
     expect(WORKSPACE_REGISTRY.some((e) => legacy.includes(e.label))).toBe(false)
@@ -264,7 +270,7 @@ describe('WORKSPACE_REGISTRY (slice S3.5 — typed domain graph, user criterion 
 
   it('non-stage areas (stage null) are not part of the pipeline chain', () => {
     const nonStage = WORKSPACE_REGISTRY.filter((e) => e.stage === null).map((e) => e.workspace)
-    expect(nonStage).toEqual(['knowledge', 'configuration'])
+    expect(nonStage).toEqual(['knowledge', 'configuration', 'demos'])
   })
 })
 
@@ -274,6 +280,13 @@ describe('producerOf (registry helper)', () => {
     expect(producerOf('sceneValid')?.path).toBe('/scene')
     expect(producerOf('compiled')?.path).toBe('/task')
     expect(producerOf('completed')?.path).toBe('/execution')
+  })
+
+  it('maps derived executionViewable to the plan origin (Programming, never Robot root)', () => {
+    // executionViewable has no direct producer; its origin maps to the plan
+    // producer so a transient non-executable state redirects to /task — not
+    // the '/' Robot root (which made a failed retry look like a full restart).
+    expect(producerOf('executionViewable')?.path).toBe('/task')
   })
 
   it('returns undefined for flags no workspace produces', () => {
@@ -319,10 +332,44 @@ describe('WORKSPACE_REGISTRY (PR-D — kind nav model, auxiliary-tools-navigatio
     }
   })
 
-  it('has no tool entries (P0-B: Workspace Analysis moved from the /analysis route into the Robot accordion)', () => {
+  it('has exactly one tool entry — the Demos workspace (P0-B: /analysis moved into the Robot accordion)', () => {
     expect(WORKSPACE_REGISTRY.find((e) => e.path === '/analysis')).toBeUndefined()
     const tools = WORKSPACE_REGISTRY.filter((e) => e.kind === 'tool')
-    expect(tools).toEqual([])
+    expect(tools.map((e) => e.workspace)).toEqual(['demos'])
+  })
+})
+
+describe('WORKSPACE_REGISTRY (demos-workspace spec — Demos as kind:\'tool\')', () => {
+  const demos = WORKSPACE_REGISTRY.find((e) => e.workspace === 'demos')!
+
+  it('registers the Demos entry with kind: \'tool\' (NOT a pipeline stage)', () => {
+    expect(demos).toBeDefined()
+    expect(demos.kind).toBe('tool')
+    expect(demos.stage).toBeNull()
+    expect(demos.stepperIndex).toBeUndefined()
+  })
+
+  it('excludes the Demos entry from the stepper pipeline (stepperStages)', () => {
+    const stages = stepperStages(WORKSPACE_REGISTRY).map((e) => e.workspace)
+    expect(stages).not.toContain('demos')
+    expect(stages).toEqual(['robot', 'scene', 'task', 'evaluation', 'execution', 'sessions'])
+  })
+
+  it('produces no workflow flag, claims no capability and gates nothing', () => {
+    expect(demos.produces).toBeNull()
+    expect(demos.capability).toBeNull()
+    expect(demos.requires).toEqual([])
+    expect(demos.hidden).toBe(false)
+  })
+
+  it('consumes/produces no pipeline artifact (auxiliary tool, not part of the C3 chain)', () => {
+    expect(demos.consumes).toBeNull()
+    expect(demos.producesArtifact).toBeNull()
+  })
+
+  it('routes at /demos with the domain label', () => {
+    expect(demos.path).toBe('/demos')
+    expect(demos.label).toBe('Demos')
   })
 })
 

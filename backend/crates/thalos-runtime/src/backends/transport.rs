@@ -66,6 +66,14 @@ pub trait Transport: Send + Sync {
 
     /// Recibir datos. Bloquea hasta recibir al menos 1 byte.
     async fn receive(&mut self) -> Result<Vec<u8>, TransportError>;
+
+    /// Descartar líneas residuales sin destinatario (defensa contra desync de
+    /// protocolo). Real transports (serial/TCP) la implementan leyendo con un
+    /// timeout corto hasta que no queda nada; test fakes la dejan como no-op
+    /// porque su cola de respuestas pertenece a comandos futuros.
+    async fn drain(&mut self) -> Result<(), TransportError> {
+        Ok(())
+    }
 }
 
 /// Transporte TCP — conecta a un ESP32 (o simulador) por socket.
@@ -176,7 +184,16 @@ impl Transport for TcpTransport {
 pub struct SerialTransport {
     port: String,
     baud: u32,
-    stream: Option<tokio::sync::Mutex<tokio_serial::SerialStream>>,
+    /// Persistent buffered reader — OWNS the serial stream. The previous
+    /// design created a fresh `BufReader` per `receive()` call, so excess
+    /// bytes buffered from a multi-line burst (or a cancelled read) were
+    /// DROPPED with the local reader → the next read returned a line
+    /// FRAGMENT ("0.000000 0.000000…") that desynced the protocol (real
+    /// repro: "unexpected response: 0.000000 0.000000" during upload).
+    /// Keeping the reader across calls preserves those bytes (mirrors the
+    /// TCP transport's persistent `reader`). `send()` writes through
+    /// `BufReader::get_mut()`.
+    reader: Option<tokio::sync::Mutex<tokio::io::BufReader<tokio_serial::SerialStream>>>,
     /// Max wait for a response line in `receive`. Defaults to 2s — short
     /// enough to beat the frontend 10s timeout and return `no_firmware` fast,
     /// long enough for a real device to answer the HELLO handshake.
@@ -198,7 +215,7 @@ impl SerialTransport {
         Self {
             port: port.into(),
             baud,
-            stream: None,
+            reader: None,
             read_timeout: std::time::Duration::from_secs(2),
             partial_line: Some(Vec::new()),
         }
@@ -221,7 +238,7 @@ impl SerialTransport {
         Self {
             port: String::new(),
             baud: 0,
-            stream: Some(tokio::sync::Mutex::new(stream)),
+            reader: Some(tokio::sync::Mutex::new(tokio::io::BufReader::new(stream))),
             read_timeout,
             partial_line: Some(Vec::new()),
         }
@@ -231,50 +248,53 @@ impl SerialTransport {
 #[async_trait]
 impl Transport for SerialTransport {
     async fn connect(&mut self) -> Result<(), TransportError> {
-        // Idempotent: a stream already injected (test seam) stays open.
-        if self.stream.is_some() {
+        // Idempotent: a reader already present (test seam) stays open.
+        if self.reader.is_some() {
             return Ok(());
         }
         let builder = tokio_serial::new(&self.port, self.baud);
         let port = tokio_serial::SerialStream::open(&builder)
             .map_err(|e| TransportError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
-        self.stream = Some(tokio::sync::Mutex::new(port));
+        self.reader = Some(tokio::sync::Mutex::new(tokio::io::BufReader::new(port)));
         // A fresh device connection must not inherit a stale partial line.
         self.partial_line = Some(Vec::new());
         Ok(())
     }
 
     async fn disconnect(&mut self) -> Result<(), TransportError> {
-        self.stream = None;
+        self.reader = None;
         self.partial_line = None;
         Ok(())
     }
 
     async fn send(&mut self, data: &[u8]) -> Result<(), TransportError> {
         use tokio::io::AsyncWriteExt;
-        let stream = self.stream.as_ref().ok_or(TransportError::Disconnected)?;
-        let mut guard = stream.lock().await;
-        guard.write_all(data).await?;
-        guard.flush().await?;
+        let reader = self.reader.as_ref().ok_or(TransportError::Disconnected)?;
+        let mut guard = reader.lock().await;
+        guard.get_mut().write_all(data).await?;
+        guard.get_mut().flush().await?;
         Ok(())
     }
 
     async fn receive(&mut self) -> Result<Vec<u8>, TransportError> {
         use tokio::io::AsyncBufReadExt;
-        let stream = self.stream.as_ref().ok_or(TransportError::Disconnected)?;
-        let mut guard = stream.lock().await;
-        let mut reader = tokio::io::BufReader::new(&mut *guard);
+        let reader = self.reader.as_ref().ok_or(TransportError::Disconnected)?;
+        let mut guard = reader.lock().await;
         // REL-04 (serial): `read_until` accumulates into the persistent
         // `partial_line`, so a partial line buffered when the timeout fires
         // SURVIVES and is resumed by the next call (unlike `read_line`, whose
         // future-owned String buffer is dropped on timeout, losing the prefix).
+        // The reader itself is ALSO persistent: excess bytes buffered from a
+        // multi-line burst stay in the reader and are returned by the next
+        // call, instead of being dropped with a per-call `BufReader` (the
+        // desync that produced "unexpected response: 0.000000 0.000000").
         let line = self
             .partial_line
             .as_mut()
             .ok_or(TransportError::Disconnected)?;
         // R4-002: bound the read — a silent device must surface `Timeout`
         // (→ `no_firmware`) instead of blocking the request forever.
-        match tokio::time::timeout(self.read_timeout, reader.read_until(b'\n', line)).await {
+        match tokio::time::timeout(self.read_timeout, guard.read_until(b'\n', line)).await {
             Err(_) => return Err(TransportError::Timeout),
             Ok(Err(e)) => return Err(TransportError::Io(e)),
             Ok(Ok(0)) => return Err(TransportError::Disconnected),
@@ -295,6 +315,35 @@ impl Transport for SerialTransport {
         }
         bytes.push(b'\n');
         Ok(bytes)
+    }
+
+    async fn drain(&mut self) -> Result<(), TransportError> {
+        use tokio::io::AsyncBufReadExt;
+        let reader = self.reader.as_ref().ok_or(TransportError::Disconnected)?;
+        let mut guard = reader.lock().await;
+        let line = self
+            .partial_line
+            .as_mut()
+            .ok_or(TransportError::Disconnected)?;
+        // Consume stale complete lines with a short bound. A partial line
+        // (timeout mid-line) stays in `partial_line` for the next receive to
+        // resume — the persistent reader guarantees no bytes are lost.
+        for _ in 0..8 {
+            match tokio::time::timeout(
+                std::time::Duration::from_millis(20),
+                guard.read_until(b'\n', line),
+            )
+            .await
+            {
+                Err(_) => break,   // nothing more buffered
+                Ok(Err(_)) => break,
+                Ok(Ok(0)) => break,
+                Ok(Ok(_)) => {
+                    line.clear(); // consumed one stale line; read the next
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -419,10 +468,10 @@ mod tests {
         // Write from the OTHER end of the virtual pair; the transport reads it.
         use tokio::io::AsyncWriteExt;
         let mut slave = slave;
-        slave.write_all(b"HELLO 1 OK\r\n").await.unwrap();
+        slave.write_all(b"HELLO 2 OK\r\n").await.unwrap();
         slave.flush().await.unwrap();
         let resp = transport.receive().await.unwrap();
-        assert_eq!(String::from_utf8(resp).unwrap(), "HELLO 1 OK\n");
+        assert_eq!(String::from_utf8(resp).unwrap(), "HELLO 2 OK\n");
     }
 
     /// REL-04 / RES-05 (RED): a partial line buffered by `read_line` when the

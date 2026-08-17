@@ -19,8 +19,27 @@ pub struct LoweringContext<'a> {
     pub provider: &'a dyn KnowledgeProvider,
     /// The default tool to use when an operation specifies `tool: None`.
     pub default_tool: Option<ToolId>,
-    /// The default motion profile for emitted MoveJ/MoveL instructions.
+    /// The default motion profile for emitted JOINT-space instructions
+    /// (MoveJ approach/Home/MoveTo). Units: rad/s, rad/s² — MoveJ plans in
+    /// radians, so this is NOT the cartesian default.
     pub default_profile: MotionProfile,
+    /// The default motion profile for emitted CARTESIAN instructions (MoveL
+    /// grasp/drop/retract). Units: m/s, m/s². `None` → falls back to
+    /// `default_profile` (existing callers that only set `default_profile`
+    /// keep working).
+    pub default_cartesian_profile: Option<MotionProfile>,
+}
+
+impl LoweringContext<'_> {
+    /// The profile for cartesian (MoveL) instructions: the explicit cartesian
+    /// profile when configured, otherwise the joint `default_profile`
+    /// (backward-compatible fallback for callers that only set
+    /// `default_profile`).
+    pub fn cartesian_profile(&self) -> MotionProfile {
+        self.default_cartesian_profile
+            .clone()
+            .unwrap_or_else(|| self.default_profile.clone())
+    }
 }
 
 impl Clone for LoweringContext<'_> {
@@ -29,6 +48,7 @@ impl Clone for LoweringContext<'_> {
             provider: self.provider,
             default_tool: self.default_tool.clone(),
             default_profile: self.default_profile.clone(),
+            default_cartesian_profile: self.default_cartesian_profile.clone(),
         }
     }
 }
@@ -38,6 +58,7 @@ impl fmt::Debug for LoweringContext<'_> {
         f.debug_struct("LoweringContext")
             .field("default_tool", &self.default_tool)
             .field("default_profile", &self.default_profile)
+            .field("default_cartesian_profile", &self.default_cartesian_profile)
             .field("provider", &"<KnowledgeProvider>")
             .finish()
     }
@@ -75,6 +96,7 @@ mod tests {
             provider: &provider,
             default_tool: None,
             default_profile: sample_profile(),
+            default_cartesian_profile: None,
         };
         // Confirm we can call provider methods through the context
         let home = ctx.provider.home_pose();
@@ -88,6 +110,7 @@ mod tests {
             provider: &provider,
             default_tool: Some(ToolId("gripper-1".to_string())),
             default_profile: sample_profile(),
+            default_cartesian_profile: None,
         };
         assert_eq!(ctx.default_tool, Some(ToolId("gripper-1".to_string())));
     }
@@ -99,6 +122,7 @@ mod tests {
             provider: &provider,
             default_tool: None,
             default_profile: sample_profile(),
+            default_cartesian_profile: None,
         };
         assert!(ctx.default_tool.is_none());
     }
@@ -111,8 +135,48 @@ mod tests {
             provider: &provider,
             default_tool: None,
             default_profile: profile.clone(),
+            default_cartesian_profile: None,
         };
         assert_eq!(ctx.default_profile, profile);
+    }
+
+    // ── Cartesian profile resolution (follow-up fix) ──────────────────────
+
+    /// Existing callers that only set `default_profile` (the JOINT profile)
+    /// must keep working: cartesian instructions fall back to the joint
+    /// profile when `default_cartesian_profile` is `None`.
+    #[test]
+    fn cartesian_profile_falls_back_to_joint_profile_when_unspecified() {
+        let provider = sample_provider();
+        let profile = sample_profile();
+        let ctx = LoweringContext {
+            provider: &provider,
+            default_tool: None,
+            default_profile: profile.clone(),
+            default_cartesian_profile: None,
+        };
+        assert_eq!(ctx.cartesian_profile(), profile);
+    }
+
+    /// When a cartesian profile IS configured, cartesian instructions get it
+    /// — distinct from the joint profile.
+    #[test]
+    fn cartesian_profile_prefers_the_explicit_profile() {
+        let provider = sample_provider();
+        let joint = sample_profile();
+        let cartesian = MotionProfile {
+            max_velocity: 0.1,
+            max_acceleration: 0.5,
+            max_jerk: None,
+        };
+        let ctx = LoweringContext {
+            provider: &provider,
+            default_tool: None,
+            default_profile: joint.clone(),
+            default_cartesian_profile: Some(cartesian.clone()),
+        };
+        assert_eq!(ctx.default_profile, joint);
+        assert_eq!(ctx.cartesian_profile(), cartesian);
     }
 
     // ── Immutability ────────────────────────────────────────────────────
@@ -124,6 +188,7 @@ mod tests {
             provider: &provider,
             default_tool: None,
             default_profile: sample_profile(),
+            default_cartesian_profile: None,
         };
         // All methods take &self — confirmed by trait signature.
         // The provider reference is immutable (&dyn, not &mut dyn).
@@ -137,6 +202,7 @@ mod tests {
             provider: &provider,
             default_tool: None,
             default_profile: sample_profile(),
+            default_cartesian_profile: None,
         };
         // Prove we can read from the context multiple times
         let _ = ctx.provider;

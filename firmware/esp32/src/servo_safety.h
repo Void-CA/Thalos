@@ -32,7 +32,7 @@ constexpr uint16_t SERVO_PULSE_MIN_US[NUM_SERVO_CHANNELS] = {
     350, 350, 300, 500,
 };
 constexpr uint16_t SERVO_PULSE_MAX_US[NUM_SERVO_CHANNELS] = {
-    1650, 2050, 2600, 2500,
+    2150, 2050, 2600, 2500,
 };
 
 // ── SafetyEnvelope — EXECUTION ENFORCEMENT AUTHORITY (ADR-1) ─────────

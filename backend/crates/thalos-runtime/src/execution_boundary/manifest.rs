@@ -57,6 +57,10 @@ pub struct ManifestMetadata {
     pub total_samples: usize,
     /// Total execution duration in microseconds.
     pub duration_us: u64,
+    /// Firmware-side repeat count (v3): the ESP32 executor loops the
+    /// trajectory `repeat_count` times back-to-back with NO re-upload between
+    /// passes. Default 1 = single pass (v2-compatible wire).
+    pub repeat_count: u32,
 }
 
 /// A complete execution manifest ready for upload to a hardware backend.

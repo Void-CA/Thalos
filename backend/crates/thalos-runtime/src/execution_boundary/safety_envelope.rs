@@ -124,6 +124,19 @@ impl SafetyEnvelope {
     /// `dt_us == 0` → physical velocity is UNDEFINED (Δt = 0): the check is
     /// skipped and the firmware executor velocity-bounds advancement
     /// (ADR-3 — dt_us==0 is PROTOCOL SEMANTICS, firmware-authoritative).
+    ///
+    /// Relative tolerance: the planner samples at `t = i * time_step` (float
+    /// accumulation) and the manifest dt is rounded to whole µs, so a plan
+    /// whose cruise is EXACTLY at the ceiling measures implied velocity as
+    /// `1.0000000000000009` on some gaps. The strict comparison falsely
+    /// rejected those physically-valid plans (VELOCITY_EXCEEDED false
+    /// positive, real-hardware repro: 48/250 cruise gaps of a 0→1.5 rad
+    /// move). The tolerance (0.1%) absorbs float jitter + µs rounding while
+    /// still rejecting genuinely excessive plans (>0.1% over ceiling). The
+    /// firmware executor velocity-bounds physical advancement by real elapsed
+    /// time (ADR-3), so a plan at the ceiling is physically safe either way.
+    const VELOCITY_TOLERANCE: f64 = 1e-3;
+
     pub fn check_gap_velocity(delta_q: &[f64], dt_us: u32) -> Result<(), SafetyViolation> {
         if dt_us == 0 {
             return Ok(());
@@ -134,7 +147,8 @@ impl SafetyEnvelope {
                 continue; // no firmware envelope authority for this channel
             };
             let implied = dq / dt_s;
-            if implied.abs() > env.max_velocity_rad_per_s {
+            let ceiling = env.max_velocity_rad_per_s * (1.0 + Self::VELOCITY_TOLERANCE);
+            if implied.abs() > ceiling {
                 return Err(SafetyViolation {
                     channel: i,
                     value: implied,
@@ -145,6 +159,38 @@ impl SafetyEnvelope {
             }
         }
         Ok(())
+    }
+
+    /// Minimum `dt_us` for a joint-space gap so that EVERY channel's implied
+    /// velocity `Δq/Δt` stays at or under its ceiling (including
+    /// [`VELOCITY_TOLERANCE`]). The per-joint per-gap re-timer uses this to
+    /// stretch a violating gap's time by exactly the amount that bounds the
+    /// offending joint, preserving identical spatial motion.
+    ///
+    /// Returns `0` when no joint needs time (all-zero Δq, or every joint is
+    /// beyond channel 3 with no firmware envelope authority). Callers keep
+    /// ProTOCOL semantics: a `dt_us == 0` gap is NOT synthesized a finite
+    /// velocity from this value — firmware velocity-bounds advancement.
+    pub fn min_gap_dt_us(delta_q: &[f64]) -> u32 {
+        let mut min_us: u64 = 0;
+        for (i, &dq) in delta_q.iter().enumerate() {
+            let Some(env) = SAFETY_ENVELOPE.get(i) else {
+                continue; // no firmware envelope authority for this channel
+            };
+            if dq == 0.0 {
+                continue;
+            }
+            // `dt` such that |dq|/dt ≤ max_velocity·(1+tol). `ceil` guarantees
+            // dt_s ≥ |dq|/ceiling so the implied velocity lands under (never
+            // over) the ceiling after µs rounding.
+            let ceiling = env.max_velocity_rad_per_s * (1.0 + Self::VELOCITY_TOLERANCE);
+            let seconds = dq.abs() / ceiling;
+            let us = (seconds * 1_000_000.0).ceil() as u64;
+            if us > min_us {
+                min_us = us;
+            }
+        }
+        min_us.min(u32::MAX as u64) as u32
     }
 }
 
@@ -361,5 +407,36 @@ mod tests {
     fn check_gap_velocity_skips_zero_dt() {
         // A 1.0 rad jump with dt_us == 0 must NOT be read as infinite velocity.
         assert!(SafetyEnvelope::check_gap_velocity(&[1.0, 1.0, 1.0, 1.0], 0).is_ok());
+    }
+
+    /// REGRESSION (real-hardware repro): the planner samples at `t = i * dt`
+    /// (float accumulation), so cruise gaps measure `dt_real = 0.010000000000000009`
+    /// → rounded to 10000 µs → implied velocity `1.0000000000000009`. With the
+    /// strict `>` comparison a plan whose cruise is EXACTLY at the 1.0 rad/s
+    /// ceiling was falsely rejected (48/250 gaps on a 0→1.5 rad move). The
+    /// relative tolerance (0.1%) absorbs the float jitter + µs rounding while
+    /// still rejecting genuinely excessive plans.
+    #[test]
+    fn check_gap_velocity_accepts_ceiling_cruise_with_float_timestamps() {
+        // Replicates the planner output for a 0→1.5 rad base move, v=1.0,
+        // a=1.0, dt=0.01: cruise samples at float `i * 0.01` with Δq = 1.0 ×
+        // real_dt. The worst gap has implied = 1.0000000000000009.
+        let dt_us: u32 = 10_000; // round(0.010000000000000009 × 1e6)
+        let dq_cruise = 0.010000000000000009_f64; // 1.0 rad/s × float dt
+        assert!(
+            SafetyEnvelope::check_gap_velocity(&[dq_cruise, 0.0, 0.0, 0.0], dt_us).is_ok(),
+            "at-ceiling cruise with float timestamp jitter must NOT be rejected"
+        );
+    }
+
+    /// A plan genuinely 1% over the ceiling must still be rejected — the
+    /// tolerance only absorbs float/rounding noise, not real exceedance.
+    #[test]
+    fn check_gap_velocity_still_rejects_one_percent_over_ceiling() {
+        let dt_us: u32 = 10_000;
+        let dq = 0.0101_f64; // 1.01 rad/s implied > 1.001 tolerance ceiling
+        let err =
+            SafetyEnvelope::check_gap_velocity(&[dq, 0.0, 0.0, 0.0], dt_us).unwrap_err();
+        assert_eq!(err.diagnostic_code(), "VELOCITY_EXCEEDED");
     }
 }

@@ -2,8 +2,9 @@ import { PipelineStatus } from '@/features/semantic/components/pipeline-status'
 import { TaskEditor } from '@/features/semantic/components/task-editor'
 import { DiagnosticsPanel } from '@/features/semantic/components/diagnostics-panel'
 import { PlanningPanel } from '@/features/planning/components/planning-panel'
-import { TrajectoryColorPicker } from '@/features/planning/components/trajectory-color-picker'
+import { TrajectoryColorSection } from '@/features/planning/components/trajectory-color-section'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { useSemanticEditor } from '@/features/semantic/store'
 
 /**
  * ProgrammingWorkspace — the UNIFIED Programming area (/task, stage 3).
@@ -33,15 +34,40 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
  * to /evaluation and /execution.
  */
 export function ProgrammingWorkspace() {
+  /** Lifted buffer-divergence flag (task-code-sync-guards spec): the Code tab
+   *  sets it while its text buffer holds uncommitted edits. The guard lives
+   *  HERE — at the switch — because the editor cannot block its own unmount. */
+  const hasUncommittedBuffer = useSemanticEditor((s) => s.hasUncommittedBuffer)
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* ── Programming header: workflow progress ── */}
-      <div className="px-3 py-2 border-b border-border/50">
+      {/* ── Programming header: workflow progress (feedback layer, R6) ── */}
+      <div data-layer="feedback" className="px-3 py-2 border-b border-border/50">
         <PipelineStatus />
       </div>
 
-      <Tabs defaultValue="tasks" className="flex flex-col h-full overflow-hidden min-h-0">
-        <TabsList className="mx-3 mt-3 shrink-0">
+      <Tabs
+        defaultValue="tasks"
+        className="flex flex-col h-full overflow-hidden min-h-0"
+        onValueChange={(_, details) => {
+          // Tab-switch guard (task-code-sync-guards spec "Tab-Switch Warns
+          // Before Discarding Uncommitted Buffer"): switching tabs unmounts
+          // the Code editor, discarding its uncommitted text buffer — warn
+          // and let the user confirm or cancel before the data is lost.
+          if (hasUncommittedBuffer) {
+            const confirmed = window.confirm('Uncommitted changes will be lost. Continue?')
+            if (!confirmed) {
+              details.cancel()
+              return
+            }
+            // The buffer is discarded with the unmount — the flag is stale.
+            useSemanticEditor.setState({ hasUncommittedBuffer: false })
+          }
+        }}
+      >
+        {/* Navigation layer (R6) — visually distinct from feedback and
+            commands so the three toolbar categories never read as one bar. */}
+        <TabsList data-layer="navigation" className="ml-3 mr-3 mt-3 shrink-0 gap-2.5">
           <TabsTrigger value="tasks">Task</TabsTrigger>
           <TabsTrigger value="motion">Motion</TabsTrigger>
           <TabsTrigger value="code">Code</TabsTrigger>
@@ -52,19 +78,14 @@ export function ProgrammingWorkspace() {
           <div className="flex-1 overflow-hidden min-h-0">
             <TaskEditor />
           </div>
+          <TrajectoryColorSection />
           <DiagnosticsPanel />
         </TabsContent>
 
         {/* Tab 2 — motion program by segments + trajectory color. */}
         <TabsContent value="motion" className="flex-1 overflow-y-auto p-3 space-y-4">
           <PlanningPanel />
-
-          <section>
-            <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">
-              Trajectory Color
-            </h2>
-            <TrajectoryColorPicker />
-          </section>
+          <TrajectoryColorSection />
         </TabsContent>
 
         {/* Tab 3 — the SAME semantic editor in TEXT mode (initialMode="text"):
@@ -77,6 +98,7 @@ export function ProgrammingWorkspace() {
           <div className="flex-1 overflow-hidden min-h-0">
             <TaskEditor initialMode="text" />
           </div>
+          <TrajectoryColorSection />
           <DiagnosticsPanel />
         </TabsContent>
       </Tabs>

@@ -1,0 +1,103 @@
+// Safety Flow — Multi-layer validation
+// Render: dot -Tsvg safety-flow.dot -o safety-flow.svg
+
+digraph safety {
+    rankdir=TB;
+    fontname="Helvetica";
+    node [fontname="Helvetica", fontsize=11];
+    edge [fontname="Helvetica", fontsize=10];
+    label="Safety Flow — Multi-Layer Validation";
+    labelloc=t;
+    fontsize=14;
+
+    // ── Layer 1: Trajectory Verification ──────────────────
+    subgraph cluster_layer1 {
+        label="Layer 1 — Trajectory Verification (thalos-core)";
+        style=filled;
+        fillcolor="#E8F4FD";
+        color="#4A90D9";
+
+        node [shape=box, style=filled, fillcolor="#FFFFFF"];
+       jl [label="Joint Limits\n(per-articulation\nmin/max rad)"];
+        col [label="Collision Detection\n(SAT, OBB,\nself + environment)"];
+        sing [label="Singularity Analysis\n(manipulability\nmeasure)"];
+
+        check1 [label="All checks\npass?", shape=diamond, style=filled, fillcolor="#FFF3CD"];
+        reject1 [label="REJECT\n(no execution)", shape=box, style=filled, fillcolor="#FDE8E8"];
+        approve1 [label="APPROVED\n(continue)", shape=box, style=filled, fillcolor="#E8FDE8"];
+
+        jl -> check1;
+        col -> check1;
+        sing -> check1;
+        check1 -> reject1 [label="fail"];
+        check1 -> approve1 [label="pass"];
+    }
+
+    // ── Layer 2: Safety Envelope ───────────────────────────
+    subgraph cluster_layer2 {
+        label="Layer 2 — Safety Envelope (safety-envelope.toml)";
+        style=filled;
+        fillcolor="#E8FDE8";
+        color="#4A904A";
+
+        node [shape=box, style=filled, fillcolor="#FFFFFF"];
+        pos [label="Position Check\nmin ≤ commanded ≤ max"];
+        vel [label="Velocity Check\n|velocity| ≤ max"];
+        rej2 [label="REJECT\n(not clamp)", shape=box, style=filled, fillcolor="#FDE8E8"];
+        app2 [label="APPROVED", shape=box, style=filled, fillcolor="#E8FDE8"];
+
+        pos -> vel;
+        vel -> rej2 [label="out of bounds"];
+        vel -> app2 [label="within bounds"];
+    }
+
+    // ── Layer 3: Protocol Validation ──────────────────────
+    subgraph cluster_layer3 {
+        label="Layer 3 — Protocol Validation (ESP32 Firmware)";
+        style=filled;
+        fillcolor="#FDE8F0";
+        color="#D94A90";
+
+        node [shape=box, style=filled, fillcolor="#FFFFFF"];
+        parse [label="Parse Command\n(MANIFEST, SEGMENT,\nSAMPLE, EXECUTE,\nSTOP, STATUS)"];
+        valid3 [label="Validate\n(joint count,\npulse range,\nsegment structure)"];
+        rej3 [label="ERROR", shape=box, style=filled, fillcolor="#FDE8E8"];
+        app3 [label="OK", shape=box, style=filled, fillcolor="#E8FDE8"];
+
+        parse -> valid3;
+        valid3 -> rej3 [label="invalid"];
+        valid3 -> app3 [label="valid"];
+    }
+
+    // ── Layer 4: Emergency Stop ───────────────────────────
+    subgraph cluster_layer4 {
+        label="Layer 4 — Emergency Stop";
+        style=filled;
+        fillcolor="#FDE8E8";
+        color="#D94A4A";
+
+        node [shape=box, style=filled, fillcolor="#FFFFFF"];
+        stop [label="STOP Command"];
+        hold [label="Hold by Inaction\n(servos hold last position)"];
+        reset [label="Return to Idle"];
+
+        stop -> hold -> reset;
+    }
+
+    // ── Flow ──────────────────────────────────────────────
+    approve1 -> pos [label="trajectory\napproved"];
+    app2 -> parse [label="command\nvalidated"];
+    app3 -> pca [label="command\naccepted"];
+
+    node [shape=box3d, style=filled, fillcolor="#F0E8FD"];
+    pca [label="PCA9685\nPWM Output"];
+    servo [label="Servo\nInternal Loop"];
+
+    pca -> servo;
+
+    // ── Annotations ───────────────────────────────────────
+    node [shape=note, style=filled, fillcolor="#FFF8E1", fontsize=9];
+    note_boundary [label="Honest Boundary:\nCommands are validated\nbefore reaching actuator.\nOnce sent, no position\nmeasurement returns.\nOpen-loop at platform level."];
+
+    note_boundary -> servo [style=dashed, arrowhead=none];
+}

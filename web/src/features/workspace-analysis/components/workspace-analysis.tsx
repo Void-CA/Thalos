@@ -252,7 +252,7 @@ export function WorkspaceAnalysis() {
        * tab is coupled to the 3D point cloud — switching re-colors it. ── */}
       {hasResults && effectiveTab && (
         <Tabs value={effectiveTab} onValueChange={(tab) => selectTab(tab as ReportTab)}>
-          <TabsList className="w-full">
+          <TabsList className="mx-3 mt-3 shrink-0 w-full">
             <TabsTrigger value="workspace">Workspace</TabsTrigger>
             <TabsTrigger value="singularity">Singularity</TabsTrigger>
             <TabsTrigger value="manipulability">Manipulability</TabsTrigger>

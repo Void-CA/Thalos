@@ -17,13 +17,10 @@ use crate::execution_boundary::manifest::{
     ExecutionManifest, ManifestInstruction, ManifestMetadata, ManifestSegment, TimedWaypoint,
 };
 use crate::execution_boundary::manifest_builder::ExecutionManifestBuilder;
-use crate::execution_boundary::safety_envelope::SafetyEnvelope;
 use crate::execution_boundary::ExecutionSample;
 use crate::session::execution_source::ExecutionSource;
 use crate::state::robot_state::{MotionMode, RobotState};
-use thalos_core::execution::plan::{
-    ExecutionInstruction, ExecutionPlan, ExecutionSegment, ExecutionWaypoint,
-};
+use thalos_core::execution::plan::{BuilderError, ExecutionPlan};
 
 use protocol::{Esp32Protocol, FirmwareState, ProtocolError};
 
@@ -66,7 +63,9 @@ impl Esp32Backend {
     /// until `connect()` is called.
     pub fn new(transport: Box<dyn Transport>) -> Self {
         Self {
-            protocol: tokio::sync::Mutex::new(Some(Esp32Protocol::new(transport, 1))),
+            // Protocol v2 (C): chunked upload ACK + 460800 baud. A stale v1
+            // firmware fails the handshake (VERSION_MISMATCH) before upload.
+            protocol: tokio::sync::Mutex::new(Some(Esp32Protocol::new(transport, 2))),
             connected: std::sync::atomic::AtomicBool::new(false),
             consecutive_poll_failures: std::sync::atomic::AtomicU32::new(0),
             plan_duration: 0.0,
@@ -74,122 +73,6 @@ impl Esp32Backend {
             collected_samples: tokio::sync::Mutex::new(None),
             last_status_logged: std::sync::atomic::AtomicU8::new(0),
         }
-    }
-
-    /// Build an [`ExecutionManifest`] from raw waypoints and total duration.
-    ///
-    /// # Migration shim (deprecated)
-    ///
-    /// The canonical chain is
-    /// `CompiledPlan → ExecutionPlanBuilder → ExecutionPlan →
-    /// ExecutionManifestBuilder`. This method keeps the legacy
-    /// `RobotController::execute()` contract working without callers opting
-    /// into the pure chain: it constructs the [`ExecutionPlan`] the legacy
-    /// algorithm implied (even spacing, a single MoveJ segment covering every
-    /// sample, first `dt_us = 0`) and delegates to [`ExecutionManifestBuilder`],
-    /// which emits bit-identical output to the old inline algorithm for the
-    /// same input. The one exception is a sub-(N−1)-microsecond duration,
-    /// handled by the degenerate branch in the body (see its comment).
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ControllerError::InvalidManifest`] if the pure builder
-    /// rejects the input. R1-1 (CRITICAL): the builder now runs the firmware
-    /// physical-envelope checks (`INVALID_JOINT` / `VELOCITY_EXCEEDED`) that
-    /// the structural `validate_manifest` does not cover — a fast or
-    /// out-of-envelope plan MUST surface as a graceful error (4xx at the
-    /// API), NEVER a panic. Fail loud, reject-not-clamp.
-    #[deprecated(note = "use ExecutionManifestBuilder via ExecutionPlanBuilder")]
-    fn build_manifest(
-        waypoints: &[Vec<f64>],
-        duration: f64,
-    ) -> Result<ExecutionManifest, ControllerError> {
-        let total_samples = waypoints.len();
-        let duration_us = (duration * 1_000_000.0) as u64;
-        // Legacy even-spacing: integer division, first sample dt = 0.
-        let dt_per_sample = if total_samples > 1 {
-            duration_us / (total_samples - 1) as u64
-        } else {
-            0
-        };
-
-        // Degenerate case: a duration shorter than (N-1) µs truncates the
-        // per-gap delta to zero, so every reconstructed timestamp collapses
-        // to 0.0 and the builder's dedup CANNOT represent the input — it
-        // either returns `Err(DedupConflict)` (equal timestamp, different
-        // joints), failing the Result below inside the production
-        // `execute()` path, or silently collapses N distinct commanded
-        // waypoints into one sample when joints are bit-equal. Legacy
-        // behavior was total: an N-sample manifest with all `dt_us = 0`
-        // (`duration_us` = 0) that the firmware validator accepts (timing
-        // diff 0 <= 1000 µs floor). Bypass the builder and reproduce that
-        // output exactly.
-        //
-        // M3 (ADR-3/ADR-5): this all-dt_us==0 output is NOT an instant-jump
-        // plan. dt_us==0 makes physical velocity v = Δq/Δt UNDEFINED — the
-        // manifest carries NO timing claim the executor could read as a jump.
-        // Velocity-bounding is FIRMWARE-AUTHORITATIVE: the executor controls
-        // advancement as max_velocity × elapsed_real_time and steps at most
-        // one dt_us==0 waypoint per update (PROTOCOL SEMANTICS, documented in
-        // docs/protocol/esp32-execution.md). The backend never infers host
-        // velocity from Δq over a zero dt.
-        if total_samples > 1 && dt_per_sample == 0 {
-            return Ok(ExecutionManifest {
-                metadata: ManifestMetadata {
-                    dof_count: waypoints.first().map(|w| w.len()).unwrap_or(0),
-                    total_samples,
-                    duration_us: 0,
-                },
-                segments: vec![ManifestSegment {
-                    index: 0,
-                    instruction: ManifestInstruction::MoveJ,
-                    sample_start: 0,
-                    sample_count: total_samples,
-                }],
-                samples: waypoints
-                    .iter()
-                    .map(|joints| TimedWaypoint {
-                        joints: joints.clone(),
-                        dt_us: 0,
-                    })
-                    .collect(),
-            });
-        }
-
-        // Absolute timestamps chosen so the builder's `round()` reproduces
-        // `dt_per_sample` exactly, and a declared duration equal to the legacy
-        // SUMMED `duration_us` (sum of dt — NOT `round(duration * 1e6)` when
-        // the integer division truncates).
-        let plan = ExecutionPlan {
-            waypoints: waypoints
-                .iter()
-                .enumerate()
-                .map(|(i, joints)| ExecutionWaypoint {
-                    joints: joints.clone(),
-                    timestamp: i as f64 * dt_per_sample as f64 / 1_000_000.0,
-                })
-                .collect(),
-            segments: vec![ExecutionSegment {
-                index: 0,
-                planned_segment_index: 0,
-                instruction: ExecutionInstruction::MoveJ,
-                waypoint_range: 0..total_samples,
-            }],
-            duration: (total_samples.saturating_sub(1) as u64 * dt_per_sample) as f64 / 1_000_000.0,
-        };
-
-        ExecutionManifestBuilder::build(&plan).map_err(|e| {
-            // R1-1 (CRITICAL): the pure builder rejects plans the structural
-            // `validate_manifest` passes — out-of-envelope positions
-            // (INVALID_JOINT) and implied velocities above the firmware
-            // ceilings (VELOCITY_EXCEEDED). The shim MUST NOT panic: surface
-            // a graceful ControllerError so the API answers 4xx (invalid_manifest)
-            // instead of the backend crashing. Fail loud, reject-not-clamp —
-            // never silent clamp/mutation of the commanded plan.
-            ControllerError::InvalidManifest(format!(
-                "manifest rejected by the firmware-parity validator: {e}"
-            ))
-        })
     }
 
     /// Get a mutable reference to the protocol, if connected.
@@ -261,77 +144,24 @@ impl Esp32Backend {
         }
     }
 
-    /// Validate that the waypoints are acceptable before any wire traffic.
+    /// Map a pure-chain builder rejection to a graceful `ControllerError`,
+    /// preserving the firmware-parity diagnostic CODE in the message.
     ///
-    /// Returns `Ok(())` or `Err(ControllerError::InvalidManifest)` with
-    /// a descriptive message.
-    fn validate_manifest(waypoints: &[Vec<f64>], duration: f64) -> Result<(), ControllerError> {
-        if waypoints.is_empty() {
-            return Err(ControllerError::InvalidManifest(
-                "no waypoints provided".into(),
-            ));
+    /// R1-1 (CRITICAL): the builder rejects plans the old structural
+    /// `validate_manifest` passed — out-of-envelope positions (INVALID_JOINT)
+    /// and implied velocities above the firmware ceilings (VELOCITY_EXCEEDED).
+    /// The rejection MUST surface as a graceful `InvalidManifest` (→ 4xx at
+    /// the API), NEVER a panic. The frontend error-UX keys on the machine-
+    /// readable code, so `Validation(code)` keeps the code verbatim.
+    fn map_builder_error(e: BuilderError) -> ControllerError {
+        match e {
+            BuilderError::Validation(code) => ControllerError::InvalidManifest(format!(
+                "plan rejected by the firmware-parity validator: {code}"
+            )),
+            BuilderError::DedupConflict { index, t } => ControllerError::InvalidManifest(format!(
+                "duplicate timestamp {t} with different positions at waypoint {index}"
+            )),
         }
-        if waypoints.iter().any(|w| w.is_empty()) {
-            return Err(ControllerError::InvalidManifest(
-                "empty joint vector in waypoint".into(),
-            ));
-        }
-        if duration <= 0.0 {
-            return Err(ControllerError::InvalidManifest(
-                "duration must be positive".into(),
-            ));
-        }
-        // All waypoints must have the same DOF
-        let dof = waypoints[0].len();
-        if waypoints.iter().any(|w| w.len() != dof) {
-            return Err(ControllerError::InvalidManifest(
-                "inconsistent DOF across waypoints".into(),
-            ));
-        }
-
-        // R1-1 (CRITICAL): surface the firmware physical-envelope rejection
-        // HERE, before plan construction and any wire traffic — the firmware
-        // SafetyEnvelope is authoritative for the live path. Position check
-        // per waypoint; implied velocity Δq/Δt per gap over the SAME
-        // even-spacing dt the shim reconstructs (bit-exact with the builder's
-        // `round()`). The diagnostic code (INVALID_JOINT / VELOCITY_EXCEEDED)
-        // matches `firmware/esp32/src/validator.cpp`. Reject-not-clamp: the
-        // plan is refused unmodified, never silently clamped/mutated.
-        for (i, w) in waypoints.iter().enumerate() {
-            if let Err(v) = SafetyEnvelope::check_joints(w) {
-                return Err(ControllerError::InvalidManifest(format!(
-                    "plan rejected by the firmware safety envelope: {} ({}) at waypoint {i}",
-                    v.diagnostic_code(),
-                    v
-                )));
-            }
-        }
-        // dt == 0 gaps (sub-microsecond durations) make velocity UNDEFINED —
-        // skipped, the firmware executor velocity-bounds advancement (ADR-3).
-        if waypoints.len() > 1 {
-            let duration_us = (duration * 1_000_000.0) as u64;
-            let dt_per_gap_us = duration_us / (waypoints.len() - 1) as u64;
-            if dt_per_gap_us > 0 {
-                for i in 1..waypoints.len() {
-                    let delta_q: Vec<f64> = waypoints[i]
-                        .iter()
-                        .zip(&waypoints[i - 1])
-                        .map(|(a, b)| a - b)
-                        .collect();
-                    if let Err(v) =
-                        SafetyEnvelope::check_gap_velocity(&delta_q, dt_per_gap_us as u32)
-                    {
-                        return Err(ControllerError::InvalidManifest(format!(
-                            "plan rejected by the firmware safety envelope: {} ({}) at gap {}",
-                            v.diagnostic_code(),
-                            v,
-                            i - 1
-                        )));
-                    }
-                }
-            }
-        }
-        Ok(())
     }
 }
 
@@ -380,43 +210,81 @@ impl RobotController for Esp32Backend {
 
     async fn execute(
         &mut self,
-        waypoints: Vec<Vec<f64>>,
-        duration: f64,
+        plan: ExecutionPlan,
     ) -> Result<(), ControllerError> {
         if !self.is_connected() {
             return Err(ControllerError::NotConnected);
         }
 
-        // Task 2.10: Validate manifest before any wire traffic
-        Self::validate_manifest(&waypoints, duration).map_err(|e| {
-            tracing::error!(
-                error = %e,
-                waypoints = waypoints.len(),
-                duration_s = duration,
-                "ESP32 execute rejected BEFORE wire traffic (invalid manifest)"
-            );
-            e
-        })?;
+        let total_samples = plan.waypoints.len();
         // Store the plan duration so STATUS polls can map fraction → seconds.
-        self.plan_duration = duration;
+        self.plan_duration = plan.duration;
+
+        // DEGENERATE TRUNCATION GUARD (legacy shim parity): a duration whose
+        // µs value truncates below (N-1) — `(duration * 1e6) as u64`
+        // (TRUNCATION, NOT round) — collapses every reconstructed gap to
+        // 0 µs. The pure builder CANNOT represent N distinct sub-µs
+        // timestamps: it either returns `Err(DedupConflict)` (equal
+        // timestamp, different joints) or silently collapses N distinct
+        // commanded waypoints when joints are bit-equal. Legacy behavior was
+        // total: an N-sample manifest with all `dt_us = 0` (`duration_us` =
+        // 0) that the firmware validator accepts (timing diff 0 <= 1000 µs
+        // floor). Bypass the builder and reproduce that output exactly.
+        //
+        // M3 (ADR-3/ADR-5): this all-dt_us==0 output is NOT an instant-jump
+        // plan. dt_us==0 makes physical velocity v = Δq/Δt UNDEFINED — the
+        // manifest carries NO timing claim the executor could read as a jump.
+        // Velocity-bounding is FIRMWARE-AUTHORITATIVE: the executor controls
+        // advancement as max_velocity × elapsed_real_time and steps at most
+        // one dt_us==0 waypoint per update (PROTOCOL SEMANTICS). The backend
+        // never infers host velocity from Δq over a zero dt.
+        let manifest = if total_samples > 1 && {
+            let duration_us = (plan.duration * 1_000_000.0) as u64;
+            duration_us < (total_samples - 1) as u64
+        } {
+            ExecutionManifest {
+                metadata: ManifestMetadata {
+                    dof_count: plan.waypoints.first().map(|w| w.joints.len()).unwrap_or(0),
+                    total_samples,
+                    duration_us: 0,
+                    repeat_count: plan.repeat_count,
+                },
+                segments: vec![ManifestSegment {
+                    index: 0,
+                    instruction: ManifestInstruction::MoveJ,
+                    sample_start: 0,
+                    sample_count: total_samples,
+                }],
+                samples: plan
+                    .waypoints
+                    .iter()
+                    .map(|wp| TimedWaypoint {
+                        joints: wp.joints.clone(),
+                        dt_us: 0,
+                    })
+                    .collect(),
+            }
+        } else {
+            // The real-timestamp pure chain: absolute timestamps become
+            // per-gap dt_us with the REAL dt (no even-spacing reconstruction),
+            // and the firmware-parity validation (INVALID_JOINT /
+            // VELOCITY_EXCEEDED / TIMING_INVALID / …) runs inside build().
+            // R1-1 (CRITICAL): a rejection surfaces as a graceful
+            // `InvalidManifest` (→ 4xx at the API), never a panic. No wire
+            // traffic has happened yet. Fail loud, reject-not-clamp — never
+            // silent clamp/mutation of the commanded plan.
+            ExecutionManifestBuilder::build(&plan).map_err(|e| {
+                tracing::error!(
+                    error = %e,
+                    waypoints = plan.waypoints.len(),
+                    duration_s = plan.duration,
+                    "ESP32 execute rejected by manifest builder (no wire traffic)"
+                );
+                Self::map_builder_error(e)
+            })?
+        };
 
         let protocol = self.protocol_mut()?;
-        // The legacy shim is deprecated; execute() still consumes it until the
-        // RobotController path migrates to the pure chain (separate SDD).
-        // R1-1 (CRITICAL): the shim is FALLIBLE — the builder can reject a
-        // plan the structural checks passed (INVALID_JOINT/VELOCITY_EXCEEDED),
-        // and a rejection MUST surface as a graceful `InvalidManifest` error
-        // (→ 4xx at the API), never a panic. No wire traffic has happened yet.
-        #[allow(deprecated)]
-        let manifest = Self::build_manifest(&waypoints, duration).map_err(|e| {
-            tracing::error!(
-                error = %e,
-                waypoints = waypoints.len(),
-                duration_s = duration,
-                "ESP32 execute rejected by manifest builder (no wire traffic)"
-            );
-            e
-        })?;
 
         // Upload → READY. One NOT_IDLE recovery: a stale firmware state
         // (READY/EXECUTING/ERROR left over from a previous session) rejects
@@ -434,12 +302,12 @@ impl RobotController for Esp32Backend {
         upload
             .map_err(|e| {
                 let mapped = Self::map_protocol_error("upload failed", e);
-                tracing::error!(error = %mapped, waypoints = waypoints.len(), "ESP32 manifest upload failed");
+                tracing::error!(error = %mapped, waypoints = plan.waypoints.len(), "ESP32 manifest upload failed");
                 mapped
             })?;
         tracing::info!(
-            waypoints = waypoints.len(),
-            duration_s = duration,
+            waypoints = plan.waypoints.len(),
+            duration_s = plan.duration,
             "ESP32 manifest uploaded (READY)"
         );
 
@@ -588,7 +456,10 @@ impl RobotController for Esp32Backend {
     }
 
     fn capabilities(&self) -> BackendCapabilities {
-        BackendCapabilities::minimal()
+        BackendCapabilities {
+            firmware_repeat: true,
+            ..BackendCapabilities::minimal()
+        }
     }
 
     /// The ESP32 is a real hardware execution backend: report `Hardware` so the
@@ -638,19 +509,14 @@ impl Esp32Backend {
 
 #[cfg(test)]
 mod tests {
-    #![allow(deprecated)] // build_manifest is deprecated by design (PR 3)
-
     use super::*;
     use crate::backends::transport::{FakeTransport, TransportError};
-    use crate::execution_boundary::manifest::ManifestInstruction;
-    use crate::execution_boundary::manifest_builder::ExecutionManifestBuilder;
-    use crate::execution_boundary::safety_envelope::SafetyEnvelope;
     use thalos_core::execution::plan::{
         ExecutionInstruction, ExecutionPlan, ExecutionSegment, ExecutionWaypoint,
     };
 
     /// Helper: create a connected Esp32Backend with a FakeTransport that
-    /// will respond with HELLO 1 OK on the first handshake.
+    /// will respond with HELLO 2 OK on the first handshake (protocol v2, C).
     async fn make_connected_backend(transport: FakeTransport) -> Esp32Backend {
         let mut backend = Esp32Backend::new(Box::new(transport));
         // Inject the HELLO response BEFORE connect
@@ -660,10 +526,248 @@ mod tests {
             .await
             .as_ref()
             .unwrap()
-            .test_inject_response(b"HELLO 1 OK\n".to_vec());
+            .test_inject_response(b"HELLO 2 OK\n".to_vec());
         backend.connect().await.expect("connect should succeed");
         assert!(backend.is_connected());
         backend
+    }
+
+    /// Build a single-segment MoveJ `ExecutionPlan` from raw waypoints and a
+    /// duration — the even-spacing reconstruction used by the legacy shim,
+    /// kept as the migration fixture for pre-existing tests.
+    fn plan_of(waypoints: Vec<Vec<f64>>, duration: f64) -> ExecutionPlan {
+        let n = waypoints.len();
+        let duration_us = (duration * 1_000_000.0) as u64;
+        let dt_per_sample = if n > 1 {
+            duration_us / (n - 1) as u64
+        } else {
+            0
+        };
+        ExecutionPlan {
+            waypoints: waypoints
+                .iter()
+                .enumerate()
+                .map(|(i, joints)| ExecutionWaypoint {
+                    joints: joints.clone(),
+                    timestamp: i as f64 * dt_per_sample as f64 / 1_000_000.0,
+                })
+                .collect(),
+            segments: vec![ExecutionSegment {
+                index: 0,
+                planned_segment_index: 0,
+                instruction: ExecutionInstruction::MoveJ,
+                waypoint_range: 0..n,
+            }],
+            duration,
+            repeat_count: 1,
+        }
+    }
+
+    /// Inject the response sequence for a full upload→execute against a plan
+    /// (protocol v2, C): OK (MANIFEST), OK (SEGMENT), ONE OK per COMPLETE
+    /// SAMPLE chunk (`n / chunk` — the trailing partial chunk gets no ACK),
+    /// READY (END_UPLOAD), OK (EXECUTE). The chunk is derived exactly like
+    /// `upload_manifest` (same 3072-byte RX-buffer invariant).
+    async fn inject_full_upload(backend: &Esp32Backend, plan: &ExecutionPlan) {
+        let dof = plan.waypoints.first().map(|w| w.joints.len()).unwrap_or(2);
+        let max_line = 19 + 10 * dof;
+        let chunk = (3072usize / max_line.max(1)).clamp(1, 64);
+        let full_chunks = plan.waypoints.len() / chunk;
+        let protocol = backend.protocol.lock().await;
+        let p = protocol.as_ref().unwrap();
+        // MANIFEST + SEGMENT(s) — one OK each.
+        p.test_inject_response(b"OK\n".to_vec());
+        p.test_inject_response(b"OK\n".to_vec());
+        // One OK per COMPLETE SAMPLE chunk.
+        for _ in 0..full_chunks {
+            p.test_inject_response(b"OK\n".to_vec());
+        }
+        p.test_inject_response(b"READY\n".to_vec());
+        p.test_inject_response(b"OK\n".to_vec());
+    }
+
+    /// Flatten the recorded `send()` buffers into individual wire LINES.
+    /// Protocol v2 batching (C) merges many SAMPLE lines into one `send()`, so
+    /// per-send buffers no longer map 1:1 to protocol lines.
+    async fn sent_lines(backend: &Esp32Backend) -> Vec<String> {
+        let sent = backend
+            .protocol
+            .lock()
+            .await
+            .as_ref()
+            .unwrap()
+            .test_sent_commands();
+        sent.iter()
+            .flat_map(|c| {
+                String::from_utf8_lossy(c)
+                    .lines()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    /// Regression (a) — limit-to-limit at the velocity ceiling MUST PASS
+    /// (no false VELOCITY_EXCEEDED). A trapezoidal plan whose cruise is
+    /// EXACTLY the 1.0 rad/s ceiling: the legacy even-spacing shim
+    /// reconstructed dt = duration_us/(N-1) and read the 10 ms cruise gaps
+    /// as ~1.0017 rad/s (false positive); the real-timestamp chain reads the
+    /// true 10 ms dt → exactly 1.0 rad/s → accepted.
+    #[tokio::test]
+    async fn execute_accepts_velocity_ceiling_trapezoid() {
+        let transport = FakeTransport::new();
+        let mut backend = make_connected_backend(transport).await;
+
+        // Trapezoid on the base joint: 1.6 ms ramp samples, 10 ms cruise
+        // samples. Cruise Δq = 1.0 rad/s × 10 ms = 0.01 rad per gap.
+        let plan = ExecutionPlan {
+        repeat_count: 1,
+            waypoints: vec![
+                ExecutionWaypoint { joints: vec![0.0, 0.0], timestamp: 0.0 },
+                ExecutionWaypoint { joints: vec![0.0008, 0.0], timestamp: 0.0016 },
+                ExecutionWaypoint { joints: vec![0.0024, 0.0], timestamp: 0.0032 },
+                ExecutionWaypoint { joints: vec![0.0124, 0.0], timestamp: 0.0132 },
+                ExecutionWaypoint { joints: vec![0.0224, 0.0], timestamp: 0.0232 },
+                ExecutionWaypoint { joints: vec![0.0324, 0.0], timestamp: 0.0332 },
+                ExecutionWaypoint { joints: vec![0.0332, 0.0], timestamp: 0.0348 },
+                ExecutionWaypoint { joints: vec![0.0336, 0.0], timestamp: 0.0364 },
+            ],
+            segments: vec![ExecutionSegment {
+                index: 0,
+                planned_segment_index: 0,
+                instruction: ExecutionInstruction::MoveJ,
+                waypoint_range: 0..8,
+            }],
+            duration: 0.0364,
+        };
+
+        // Direct pure-chain proof: the REAL per-gap dt keeps every implied
+        // velocity at or below the 1.0 rad/s ceiling.
+        let manifest = ExecutionManifestBuilder::build(&plan)
+            .expect("cruise exactly at the ceiling must build");
+        let dt: Vec<u32> = manifest.samples.iter().map(|s| s.dt_us).collect();
+        assert_eq!(
+            dt,
+            vec![0, 1_600, 1_600, 10_000, 10_000, 10_000, 1_600, 1_600],
+            "real per-gap dt must reach the manifest"
+        );
+
+        // End-to-end: execute() accepts the plan (no false VELOCITY_EXCEEDED)
+        // and uploads it — a connected backend with a valid trapezoid.
+        let transport = FakeTransport::new();
+        let mut backend = make_connected_backend(transport).await;
+        inject_full_upload(&backend, &plan).await;
+        backend
+            .execute(plan)
+            .await
+            .expect("velocity-ceiling trapezoid must execute");
+        assert!(backend.is_connected());
+    }
+
+    /// Regression (b) — a GENUINE exceedance with real dt MUST still be
+    /// rejected: base joint Δq = 0.02 rad over a real 10 ms gap = 2.0 rad/s,
+    /// double the 1.0 rad/s ceiling. The message must carry the
+    /// VELOCITY_EXCEEDED diagnostic code.
+    #[tokio::test]
+    async fn execute_rejects_genuine_velocity_exceedance_with_real_dt() {
+        let transport = FakeTransport::new();
+        let mut backend = make_connected_backend(transport).await;
+
+        // Real timestamps: one 10 ms gap, Δq = 0.02 → 2.0 rad/s > 1.0.
+        let plan = ExecutionPlan {
+        repeat_count: 1,
+            waypoints: vec![
+                ExecutionWaypoint { joints: vec![0.0, 0.0], timestamp: 0.0 },
+                ExecutionWaypoint { joints: vec![0.02, 0.0], timestamp: 0.01 },
+            ],
+            segments: vec![ExecutionSegment {
+                index: 0,
+                planned_segment_index: 0,
+                instruction: ExecutionInstruction::MoveJ,
+                waypoint_range: 0..2,
+            }],
+            duration: 0.01,
+        };
+
+        let result = backend.execute(plan).await;
+        match result {
+            Ok(()) => panic!("a 2.0 rad/s gap must be rejected, not executed"),
+            Err(ControllerError::InvalidManifest(msg)) => {
+                assert!(
+                    msg.contains("VELOCITY_EXCEEDED"),
+                    "rejection must carry the VELOCITY_EXCEEDED code: {msg}"
+                );
+            }
+            Err(other) => panic!("expected InvalidManifest, got {other:?}"),
+        }
+
+        // Rejected BEFORE wire traffic: only HELLO from connect was sent.
+        assert!(backend.is_connected());
+        let sent = backend
+            .protocol
+            .lock()
+            .await
+            .as_ref()
+            .unwrap()
+            .test_sent_commands();
+        assert_eq!(sent.len(), 1, "only HELLO from connect — no upload traffic");
+        assert_eq!(String::from_utf8(sent[0].clone()).unwrap(), "HELLO 2\n");
+    }
+
+    /// Regression (c) — the degenerate TRUNCATION guard: N > 1 waypoints and
+    /// a TRUNCATED duration_us `(duration * 1e6) as u64` smaller than (N-1)
+    /// produces the all-dt_us==0 manifest (duration_us: 0, single MoveJ
+    /// segment, every dt_us 0) — bypassing the builder, which cannot
+    /// represent N distinct sub-µs timestamps. This is the MIGRATED legacy
+    /// `degenerate_zero_dt_manifest_has_no_instant_jump_timing_claim` test
+    /// against the new execute(plan) path.
+    #[tokio::test]
+    async fn execute_degenerate_truncation_produces_all_zero_dt_manifest() {
+        let transport = FakeTransport::new();
+        let mut backend = make_connected_backend(transport).await;
+
+        // 3 waypoints over 1.5 µs: trunc(1.5) = 1 µs < (3-1) = 2 gaps → guard.
+        let waypoints = vec![
+            vec![0.0, 0.0, 0.0, 0.01],
+            vec![0.5, 0.5, 0.5, 0.02],
+            vec![1.0, 1.0, 1.0, 0.03],
+        ];
+        let plan = plan_of(waypoints.clone(), 1.5e-6);
+        inject_full_upload(&backend, &plan).await;
+
+        backend
+            .execute(plan)
+            .await
+            .expect("sub-microsecond duration must take the degenerate branch");
+
+        // The wire manifest is the all-zero-dt output: MANIFEST ... 0 and
+        // every SAMPLE line ends with dt_us = 0 (no timing claim).
+        let lines = sent_lines(&backend).await;
+        let manifest_line = lines
+            .iter()
+            .find(|l| l.starts_with("MANIFEST"))
+            .expect("MANIFEST must have been sent");
+        let parts: Vec<&str> = manifest_line.trim().split_whitespace().collect();
+        assert_eq!(parts[0], "MANIFEST");
+        assert_eq!(parts[1], "4", "DOF preserved");
+        assert_eq!(parts[2], "3", "all 3 samples preserved");
+        assert_eq!(
+            parts[3], "0",
+            "degenerate manifest declares NO duration (duration_us = 0)"
+        );
+
+        let sample_lines: Vec<&String> = lines.iter().filter(|l| l.starts_with("SAMPLE")).collect();
+        assert_eq!(sample_lines.len(), 3);
+        for (i, line) in sample_lines.iter().enumerate() {
+            let tokens: Vec<&str> = line.trim().split_whitespace().collect();
+            assert_eq!(
+                tokens.last().unwrap(),
+                &"0",
+                "sample {i} must carry dt_us = 0 (no instant-jump timing claim)"
+            );
+            // Every commanded joint preserved — nothing collapsed.
+            assert_eq!(tokens[1], format!("{:.6}", waypoints[i][0]));
+        }
     }
 
     /// Test transport that answers the HELLO handshake once, then reports the
@@ -696,7 +800,7 @@ mod tests {
                 .handshaken
                 .swap(true, std::sync::atomic::Ordering::SeqCst)
             {
-                Ok(b"HELLO 1 OK\n".to_vec())
+                Ok(b"HELLO 2 OK\n".to_vec())
             } else {
                 Err(TransportError::Disconnected)
             }
@@ -740,7 +844,7 @@ mod tests {
         let mut backend = Esp32Backend::new(Box::new(DisconnectAfterHandshake::new()));
         backend.connect().await.expect("handshake should succeed");
         let err = backend
-            .execute(vec![vec![0.0, 0.0], vec![1.0, 1.0]], 1.0)
+            .execute(plan_of(vec![vec![0.0, 0.0], vec![1.0, 1.0]], 1.0))
             .await
             .unwrap_err();
         assert_eq!(err, ControllerError::ConnectionLost);
@@ -774,7 +878,10 @@ mod tests {
         let transport = FakeTransport::new();
         let mut backend = make_connected_backend(transport).await;
 
-        // Inject responses for the full upload→execute flow
+        // Inject responses for the full upload→execute flow (protocol v2, C):
+        // MANIFEST OK, SEGMENT OK, NO chunk ACK (2 samples < chunk 64 → the
+        // trailing partial chunk gets no ACK; END_UPLOAD confirms it), READY,
+        // EXECUTE OK.
         backend
             .protocol
             .lock()
@@ -795,20 +902,6 @@ mod tests {
             .await
             .as_ref()
             .unwrap()
-            .test_inject_response(b"OK\n".to_vec()); // SAMPLE 0
-        backend
-            .protocol
-            .lock()
-            .await
-            .as_ref()
-            .unwrap()
-            .test_inject_response(b"OK\n".to_vec()); // SAMPLE 1
-        backend
-            .protocol
-            .lock()
-            .await
-            .as_ref()
-            .unwrap()
             .test_inject_response(b"READY\n".to_vec()); // END_UPLOAD
         backend
             .protocol
@@ -821,7 +914,7 @@ mod tests {
         // Execute with simple waypoints
         let waypoints = vec![vec![0.0, 0.0], vec![1.0, 1.0]];
         backend
-            .execute(waypoints, 1.0)
+            .execute(plan_of(waypoints, 1.0))
             .await
             .expect("execute should succeed");
         assert!(backend.is_connected());
@@ -837,7 +930,7 @@ mod tests {
         assert!(!sent.is_empty(), "commands should have been sent");
 
         // HELLO was first (from connect)
-        assert_eq!(String::from_utf8(sent[0].clone()).unwrap(), "HELLO 1\n");
+        assert_eq!(String::from_utf8(sent[0].clone()).unwrap(), "HELLO 2\n");
 
         // Check MANIFEST was sent
         let has_manifest = sent.iter().any(|c| c.starts_with(b"MANIFEST"));
@@ -846,6 +939,59 @@ mod tests {
         // Check EXECUTE was sent
         let has_execute = sent.iter().any(|c| c.starts_with(b"EXECUTE"));
         assert!(has_execute, "EXECUTE should have been sent");
+    }
+
+    /// v2 (C): a multi-chunk upload consumes exactly ONE ACK per SAMPLE chunk
+    /// — not one per line. DOF=6 → chunk = 3072/(19+60) = 38; 150 samples →
+    /// ceil(150/38) = 4 chunk ACKs. The MANIFEST line declares the chunk so
+    /// the firmware counts the batch boundaries.
+    #[tokio::test]
+    async fn execute_consumes_one_ack_per_sample_chunk() {
+        use std::sync::atomic::Ordering;
+
+        let transport = FakeTransport::new();
+        let mut backend = make_connected_backend(transport).await;
+
+        let dof = 6usize;
+        let n = 150usize;
+        let waypoints: Vec<Vec<f64>> = (0..n)
+            .map(|i| {
+                let t = i as f64 * 0.0001; // tiny amplitude — inside the envelope
+                vec![t; dof]
+            })
+            .collect();
+        let plan = plan_of(waypoints, 1.0);
+
+        // Inject: OK (MANIFEST), OK (SEGMENT), 3 chunk ACKs (150/38 = 3 FULL
+        // chunks — the trailing 36 samples get no ACK), READY, OK.
+        let protocol = backend.protocol.lock().await;
+        let p = protocol.as_ref().unwrap();
+        p.test_inject_response(b"OK\n".to_vec());
+        p.test_inject_response(b"OK\n".to_vec());
+        for _ in 0..3 {
+            p.test_inject_response(b"OK\n".to_vec());
+        }
+        p.test_inject_response(b"READY\n".to_vec());
+        p.test_inject_response(b"OK\n".to_vec());
+        drop(protocol);
+
+        backend
+            .execute(plan)
+            .await
+            .expect("multi-chunk upload must succeed");
+        assert!(backend.is_connected());
+
+        // The MANIFEST line declares the derived chunk (3072 / max_line(6)).
+        let lines = sent_lines(&backend).await;
+        let manifest = lines
+            .iter()
+            .find(|l| l.starts_with("MANIFEST"))
+            .expect("MANIFEST sent");
+        let parts: Vec<&str> = manifest.trim().split_whitespace().collect();
+        assert_eq!(parts[4], "38", "chunk derived from DOF=6: 3072/79 = 38");
+        let sample_lines = lines.iter().filter(|l| l.starts_with("SAMPLE")).count();
+        assert_eq!(sample_lines, n, "all SAMPLE lines hit the wire (batched)");
+        assert!(backend.is_connected());
     }
 
     #[tokio::test]
@@ -858,7 +1004,7 @@ mod tests {
             .await
             .as_ref()
             .unwrap()
-            .test_inject_response(b"HELLO 1 OK\n".to_vec());
+            .test_inject_response(b"HELLO 2 OK\n".to_vec());
         backend.connect().await.expect("first connect");
 
         let err = backend.connect().await.unwrap_err();
@@ -870,7 +1016,10 @@ mod tests {
         let transport = FakeTransport::new();
         let mut backend = Esp32Backend::new(Box::new(transport));
 
-        let err = backend.execute(vec![vec![0.0]], 1.0).await.unwrap_err();
+        let err = backend
+            .execute(plan_of(vec![vec![0.0]], 1.0))
+            .await
+            .unwrap_err();
         assert_eq!(err, ControllerError::NotConnected);
     }
 
@@ -887,10 +1036,10 @@ mod tests {
             .await
             .as_ref()
             .unwrap()
-            .test_inject_response(b"HELLO 1 OK\n".to_vec());
+            .test_inject_response(b"HELLO 2 OK\n".to_vec());
         backend.connect().await.expect("connect");
 
-        let result = backend.execute(vec![], 1.0).await;
+        let result = backend.execute(plan_of(vec![], 1.0)).await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -910,42 +1059,47 @@ mod tests {
             .unwrap()
             .test_sent_commands();
         assert_eq!(sent.len(), 1, "only HELLO should have been sent");
-        assert_eq!(String::from_utf8(sent[0].clone()).unwrap(), "HELLO 1\n");
+        assert_eq!(String::from_utf8(sent[0].clone()).unwrap(), "HELLO 2\n");
     }
 
+    /// A zero-duration plan is the degenerate case the truncation guard owns
+    /// — it is NOT a "duration must be positive" rejection anymore (that
+    /// structural check lived in the removed `validate_manifest`). `execute`
+    /// builds the all-dt_us==0 manifest and uploads it; the scene's `has_wps`
+    /// guard is what stops zero-duration plans from reaching the wire.
     #[tokio::test]
-    async fn zero_duration_rejected_before_wire_traffic() {
+    async fn zero_duration_plan_uploads_via_degenerate_guard() {
         let transport = FakeTransport::new();
-        let mut backend = Esp32Backend::new(Box::new(transport));
+        let mut backend = make_connected_backend(transport).await;
+        // 2 waypoints, duration 0 → trunc(0) = 0 < (2-1) → degenerate branch.
+        let plan = plan_of(vec![vec![0.0, 0.0], vec![1.0, 0.0]], 0.0);
+        inject_full_upload(&backend, &plan).await;
+
         backend
+            .execute(plan)
+            .await
+            .expect("zero-duration multi-waypoint plan takes the degenerate branch");
+
+        let sent = backend
             .protocol
             .lock()
             .await
             .as_ref()
             .unwrap()
-            .test_inject_response(b"HELLO 1 OK\n".to_vec());
-        backend.connect().await.expect("connect");
-
-        let result = backend.execute(vec![vec![0.0]], 0.0).await;
-
-        assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err(),
-            ControllerError::InvalidManifest("duration must be positive".into())
-        );
-
-        // Only HELLO was sent (from connect)
-        assert_eq!(
-            backend
-                .protocol
-                .lock()
-                .await
-                .as_ref()
-                .unwrap()
-                .test_sent_commands()
-                .len(),
-            1
-        );
+            .test_sent_commands();
+        let manifest_line = sent
+            .iter()
+            .find(|c| c.starts_with(b"MANIFEST"))
+            .expect("MANIFEST must have been sent");
+        let manifest_text = String::from_utf8_lossy(manifest_line).to_string();
+        let parts: Vec<&str> = manifest_text.trim().split_whitespace().collect();
+        assert_eq!(parts[3], "0", "degenerate manifest declares duration_us = 0");
+        // Every SAMPLE line ends with dt_us = 0.
+        for c in sent.iter().filter(|c| c.starts_with(b"SAMPLE")) {
+            let line_text = String::from_utf8_lossy(c).to_string();
+            let tokens: Vec<&str> = line_text.trim().split_whitespace().collect();
+            assert_eq!(tokens.last().unwrap(), &"0", "dt_us must be 0");
+        }
     }
 
     #[tokio::test]
@@ -958,10 +1112,12 @@ mod tests {
             .await
             .as_ref()
             .unwrap()
-            .test_inject_response(b"HELLO 1 OK\n".to_vec());
+            .test_inject_response(b"HELLO 2 OK\n".to_vec());
         backend.connect().await.expect("connect");
 
-        let result = backend.execute(vec![vec![0.0, 0.0], vec![1.0]], 1.0).await;
+        let result = backend
+            .execute(plan_of(vec![vec![0.0, 0.0], vec![1.0]], 1.0))
+            .await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -1007,7 +1163,7 @@ mod tests {
         // Base 1.0 rad over 0.2 s = 5.0 rad/s implied velocity — inside the
         // planner envelope (25 rad/s), outside the firmware envelope (1.0).
         let result = backend
-            .execute(vec![vec![0.0, 0.0], vec![1.0, 0.0]], 0.2)
+            .execute(plan_of(vec![vec![0.0, 0.0], vec![1.0, 0.0]], 0.2))
             .await;
 
         match result {
@@ -1032,7 +1188,7 @@ mod tests {
             .unwrap()
             .test_sent_commands();
         assert_eq!(sent.len(), 1, "only HELLO from connect — no upload traffic");
-        assert_eq!(String::from_utf8(sent[0].clone()).unwrap(), "HELLO 1\n");
+        assert_eq!(String::from_utf8(sent[0].clone()).unwrap(), "HELLO 2\n");
     }
 
     /// R1-1 (CRITICAL): an out-of-envelope POSITION plan (base at 4.0 rad —
@@ -1048,7 +1204,7 @@ mod tests {
         // Base 4.0 rad — the planner accepts it (URDF planning envelope),
         // the firmware SafetyEnvelope rejects it.
         let result = backend
-            .execute(vec![vec![0.0, 0.0], vec![4.0, 0.0]], 1.0)
+            .execute(plan_of(vec![vec![0.0, 0.0], vec![4.0, 0.0]], 1.0))
             .await;
 
         match result {
@@ -1085,7 +1241,7 @@ mod tests {
             .await
             .as_ref()
             .unwrap()
-            .test_inject_response(b"HELLO 1 OK\n".to_vec());
+            .test_inject_response(b"HELLO 2 OK\n".to_vec());
         backend.connect().await.expect("connect");
         assert!(backend.is_connected());
 
@@ -1107,6 +1263,52 @@ mod tests {
         assert!(!caps.io);
         assert!(!caps.gripper);
         assert!(!caps.streaming);
+        // v3: the ESP32 REPEATS INTERNALLY (manifest repeat_count, loops
+        // back-to-back) — the ONLY backend with firmware-side repeat.
+        assert!(caps.firmware_repeat);
+    }
+
+    /// v3: a firmware-side `Repeat { count }` plan uploads ONCE with the
+    /// `repeat_count` in the MANIFEST (5th field) — NO re-upload per pass.
+    #[tokio::test]
+    async fn execute_repeat_uploads_once_with_count_in_manifest() {
+        let transport = FakeTransport::new();
+        let mut backend = make_connected_backend(transport).await;
+
+        let mut plan = plan_of(
+            vec![vec![0.0, 0.0], vec![0.5, 0.3]],
+            1.0,
+        );
+        plan.repeat_count = 3;
+
+        // Inject: MANIFEST OK, SEGMENT OK, no chunk ACK (2 samples < chunk),
+        // READY, EXECUTE OK — the host uploads ONCE regardless of repeat.
+        let protocol = backend.protocol.lock().await;
+        let p = protocol.as_ref().unwrap();
+        p.test_inject_response(b"OK\n".to_vec());
+        p.test_inject_response(b"OK\n".to_vec());
+        p.test_inject_response(b"READY\n".to_vec());
+        p.test_inject_response(b"OK\n".to_vec());
+        drop(protocol);
+
+        backend
+            .execute(plan)
+            .await
+            .expect("single upload with repeat_count must succeed");
+        assert!(backend.is_connected());
+
+        // The MANIFEST line carries the repeat count in the 5th field.
+        let lines = sent_lines(&backend).await;
+        let manifest = lines
+            .iter()
+            .find(|l| l.starts_with("MANIFEST"))
+            .expect("MANIFEST sent");
+        let parts: Vec<&str> = manifest.trim().split_whitespace().collect();
+        assert_eq!(parts[4], "64", "chunk");
+        assert_eq!(parts[5], "3", "repeat_count in MANIFEST");
+        // EXACTLY the one upload — no second manifest for the next pass.
+        let manifests = lines.iter().filter(|l| l.starts_with("MANIFEST")).count();
+        assert_eq!(manifests, 1, "one upload for the whole Repeat");
     }
 
     #[test]
@@ -1116,180 +1318,6 @@ mod tests {
         let transport = FakeTransport::new();
         let backend = Esp32Backend::new(Box::new(transport));
         assert_eq!(backend.execution_source(), ExecutionSource::Hardware);
-    }
-
-    #[test]
-    fn build_manifest_creates_correct_structure() {
-        let waypoints = vec![vec![0.0, 0.0], vec![0.5, 0.3], vec![1.0, 0.5]];
-        let manifest = Esp32Backend::build_manifest(&waypoints, 2.0)
-            .expect("in-envelope waypoints must build");
-
-        assert_eq!(manifest.metadata.dof_count, 2);
-        assert_eq!(manifest.metadata.total_samples, 3);
-        assert_eq!(manifest.metadata.duration_us, 2_000_000);
-
-        assert_eq!(manifest.segments.len(), 1);
-        assert_eq!(manifest.segments[0].sample_count, 3);
-
-        // dt evenly spaced: 2_000_000 / 2 = 1_000_000 per sample gap
-        assert_eq!(manifest.samples[0].dt_us, 0);
-        assert_eq!(manifest.samples[1].dt_us, 1_000_000);
-        assert_eq!(manifest.samples[2].dt_us, 1_000_000);
-    }
-
-    /// The deprecated `build_manifest` MUST delegate to the pure chain
-    /// (`ExecutionManifestBuilder`) and reproduce the legacy even-spacing
-    /// output bit-for-bit. A NON-divisible duration (2_000_000 µs / 3 gaps =
-    /// 666_666 µs) pins the legacy integer-division semantics: `duration_us`
-    /// is the SUM of `dt_us` (1_999_998), NOT `round(duration * 1e6)` — a
-    /// naive wrapper that just forwards `duration` would produce 2_000_000.
-    #[test]
-    fn deprecated_build_manifest_delegates_to_builder() {
-        let waypoints = vec![
-            vec![0.0, 0.0],
-            vec![0.5, 0.3],
-            vec![1.0, 0.5],
-            vec![1.5, 0.7],
-        ];
-        let duration = 2.0;
-
-        // Legacy wrapper output.
-        let legacy = Esp32Backend::build_manifest(&waypoints, duration)
-            .expect("in-envelope waypoints must build");
-
-        // The pure chain, fed the plan the wrapper constructs (same even
-        // spacing reconstructed from the raw signature).
-        let duration_us = (duration * 1_000_000.0) as u64;
-        let dt_per_sample = duration_us / (waypoints.len() - 1) as u64;
-        let plan = ExecutionPlan {
-            waypoints: waypoints
-                .iter()
-                .enumerate()
-                .map(|(i, joints)| ExecutionWaypoint {
-                    joints: joints.clone(),
-                    timestamp: i as f64 * dt_per_sample as f64 / 1_000_000.0,
-                })
-                .collect(),
-            segments: vec![ExecutionSegment {
-                index: 0,
-                planned_segment_index: 0,
-                instruction: ExecutionInstruction::MoveJ,
-                waypoint_range: 0..waypoints.len(),
-            }],
-            duration: ((waypoints.len() as u64 - 1) * dt_per_sample) as f64 / 1_000_000.0,
-        };
-        let direct = ExecutionManifestBuilder::build(&plan).expect("same input must build");
-
-        // Old and new paths produce IDENTICAL manifests.
-        assert_eq!(legacy, direct);
-
-        // And both preserve the legacy semantics exactly (integer division).
-        assert_eq!(legacy.metadata.dof_count, 2);
-        assert_eq!(legacy.metadata.total_samples, 4);
-        assert_eq!(legacy.metadata.duration_us, 1_999_998);
-        assert_eq!(legacy.segments.len(), 1);
-        assert_eq!(legacy.segments[0].instruction, ManifestInstruction::MoveJ);
-        assert_eq!(legacy.segments[0].sample_start, 0);
-        assert_eq!(legacy.segments[0].sample_count, 4);
-        let dt: Vec<u32> = legacy.samples.iter().map(|s| s.dt_us).collect();
-        assert_eq!(dt, vec![0, 666_666, 666_666, 666_666]);
-        assert_eq!(legacy.samples[3].joints, vec![1.5, 0.7]);
-    }
-
-    /// Regression test for the review-reliability CRITICAL on the deprecated
-    /// shim: a duration shorter than (N-1) µs truncates `dt_per_sample` to
-    /// zero, collapsing every reconstructed timestamp to 0.0. The builder's
-    /// dedup then REJECTS the input (`DedupConflict` — equal timestamp,
-    /// different joints), which would panic the `.expect()` inside the
-    /// production `execute()` path, or silently collapse distinct commanded
-    /// waypoints when joints are bit-equal. The shim MUST instead reproduce
-    /// the legacy total output: N samples, all `dt_us = 0`, `duration_us = 0`,
-    /// one MoveJ segment covering everything — accepted by the firmware
-    /// validator (timing diff 0 <= 1000 µs floor).
-    #[test]
-    fn deprecated_build_manifest_handles_sub_microsecond_duration() {
-        // 3 waypoints over 1.5 µs: trunc(1.5) = 1 µs / 2 gaps = 0 µs per sample.
-        let waypoints = vec![vec![0.0, 0.0], vec![0.5, 0.3], vec![1.0, 0.5]];
-        let duration = 1.5e-6;
-
-        // Must NOT panic (the builder would return Err(DedupConflict) here).
-        let manifest = Esp32Backend::build_manifest(&waypoints, duration)
-            .expect("sub-microsecond duration must take the degenerate branch");
-
-        assert_eq!(manifest.metadata.dof_count, 2);
-        assert_eq!(manifest.metadata.total_samples, 3);
-        assert_eq!(manifest.metadata.duration_us, 0);
-
-        assert_eq!(manifest.segments.len(), 1);
-        assert_eq!(manifest.segments[0].index, 0);
-        assert_eq!(manifest.segments[0].instruction, ManifestInstruction::MoveJ);
-        assert_eq!(manifest.segments[0].sample_start, 0);
-        assert_eq!(manifest.segments[0].sample_count, 3);
-
-        assert_eq!(manifest.samples.len(), 3);
-        let dt: Vec<u32> = manifest.samples.iter().map(|s| s.dt_us).collect();
-        assert_eq!(dt, vec![0, 0, 0]);
-        // Every sample retains its original commanded joints — nothing collapsed.
-        for (sample, expected) in manifest.samples.iter().zip(&waypoints) {
-            assert_eq!(sample.joints, *expected);
-        }
-    }
-
-    /// M3 no-instant-jump contract (spec `backend_dt_us_zero_velocity_bounded`,
-    /// ADR-3/ADR-5): the degenerate all-dt_us==0 branch MUST NOT produce a plan
-    /// the executor could read as an instant jump. The manifest carries NO
-    /// Δq/Δt timing claim (every dt_us == 0, duration_us == 0) — physical
-    /// velocity is UNDEFINED, so the firmware executor velocity-bounds
-    /// advancement (max_velocity × elapsed real time, one waypoint per
-    /// update). The backend never emits a fabricated dt that implies a jump.
-    #[test]
-    fn degenerate_zero_dt_manifest_has_no_instant_jump_timing_claim() {
-        // 4 distinct commanded joints over a sub-microsecond duration.
-        let waypoints = vec![
-            vec![0.0, 0.0, 0.0, 0.01],
-            vec![0.5, 0.5, 0.5, 0.02],
-            vec![1.0, 1.0, 1.0, 0.03],
-        ];
-        let manifest = Esp32Backend::build_manifest(&waypoints, 1.5e-6)
-            .expect("sub-microsecond duration must take the degenerate branch");
-
-        // Every gap is dt_us == 0: no sample pair carries an implied Δq/Δt.
-        assert_eq!(manifest.metadata.duration_us, 0, "no duration claim");
-        for (i, sample) in manifest.samples.iter().enumerate() {
-            assert_eq!(
-                sample.dt_us, 0,
-                "sample {i} must not fabricate a timing claim (instant-jump read)"
-            );
-        }
-        // All commanded joints preserved — the firmware velocity-bounds each
-        // waypoint in turn; nothing is collapsed or re-timed by the backend.
-        for (sample, expected) in manifest.samples.iter().zip(&waypoints) {
-            assert_eq!(sample.joints, *expected);
-        }
-        // And the mirror's velocity check treats dt==0 as UNDEFINED (skipped):
-        // the same manifest passes the backend's physical validation.
-        for pair in manifest.samples.windows(2) {
-            let delta_q: Vec<f64> = pair[1]
-                .joints
-                .iter()
-                .zip(&pair[0].joints)
-                .map(|(a, b)| a - b)
-                .collect();
-            SafetyEnvelope::check_gap_velocity(&delta_q, pair[1].dt_us)
-                .expect("dt==0 velocity must be skipped (firmware-authoritative)");
-        }
-    }
-
-    #[test]
-    fn validate_manifest_rejects_dof_mismatch() {
-        let result = Esp32Backend::validate_manifest(&[vec![0.0, 0.0], vec![0.0, 0.0, 0.0]], 1.0);
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            ControllerError::InvalidManifest(msg) => {
-                assert!(msg.contains("DOF"), "should mention DOF: {msg}");
-            }
-            other => panic!("Expected InvalidManifest, got {other:?}"),
-        }
     }
 
     /// Robustness regression (real hardware): a stale serial buffer (boot
@@ -1314,7 +1342,7 @@ mod tests {
             .await
             .as_ref()
             .unwrap()
-            .test_inject_response(b"HELLO 1 OK\n".to_vec());
+            .test_inject_response(b"HELLO 2 OK\n".to_vec());
 
         backend
             .connect()
@@ -1338,9 +1366,9 @@ mod tests {
             p.test_inject_response(b"ERROR NOT_IDLE\n".to_vec());
             // Recovery STOP response (consumed by protocol.stop()).
             p.test_inject_response(b"OK\n".to_vec());
-            // Retry upload: MANIFEST, SEGMENT, SAMPLE 0, SAMPLE 1, END_UPLOAD.
-            p.test_inject_response(b"OK\n".to_vec());
-            p.test_inject_response(b"OK\n".to_vec());
+            // Retry upload (v2): MANIFEST → OK, SEGMENT → OK, then the 2
+            // samples (chunk 64) form a trailing partial chunk → NO chunk ACK;
+            // END_UPLOAD → READY.
             p.test_inject_response(b"OK\n".to_vec());
             p.test_inject_response(b"OK\n".to_vec());
             p.test_inject_response(b"READY\n".to_vec());
@@ -1349,7 +1377,7 @@ mod tests {
         }
 
         backend
-            .execute(vec![vec![0.0, 0.0], vec![1.0, 1.0]], 1.0)
+            .execute(plan_of(vec![vec![0.0, 0.0], vec![1.0, 1.0]], 1.0))
             .await
             .expect("upload must recover from NOT_IDLE with a STOP + retry");
         assert!(backend.is_connected());

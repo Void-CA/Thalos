@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { act } from 'react'
 import { MemoryRouter } from 'react-router'
@@ -92,8 +92,23 @@ describe('ProgrammingWorkspace — unified tabs (Task | Motion | Code)', () => {
   it('switches to the Motion tab (PlanningPanel + TrajectoryColorPicker)', () => {
     renderWorkspace()
     fireEvent.click(screen.getByRole('tab', { name: 'Motion' }))
-    expect(screen.getByRole('heading', { name: 'Trajectory Color' })).toBeInTheDocument()
+    // Trajectory Color lives in a collapsed Accordion section on this tab.
+    expect(screen.getByRole('button', { name: /Trajectory Color/ })).toBeInTheDocument()
+    // Expand it to reveal the picker modes.
+    fireEvent.click(screen.getByRole('button', { name: /Trajectory Color/ }))
+    expect(screen.getByRole('button', { name: 'Segment' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Quality' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Manipulability' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Singularity' })).toBeInTheDocument()
     expect(screen.getByText(/No segments\. Add a motion command/)).toBeInTheDocument()
+  })
+
+  it('exposes the Trajectory Color section (collapsed) on Task and Code tabs too', () => {
+    renderWorkspace()
+    fireEvent.click(screen.getByRole('tab', { name: 'Task' }))
+    expect(screen.getByRole('button', { name: /Trajectory Color/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Code' }))
+    expect(screen.getByRole('button', { name: /Trajectory Color/ })).toBeInTheDocument()
   })
 
   it('renders NO analysis content inside the programming workspace anymore', () => {
@@ -112,5 +127,76 @@ describe('ProgrammingWorkspace — unified tabs (Task | Motion | Code)', () => {
     })
     renderWorkspace()
     expect(screen.queryByRole('tab', { name: 'Analysis' })).not.toBeInTheDocument()
+  })
+
+  it('R6 — separates the three visual layers into distinct containers: feedback (PipelineStatus), navigation (tabs), commands (toolbar)', () => {
+    renderWorkspace()
+    const feedback = document.querySelector('[data-layer="feedback"]')
+    const navigation = document.querySelector('[data-layer="navigation"]')
+    const commands = document.querySelector('[data-layer="commands"]')
+    // All three layers render.
+    expect(feedback).not.toBeNull()
+    expect(navigation).not.toBeNull()
+    expect(commands).not.toBeNull()
+    // No layer is merged into another — each keeps its own container so the
+    // styling can differentiate tabs (navigation) from PipelineStatus
+    // (feedback) from command buttons (actions).
+    expect(feedback).not.toBe(navigation)
+    expect(navigation).not.toBe(commands)
+  })
+})
+
+describe('ProgrammingWorkspace — tab-switch guard (task-code-sync-guards spec)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    cleanup()
+  })
+
+  it('warns "Uncommitted changes will be lost" when leaving Code with an uncommitted buffer; cancel keeps the tab', () => {
+    renderWorkspace()
+    fireEvent.click(screen.getByRole('tab', { name: 'Code' }))
+    fireEvent.change(screen.getByTestId('program-textarea'), {
+      target: { value: 'pick bolt-1\nwait 2s\nhome' },
+    })
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    fireEvent.click(screen.getByRole('tab', { name: 'Task' }))
+
+    // The warning is shown, and declining the discard keeps the Code editor
+    // mounted with the buffer untouched (spec "Cancel preserves buffer").
+    expect(confirmSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Uncommitted changes will be lost'),
+    )
+    expect(screen.getByTestId('program-textarea')).toBeInTheDocument()
+    expect((screen.getByTestId('program-textarea') as HTMLTextAreaElement).value).toBe(
+      'pick bolt-1\nwait 2s\nhome',
+    )
+  })
+
+  it('discards and switches after confirmation', () => {
+    renderWorkspace()
+    fireEvent.click(screen.getByRole('tab', { name: 'Code' }))
+    fireEvent.change(screen.getByTestId('program-textarea'), {
+      target: { value: 'pick bolt-1\nwait 2s\nhome' },
+    })
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    fireEvent.click(screen.getByRole('tab', { name: 'Motion' }))
+
+    expect(confirmSpy).toHaveBeenCalled()
+    // The switch completes: Motion panel renders, Code editor unmounts.
+    expect(screen.getByRole('button', { name: /Trajectory Color/ })).toBeInTheDocument()
+    expect(screen.queryByTestId('program-textarea')).not.toBeInTheDocument()
+  })
+
+  it('switches without warning when the buffer is committed (or clean)', () => {
+    renderWorkspace()
+    fireEvent.click(screen.getByRole('tab', { name: 'Code' }))
+    const confirmSpy = vi.spyOn(window, 'confirm')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Motion' }))
+
+    expect(confirmSpy).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: /Trajectory Color/ })).toBeInTheDocument()
   })
 })

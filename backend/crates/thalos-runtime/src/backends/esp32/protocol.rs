@@ -265,19 +265,23 @@ impl Esp32Protocol {
     /// ready to send over the transport.
     ///
     /// The returned vector contains the following lines, in order:
-    /// 1. `MANIFEST <dof> <N> <dur_us>\n`
+    /// 1. `MANIFEST <dof> <N> <dur_us> <chunk>\n` — the 4th field (v2, C) is
+    ///    the chunked-ACK batch size the firmware ACKs once per batch.
     /// 2. `SEGMENT <idx> <instr> <start> <count>\n` (one per segment)
     /// 3. `SAMPLE <j0> ... <dt_us>\n` (one per sample)
     /// 4. `END_UPLOAD\n`
-    pub fn encode_manifest(manifest: &ExecutionManifest) -> Vec<Vec<u8>> {
+    pub fn encode_manifest(manifest: &ExecutionManifest, chunk: usize) -> Vec<Vec<u8>> {
         let mut lines = Vec::new();
 
-        // MANIFEST <dof> <N> <dur_us>
+        // MANIFEST <dof> <N> <dur_us> <chunk> <repeat> (v3: repeat = firmware
+        // side pass count, default 1).
         lines.push(Self::format_line(&[
             "MANIFEST",
             &manifest.metadata.dof_count.to_string(),
             &manifest.metadata.total_samples.to_string(),
             &manifest.metadata.duration_us.to_string(),
+            &chunk.to_string(),
+            &manifest.metadata.repeat_count.to_string(),
         ]));
 
         // SEGMENT <idx> <instruction> <start> <count>
@@ -348,39 +352,69 @@ impl Esp32Protocol {
         }))
     }
 
-    /// Upload a manifest to the ESP32.
+    /// Upload a manifest to the ESP32 (protocol v2, C).
     ///
-    /// Sends the encoded manifest lines and waits for responses after
-    /// MANIFEST, SEGMENT, and SAMPLE lines (expecting `OK`). After
-    /// `END_UPLOAD`, waits for `READY` or `ERROR <reason>`.
+    /// Sends MANIFEST and SEGMENT lines expecting an `OK` each, then SAMPLE
+    /// lines in BATCHES of `chunk` expecting ONE `OK` per batch (instead of
+    /// one per line — the v2 latency fix), then `END_UPLOAD` expecting
+    /// `READY` or `ERROR <reason>`.
+    ///
+    /// The chunk size is derived from the DOF so a full batch of encoded
+    /// SAMPLE lines fits the firmware RX buffer (4096) with margin:
+    /// `chunk × max_line ≤ 3072`. max_line = "SAMPLE " + DOF×(space+9) + dt_u32 + '\n'.
     pub async fn upload_manifest(
         &mut self,
         manifest: &ExecutionManifest,
     ) -> Result<(), ProtocolError> {
         self.firmware_state = FirmwareState::Receiving;
 
-        let lines = Self::encode_manifest(manifest);
-        // The last line is END_UPLOAD — handled separately
-        let upload_lines = &lines[..lines.len() - 1];
+        // Protocol desync defense: drain stale lines left in the buffer from
+        // a prior STATUS poll (or a cancelled read). Without this, the first
+        // upload response read could return a leftover fragment ("unexpected
+        // response: 0.000000 0.000000" real repro) instead of the firmware's
+        // `OK`. Real transports drain; fakes are a no-op.
+        self.transport.drain().await?;
 
-        for cmd in upload_lines {
-            self.transport.send(cmd).await?;
-            // Expect OK after MANIFEST, SEGMENT, SAMPLE — a firmware
-            // `ERROR <reason>` (e.g. NOT_IDLE on MANIFEST from a stale state)
-            // must surface as an EspError so the caller can recover, not as a
-            // generic UnexpectedResponse.
-            let response = self.transport.receive().await?;
-            let line = String::from_utf8(response)
-                .map_err(|e| ProtocolError::MalformedResponse(format!("invalid UTF-8: {e}")))?;
-            match Self::parse_response(&line)? {
-                ParsedResponse::Ok => {}
-                ParsedResponse::Error(reason) => {
-                    return Err(ProtocolError::EspError(reason));
-                }
-                other => {
-                    return Err(ProtocolError::UnexpectedResponse(format!("{other:?}")));
-                }
+        let dof = manifest.metadata.dof_count as usize;
+        let max_line = 19 + 10 * dof; // upper bound per SAMPLE line (bytes)
+        let chunk = (3072usize / max_line.max(1)).clamp(1, 64);
+
+        let lines = Self::encode_manifest(manifest, chunk);
+
+        // MANIFEST (first line) — expect OK. A firmware `ERROR <reason>`
+        // (e.g. NOT_IDLE from a stale state) surfaces here as EspError so the
+        // caller can STOP+retry (recovery in Esp32Backend::execute).
+        Self::send_expect_ok(&mut *self.transport, &lines[0]).await?;
+
+        // SEGMENT lines — each answered OK (few lines, keep the per-line ACK).
+        let mut idx = 1usize;
+        let segment_end = idx + manifest.segments.len();
+        while idx < segment_end {
+            Self::send_expect_ok(&mut *self.transport, &lines[idx]).await?;
+            idx += 1;
+        }
+
+        // SAMPLE lines — ONE send per COMPLETE chunk (batched write: a USB-serial
+        // `send()` costs ~5-7ms per call on real adapters — 1228 individual
+        // sends were the REAL post-v2 bottleneck, not the ACK round-trips), and
+        // ONE OK per chunk. A trailing partial chunk is sent batched too, with
+        // no per-chunk ACK; END_UPLOAD confirms it.
+        let sample_end = segment_end + manifest.samples.len();
+        let mut sent_in_chunk = 0usize;
+        let mut batch = Vec::new();
+        while idx < sample_end {
+            batch.extend_from_slice(&lines[idx]);
+            idx += 1;
+            sent_in_chunk += 1;
+            if sent_in_chunk >= chunk {
+                self.transport.send(&batch).await?;
+                batch.clear();
+                Self::expect_ok_response(&mut *self.transport).await?;
+                sent_in_chunk = 0;
             }
+        }
+        if !batch.is_empty() {
+            self.transport.send(&batch).await?;
         }
 
         // Send END_UPLOAD — expect READY or ERROR
@@ -394,6 +428,29 @@ impl Esp32Protocol {
                 self.firmware_state = FirmwareState::Ready;
                 Ok(())
             }
+            ParsedResponse::Error(reason) => Err(ProtocolError::EspError(reason)),
+            other => Err(ProtocolError::UnexpectedResponse(format!("{other:?}"))),
+        }
+    }
+
+    /// Send one line and consume exactly one response, mapping `OK` → Ok,
+    /// `ERROR <reason>` → EspError, anything else → UnexpectedResponse.
+    async fn send_expect_ok(
+        transport: &mut dyn Transport,
+        cmd: &[u8],
+    ) -> Result<(), ProtocolError> {
+        transport.send(cmd).await?;
+        Self::expect_ok_response(transport).await
+    }
+
+    /// Consume exactly one response line with the OK/ERROR/Unexpected mapping
+    /// (shared by MANIFEST, SEGMENT and each SAMPLE chunk).
+    async fn expect_ok_response(transport: &mut dyn Transport) -> Result<(), ProtocolError> {
+        let response = transport.receive().await?;
+        let line = String::from_utf8(response)
+            .map_err(|e| ProtocolError::MalformedResponse(format!("invalid UTF-8: {e}")))?;
+        match Self::parse_response(&line)? {
+            ParsedResponse::Ok => Ok(()),
             ParsedResponse::Error(reason) => Err(ProtocolError::EspError(reason)),
             other => Err(ProtocolError::UnexpectedResponse(format!("{other:?}"))),
         }
@@ -577,6 +634,7 @@ mod tests {
                 dof_count: 2,
                 total_samples: 3,
                 duration_us: 1_000_000,
+                repeat_count: 1,
             },
             segments: vec![ManifestSegment {
                 index: 0,
@@ -607,6 +665,7 @@ mod tests {
                 dof_count: 3,
                 total_samples: 5,
                 duration_us: 2_000_000,
+                repeat_count: 1,
             },
             segments: vec![
                 ManifestSegment {
@@ -652,15 +711,15 @@ mod tests {
     #[test]
     fn encode_single_segment_manifest() {
         let manifest = sample_manifest();
-        let lines = Esp32Protocol::encode_manifest(&manifest);
+        let lines = Esp32Protocol::encode_manifest(&manifest, 64);
 
         // MANIFEST + 1 SEGMENT + 3 SAMPLES + END_UPLOAD = 6 lines
         assert_eq!(lines.len(), 6);
 
-        // MANIFEST <dof> <N> <dur_us>
+        // MANIFEST <dof> <N> <dur_us> <chunk> (v2 chunked ACK, C)
         assert_eq!(
             String::from_utf8(lines[0].clone()).unwrap(),
-            "MANIFEST 2 3 1000000\n"
+            "MANIFEST 2 3 1000000 64 1\n"
         );
 
         // SEGMENT 0 movej 0 3
@@ -693,14 +752,14 @@ mod tests {
     #[test]
     fn encode_multi_segment_manifest() {
         let manifest = multi_segment_manifest();
-        let lines = Esp32Protocol::encode_manifest(&manifest);
+        let lines = Esp32Protocol::encode_manifest(&manifest, 62);
 
         // MANIFEST + 2 SEGMENTS + 5 SAMPLES + END_UPLOAD = 9 lines
         assert_eq!(lines.len(), 9);
 
         assert_eq!(
             String::from_utf8(lines[0].clone()).unwrap(),
-            "MANIFEST 3 5 2000000\n"
+            "MANIFEST 3 5 2000000 62 1\n"
         );
 
         assert_eq!(
@@ -719,7 +778,7 @@ mod tests {
     #[test]
     fn encode_sample_lines_include_joints_and_dt() {
         let manifest = sample_manifest();
-        let lines = Esp32Protocol::encode_manifest(&manifest);
+        let lines = Esp32Protocol::encode_manifest(&manifest, 64);
 
         // Sample 0: joints=[0.0, 0.0], dt_us=0
         let sample0 = String::from_utf8(lines[2].clone()).unwrap();
@@ -739,17 +798,18 @@ mod tests {
                 dof_count: 0,
                 total_samples: 0,
                 duration_us: 0,
+                repeat_count: 1,
             },
             segments: vec![],
             samples: vec![],
         };
-        let lines = Esp32Protocol::encode_manifest(&manifest);
+        let lines = Esp32Protocol::encode_manifest(&manifest, 64);
 
         // MANIFEST line + END_UPLOAD (no SEGMENT or SAMPLE lines)
         assert_eq!(lines.len(), 2);
         assert_eq!(
             String::from_utf8(lines[0].clone()).unwrap(),
-            "MANIFEST 0 0 0\n"
+            "MANIFEST 0 0 0 64 1\n"
         );
         assert_eq!(String::from_utf8(lines[1].clone()).unwrap(), "END_UPLOAD\n");
     }
@@ -939,12 +999,11 @@ mod tests {
     #[tokio::test]
     async fn upload_manifest_rejected_with_esp_error() {
         let mut transport = FakeTransport::new();
-        // sample_manifest() has: MANIFEST + 1 SEGMENT + 3 SAMPLES + END_UPLOAD = 6 lines
+        // sample_manifest() has: MANIFEST + 1 SEGMENT + 3 SAMPLES + END_UPLOAD.
+        // v2 (C): 3 samples < chunk 64 → NO per-sample ACKs; END_UPLOAD is the
+        // next response consumed.
         transport.inject_response(b"OK\n".to_vec()); // MANIFEST
         transport.inject_response(b"OK\n".to_vec()); // SEGMENT
-        transport.inject_response(b"OK\n".to_vec()); // SAMPLE 0
-        transport.inject_response(b"OK\n".to_vec()); // SAMPLE 1
-        transport.inject_response(b"OK\n".to_vec()); // SAMPLE 2
         transport.inject_response(b"ERROR DOF_MISMATCH\n".to_vec()); // END_UPLOAD
         transport.connect().await.unwrap();
 
@@ -964,12 +1023,10 @@ mod tests {
     #[tokio::test]
     async fn upload_manifest_full_success() {
         let mut transport = FakeTransport::new();
-        // Each MANIFEST/SEGMENT/SAMPLE line expects OK (total 5)
+        // MANIFEST → OK, SEGMENT → OK; the 3 samples (dof=2 → chunk 64) form a
+        // trailing partial chunk → NO per-sample ACKs; END_UPLOAD → READY.
         transport.inject_response(b"OK\n".to_vec()); // MANIFEST
         transport.inject_response(b"OK\n".to_vec()); // SEGMENT
-        transport.inject_response(b"OK\n".to_vec()); // SAMPLE 0
-        transport.inject_response(b"OK\n".to_vec()); // SAMPLE 1
-        transport.inject_response(b"OK\n".to_vec()); // SAMPLE 2
         transport.inject_response(b"READY\n".to_vec()); // END_UPLOAD
         transport.connect().await.unwrap();
 

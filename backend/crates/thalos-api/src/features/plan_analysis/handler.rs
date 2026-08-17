@@ -13,8 +13,8 @@ use axum::{Json, extract::State};
 
 use thalos_core::{
     analysis::observation::ArtifactRef, ids::MotionPlanId, kinematics::forward::ForwardKinematics,
-    kinematics::inverse::DampedLeastSquaresSolver, motion::segment::MotionSegment,
-    robot::state::RobotState,
+    kinematics::inverse::DampedLeastSquaresSolver, kinematics::inverse::IKConfig,
+    motion::segment::MotionSegment, robot::state::RobotState,
 };
 use thalos_optimization::{
     PlanMetrics,
@@ -43,6 +43,17 @@ use crate::features::plan_analysis::dto::{
     ApplyRequest, ApplyResponse, EditProgramRequest, MetricsComparisonDto, OperatorAppliedDto,
     OptimizeResponse, PlanAnalysisRequest, PlanAnalysisResponse, PreviewRequest, PreviewResponse,
     UndoResponse,
+};
+
+/// IK solver configuration for plan analysis (spec `ik-config`).
+///
+/// Preserved site values (500/1e-6/0.1) — the same set the runtime service
+/// uses. Unifying the TYPE across sites, not the values: semantic compilation
+/// keeps its own (1000/1e-4/0.1). Value convergence is a separate follow-up.
+const IK_CONFIG: IKConfig = IKConfig {
+    max_iterations: 500,
+    tolerance: 1e-6,
+    lambda: 0.1,
 };
 
 /// POST /api/v1/plan/analyze
@@ -81,10 +92,16 @@ pub async fn analyze_plan(
     // (mismas observaciones + mismo programa → mismas recomendaciones). Un plan
     // sin programa (single-shot legacy) no produce recomendaciones — contexto
     // inexistente, documentado (campo aditivo en el wire).
-    let program = PlanningProgram::new(segments.iter().map(|s| s.source.clone()).collect());
+    let program = match active_plan.semantic_targets.clone() {
+        Some(semantic_targets) => PlanningProgram::with_semantic_targets(
+            segments.iter().map(|s| s.source.clone()).collect(),
+            semantic_targets,
+        ),
+        None => PlanningProgram::new(segments.iter().map(|s| s.source.clone()).collect()),
+    };
     let fk = ForwardKinematics::new(snapshot.chain.clone());
     let solver =
-        DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
+        DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
 
     // PR3: cuando programa + solver están disponibles (la MISMA condición que
     // el análisis con recomendaciones), el flujo también compone el pipeline
@@ -97,7 +114,7 @@ pub async fn analyze_plan(
     // `select_candidate_target_segment`. Cuando NO existe segmento elegible,
     // el flujo de candidatos se omite honestamente: el ranking queda ausente
     // (nunca filas falsas o degeneradas).
-    let result = match select_candidate_target_segment(&program) {
+    let mut result = match select_candidate_target_segment(&program) {
         Some(target_segment) => PlanAnalysisService::analyze_plan_with_candidates(
             &snapshot.chain,
             trajectory,
@@ -121,6 +138,12 @@ pub async fn analyze_plan(
         )?,
     };
 
+    // Robot identity provenance (spec `robot-identity`): the report carries the
+    // SCENE-owned identity (`RuntimeSnapshot.robot_id` — catalog `metadata.id`
+    // or `urdf:<hash>`), never something derived from the chain. The
+    // aggregator cannot know it, so the handler stamps it from the snapshot.
+    result.report.robot_id = Some(snapshot.robot_id.clone());
+
     // El wire es una proyección del reporte canónico (I6): el handler no
     // construye modelos intermedios entre dominio y contrato. El `assessment`
     // del runtime (aditivo) se proyecta tal cual; `candidate_ranking` (PR3,
@@ -133,7 +156,8 @@ pub async fn analyze_plan(
             &result.recommendations,
             Some(&result.assessment),
         )
-        .with_candidate_ranking(result.candidate_ranking.as_ref()),
+        .with_candidate_ranking(result.candidate_ranking.as_ref())
+        .with_trajectory(trajectory),
     ))
 }
 
@@ -197,7 +221,7 @@ pub async fn preview_command(
 
     let fk = ForwardKinematics::new(snapshot.chain.clone());
     let solver =
-        DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
+        DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
 
     // M2 (design ADR-3): compile the program to obtain the segment context
     // (waypoint_range + segment-start joints) and let the advisor verify
@@ -359,7 +383,7 @@ pub async fn apply_command(
 
     let fk = ForwardKinematics::new(snapshot.chain.clone());
     let solver =
-        DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
+        DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
 
     // M2 (design ADR-3): same compiled-plan context as the analyze service
     // (deterministic recommendation ids across analyze → preview → apply).
@@ -495,9 +519,13 @@ fn active_program(snapshot: &RuntimeSnapshot) -> Result<PlanningProgram, ApiErro
             code: "no_program_segments".to_string(),
         });
     }
-    Ok(PlanningProgram::new(
-        segments.iter().map(|s| s.source.clone()).collect(),
-    ))
+    Ok(match active_plan.semantic_targets.clone() {
+        Some(semantic_targets) => PlanningProgram::with_semantic_targets(
+            segments.iter().map(|s| s.source.clone()).collect(),
+            semantic_targets,
+        ),
+        None => PlanningProgram::new(segments.iter().map(|s| s.source.clone()).collect()),
+    })
 }
 
 /// Ciclo compartido de write-back (CDD step 3): `edit.apply(program)` →
@@ -529,7 +557,7 @@ async fn apply_program_edit(
     //    start que preview/apply).
     let fk = ForwardKinematics::new(snapshot.chain.clone());
     let solver =
-        DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
+        DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
     let start_joints = snapshot
         .active_plan
         .as_ref()
@@ -654,7 +682,7 @@ pub async fn undo_command(State(state): State<Arc<AppState>>) -> ApiResult<UndoR
     //    comando deshecho).
     let fk = ForwardKinematics::new(snapshot.chain.clone());
     let solver =
-        DampedLeastSquaresSolver::new(fk, snapshot.resolve_default_frame(), 500, 1e-6, 0.1);
+        DampedLeastSquaresSolver::from_config(fk, snapshot.resolve_default_frame(), IK_CONFIG);
     let start_joints = active_plan
         .trajectory
         .waypoints()

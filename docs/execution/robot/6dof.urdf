@@ -1,0 +1,246 @@
+<?xml version="1.0"?>
+<robot name="manipulator_6dof">
+
+  <!-- Base Link -->
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0.05" rpy="0 0 0"/>
+      <geometry>
+        <cylinder length="0.1" radius="0.1"/>
+      </geometry>
+      <material name="yellow">
+        <color rgba="1.0 0.75 0.0 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.05" rpy="0 0 0"/>
+      <geometry>
+        <cylinder length="0.1" radius="0.1"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="2.0"/>
+      <origin xyz="0 0 0.05" rpy="0 0 0"/>
+      <inertia ixx="0.00667" ixy="0.0" ixz="0.0" iyy="0.00667" iyz="0.0" izz="0.01"/>
+    </inertial>
+  </link>
+
+  <!-- Link 1: Eje Rotación Hombro (Yaw) -->
+  <link name="link_1">
+    <visual>
+      <origin xyz="0 0 0.075" rpy="0 0 0"/>
+      <geometry>
+        <cylinder length="0.15" radius="0.06"/>
+      </geometry>
+      <material name="black">
+        <color rgba="0.1 0.1 0.1 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.075" rpy="0 0 0"/>
+      <geometry>
+        <cylinder length="0.15" radius="0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.5"/>
+      <origin xyz="0 0 0.075" rpy="0 0 0"/>
+      <inertia ixx="0.00416" ixy="0.0" ixz="0.0" iyy="0.00416" iyz="0.0" izz="0.0027"/>
+    </inertial>
+  </link>
+
+  <!-- Link 2: Brazo Superior (Pitch) -->
+  <link name="link_2">
+    <visual>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.06 0.06 0.3"/>
+      </geometry>
+      <material name="yellow">
+        <color rgba="1.0 0.75 0.0 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.06 0.06 0.3"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.2"/>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+      <inertia ixx="0.00936" ixy="0.0" ixz="0.0" iyy="0.00936" iyz="0.0" izz="0.00072"/>
+    </inertial>
+  </link>
+
+  <!-- Link 3: Antebrazo (Pitch) -->
+  <link name="link_3">
+    <visual>
+      <origin xyz="0 0 0.125" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.05 0.05 0.25"/>
+      </geometry>
+      <material name="yellow">
+        <color rgba="1.0 0.75 0.0 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.125" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.05 0.05 0.25"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.8"/>
+      <origin xyz="0 0 0.125" rpy="0 0 0"/>
+      <inertia ixx="0.00433" ixy="0.0" ixz="0.0" iyy="0.00433" iyz="0.0" izz="0.00033"/>
+    </inertial>
+  </link>
+
+  <!-- Link 4: Muñeca Rotación Longitudinal (Roll) -->
+  <link name="link_4">
+    <visual>
+      <origin xyz="0 0 0.05" rpy="0 0 0"/>
+      <geometry>
+        <cylinder length="0.1" radius="0.04"/>
+      </geometry>
+      <material name="black">
+        <color rgba="0.1 0.1 0.1 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.05" rpy="0 0 0"/>
+      <geometry>
+        <cylinder length="0.1" radius="0.04"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.4"/>
+      <origin xyz="0 0 0.05" rpy="0 0 0"/>
+      <inertia ixx="0.00049" ixy="0.0" ixz="0.0" iyy="0.00049" iyz="0.0" izz="0.00032"/>
+    </inertial>
+  </link>
+
+  <!-- Link 5: Muñeca Flexión (Pitch) -->
+  <link name="link_5">
+    <visual>
+      <origin xyz="0 0 0.04" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.04 0.04 0.08"/>
+      </geometry>
+      <material name="yellow">
+        <color rgba="1.0 0.75 0.0 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.04" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.04 0.04 0.08"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.2"/>
+      <origin xyz="0 0 0.04" rpy="0 0 0"/>
+      <inertia ixx="0.000133" ixy="0.0" ixz="0.0" iyy="0.000133" iyz="0.0" izz="0.000053"/>
+    </inertial>
+  </link>
+
+  <!-- End Effector: Flanche/Rotación Final (Yaw/Roll según diseño) -->
+  <link name="end_effector">
+    <visual>
+      <origin xyz="0 0 0.02" rpy="0 0 0"/>
+      <geometry>
+        <cylinder length="0.04" radius="0.03"/>
+      </geometry>
+      <material name="white">
+        <color rgba="1.0 1.0 1.0 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.02" rpy="0 0 0"/>
+      <geometry>
+        <cylinder length="0.04" radius="0.03"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.1"/>
+      <origin xyz="0 0 0.02" rpy="0 0 0"/>
+      <inertia ixx="0.000035" ixy="0.0" ixz="0.0" iyy="0.000035" iyz="0.0" izz="0.000045"/>
+    </inertial>
+  </link>
+
+  <link name="tool0"/>
+
+  <!--
+    TCP (tool0) measurement procedure — calibration-field Phase 0.
+    The exact tcp_joint offset depends on the PHYSICALLY MOUNTED pen tip and
+    is OUT OF REPO SCOPE: this file keeps the current value (0 0 0.06) as
+    BASELINE until the real tip is measured. Do NOT change this origin blindly.
+
+    Procedure (see docs/execution/robot/pen-tip-procedure.md):
+      1. Mount the fabricated pen tip (cylinder with 8 mm rod hole + funnel
+         for the pen) on the prismatic rod.
+      2. Measure the REAL length from the end_effector datum to the pen tip
+         contact point with a ruler/caliper (meters, 3+ decimals).
+      3. Update this origin to the measured offset, e.g. xyz="0 0 0.085".
+      4. Verify FK: start the backend, POST /api/v1/scene/from-fk with the
+         current joint angles and confirm the TCP position readout.
+    Any change here changes the URDF hash -> a NEW robot_id -> any previously
+    calibrated field is invalidated (correct behavior, calibration-field CF-5).
+  -->
+  <joint name="tcp_joint" type="fixed">
+    <parent link="end_effector"/>
+    <child link="tool0"/>
+    <origin xyz="0 0 0.04" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Joints (Ejes de Movimiento en serie) -->
+  <joint name="axis_0" type="revolute">
+    <parent link="base_link"/>
+    <child link="link_1"/>
+    <origin xyz="0 0 0.1" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.1416" upper="3.1416" effort="20.0" velocity="1.0"/> 
+  </joint>
+
+  <joint name="axis_1" type="revolute">
+    <parent link="link_1"/>
+    <child link="link_2"/>
+    <origin xyz="0 0 0.15" rpy="0 0 0"/> 
+    <axis xyz="0 1 0"/>
+    <limit lower="-1.5708" upper="1.5708" effort="20.0" velocity="1.0"/> 
+  </joint>
+
+  <joint name="axis_2" type="revolute">
+    <parent link="link_2"/>
+    <child link="link_3"/>
+    <origin xyz="0 0 0.3" rpy="0 0 0"/> 
+    <axis xyz="0 1 0"/>
+    <limit lower="-2.0944" upper="2.0944" effort="15.0" velocity="1.0"/> 
+  </joint>
+
+  <joint name="axis_3" type="revolute">
+    <parent link="link_3"/>
+    <child link="link_4"/>
+    <origin xyz="0 0 0.25" rpy="0 0 0"/> 
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.1416" upper="3.1416" effort="10.0" velocity="1.5"/> 
+  </joint>
+
+  <joint name="axis_4" type="revolute">
+    <parent link="link_4"/>
+    <child link="link_5"/>
+    <origin xyz="0 0 0.1" rpy="0 0 0"/> 
+    <axis xyz="0 1 0"/>
+    <limit lower="-1.5708" upper="1.5708" effort="10.0" velocity="1.5"/> 
+  </joint>
+
+  <joint name="axis_5" type="revolute">
+    <parent link="link_5"/>
+    <child link="end_effector"/>
+    <origin xyz="0 0 0.08" rpy="0 0 0"/> 
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.1416" upper="3.1416" effort="5.0" velocity="2.0"/> 
+  </joint>
+
+</robot>

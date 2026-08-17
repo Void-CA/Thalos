@@ -3,6 +3,8 @@ import { useDomainSceneStore } from '@/features/scene/store'
 import type { SceneObject, SceneLocation } from '@/features/scene/store'
 import type { PoseDef } from '@/shared/contracts'
 import { useSceneStore } from '../store'
+import { ApproachMarkers } from './approach-markers'
+import type { ApproachMarkerEntity } from './approach-markers'
 import { scaleFromRefDim } from './scale'
 
 /**
@@ -126,11 +128,30 @@ export function SceneEntities() {
   // (spec R1.3). Selecting each array re-renders only when that array changes.
   const objects = useDomainSceneStore(s => s.objects)
   const locations = useDomainSceneStore(s => s.locations)
+  // SCARA approach/retreat transit height — re-renders the approach markers
+  // live when the editor's "SCARA approach / Z↑" input changes.
+  const approachHeight = useDomainSceneStore(s => s.approachHeight)
   // Overlay sizes scale with the scene reference dimension (viewport store) —
   // absent scene data degrades to 1.0 via scaleFromRefDim (no-op).
   const refDim = useSceneStore(s => s.data?.referenceDimension) ?? 1.0
 
   if (objects.length === 0 && locations.length === 0) return null
+
+  // Approach markers reuse the SAME nudge-adjusted positions as the meshes so
+  // they align with them exactly (locations at z=0 sit at ENTITY_SIZE/2).
+  const entitySize = scaleFromRefDim(refDim, ENTITY_SIZE)
+  const markerEntities: ApproachMarkerEntity[] = [
+    ...objects.map((obj: SceneObject) => ({
+      id: obj.id,
+      kind: 'object' as const,
+      basePosition: nudgeToFloor(obj.pose.position, 'object', entitySize),
+    })),
+    ...locations.map((loc: SceneLocation) => ({
+      id: loc.id,
+      kind: 'location' as const,
+      basePosition: nudgeToFloor(loc.pose.position, 'location', entitySize),
+    })),
+  ]
 
   return (
     <group>
@@ -140,6 +161,12 @@ export function SceneEntities() {
       {locations.map((loc: SceneLocation) => (
         <SceneEntityMesh key={loc.id} id={loc.id} name={loc.name} pose={loc.pose} kind="location" refDim={refDim} />
       ))}
+      <ApproachMarkers
+        entities={markerEntities}
+        refDim={refDim}
+        approachHeight={approachHeight}
+        entitySize={entitySize}
+      />
     </group>
   )
 }

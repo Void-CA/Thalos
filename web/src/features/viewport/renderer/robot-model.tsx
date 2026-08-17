@@ -5,6 +5,14 @@ import { useSceneStore } from '../store'
 import { DEFAULT_FRAME_STYLE } from '../types'
 import type { SceneFrame, SceneLink, ScenePrimitive } from '../types'
 import { AXIS_ORIGIN, LINK_COLOR, LINK_OPACITY } from '@/shared/tokens'
+import {
+  INTERPOLATION_DELAY_MS,
+  pushSnapshot,
+  findInterpolationWindow,
+  computeAlpha,
+  interpolateTransforms,
+} from './snapshot-interpolation'
+import type { SnapshotBuffer } from './snapshot-interpolation'
 
 /**
  * RobotModel — renders the robot scene and applies the single
@@ -25,6 +33,11 @@ export function RobotModel() {
   const transformSnapshot = useSceneStore(s => s.transformSnapshot)
   const frameGroups = useRef(new Map<string, THREE.Group>())
   const linkMeshes = useRef(new Map<string, THREE.Mesh>())
+  // Rolling buffer of execution snapshots (PR1 rework). Kept per-instance so
+  // separate mounts never share stale state. The renderer DELIBERATELY renders
+  // INTERPOLATION_DELAY_MS behind the freshest backend tick — the visual
+  // representation is temporally buffered, not the robot "reacting late".
+  const interpBuffer = useRef<SnapshotBuffer>([])
 
   const primitivesByFrame = useMemo(() => {
     const m = new Map<string, ScenePrimitive[]>()
@@ -40,7 +53,29 @@ export function RobotModel() {
   useFrame(() => {
     if (!data) return
     if (transformSnapshot.kind === 'execution') {
-      for (const tx of transformSnapshot.transforms) {
+      // PR1 rework (delay buffer): push the incoming tick, then render a pose
+      // ~INTERPOLATION_DELAY_MS BEHIND the freshest snapshot. `renderTime` is
+      // the render clock pushed back by a fixed visual-latency window — it
+      // lands INSIDE a previously received interval, so interpolation actually
+      // produces intermediate poses (the old pair-window was a production
+      // no-op because `now >= currTs` always). The window is searched in the
+      // buffer (jitter may leave several snapshots behind `renderTime`); when
+      // none exists — buffer empty or `renderTime` past the latest — HOLD the
+      // latest complete snapshot (alpha 1, never extrapolate).
+      const snapshot = {
+        transforms: transformSnapshot.transforms,
+        receivedAt: transformSnapshot.receivedAt,
+      }
+      interpBuffer.current = pushSnapshot(interpBuffer.current, snapshot)
+      const renderTime = performance.now() - INTERPOLATION_DELAY_MS
+      const window = findInterpolationWindow(interpBuffer.current, renderTime)
+      const alpha = window
+        ? computeAlpha(renderTime, window.prev.receivedAt, window.current.receivedAt)
+        : 1
+      const transforms = window
+        ? interpolateTransforms(window.prev, window.current, alpha)
+        : interpBuffer.current[interpBuffer.current.length - 1].transforms
+      for (const tx of transforms) {
         // Frame transforms (frame groups keyed by frame id)
         const g = frameGroups.current.get(tx.id)
         if (g) {

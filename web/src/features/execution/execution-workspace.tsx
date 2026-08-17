@@ -89,13 +89,34 @@ export function ExecutionWorkspace() {
 
   /** connection_lost / not_connected get the connect CTA (reconnect the
    *  hardware backend + retry); every other failure gets Retry
-   *  (reset + start) — execution-workspace spec + R3-001. */
+   *  (reset + start) — execution-workspace spec + R3-001.
+   *
+   *  protocol_error is the WIRE-level class (serial desync, firmware
+   *  rejections): the plan state is intact, so retrying must NOT reset the
+   *  plan — a reset drops the derived `executionViewable` flag and the route
+   *  guard ejects the user from /execution to the Robot root. Instead,
+   *  reconnect the hardware backend (fresh handshake clears any serial line
+   *  desync) and re-attempt start with the plan loaded. */
   const isConnectionLost = error?.code === 'connection_lost'
   const isNotConnected = error?.code === 'not_connected'
+  const isProtocolError = error?.code === 'protocol_error'
   const needsConnect = isConnectionLost || isNotConnected
 
   const handleRetry = () => {
     void reset().then(() => start())
+  }
+
+  const handleProtocolRetry = async () => {
+    // Reconnect the active hardware backend with its current port first: the
+    // connect path builds a fresh transport + handshake, clearing any serial
+    // line desync (the actual recovery for a protocol error). Then start
+    // WITHOUT reset — the plan stays loaded and executionViewable never drops.
+    const { backends, activeId, connect } = useBackendStore.getState()
+    const active = backends.find((b) => b.id === activeId)
+    if (active?.id === 'esp32') {
+      await connect(active.id, active.port ?? '')
+    }
+    await start()
   }
 
   const handleReconnect = async () => {
@@ -280,10 +301,13 @@ export function ExecutionWorkspace() {
                       // Resilience-matrix retry: Retry (reset + start) for
                       // network/timeout failures; Reconnect/Connect (reconnect
                       // the active hardware backend, then reset + start) for
-                      // connection_lost / not_connected — execution-workspace
-                      // spec + R3-001.
+                      // connection_lost / not_connected; protocol errors
+                      // reconnect + start WITHOUT reset (plan intact, no
+                      // guard ejection) — execution-workspace spec + R3-001.
                       if (needsConnect) {
                         void handleReconnect()
+                      } else if (isProtocolError) {
+                        void handleProtocolRetry()
                       } else {
                         handleRetry()
                       }
