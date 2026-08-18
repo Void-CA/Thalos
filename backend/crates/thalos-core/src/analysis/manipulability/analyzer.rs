@@ -36,6 +36,10 @@ impl ManipulabilityAnalyzer {
                     position: ws_sample.position,
                     singularity,
                     manipulability,
+                    // Staged by `ManipulabilityAnalysis::from_samples` once
+                    // the FULL sample set is collected (design
+                    // "relative_manipulability" needs the distribution).
+                    relative_manipulability: 0.0,
                 }
             })
             .collect();
@@ -133,11 +137,39 @@ mod tests {
             // Task 2.1: normalized + grade populated per sample
             assert!(s.manipulability.manipulability_grade.is_some());
             assert!(s.manipulability.normalized_yoshikawa.is_finite());
+            // Design "relative_manipulability": every sample is staged
+            // against the robot's own distribution and clamped to [0, 1].
+            assert!(
+                (0.0..=1.0).contains(&s.relative_manipulability),
+                "relative score {} must live in [0, 1]",
+                s.relative_manipulability
+            );
         }
 
+        // The 100-sample planar 2R spans a real distribution (near-singular
+        // configurations at joint limits vs fully dexterous ones) — the
+        // relative metric must DISCRIMINATE, not collapse to a constant.
+        assert!(
+            analysis.samples.iter().any(|s| s.relative_manipulability < 1.0),
+            "a real workspace must produce relative scores below 1.0"
+        );
+        assert!(
+            analysis.metrics.p05 <= analysis.metrics.p50
+                && analysis.metrics.p50 <= analysis.metrics.p95,
+            "percentiles must be ordered P05 ≤ P50 ≤ P95"
+        );
+        assert!(
+            (0.0..=1.0).contains(&analysis.metrics.avg_relative),
+            "avg_relative must stay in [0, 1]"
+        );
+
         println!(
-            "Planar 2R: avg_yoshikawa={:.4}, avg_isotropy={:.4}",
-            analysis.metrics.avg_yoshikawa, analysis.metrics.avg_isotropy,
+            "Planar 2R: avg_yoshikawa={:.4}, avg_isotropy={:.4}, p05={:.4}, p95={:.4}, avg_relative={:.4}",
+            analysis.metrics.avg_yoshikawa,
+            analysis.metrics.avg_isotropy,
+            analysis.metrics.p05,
+            analysis.metrics.p95,
+            analysis.metrics.avg_relative,
         );
     }
 

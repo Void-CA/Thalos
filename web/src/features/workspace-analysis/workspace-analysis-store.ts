@@ -11,6 +11,11 @@ export interface CloudPoint {
    *  Only available in manipulability samples from NEW backends; absent on
    *  legacy payloads → the point-cloud falls back to raw thresholds. */
   grade?: 'low' | 'medium' | 'high'
+  /** Percentile score (0–1) of this sample relative to the robot's OWN
+   *  normalized-yoshikawa distribution (design "relative_manipulability").
+   *  Only available in manipulability samples from NEW backends; absent on
+   *  legacy payloads. */
+  relativeManipulability?: number
 }
 
 export type PointCloudColorMode = 'none' | 'workspace' | 'singularity' | 'manipulability'

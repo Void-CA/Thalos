@@ -17,7 +17,7 @@ constexpr uint8_t PCA9685_ADDR = 0x40;
 // connector. Joint 0 (base) → 15 (physically connected), 1 → 14, 2 → 13,
 // 3 (prismatic) → 12.
 constexpr uint8_t NUM_SERVO_CHANNELS = 4;
-constexpr uint8_t SERVO_CHANNELS[NUM_SERVO_CHANNELS] = {15, 14, 13, 12};
+constexpr uint8_t SERVO_CHANNELS[NUM_SERVO_CHANNELS] = {15, 14, 13, 11};
 
 // ── PCA9685 Constants (NOMINAL) ────────────────────────────────────────────
 // 50 Hz PWM → prescale value 0x79 (see PCA9685 datasheet)

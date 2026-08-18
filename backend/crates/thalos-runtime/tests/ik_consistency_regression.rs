@@ -75,8 +75,11 @@ fn three_path_solvers(chain: &SerialChain, config: IKConfig) -> [DampedLeastSqua
 fn mid_workspace_seed(chain: &SerialChain) -> Vec<f64> {
     // Icebot is 4 DOF (3 z-axis revolutes + 1 z prismatic). Mid-range values
     // keep joint-limit clamping from interfering with the solves.
+    // With physical home offsets (axis_0 +20°, axis_1 -80°), the workspace is
+    // rotated and the minimum reach is ~0.173m. Use a seed that keeps the
+    // end effector well within the reachable annulus (r < 0.225m max).
     assert_eq!(chain.dof_count(), 4, "icebot must have 4 DOF");
-    vec![0.5, 1.0, -0.5, 0.03]
+    vec![0.3, 0.8, -0.3, 0.03]
 }
 
 /// The end-effector pose at the seed — the reachable starting point.
@@ -117,8 +120,10 @@ fn same_chain_same_target_same_config_yields_same_verdict_across_all_three_paths
     let chain = adapter::from_urdf(ICEBOT_URDF).expect("icebot URDF must import");
     let q0 = mid_workspace_seed(&chain);
     let seed = seed_pose(&chain, &q0);
-    // Reachable position target (2 cm offset from the seed along x).
-    let reachable_pos = seed.translation() + Vector3::new(0.02, 0.0, 0.0);
+    // Reachable position target (1 cm offset from the seed toward origin).
+    // With physical offsets the workspace is tighter; a larger offset
+    // can push the target past the max reach (~0.225 m).
+    let reachable_pos = seed.translation() + Vector3::new(-0.01, 0.0, 0.0);
 
     // Analysis/runtime config: reachable position converges on all three paths.
     let solvers = three_path_solvers(&chain, analysis_config());

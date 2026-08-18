@@ -13,6 +13,11 @@ export interface ManipulabilityStats {
   coverage: number
   average: number
   min: number
+  /** Mean of the per-point `relative_manipulability` scores (0–1), computed
+   *  ONLY from points that carry the field — older payloads omit it and the
+   *  UI never fabricates a value (I2). `null` when no point in the span
+   *  carries it (design "relative_manipulability", additive wire field). */
+  relativeAverage: number | null
 }
 
 /** Aggregated Jacobian determinant det(J·Jᵀ) over a waypoint span. */
@@ -36,12 +41,19 @@ export function manipulabilityStatsInRange(
   const covered = series.filter((p) => p.waypoint >= start && p.waypoint <= end)
   if (covered.length === 0) return null
   const values = covered.map((p) => p.yoshikawa)
+  const relativeValues = covered
+    .map((p) => p.relative_manipulability)
+    .filter((v): v is number => typeof v === 'number')
   const totalWaypoints = end - start + 1
   return {
     count: covered.length,
     coverage: covered.length / Math.max(totalWaypoints, 1),
     average: values.reduce((a, b) => a + b, 0) / values.length,
     min: Math.min(...values),
+    relativeAverage:
+      relativeValues.length > 0
+        ? relativeValues.reduce((a, b) => a + b, 0) / relativeValues.length
+        : null,
   }
 }
 
@@ -159,6 +171,14 @@ export function RegionInspector() {
                 value={`${manipulability.count} of ${region.waypoint_count} analyzed`}
               />
             </div>
+            {manipulability.relativeAverage != null && (
+              <div className="grid grid-cols-2 gap-1.5 mt-1.5">
+                <MetricCard
+                  label="Relative avg"
+                  value={fmtPct(manipulability.relativeAverage)}
+                />
+              </div>
+            )}
             {determinant && (
               <div className="grid grid-cols-2 gap-1.5 mt-1.5">
                 <MetricCard label="det(J·Jᵀ) avg" value={fmt(determinant.average)} />
@@ -218,6 +238,11 @@ function fmt(val: number): string {
   if (abs >= 0.001) return val.toFixed(4)
   if (abs >= 1e-6) return val.toFixed(6)
   return val.toExponential(2)
+}
+
+/** Percentile score (0–1) rendered as an integer percentage. */
+function fmtPct(val: number): string {
+  return `${Math.round(val * 100)}%`
 }
 
 /** Compact duration label: seconds, or minutes + seconds past 60s. */

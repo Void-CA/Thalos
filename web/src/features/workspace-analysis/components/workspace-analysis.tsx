@@ -359,6 +359,23 @@ export function WorkspaceAnalysis() {
                     max={mp.data.metrics.max_isotropy}
                     pct
                   />
+                  {mp.data.percentiles && (
+                    <div className="pt-1.5 border-t border-border">
+                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                        Relative (this robot)
+                      </span>
+                      <p className="text-[10px] text-muted-foreground mb-1.5">
+                        Score vs this robot&apos;s own distribution (P05–P95 of normalized
+                        Yoshikawa) — comparable across robots regardless of their maximum.
+                      </p>
+                      <div className="grid grid-cols-4 gap-2">
+                        <MetricValue label="Avg Relative" value={mp.data.percentiles.avg_relative} pct />
+                        <MetricValue label="P05" value={mp.data.percentiles.p05} pct />
+                        <MetricValue label="P50" value={mp.data.percentiles.p50} pct />
+                        <MetricValue label="P95" value={mp.data.percentiles.p95} pct />
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">
                     <span>Total samples</span>
                     <span className="font-mono tabular-nums text-foreground">{mp.data.metrics.total_samples ?? '—'}</span>

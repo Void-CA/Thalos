@@ -41,15 +41,73 @@ pub struct DemoEvidence {
 
 /// Closed-form bent start for icebot's 2-link arm (L1 = 0.125, L2 = 0.100,
 /// axis_1 limit [0, 2.0944]) derived from the scene's `home_pose`.
+///
+/// Accounts for the physical home offsets in the URDF:
+/// - axis_0 origin rpy Z: +0.3491 rad (20°)
+/// - axis_1 origin rpy Z: -1.3963 rad (-80°)
+///
+/// The URDF FK chain produces effective link angles:
+///   link1 direction = 0.3491 + q0
+///   link2 direction = (0.3491 - 1.3963) + q0 + q1 = -1.0472 + q0 + q1
+///
+/// Standard 2R IK solves for θ1 (link1 absolute angle) and θ2 (link2
+/// relative angle), then maps back to joint angles:
+///   q0 = θ1 - 0.3491
+///   q1 = θ2 + 1.3963
+///
+/// Tries both elbow-up and elbow-down solutions; returns the first that
+/// satisfies joint limits.
 pub fn bent_start_joints(home: &thalos_document::pose::Pose) -> [f64; 4] {
     const L1: f64 = 0.125;
     const L2: f64 = 0.100;
+    /// RPY Z offset of axis_0 origin.
+    const OFFSET_0: f64 = 0.3491;
+    /// RPY Z offset of axis_1 origin.
+    const OFFSET_1: f64 = -1.3963;
+    /// Cumulative offset (OFFSET_0 + OFFSET_1).
+    const CUM_OFFSET: f64 = OFFSET_0 + OFFSET_1; // -1.0472
+
+    // Joint limits for axis_0 and axis_1.
+    const Q0_MIN: f64 = -1.5708;
+    const Q0_MAX: f64 = 1.5708;
+    const Q1_MIN: f64 = 0.0;
+    const Q1_MAX: f64 = 2.0944;
+
     let [x, y, z] = home.position;
     let r = (x * x + y * y).sqrt();
-    let q0 = y.atan2(x);
-    let cos_q1 = ((r * r - L1 * L1 - L2 * L2) / (2.0 * L1 * L2)).clamp(-1.0, 1.0);
-    let q1 = cos_q1.acos();
-    let q2 = -(q0 + q1);
+    let phi = y.atan2(x);
+
+    // Standard 2R IK — cosine rule for elbow angle.
+    let cos_theta2 = ((r * r - L1 * L1 - L2 * L2) / (2.0 * L1 * L2)).clamp(-1.0, 1.0);
+    let theta2_abs = cos_theta2.acos(); // always positive [0, π]
+
+    // Try both solutions: elbow-down (+theta2) and elbow-up (-theta2).
+    for &sign in &[1.0_f64, -1.0] {
+        let theta2 = sign * theta2_abs;
+        let sin_theta2 = theta2.sin();
+        let beta = (L2 * sin_theta2).atan2(L1 + L2 * cos_theta2);
+        let theta1 = phi - beta;
+
+        let q0 = theta1 - OFFSET_0;
+        let q1 = theta2 - OFFSET_1; // = theta2 + 1.3963
+
+        if q0 >= Q0_MIN && q0 <= Q0_MAX && q1 >= Q1_MIN && q1 <= Q1_MAX {
+            // Wrist neutral: net rotation after all three revolute joints = 0.
+            let q2 = -CUM_OFFSET - q0 - q1;
+            let q3 = (0.04 - z).clamp(0.0, 0.06);
+            return [q0, q1, q2, q3];
+        }
+    }
+
+    // Fallback: neither solution satisfies limits — return elbow-down anyway
+    // (IK solver will attempt to converge from a sub-optimal seed).
+    let theta2 = theta2_abs;
+    let sin_theta2 = theta2.sin();
+    let beta = (L2 * sin_theta2).atan2(L1 + L2 * cos_theta2);
+    let theta1 = phi - beta;
+    let q0 = theta1 - OFFSET_0;
+    let q1 = theta2 - OFFSET_1;
+    let q2 = -CUM_OFFSET - q0 - q1;
     let q3 = (0.04 - z).clamp(0.0, 0.06);
     [q0, q1, q2, q3]
 }

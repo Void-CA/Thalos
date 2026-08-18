@@ -211,6 +211,22 @@ pub struct ManipulabilityMetricsDto {
     /// Reference Dimension on Metrics").
     #[serde(default)]
     pub reference_dimension: f64,
+    /// Percentile P05 of `normalized_yoshikawa` sobre la distribución del
+    /// propio robot (design "relative_manipulability"). ADITIVO
+    /// (`#[serde(default)]` → 0.0): payloads legacy sin el campo
+    /// deserializan sin error.
+    #[serde(default)]
+    pub p05: f64,
+    /// Percentile P50 (mediana) de `normalized_yoshikawa`. ADITIVO.
+    #[serde(default)]
+    pub p50: f64,
+    /// Percentile P95 de `normalized_yoshikawa`. ADITIVO.
+    #[serde(default)]
+    pub p95: f64,
+    /// Promedio de los scores `relative_manipulability` por sample (en
+    /// [0, 1]). ADITIVO.
+    #[serde(default)]
+    pub avg_relative: f64,
 }
 
 impl From<ManipulabilityMetrics> for ManipulabilityMetricsDto {
@@ -224,6 +240,10 @@ impl From<ManipulabilityMetrics> for ManipulabilityMetricsDto {
             min_isotropy: m.min_isotropy,
             max_isotropy: m.max_isotropy,
             reference_dimension: m.reference_dimension,
+            p05: m.p05,
+            p50: m.p50,
+            p95: m.p95,
+            avg_relative: m.avg_relative,
         }
     }
 }
@@ -238,6 +258,12 @@ pub struct ManipulabilitySampleDto {
     /// 0.0): payloads legacy sin el campo deserializan sin error.
     #[serde(default)]
     pub normalized_yoshikawa: f64,
+    /// Score percentil (0..1) de este sample relativo a la distribución
+    /// P05–P95 de `normalized_yoshikawa` del propio robot (design
+    /// "relative_manipulability"). ADITIVO (`#[serde(default)]` → 0.0):
+    /// payloads legacy sin el campo deserializan sin error.
+    #[serde(default)]
+    pub relative_manipulability: f64,
     /// Grade clasificado por el backend (`"low" | "medium" | "high"`).
     /// `None` = payload legacy → fallback frontend.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -257,6 +283,7 @@ impl From<&thalos_core::analysis::manipulability::ManipulabilitySample>
             yoshikawa: s.manipulability.yoshikawa,
             isotropy: s.manipulability.isotropy,
             normalized_yoshikawa: s.manipulability.normalized_yoshikawa,
+            relative_manipulability: s.relative_manipulability,
             manipulability_grade: s
                 .manipulability
                 .manipulability_grade
@@ -380,6 +407,7 @@ mod tests {
                 normalized_yoshikawa: normalized,
                 manipulability_grade: Some(grade),
             },
+            relative_manipulability: 0.7,
         }
     }
 
@@ -392,6 +420,10 @@ mod tests {
         assert!(
             (value["normalized_yoshikawa"].as_f64().expect("f64") - 0.22).abs() < 1e-12,
             "normalized_yoshikawa must project"
+        );
+        assert!(
+            (value["relative_manipulability"].as_f64().expect("f64") - 0.7).abs() < 1e-12,
+            "relative_manipulability must project"
         );
         assert_eq!(
             value["manipulability_grade"], "medium",
@@ -413,12 +445,32 @@ mod tests {
             min_isotropy: 0.1,
             max_isotropy: 0.8,
             reference_dimension: 2.3,
+            p05: 0.02,
+            p50: 0.5,
+            p95: 0.98,
+            avg_relative: 0.45,
         };
         let dto = ManipulabilityMetricsDto::from(metrics);
         let value = serde_json::to_value(&dto).expect("serialize");
         assert!(
             (value["reference_dimension"].as_f64().expect("f64") - 2.3).abs() < 1e-12,
             "reference_dimension must project (spec scenario: L_ref = 0.5 → 0.5)"
+        );
+        assert!(
+            (value["p05"].as_f64().expect("f64") - 0.02).abs() < 1e-12,
+            "p05 must project"
+        );
+        assert!(
+            (value["p50"].as_f64().expect("f64") - 0.5).abs() < 1e-12,
+            "p50 must project"
+        );
+        assert!(
+            (value["p95"].as_f64().expect("f64") - 0.98).abs() < 1e-12,
+            "p95 must project"
+        );
+        assert!(
+            (value["avg_relative"].as_f64().expect("f64") - 0.45).abs() < 1e-12,
+            "avg_relative must project"
         );
     }
 
@@ -437,12 +489,17 @@ mod tests {
                 min_isotropy: 0.4,
                 max_isotropy: 0.4,
                 reference_dimension: 2.3,
+                p05: 0.4,
+                p50: 0.5,
+                p95: 0.6,
+                avg_relative: 0.5,
             },
             samples: Some(vec![ManipulabilitySampleDto {
                 position: PointDto { x: 0.3, y: 0.4, z: 0.5 },
                 yoshikawa: 0.5,
                 isotropy: 0.4,
                 normalized_yoshikawa: 0.22,
+                relative_manipulability: 0.71,
                 manipulability_grade: Some("medium".to_string()),
             }]),
         };
@@ -455,17 +512,32 @@ mod tests {
         value["samples"][0]
             .as_object_mut()
             .expect("sample")
+            .remove("relative_manipulability");
+        value["samples"][0]
+            .as_object_mut()
+            .expect("sample")
             .remove("manipulability_grade");
         value["metrics"]
             .as_object_mut()
             .expect("metrics")
             .remove("reference_dimension");
+        for key in ["p05", "p50", "p95", "avg_relative"] {
+            value["metrics"]
+                .as_object_mut()
+                .expect("metrics")
+                .remove(key);
+        }
 
         let back: ManipulabilityResponse =
             serde_json::from_value(value).expect("legacy payload must deserialize");
         assert_eq!(back.samples.as_ref().expect("samples")[0].normalized_yoshikawa, 0.0);
+        assert_eq!(back.samples.as_ref().expect("samples")[0].relative_manipulability, 0.0);
         assert_eq!(back.samples.as_ref().expect("samples")[0].manipulability_grade, None);
         assert_eq!(back.metrics.reference_dimension, 0.0);
+        assert_eq!(back.metrics.p05, 0.0);
+        assert_eq!(back.metrics.p50, 0.0);
+        assert_eq!(back.metrics.p95, 0.0);
+        assert_eq!(back.metrics.avg_relative, 0.0);
         assert!(
             (back.samples.as_ref().expect("samples")[0].yoshikawa - 0.5).abs() < 1e-12,
             "pre-existing fields keep their values"

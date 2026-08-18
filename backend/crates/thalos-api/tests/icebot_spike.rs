@@ -200,13 +200,25 @@ async fn icebot_spike_full_path() {
     }
 
     // 4. Semantic Pick/Place lowering → valid motion (design D7). The
-    // LOADED icebot chain drives lowering + DLS IK + planning; poses inside
-    // the reachable annulus (axis_1 limit, radius ≥ ~0.115 m).
+    // LOADED icebot chain drives lowering + DLS IK + planning. With physical
+    // home offsets the workspace rotates, so pick/place must sit near the
+    // FK-derived home (within the reachable annulus, radius ~0.12-0.22 m).
+    // Use positions close to home so IK converges from the home config.
+    let pick = [
+        home[0] - 0.02,
+        home[1] - 0.01,
+        0.02,
+    ];
+    let place = [
+        home[0] + 0.01,
+        home[1] - 0.03,
+        0.02,
+    ];
     let (status, body) = get_json(
         app.clone(),
         http::Method::POST,
         "/api/v1/semantic/execute",
-        Some(pick_place_task(&home, [0.15, 0.05, 0.02], [0.15, 0.10, 0.02])),
+        Some(pick_place_task(&home, pick, place)),
     )
     .await;
     assert_eq!(

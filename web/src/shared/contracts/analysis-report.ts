@@ -108,6 +108,12 @@ export interface ManipulabilityPointWire {
    *  robot). ADDITIVE — `undefined` on legacy payloads triggers the
    *  frontend fallback classification. */
   manipulability_grade?: 'low' | 'medium' | 'high'
+  /** Percentile-based score (0–1) of this waypoint relative to the robot's
+   *  OWN normalized-yoshikawa distribution — staged against P05–P95 over
+   *  the analyzed set (design "relative_manipulability"). ADDITIVE — ABSENT
+   *  until the backend computes it; absence is the signal, consumers must
+   *  never fabricate a value (I2: the UI does not recompute manipulability). */
+  relative_manipulability?: number
 }
 
 /** One singularity point per analyzed waypoint (dense series). Projection of

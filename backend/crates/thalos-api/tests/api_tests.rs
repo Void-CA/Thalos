@@ -3250,7 +3250,8 @@ async fn motion_plan_resolver_error_returns_4xx_no_partial() {
 /// TaskDocument payload whose scene `home_pose` sits inside the icebot
 /// workspace: `home` lowers to a single MoveJ toward that pose (the same
 /// lowering `planar2r_task_payload` relies on, but reachable by a 4-DOF
-/// planar + prismatic robot).
+/// planar + prismatic robot). With physical home offsets (axis_0 +20°,
+/// axis_1 -80°), minimum reach is ~0.173m (axis_1 limit constrains elbow).
 fn icebot_task_payload(operations: Value) -> Value {
     json!({
         "task": {
@@ -3266,7 +3267,7 @@ fn icebot_task_payload(operations: Value) -> Value {
                 "locations": [],
                 "tools": [],
                 "home_pose": {
-                    "position": [0.225, 0.0, 0.02],
+                    "position": [0.18, 0.0, 0.02],
                     "orientation": [0.0, 0.0, 0.0, 1.0]
                 }
             },
@@ -3299,21 +3300,17 @@ async fn urdf_load_then_plan_uses_real_chain() {
     .await;
     assert_eq!(load_status, StatusCode::OK, "URDF load must succeed");
 
-    // MoveJ toward a pose inside the icebot workspace. The chain tip is
-    // `tool0` (fixed tcp_joint child) at zero-config (0.225, 0, 0.04); the
-    // target below keeps X/Y at the start and moves the prismatic joint, so
-    // IK converges with real 4-joint motion. Keeping X/Y is deliberate: at
-    // q=0 the arm is FULLY EXTENDED — a classic planar singularity (the
-    // Jacobian X-row is all-zero, rank-2 linear Jacobian) where radial XY
-    // motion is unreachable. This is a physical singularity, not a solver
-    // or fixed-joint degeneracy (see `icebot_xy_ik_converges_from_non_singular_q0`).
+    // MoveJ toward a pose inside the icebot workspace. With the physical
+    // home offsets (axis_0 +20°, axis_1 -80°), the minimum reach is ~0.173m
+    // (axis_1 limit [0, 2.0944] constrains the elbow). The target must have
+    // r ≥ 0.173m to be reachable.
     let program = json!({
         "instructions": [{
             "type": "move_j",
             "origin": "op_0",
             "target": {
                 "type": "pose",
-                "position": [0.225, 0.0, 0.02],
+                "position": [0.18, 0.0, 0.02],
                 "orientation": [0.0, 0.0, 0.0, 1.0],
                 "frame": "world"
             },
@@ -3398,12 +3395,10 @@ async fn urdf_load_then_semantic_execute_uses_real_chain() {
 /// Spec: unified-kinematics "XY-Convergence Regression" — a planar robot
 /// must converge on an XY target from a NON-singular initial configuration.
 ///
-/// The icebot arm is fully extended at q=0 (tool0 at (0.225, 0, 0.04), the
-/// classic fully-extended planar singularity: the Jacobian X-row is all
-/// zero, so radial XY motion is unreachable). That is a physical
-/// singularity, NOT a solver or fixed-joint bug. Starting from the bent,
-/// non-singular configuration q0 = [π/4, π/4, π/4, π/4] the DLS solver
-/// MUST converge on an XY target inside the workspace.
+/// The icebot arm at q=0 with physical offsets (axis_0 +20°, axis_1 -80°)
+/// puts tool0 at ~(0.167, -0.130, 0.04) — not a classic singularity but
+/// starting from a bent, non-singular configuration q0 = [π/4, π/4, π/4, π/4]
+/// the DLS solver MUST converge on an XY target inside the workspace.
 #[tokio::test]
 async fn icebot_xy_ik_converges_from_non_singular_q0() {
     let app = test_app().await;

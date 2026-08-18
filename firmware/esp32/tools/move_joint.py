@@ -10,7 +10,7 @@ Channel map (firmware/esp32/src/servo_config.h):
     joint 0 (base)     -> channel 15
     joint 1 (codo)     -> channel 14
     joint 2 (muneca)   -> channel 13
-    joint 3 (prism.)   -> channel 12   (CAREFUL: ultra-sensitive mapping)
+    joint 3 (prism.)   -> channel 11   (CAREFUL: ultra-sensitive mapping)
 
 Usage:
     python3 tools/move_joint.py --joint 0 --range 0.2 --dt-ms 1000

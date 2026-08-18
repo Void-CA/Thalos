@@ -146,5 +146,42 @@ describe('manipulability grade mapping (task 5.3, spec manipulability-normalizat
 
     expect(result.samples?.[0]?.grade).toBeUndefined()
     expect(result.samples?.[0]?.yoshikawa).toBeCloseTo(0.05)
+    expect(result.percentiles).toBeUndefined()
+  })
+
+  it('maps relative_manipulability + percentiles from the wire (relative metric)', async () => {
+    mocks.post.mockResolvedValue({
+      data: {
+        metrics: {
+          avg_yoshikawa: 0.1, reference_dimension: 2.3,
+          p05: 0.02, p50: 0.5, p95: 0.98, avg_relative: 0.45,
+        },
+        samples: [
+          { position: { x: 0.1, y: 0.2, z: 0.3 }, yoshikawa: 0.05, relative_manipulability: 0.0 },
+          { position: { x: 0.2, y: 0.1, z: 0.3 }, yoshikawa: 0.9, relative_manipulability: 1.0 },
+        ],
+      },
+    })
+    const service = new WorkspaceService(apiClient)
+
+    const result = await service.analyzeManipulability('scara', sampleParams)
+
+    expect(result.samples?.map((s) => s.relativeManipulability)).toEqual([0.0, 1.0])
+    expect(result.percentiles).toEqual({ p05: 0.02, p50: 0.5, p95: 0.98, avg_relative: 0.45 })
+  })
+
+  it('leaves relativeManipulability undefined for legacy samples without the field', async () => {
+    mocks.post.mockResolvedValue({
+      data: {
+        metrics: { avg_yoshikawa: 0.1 },
+        samples: [{ position: { x: 0.1, y: 0.2, z: 0.3 }, yoshikawa: 0.05 }],
+      },
+    })
+    const service = new WorkspaceService(apiClient)
+
+    const result = await service.analyzeManipulability('scara', sampleParams)
+
+    expect(result.samples?.[0]?.relativeManipulability).toBeUndefined()
+    expect(result.percentiles).toBeUndefined()
   })
 })

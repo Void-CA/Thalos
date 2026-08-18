@@ -16,6 +16,18 @@ export interface SingularityResult {
 export interface ManipulabilityResult {
   metrics: Record<string, number>
   samples: CloudPoint[] | null
+  /** P05 / P50 / P95 of `normalized_yoshikawa` + the mean per-sample
+   *  relative score, over the robot's OWN distribution (design
+   *  "relative_manipulability"). ADDITIVE — every field is optional: legacy
+   *  payloads that lack the wire keys leave them `undefined`. */
+  percentiles?: ManipulabilityPercentiles
+}
+
+export interface ManipulabilityPercentiles {
+  p05?: number
+  p50?: number
+  p95?: number
+  avg_relative?: number
 }
 
 export interface SampleParams {
@@ -43,6 +55,9 @@ function extractPoints(arr: unknown[] | undefined | null, stateKey?: string): Cl
     // Backend-classified grade (task 5.3, spec "Point-cloud consumes grade"):
     // mapped verbatim from the wire; absent on legacy payloads.
     ...(s.manipulability_grade !== undefined ? { grade: s.manipulability_grade } : {}),
+    // Percentile score vs the robot's own distribution (design
+    // "relative_manipulability"): mapped verbatim; absent on legacy payloads.
+    ...(s.relative_manipulability !== undefined ? { relativeManipulability: s.relative_manipulability } : {}),
   }))
 }
 
@@ -92,11 +107,36 @@ export class WorkspaceService {
     const body = { ...params, include_samples: true }
     if (robotId) {
       const { data } = await this.client.post('/workspace/manipulability', { robot_id: robotId, ...body })
-      return { metrics: data.metrics, samples: extractPoints(data.samples) }
+      return {
+        metrics: data.metrics,
+        samples: extractPoints(data.samples),
+        percentiles: extractPercentiles(data.metrics),
+      }
     }
     const { data } = await this.client.post('/workspace/manipulability/active', body)
-    return { metrics: data.metrics, samples: extractPoints(data.samples) }
+    return {
+      metrics: data.metrics,
+      samples: extractPoints(data.samples),
+      percentiles: extractPercentiles(data.metrics),
+    }
   }
+}
+
+/**
+ * Typed view of the additive percentile fields on the manipulability metrics
+ * record (design "relative_manipulability"). Old payloads lack the keys —
+ * the absent fields stay `undefined` (absence is the signal, never 0).
+ */
+function extractPercentiles(metrics: Record<string, number> | undefined): ManipulabilityPercentiles | undefined {
+  if (!metrics) return undefined
+  const p05 = metrics.p05
+  const p50 = metrics.p50
+  const p95 = metrics.p95
+  const avg_relative = metrics.avg_relative
+  if (p05 === undefined && p50 === undefined && p95 === undefined && avg_relative === undefined) {
+    return undefined
+  }
+  return { p05, p50, p95, avg_relative }
 }
 
 export const workspaceService = new WorkspaceService(apiClient)

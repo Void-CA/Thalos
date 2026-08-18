@@ -179,6 +179,19 @@ describe('manipulabilityStatsInRange — pure aggregation', () => {
     expect(stats?.count).toBe(3)
     expect(stats?.average).toBeCloseTo(0.2)
     expect(stats?.min).toBeCloseTo(0.1)
+    // Legacy payloads without relative_manipulability → null, never a value.
+    expect(stats?.relativeAverage).toBeNull()
+  })
+
+  it('averages relative_manipulability ONLY from points that carry it', () => {
+    const series = [
+      { waypoint: 10, yoshikawa: 0.1, relative_manipulability: 0.2 },
+      { waypoint: 11, yoshikawa: 0.2, relative_manipulability: 0.6 },
+      { waypoint: 12, yoshikawa: 0.3 }, // legacy point — skipped
+      { waypoint: 30, yoshikawa: 0.9, relative_manipulability: 1.0 },
+    ]
+    const stats = manipulabilityStatsInRange(series, 10, 12)
+    expect(stats?.relativeAverage).toBeCloseTo(0.4) // (0.2 + 0.6) / 2
   })
 
   it('returns null when the span has no covered waypoints', () => {

@@ -57,15 +57,18 @@ export interface PickablePoint {
   state?: string
   yoshikawa?: number
   grade?: 'low' | 'medium' | 'high'
+  relativeManipulability?: number
 }
 
 /**
- * Color for a cloud point in the given mode. Manipulability mode uses the
- * BACKEND grade when present (task 5.3 — the UI never reclassifies, I2); for
- * legacy payloads (grade absent) it falls back to the SAME normalized
- * classify as the chart (`computeFallbackNormalized` + `classifyGrade` with
- * the scene's L_ref) — never a raw 0.3/0.5 partition, which would disagree
- * with the chart's constant dimensionless thresholds.
+ * Color for a cloud point in the given mode.
+ *
+ * Manipulability mode priority:
+ * 1. `relativeManipulability` (0–1, robot-relative) — when present, classify
+ *    against simple [0.3, 0.7] thresholds: this answers "how good is this
+ *    configuration for THIS robot?"
+ * 2. `grade` (backend absolute grade) — legacy/absolute path
+ * 3. `yoshikawa` fallback — legacy payloads, normalized classification
  */
 export function pickColor(p: PickablePoint, mode: string, lRef: number = 1.0): THREE.Color {
   if (mode === 'workspace') return new THREE.Color(CLOUD_WORKSPACE)
@@ -74,18 +77,26 @@ export function pickColor(p: PickablePoint, mode: string, lRef: number = 1.0): T
     if (p.state === 'near_singular') return new THREE.Color(SINGULAR_NEAR)
     if (p.state === 'singular') return new THREE.Color(SINGULAR_SINGULAR)
   }
-  if (mode === 'manipulability' && p.grade) {
-    if (p.grade === 'low') return new THREE.Color(MANIP_LOW)
-    if (p.grade === 'medium') return new THREE.Color(MANIP_MED)
-    if (p.grade === 'high') return new THREE.Color(MANIP_HIGH)
-  }
-  if (mode === 'manipulability' && p.yoshikawa !== undefined) {
-    // Legacy fallback: no backend grade → normalized classification consistent
-    // with the chart (thresholds T_LOW/T_HIGH constant, L_ref of the scene).
-    const grade = classifyGrade(computeFallbackNormalized(p.yoshikawa, lRef))
-    if (grade === 'low') return new THREE.Color(MANIP_LOW)
-    if (grade === 'medium') return new THREE.Color(MANIP_MED)
-    return new THREE.Color(MANIP_HIGH)
+  if (mode === 'manipulability') {
+    // 1. Robot-relative score (new path): classify against [0.3, 0.7]
+    if (p.relativeManipulability !== undefined) {
+      if (p.relativeManipulability < 0.3) return new THREE.Color(MANIP_LOW)
+      if (p.relativeManipulability < 0.7) return new THREE.Color(MANIP_MED)
+      return new THREE.Color(MANIP_HIGH)
+    }
+    // 2. Absolute backend grade (legacy path)
+    if (p.grade) {
+      if (p.grade === 'low') return new THREE.Color(MANIP_LOW)
+      if (p.grade === 'medium') return new THREE.Color(MANIP_MED)
+      return new THREE.Color(MANIP_HIGH)
+    }
+    // 3. Raw yoshikawa fallback (legacy payloads)
+    if (p.yoshikawa !== undefined) {
+      const grade = classifyGrade(computeFallbackNormalized(p.yoshikawa, lRef))
+      if (grade === 'low') return new THREE.Color(MANIP_LOW)
+      if (grade === 'medium') return new THREE.Color(MANIP_MED)
+      return new THREE.Color(MANIP_HIGH)
+    }
   }
   return new THREE.Color(CLOUD_GENERIC)
 }

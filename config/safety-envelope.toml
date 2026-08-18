@@ -22,7 +22,7 @@ i2c_scl_gpio = 5
 pca9685_address = "0x40"
 pca9685_prescale = "0x79"
 pca9685_steps_per_us = 0.2048
-servo_channels = [15, 14, 13, 12]
+servo_channels = [15, 14, 13, 11]
 num_servo_channels = 4
 
 # base (0): URDF mechanism-safe ±1.5708 rad; pulse Configured; velocity URDF.
@@ -46,23 +46,23 @@ position_source = "URDF"
 max_velocity_rad_per_s = 1.0
 velocity_source = "URDF"
 
-# elbow (1): URDF 0..2.0944 rad; pulse Configured; velocity URDF.
+# elbow (1): URDF ±1.5708 rad (±90° centered); pulse Configured; velocity URDF.
 [[channel]]
 name = "elbow"
 index = 1
 
 [channel.calibration]
-joint_min_rad = 0.0
-joint_max_rad = 2.0944
+joint_min_rad = -1.5708
+joint_max_rad = 1.5708
 
 [channel.pulse]
-min_us = 350
-max_us = 2050
+min_us = 375
+max_us = 2175
 source = "Configured"
 
 [channel.envelope]
-position_min_rad = 0.0
-position_max_rad = 2.0944
+position_min_rad = -1.5708
+position_max_rad = 1.5708
 position_source = "URDF"
 max_velocity_rad_per_s = 1.0
 velocity_source = "URDF"
@@ -101,8 +101,8 @@ joint_min_rad = 0.0
 joint_max_rad = 0.06
 
 [channel.pulse]
-min_us = 500
-max_us = 2500
+min_us = 1500
+max_us = 1550
 source = "Configured"
 
 [channel.envelope]

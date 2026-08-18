@@ -21,18 +21,18 @@ struct SafetyEnvelope {
 // ── Joint Limits (rad) — CALIBRATION MAP ONLY (ADR-1 authority split) ────
 // Per-channel rad→pulse linear-interpolation endpoints; NOT the execution enforcement authority.
 constexpr float JOINT_MIN_RAD[NUM_SERVO_CHANNELS] = {
-    -1.5708f, 0.0f, -3.1416f, 0.0f,
+    -1.5708f, -1.5708f, -3.1416f, 0.0f,
 };
 constexpr float JOINT_MAX_RAD[NUM_SERVO_CHANNELS] = {
-    1.5708f, 2.0944f, 3.1416f, 0.06f,
+    1.5708f, 1.5708f, 3.1416f, 0.06f,
 };
 
 // ── Pulse Width Range (µs) — SERVO_PULSE_MIN/MAX_US ───────────────
 constexpr uint16_t SERVO_PULSE_MIN_US[NUM_SERVO_CHANNELS] = {
-    350, 350, 300, 500,
+    350, 375, 300, 1500,
 };
 constexpr uint16_t SERVO_PULSE_MAX_US[NUM_SERVO_CHANNELS] = {
-    2150, 2050, 2600, 2500,
+    2150, 2175, 2600, 1550,
 };
 
 // ── SafetyEnvelope — EXECUTION ENFORCEMENT AUTHORITY (ADR-1) ─────────
@@ -41,7 +41,7 @@ constexpr SafetyEnvelope SAFETY_ENVELOPE[NUM_SERVO_CHANNELS] = {
     // base (0)
     { -1.5708f, 1.5708f, SERVO_PULSE_MIN_US[0], SERVO_PULSE_MAX_US[0], 1.0f, LimitSource::URDF, LimitSource::Configured, LimitSource::URDF },
     // elbow (1)
-    { 0.0f, 2.0944f, SERVO_PULSE_MIN_US[1], SERVO_PULSE_MAX_US[1], 1.0f, LimitSource::URDF, LimitSource::Configured, LimitSource::URDF },
+    { -1.5708f, 1.5708f, SERVO_PULSE_MIN_US[1], SERVO_PULSE_MAX_US[1], 1.0f, LimitSource::URDF, LimitSource::Configured, LimitSource::URDF },
     // wrist (2)
     { -3.1416f, 3.1416f, SERVO_PULSE_MIN_US[2], SERVO_PULSE_MAX_US[2], 2.0f, LimitSource::Temporary, LimitSource::Temporary, LimitSource::Temporary },
     // prismatic (3)
