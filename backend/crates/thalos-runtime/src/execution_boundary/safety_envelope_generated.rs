@@ -15,7 +15,7 @@ pub const SAFETY_ENVELOPE: [ChannelEnvelope; 4] = [
     },
     // elbow (1)
     ChannelEnvelope {
-        position_min_rad: -1.5708, position_max_rad: 1.5708,
+        position_min_rad: -2.0944, position_max_rad: 2.0944,
         pulse_min_us: 375, pulse_max_us: 2175,
         max_velocity_rad_per_s: 1.0,
         position_source: LimitSource::Urdf,
@@ -25,7 +25,7 @@ pub const SAFETY_ENVELOPE: [ChannelEnvelope; 4] = [
     // wrist (2)
     ChannelEnvelope {
         position_min_rad: -3.1416, position_max_rad: 3.1416,
-        pulse_min_us: 300, pulse_max_us: 2600,
+        pulse_min_us: 1450, pulse_max_us: 1525,
         max_velocity_rad_per_s: 2.0,
         position_source: LimitSource::Temporary,
         pulse_source: LimitSource::Temporary,

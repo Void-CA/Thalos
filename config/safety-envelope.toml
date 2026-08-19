@@ -46,14 +46,14 @@ position_source = "URDF"
 max_velocity_rad_per_s = 1.0
 velocity_source = "URDF"
 
-# elbow (1): URDF ±1.5708 rad (±90° centered); pulse Configured; velocity URDF.
+# elbow (1): ±2.0944 rad (±120° centered); pulse Configured; velocity URDF.
 [[channel]]
 name = "elbow"
 index = 1
 
 [channel.calibration]
-joint_min_rad = -1.5708
-joint_max_rad = 1.5708
+joint_min_rad = -2.0944
+joint_max_rad = 2.0944
 
 [channel.pulse]
 min_us = 375
@@ -61,8 +61,8 @@ max_us = 2175
 source = "Configured"
 
 [channel.envelope]
-position_min_rad = -1.5708
-position_max_rad = 1.5708
+position_min_rad = -2.0944
+position_max_rad = 2.0944
 position_source = "URDF"
 max_velocity_rad_per_s = 1.0
 velocity_source = "URDF"

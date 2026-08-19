@@ -15,7 +15,7 @@ format:
 #| echo: false
 #| output: false
 import subprocess, tempfile, os
-from IPython.display import SVG, display
+from IPython.display import SVG, Markdown, display
 def render_graphviz(dot_source, filename="h6_arch"):
     dot_path = os.path.join(os.getcwd(), f"{filename}.dot")
     svg_path = os.path.join(os.getcwd(), f"{filename}.svg")
@@ -279,32 +279,44 @@ metrics1 = d1["baseline"]["metrics"]
 
 **Fase 1: Admisibilidad**
 
-| Criterio | Resultado |
-|:---|:---:|
-| Colisiones | `int(metrics1.get('has_collisions', 0))` |
-| Singularidades | `int(metrics1.get('singular_count', 0))` |
-| Near-singularidades | `int(metrics1.get('near_singular_count', 0))` |
-| Estado | **PASS** — ambos candidatos admisibles |
+```{python}
+#| echo: false
+m1 = d1["baseline"]["metrics"]
+display(Markdown(
+    "| Criterio | Resultado |\n"
+    "|:---|:---:|\n"
+    f"| Colisiones | {int(m1.get('has_collisions', 0))} |\n"
+    f"| Singularidades | {int(m1.get('singular_count', 0))} |\n"
+    f"| Near-singularidades | {int(m1.get('near_singular_count', 0))} |\n"
+    "| Estado | **PASS** — ambos candidatos admisibles |"
+))
+```
 
 **Fase 2: Scoring**
 
 ```{python}
 #| echo: false
+ranked1 = d1["intelligence"]["candidate_ranking"]["ranked"]
 keys = ['risk', 'duration', 'manipulability', 'length']
 labels = ['Riesgo', 'Duración (s)', 'Manipulabilidad', 'Longitud (m)']
 weights = [0.5, 0.2, 0.2, 0.1]
 
-header = "| Componente | Peso | Direct | AlternateElbow | $\\Delta$ |"
-sep =    "|:---|---:|---:|---:|---:|"
-print(header)
-print(sep)
+rows = []
 for key, label, w in zip(keys, labels, weights):
     d_val = ranked1[0][key]
     a_val = ranked1[1][key]
     delta = a_val - d_val
-    print(f"| {label} | {w:.1f} | {d_val:.4f} | {a_val:.4f} | {delta:+.4f} |")
-print(sep)
-print(f"| **J** | **1.0** | **{ranked1[0]['cost']:.4f}** | **{ranked1[1]['cost']:.4f}** | **{ranked1[1]['cost']-ranked1[0]['cost']:+.4f}** |")
+    rows.append(f"| {label} | {w:.1f} | {d_val:.4f} | {a_val:.4f} | {delta:+.4f} |")
+
+j1 = ranked1[0]['cost']
+j2 = ranked1[1]['cost']
+display(Markdown(
+    "| Componente | Peso | Direct | AlternateElbow | $\\Delta$ |\n"
+    "|:---|---:|---:|---:|---:|\n"
+    + "\n".join(rows) + "\n"
+    "|:---|---:|---:|---:|---:|\n"
+    f"| **J** | **1.0** | **{j1:.4f}** | **{j2:.4f}** | **{j2-j1:+.4f}** |"
+))
 ```
 
 **Decisión:** Direct seleccionado (menor $J$). AlternateElbow rechazado — todos los componentes diferenciales del scoring favorecen a Direct.
@@ -393,30 +405,42 @@ metrics2 = d2["baseline"]["metrics"]
 
 **Fase 1: Admisibilidad**
 
-| Criterio | Resultado |
-|:---|:---:|
-| Colisiones | `int(metrics2.get('has_collisions', 0))` |
-| Singularidades | `int(metrics2.get('singular_count', 0))` |
-| Near-singularidades | `int(metrics2.get('near_singular_count', 0))` |
-| Estado | **PASS** — ambos candidatos admisibles |
+```{python}
+#| echo: false
+m2 = d2["baseline"]["metrics"]
+display(Markdown(
+    "| Criterio | Resultado |\n"
+    "|:---|:---:|\n"
+    f"| Colisiones | {int(m2.get('has_collisions', 0))} |\n"
+    f"| Singularidades | {int(m2.get('singular_count', 0))} |\n"
+    f"| Near-singularidades | {int(m2.get('near_singular_count', 0))} |\n"
+    "| Estado | **PASS** — ambos candidatos admisibles |"
+))
+```
 
 **Fase 2: Scoring**
 
 ```{python}
 #| echo: false
-header = "| Componente | Peso | Direct | AlternateElbow | $\\Delta$ |"
-sep =    "|:---|---:|---:|---:|---:|"
-print(header)
-print(sep)
+ranked2 = d2["intelligence"]["candidate_ranking"]["ranked"]
+rows = []
 for key, label, w in zip(['risk', 'duration', 'manipulability', 'length'],
                           ['Riesgo', 'Duración (s)', 'Manipulabilidad', 'Longitud (m)'],
                           [0.5, 0.2, 0.2, 0.1]):
     d_val = ranked2[0][key]
     a_val = ranked2[1][key]
     delta = a_val - d_val
-    print(f"| {label} | {w:.1f} | {d_val:.4f} | {a_val:.4f} | {delta:+.4f} |")
-print(sep)
-print(f"| **J** | **1.0** | **{ranked2[0]['cost']:.4f}** | **{ranked2[1]['cost']:.4f}** | **{ranked2[1]['cost']-ranked2[0]['cost']:+.4f}** |")
+    rows.append(f"| {label} | {w:.1f} | {d_val:.4f} | {a_val:.4f} | {delta:+.4f} |")
+
+j1 = ranked2[0]['cost']
+j2 = ranked2[1]['cost']
+display(Markdown(
+    "| Componente | Peso | Direct | AlternateElbow | $\\Delta$ |\n"
+    "|:---|---:|---:|---:|---:|\n"
+    + "\n".join(rows) + "\n"
+    "|:---|---:|---:|---:|---:|\n"
+    f"| **J** | **1.0** | **{j1:.4f}** | **{j2:.4f}** | **{j2-j1:+.4f}** |"
+))
 ```
 
 **Decisión:** Direct seleccionado (mismo patrón que Escenario 1).
@@ -463,35 +487,42 @@ h6_reason = h6["candidate_ranking"]["reason"]
 
 ### Strategy Trace
 
-| # | Strategy | Outcome |
-|---|---|---|
 ```{python}
 #| echo: false
+from IPython.display import Markdown
+rows = []
 for i, t in enumerate(h6_trace):
     kind = t["outcome"]["kind"]
     reason = t["outcome"].get("reason", "")
     outcome_str = kind.capitalize() if kind == "generated" else f"Skipped — {reason}"
-    print(f"| {i} | {t['strategy']} | {outcome_str} |")
+    rows.append(f"| {i} | {t['strategy']} | {outcome_str} |")
+display(Markdown(
+    "| # | Strategy | Outcome |\n"
+    "|---|---|---|\n"
+    + "\n".join(rows)
+))
 ```
 
 ### Candidate Ranking
 
 ```{python}
 #| echo: false
+from IPython.display import Markdown
 h6_selected = h6_ranked[0]["strategy"]
-header = "| # | Estrategia | Riesgo | Duración (s) | Manipulabilidad | Longitud (m) | J |"
-sep =    "|:---:|:---|---:|---:|---:|---:|---:|"
-print(header)
-print(sep)
+rows = []
 for i, c in enumerate(h6_ranked):
     marker = " ←" if c["strategy"] == h6_selected else ""
-    print(f"| {i} | {c['strategy']}{marker} | {c['risk']:.4f} | {c['duration']:.4f} | {c['manipulability']:.6f} | {c['length']:.4f} | {c['cost']:.8f} |")
-print(sep)
-print(f"**Seleccionado:** {h6_selected}")
-print()
-print(f"J_selected = {h6_ranked[0]['cost']:.8f} &nbsp;&nbsp; J_Direct = {h6_ranked[2]['cost']:.4f}")
-print()
-print(f"&Delta;J = {h6_ranked[2]['cost'] - h6_ranked[0]['cost']:+.4f} — diferencia normalizada entre ReplannedAlternate y Direct en el conjunto evaluado.")
+    rows.append(f"| {i} | {c['strategy']}{marker} | {c['risk']:.4f} | {c['duration']:.4f} | {c['manipulability']:.6f} | {c['length']:.4f} | {c['cost']:.8f} |")
+
+lines = (
+    "| # | Estrategia | Riesgo | Duración (s) | Manipulabilidad | Longitud (m) | J |\n"
+    "|:---:|:---|---:|---:|---:|---:|---:|\n"
+    + "\n".join(rows) + "\n"
+    f"\n**Seleccionado:** {h6_selected}\n\n"
+    f"J_selected = {h6_ranked[0]['cost']:.8f} &nbsp;&nbsp; J_Direct = {h6_ranked[2]['cost']:.4f}\n\n"
+    f"&Delta;J = {h6_ranked[2]['cost'] - h6_ranked[0]['cost']:+.4f} — diferencia normalizada entre ReplannedAlternate y Direct en el conjunto evaluado."
+)
+display(Markdown(lines))
 ```
 
 ### Diagrama de la Ruta Arquitectónica H6
@@ -542,6 +573,7 @@ En el escenario `6dof-elbow-swap`, ReplannedAlternate **obtiene el menor `J` del
 
 ```{python}
 #| echo: false
+from IPython.display import Markdown
 ranked1 = d1["intelligence"]["candidate_ranking"]["ranked"]
 ranked2 = d2["intelligence"]["candidate_ranking"]["ranked"]
 direct_j = ranked1[0]["cost"]
@@ -549,16 +581,16 @@ alt_j = ranked1[1]["cost"]
 direct_j2 = ranked2[0]["cost"]
 alt_j2 = ranked2[1]["cost"]
 
-header = "| Métrica | near-singular | elbow-swap |"
-sep =    "|:---|---:|---:|"
-print(header)
-print(sep)
-print(f"| Waypoints | {len(d1['baseline']['trajectory']['waypoints'])} | {len(d2['baseline']['trajectory']['waypoints'])} |")
-print(f"| Risk | {d1['intelligence']['assessment']['risk']} | {d2['intelligence']['assessment']['risk']} |")
-print(f"| J_Direct | {direct_j:.4f} | {direct_j2:.4f} |")
-print(f"| J_Alternate | {alt_j:.4f} | {alt_j2:.4f} |")
-print(f"| &Delta;J | {alt_j-direct_j:+.2f} | {alt_j2-direct_j2:+.2f} |")
-print(f"| Seleccionado | Direct | Direct |")
+display(Markdown(
+    "| Métrica | near-singular | elbow-swap |\n"
+    "|:---|---:|---:|\n"
+    f"| Waypoints | {len(d1['baseline']['trajectory']['waypoints'])} | {len(d2['baseline']['trajectory']['waypoints'])} |\n"
+    f"| Risk | {d1['intelligence']['assessment']['risk']} | {d2['intelligence']['assessment']['risk']} |\n"
+    f"| J_Direct | {direct_j:.4f} | {direct_j2:.4f} |\n"
+    f"| J_Alternate | {alt_j:.4f} | {alt_j2:.4f} |\n"
+    f"| &Delta;J | {alt_j-direct_j:+.2f} | {alt_j2-direct_j2:+.2f} |\n"
+    "| Seleccionado | Direct | Direct |"
+))
 ```
 
 > **Nota de alcance:** Los resultados anteriores corresponden a los escenarios evaluados (`6dof-near-singular` y `6dof-elbow-swap`). No constituyen una demostración de optimalidad general de la estrategia Direct sobre AlternateElbow; reflejan el comportamiento observado bajo las condiciones específicas de cada experimento.
