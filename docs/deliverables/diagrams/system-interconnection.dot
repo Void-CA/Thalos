@@ -58,8 +58,8 @@ digraph system {
         node [shape=box, style=filled, fillcolor="#FFFFFF"];
         s0 [label="Base\nCh15\n±1.5708 rad\n350–2150 µs"];
         s1 [label="Elbow\nCh14\n0–2.0944 rad\n350–2050 µs"];
-        s2 [label="Wrist\nCh13\n±3.1416 rad\n300–2600 µs"];
-        s3 [label="Prismatic\nCh12\n0–0.06 m\n500–2500 µs"];
+        s2 [label="Wrist\nCh12\n±3.1416 rad\n300–2600 µs"];
+        s3 [label="Prismatic\nCh11\n0–0.06 m\n500–2500 µs"];
     }
 
     // ── Power ─────────────────────────────────────────────
@@ -73,8 +73,8 @@ digraph system {
     i2c -> pca;
     pca -> s0 [label="Ch15"];
     pca -> s1 [label="Ch14"];
-    pca -> s2 [label="Ch13"];
-    pca -> s3 [label="Ch12"];
+    pca -> s2 [label="Ch12"];
+    pca -> s3 [label="Ch11"];
 
     psu -> pca [label="V+ (servo rail)"];
     psu -> servo_drv [label="5V logic\n(if shared)"];

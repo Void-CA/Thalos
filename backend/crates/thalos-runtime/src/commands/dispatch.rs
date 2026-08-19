@@ -200,4 +200,59 @@ mod tests {
             "LoadUrdfRobot must clear the active plan"
         );
     }
+
+    #[test]
+    fn set_joints_rejects_wrong_dof_count() {
+        let mut runtime = test_runtime(); // Planar2R = 2 DOF
+
+        let err = Command::SetJoints(vec![1.0, 2.0, 3.0])
+            .execute(&mut runtime)
+            .unwrap_err();
+
+        match err {
+            RuntimeError::JointCountMismatch { expected, received } => {
+                assert_eq!(expected, 2);
+                assert_eq!(received, 3);
+            }
+            other => panic!("expected JointCountMismatch, got {other:?}"),
+        }
+
+        // Joints must remain unchanged after the rejected command.
+        assert_eq!(runtime.active_robot.joints, vec![0.0, 0.0]);
+    }
+
+    #[test]
+    fn movej_rejects_wrong_dof_count() {
+        let mut runtime = test_runtime(); // Planar2R = 2 DOF
+
+        let err = Command::Motion(MotionCommands::MoveJ {
+            target: vec![1.0, 2.0, 3.0],
+        })
+        .execute(&mut runtime)
+        .unwrap_err();
+
+        match err {
+            RuntimeError::JointCountMismatch { expected, received } => {
+                assert_eq!(expected, 2);
+                assert_eq!(received, 3);
+            }
+            other => panic!("expected JointCountMismatch, got {other:?}"),
+        }
+
+        // Joints must remain unchanged after the rejected command.
+        assert_eq!(runtime.active_robot.joints, vec![0.0, 0.0]);
+    }
+
+    #[test]
+    fn movej_accepts_correct_dof_count() {
+        let mut runtime = test_runtime(); // Planar2R = 2 DOF
+
+        Command::Motion(MotionCommands::MoveJ {
+            target: vec![1.0, 2.0],
+        })
+        .execute(&mut runtime)
+        .expect("MoveJ with correct DOF must succeed");
+
+        assert_eq!(runtime.active_robot.joints, vec![1.0, 2.0]);
+    }
 }

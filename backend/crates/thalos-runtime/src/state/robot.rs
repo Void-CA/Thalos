@@ -99,9 +99,22 @@ impl SceneRuntime {
     }
 
     /// Update `active_robot.joints` from a controller state (e.g. simulation tick).
+    ///
+    /// Silently drops the update when the controller state length differs from
+    /// the chain DOF count — the chain is the source of truth and must not be
+    /// resized to match a stale or mismatched controller. A mismatch usually
+    /// indicates that a command (e.g. `MoveJ`) set joints without DOF
+    /// validation; callers should fix the upstream validator instead of
+    /// relaxing this guard.
     pub fn set_joints_from_state(&mut self, joints: &[f64]) {
         if joints.len() == self.active_robot.joints.len() {
             self.active_robot.joints.copy_from_slice(joints);
+        } else {
+            tracing::warn!(
+                controller_len = joints.len(),
+                chain_len = self.active_robot.joints.len(),
+                "set_joints_from_state: controller joint count differs from chain DOF — update dropped"
+            );
         }
     }
 

@@ -32,9 +32,9 @@ Physical interconnection between the ESP32 controller and the ICEBOT actuators.
                                            │  = 0x79)           │
                                            └──┬──┬──┬──┬───────┘
                                               │  │  │  │
-                              Ch15    Ch14    Ch13   Ch12
-                                │       │       │      │
-                                ▼       ▼       ▼      ▼
+                               Ch15    Ch14    Ch12   Ch11
+                                 │       │       │      │
+                                 ▼       ▼       ▼      ▼
 ┌───────────────────────────────────────────────────────────────────┐
 │                    ACTUATOR ARRAY                                 │
 │                                                                   │
@@ -62,8 +62,8 @@ Physical interconnection between the ESP32 controller and the ICEBOT actuators.
        │         │
        │         ├──▶ Channel 15 → Base servo
        │         ├──▶ Channel 14 → Elbow servo
-       │         ├──▶ Channel 13 → Wrist servo
-       │         └──▶ Channel 12 → Prismatic servo
+        │         ├──▶ Channel 12 → Wrist servo
+        │         └──▶ Channel 11 → Prismatic servo
        │
        └──▶ ESP32 VIN (logic supply, if shared)
 ```

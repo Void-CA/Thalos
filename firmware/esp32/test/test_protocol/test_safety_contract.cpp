@@ -138,7 +138,7 @@ static Manifest make_4dof_manifest(size_t count, const float wps[][4],
 // Decode the last setPWM write for `channel` from the Wire stub log.
 // setPWM writes [reg, onL, onH, offL, offH]; off (the steps) is bytes 3-4.
 // FIXTURE FIX (M2): ServoDriver writes PHYSICAL channels (SERVO_CHANNELS[ch]
-// = 15/14/13/12), so the register must be derived from the physical channel:
+// = 15/14/12/11), so the register must be derived from the physical channel:
 // reg = LED0_ON_L + SERVO_CHANNELS[channel] * 4. Decoding with the raw
 // logical index (LED0_ON_L + channel * 4) misses every write — the helper
 // must mirror the real driver's channel mapping or `wrote` is always false.

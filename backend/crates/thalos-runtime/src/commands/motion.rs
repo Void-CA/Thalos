@@ -75,6 +75,13 @@ impl ExecutableCommand for MotionCommands {
     fn execute(&self, runtime: &mut SceneRuntime) -> Result<Option<IKResult>, RuntimeError> {
         match self {
             Self::MoveJ { target } => {
+                let expected = runtime.active_robot.chain.dof_count();
+                if target.len() != expected {
+                    return Err(RuntimeError::JointCountMismatch {
+                        expected,
+                        received: target.len(),
+                    });
+                }
                 runtime.active_robot.joints = target.clone();
                 Ok(None)
             }
@@ -86,6 +93,13 @@ impl ExecutableCommand for MotionCommands {
                 time_step,
             } => {
                 let chain = runtime.active_robot.chain.clone();
+                let expected = chain.dof_count();
+                if target.len() != expected {
+                    return Err(RuntimeError::JointCountMismatch {
+                        expected,
+                        received: target.len(),
+                    });
+                }
                 let ee = *chain.end_effector();
                 let state = RobotState::new(runtime.active_robot.joints.clone());
                 let solver = make_ik_solver(&chain, ee);

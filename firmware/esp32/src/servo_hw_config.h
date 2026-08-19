@@ -14,10 +14,10 @@ constexpr uint8_t PCA9685_ADDR = 0x40;
 // Maps joint index → PCA9685 channel.
 // HIGH channels chosen on purpose: the low-numbered header pins sit too close
 // to the low-quality wiring run, so the servos live on the far side of the
-// connector. Joint 0 (base) → 15 (physically connected), 1 → 14, 2 → 13,
-// 3 (prismatic) → 12.
+// connector. Joint 0 (base) → 15 (physically connected), 1 → 14, 2 → 12,
+// 3 (prismatic) → 11.
 constexpr uint8_t NUM_SERVO_CHANNELS = 4;
-constexpr uint8_t SERVO_CHANNELS[NUM_SERVO_CHANNELS] = {15, 14, 13, 11};
+constexpr uint8_t SERVO_CHANNELS[NUM_SERVO_CHANNELS] = {15, 14, 12, 11};
 
 // ── PCA9685 Constants (NOMINAL) ────────────────────────────────────────────
 // 50 Hz PWM → prescale value 0x79 (see PCA9685 datasheet)

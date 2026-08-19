@@ -9,7 +9,7 @@ servo at a time).
 Channel map (firmware/esp32/src/servo_config.h):
     joint 0 (base)     -> channel 15
     joint 1 (codo)     -> channel 14
-    joint 2 (muneca)   -> channel 13
+    joint 2 (muneca)   -> channel 12
     joint 3 (prism.)   -> channel 11   (CAREFUL: ultra-sensitive mapping)
 
 Usage:

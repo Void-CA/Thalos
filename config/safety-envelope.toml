@@ -22,7 +22,7 @@ i2c_scl_gpio = 5
 pca9685_address = "0x40"
 pca9685_prescale = "0x79"
 pca9685_steps_per_us = 0.2048
-servo_channels = [15, 14, 13, 11]
+servo_channels = [15, 14, 12, 11]
 num_servo_channels = 4
 
 # base (0): URDF mechanism-safe ±1.5708 rad; pulse Configured; velocity URDF.
@@ -79,8 +79,8 @@ joint_min_rad = -3.1416
 joint_max_rad = 3.1416
 
 [channel.pulse]
-min_us = 300
-max_us = 2600
+min_us = 1450
+max_us = 1525
 source = "Temporary"
 
 [channel.envelope]
