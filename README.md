@@ -69,3 +69,4 @@ La documentación en [`docs/`](docs/) está organizada por función:
 `summary/` y `archive/`.
 
 Decisiones arquitectónicas registradas (ADR) en [`docs/architecture/adr/`](docs/architecture/adr/).
+# thalos-industrial
